@@ -96,6 +96,7 @@ const result = await ai.ChatCompletion({
 - **Code generation** — Entity classes, stored procedures, views, and Angular forms
 - **CLI tooling** — Command-line tools for codegen, metadata sync, and AI operations
 - **Docker support** — Containerized deployment with Flyway migrations
+- **Claude Code pack** — Curated AI-assistant context (`CLAUDE.md` + slash commands + skills) ships with every install; refresh with `mj update:claude`
 
 </td>
 </tr>

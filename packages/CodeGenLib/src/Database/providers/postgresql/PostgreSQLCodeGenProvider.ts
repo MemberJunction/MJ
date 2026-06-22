@@ -10,6 +10,7 @@ import {
 } from '../../codeGenDatabaseProvider';
 import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
+import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
@@ -538,7 +539,18 @@ ${trigger}
         // outer function's local variables (including p_data) are NOT in scope.
         const fieldCastEntries = writableFields
             .map((f) => {
-                const cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$1');
+                let cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$1');
+                // Non-nullable columns with a DB default: a present-but-NULL payload
+                // value inserts NULL and violates the NOT NULL constraint (an ABSENT
+                // key is fine — the FOREACH omits it so the column DEFAULT applies).
+                // Mirror the typed-arg sproc (generateInsertFieldString): coalesce
+                // NULL — and, for UUIDs, the empty-UUID sentinel — to the column default.
+                if (f.HasDefaultValue && !f.AllowsNull) {
+                    const def = this.formatInsertDefaultValue(f);
+                    cast = f.IsUniqueIdentifier
+                        ? `CASE WHEN ${cast} = '00000000-0000-0000-0000-000000000000'::uuid THEN ${def} ELSE COALESCE(${cast}, ${def}) END`
+                        : `COALESCE(${cast}, ${def})`;
+                }
                 return `        WHEN '${f.Name}' THEN '${cast.replace(/'/g, "''")}'`;
             })
             .join('\n');
@@ -1269,6 +1281,7 @@ END $$;
             'getutcdate()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetime()': "NOW() AT TIME ZONE 'UTC'",
             'sysdatetimeoffset()': "NOW() AT TIME ZONE 'UTC'",
+            'sysutcdatetime()': "NOW() AT TIME ZONE 'UTC'",
             'now()': 'NOW()',
             'current_timestamp': 'CURRENT_TIMESTAMP',
             'user_name()': 'CURRENT_USER',
@@ -1693,6 +1706,11 @@ ORDER BY ordinal_position`;
     getFixVirtualFieldNullabilitySQL(mjCoreSchema: string): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
         return this.buildFixVirtualFieldNullabilityUpdateSQL(mjCoreSchema, qs);
+    }
+
+    /** @inheritdoc */
+    getMetadataSupportObjectsSQL(mjCoreSchema: string): string | null {
+        return buildMetadataSupportObjectsSQL(mjCoreSchema);
     }
 
     // ─── METADATA MANAGEMENT: SQL FILE EXECUTION ─────────────────────
@@ -2504,7 +2522,10 @@ ORDER BY "EntityID", "Sequence";
      * Builds the CASE expression for AllowUpdateAPI in the pending entity fields query.
      */
     private buildAllowUpdateAPICase(): string {
-        return `CASE WHEN sf."IsVirtual" = true THEN FALSE
+        // sf is the schema view (vwSQLColumnsAndEntityFields), whose "IsVirtual"
+        // is an INTEGER 1/0 (not the EntityField table's BOOLEAN). Compare with
+        // <> 0, not `= true`, or PG raises `operator does not exist: integer = boolean`.
+        return `CASE WHEN sf."IsVirtual" <> 0 THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.CreatedAtFieldName}' THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.UpdatedAtFieldName}' THEN FALSE
            WHEN sf."FieldName" = '${EntityInfo.DeletedAtFieldName}' THEN FALSE

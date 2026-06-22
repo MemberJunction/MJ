@@ -141,8 +141,11 @@ describe('BaseAgent realtime (session-driven) integration', () => {
 
             expect(deps.Model).toBe(agent.ResolvedModel);
             expect(deps.SessionParams.Model).toBe('mock-realtime');
-            // Companion / "voice for the target" framing is in the system prompt.
-            expect(deps.SessionParams.SystemPrompt).toContain('Realtime Co-Agent');
+            // Identity framing speaks first-person AS the TARGET (here the fallback, since makeParams sets no
+            // target) — NOT as the co-agent. This guards the convergence: the prompt must never identify as
+            // the co-agent ("Realtime Co-Agent"). See plans/realtime/realtime-core-host-convergence.md.
+            expect(deps.SessionParams.SystemPrompt).toContain('the configured target agent');
+            expect(deps.SessionParams.SystemPrompt).not.toContain('voice for the agent "Realtime Co-Agent"');
             expect(deps.SessionParams.SystemPrompt).toContain(INVOKE_TARGET_AGENT_TOOL_NAME);
             // All collaborators are wired as callable closures.
             expect(typeof deps.DelegateToTarget).toBe('function');

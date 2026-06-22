@@ -56,6 +56,7 @@
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
     "@memberjunction/ai-cli": "5.41.0",
+    "@memberjunction/cli-core": "5.41.0",
     "@memberjunction/codegen-lib": "5.41.0",
     "@memberjunction/config": "5.41.0",
     "@memberjunction/core": "5.41.0",
@@ -70,6 +71,7 @@
     "@memberjunction/skyway-postgres": "^0.6.2",
     "@memberjunction/skyway-sqlserver": "^0.6.2",
     "@memberjunction/sql-converter": "5.41.0",
+    "@memberjunction/sqlglot-ts": "5.41.0",
     "@memberjunction/sqlserver-dataprovider": "5.41.0",
     "@memberjunction/testing-cli": "5.41.0",
     "@oclif/core": "^3.27.0",

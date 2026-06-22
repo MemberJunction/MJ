@@ -298,6 +298,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract get FixedWidthStringTypeNames(): readonly string[];
 
+    /**
+     * Maximum string length usable in an INDEX KEY column (PRIMARY KEY / UNIQUE constraint) on this
+     * dialect. A PK string column wider than this can't be indexed, so callers (e.g. the integration
+     * schema builder) cap PK string columns at this value. Default: no practical declare-time cap — a
+     * dialect overrides it where one exists. SQL Server's 900-byte index-key limit = 450 NVARCHAR chars;
+     * PostgreSQL enforces its (larger) btree limit on the stored value at write time, not the declared
+     * length, so it keeps the no-cap default.
+     */
+    get MaxKeyStringLength(): number {
+        return Number.MAX_SAFE_INTEGER;
+    }
+
     /** SQL type names this dialect uses for date / time / timestamp columns. */
     abstract get DateTypeNames(): readonly string[];
 

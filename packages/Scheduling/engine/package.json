@@ -28,6 +28,7 @@
     "@memberjunction/scheduling-base-types": "5.41.0",
     "@memberjunction/scheduling-engine-base": "5.41.0",
     "@memberjunction/sqlserver-dataprovider": "5.41.0",
+    "@memberjunction/record-set-processor": "5.41.0",
     "cron-parser": "^4.9.0",
     "uuid": "^13.0.0"
   },

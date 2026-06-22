@@ -512,21 +512,22 @@ export class DuplicateRecordDetector extends VectorBase {
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
-        const embeddingAPIKey = GetAIAPIKey(aiModel.DriverClass);
-        const vectorDBAPIKey = GetAIAPIKey(vectorDB.ClassKey);
-
-        if (!embeddingAPIKey) {
-            throw new Error(`No API Key found for AI Model ${aiModel.DriverClass}`);
-        }
-        if (!vectorDBAPIKey) {
-            throw new Error(`No API Key found for Vector Database ${vectorDB.ClassKey}`);
-        }
+        // Resolve API keys. Empty/null is legitimate for local providers — local
+        // embeddings (ONNX runtime) and the in-process SimpleVectorServiceProvider need
+        // no remote credential — so we don't pre-throw on a missing key. Whether the vector
+        // DB genuinely needs one is decided AFTER instantiation via VectorDBBase.RequiresAPIKey;
+        // a cloud provider that truly needs a key will otherwise fail at the inference call
+        // with a more actionable provider-level error. Mirrors EntityVectorSyncer.
+        const embeddingAPIKey = GetAIAPIKey(aiModel.DriverClass) || '';
+        const vectorDBAPIKey = GetAIAPIKey(vectorDB.ClassKey) || '';
 
         this.embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings, aiModel.DriverClass, embeddingAPIKey
         );
+        // Sentinel when keyless so the base ctor's non-empty requirement is satisfied for
+        // local providers (which authenticate via the host process, not a key).
         this.vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
-            VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey
+            VectorDBBase, vectorDB.ClassKey, vectorDBAPIKey || 'colocated'
         );
 
         if (!this.embedding) {
@@ -534,6 +535,9 @@ export class DuplicateRecordDetector extends VectorBase {
         }
         if (!this.vectorDB) {
             throw new Error(`Failed to create VectorDB instance for ${vectorDB.ClassKey}`);
+        }
+        if (!this.vectorDB.SupportsColocatedQuery && this.vectorDB.RequiresAPIKey && !vectorDBAPIKey) {
+            throw new Error(`No API Key found for Vector Database ${vectorDB.ClassKey}`);
         }
 
         // Resolve the vector index name from the entity document's VectorIndexID

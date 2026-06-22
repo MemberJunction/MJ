@@ -33,6 +33,50 @@ export function computeContentHash(fields: Record<string, unknown>): string {
 }
 
 /**
+ * Reserved key under which captured (unmapped/overflow) source fields are folded into the
+ * content-hash basis. Uses the `__mj_integration_*` reserved prefix so it can never collide
+ * with a real MAPPED destination column.
+ */
+const OVERFLOW_HASH_KEY = '__mj_integration_overflow';
+
+/**
+ * The basis object a record's content hash is computed over. When the record carries CAPTURED
+ * (unmapped) source fields — the ones the engine parks in `__mj_integration_CustomOverflow` —
+ * they are folded in under {@link OVERFLOW_HASH_KEY} so a change to a custom/overflow field
+ * counts as a real change.
+ *
+ * Why this exists: the original {@link computeContentHash} hashed MAPPED fields only, from an
+ * era before custom-column capture — so a delta that touched ONLY unmapped/custom fields hashed
+ * identically and was silently skipped (the captured overflow was never re-written). Including the
+ * overflow makes change-detection cover everything that actually lands in MJ.
+ *
+ * Backward-compatible: a record with NO overflow returns `mappedFields` unchanged, so its hash is
+ * byte-identical to the legacy basis (no spurious mass re-sync). Only records that carry overflow
+ * get a new basis — and they re-sync once, correctly, on the first sync after this change.
+ */
+export function contentHashBasis(
+    mappedFields: Record<string, unknown>,
+    unmappedFields?: Record<string, unknown> | null,
+): Record<string, unknown> {
+    if (!unmappedFields || Object.keys(unmappedFields).length === 0) {
+        return mappedFields;
+    }
+    return { ...mappedFields, [OVERFLOW_HASH_KEY]: unmappedFields };
+}
+
+/**
+ * Content hash of a record over its MAPPED fields PLUS its captured (overflow) fields.
+ * The change-detection hash for connectors that capture custom columns. Symmetric with
+ * {@link contentHashBasis} — use this for the compare AND the write so they always agree.
+ */
+export function computeContentHashWithOverflow(
+    mappedFields: Record<string, unknown>,
+    unmappedFields?: Record<string, unknown> | null,
+): string {
+    return computeContentHash(contentHashBasis(mappedFields, unmappedFields));
+}
+
+/**
  * Stable JSON serialization: object keys sorted recursively, arrays kept in order
  * (array order is semantically meaningful), `undefined` entries omitted. Dates and
  * other non-plain values fall back to their JSON form.

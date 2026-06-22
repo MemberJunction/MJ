@@ -1,5 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { MJButtonDirective, MjButtonVariant, MjButtonSize } from '../lib/button/button.directive';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { ElementRef } from '@angular/core';
+import { MJButtonDirective, MjButtonVariant } from '../lib/button/button.directive';
+
+/**
+ * Minimal in-memory stand-in for the host `ElementRef`, so the directive can be instantiated
+ * directly (no Angular TestBed) and we can assert what it writes to / reads from the element.
+ */
+function makeHost(textContent = ''): ElementRef<HTMLElement> {
+  const attrs: Record<string, string> = {};
+  const el = {
+    textContent,
+    setAttribute: (k: string, v: string) => { attrs[k] = v; },
+    getAttribute: (k: string) => (k in attrs ? attrs[k] : null),
+  } as unknown as HTMLElement;
+  return new ElementRef(el);
+}
 
 /**
  * Tests for MJButtonDirective pure logic.
@@ -10,7 +25,7 @@ describe('MJButtonDirective', () => {
   let directive: MJButtonDirective;
 
   beforeEach(() => {
-    directive = new MJButtonDirective();
+    directive = new MJButtonDirective(makeHost());
   });
 
   describe('default values', () => {
@@ -174,6 +189,65 @@ describe('MJButtonDirective', () => {
     it('should return null when not toggleable', () => {
       directive.toggleable = false;
       expect(directive.ariaPressed).toBeNull();
+    });
+  });
+
+  describe('ariaLabel input', () => {
+    it('writes the value to the host element as aria-label', () => {
+      const host = makeHost();
+      const d = new MJButtonDirective(host);
+      d.ariaLabel = 'Remove';
+      expect(host.nativeElement.getAttribute('aria-label')).toBe('Remove');
+      expect(d.ariaLabel).toBe('Remove');
+    });
+
+    it('does NOT touch the attribute when set to null/undefined (never clobbers a direct aria-label)', () => {
+      const host = makeHost();
+      host.nativeElement.setAttribute('aria-label', 'Authored directly');
+      const d = new MJButtonDirective(host);
+      d.ariaLabel = null;
+      // The directly-authored label is left intact.
+      expect(host.nativeElement.getAttribute('aria-label')).toBe('Authored directly');
+      expect(d.ariaLabel).toBeUndefined();
+    });
+  });
+
+  describe('icon-button accessible-name dev warning', () => {
+    it('warns for an icon variant with no accessible name', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const d = new MJButtonDirective(makeHost(''));
+      d.variant = 'icon';
+      d.ngAfterContentInit();
+      expect(warn).toHaveBeenCalledOnce();
+      warn.mockRestore();
+    });
+
+    it('does NOT warn when the icon button has an ariaLabel', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const d = new MJButtonDirective(makeHost(''));
+      d.variant = 'icon';
+      d.ariaLabel = 'Settings';
+      d.ngAfterContentInit();
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('does NOT warn when the icon button has visible text', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const d = new MJButtonDirective(makeHost('Save'));
+      d.variant = 'icon';
+      d.ngAfterContentInit();
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    it('does NOT warn for non-icon variants even without a name', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const d = new MJButtonDirective(makeHost(''));
+      d.variant = 'primary';
+      d.ngAfterContentInit();
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
     });
   });
 });

@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import {
   MJButtonDirective,
+  MJClickableDirective,
   MJDatepickerComponent,
   MJWindowComponent,
   MJWindowTitlebarComponent,
@@ -133,6 +134,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     FormsModule,
     ReactiveFormsModule,
     MJButtonDirective,
+    MJClickableDirective,
     MJDatepickerComponent,
     MJWindowComponent,
     MJWindowTitlebarComponent,

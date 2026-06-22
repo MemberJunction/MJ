@@ -1,4 +1,6 @@
 import { MJLruCache } from '@memberjunction/global';
+import { computeUnmappedFields } from './CustomOverflow.js';
+import { flattenRecord, hasNestedObject } from './RecordFlatten.js';
 import type { ICompanyIntegrationFieldMap } from './entity-types.js';
 import type { ExternalRecord, MappedRecord } from './types.js';
 import type {
@@ -58,20 +60,39 @@ export class FieldMappingEngine {
         fieldMaps: ICompanyIntegrationFieldMap[],
         entityName: string
     ): MappedRecord {
+        // Flatten nested source objects to scalar columns (e.g. checkin_question.id →
+        // checkin_question_id) BEFORE mapping. The match keys on the mapped PK VALUE
+        // (MatchEngine.FindByKeyFields), so an object-valued source field would produce a
+        // per-occurrence / per-version key → duplicate rows. Discovery flattens identically, so
+        // the field maps reference the flattened scalar names. A record with no nested objects
+        // passes through unchanged — every flat-record connector is a no-op here.
+        const ext: ExternalRecord = hasNestedObject(record.Fields)
+            ? { ...record, Fields: flattenRecord(record.Fields) }
+            : record;
+
         const mappedFields: Record<string, unknown> = {};
+        const mappedSourceNames = new Set<string>();
 
         for (const fieldMap of fieldMaps) {
-            const value = this.ApplyFieldMapping(record, fieldMap);
+            mappedSourceNames.add(fieldMap.SourceFieldName);
+            const value = this.ApplyFieldMapping(ext, fieldMap);
             if (value !== undefined) {
                 mappedFields[fieldMap.DestinationFieldName] = value;
             }
         }
 
+        // Capture the source keys with no field map (gaps.md §2). Cheap O(columns) diff;
+        // the result is empty (and discarded by the writer) in the common all-mapped case,
+        // so this adds no measurable cost to a customs-free sync. The engine parks any extras
+        // in the __mj_integration_CustomOverflow system column — see {@link CustomOverflow}.
+        const unmappedFields = computeUnmappedFields(ext.Fields, mappedSourceNames);
+
         return {
-            ExternalRecord: record,
+            ExternalRecord: ext,
             MJEntityName: entityName,
             MappedFields: mappedFields,
-            ChangeType: record.IsDeleted ? 'Delete' : 'Create',
+            ChangeType: ext.IsDeleted ? 'Delete' : 'Create',
+            UnmappedFields: unmappedFields,
         };
     }
 

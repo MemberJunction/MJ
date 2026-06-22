@@ -18,11 +18,10 @@ function createMockCompanyIntegration(
     const config = JSON.stringify({ ...credentialJson, ...configOverrides });
 
     return {
-        Get: (field: string) => {
-            if (field === 'Configuration') return config;
-            if (field === 'CredentialID') return null; // skip DB credential path
-            return null;
-        },
+        // The connector reads the strongly-typed entity properties directly
+        // (per MJ convention — no `.Get()`), so expose them as real properties.
+        Configuration: config,
+        CredentialID: null, // skip the DB credential-entity path; use Configuration JSON
     } as unknown as MJCompanyIntegrationEntity;
 }
 
@@ -91,37 +90,25 @@ describe('SalesforceConnector (unit)', () => {
         });
     });
 
-    describe('GetIntegrationObjects', () => {
-        it('should return 9 SF standard objects', () => {
-            const objects = connector.GetIntegrationObjects();
-            expect(objects.length).toBe(9);
-
-            const names = objects.map(o => o.Name);
-            expect(names).toContain('Account');
-            expect(names).toContain('Contact');
-            expect(names).toContain('Lead');
-            expect(names).toContain('Opportunity');
-            expect(names).toContain('Task');
-            expect(names).toContain('Event');
-            expect(names).toContain('Case');
-            expect(names).toContain('Campaign');
-            expect(names).toContain('User');
+    describe('DiscoveryIsAuthoritative', () => {
+        it('should affirm authoritative discovery (global describe = complete gamut)', () => {
+            // IMPROVE-build correction: the global /sobjects/ describe returns the complete
+            // credentialed object gamut, so comprehensive refresh may safely deactivate
+            // dropped objects (reversible). Default on the base is false.
+            expect(connector.DiscoveryIsAuthoritative).toBe(true);
         });
+    });
 
-        it('should mark User as non-writable', () => {
+    describe('GetIntegrationObjects (no baked famous catalog)', () => {
+        it('should NOT return a hardcoded famous-subset catalog when the metadata cache is unseeded', () => {
+            // IMPROVE-build correction: the connector used to return a baked ~9-object catalog.
+            // It now derives the action-generation hint set ENTIRELY from runtime-cached
+            // IntegrationObject metadata. With no seeded integration, it returns [] — it NEVER
+            // falls back to a hardcoded list. The per-tenant object universe comes from
+            // DiscoverObjects (live describe), proven separately below.
             const objects = connector.GetIntegrationObjects();
-            const user = objects.find(o => o.Name === 'User');
-            expect(user?.SupportsWrite).toBe(false);
-        });
-
-        it('should include Id as PrimaryKey for all objects', () => {
-            const objects = connector.GetIntegrationObjects();
-            for (const obj of objects) {
-                const idField = obj.Fields.find(f => f.Name === 'Id');
-                expect(idField, `${obj.Name} should have Id field`).toBeDefined();
-                expect(idField!.IsPrimaryKey).toBe(true);
-                expect(idField!.IsReadOnly).toBe(true);
-            }
+            expect(Array.isArray(objects)).toBe(true);
+            expect(objects.length).toBe(0);
         });
     });
 
@@ -276,8 +263,8 @@ describe('SalesforceConnector (mocked API)', () => {
         });
     });
 
-    describe('DiscoverObjects', () => {
-        it('should return object schemas from /sobjects/', async () => {
+    describe('DiscoverObjects (live describe — runtime MECHANISM, not a baked catalog)', () => {
+        it('should enumerate objects from the live /sobjects/ describe response', async () => {
             mockJwtSign();
             setupAuthAndApiMock([{
                 body: {
@@ -292,11 +279,52 @@ describe('SalesforceConnector (mocked API)', () => {
             const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
             const objects = await connector.DiscoverObjects(ci, contextUser);
 
-            // Should filter to queryable objects
-            expect(objects.length).toBeGreaterThanOrEqual(2);
+            // The object universe comes from the LIVE describe — not a hardcoded list.
             const names = objects.map(o => o.Name);
             expect(names).toContain('Account');
             expect(names).toContain('Contact');
+            // ApexLog is system noise — filtered out by the user-relevance heuristic.
+            expect(names).not.toContain('ApexLog');
+        });
+
+        it('should always surface per-tenant custom (__c) objects', async () => {
+            mockJwtSign();
+            setupAuthAndApiMock([{
+                body: {
+                    sobjects: [
+                        { name: 'Account', label: 'Account', queryable: true, createable: true, custom: false },
+                        { name: 'Widget__c', label: 'Widget', queryable: true, createable: true, custom: true },
+                        { name: 'AuditLog__c', label: 'Audit Log', queryable: true, createable: false, custom: true },
+                    ],
+                },
+            }]);
+
+            const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
+            const objects = await connector.DiscoverObjects(ci, contextUser);
+
+            const names = objects.map(o => o.Name);
+            // Custom objects ALWAYS pass — they are customer-defined data the catalog can't predict.
+            expect(names).toContain('Widget__c');
+            expect(names).toContain('AuditLog__c');
+            const widget = objects.find(o => o.Name === 'Widget__c');
+            expect(widget?.SupportsWrite).toBe(true);
+            expect(widget?.SupportsIncrementalSync).toBe(true);
+        });
+
+        it('should exclude non-queryable objects', async () => {
+            mockJwtSign();
+            setupAuthAndApiMock([{
+                body: {
+                    sobjects: [
+                        { name: 'Account', label: 'Account', queryable: true, createable: true, custom: false },
+                        { name: 'NonQueryable', label: 'NQ', queryable: false, createable: true, custom: false },
+                    ],
+                },
+            }]);
+
+            const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
+            const objects = await connector.DiscoverObjects(ci, contextUser);
+            expect(objects.map(o => o.Name)).not.toContain('NonQueryable');
         });
     });
 
@@ -423,13 +451,20 @@ describe('SalesforceConnector (mocked API)', () => {
         });
     });
 
-    describe('CreateRecord', () => {
-        it('should POST to sobjects endpoint and return success', async () => {
+    describe('CreateRecord (sObject row resource — BuildCreatedResult invariant)', () => {
+        it('should POST to /sobjects/{Type} and extract the ID from the {id,success,errors} body', async () => {
             mockJwtSign();
-            setupAuthAndApiMock([{
-                body: { id: '001A000099', success: true, errors: [] },
-                status: 201,
-            }]);
+            let capturedUrl = '';
+            let capturedMethod = '';
+            let capturedBody: unknown;
+            fetchSpy.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+                const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+                if (url.includes('/services/oauth2/token')) return mockTokenResponse();
+                capturedUrl = url;
+                capturedMethod = init?.method ?? '';
+                capturedBody = init?.body ? JSON.parse(init.body as string) : undefined;
+                return mockApiResponse({ id: '001A000099', success: true, errors: [] }, 201);
+            });
 
             const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
             const ctx: CreateRecordContext = {
@@ -442,6 +477,66 @@ describe('SalesforceConnector (mocked API)', () => {
             const result = await connector.CreateRecord(ctx);
             expect(result.Success).toBe(true);
             expect(result.ExternalID).toBe('001A000099');
+            expect(capturedMethod).toBe('POST');
+            expect(capturedUrl).toContain('/services/data/v61.0/sobjects/Account/');
+            expect(capturedBody).toMatchObject({ Name: 'New Account', Industry: 'Technology' });
+        });
+
+        it('should FAIL LOUDLY when a 2xx response carries no record ID (silent-loss guard)', async () => {
+            mockJwtSign();
+            setupAuthAndApiMock([{ body: { id: '', success: true, errors: [] }, status: 201 }]);
+
+            const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
+            const result = await connector.CreateRecord({
+                CompanyIntegration: ci,
+                ObjectName: 'Account',
+                Attributes: { Name: 'New Account' },
+                ContextUser: contextUser,
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('no record ID');
+        });
+
+        it('should FAIL when SF returns 2xx with success=false', async () => {
+            mockJwtSign();
+            setupAuthAndApiMock([{
+                body: { id: null, success: false, errors: [{ errorCode: 'REQUIRED_FIELD_MISSING', message: 'Required fields are missing: [Name]' }] },
+                status: 201,
+            }]);
+
+            const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
+            const result = await connector.CreateRecord({
+                CompanyIntegration: ci,
+                ObjectName: 'Account',
+                Attributes: {},
+                ContextUser: contextUser,
+            });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('success=false');
+            expect(result.ErrorMessage).toContain('REQUIRED_FIELD_MISSING');
+        });
+
+        it('should strip read-only/system fields from the create body', async () => {
+            mockJwtSign();
+            let capturedBody: Record<string, unknown> | undefined;
+            fetchSpy.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+                const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+                if (url.includes('/services/oauth2/token')) return mockTokenResponse();
+                capturedBody = init?.body ? JSON.parse(init.body as string) : undefined;
+                return mockApiResponse({ id: '001A0000AA', success: true, errors: [] }, 201);
+            });
+
+            const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
+            await connector.CreateRecord({
+                CompanyIntegration: ci,
+                ObjectName: 'Account',
+                Attributes: { Name: 'X', Id: 'should-not-be-sent', SystemModstamp: '2026-01-01T00:00:00Z' },
+                ContextUser: contextUser,
+            });
+            expect(capturedBody).toBeDefined();
+            expect(capturedBody!['Name']).toBe('X');
+            expect(capturedBody!['Id']).toBeUndefined();
+            expect(capturedBody!['SystemModstamp']).toBeUndefined();
         });
     });
 
@@ -616,6 +711,28 @@ class TestSalesforceConnector extends SalesforceConnector {
         return { Token: 't', InstanceUrl: 'https://na1.salesforce.com', ApiVersion: '61.0', Config: {} };
     }
 
+    /** Public wrapper around the protected TransformRecord hook. */
+    public CallTransformRecord(raw: Record<string, unknown>): Record<string, unknown> {
+        const self = this as unknown as {
+            TransformRecord: (r: Record<string, unknown>, o: unknown, f: unknown) => Record<string, unknown>;
+        };
+        return self.TransformRecord(raw, {} as unknown, [] as unknown);
+    }
+
+    /** Public wrapper around the protected ExcludedSourceKeys hook. */
+    public CallExcludedSourceKeys(objectName: string): string[] {
+        const self = this as unknown as { ExcludedSourceKeys: (o: string) => string[] };
+        return self.ExcludedSourceKeys(objectName);
+    }
+
+    /** Public wrapper around the protected NormalizeResponse hook. */
+    public CallNormalizeResponse(rawBody: unknown): Record<string, unknown>[] {
+        const self = this as unknown as {
+            NormalizeResponse: (b: unknown, k: string | null) => Record<string, unknown>[];
+        };
+        return self.NormalizeResponse(rawBody, null);
+    }
+
     /** Public wrapper around the private CreateBulkJob for testing. */
     public async CallCreateBulkJob(attrs: Record<string, unknown>) {
         const self = this as unknown as {
@@ -693,5 +810,127 @@ describe('SalesforceConnector.ExecuteCompositeRequest (sub-request error validat
 
         expect(result.Success).toBe(true);
         expect(result.ExternalID).toBe('composite');
+    });
+});
+
+// ─── TransformRecord / ExcludedSourceKeys (attributes-strip — sanctioned removal) ──────
+
+describe('SalesforceConnector.TransformRecord', () => {
+    it('strips the SF `attributes` metadata blob while preserving every data field', () => {
+        const connector = new TestSalesforceConnector();
+        const raw = {
+            attributes: { type: 'Account', url: '/services/data/v61.0/sobjects/Account/001A' },
+            Id: '001A',
+            Name: 'Acme',
+            Custom_Field__c: 'kept',
+            AnnualRevenue: 1000,
+        };
+
+        const out = connector.CallTransformRecord(raw);
+
+        // attributes removed...
+        expect(out['attributes']).toBeUndefined();
+        // ...everything else (including custom __c) preserved — full-record pass-through.
+        expect(out['Id']).toBe('001A');
+        expect(out['Name']).toBe('Acme');
+        expect(out['Custom_Field__c']).toBe('kept');
+        expect(out['AnnualRevenue']).toBe(1000);
+    });
+
+    it('is identity (returns the same object) when no attributes key is present', () => {
+        const connector = new TestSalesforceConnector();
+        const raw = { Id: '001A', Name: 'Acme' };
+        const out = connector.CallTransformRecord(raw);
+        expect(out).toBe(raw); // identity fast-path
+    });
+
+    it('declares `attributes` as the sanctioned excluded key', () => {
+        const connector = new TestSalesforceConnector();
+        expect(connector.CallExcludedSourceKeys('Account')).toEqual(['attributes']);
+        expect(connector.CallExcludedSourceKeys('Widget__c')).toEqual(['attributes']);
+    });
+});
+
+// ─── NormalizeResponse (SOQL envelope unwrapping) ─────────────────────────────
+
+describe('SalesforceConnector.NormalizeResponse', () => {
+    it('extracts records[] from a SOQL query envelope', () => {
+        const connector = new TestSalesforceConnector();
+        const out = connector.CallNormalizeResponse({
+            totalSize: 2,
+            done: true,
+            records: [{ Id: 'a' }, { Id: 'b' }],
+        });
+        expect(out.length).toBe(2);
+        expect(out[0]['Id']).toBe('a');
+    });
+
+    it('returns an empty array when the envelope has no records', () => {
+        const connector = new TestSalesforceConnector();
+        expect(connector.CallNormalizeResponse({ totalSize: 0, done: true })).toEqual([]);
+    });
+});
+
+// ─── FetchChanges incremental — watermark filter + attributes-strip end to end ────────
+
+describe('SalesforceConnector.FetchChanges (incremental + attributes-strip)', () => {
+    let connector: SalesforceConnector;
+    let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+        connector = new SalesforceConnector();
+        fetchSpy = vi.spyOn(globalThis, 'fetch');
+    });
+    afterEach(() => vi.restoreAllMocks());
+
+    it('adds a SystemModstamp watermark filter on a subsequent (incremental) sync and strips attributes from emitted records', async () => {
+        vi.mock('jsonwebtoken', () => ({ default: { sign: () => 'mock-jwt-assertion' } }));
+
+        let soqlUrl = '';
+        fetchSpy.mockImplementation(async (input: string | URL | Request) => {
+            const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+            if (url.includes('/services/oauth2/token')) return mockTokenResponse();
+            if (url.includes('/describe')) {
+                return mockApiResponse({
+                    fields: [
+                        { name: 'Id', type: 'id', nillable: false, defaultedOnCreate: true, externalId: false, calculated: false, updateable: false, referenceTo: [] },
+                        { name: 'Name', type: 'string', nillable: true, defaultedOnCreate: false, externalId: false, calculated: false, updateable: true, referenceTo: [] },
+                        { name: 'SystemModstamp', type: 'datetime', nillable: false, defaultedOnCreate: true, externalId: false, calculated: false, updateable: false, referenceTo: [] },
+                        { name: 'IsDeleted', type: 'boolean', nillable: false, defaultedOnCreate: true, externalId: false, calculated: false, updateable: false, referenceTo: [] },
+                        { name: 'LastModifiedById', type: 'reference', nillable: false, defaultedOnCreate: true, externalId: false, calculated: false, updateable: false, referenceTo: ['User'] },
+                    ],
+                });
+            }
+            soqlUrl = url;
+            return mockApiResponse({
+                totalSize: 1,
+                done: true,
+                records: [
+                    { attributes: { type: 'Account', url: '/x' }, Id: '001A', Name: 'Acme', SystemModstamp: '2026-04-01T00:00:00.000Z', IsDeleted: false, LastModifiedById: '005' },
+                ],
+            });
+        });
+
+        const ci = createMockCompanyIntegration(MOCK_CREDENTIALS);
+        const result = await connector.FetchChanges({
+            CompanyIntegration: ci,
+            ObjectName: 'Account',
+            WatermarkValue: '2026-03-01T00:00:00.000Z',
+            BatchSize: 500,
+            ContextUser: contextUser,
+        });
+
+        // Incremental WHERE filter present on the SOQL using the per-object watermark column.
+        const decoded = decodeURIComponent(soqlUrl);
+        expect(decoded).toContain('WHERE SystemModstamp >= 2026-03-01T00:00:00.000Z');
+        expect(decoded).toContain('ORDER BY SystemModstamp ASC');
+
+        // Emitted record carries the full source EXCEPT the stripped attributes blob.
+        expect(result.Records.length).toBe(1);
+        expect(result.Records[0].Fields['attributes']).toBeUndefined();
+        expect(result.Records[0].Fields['Name']).toBe('Acme');
+        expect(result.Records[0].Fields['Id']).toBe('001A');
+        // Watermark advances past the max SystemModstamp (+1ms).
+        expect(result.NewWatermarkValue).toBe('2026-04-01T00:00:00.001Z');
     });
 });

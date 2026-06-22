@@ -299,6 +299,29 @@ console.log(field.IsPrimaryKey); // Primary key?
 console.log(field.ReadOnly);     // Read-only field?
 ```
 
+#### Deprecated and Disabled Fields (Active-Status Enforcement)
+
+Every entity field has a `Status` of `Active` (the default), `Deprecated`, or `Disabled`. The column stays physically present in the table and the `EntityField` instance is always created — status only governs whether *code* is allowed to use the field:
+
+- **`Deprecated`** — still functional, but emits a batched console **warning** when accessed, nudging callers off it before removal.
+- **`Disabled`** — **throws** on access; the field is off-limits even though the metadata and physical column remain.
+
+**Where enforcement happens (and where it deliberately does not).** The status check lives at the field-access boundary that real code flows through — `BaseEntity.Get()`, `BaseEntity.Set()`, and `BaseEntity.SetMany()` — which is exactly what the generated strongly-typed accessors call:
+
+```typescript
+// Generated accessor → BaseEntity.Get/Set → status enforced here
+const s = agentRun.AgentState;      // Deprecated → warns; Disabled → throws
+agentRun.Set('AgentState', value);  // same enforcement via the dynamic API
+```
+
+It is **not** enforced on the low-level `EntityField.Value` accessor. Framework-internal machinery — dirty checking, validation, serialization (`GetAll`), record-change capture, and load-time hydration — reads `EntityField.Value` directly and is therefore exempt by construction. This is what keeps merely **loading or saving** a record that *contains* a deprecated column from false-warning on every operation: only genuine, code-initiated field access counts as "use."
+
+`SetMany()` distinguishes the two via its `ignoreActiveStatusAssertions` parameter — the load/hydration paths pass `true` (populating from the database is not user use), while ordinary user-initiated `SetMany()` calls enforce status.
+
+**Fast path.** Enforcement is gated on `EntityInfo.HasInactiveFields`, a value memoized once per entity definition. Entities whose fields are all `Active` (the overwhelming majority) pay only a single cached boolean check in `Get`/`Set`/`SetMany` — no per-field work and zero overhead in hot read/write loops.
+
+> Note: `EntityField.ActiveStatusAssertions` is retained as a **deprecated no-op** for backward compatibility. There is nothing to toggle at the field level anymore, since `EntityField.Value` no longer asserts.
+
 #### Save and Delete
 
 ```typescript
