@@ -207,6 +207,7 @@ export class RecordProcessEditorComponent extends BaseAngularComponent implement
     onRulesChange(ruleSet: FieldRuleSet): void {
         this.RuleSet = ruleSet;
         if (this.Record) this.Record.Configuration = JSON.stringify(ruleSet);
+        this.cdr.detectChanges();
     }
 
     /** Saves the record (and emits). Returns success. */

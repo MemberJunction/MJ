@@ -7,7 +7,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { parseAppliedRunDetailChanges, displayRunValue, type RunDetailChange } from '../run-detail';
 
@@ -152,12 +152,13 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
             },
             { EntityName: 'MJ: Record Processes', Fields: ['ID', 'Name'], ResultType: 'simple' },
         ]);
+        // Normalized-UUID keys → O(1), case-safe across SQL Server (upper) / PostgreSQL (lower).
         const nameByID = new Map<string, string>();
-        if (procs.Success) for (const p of procs.Results as Array<{ ID: string; Name: string }>) nameByID.set(p.ID, p.Name);
+        if (procs.Success) for (const p of procs.Results as Array<{ ID: string; Name: string }>) nameByID.set(NormalizeUUID(p.ID), p.Name);
         const rawRuns = runs.Success ? (runs.Results as RawRun[]) : [];
         this.Runs = rawRuns.map((r) => ({
             ...r,
-            ProcessName: [...nameByID.entries()].find(([id]) => UUIDsEqual(id, r.RecordProcessID))?.[1] ?? '(deleted)',
+            ProcessName: nameByID.get(NormalizeUUID(r.RecordProcessID)) ?? '(deleted)',
             EntityName: this.ProviderToUse.EntityByID(r.EntityID)?.Name ?? r.EntityID,
         }));
         this.Loading = false;
