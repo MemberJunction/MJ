@@ -84,6 +84,10 @@ async function createSQLServerProvider(config: ResolvedConfig): Promise<Database
 async function createPostgreSQLProvider(config: ResolvedConfig): Promise<DatabaseProviderBase> {
   const coreSchema = config.coreSchema ?? '__mj';
   _pgProvider = new PostgreSQLDataProvider();
+  // SSL is intentionally not set here. Like `mj sync`, it is driven by the standard
+  // PG* environment (e.g. PGSSLMODE) and the provider's own `NODE_ENV`-based default —
+  // which is how connections to managed Postgres (AWS Aurora/RDS `rds.force_ssl=1`)
+  // are enabled in production. Setting an explicit `ssl` here would override that env.
   await _pgProvider.Config(
     new PostgreSQLProviderConfigData(
       {
@@ -92,7 +96,6 @@ async function createPostgreSQLProvider(config: ResolvedConfig): Promise<Databas
         Database: config.dbDatabase,
         User: config.codeGenLogin,
         Password: config.codeGenPassword,
-        SSL: resolvePostgreSQLSsl(config),
       },
       coreSchema,
       1, // checkRefreshIntervalSeconds — must be > 0 to trigger the provider's initial metadata load
@@ -103,37 +106,6 @@ async function createPostgreSQLProvider(config: ResolvedConfig): Promise<Databas
   SetProvider(_pgProvider);
   _systemUser = await resolvePostgreSQLSystemUser(_pgProvider, coreSchema);
   return _pgProvider as unknown as DatabaseProviderBase;
-}
-
-/**
- * Resolves the PostgreSQL SSL setting so `mj app` connects to managed Postgres —
- * notably AWS Aurora/RDS, which default to `rds.force_ssl=1` and REJECT an
- * unencrypted connection. The CLI doesn't set `NODE_ENV=production`, so the
- * provider's own NODE_ENV-based default can't be relied on here; SSL is enabled
- * explicitly for RDS endpoints.
- *
- *  - `*.rds.amazonaws.com` host (Aurora/RDS), or explicit `DB_ENCRYPT=1` → SSL ON.
- *  - explicit `DB_ENCRYPT=0` → SSL OFF.
- *  - otherwise (e.g. localhost) → undefined, leaving the provider's own default
- *    (off in dev) — verified working against a local Postgres.
- *
- * `rejectUnauthorized` follows `DB_TRUST_SERVER_CERTIFICATE` (mirrors the SQL Server
- * flag), so Aurora works two ways: securely by installing the Amazon RDS CA bundle
- * via `NODE_EXTRA_CA_CERTS` (leave the flag off → cert is validated), or by setting
- * `DB_TRUST_SERVER_CERTIFICATE=1` to skip validation when the CA isn't installed.
- */
-function resolvePostgreSQLSsl(config: ResolvedConfig): boolean | { rejectUnauthorized: boolean } | undefined {
-  const host = (config.dbHost ?? '').toLowerCase();
-  const isRds = host.endsWith('.rds.amazonaws.com');
-  const dbEncryptSet = process.env.DB_ENCRYPT !== undefined;
-
-  if (dbEncryptSet && config.dbEncrypt === false) {
-    return false;
-  }
-  if (isRds || (dbEncryptSet && config.dbEncrypt === true)) {
-    return { rejectUnauthorized: !config.dbTrustServerCertificate };
-  }
-  return undefined; // local/dev → provider's own default (SSL off)
 }
 
 /**
