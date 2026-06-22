@@ -1069,7 +1069,13 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, manifest.migrations.directory, tempDir, context.GitHubOptions, subpath);
+  // Platform-aware dialect directory: on Postgres pull `<directory>-pg/` (the bizapps `migrations-pg`
+  // sibling convention), else the SQL Server `<directory>/`. The directory holds the dialect's variant
+  // of the same migrations; Skyway then runs them with the matching provider (below).
+  const platform = context.DatabaseProvider.Dialect.PlatformKey;
+  const migrationsDir = platform === 'postgresql' ? `${manifest.migrations.directory}-pg` : manifest.migrations.directory;
+
+  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, migrationsDir, tempDir, context.GitHubOptions, subpath);
 
   if (!downloadResult.Success) {
     return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
@@ -1084,7 +1090,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
     MJCoreSchema: context.MJCoreSchema,
     ExtraPlaceholders: context.MigrationPlaceholders,
     // Select the Skyway provider matching the live DB platform.
-    Platform: context.DatabaseProvider.Dialect.PlatformKey,
+    Platform: platform,
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };

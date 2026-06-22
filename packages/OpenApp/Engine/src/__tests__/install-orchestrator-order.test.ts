@@ -76,7 +76,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadDirectory } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadDirectory, DownloadMigrations } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
@@ -323,5 +323,54 @@ describe('InstallApp connector profile (metadata.processOnInstall, no schema)', 
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain('MetadataPusher');
+    });
+});
+
+describe('HandleMigrations — platform-aware dialect directory', () => {
+    // A full Open App (schema + migrations) like the per-connector Integrations apps.
+    const fullAppJSON = JSON.stringify({
+        manifestVersion: 1, name: 'connector-hubspot', displayName: 'HubSpot Connector',
+        description: 'HubSpot connector test app description', version: '1.0.0', publisher: { name: 'Test' },
+        repository: 'https://github.com/MemberJunction/Integrations', mjVersionRange: '>=5.0.0 <6.0.0',
+        schema: { name: 'mj_connector_hubspot', createIfNotExists: true },
+        migrations: { directory: 'migrations', engine: 'skyway' },
+        packages: { server: [{ name: '@memberjunction/connector-hubspot', role: 'bootstrap', startupExport: 'registerConnector' }] },
+    });
+    const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
+    const ctxFor = (platformKey: string) =>
+        ({ ...context, DatabaseProvider: { Dialect: { PlatformKey: platformKey } }, DatabaseConfig: {} } as unknown as OrchestratorContext);
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 1, AppliedFiles: ['V1__x.sql'] });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true } as never);
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true } as never);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined as never);
+        vi.mocked(FindInstalledApp).mockResolvedValue(null);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockResolvedValue('id-hubspot');
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: fullAppJSON });
+        vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, LocalPath: '/tmp/m', Files: ['V1__x.sql'] });
+    });
+
+    it('downloads migrations/ on SQL Server', async () => {
+        const r = await InstallApp({ Source: source }, ctxFor('sqlserver'));
+        expect(r.Success).toBe(true);
+        expect(vi.mocked(DownloadMigrations)).toHaveBeenCalledWith(
+            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations', expect.any(String), expect.anything(), 'CRM/HubSpot',
+        );
+    });
+
+    it('downloads migrations-pg/ on PostgreSQL', async () => {
+        const r = await InstallApp({ Source: source }, ctxFor('postgresql'));
+        expect(r.Success).toBe(true);
+        expect(vi.mocked(DownloadMigrations)).toHaveBeenCalledWith(
+            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations-pg', expect.any(String), expect.anything(), 'CRM/HubSpot',
+        );
     });
 });
