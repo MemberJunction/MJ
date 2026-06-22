@@ -32,20 +32,21 @@ mj sync push --dir metadata \
   --delete-db-only
 ```
 
-## Final destructive step — remove the connector CODE from core (separate commit, build-verified)
+## Connector CODE removal — DONE in this PR
 
-The metadata above is build-safe. The code removal below deletes a package and must be done with a full
-`npm install` + build to verify (blast radius is small — only `@memberjunction/server-bootstrap` references
-`@memberjunction/integration-connectors`):
+The connector source + tests have been removed from core (they now live in
+`MemberJunction/Integrations`), alongside the metadata retirement above:
 
-1. Delete the moved source metadata: `metadata/integrations/.{vendor}.json` (root dotfiles, **keep**
-   `.betty.json` / `.integrations.json` / `.mj-sync.json`) and `metadata/integrations/<vendor>/` subdirs.
-2. `git rm -r packages/Integration/connectors` — the core `@memberjunction/integration-connectors` package
-   (the new repo now owns that npm name).
-3. Remove `@memberjunction/integration-connectors` from `packages/ServerBootstrap/package.json`.
-4. `npm run mj:manifest:server-bootstrap` — regenerates `mj-class-registrations.ts` **without** the
-   connector imports/registrations (do **not** hand-edit the generated file).
-5. `npm install` then build `@memberjunction/server-bootstrap` to confirm it compiles connector-free.
+1. **Source metadata removed** — `metadata/integrations/.{vendor}.json` (root dotfiles) and
+   `metadata/integrations/<vendor>/` subdirs. Kept: `.betty.json` (already-deleted marker),
+   `.integrations.json`, `.mj-sync.json`, `additionalSchemaInfo.json`.
+2. **Package removed** — `packages/Integration/connectors` (all 35 connector classes **+ tests/fixtures**).
+   The `@memberjunction/integration-connectors` npm name is now owned by `MemberJunction/Integrations`.
+3. **ServerBootstrap dep removed** — dropped from `packages/ServerBootstrap/package.json`.
+4. **Bootstrap manifest** — the connector import block + 35 registration entries removed from
+   `mj-class-registrations.ts` (the only core file that referenced them). A subsequent
+   `npm run mj:manifest:server-bootstrap` reproduces this exactly (the package is gone).
 
-`RelationalDBConnector` / `FileFeedConnector` are framework-generic primitives with no vendor catalog — if
-you want them to remain in core, keep their source under a retained home before step 2 (open decision).
+Note: `RelationalDBConnector` / `FileFeedConnector` are framework-generic primitives with no vendor
+catalog. They moved with the rest into the shared package (the "one package" decision); if core should
+retain them natively, relocate their source to a kept home — open decision, see the MJ PR.
