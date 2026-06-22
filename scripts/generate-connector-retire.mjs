@@ -1,37 +1,79 @@
 #!/usr/bin/env node
 /**
- * RELEASE B (subtractive) generator. Produces the artifacts that retire the seeded vendor
- * connector metadata from MJ core — now that connectors live in MemberJunction/Integrations
- * and seed their own metadata on install:
+ * RELEASE B (subtractive) generator — VERSION-AWARE.
  *
- *  1. Top-level `deleteRecord` files (the version-controlled, operator-applied cleanup, mirroring
- *     the Betty / old-nimble precedent), in reverse-FK order:
- *       metadata/integration-object-deletes/.connector-iof.deletes.json   (all active IOF)
- *       metadata/integration-object-deletes/.connector-io.deletes.json    (all active IO)
- *       metadata/integration-deletes/.connector-integration.deletes.json  (all active Integration)
- *  2. A forward-fix migration that nets the same rows out of a FRESH install (which replays the
- *     baseline seeds) — but GUARDED so it never deletes a row an existing install is actually using
- *     (anything referenced by CompanyIntegration). Idempotent, reverse-FK order.
+ * Retires the seeded vendor connector metadata from MJ core, following the precise per-RECORD rule
+ * (a record = an Integration, IntegrationObject, or IntegrationObjectField), classified against the
+ * `v5.41.0` git tag (the "before 5.42.0" snapshot):
  *
- * Records already tagged deleteRecord (Betty, old-nimble) are skipped — not re-deleted, not moved.
+ *   - Case A  (present at v5.41.0, NOT already deleteRecord-tagged):
+ *        moved to MemberJunction/Integrations AND tagged here with a top-level deleteRecord
+ *        (so it is removed from existing customer DBs that seeded it before 5.42.0).
+ *   - Case B  (present at v5.41.0, ALREADY deleteRecord-tagged, e.g. Betty):
+ *        left exactly as-is. Not moved, not re-tagged.
+ *   - Case C  (added in 5.42.0 — NOT present at v5.41.0):
+ *        moved to MemberJunction/Integrations and its source REMOVED here — but NEVER tagged
+ *        deleteRecord and NEVER deleted via migration (it was never shipped to a customer DB).
  *
- * Run from the repo root:  node scripts/generate-connector-retire.mjs
+ * IMPORTANT: a single metadata file can contain BOTH Case A and Case C records (e.g. an Integration
+ * row that existed at v5.41.0 whose IO/IOF were all built out in 5.42.0). Classification is therefore
+ * per-record by ID, NOT per-file — only the Case A records become deleteRecord entries; the file's
+ * Case C records are simply dropped when the source file is removed.
+ *
+ * The committed top-level deleteRecord files ARE the durable mechanism (a deploy-time `mj sync push`
+ * applies them on both fresh and existing installs). No forward-fix migration is emitted — a migration
+ * would delete by a coarser key and risk touching Case C rows, which this rule forbids.
+ *
+ * Reads the connector metadata from a CLEAN `next` checkout (this worktree removes its own copy):
+ *   NEXT_METADATA_DIR=/path/to/clean/next/metadata  node scripts/generate-connector-retire.mjs
  */
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const META = join(REPO_ROOT, 'metadata');
-const INTEG_DIR = join(META, 'integrations');
-const MIGRATION = join(REPO_ROOT, 'migrations', 'v5', 'V202606221600__v5.43.x__Retire_Connector_Integration_Seed.sql');
+const BOUNDARY_TAG = process.env.BOUNDARY_TAG || 'v5.41.0';
+const NEXT_META = process.env.NEXT_METADATA_DIR || join(META); // default: this repo's metadata (must be clean)
 
-/** Collect every integration metadata file: root dotfiles + workshop subdirs (excluding already-deleted Betty). */
-function integrationFiles() {
+/** Yield every record (level, ID, hasDeleteRecord, fieldsName) from an Integration metadata blob. */
+function* records(raw) {
+  const recs = Array.isArray(raw) ? raw : [raw];
+  for (const integ of recs) {
+    if (!integ || typeof integ !== 'object' || !integ.fields?.ClassName) continue;
+    yield { level: 'INT', id: integ.primaryKey?.ID, del: integ.deleteRecord?.delete === true, name: integ.fields?.Name, node: integ };
+    for (const io of integ.relatedEntities?.['MJ: Integration Objects'] ?? []) {
+      yield { level: 'IO', id: io.primaryKey?.ID, del: io.deleteRecord?.delete === true, name: io.fields?.Name, node: io };
+      for (const iof of io.relatedEntities?.['MJ: Integration Object Fields'] ?? []) {
+        yield { level: 'IOF', id: iof.primaryKey?.ID, del: iof.deleteRecord?.delete === true, name: iof.fields?.Name, node: iof };
+      }
+    }
+  }
+}
+
+/** All record IDs present in the integration metadata at the boundary tag (the "before 5.42.0" set). */
+function boundaryIds() {
+  const list = execFileSync('git', ['ls-tree', '-r', '--name-only', BOUNDARY_TAG, '--', 'metadata/integrations'], { cwd: REPO_ROOT })
+    .toString().split('\n').filter(Boolean);
+  const ids = new Set();
+  for (const fp of list) {
+    if (!fp.endsWith('.json') || fp.includes('additionalSchemaInfo') || fp.endsWith('.mj-sync.json') || fp.endsWith('.integrations.json')) continue;
+    let raw;
+    try { raw = JSON.parse(execFileSync('git', ['show', `${BOUNDARY_TAG}:${fp}`], { cwd: REPO_ROOT, maxBuffer: 1 << 30 }).toString()); }
+    catch { continue; }
+    for (const r of records(raw)) if (r.id) ids.add(r.id.toUpperCase());
+  }
+  return ids;
+}
+
+/** All integration metadata files in the (clean) next checkout. */
+function nextFiles() {
+  const dir = join(NEXT_META, 'integrations');
   const out = [];
-  for (const f of readdirSync(INTEG_DIR)) {
-    const p = join(INTEG_DIR, f);
-    if (f.startsWith('.') && f.endsWith('.json') && !['.integrations.json', '.mj-sync.json', '.betty.json'].includes(f)) out.push(p);
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (f.startsWith('.') && f.endsWith('.json') && !['.integrations.json', '.mj-sync.json'].includes(f)) out.push(p);
     else if (!f.startsWith('.') && statSync(p).isDirectory()) {
       const m = readdirSync(p).find((x) => x.endsWith('.integration.json'));
       if (m) out.push(join(p, m));
@@ -40,109 +82,47 @@ function integrationFiles() {
   return out;
 }
 
-const isDeleted = (rec) => rec?.deleteRecord?.delete === true;
-const delRec = (fields, id) => ({ fields: { Name: fields?.Name ?? null }, primaryKey: { ID: id }, deleteRecord: { delete: true } });
+const v541 = boundaryIds();
+const delRec = (name, id) => ({ fields: { Name: name ?? null }, primaryKey: { ID: id }, deleteRecord: { delete: true } });
+const A = { INT: [], IO: [], IOF: [] };
+const counts = { A: { INT: 0, IO: 0, IOF: 0 }, B: { INT: 0, IO: 0, IOF: 0 }, C: { INT: 0, IO: 0, IOF: 0 } };
 
-const integrations = [];       // ID-bearing Integration deleteRecord entries (mj-sync push)
-const ios = [];                // ID-bearing IO deleteRecord entries
-const iofs = [];               // ID-bearing IOF deleteRecord entries
-const classNames = new Set();  // EVERY active connector ClassName (the migration's robust key)
-
-for (const file of integrationFiles()) {
-  const raw = JSON.parse(readFileSync(file, 'utf-8'));
-  const recs = Array.isArray(raw) ? raw : [raw];
-  for (const integ of recs) {
-    if (!integ?.fields?.ClassName || isDeleted(integ)) continue;
-    classNames.add(integ.fields.ClassName);
-    // deleteRecord files require a primaryKey; older DB-seeded connectors have one,
-    // newer workshop-authored ones may not (never pushed). The migration below covers
-    // all by ClassName regardless, so missing-PK connectors are not lost.
-    const integId = integ.primaryKey?.ID;
-    if (integId) integrations.push(delRec(integ.fields, integId));
-    for (const io of integ.relatedEntities?.['MJ: Integration Objects'] ?? []) {
-      if (isDeleted(io) || !io.primaryKey?.ID) continue;
-      ios.push(delRec(io.fields, io.primaryKey.ID));
-      for (const iof of io.relatedEntities?.['MJ: Integration Object Fields'] ?? []) {
-        if (isDeleted(iof) || !iof.primaryKey?.ID) continue;
-        iofs.push(delRec(iof.fields, iof.primaryKey.ID));
-      }
-    }
+for (const file of nextFiles()) {
+  for (const r of records(JSON.parse(readFileSync(file, 'utf-8')))) {
+    const inV541 = r.id ? v541.has(r.id.toUpperCase()) : false;
+    const cls = r.del ? 'B' : (inV541 ? 'A' : 'C');
+    counts[cls][r.level]++;
+    if (cls === 'A' && r.id) A[r.level].push(delRec(r.name, r.id)); // only pre-5.42, untagged → deleteRecord
   }
 }
 
 const writeJson = (p, obj) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, JSON.stringify(obj, null, 2) + '\n', 'utf-8'); };
 
-// 1. deleteRecord files — one entity per directory (mj-sync requirement). Reverse-FK order is
-//    enforced by the DeletionAuditor + the directoryOrder below: IOF -> IO -> Integration.
-const iofDeletesDir = join(META, 'integration-object-field-deletes'); // MJ: Integration Object Fields
-const objDeletesDir = join(META, 'integration-object-deletes');       // MJ: Integration Objects (existing)
-const integDeletesDir = join(META, 'integration-deletes');            // MJ: Integrations
-writeJson(join(iofDeletesDir, '.connector-iof.deletes.json'), iofs);
-writeJson(join(objDeletesDir, '.connector-io.deletes.json'), ios);
-writeJson(join(integDeletesDir, '.connector-integration.deletes.json'), integrations);
-if (!existsSync(join(iofDeletesDir, '.mj-sync.json')))
-  writeJson(join(iofDeletesDir, '.mj-sync.json'), { entity: 'MJ: Integration Object Fields', filePattern: '**/.*.json', defaults: {} });
-if (!existsSync(join(integDeletesDir, '.mj-sync.json')))
-  writeJson(join(integDeletesDir, '.mj-sync.json'), { entity: 'MJ: Integrations', filePattern: '**/.*.json', defaults: {} });
+// Top-level deleteRecord files, one entity per dir (reverse-FK order via root directoryOrder).
+const iofDir = join(META, 'integration-object-field-deletes');
+const ioDir = join(META, 'integration-object-deletes');
+const intDir = join(META, 'integration-deletes');
+writeJson(join(iofDir, '.connector-iof.deletes.json'), A.IOF);
+writeJson(join(ioDir, '.connector-io.deletes.json'), A.IO);
+writeJson(join(intDir, '.connector-integration.deletes.json'), A.INT);
+if (!existsSync(join(iofDir, '.mj-sync.json'))) writeJson(join(iofDir, '.mj-sync.json'), { entity: 'MJ: Integration Object Fields', filePattern: '**/.*.json', defaults: {} });
+if (!existsSync(join(intDir, '.mj-sync.json'))) writeJson(join(intDir, '.mj-sync.json'), { entity: 'MJ: Integrations', filePattern: '**/.*.json', defaults: {} });
 
-// Ensure the three delete dirs are in the root metadata directoryOrder (after 'integrations').
+// Ensure the delete dirs are in the root directoryOrder (after 'integrations').
 const rootSyncPath = join(META, '.mj-sync.json');
 const rootSync = JSON.parse(readFileSync(rootSyncPath, 'utf-8'));
 if (Array.isArray(rootSync.directoryOrder)) {
   const want = ['integration-object-field-deletes', 'integration-object-deletes', 'integration-deletes'];
-  const after = rootSync.directoryOrder.indexOf('integrations');
   const missing = want.filter((d) => !rootSync.directoryOrder.includes(d));
   if (missing.length) {
-    rootSync.directoryOrder.splice(after + 1, 0, ...missing);
+    rootSync.directoryOrder.splice(rootSync.directoryOrder.indexOf('integrations') + 1, 0, ...missing);
     writeJson(rootSyncPath, rootSync);
-    console.log(`Added to directoryOrder: ${missing.join(', ')}`);
   }
 }
 
-// 2. Guarded, idempotent forward-fix migration — keyed on the stable ClassName so it
-//    covers EVERY seeded connector regardless of whether its metadata carried a primaryKey.
-const classList = [...classNames].sort().map((c) => `        '${c.replace(/'/g, "''")}'`).join(',\n');
-const sql = `-- RELEASE B (subtractive): retire the seeded vendor connector catalog from MJ core.
--- Vendor connectors now live in MemberJunction/Integrations and seed their own
--- Integration / IntegrationObject / IntegrationObjectField rows on install. This nets the
--- baseline-seeded rows out of a FRESH install while LEAVING ALONE anything an existing
--- install is actually using (referenced by CompanyIntegration), so upgrades never lose data.
--- Keyed on Integration.ClassName (stable across seeds), reverse-FK order, idempotent.
---
--- NOTE: must ship only AFTER MemberJunction/Integrations is published and the additive
--- release A (multi-app + connector-profile install) is live. See PR for sequencing.
-
--- The set of seeded vendor-connector Integration IDs that NO company is using.
-DECLARE @Unused TABLE (ID UNIQUEIDENTIFIER PRIMARY KEY);
-INSERT INTO @Unused (ID)
-SELECT i.ID
-FROM [\${flyway:defaultSchema}].[Integration] i
-WHERE i.ClassName IN (
-${classList}
-)
-AND NOT EXISTS (
-    SELECT 1 FROM [\${flyway:defaultSchema}].[CompanyIntegration] ci WHERE ci.IntegrationID = i.ID
-);
-
--- IntegrationObjectField rows of unused integrations' objects.
-DELETE iof
-FROM [\${flyway:defaultSchema}].[IntegrationObjectField] iof
-INNER JOIN [\${flyway:defaultSchema}].[IntegrationObject] io ON io.ID = iof.IntegrationObjectID
-WHERE io.IntegrationID IN (SELECT ID FROM @Unused);
-
--- IntegrationObject rows of unused integrations.
-DELETE io
-FROM [\${flyway:defaultSchema}].[IntegrationObject] io
-WHERE io.IntegrationID IN (SELECT ID FROM @Unused);
-
--- The unused Integration rows themselves.
-DELETE i
-FROM [\${flyway:defaultSchema}].[Integration] i
-WHERE i.ID IN (SELECT ID FROM @Unused);
-`;
-mkdirSync(dirname(MIGRATION), { recursive: true });
-writeFileSync(MIGRATION, sql, 'utf-8');
-
-console.log(`Connector ClassNames (migration covers all): ${classNames.size}`);
-console.log(`deleteRecord entries — Integrations: ${integrations.length}  IntegrationObjects: ${ios.length}  IntegrationObjectFields: ${iofs.length}`);
-console.log(`\nWrote:\n  ${iofDeletesDir}/.connector-iof.deletes.json\n  ${objDeletesDir}/.connector-io.deletes.json\n  ${integDeletesDir}/.connector-integration.deletes.json\n  ${MIGRATION}`);
+const line = (c) => `INT ${counts[c].INT}  IO ${counts[c].IO}  IOF ${counts[c].IOF}`;
+console.log(`Boundary ${BOUNDARY_TAG}: ${v541.size} record IDs`);
+console.log(`Case A (pre-5.42 → deleteRecord): ${line('A')}`);
+console.log(`Case B (already deleted → stays): ${line('B')}`);
+console.log(`Case C (added in 5.42 → remove only, NO deleteRecord): ${line('C')}`);
+console.log(`\nWrote deleteRecord files for Case A only (${A.INT.length} INT / ${A.IO.length} IO / ${A.IOF.length} IOF). No migration emitted.`);
