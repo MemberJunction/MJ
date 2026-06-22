@@ -57,6 +57,33 @@ function check(name: string, condition: boolean, detail?: string): void {
     }
 }
 
+// Savings tracking — measures actual character reduction per reduction op (crush = structural
+// JSON/code crushing; expire = P2 message expiration), reported as an average at the end.
+type SavingCat = 'crush' | 'expire';
+interface Saving { cat: SavingCat; name: string; before: number; after: number; }
+const savings: Saving[] = [];
+function pctOf(before: number, after: number): number {
+    return before > 0 ? Math.round((1 - after / before) * 1000) / 10 : 0;
+}
+function recordSaving(cat: SavingCat, name: string, before: number, after: number): void {
+    savings.push({ cat, name, before, after });
+    LogStatus(`  📉 ${name}: ${before} → ${after} chars (${pctOf(before, after)}% reduced)`);
+}
+function avgPct(items: Saving[]): number {
+    if (!items.length) return 0;
+    return Math.round((items.reduce((s, x) => s + (x.before > 0 ? 1 - x.after / x.before : 0), 0) / items.length) * 1000) / 10;
+}
+function reportSavings(): void {
+    const crush = savings.filter(s => s.cat === 'crush');
+    const totBefore = savings.reduce((s, x) => s + x.before, 0);
+    const totAfter = savings.reduce((s, x) => s + x.after, 0);
+    LogStatus(`\n────────── SAVINGS SUMMARY ──────────`);
+    for (const s of savings) LogStatus(`  [${s.cat}] ${s.name}: ${s.before} → ${s.after} (${pctOf(s.before, s.after)}%)`);
+    LogStatus(`  AVG crush-only (P1+P3):  ${avgPct(crush)}%   over ${crush.length} ops`);
+    LogStatus(`  AVG all reduction ops:   ${avgPct(savings)}%   over ${savings.length} ops`);
+    LogStatus(`  AGGREGATE (weighted):    ${pctOf(totBefore, totAfter)}%   (${totBefore} → ${totAfter} chars)`);
+}
+
 /** A failed-run projection, matching MemoryManagerAgent's internal InstructiveFailedRun shape. */
 interface FailedRunLite {
     ID: string;
@@ -167,12 +194,14 @@ function runP1(harness: SmokeHarness): void {
     const crushed = harness.CrushValue(data, onParams);
     check('raw array-of-objects crushed to tabular form ($t)', crushed.includes('$t'));
     check('crushed output carries the context-crush legend', crushed.includes('context-crush'));
-    check('crushed output measurably smaller than verbatim JSON', crushed.split('\n')[0].length < verbatim.length, `${crushed.split('\n')[0].length} vs ${verbatim.length}`);
+    check('crushed output measurably smaller than verbatim JSON', crushed.length < verbatim.length, `${crushed.length} vs ${verbatim.length}`);
+    recordSaving('crush', 'P1 raw 200-row JSON', verbatim.length, crushed.length);
 
     // JSON-STRING param (actions that JSON.stringify their payload, e.g. run-adhoc-query's Results)
     // — the P1 wiring-gap regression: these must also be crushed.
     const crushedStr = harness.CrushValue(verbatim, onParams);
     check('JSON-STRING param also crushed (wiring-gap regression)', crushedStr.includes('$t') && crushedStr.includes('context-crush'));
+    recordSaving('crush', 'P1 JSON-string param', verbatim.length, crushedStr.length);
 
     // Opt-out → verbatim.
     const offParams = makeParams({ data: { __agentTypePromptParams: { crushActionResults: false } } });
@@ -198,9 +227,11 @@ async function runP2(harness: SmokeHarness): Promise<void> {
             { role: 'user', content: 'X'.repeat(2000), metadata: { messageType: 'action-result', expirationTurns: 2, expirationMode: 'Remove', turnAdded: 0 } },
         ];
         const before = prefixJSON(messages, 2);
+        const tailBefore = (messages[2].content as string).length;
         await harness.Prune(makeParams({ conversationMessages: messages, verbose: false }), 5);
         check('(a) volatile action-result removed', messages.length === 2, `len=${messages.length}`);
         check('(a) stable prefix byte-identical', prefixJSON(messages, 2) === before);
+        recordSaving('expire', 'P2 remove (expired tail)', tailBefore, 0);
     }
 
     // (b) Volatile action-result COMPACTED (First N Chars); stable prefix byte-identical.
@@ -211,10 +242,12 @@ async function runP2(harness: SmokeHarness): Promise<void> {
             { role: 'user', content: 'Y'.repeat(2000), metadata: { messageType: 'action-result', expirationTurns: 2, expirationMode: 'Compact', compactMode: 'First N Chars', compactLength: 80, turnAdded: 0 } },
         ];
         const before = prefixJSON(messages, 2);
+        const tailBefore = (messages[2].content as string).length;
         await harness.Prune(makeParams({ conversationMessages: messages, verbose: false }), 5);
         const tail = messages[2];
         const tailContent = typeof tail?.content === 'string' ? tail.content : '';
         check('(b) volatile action-result still present (compacted, not removed)', messages.length === 3);
+        recordSaving('expire', 'P2 compact (First N Chars)', tailBefore, tailContent.length);
         check('(b) tail content compacted/shortened', tailContent.length < 200 && tailContent.includes('[Compacted'), `len=${tailContent.length}`);
         check('(b) tail metadata wasCompacted=true', tail?.metadata?.wasCompacted === true);
         check('(b) stable prefix byte-identical', prefixJSON(messages, 2) === before);
@@ -248,7 +281,8 @@ function runP3(harness: SmokeHarness): void {
     const onParams = makeParams({ data: { __agentTypePromptParams: { crushCodeLang: 'sql' } } });
     const crushed = harness.CrushValue(sqlStr, onParams);
     check('crushed output collapses the VALUES list', crushed.includes('value tuples elided'), crushed.slice(0, 80));
-    check('crushed output is shorter than the original SQL', crushed.split('\n')[0].length < sqlStr.length, `${crushed.length} vs ${sqlStr.length}`);
+    check('crushed output is shorter than the original SQL', crushed.length < sqlStr.length, `${crushed.length} vs ${sqlStr.length}`);
+    recordSaving('crush', 'P3 SQL VALUES list', sqlStr.length, crushed.length);
 
     const offParams = makeParams({ data: { __agentTypePromptParams: { crushActionResults: false } } });
     const optedOut = harness.CrushValue(sqlStr, offParams);
@@ -361,6 +395,7 @@ async function main(): Promise<void> {
         await pool.close();
     }
 
+    reportSavings();
     LogStatus(`\n══════════ CONTEXTCRUSH SMOKE: ${passCount} passed, ${failCount} failed ══════════`);
     if (failCount > 0) process.exit(1);
 }
