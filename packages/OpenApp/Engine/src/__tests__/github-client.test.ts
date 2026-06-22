@@ -183,7 +183,7 @@ describe('FetchManifestFromGitHub', () => {
         expect(mocks.getContent).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App', path: 'mj-app.json', ref: 'HEAD' });
     });
 
-    it('resolves the manifest under an in-repo subpath (multi-app repo)', async () => {
+    it('resolves the manifest under an in-repo subpath at the scoped tag (multi-app repo)', async () => {
         mocks.getContent.mockResolvedValueOnce(fileResponse('{"manifestVersion":1}'));
 
         await FetchManifestFromGitHub('https://github.com/MemberJunction/Integrations/CRM/HubSpot', '1.2.0', {});
@@ -191,7 +191,7 @@ describe('FetchManifestFromGitHub', () => {
             owner: 'MemberJunction',
             repo: 'Integrations',
             path: 'CRM/HubSpot/mj-app.json',
-            ref: 'v1.2.0',
+            ref: 'CRM-HubSpot@1.2.0', // scoped per-connector tag, not repo-wide v1.2.0
         });
     });
 
@@ -282,5 +282,44 @@ describe('TokenMap resolution', () => {
 
         await FetchManifestFromGitHub('https://github.com/Acme/UnmatchedRepo', undefined, options);
         expect(lastAuth()).toBeUndefined();
+    });
+});
+
+describe('scoped (multi-app) version resolution', () => {
+    const MULTI = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
+
+    it('ValidateGitHubTag checks the connector-scoped tag, not repo-wide vX.Y.Z', async () => {
+        mocks.getRef.mockResolvedValueOnce({ data: {} });
+        const r = await ValidateGitHubTag(MULTI, '1.2.0', {});
+        expect(r.Exists).toBe(true);
+        expect(mocks.getRef).toHaveBeenCalledWith({ owner: 'MemberJunction', repo: 'Integrations', ref: 'tags/CRM-HubSpot@1.2.0' });
+    });
+
+    it('ListGitHubTags returns only THIS connector\'s versions from <prefix>@<version> tags', async () => {
+        mocks.listTags.mockResolvedValueOnce({
+            data: [
+                { name: 'CRM-HubSpot@1.0.0' },
+                { name: 'CRM-HubSpot@1.2.0' },
+                { name: 'CRM-Salesforce@3.0.0' }, // a different connector — must be ignored
+                { name: 'v9.9.9' },               // repo-wide tag — must be ignored
+            ],
+        });
+        const tags = await ListGitHubTags(MULTI, {});
+        expect(tags).toEqual(['1.2.0', '1.0.0']);
+    });
+
+    it('GetLatestVersion picks the newest scoped version (skips repo-wide releases)', async () => {
+        mocks.listTags.mockResolvedValueOnce({
+            data: [{ name: 'CRM-HubSpot@1.0.0' }, { name: 'CRM-HubSpot@1.4.1' }, { name: 'CRM-HubSpot@1.4.0' }],
+        });
+        const v = await GetLatestVersion(MULTI, {});
+        expect(v).toBe('1.4.1');
+        expect(mocks.listReleases).not.toHaveBeenCalled(); // releases are repo-wide; scoped apps go straight to tags
+    });
+
+    it('single-app repos still resolve repo-wide v-tags (backwards compatible)', async () => {
+        mocks.getRef.mockResolvedValueOnce({ data: {} });
+        await ValidateGitHubTag('https://github.com/Acme/App', '2.0.0', {});
+        expect(mocks.getRef).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App', ref: 'tags/v2.0.0' });
     });
 });

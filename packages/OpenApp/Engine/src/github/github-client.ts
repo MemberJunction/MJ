@@ -180,10 +180,24 @@ async function ListDirectory(octokit: Octokit, owner: string, repo: string, path
 }
 
 /**
- * Normalizes a version string to a `v`-prefixed tag, or 'HEAD' when no version.
+ * The git-tag namespace for a multi-app (subpath) app: the in-repo subpath with slashes
+ * flattened to hyphens (`CRM/HubSpot` → `CRM-HubSpot`), so each app in a monorepo has its
+ * own independent tag line (`CRM-HubSpot@1.2.0`). undefined for single-app repos (repo-wide `vX.Y.Z`).
  */
-function ResolveRef(version: string | undefined): string {
-    return version ? `v${version.replace(/^v/, '')}` : 'HEAD';
+function ScopedTagPrefix(subpath: string | undefined): string | undefined {
+    const s = subpath?.replace(/^\/+|\/+$/g, '');
+    return s ? s.replace(/\//g, '-') : undefined;
+}
+
+/**
+ * Resolves the git ref to fetch at. With no version → 'HEAD'. With a version:
+ * a subpath app uses its scoped tag `<prefix>@<version>`; a single-app repo uses `v<version>`.
+ */
+function ResolveRef(version: string | undefined, subpath?: string): string {
+    if (!version) return 'HEAD';
+    const v = version.replace(/^v/, '');
+    const prefix = ScopedTagPrefix(subpath);
+    return prefix ? `${prefix}@${v}` : `v${v}`;
 }
 
 /**
@@ -215,8 +229,8 @@ export async function FetchManifestFromGitHub(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const ref = ResolveRef(version);
     const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const ref = ResolveRef(version, effectiveSubpath);
     const manifestPath = ComposeRepoPath(effectiveSubpath, 'mj-app.json');
 
     try {
@@ -287,8 +301,8 @@ export async function DownloadMigrations(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const ref = ResolveRef(version);
     const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const ref = ResolveRef(version, effectiveSubpath);
     const cleanPath = ComposeRepoPath(effectiveSubpath, migrationsPath);
     const octokit = CreateOctokit(repoUrl, options);
 
@@ -347,8 +361,8 @@ export async function DownloadDirectory(
         return { Success: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const ref = ResolveRef(version);
     const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
+    const ref = ResolveRef(version, effectiveSubpath);
     const rootPath = ComposeRepoPath(effectiveSubpath, dirPath);
     const octokit = CreateOctokit(repoUrl, options);
     const writtenFiles: string[] = [];
@@ -397,17 +411,20 @@ export async function DownloadDirectory(
  */
 export async function GetLatestVersion(
     repoUrl: string,
-    options: GitHubClientOptions
+    options: GitHubClientOptions,
+    subpath?: string
 ): Promise<string | null> {
-    // Try GitHub Releases first
-    const releases = await ListGitHubReleases(repoUrl, options);
-    const stable = releases.find(r => !r.PreRelease && !r.Draft);
-    if (stable) {
-        return stable.TagName.replace(/^v/, '');
+    // For a multi-app (subpath) app, versions live in per-connector scoped tags, not repo-wide
+    // releases — go straight to the scoped tag line.
+    if (!ScopedTagPrefix(subpath ?? ParseGitHubUrl(repoUrl)?.Subpath)) {
+        const releases = await ListGitHubReleases(repoUrl, options);
+        const stable = releases.find(r => !r.PreRelease && !r.Draft);
+        if (stable) {
+            return stable.TagName.replace(/^v/, '');
+        }
     }
 
-    // Fall back to tags (sorted by semver descending)
-    const tags = await ListGitHubTags(repoUrl, options);
+    const tags = await ListGitHubTags(repoUrl, options, subpath);
     if (tags.length > 0) {
         return tags[0].replace(/^v/, '');
     }
@@ -425,19 +442,27 @@ export async function GetLatestVersion(
  */
 export async function ListGitHubTags(
     repoUrl: string,
-    options: GitHubClientOptions
+    options: GitHubClientOptions,
+    subpath?: string
 ): Promise<string[]> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return [];
     }
 
+    const prefix = ScopedTagPrefix(subpath ?? parsed.Subpath);
+    const semver = '\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+(\\.[a-zA-Z0-9]+)*)?';
+    // Multi-app repo: match this connector's scoped tags `<prefix>@<semver>` and return the versions.
+    // Single-app repo: match repo-wide `v<semver>` tags as before.
+    const pattern = prefix
+        ? new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}@(${semver})$`)
+        : new RegExp(`^(v?${semver})$`);
+
     try {
         const { data } = await CreateOctokit(repoUrl, options).repos.listTags({ owner: parsed.Owner, repo: parsed.Repo, per_page: 100 });
-        const semverPattern = /^v?\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$/;
         return data
-            .map(t => t.name)
-            .filter(name => semverPattern.test(name))
+            .map(t => t.name.match(pattern)?.[1])
+            .filter((v): v is string => v != null)
             .sort((a, b) => compareSemver(b, a));
     }
     catch {
@@ -456,14 +481,16 @@ export async function ListGitHubTags(
 export async function ValidateGitHubTag(
     repoUrl: string,
     version: string,
-    options: GitHubClientOptions
+    options: GitHubClientOptions,
+    subpath?: string
 ): Promise<{ Exists: boolean; ErrorMessage?: string }> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
         return { Exists: false, ErrorMessage: `Invalid GitHub URL: ${repoUrl}` };
     }
 
-    const tag = `v${version.replace(/^v/, '')}`;
+    // Multi-app repo: scoped tag `<prefix>@<version>`; single-app repo: `v<version>`.
+    const tag = ResolveRef(version, subpath ?? parsed.Subpath);
 
     try {
         await CreateOctokit(repoUrl, options).git.getRef({ owner: parsed.Owner, repo: parsed.Repo, ref: `tags/${tag}` });
