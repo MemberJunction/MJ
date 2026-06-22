@@ -95,6 +95,15 @@ const E2E_RESULT_SCHEMA = {
         skipReason: { type: 'string' },
         // The connector-e2e scrubbed steps result (setup/forward/delta/idempotent/teardown).
         steps: { type: 'object' },
+        // The per-connector LIFECYCLE matrix (birth→death) from the harness result.lifecycle[]. Each entry
+        // {stage, status:'pass'|'fail'|'skip', skipReason?, failDetail?}. The deterministic gate below FAILS
+        // the e2e if any applicable stage is 'fail' — the full-lifecycle floor for new connectors. Return it
+        // VERBATIM from the harness result.lifecycle (Create/DiscoverObj/DiscoverFields/CustomCols/ApplyAll/
+        // FullSync/Incremental/Merkle/WriteBack/Maintenance/Death).
+        lifecycle: { type: 'array', items: { type: 'object', properties: {
+            stage: { type: 'string' }, status: { type: 'string', enum: ['pass', 'fail', 'skip'] },
+            skipReason: { type: 'string' }, failDetail: { type: 'string' },
+        } } },
         // Per-phase NL + JSON evidence the floor reads (§6 observability contract).
         nl: { type: 'string' },
         assertions: {
@@ -265,7 +274,7 @@ if (HAS_BROKER_CREDS) {
         `  • secondSyncGrew — TRUE if ANY table's rowcount GREW between the full pull and the idempotent re-run (non-idempotent identity, the GZ #22 class: 127→254). Zero-growth everywhere → false.\n` +
         `  • captureEngaged — query sys.columns: every created table in the connector's schema MUST have __mj_integration_CustomOverflow (its absence is the GZ #29/#31 silent-kill class → false); when present, true. Leave null ONLY if the DB is unreachable for the check.\n` +
         `  • COVERAGE (no-silent-subset floor) — from the per-object rowcounts you already collected, set: coveredObjects = the IO.Name list that landed >=1 row; exercisedWrites = the IO.Name list whose write you round-tripped (read-only live runs: leave empty + a skip/scope reason); skippedObjects = [{object,reason}]. If you did NOT cover every active object/write (a bounded subset is legitimate), you MUST set coverageScopeReason to a one-line justification — otherwise the floor flags a silent subset. Marginal output of data you already have; declare the scope honestly, do NOT expand the run to chase 100%.\n` +
-        `  ADVISORY (set if exposed; do NOT gate): pkClassifierRan, idempotentThreeSync, runEventsParsed, customColumnsCaptured, rateLimitObserved, referenceModeWorks. status='pass' iff: instanceCreated AND connectionTested AND discoveryAddedObjects AND entitiesRegistered AND entityMapCount>0 AND rowsProcessed>0 AND syncLandedRows AND forwardCompleteness AND idempotentZeroWork AND firstSyncComplete!==false AND secondSyncGrew!==true AND captureEngaged!==false. Return phaseId='E2E.Hybrid.Live', the scrubbed steps VERBATIM in steps, a plain-English nl summary, and mjapiPort.`,
+        `  ADVISORY (set if exposed; do NOT gate): pkClassifierRan, idempotentThreeSync, runEventsParsed, customColumnsCaptured, rateLimitObserved, referenceModeWorks. status='pass' iff: instanceCreated AND connectionTested AND discoveryAddedObjects AND entitiesRegistered AND entityMapCount>0 AND rowsProcessed>0 AND syncLandedRows AND forwardCompleteness AND idempotentZeroWork AND firstSyncComplete!==false AND secondSyncGrew!==true AND captureEngaged!==false. Return phaseId='E2E.Hybrid.Live', the scrubbed steps VERBATIM in steps, the harness result.lifecycle[] array VERBATIM in lifecycle (the birth→death per-stage matrix the deterministic lifecycle gate enforces — any stage status==='fail' fails the e2e), a plain-English nl summary, and mjapiPort.`,
         { agentType: 'testing-agent', schema: E2E_RESULT_SCHEMA, phase: 'E2ELive', label: `hybrid-live:${VENDOR}` }
     );
 } else {
@@ -281,7 +290,7 @@ if (HAS_BROKER_CREDS) {
         `  • secondSyncGrew — TRUE if any table grew between the full pull and the idempotent re-run (non-idempotent identity). captureEngaged — every created table has __mj_integration_CustomOverflow AND customs captured where the source carries them.\n` +
         `  • deltaApplied — the DeltaPass create AND update AND delete-tombstone each verified by DB state independently.\n` +
         `  • COVERAGE (MOCK = FULL, NO subset — agent-arc rule) — the mock vendor is FREE + INSTANT, so EVERY active object MUST land >=1 row and EVERY writable object's write MUST round-trip. Set coveredObjects = the IO.Name list that landed >=1 row (this MUST equal the FULL active IO set), exercisedWrites = the IO.Name list whose write round-tripped (MUST equal the FULL writable set), skippedObjects = [{object,reason}] ONLY for an object that is STRUCTURALLY impossible to mock (e.g. it has no read endpoint at all) with a CONCRETE per-object reason. A blanket coverageScopeReason / "Goldilocks subset" is REJECTED in MOCK mode — the floor FAILS behavioral-coverage-mock-incomplete / write-coverage-mock-incomplete on ANY uncovered object. Bound ROW DEPTH per object (don't generate 50k mock rows), NEVER the object SET. The fixtures MUST carry data for EVERY object so all can sync — if a fixture is missing for any object, ADD it. Cover ALL objects, not a representative few.\n` +
-        `status='pass' ONLY if applyAllRan AND forwardCompleteness AND syncLandedRows AND idempotentZeroWork AND firstSyncComplete!==false AND secondSyncGrew!==true AND captureEngaged!==false AND coveredObjects equals the full active IO set (every object) AND the NEW harness's \`coverage.all-objects\` gate step reported ok=TRUE. If coverage.all-objects is not ok (any object synced 0 rows), status='fail' — fix the relational fixtures / DAG access-path so that object lands rows; do NOT scope it away. Return scrubbed steps VERBATIM in steps (INCLUDING the coverage.all-objects step), a plain-English nl summary, phaseId='E2E.Hybrid.Mock', and mjapiPort.`,
+        `status='pass' ONLY if applyAllRan AND forwardCompleteness AND syncLandedRows AND idempotentZeroWork AND firstSyncComplete!==false AND secondSyncGrew!==true AND captureEngaged!==false AND coveredObjects equals the full active IO set (every object) AND the NEW harness's \`coverage.all-objects\` gate step reported ok=TRUE. If coverage.all-objects is not ok (any object synced 0 rows), status='fail' — fix the relational fixtures / DAG access-path so that object lands rows; do NOT scope it away. Return scrubbed steps VERBATIM in steps (INCLUDING the coverage.all-objects step), the harness result.lifecycle[] array VERBATIM in lifecycle (the birth→death per-stage matrix the deterministic lifecycle gate enforces — any stage status==='fail' fails the e2e), a plain-English nl summary, phaseId='E2E.Hybrid.Mock', and mjapiPort.`,
         { agentType: 'testing-agent', schema: E2E_RESULT_SCHEMA, phase: 'E2EMock', label: `hybrid-mock:${VENDOR}` }
     );
 }
@@ -312,6 +321,18 @@ const failures = [];
 const a = primaryResult?.assertions ?? {};
 if (primaryResult?.status !== 'pass') {
     failures.push({ rule: HAS_BROKER_CREDS ? 'hybrid-live-not-pass' : 'hybrid-mock-not-pass', detail: `${HAS_BROKER_CREDS ? 'live' : 'mock'} e2e status=${primaryResult?.status}; ${JSON.stringify(primaryResult?.failures ?? [])}` });
+}
+// ── DETERMINISTIC LIFECYCLE-STAGE GATE (the full-lifecycle floor for new connectors) ──────────────
+// Beyond the agent's self-reported status, enforce the harness's birth→death matrix (result.lifecycle[])
+// DIRECTLY: any APPLICABLE stage reported 'fail' fails the e2e. A 'skip' is allowed (capability not
+// declared / not stageable cred-free / keyless-no-PK legitimate skip — soft keys); only a hard 'fail'
+// gates. This is what makes the agent arc require the WHOLE lifecycle on every connector — discovery,
+// custom columns, sync, incremental, merkle, write-back, maintenance, death — not just coverage.all-objects.
+const lifecycleStages = Array.isArray(primaryResult?.lifecycle) ? primaryResult.lifecycle : [];
+for (const st of lifecycleStages) {
+    if (st && st.status === 'fail') {
+        failures.push({ rule: 'lifecycle-stage-failed', detail: `lifecycle stage '${st.stage}' FAILED: ${st.failDetail || '(no detail)'}` });
+    }
 }
 if (HAS_BROKER_CREDS) {
     // LIVE full-creation-pipeline is mandatory — assert the full create→discover→apply→sync set.
