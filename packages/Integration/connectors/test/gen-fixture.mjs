@@ -13,14 +13,59 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve as pathResolve } from 'node:path';
 
-/** Synthesize a deterministic sample value for a column type + row index. */
-function synth(type, i) {
+/**
+ * Synthesize a deterministic, VENDOR-FAITHFUL sample value for a (fieldName, type, rowIndex).
+ *
+ * NOT `val-1`. The cred-free test only earns "would-work-with-creds" confidence if the mock data is
+ * SHAPED like real vendor data — so the connector's REAL coercion / field-mapping / validation / date
+ * parsing / numeric handling runs on realistic values, not placeholders. Type is authoritative for
+ * bool/number/date; field NAME drives realistic string shapes (email, phone, url, money, address,
+ * status, etc.). Deterministic in `i` so runs are reproducible and delta assertions are stable.
+ */
+function synth(fieldName, type, i) {
   const t = (type || '').toLowerCase();
-  if (t.includes('date') || t.includes('time')) return `2026-06-1${i}T00:00:00Z`;
-  if (t.includes('bit') || t.includes('bool')) return i % 2 === 0;
-  if (t.includes('int') || t.includes('decimal') || t.includes('float') || t.includes('numer') || t.includes('money')) return i + 1;
-  if (t.includes('max')) return '[]';
-  return `val-${i}`;
+  const f = (fieldName || '').toLowerCase();
+  const pick = (arr) => arr[(i - 1) % arr.length];
+  // --- TYPE-authoritative kinds first (bool / date / number) ---
+  if (t.includes('bit') || t.includes('bool') || /^is[A-Z]|^has[A-Z]|enabled$|active$/i.test(fieldName || '')) return i % 2 === 1;
+  if (t.includes('date') || t.includes('time')) {
+    const d = `2026-06-${String(9 + i).padStart(2, '0')}`;
+    return (/(^|_)date$/i.test(fieldName || '') && !/time/i.test(f)) ? d : `${d}T0${i}:30:00Z`;
+  }
+  if (/(int|decimal|float|double|real|numer|money|bigint)/.test(t)) {
+    if (/price|cost|amount|total|fee|balance|revenue|salary|paid/.test(f)) return Number((10 * i + 9.99).toFixed(2));
+    if (/percent|rate|ratio/.test(f)) return Number((0.1 * i).toFixed(2));
+    if (/year/.test(f)) return 2020 + i;
+    if (/\blat(itude)?\b/.test(f)) return Number((40 + i * 0.013).toFixed(6));
+    if (/\b(lon|lng|longitude)\b/.test(f)) return Number((-74 - i * 0.013).toFixed(6));
+    if (/count|qty|quantity|number|num|total|seats|capacity|attendees/.test(f)) return i * 3 + 1;
+    return i + 1;
+  }
+  // --- STRING shapes driven by field NAME (faithful real-world payloads) ---
+  if (/e-?mail/.test(f)) return `user${i}@example.com`;
+  if (/first.?name|given.?name|fname/.test(f)) return pick(['Alex', 'Jordan', 'Taylor', 'Morgan']);
+  if (/last.?name|surname|family.?name|lname/.test(f)) return pick(['Rivera', 'Chen', 'Patel', 'Nguyen']);
+  if (/full.?name|display.?name|contact.?name|attendee.?name|^name$/.test(f)) return pick(['Alex Rivera', 'Jordan Chen', 'Taylor Patel']);
+  if (/company|organization|org.?name|account.?name|business|exhibitor|sponsor/.test(f)) return pick(['Acme Corp', 'Globex LLC', 'Initech']);
+  if (/phone|mobile|\btel\b|fax|cell/.test(f)) return `555-01${String(i).padStart(2, '0')}`;
+  if (/url|link|website|href|\buri\b|webpage|portal/.test(f)) return `https://example.com/${fieldName}/${i}`;
+  if (/zip|postal/.test(f)) return `021${String(i).padStart(2, '0')}`;
+  if (/country/.test(f)) return 'US';
+  if (/\bstate\b|province/.test(f) && f.length < 16) return pick(['MA', 'NY', 'CA']);
+  if (/\bcity\b|town/.test(f)) return pick(['Boston', 'New York', 'San Francisco']);
+  if (/street|address|addr(?!ess_)/.test(f)) return `${100 + i} Test St`;
+  if (/currency/.test(f)) return 'USD';
+  if (/timezone|tz\b/.test(f)) return 'America/New_York';
+  if (/locale|language|lang\b/.test(f)) return 'en-US';
+  if (/status|stage|phase/.test(f)) return pick(['active', 'pending', 'completed']);
+  if (/\btype\b|category|kind|tier|level/.test(f)) return pick(['standard', 'premium', 'basic']);
+  if (/guid|uuid/.test(f)) return `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`;
+  if (/desc|description|note|comment|message|body|content|summary|bio|about/.test(f)) return `Sample ${fieldName} ${i}`;
+  if (/title|label|headline|subject/.test(f)) return `Sample Title ${i}`;
+  if (/color|colour/.test(f)) return pick(['#1A73E8', '#34A853', '#FBBC05']);
+  if (/(^|_)(id|code|key|ref|slug|handle|token|sku|barcode)$/.test(f)) return `${fieldName}-${i}`;
+  if (t.includes('max')) return '[]'; // JSON/blob column → empty-array string (connector reshapes)
+  return `${fieldName} ${i}`; // faithful default: carries the field name + a stable index
 }
 
 /**
@@ -50,7 +95,7 @@ function parseNestingChain(nesting) {
   const parts = String(nesting).split('->').map((s) => s.trim()).filter(Boolean);
   return parts.slice(1).map((p) => ({ field: p.replace(/\[\]\s*$/, ''), list: /\[\]\s*$/.test(p) }));
 }
-
+  
 /** True iff field is a plain, non-key, non-MAX string scalar safe to round-trip a delta update value. */
 function isSafeScalarField(fn, ft, pk, wm) {
   if (fn === pk || fn === wm) return false;
@@ -73,8 +118,8 @@ function buildAccessPathManifest(rows, cfgKey) {
   const objs = [], routes = [];
   const mkRow = (r, n) => {
     const row = {};
-    for (const { fn, ft } of r.fields) row[fn] = fn === r.pk ? synthPk(r.name, r.pkType, n) : (fn === r.wm ? `2026-06-1${n}T00:00:00Z` : synth(ft, n));
-    row[r.pk] = synthPk(r.name, r.pkType, n);
+    for (const { fn, ft } of r.fields) row[fn] = fn === r.pk ? synthPk(r.name, r.pkType, n) : (fn === r.wm ? `2026-06-1${n}T00:00:00Z` : synth(fn, ft, n));
+    if (r.pk) row[r.pk] = synthPk(r.name, r.pkType, n);   // keyless object → no PK column; content-hash/synthetic-PK identity (§4)
     if (r.wm) row[r.wm] = `2026-06-1${n}T00:00:00Z`;
     return row;
   };
@@ -174,7 +219,110 @@ export function applyTestDescriptor(manifest, fixturesDir) {
   if (descriptor.credentials) { manifest.Configuration = { ...(manifest.Configuration || {}), ...descriptor.credentials }; changed = true; }
   if (descriptor.fetchShape) { manifest.FetchShape = descriptor.fetchShape; changed = true; }
   if (descriptor.liveOnly) { manifest.LiveOnly = true; changed = true; }
+  // The `lifecycle` block is the SINGLE declared-capability gating source for the production-faithful
+  // lifecycle harness (which stages a connector supports). Stamp it onto the manifest so
+  // matrixSpecsFromManifest (connector-e2e-adapters.mjs) and the harness phases can read it.
+  if (descriptor.lifecycle && typeof descriptor.lifecycle === 'object') { manifest.Lifecycle = descriptor.lifecycle; changed = true; }
   return changed;
+}
+
+// Build ONE synthetic row for object r at index n: the deployed PK + watermark + per-field provable-
+// shape values, PLUS one UNDECLARED custom field (`mj_e2e_custom_attr`) so the custom-column capture
+// cell is non-vacuous (a real source returns vendor fields the static schema doesn't list → overflow →
+// promotion). Module-level so the clobber path (buildFixtureFromRows) and the merge path
+// (mergeAllObjectDataRoutes) emit byte-identical rows. Gated off by E2E_FIXTURE_CUSTOM_FIELDS=0.
+function mkSynthRow(r, n) {
+  const emitCustom = process.env.E2E_FIXTURE_CUSTOM_FIELDS !== '0';
+  const row = {};
+  for (const { fn, ft } of r.fields) row[fn] = fn === r.pk ? synthPk(r.name, r.pkType, n) : (fn === r.wm ? `2026-06-1${n}T00:00:00Z` : synth(fn, ft, n));
+  if (r.pk) row[r.pk] = synthPk(r.name, r.pkType, n);   // keyless object → no PK column; content-hash/synthetic-PK identity (§4)
+  if (r.wm) row[r.wm] = `2026-06-1${n}T00:00:00Z`;
+  if (emitCustom) row.mj_e2e_custom_attr = `custom-${n}`;   // undeclared → must be captured to overflow
+  return row;
+}
+
+// MERGE-ALL-OBJECTS — a hand-authored SOQL/GraphQL/by-id fixture carries the faithful auth/token/
+// describe routes the generic generator can't infer, but is THIN on per-object DATA routes (fonteva:
+// 5 of 28 queryAll). Given the FULL deployed `rows`, KEEP every hand route and ADD a shape-correct data
+// route for each deployed object lacking one — turning a thin hand fixture all-object WITHOUT clobbering
+// its hand-authored auth. The mock already matches SOQL (`Match:"FROM <obj>"` over the decoded query),
+// GraphQL (`Match:"operationName:<op>"`), and by-id (`/{iD}/<section>` template-var) — we only need the
+// per-object routes to exist. Returns { added, totalObjects, shape }.
+function mergeAllObjectDataRoutes(handM, rows, shape, envelopeKey) {
+  handM.Routes = Array.isArray(handM.Routes) ? handM.Routes : [];
+  handM.Objects = Array.isArray(handM.Objects) ? handM.Objects : [];
+  const haveMatch = new Set(handM.Routes.filter((r) => r.Match).map((r) => String(r.Match).toLowerCase()));
+  const havePath = new Set(handM.Routes.map((r) => String(r.Path)));
+  const haveObj = new Set(handM.Objects.map((o) => String(o.Name)));
+  const addObj = (r) => { if (!haveObj.has(r.name)) { handM.Objects.push({ Name: r.name, OrderingField: r.wm || r.pk }); haveObj.add(r.name); } };
+  // SOQL FROM target = the real Salesforce API name, which lives in the APIPath (/sobjects/<sObject>),
+  // NOT the friendly IO Name (fonteva IO 'Item' → sObject 'OrderApi__Item__c'). Parse it from the path.
+  const sObjOf = (r) => (String(r.rawApiPath ?? r.apipath ?? '').match(/\/sobjects\/([^/?]+)/)?.[1]) || r.name;
+  // SOQL data routes MUST use the SAME full path the connector calls (/services/data/vXX/queryAll), NOT a
+  // bare prefix: the hand fixture carries a catch-all no-Match queryAll route whose EXACT-path match would
+  // otherwise intercept every prefix route (→ 0 rows for the 23 new objects, the exact bug observed).
+  // Reuse an existing FROM-route's Path as the exemplar; the desc-length sort below keeps the new
+  // exact-path Match routes ahead of the no-Match catch-all so they win the first-exact-wins scan.
+  const soqlExemplarPath = handM.Routes.find((r) => r.Match && /^from /i.test(String(r.Match)))?.Path
+    || handM.Routes.find((r) => /\/query(all)?$/i.test(String(r.Path)))?.Path
+    || '/services/data';
+  // IDEMPOTENT REBUILD of shape DATA routes: strip every existing FROM-data (soql) / operationName-data
+  // (graphql) route — hand-authored AND prior-merge — then re-add fresh below. WITHOUT this, a generator
+  // FIX never reaches a fixture a prior (buggy) run already wrote: the haveMatch dedup keeps the stale
+  // body (the exact reason the capital-`Id` SOQL fix didn't apply on re-run). Auth/token/describe routes
+  // carry no FROM/operationName Match, so they survive untouched. (by-id is path-keyed → deduped per-object.)
+  if (shape === 'soql') handM.Routes = handM.Routes.filter((rt) => !(rt.Match && /^from /i.test(String(rt.Match))));
+  else if (shape === 'graphql') handM.Routes = handM.Routes.filter((rt) => !(rt.Match && /^operationname:/i.test(String(rt.Match))));
+  haveMatch.clear();
+  for (const rt of handM.Routes) if (rt.Match) haveMatch.add(String(rt.Match).toLowerCase());
+  let added = 0;
+  for (const r of rows) {
+    const body = [mkSynthRow(r, 1), mkSynthRow(r, 2), mkSynthRow(r, 3)];
+    if (shape === 'soql') {
+      const sObj = sObjOf(r);
+      const match = `FROM ${sObj}`;
+      if (!haveMatch.has(match.toLowerCase())) {
+        // SF SOQL records are identified by the CAPITAL `Id` (REQUIRED_SOQL_FIELDS + raw['Id'] dedup in
+        // SalesforceConnector), NOT the lowercased deployed PK IOF ('id') — without it the connector reads
+        // raw['Id']=undefined → empty ExternalID → create fails (the observed 23/28 zero-row failure).
+        // Mirror the PK value onto capital `Id`, add the SF system fields + the `attributes` envelope the
+        // SOQL path expects (TransformRecord strips attributes; ExcludedSourceKeys agrees on the removal).
+        const recs = [1, 2, 3].map((n) => {
+          const row = mkSynthRow(r, n);
+          row.Id = row[r.pk] ?? synthPk(r.name, r.pkType, n);
+          if (row.SystemModstamp == null) row.SystemModstamp = `2026-06-1${n}T00:00:00Z`;
+          if (row.IsDeleted == null) row.IsDeleted = false;
+          row.attributes = { type: sObj };
+          return row;
+        });
+        handM.Routes.push({ Path: soqlExemplarPath, Method: 'GET', Status: 200, Match: match, Body: { records: recs, done: true, totalSize: recs.length } });
+        haveMatch.add(match.toLowerCase()); added++;
+      }
+    } else if (shape === 'graphql') {
+      const qn = r.rdk || r.name;   // GraphQL query/operation name = the IO's ResponseDataKey
+      const match = `operationName:${qn}`;
+      if (!haveMatch.has(match.toLowerCase())) {
+        handM.Routes.push({ Path: '/graphql', Method: 'POST', Status: 200, Match: match, Body: { data: { [qn]: body } } });
+        haveMatch.add(match.toLowerCase()); added++;
+      }
+    } else {   // by-id / byid: deployed apipath is /{iD}/<section> (template-var) — a flat GET the mock {seg}-matches
+      const p = String(r.apipath);
+      if (!havePath.has(p)) {
+        handM.Routes.push({ Path: p, Method: 'GET', Status: 200, Body: (envelopeKey ? { [envelopeKey]: body } : body) });
+        havePath.add(p); added++;
+      }
+    }
+    addObj(r);
+  }
+  // SOQL substring-collision tie-break: matchRoute keeps the FIRST same-prefix candidate, so order the
+  // `FROM <obj>` routes DESC by Match length — `FROM AccountContact` is tried before `FROM Account`, else
+  // a 'FROM AccountContact' query substring-hits the shorter 'FROM Account' route first → wrong data.
+  // Non-FROM routes (token/describe) get -1 and sort to the end; they're exact-path matched, so order is moot.
+  if (shape === 'soql') {
+    const fromLen = (r) => (r.Match && /^from /i.test(String(r.Match)) ? String(r.Match).length : -1);
+    handM.Routes.sort((a, b) => fromLen(b) - fromLen(a));
+  }
+  return { added, totalObjects: handM.Objects.length, shape };
 }
 
 export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = null) {
@@ -197,15 +345,7 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   // cell is genuinely exercised: a real source returns vendor/custom fields the static schema doesn't list,
   // and the connector's full-record passthrough must surface them → overflow → promotion. A bare declared-
   // only row makes the custom-column cell vacuous. Gated by E2E_FIXTURE_CUSTOM_FIELDS!=0.
-  const emitCustom = process.env.E2E_FIXTURE_CUSTOM_FIELDS !== '0';
-  const mkRowFor = (r, n) => {
-    const row = {};
-    for (const { fn, ft } of r.fields) row[fn] = fn === r.pk ? synthPk(r.name, r.pkType, n) : (fn === r.wm ? `2026-06-1${n}T00:00:00Z` : synth(ft, n));
-    row[r.pk] = synthPk(r.name, r.pkType, n);
-    if (r.wm) row[r.wm] = `2026-06-1${n}T00:00:00Z`;
-    if (emitCustom) row.mj_e2e_custom_attr = `custom-${n}`;   // undeclared → must be captured to overflow
-    return row;
-  };
+  const mkRowFor = (r, n) => mkSynthRow(r, n);   // module-level builder, shared with the merge-all-objects path
   // MIXED catalog (flat door objects + access-path children): flat objects get a route-per-object;
   // access-path objects either EMBED into their door object's records (embedded-array extraction, e.g.
   // Program.rounds[]) or get their OWN entry route (path/query-injected, called once per parent id — the
@@ -288,19 +428,33 @@ export function buildFixtureFromRows(rows, cfgKey = 'BaseURL', envelopeKey = nul
   let pick = -1, updField = null;
   for (let i = 0; i < routeRows.length; i++) {
     const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
-    if (!rr.pk || !Array.isArray(body) || body.length < 3) continue;
+    if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{') || rr.accessPath) continue; // delta target must be FLAT (no parent chain to replay in the delta pass)
     const uf = rr.fields.map((f) => f.fn).find((fn) => isSafeScalarStr(body, fn, (rr.fields.find((x) => x.fn === fn) || {}).ft, rr.pk, rr.wm));
     if (uf) { pick = i; updField = uf; break; }
   }
   // Fallback: first PK-bearing object with any non-PK/non-wm string body value (excluding link/json names).
   if (pick < 0) for (let i = 0; i < routeRows.length; i++) {
     const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
-    if (!rr.pk || !Array.isArray(body) || body.length < 3) continue;
+    if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{') || rr.accessPath) continue; // delta target must be FLAT (no parent chain to replay in the delta pass)
     updField = Object.keys(body[0]).find((k) => k !== rr.pk && k !== rr.wm
       && typeof body[0][k] === 'string' && !/date|time|_links|link|url|json|fields/i.test(k)) || null;
     pick = i; break;
   }
-  if (pick < 0) pick = 0; // last resort: first object, no update sub-assert
+  // Last resort — an ALL-ACCESS-PATH connector (e.g. PheedLoop, where EVERY object carries a
+  // Configuration.AccessPath so the two loops above skip them all) lands here. Prefer a DIRECT
+  // (non-template-var) object: its route replays standalone in the delta pass, so present/update/delete
+  // round-trip even though it's technically an access object. Only TEMPLATE-VAR objects truly need a
+  // parent chain the delta pass can't replay. Green connectors already picked above → never reach here.
+  if (pick < 0) {
+    for (let i = 0; i < routeRows.length; i++) {
+      const rr = routeRows[i], body = unwrapBody(routes[i]?.Body);
+      if (!rr.pk || !Array.isArray(body) || body.length < 3 || String(rr.rawApiPath ?? rr.apipath ?? '').includes('{')) continue;
+      updField = rr.fields.map((f) => f.fn).find((fn) => isSafeScalarStr(body, fn, (rr.fields.find((x) => x.fn === fn) || {}).ft, rr.pk, rr.wm))
+        || Object.keys(body[0]).find((k) => k !== rr.pk && k !== rr.wm && typeof body[0][k] === 'string' && !/date|time|_links|link|url|json|fields/i.test(k)) || null;
+      pick = i; break;
+    }
+  }
+  if (pick < 0) pick = 0; // absolute last resort: first object, no update sub-assert
   const first = routeRows[pick], r0 = routes[pick];
   const r0Body = unwrapBody(r0.Body);
   const pk0 = first.pk;
@@ -398,9 +552,17 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   // transport — get a CAREFULLY hand-authored fixtures.json. Auto-regen from deployed APIPaths would
   // CLOBBER it with naive GET-list routes the connector never calls, causing empty fetches / infinite
   // non-advancing pagination (the Fonteva BusinessGroup 5000-batch loop). Detect + preserve them.
+  // Read the per-connector test-descriptor up front: it supplies the faithful SHAPE the generic
+  // generator can't infer — `pathPrefix` (the real base path the connector prepends, e.g. PheedLoop's
+  // `/api/v3/organization/{OrganizationCode}`, so routes EXACTLY match the connector's real call and a
+  // wrong path correctly fails), `envelopeKey`, `credentials` — AND can FORCE all-object regen via
+  // `"expandToAllObjects": true` so a thin hand fixture no longer caps coverage to its few objects.
+  let descriptorCfg = null;
+  try { const dp = pathResolve(fixturesDir, 'test-descriptor.json'); if (existsSync(dp)) descriptorCfg = JSON.parse(readFileSync(dp, 'utf8')); } catch { /* no descriptor */ }
+  const forceAllObjects = descriptorCfg?.expandToAllObjects === true;
   try {
     const existing = pathResolve(fixturesDir, 'fixtures.json');
-    if (existsSync(existing)) {
+    if (!forceAllObjects && existsSync(existing)) {
       const m = JSON.parse(readFileSync(existing, 'utf8'));
       const handAuthored =
         // Explicit opt-in marker — the robust, route-shape-INDEPENDENT signal a fixture is faithful.
@@ -458,6 +620,13 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   // the residual is REPORTED, never hidden. Set via E2E_EXCLUDE_OBJECTS=comma,list (case-insensitive).
   const excludeObjects = new Set(String(process.env.E2E_EXCLUDE_OBJECTS || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean));
 
+  // The connector's real base path (descriptor.pathPrefix) — e.g. PheedLoop prepends
+  // `/api/v3/organization/{OrganizationCode}` in GetBaseURL — must be on EVERY route so the mock serves
+  // the EXACT full path the connector calls (a wrong path/prefix then correctly fails; no loose match).
+  // Template vars in the prefix (e.g. {OrganizationCode}) stay literal; matchRoute wildcard-matches them.
+  const pfx = String(descriptorCfg?.pathPrefix || '').trim();
+  const prefixed = (p) => (pfx && p && !String(p).startsWith('(') ? `/${pfx.replace(/^\/+|\/+$/g, '')}/${String(p).replace(/^\/+/, '')}` : p);
+
   // 2) Per-object fields + the deployed PK column.
   const rows = [];
   for (const ioRow of ioRows) {
@@ -484,8 +653,11 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
     const pkRow = (iofRows ?? []).find((f) => { const v = col(f, 'pk'); return v === true || v === 1 || String(v).toLowerCase() === 'true'; });
     const pk = pkRow ? col(pkRow, 'fn') : null;
     const pkType = pkRow ? col(pkRow, 'ft') : null; // PK column type → numeric PKs need numeric synth values
-    if (!pk || !fields.length) continue; // need a PK to key the synthetic rows + identity assertions
-    rows.push({ name: col(ioRow, 'name'), apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath, rdk: col(ioRow, 'rdk') || null });
+    if (!fields.length) continue; // keyless objects are FINE — the engine assigns identity via DiscoverFields
+    // streaming PK ideation, else synthetic-PK / content-hash fallback (§4). The harness must NOT drop them
+    // (requiring a hard PK was the bug that made neon's 24 soft-keyless objects show as untested).
+    const apForRow = accessPath ? { ...accessPath, door: prefixed(accessPath.door), entryPath: prefixed(accessPath.entryPath), alternativePaths: (accessPath.alternativePaths || []).map(prefixed) } : accessPath;
+    rows.push({ name: col(ioRow, 'name'), apipath: prefixed(apipath), rawApiPath: apipath, wm: col(ioRow, 'wm') || null, pk, pkType, fields, accessPath: apForRow, rdk: col(ioRow, 'rdk') || null });
   }
   if (!rows.length) return { ok: false, reason: `no routable, PK-bearing deployed objects for integration ${integrationID}` };
 
@@ -495,10 +667,34 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   // IO's declared `ResponseDataKey`; for connectors that default the envelope in CODE (SharePoint hard-
   // codes `value` while ResponseDataKey is null), the global override `E2E_RESPONSE_ENVELOPE_KEY` supplies
   // it. Null ⇒ bare array (the openwater/plain-REST case, unchanged).
-  const envelopeKey = process.env.E2E_RESPONSE_ENVELOPE_KEY
+  const envelopeKey = descriptorCfg?.envelopeKey
+    || process.env.E2E_RESPONSE_ENVELOPE_KEY
     || (rows.map((r) => r.rdk).filter(Boolean).sort((a, b) =>
         rows.filter((r) => r.rdk === b).length - rows.filter((r) => r.rdk === a).length)[0])
     || null;
+
+  // MERGE-ALL-OBJECTS for auth-bearing shapes (SOQL / GraphQL / by-id): when expandToAllObjects is set
+  // AND a hand-authored fixture exists AND the descriptor declares one of these shapes, PRESERVE the hand
+  // fixture's token/describe/auth routes and ADD a shape-correct data route for every deployed object that
+  // lacks one — instead of clobbering with generic regen (which can't reproduce the faithful auth, e.g.
+  // fonteva's LoginUrl key + instance_url two-phase OAuth). This is what turns fonteva 5/28 → 28/28,
+  // path-lms 1/84 → 84/84, orcid 3/12 → 12/12 without losing their hand-authored connection plumbing.
+  const fetchShape = String(descriptorCfg?.fetchShape || '').toLowerCase();
+  const MERGE_SHAPES = new Set(['soql', 'graphql', 'by-id', 'byid']);
+  if (forceAllObjects && MERGE_SHAPES.has(fetchShape)) {
+    const handPath = pathResolve(fixturesDir, 'fixtures.json');
+    if (existsSync(handPath)) {
+      let handM = null;
+      try { handM = JSON.parse(readFileSync(handPath, 'utf8')); } catch { handM = null; }
+      if (handM && Array.isArray(handM.Routes)) {
+        const merged = mergeAllObjectDataRoutes(handM, rows, fetchShape, envelopeKey);
+        applyTestDescriptor(handM, fixturesDir);   // merge descriptor creds/flags into the hand Configuration
+        writeFileSync(handPath, JSON.stringify(handM, null, 2) + '\n');
+        return { ok: true, written: handPath, merged: true, mergeShape: fetchShape, added: merged.added,
+                 objectNames: handM.Objects.map((o) => o.Name), deltaObject: (handM.DeltaPasses?.[0]?.Object ?? null) };
+      }
+    }
+  }
 
   const { manifest, objectNames, deltaObject } = buildFixtureFromRows(rows, cfgKey, envelopeKey);
   if (!manifest) return { ok: false, reason: 'fixture builder produced no objects' };
@@ -517,7 +713,7 @@ export async function regenerateFixturesFromDeployed({ db, platform, mjSchema = 
   mkdirSync(fixturesDir, { recursive: true });
   const out = pathResolve(fixturesDir, 'fixtures.json');
   writeFileSync(out, JSON.stringify(manifest, null, 2) + '\n');
-  return { ok: true, written: out, objectNames, deltaObject, descriptor: descriptor ? Object.keys(descriptor) : null };
+  return { ok: true, written: out, objectNames, deltaObject, descriptor: descriptorCfg ? Object.keys(descriptorCfg) : null };
 }
 
 // ── CLI (legacy /tmp/<CONN>-meta.txt path) ──────────────────────────────────────

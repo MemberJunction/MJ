@@ -643,9 +643,11 @@ async function connectorE2EPlan(values, scrub, allowWrite) { // eslint-disable-l
             // E7 — applyScope is carried from cfg (scoped by default for connector-e2e); phaseSetup honors it.
             applyScope: cfg.applyScope,
             deltaPasses: cfg.mode === 'mock' ? deltaPassesFromManifest(mock.manifest) : [],
-            discoverable: matrixSpecs.discoverable,
-            discoverNarrowedRoutes: matrixSpecs.discoverNarrowedRoutes,
-            writeRoundTrip: matrixSpecs.writeRoundTrip,
+            // Spread the FULL declared-capability set so every lifecycle stage can gate on it:
+            // discoverable, supportsFieldDiscovery, customTables, supportsCustomColumns, incrementalStrategy,
+            // supportsPartitionReconcile, supportsWrite, writeRoundTrip, supportsScheduling,
+            // connectionTestable, discoverNarrowedRoutes, lifecycleDeclared.
+            ...matrixSpecs,
         };
 
         const result = await runConnectorE2E({ gql, db, mock }, fullCfg, allowWrite);

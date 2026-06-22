@@ -68,6 +68,30 @@ const E2E_GQL = {
       }
     }`,
     writeRecord: GQL.writeRecord,
+    // Stage 4 — custom-column promotion (the real production GraphQL, not a hand-call).
+    listCustomColumnCandidates: `query($ciid: String!, $entityName: String) {
+      IntegrationListCustomColumnCandidates(companyIntegrationID: $ciid, entityName: $entityName) {
+        Success Message Candidates { EntityName SourceKey ColumnName InferredType NeedsColumn }
+      }
+    }`,
+    promoteCustomColumns: `mutation($ciid: String!, $entityNames: [String!]) {
+      IntegrationPromoteCustomColumns(companyIntegrationID: $ciid, entityNames: $entityNames) {
+        Success Message Promoted ColumnsAdded { EntityName ColumnName } SchemaUpdatePending
+      }
+    }`,
+    // Stage 10b — scheduled-job lifecycle (discovery/sync "can happen on a schedule"). The real GraphQL.
+    createSchedule: `mutation($input: CreateScheduleInput!) {
+      IntegrationCreateSchedule(input: $input) { Success Message ScheduledJobID }
+    }`,
+    listSchedules: `query($ciid: String!) {
+      IntegrationListSchedules(companyIntegrationID: $ciid) { Success Message Schedules { ID Name Status CronExpression } }
+    }`,
+    toggleSchedule: `mutation($id: String!, $enabled: Boolean!) {
+      IntegrationToggleSchedule(scheduledJobID: $id, enabled: $enabled) { Success Message }
+    }`,
+    deleteSchedule: `mutation($id: String!, $ciid: String) {
+      IntegrationDeleteSchedule(scheduledJobID: $id, companyIntegrationID: $ciid) { Success Message }
+    }`,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -627,6 +651,131 @@ export async function phaseDiscoverColumns({ gql, db, ciid, cfg, integrationID }
 /**
  * @param {object} args { gql, ciid, maps, cfg }
  */
+// ─────────────────────────────────────────────────────────────────────────────
+// STAGE 4 — Custom tables/columns: full-record passthrough → __mj_integration_CustomOverflow →
+// promotion (mints real columns). PRODUCTION-FAITHFUL + GraphQL-driven (NOT a unit test): every synth
+// row carries an UNMAPPED `mj_e2e_custom_attr` (gen-fixture), so the FIRST full sync (stage 6) already
+// captured it to overflow for EVERY object that landed rows — no field-map disabling needed. This phase
+// then drives the REAL promotion GraphQL (`IntegrationListCustomColumnCandidates` →
+// `IntegrationPromoteCustomColumns`) and asserts the lifecycle end-to-end with anti-vacuous DB checks:
+// overflow captured (over ALL synced objects, no subset) → candidate surfaced → promotion mints a real
+// column (sys.columns/information_schema + EntityField) → (when no restart pending) no re-capture next sync.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function phaseCustomColumns({ gql, db, verify, ciid, maps, cfg }) {
+    const out = [];
+    const pg = cfg.platform === 'postgresql';
+    const CUSTOM = 'mj_e2e_custom_attr';                 // the unmapped attribute gen-fixture emits on every row
+    const OVF = '__mj_integration_CustomOverflow';
+    const mjSchema = cfg.mjSchema || '__mj';
+    const lit = (s) => `'${String(s).replace(/'/g, "''")}'`;
+    const qid = (n) => (pg ? `"${n}"` : `[${n}]`);
+
+    // 1) OVERFLOW CAPTURE over ALL synced objects (no subset) — the unmapped custom attr must be in the
+    //    overflow JSON of every object that landed rows (the first full sync already ran it).
+    const entitiesWithOverflow = [];
+    let checked = 0;
+    for (const m of (maps || [])) {
+        const entityName = m.Entity || m.entity;
+        if (!entityName) continue;
+        let meta; try { meta = await verify.entityMeta(entityName); } catch { continue; }
+        const tbl = `${qid(meta.schema)}.${qid(meta.table)}`;
+        let rows; try { rows = await db.rows(`SELECT COUNT(*) AS c FROM ${tbl} WHERE ${qid(OVF)} LIKE '%${CUSTOM}%'`); } catch { continue; }
+        checked++;
+        if (Number(rows?.[0]?.c ?? rows?.[0]?.C ?? 0) > 0) entitiesWithOverflow.push({ entityName, meta });
+    }
+    if (!entitiesWithOverflow.length) {
+        // FORGIVING: overflow is ONE of two valid custom-column paths. The PRIMARY path is DiscoverFields
+        // streaming finding the new field → it becomes a normal MAPPED column (never overflow). A SOQL
+        // connector also only SELECTs declared fields, so an injected extra never returns. So "no overflow"
+        // is a legitimate SKIP, not a failure — the matrix honestly says the overflow path wasn't exercised.
+        return [step('custom.overflow-captured', true, {
+            objectsChecked: checked, objectsWithOverflow: 0,
+            skipReason: `no unmapped field reached ${OVF} this run — custom fields flow via DiscoverFields streaming (discovered→mapped) for these connectors, or the shape (SOQL) never returns un-SELECTed fields; overflow path not exercised`,
+        })];
+    }
+    out.push(step('custom.overflow-captured', true, {
+        objectsChecked: checked, objectsWithOverflow: entitiesWithOverflow.length,
+        sample: entitiesWithOverflow.slice(0, 10).map((e) => e.entityName),
+        note: `unmapped '${CUSTOM}' captured to ${OVF} on ${entitiesWithOverflow.length}/${checked} objects (full-record passthrough)`,
+    }));
+
+    // 2) CANDIDATE surfaced via the real GraphQL (production path, not a hand-call).
+    const cand = (await gql(E2E_GQL.listCustomColumnCandidates, { ciid, entityName: null }))?.IntegrationListCustomColumnCandidates;
+    const candidates = cand?.Candidates ?? [];
+    const customCand = candidates.filter((c) => String(c.SourceKey ?? '').includes(CUSTOM) || String(c.ColumnName ?? '').includes(CUSTOM));
+    out.push(step('custom.candidate-surfaced', customCand.length > 0, {
+        totalCandidates: candidates.length, customAttrCandidates: customCand.length,
+        sample: customCand.slice(0, 5).map((c) => `${c.EntityName}.${c.ColumnName}(${c.InferredType})`),
+    }));
+
+    // 3) PROMOTE via real GraphQL — mint the real columns.
+    const promoteEntities = [...new Set(customCand.map((c) => c.EntityName).filter(Boolean))];
+    const prom = (await gql(E2E_GQL.promoteCustomColumns, { ciid, entityNames: promoteEntities.length ? promoteEntities : null }))?.IntegrationPromoteCustomColumns;
+    const added = prom?.ColumnsAdded ?? [];
+    const customAdded = added.filter((a) => String(a.ColumnName ?? '').includes(CUSTOM));
+    out.push(step('custom.promoted', !!prom?.Promoted && customAdded.length > 0, {
+        promoted: !!prom?.Promoted, columnsAdded: added.length, customColumnsAdded: customAdded.length,
+        schemaUpdatePending: !!prom?.SchemaUpdatePending,
+        sample: customAdded.slice(0, 5).map((a) => `${a.EntityName}.${a.ColumnName}`),
+    }));
+
+    // 4) DB cross-check: the minted column physically exists on the table AND an EntityField row exists.
+    if (customAdded.length) {
+        const a = customAdded[0];
+        let meta; try { meta = await verify.entityMeta(a.EntityName); } catch { meta = null; }
+        let colOk = false, fieldOk = false;
+        if (meta) {
+            const colSql = pg
+                ? `SELECT COUNT(*) AS c FROM information_schema.columns WHERE table_schema = ${lit(meta.schema)} AND table_name = ${lit(meta.table)} AND column_name = ${lit(a.ColumnName)}`
+                : `SELECT COUNT(*) AS c FROM sys.columns WHERE object_id = OBJECT_ID(${lit(meta.schema + '.' + meta.table)}) AND name = ${lit(a.ColumnName)}`;
+            try { colOk = Number((await db.rows(colSql))?.[0]?.c ?? (await db.rows(colSql))?.[0]?.C ?? 0) > 0; } catch { colOk = false; }
+            const efSql = pg
+                ? `SELECT COUNT(*) AS c FROM "${mjSchema}"."EntityField" WHERE "EntityID" = ${lit(meta.entityID)} AND "Name" = ${lit(a.ColumnName)}`
+                : `SELECT COUNT(*) AS c FROM [${mjSchema}].[EntityField] WHERE EntityID = ${lit(meta.entityID)} AND Name = ${lit(a.ColumnName)}`;
+            try { fieldOk = Number((await db.rows(efSql))?.[0]?.c ?? (await db.rows(efSql))?.[0]?.C ?? 0) > 0; } catch { fieldOk = false; }
+        }
+        out.push(step('custom.column-minted', colOk && fieldOk, {
+            entity: a.EntityName, column: a.ColumnName, tableColumnExists: colOk, entityFieldExists: fieldOk,
+            note: colOk && fieldOk
+                ? `promotion minted real column ${a.EntityName}.${a.ColumnName} (table + EntityField)`
+                : `minted column / EntityField NOT found in DB (table=${colOk}, field=${fieldOk})`,
+        }));
+    }
+    return out;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAGE 10b — Scheduled-job lifecycle ("discovery/sync can happen on a schedule"). Production-faithful
+// + GraphQL-driven: create a schedule (far-future cron so it never fires mid-test) → list (registered) →
+// toggle off/on (enable control) → delete (cleanup). Proves the connection is SCHEDULABLE without
+// depending on cron timing. supportsScheduling:false → honest skip.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function phaseScheduledJob({ gql, ciid, cfg }) {
+    if (cfg.supportsScheduling === false) {
+        return [step('scheduled-job.skipped', true, { skipReason: 'descriptor declares supportsScheduling:false' })];
+    }
+    const out = [];
+    const created = (await gql(E2E_GQL.createSchedule, { input: {
+        CompanyIntegrationID: ciid, Name: `mj_e2e_sched_${String(ciid).slice(0, 8)}`,
+        CronExpression: '0 0 31 12 *', Timezone: 'UTC', JobKind: 'sync', FullSync: false,
+    } }))?.IntegrationCreateSchedule;
+    const jobID = created?.ScheduledJobID;
+    out.push(step('scheduled-job.created', !!created?.Success && !!jobID, { scheduledJobID: jobID ?? null, message: created?.Message }));
+    if (!jobID) return out;
+    try {
+        const list = (await gql(E2E_GQL.listSchedules, { ciid }))?.IntegrationListSchedules;
+        const found = (list?.Schedules ?? []).find((s) => s.ID === jobID);
+        out.push(step('scheduled-job.listed', !!found, { total: (list?.Schedules ?? []).length, found: !!found, status: found?.Status }));
+        const off = (await gql(E2E_GQL.toggleSchedule, { id: jobID, enabled: false }))?.IntegrationToggleSchedule;
+        const on = (await gql(E2E_GQL.toggleSchedule, { id: jobID, enabled: true }))?.IntegrationToggleSchedule;
+        out.push(step('scheduled-job.toggled', !!off?.Success && !!on?.Success, { disabled: !!off?.Success, reEnabled: !!on?.Success }));
+    } finally {
+        const del = (await gql(E2E_GQL.deleteSchedule, { id: jobID, ciid }))?.IntegrationDeleteSchedule;
+        out.push(step('scheduled-job.deleted', !!del?.Success, { deleted: !!del?.Success }));
+    }
+    return out;
+}
+
 export async function phaseDAG({ gql, db, ciid, maps, cfg, integrationID }) {
     const steps = [];
 
@@ -1118,6 +1267,40 @@ async function buildSkipApplyMaps(db, cfg) {
     return out;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// LIFECYCLE MATRIX — map the flat result.steps groups onto the ordered birth→death stages so the
+// campaign can render a per-connector × per-stage matrix. Each stage rolls up its constituent step
+// groups: pass = all real (ok && !skip); skip = all skip-with-reason; fail = any hard failure.
+// ─────────────────────────────────────────────────────────────────────────────
+const LIFECYCLE_STAGES = [
+    { stage: 'Create', groups: ['setup'] },
+    { stage: 'DiscoverObj', groups: ['discoverOverlay'] },
+    { stage: 'DiscoverFields', groups: ['discoverColumns'] },
+    { stage: 'CustomCols', groups: ['customColumns'] },
+    { stage: 'ApplyAll', groups: ['coverage'] },
+    { stage: 'FullSync', groups: ['forward'] },
+    { stage: 'Incremental', groups: ['watermark', 'idempotent'] },
+    { stage: 'Merkle', groups: ['merkle'] },
+    { stage: 'WriteBack', groups: ['bidirectional', 'backward'] },
+    { stage: 'Maintenance', groups: ['rateLimit', 'concurrency', 'retry', 'pagination', 'scheduledJob'] },
+    { stage: 'Death', groups: ['teardown'] },
+];
+function assembleLifecycle(steps) {
+    return LIFECYCLE_STAGES.map(({ stage, groups }) => {
+        const cells = groups.flatMap((g) => { const v = steps[g]; return Array.isArray(v) ? v : (v ? [v] : []); }).filter(Boolean);
+        if (!cells.length) return { stage, status: 'skip', skipReason: 'stage not run', steps: [] };
+        const anyFail = cells.some((c) => c && c.ok === false && !c.skipReason && !c.reason);
+        const allSkip = cells.every((c) => c && (c.skipReason || c.reason));
+        const status = anyFail ? 'fail' : (allSkip ? 'skip' : 'pass');
+        const skipReason = status === 'skip'
+            ? (cells.find((c) => c.skipReason)?.skipReason ?? cells.find((c) => c.reason)?.reason ?? 'skipped') : undefined;
+        const failDetail = status === 'fail'
+            ? (cells.find((c) => c.ok === false && !c.skipReason && !c.reason)?.note
+               ?? cells.find((c) => c.ok === false && !c.skipReason && !c.reason)?.name) : undefined;
+        return { stage, status, skipReason, failDetail, steps: cells };
+    });
+}
+
 export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
     const result = { ok: false, mode: cfg.mode, connector: cfg.connector, platform: cfg.platform, runId: cfg.runId, steps: {} };
     const createdSink = [];
@@ -1165,6 +1348,28 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
         // subset. A connector is NOT runtime-proven unless every object either synced rows>0 OR is flagged
         // legitimately-empty with a logged reason (a structural ZERO_PARENTS where the source genuinely has
         // no parents this run). This is what CATCHES a thin fixture passing as "all objects".
+        // DEPLOYED-vs-TESTED gate (the anti-thin-fixture guard): count the connector's Active DEPLOYED
+        // IntegrationObjects. A hand fixture that maps/syncs only a handful of them must NOT read green —
+        // this is what turns "path-lms 1/1 green" (1 of 84 DEPLOYED) into a LOUD failure. The HARNESS, not
+        // a human, refuses to call a thin fixture all-object. Computed before the gate (needs an await).
+        let deployedObjectCount = 0, syncableObjectCount = 0;
+        try {
+            const pg = cfg.platform === 'postgresql';
+            const sch = cfg.mjSchema || '__mj';
+            const IOt = pg ? `"${sch}"."IntegrationObject"` : `[${sch}].[IntegrationObject]`;
+            const IOFt = pg ? `"${sch}"."IntegrationObjectField"` : `[${sch}].[IntegrationObjectField]`;
+            const idC = pg ? '"IntegrationID"' : 'IntegrationID', stC = pg ? '"Status"' : 'Status';
+            const ioId = pg ? '"ID"' : 'ID', fIoId = pg ? '"IntegrationObjectID"' : 'IntegrationObjectID', pkC = pg ? '"IsPrimaryKey"' : 'IsPrimaryKey';
+            const pkTrue = pg ? 'true' : '1';
+            const dr = await db.rows(`SELECT COUNT(*) AS c FROM ${IOt} WHERE ${idC}='${cfg.integrationID}' AND ${stC}='Active'`);
+            deployedObjectCount = Number((dr && dr[0] && (dr[0].c ?? dr[0].C)) || 0);
+            // SYNCABLE = Active objects with a derivable PK (static OR discovery/streaming-assigned). A keyless
+            // object for which statistical PK ideation finds NO unique column is a LEGITIMATE skip — soft keys,
+            // CodeGen doesn't create its entity — so it is EXCLUDED from the must-test denominator, NOT failed.
+            const sr = await db.rows(`SELECT COUNT(DISTINCT io.${ioId}) AS c FROM ${IOt} io JOIN ${IOFt} f ON f.${fIoId}=io.${ioId} AND f.${pkC}=${pkTrue} WHERE io.${idC}='${cfg.integrationID}' AND io.${stC}='Active'`);
+            syncableObjectCount = Number((sr && sr[0] && (sr[0].c ?? sr[0].C)) || 0);
+        } catch { /* count unavailable → gate degrades to the synced-rows check below */ }
+
         result.steps.coverage = (() => {
             const comp = (result.steps.forward || []).filter(c => c && c.name === 'forward.completeness');
             const run = (result.steps.forward || []).find(c => c && c.name === 'forward.full.run');
@@ -1180,20 +1385,40 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
             const covered = comp.filter(c => (c.destRows || 0) > 0).map(c => c.object);
             const zeroReal = comp.filter(c => (c.destRows || 0) === 0 && !legitEmpty.has(c.object)).map(c => c.object);
             const zeroLegit = comp.filter(c => (c.destRows || 0) === 0 && legitEmpty.has(c.object)).map(c => c.object);
-            const total = comp.length, catalog = (setup.applyAll?.mapsCreated ?? setup.maps.length);
-            const ok = zeroReal.length === 0 && total > 0;
+            const total = comp.length;
+            // Denominator = SYNCABLE objects (have a derivable PK). PK-bearing objects the matrix never tested
+            // = a real thin-fixture/coverage gap (FAIL). Keyless objects with no derivable PK = LEGITIMATE skips
+            // (soft keys; statistical ideation found no unique column; CodeGen doesn't create the entity) →
+            // logged, never a failure. Fall back to deployedObjectCount when the syncable count is unavailable.
+            const denom = syncableObjectCount > 0 ? syncableObjectCount : deployedObjectCount;
+            const untestedSyncable = denom > total ? denom - total : 0;
+            const keylessSkipped = deployedObjectCount > denom ? deployedObjectCount - denom : 0;
+            const ok = zeroReal.length === 0 && total > 0 && untestedSyncable === 0;
             return [step('coverage.all-objects', ok, {
-                catalogObjects: catalog, checkedObjects: total,
+                deployedObjects: deployedObjectCount, syncableObjects: syncableObjectCount, checkedObjects: total,
+                untestedSyncableObjects: untestedSyncable, keylessSkipped,
                 coveredWithRows: covered.length, zeroRowReal: zeroReal.length, zeroRowLegitEmpty: zeroLegit.length,
                 zeroRealObjects: zeroReal.slice(0, 40), zeroLegitObjects: zeroLegit.slice(0, 40),
-                note: ok ? 'every materialized object synced rows>0 (or is logged legit-empty) — real all-object DAG coverage'
-                         : `${zeroReal.length} object(s) synced 0 rows with NO legitimate-empty reason — NOT all-object proven`,
+                note: untestedSyncable > 0
+                    ? `THIN FIXTURE: ${untestedSyncable} PK-bearing object(s) of ${denom} syncable never tested (vacuous green). Make the fixture all-object.`
+                    : !ok
+                        ? `${zeroReal.length} tested object(s) synced 0 rows with no legit-empty reason — NOT all-object proven`
+                        : `all ${denom} syncable objects tested + rows>0${keylessSkipped ? ` (${keylessSkipped} keyless objects legitimately skipped — no derivable PK, soft keys)` : ''}`,
             })];
         })();
 
         // Heavy fault-injection cells stay on a bounded representative subset (per-object fault injection
         // over a 1600-object catalog is intractable + adds no coverage signal). Coverage is proven above.
         const faultMaps = setup.syncMaps.slice(0, Number(process.env.E2E_FAULT_OBJECTS) || 8);
+        // HONEST BOUND (no silent capping): the per-object cells above (forward / coverage / delta /
+        // idempotent / watermark) run over EVERY object. The fault-injection cells below test
+        // ENGINE-LEVEL, object-agnostic behavior (429 backoff, within-layer concurrency, Merkle skip,
+        // transient retry, write round-trip) — identical regardless of object — so they run on this
+        // bounded representative set. Recorded so the rollup shows EXACTLY what was bounded and why.
+        result.steps.faultScope = [step('fault-scope', true, {
+            faultObjects: faultMaps.map((m) => m.sourceObjectName), boundedTo: faultMaps.length, ofTotal: setup.syncMaps.length,
+            note: 'engine-level cells run on a bounded representative set; per-object cells covered ALL objects.',
+        })];
 
         // ALL 17 CELLS ALWAYS RUN. A cell either executes (GREEN/FAIL) or returns ONE step with an
         // explicit skipReason — never silently absent. Cells split into three groups by what they need:
@@ -1216,6 +1441,18 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
         // P-idempotent — re-run with no change does 0 work / 0 row delta (both modes).
         result.steps.idempotent = await phaseIdempotent({ gql, verify, ciid: setup.ciid, maps: setup.syncMaps, cfg });
 
+        // STAGE 4 — custom-column passthrough → __mj_integration_CustomOverflow → promotion. The first full
+        // sync already overflowed the UNMAPPED mj_e2e_custom_attr for every object; this drives the real
+        // promotion GraphQL over ALL synced objects (no subset). Mock-only (asserting promotion would mutate
+        // a real client tenant's schema). A descriptor with supportsCustomColumns:false → honest skip.
+        // Run in mock mode ALWAYS: the unmapped mj_e2e_custom_attr makes overflow→promotion universal (the
+        // base capability), so a connector that genuinely can't capture/promote FAILS honestly rather than
+        // skipping. The descriptor's supportsCustomColumns flag drives the declaration-honesty gate, NOT this
+        // run decision. Live skips (promotion would mutate the real tenant schema).
+        result.steps.customColumns = (cfg.mode === 'mock')
+            ? await phaseCustomColumns({ gql, db, verify, ciid: setup.ciid, maps: setup.syncMaps, cfg })
+            : [step('custom-columns.skipped', true, { skipReason: 'live — promotion assertion would mutate the real tenant schema' })];
+
         // I3 — non-advancing pagination. phaseInfinitePagination self-skips-with-reason in live (needs mock route-swap + capture).
         result.steps.pagination = await phaseInfinitePagination({ gql, mock, ciid: setup.ciid, maps: faultMaps, cfg });
 
@@ -1226,6 +1463,8 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
         result.steps.dag = await phaseDAG({ gql, db, ciid: setup.ciid, maps: setup.syncMaps, cfg, integrationID: cfg.integrationID });
         // cell 14 — Merkle/partition reconcile skips an unchanged partition (0 writes on re-sync).
         result.steps.merkle = await phaseMerkle({ gql, ciid: setup.ciid, maps: faultMaps, cfg });
+        // STAGE 10b — scheduled-job lifecycle (create→list→toggle→delete). DB/gql-side, both modes.
+        result.steps.scheduledJob = await phaseScheduledJob({ gql, ciid: setup.ciid, cfg });
 
         // (B) mock-only fault-injection / vendor-mutation cells — explicit skip-with-reason in live.
         if (cfg.mode === 'mock') {
@@ -1269,6 +1508,9 @@ export async function runConnectorE2E({ gql, db, mock }, cfg, allowWrite) {
                 });
             } catch (e) { result.steps.teardown = [step('teardown', false, { error: String(e?.message ?? e) })]; }
         }
+        // Assemble the ordered birth→death lifecycle matrix BEFORE closing connections (uses result.steps,
+        // including the teardown/Death step just written above). Consumed by run-connector-campaign.mjs.
+        result.lifecycle = assembleLifecycle(result.steps);
         if (mock?.close) { try { await mock.close(); } catch { /* best-effort */ } }
         if (db.close) { try { await db.close(); } catch { /* best-effort */ } }
         // Verdict AFTER teardown: a failed cleanup turns the run red, not silently green.

@@ -295,6 +295,45 @@ const allIOFRows = ioRows
     .map(io => pickArr(io && io.relatedEntities, 'MJ: Integration Object Fields', 'Integration Object Fields'))
     .flat();
 
+// ── NESTED-OBJECT PARENT-RESOLUTION gate (deterministic; the systemic nested defect the all-object
+// test exposed). A template-var APIPath (`/events/{eventCode}/attendees/`) where the path BEFORE the
+// {var} matches a sibling IO's APIPath is a PARENT-ITERATION object: the engine resolves {var} ONLY via
+// Configuration.parentObjectName / parentObjects[var] / an exact-name FK, else it LOUDLY skips → 0 rows
+// in prod. The arc emits parentObjectName by construction (deriveTemplateVarParents); this REJECTS any
+// such IO that still lacks it so the defect can never reship. By-id self-refs (the {var} is the first
+// segment, no sibling parent) are NOT gated. ~110 such objects shipped unresolved across ~10 connectors.
+{
+    const normP = (p) => '/' + String(p || '').replace(/^\/+|\/+$/g, '') + '/';
+    const flatByPath = new Map();
+    for (const io of ioRows) { const ap = io && io.fields && io.fields.APIPath; if (ap && !String(ap).includes('{')) flatByPath.set(normP(ap), io.fields.Name); }
+    const cfgOf = (io) => { const c = io && io.fields && io.fields.Configuration; if (c && typeof c === 'object') return c; if (typeof c === 'string') { try { return JSON.parse(c); } catch { return {}; } } return {}; };
+    const unresolvedNested = [];
+    for (const io of ioRows) {
+        const f = io && io.fields; if (!f) continue;
+        const ap = String(f.APIPath || ''); if (!ap.includes('{')) continue;
+        const segs = ap.split('/');
+        const varIdxs = segs.map((s, i) => (/^\{.*\}$/.test(s) ? i : -1)).filter((i) => i >= 0);
+        if (varIdxs.length === 0) continue;
+        const cfg = cfgOf(io);
+        const iofs = pickArr(io.relatedEntities, 'MJ: Integration Object Fields', 'Integration Object Fields');
+        const hasFKForVar = (v) => iofs.some((x) => x && x.fields && x.fields.RelatedIntegrationObjectID && String(x.fields.Name || '').toLowerCase() === v.toLowerCase());
+        for (const vi of varIdxs) {
+            const varName = segs[vi].replace(/^\{|\}$/g, '');
+            if (!flatByPath.has(normP(segs.slice(0, vi).join('/')))) continue; // by-id self-ref / non-flat parent → not gated
+            const resolved = (typeof cfg.parentObjectName === 'string' && cfg.parentObjectName.trim())
+                || (cfg.parentObjects && typeof cfg.parentObjects === 'object' && cfg.parentObjects[varName])
+                || hasFKForVar(varName);
+            if (!resolved) unresolvedNested.push(`${f.Name}{${varName}}`);
+        }
+    }
+    if (unresolvedNested.length > 0) {
+        failures.push({
+            rule: 'nested-parent-unresolved',
+            detail: `${unresolvedNested.length} parent-iteration template-var object(s) have a parent that EXISTS as a sibling object but is NOT resolvable (no Configuration.parentObjectName / parentObjects[var] / exact-name FK) — the engine skips them → 0 rows in prod. The arc emits this via deriveTemplateVarParents; run it. Offenders: ${unresolvedNested.slice(0, 25).join(', ')}${unresolvedNested.length > 25 ? ', …' : ''}`,
+        });
+    }
+}
+
 // ── IOF FK @lookup-qualifier gate (deterministic; agent ran fk-lookup-qualifier.mjs over the FULL file). ──
 // An IOF RelatedIntegrationObjectID @lookup must qualify its sibling-object lookup with the INTEGRATION's id
 // (`&IntegrationID=@parent:IntegrationID`). The wrong `&IntegrationID=@parent:ID` resolves to the IO's OWN id,
@@ -947,25 +986,37 @@ if (hybridE2E && hybridE2E.assertions) {
     };
     const activeIOFields = ioRows.map((io) => (io && io.fields) ? io.fields : {}).filter((f) => f && f.Name && ioActive(f));
     const scopeReason = typeof a.coverageScopeReason === 'string' ? a.coverageScopeReason.trim() : '';
+    // MOCK-FULL-COVERAGE (agent-arc rule): the mock vendor is free + instant, so in MOCK mode EVERY object/write
+    // MUST be exercised — the blanket `coverageScopeReason` ("Goldilocks subset") CANNOT downgrade an uncovered
+    // object. Only LIVE may be bounded (rate limits / huge real tables) and only live + Postgres may be skipped
+    // wholesale. A genuine per-object skip (`skippedObjects` with a concrete structural reason, e.g. no read
+    // endpoint) is still honored in any mode. This is what makes a "2 of 34 objects" mock run impossible to pass.
+    const isMock = norm(hybridE2E.mode) === 'mock';
 
-    // Behavioral coverage — every Active object covered (>=1 row) OR skipped OR (remainder) scope-reasoned.
+    // Behavioral coverage — every Active object covered (>=1 row) OR per-object skipped; LIVE may scope-reason the
+    // remainder. MOCK mode: scope-reason is REJECTED — every object must be covered or concretely per-object skipped.
     if (Array.isArray(a.coveredObjects)) {
         const covered = toNameSet(a.coveredObjects);
         const skipped = toNameSet(a.skippedObjects);
         const silent = activeIOFields.filter((f) => !covered.has(norm(f.Name)) && !skipped.has(norm(f.Name)));
-        if (silent.length > 0 && !scopeReason) {
-            failures.push({ rule: 'behavioral-coverage-silent-subset', detail: `hybrid-e2e covered ${covered.size}/${activeIOFields.length} active object(s); ${silent.length} were neither synced nor skipped nor scope-reasoned (first: ${silent.slice(0, 8).map((f) => f.Name).join(', ')}${silent.length > 8 ? ', …' : ''}). A silent subset is the convenient-subset duck — exercise them, mark per-object skipReasons, OR set assertions.coverageScopeReason (one line, e.g. Goldilocks-bounded representative streams) so the remainder is acknowledged, not hidden.` });
+        if (silent.length > 0 && (isMock || !scopeReason)) {
+            failures.push({ rule: isMock ? 'behavioral-coverage-mock-incomplete' : 'behavioral-coverage-silent-subset', detail: isMock
+                ? `MOCK hybrid-e2e covered ${covered.size}/${activeIOFields.length} active object(s); ${silent.length} uncovered (first: ${silent.slice(0, 8).map((f) => f.Name).join(', ')}${silent.length > 8 ? ', …' : ''}). In MOCK mode EVERY object MUST be exercised — the mock vendor is free + instant, so a Goldilocks/coverageScopeReason subset is REJECTED (only live + Postgres may be bounded). Exercise every object, or mark a CONCRETE per-object skipReason (structural, e.g. no read endpoint) — a blanket scope reason does NOT count here.`
+                : `hybrid-e2e covered ${covered.size}/${activeIOFields.length} active object(s); ${silent.length} were neither synced nor skipped nor scope-reasoned (first: ${silent.slice(0, 8).map((f) => f.Name).join(', ')}${silent.length > 8 ? ', …' : ''}). A silent subset is the convenient-subset duck — exercise them, mark per-object skipReasons, OR set assertions.coverageScopeReason (one line, e.g. Goldilocks-bounded representative streams) so the remainder is acknowledged, not hidden.` });
         }
     }
 
-    // Write coverage — every WRITABLE object's write actually round-tripped OR skipped OR scope-reasoned.
+    // Write coverage — every WRITABLE object's write actually round-tripped OR per-object skipped; LIVE may
+    // scope-reason the remainder. MOCK mode: scope-reason is REJECTED — every writable path must round-trip.
     if (Array.isArray(a.exercisedWrites)) {
         const exercised = toNameSet(a.exercisedWrites);
         const skipped = toNameSet(a.skippedObjects);
         const writable = activeIOFields.filter(isWritable);
         const unproven = writable.filter((f) => !exercised.has(norm(f.Name)) && !skipped.has(norm(f.Name)));
-        if (unproven.length > 0 && !scopeReason) {
-            failures.push({ rule: 'write-coverage-unproven', detail: `${unproven.length}/${writable.length} writable object(s) declare a write capability whose path was never exercised by the e2e and is not skipped/scope-reasoned (first: ${unproven.slice(0, 8).map((f) => f.Name).join(', ')}${unproven.length > 8 ? ', …' : ''}). bijection proves the write COLUMNS exist; this proves the write WORKS. Round-trip a representative write, mark per-object skipReasons, OR set assertions.coverageScopeReason.` });
+        if (unproven.length > 0 && (isMock || !scopeReason)) {
+            failures.push({ rule: isMock ? 'write-coverage-mock-incomplete' : 'write-coverage-unproven', detail: isMock
+                ? `MOCK hybrid-e2e: ${unproven.length}/${writable.length} writable object(s) never had their write path exercised (first: ${unproven.slice(0, 8).map((f) => f.Name).join(', ')}${unproven.length > 8 ? ', …' : ''}). In MOCK mode every write MUST round-trip against the mock — scope-reason is REJECTED (only live + Postgres may be bounded). Round-trip every writable object or mark a CONCRETE per-object skipReason.`
+                : `${unproven.length}/${writable.length} writable object(s) declare a write capability whose path was never exercised by the e2e and is not skipped/scope-reasoned (first: ${unproven.slice(0, 8).map((f) => f.Name).join(', ')}${unproven.length > 8 ? ', …' : ''}). bijection proves the write COLUMNS exist; this proves the write WORKS. Round-trip a representative write, mark per-object skipReasons, OR set assertions.coverageScopeReason.` });
         }
     }
 }

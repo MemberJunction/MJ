@@ -223,10 +223,33 @@ export function objectsFromManifest(manifest) {
  * All are OPTIONAL — a fixture that declares none yields undefined and the phases stub-with-reason.
  */
 export function matrixSpecsFromManifest(manifest) {
+    // The `lifecycle` block (from test-descriptor.json, stamped onto manifest.Lifecycle by
+    // applyTestDescriptor) is the SINGLE declared-capability gating source for the production-faithful
+    // lifecycle harness. Legacy top-level manifest keys (DiscoverySupported/DiscoverNarrowedRoutes/
+    // WriteRoundTrip) remain as fallback so pre-lifecycle fixtures still run. A capability declared TRUE
+    // here MUST be exercised by the harness (no silent stub) — the harness enforces declared-TRUE-must-run
+    // and a capability.declaration-honest cross-check against the deployed metadata.
+    const lc = (manifest && typeof manifest.Lifecycle === 'object' && manifest.Lifecycle) || {};
     return {
-        discoverable: manifest?.DiscoverySupported === true,
+        lifecycleDeclared: manifest?.Lifecycle != null,
+        // discovery (stages 2/3/10a)
+        discoverable: lc.supportsDiscovery === true || manifest?.DiscoverySupported === true,
+        supportsFieldDiscovery: lc.supportsFieldDiscovery === true || lc.supportsDiscovery === true,
+        customTables: Array.isArray(lc.customTables) ? lc.customTables.filter(Boolean) : [],
+        // custom-column promotion (stage 4)
+        supportsCustomColumns: lc.supportsCustomColumns === true,
+        // incremental (stage 7) — REQUIRED to be 'watermark' | 'content-hash' when declared
+        incrementalStrategy: typeof lc.incrementalStrategy === 'string' ? lc.incrementalStrategy : null,
+        // merkle (stage 8)
+        supportsPartitionReconcile: lc.supportsPartitionReconcile === true,
+        // write-back (stage 9) — supportsWrite must align with the connector's CRUD capability flags
+        supportsWrite: lc.supportsWrite === true || manifest?.WriteRoundTrip != null,
+        writeRoundTrip: lc.writeRoundTrip ?? manifest?.WriteRoundTrip ?? null,
+        // scheduling (stage 10b) + connection test (stage 1) default ON
+        supportsScheduling: lc.supportsScheduling !== false,
+        connectionTestable: lc.connectionTestable !== false,
+        // deactivation overlay staging (stages 2/10a)
         discoverNarrowedRoutes: Array.isArray(manifest?.DiscoverNarrowedRoutes) && manifest.DiscoverNarrowedRoutes.length
             ? manifest.DiscoverNarrowedRoutes : null,
-        writeRoundTrip: manifest?.WriteRoundTrip ?? null,
     };
 }

@@ -207,6 +207,22 @@ if (args?.writeBackPath) {
         { schema: { type: 'object', properties: { nonPkNotNull_demoted: { type: 'integer' }, contradictionFK_stripped: { type: 'integer' } }, additionalProperties: true }, model: 'haiku', phase: 'extract', label: 'enforce-floor' }
     ).catch(() => null);
     log(`§0b enforcement: demoted ${enforced?.nonPkNotNull_demoted ?? '?'} non-PK NOT NULL, stripped ${enforced?.contradictionFK_stripped ?? '?'} contradiction FK`);
+
+    // NESTED-OBJECT PARENT RESOLUTION (root-cause arc fix). A template-var APIPath
+    // (`/events/{eventCode}/attendees/`) cannot SYNC unless the child IO declares how to resolve the
+    // var to a parent — the engine resolves ONLY via authored metadata (Configuration.parentObjectName
+    // or an exact-name FK) and loudly skips otherwise (engine §19: no runtime guess). The path STRUCTURE
+    // already encodes the parent (the object whose APIPath is the path truncated before the {var}), so we
+    // DERIVE Configuration.parentObjectName deterministically here — pure structure, not a guess. Without
+    // this, EVERY nested object syncs 0 rows in prod (the systemic defect the all-object test exposed
+    // across ~10 connectors). Idempotent; the same rule that back-fills existing metadata.
+    const parents = await agent(
+        `Run EXACTLY this command and return its JSON stdout verbatim (do not judge or alter it):\n` +
+        `node packages/Integration/connector-builder-workshop/scripts/derive-template-var-parents.mjs ${args.writeBackPath} --write\n` +
+        `Return { resolved, multiVar, unresolved } parsed from the stdout.`,
+        { schema: { type: 'object', properties: { resolved: { type: 'integer' }, multiVar: { type: 'integer' }, unresolved: { type: 'integer' } }, additionalProperties: true }, model: 'haiku', phase: 'extract', label: 'derive-parents' }
+    ).catch(() => null);
+    log(`template-var parents: derived ${parents?.resolved ?? '?'} parentObjectName (multiVar=${parents?.multiVar ?? '?'}, unresolved=${parents?.unresolved ?? '?'})`);
 }
 
 // Flatten claims with object identity for the batched verify + adversarial passes.

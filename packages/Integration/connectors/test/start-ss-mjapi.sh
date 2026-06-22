@@ -40,6 +40,12 @@ export DB_PORT="${DB_PORT:-1444}"
 export DB_DATABASE="${DB_DATABASE:-MJ_SS_E2E}"
 export DB_USERNAME="${DB_USERNAME:-sa}"
 export DB_PASSWORD="${DB_PASSWORD:-Claude2Sql99}"
+# CodeGen (the RSU/ApplyAll child process spawned at RUNTIME) needs DDL-capable DB creds. Without these
+# the spawned codegen connects with an EMPTY user → "ConnectionError: Login failed for user ''" → every
+# runtime ApplyAll fails at RunCodeGen (the connector entities never get created). Default to the same
+# sa creds as the runtime connection so the spawned child inherits them.
+export CODEGEN_DB_USERNAME="${CODEGEN_DB_USERNAME:-$DB_USERNAME}"
+export CODEGEN_DB_PASSWORD="${CODEGEN_DB_PASSWORD:-$DB_PASSWORD}"
 export DB_TRUST_SERVER_CERTIFICATE="${DB_TRUST_SERVER_CERTIFICATE:-1}"
 export MJ_CORE_SCHEMA="${MJ_CORE_SCHEMA:-__mj}"
 
@@ -114,6 +120,26 @@ if [[ ! -e "$RSU_WORK_DIR/.env" && -f "$REPO_ROOT/.env" ]]; then
     && echo "linked $RSU_WORK_DIR/.env -> repo .env" \
     || echo "WARN: could not link .env into $RSU_WORK_DIR (RSU CodeGen DB login may fail)"
 fi
+# The RSU IN-PROCESS CodeGen runner calls initializeConfig(RSU_WORK_DIR). With no mj.config.cjs here it
+# falls back to defaults whose RELATIVE './SQL Scripts/generated' resolves against '/' →
+# "ENOENT: mkdir '/SQL Scripts/generated/__mj'" → every runtime ApplyAll fails at RunCodeGen. Drop a
+# config that re-exports the repo config with output dirs anchored ABSOLUTE under THIS isolated work dir
+# (generated SQL/TS land here, never the repo or '/'), and with dev-package afterCommands removed (not
+# needed for a runtime schema update; they fast-fail on a cold worktree). Written every restart (cheap).
+cat > "$RSU_WORK_DIR/mj.config.cjs" <<EOF
+const orig = require('$REPO_ROOT/mj.config.cjs');
+const path = require('path');
+const wd = __dirname;
+const base = { ...orig };
+base.output = (orig.output || []).map((o) => {
+  let d = String(o.directory || '');
+  if (d.startsWith('./')) d = d.slice(2);
+  return { ...o, directory: path.isAbsolute(d) ? d : path.join(wd, d) };
+});
+base.commands = []; // RSU runtime: skip dev-package rebuild afterCommands
+module.exports = base;
+EOF
+echo "wrote $RSU_WORK_DIR/mj.config.cjs (output dirs absolute under work dir, no afterCommands)"
 
 # --- guard: refuse to restart while a sync is actively running -------------------
 # (a half-killed MJAPI mid-sync orphans the run; cheap COUNT via sqlcmd in docker)

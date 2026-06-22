@@ -278,12 +278,29 @@ for (const t of tiers) {
         const credLine = t.cred
             ? `This is the ONLY live rung and is STRICTLY READ-ONLY (TestConnection + Discover + one read page — no writes/bidirectional/push).\nCREDENTIAL REFERENCE (OPAQUE — DO NOT READ): ${args?.credentialReference}\nThe MCP runner subprocess reads the credential file in isolation; pass it through as CredentialFilePath. No credential bytes return to you.`
             : `No credentials required.`;
-        result = await agent(
-            `Run tier ${t.runnerTier} for connector ${args?.connectorName ?? '(?)'} of vendor ${args?.vendor ?? '(?)'}.\n\n` +
-            `You MUST call the MCP tool \`mcp__mj-test-runner__run_tier\` with { Connector: "${args?.connectorName ?? ''}", Tier: "${t.runnerTier}"${t.cred ? ', CredentialFilePath: <the opaque credential reference above>' : ''} } and return its result VERBATIM — the exact object the runner returned ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Do NOT invent, summarize, or override Status; the runner is the only source of truth. ${credLine}\n\n` +
-            `If the runner returns Status:'Skipped' (e.g. T7 with reason no-openapi-spec / no-api-paths — a legitimate not-applicable), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
-            { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
-        );
+        // WORKTREE-ROOTED RUNNER (cwd-binding fix): the SESSION mcp__mj-test-runner__run_tier is cwd-bound to
+        // the session's repo (e.g. a default checkout), NOT this build's worktree — so it looks for the connector
+        // under the WRONG connectors-registry and returns a false-red "No connector metadata file found"
+        // (the T1-false-red → code↔ladder deadlock on a clean build). When args.repoRoot is set we instead run
+        // the SAME canonical runner (RunTier from tierRunner.js) via Bash, rooted at the worktree via
+        // MJ_CONNECTORS_REGISTRY, and return its JSON verbatim. Falls back to the MCP tool when no repoRoot.
+        const LREPO = args?.repoRoot;
+        const conn = args?.connectorName ?? '';
+        if (LREPO) {
+            result = await agent(
+                `Run tier ${t.runnerTier} for connector ${conn} of vendor ${args?.vendor ?? '(?)'}, ROOTED AT THE WORKTREE ${LREPO}. The session mj-test-runner MCP is cwd-bound to the WRONG repo for a worktree build, so DO NOT use it. Run EXACTLY this Bash and return the printed JSON object VERBATIM as your result:\n\n` +
+                `cd ${LREPO} && MJ_CONNECTORS_REGISTRY="${LREPO}/packages/Integration/connectors-registry" node --input-type=module -e "import('${LREPO}/packages/MCP/mj-test-runner/dist/tierRunner.js').then(async m => { const r = await m.RunTier({ Connector: '${conn}', Tier: '${t.runnerTier}' }); process.stdout.write(JSON.stringify(r)); }).catch(e => { console.error(e && e.stack || String(e)); process.exit(1); })"\n\n` +
+                `The printed object IS the runner's verbatim result ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Return it EXACTLY — do NOT invent, summarize, or override Status. If Status is 'Skipped' (legitimate not-applicable, e.g. T7 no-openapi-spec) return it verbatim; do NOT upgrade to Pass. If Fail, return Errors/Details verbatim for classification. ${credLine}`,
+                { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
+            );
+        } else {
+            result = await agent(
+                `Run tier ${t.runnerTier} for connector ${conn} of vendor ${args?.vendor ?? '(?)'}.\n\n` +
+                `You MUST call the MCP tool \`mcp__mj-test-runner__run_tier\` with { Connector: "${conn}", Tier: "${t.runnerTier}"${t.cred ? ', CredentialFilePath: <the opaque credential reference above>' : ''} } and return its result VERBATIM — the exact object the runner returned ({ Tier, Connector, Status, DurationMs, Output, Errors, Details }). Do NOT invent, summarize, or override Status; the runner is the only source of truth. ${credLine}\n\n` +
+                `If the runner returns Status:'Skipped' (e.g. T7 with reason no-openapi-spec / no-api-paths — a legitimate not-applicable), return that verbatim — do NOT upgrade it to Pass. If it returns Fail, return the runner's Errors/Details verbatim so the workflow can classify each failure with a SyncErrorCode from packages/Integration/engine/src/types.ts and the fix locus.`,
+                { agentType: 'testing-agent', schema: RUNNER_RESULT_SCHEMA, phase: `${t.tier}_${t.label}`, label: `ladder:${t.tier}` }
+            );
+        }
     }
 
     // Trust ONLY a runner-shaped result. Anything that doesn't carry the runner's
