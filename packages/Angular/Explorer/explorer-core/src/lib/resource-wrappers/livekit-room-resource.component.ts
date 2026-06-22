@@ -65,6 +65,7 @@ interface InviteeChoice {
       @case ('picking') {
         <div class="mj-lk-prejoin">
           <div class="mj-lk-prejoin__card">
+            <button type="button" class="mj-lk-back" (click)="backToLanding()"><i class="fa-solid fa-arrow-left"></i> Back</button>
             <div class="mj-lk-prejoin__icon"><i class="fa-solid fa-video"></i></div>
             <h2 class="mj-lk-prejoin__title">Start a call</h2>
             <p class="mj-lk-prejoin__subtitle">
