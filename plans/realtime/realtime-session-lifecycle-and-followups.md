@@ -1,6 +1,18 @@
 # Realtime Session Lifecycle & Follow-Ups
 
-**Status:** Plan (2026-06-20). Tracks the work remaining after the Phase 1/2 convergence + multi-agent turn-taking MVP. Companion to [`realtime-core-host-convergence.md`](realtime-core-host-convergence.md) and [`multi-agent-meeting-turn-taking.md`](multi-agent-meeting-turn-taking.md).
+**Status:** Active roadmap — last updated **2026-06-21**. This is the canonical "what's shipped / what's next" doc for the realtime co-agent + Meet work. The foundational plans it grew out of are now **complete** and archived under [`../complete/realtime/`](../complete/realtime/) — notably [`realtime-core-host-convergence.md`](../complete/realtime/realtime-core-host-convergence.md) (Phase 1+2) and [`multi-agent-meeting-turn-taking.md`](../complete/realtime/multi-agent-meeting-turn-taking.md) (the 2a turn-taking MVP, since superseded by the free-for-all decision below).
+
+> **Where things live now:** this folder ([`plans/realtime/`](.)) holds only **forward-looking** realtime plans; everything shipped moved to [`../complete/realtime/`](../complete/realtime/). See [`README.md`](README.md) for the index.
+
+---
+
+## 🧭 Strategic decision (2026-06-21): free-for-all by default, moderator dormant
+
+We trialled putting an **LLM "turn moderator"** in front of multi-agent rooms (a fast prompt that routes each turn to specific agents). **Decision: it's the wrong long-term bet** — it compounds a dumb-fast-LLM's routing errors on top of lossy STT, and the realtime models themselves are getting good enough at multi-party turn-taking that an external router will soon be dead weight.
+
+**So the default is now _free-for-all_:** every agent hears the whole room and self-organizes via provider VAD + auto-response + universal barge-in. The moderator is **kept wired but OFF by default** (`MJ_REALTIME_MODERATOR_MODE=on` to enable) for controlled scenarios (webinars, large rooms, weaker models). All the moderator infra (the `RealtimeTurnModerator` prompt-run router, floor pre-staging, lookback) stays in the tree, dormant.
+
+**Consequence — the open problem:** free-for-all works cleanly for **≤2 agents** but degrades with **3+** (see Remaining #1). The bet is that smarter models close this gap; the near-term mitigation is a diarized peer-echo damper, not the router.
 
 ---
 
@@ -9,6 +21,17 @@
 - **Co-agent observability lands on every surface.** Hardened `createCoAgentRun` (only stamp a non-empty `AgentSessionID`) + threaded the real session id coordinator → factory → prep. Verified live: bridge sessions now create `Realtime Co-Agent` runs with the Demo Loop / Sage delegations nested under them.
 - **Correct agent detection in the LiveKit driver.** `IsAgent` was `p.IsLocal` only — so *other* agents in a room read as humans. Now also recognizes the coordinator's `agent-<id>` identity convention. Fixes turn-taking's agent-exclusion **and** the occupancy check below.
 - **Auto-leave an emptied room.** `AIBridgeEngine.evaluateRoomOccupancy`: once a human has been seen and the roster drops to agents-only, a 15s grace timer (cancelled on re-join, so a refresh is safe) stops the session via the normal path — which closes the realtime session and **finalizes the co-agent run**. This is the dominant teardown case (user closes the tab) that previously left a `Connected` bridge + `Running` run forever.
+
+---
+
+## Shipped in the 2026-06-21 session (Meet UX + cost-leak + multi-agent + polish)
+
+- **Meet room End vs. Leave (Zoom/Teams-style).** The control-bar red button is a split control: **End meeting for everyone** vs. **Leave meeting**, available on both a freshly-started AND a rejoined room (the old "End" pill on the agents bar was gated by the local roster, so it vanished on join). End-for-all is now a **server-side, by-room-name** teardown — `LiveKitAgentRoomCoordinator.StopAllAgentsInRoom(roomName)` + the `EndLiveKitRoom` mutation + `GraphQLLiveKitClient.EndRoom()` — so a participant who only *joined* (and never tracked bridge ids) can still end it. Generic `livekit-room` stays MJ-agnostic via a `CanEndForAll` input + `EndForAll` output; `mj-livekit-room` does the teardown.
+- **Cost-leak fix (the key one).** `dispatchUserTurn` is now **diarization-aware**: an `agent-…` inbound speaker is a peer agent being *overheard*, NOT a human, so it no longer calls `noteHumanPresence()`. An agents-only room can't keep cancelling its own empty-room auto-leave by transcribing its peers → agents stop once the last human leaves. No billable realtime sessions stranded in an empty room. This underpins both **Leave** (you go, the room cleans itself up) and abrupt tab-close.
+- **Meet landing + navigation.** New room / Join existing / Past history landing, with a **Back** button on every sub-view (picker, join, history). Any disconnect (`onRoomLeft()`) returns here instead of stranding the user on a dead room. History/Join reuse the Voice Transcripts data layer.
+- **Multi-agent turn-taking + the moderator toggle.** Broadcast a room's user turns to every agent's gate (fixes agents whose model can't transcribe in meeting mode); per-room diarized lookback; the pluggable `SetTurnModerator` hook (serialized speaking via the floor, pre-stage, runaway ceiling) — **gated OFF by default** per the free-for-all decision above. Seeded "Realtime: Turn Moderator" prompt (GPT-OSS-120B on Cerebras) sits dormant.
+- **Speaking-indicator polish.** 1500 ms speaking-hold debounce in `LiveKitRoomController` (no more flicker when a speaker breathes); spotlight / agent-state / `AgentParticipant` now prefer the *actually-speaking* agent so the indicator names the right one in a multi-agent room.
+- **Verbose-gated diagnostics.** All realtime `[diag]` tracing is now dark unless `MJ_VERBOSE=true|1|yes` (shared `RealtimeDiagLog()` in `@memberjunction/ai` for the driver session classes; `LogStatusEx({verboseOnly})` in the engine/moderator/resolver). Preserved for future debugging, silent in normal operation.
 
 ---
 
@@ -68,21 +91,11 @@ Net: OpenAI rooms become fully turn-taking the moment a 2nd agent joins; a Gemin
 ### ✅ Speaking-indicator sub-bug — SHIPPED (2026-06-20)
 The "who's speaking" spotlight/header didn't show *other* agents even though their tile ring lit up. Root cause: the tile ring uses per-participant `IsSpeaking` (works for server-published agents) while `selectSpotlight`/`selectSplitSpeaker` used only the native `ActiveSpeakerIdentities` list (which omits them). Fixed in `livekit-room-logic.ts` by adding an `IsSpeaking` fallback to both selectors — the native list still wins when populated, the flag catches the agent it misses.
 
-## 7. Smarter turn-taking gate (L1 / L2)
-
-From the turn-taking doc: L0 (name-addressing) ships today. L1 = a lightweight "is this in my lane / should I jump in?" relevance judgment on silence windows; L2 = delegate to the model's own multi-party turn-taking as it matures. The gate is already an interface — swap implementations.
-
-## 8. Phase 3 + misc
-
-- **Per-host UX tools** via the `ExtraTools` seam (whiteboard / remote browser on LiveKit), then **audio → video**.
-- **Configurable grace window** for auto-leave (currently a 15s const) + flicker hardening if needed.
-- Optional `RealtimeClientSessionService` → `RealtimeCoAgentSessionService` rename (the "Client" is now a misnomer — it serves the bridge too).
-
 ---
 
-## Status / remaining
+## Status / shipped
 
-**Shipped:** §1 (finalize) · §2 (TTL/idle sweep, now **configurable** via `ConfigureSessionTimings`) · §3 (floor control) · §4 (Gemini meeting mode — *pending live validation*) · §5 (unified room transcript) · §5(b) **per-speaker diarization** · §6 (first-agent re-gating + the **re-gate context note** + speaking-indicator) + the realtime-session **capability surface**.
+**Shipped:** §1 (finalize) · §2 (TTL/idle sweep, now **configurable** via `ConfigureSessionTimings`) · §3 (floor control) · §4 (Gemini meeting mode — *pending live validation*) · §5 (unified room transcript) · §5(b) **per-speaker diarization** · §6 (first-agent re-gating + the **re-gate context note** + speaking-indicator) + the realtime-session **capability surface** · **(2026-06-21)** Meet End/Leave + room-level teardown · diarization-aware cost-leak auto-leave · Meet landing/Back · multi-agent broadcast + dormant moderator toggle · speaking-indicator hold · verbose-gated diagnostics.
 
 **Surfacing (loose end #1) — SHIPPED:**
 - **Voice Transcripts dashboard** — a new nav item in the AI Analytics shell (`@memberjunction/ng-dashboards`): a master-detail browser over the meeting-room transcripts, **diarized per speaker** (agent lines → agent name; heard lines → the participant's display name via the `ExternalID` → roster join). `AnalyticsRealtimeTranscriptsComponent` + `realtime-transcripts-data.ts`.
@@ -90,7 +103,26 @@ From the turn-taking doc: L0 (name-addressing) ships today. L1 = a lightweight "
 
 **§5(b) diarization — SHIPPED:** the engine tracks `LastInboundSpeaker` from the inbound media frame's `SpeakerLabel` (which the LiveKit/Zoom drivers populate) and attributes each `User` transcript line to that participant — so the room transcript records *who* spoke, not just "a user." Single-speaker-at-a-time approximation; resolving a participant identity to an MJ `UserID` (vs. display name) is the remaining refinement.
 
-**Remaining:**
-1. **§4 live validation** — confirm the Gemini manual-activity turn boundaries against the live API in a busy room.
-2. **Diarization → UserID** — heard participants resolve to a display name; mapping to an MJ `UserID` needs a per-provider identity resolver (the `AIAgentSessionBridgeParticipant.UserID` is currently unpopulated).
-3. **§7 smarter gate** (L1 contextual → L2 model-native), **§8 Phase 3** (per-host UX tools, video), the `RealtimeClientSessionService` rename (deferred — mechanical, its own commit).
+---
+
+## ▶️ Next steps (priority order)
+
+### 1. The 3+-agent free-for-all storm (the open problem)
+Free-for-all is clean for **≤2 agents** but degrades with **3+**: agents transcribe each other's speech as `'user'` turns → each replies → the replies are overheard and transcribed again → it spirals into echo / farewell loops. (Diagnosed live this session; it's not a crash, it's an N² echo cascade.) The router/moderator is **not** the fix (see the free-for-all decision up top).
+
+**Proposed fix — a diarized peer-echo damper (no router):** an agent should **not auto-respond to a turn whose diarized speaker is another `agent-…`**. We already compute `LastInboundSpeaker` (the §5(b) diarization signal) and already use it for the cost-leak auto-leave — the same signal gates this. An agent still *hears* peers (context accrues, barge-in works), it just won't reflexively answer another bot. This is the smallest change that should make 3+-agent rooms usable without reintroducing the router. Needs design + the where-to-gate decision (`evaluateUserTurnForAgent` / the broadcast fan-out in `dispatchUserTurn`).
+
+### 2. §4 Gemini meeting-mode live validation
+Confirm the Gemini manual-activity (`activityStart`/`activityEnd`) turn boundaries against the **live** API in a busy multi-speaker room — unit-tested at send-shape level, not yet live-validated. Runbook: [`gemini-meeting-live-test-runbook.md`](gemini-meeting-live-test-runbook.md).
+
+### 3. Diarization → UserID
+Heard participants currently resolve to a **display name**; mapping to an MJ `UserID` needs a per-provider identity resolver (`AIAgentSessionBridgeParticipant.UserID` is unpopulated today).
+
+### 4. Smarter turn-taking gate (was §7) — only if free-for-all + the damper aren't enough
+L0 (name-addressing) exists; L1 = a lightweight contextual "is this in my lane?" judgment on silence windows; L2 = delegate to the model's own multi-party turn-taking as it matures. The gate is already an interface. **Note:** the free-for-all bet is that L2 (model-native) arrives before we need L1 — revisit only if the damper proves insufficient. Background in the archived [`multi-agent-meeting-turn-taking.md`](../complete/realtime/multi-agent-meeting-turn-taking.md).
+
+### 5. Phase 3 + misc (was §8)
+- **Per-host UX tools** via the `ExtraTools` seam (whiteboard / remote browser on LiveKit), then **audio → video**.
+- **Configurable grace window** for auto-leave (currently a 15s const) + flicker hardening if needed.
+- Optional `RealtimeClientSessionService` → `RealtimeCoAgentSessionService` rename (the "Client" is now a misnomer — it serves the bridge too; mechanical, its own commit).
+- Tests for the new `EndRoom` / `StopAllAgentsInRoom` room-teardown path and the split-leave control.
