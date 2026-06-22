@@ -2,80 +2,152 @@
  * Shared context builder for MJ Open App CLI commands.
  *
  * Constructs the OrchestratorContext needed by the engine's install/upgrade/remove
- * functions, using the MJ entity framework (Metadata, RunView, BaseEntity) backed
- * by the SQL Server data provider.
+ * functions, using the MJ entity framework (Metadata, RunView, BaseEntity). The
+ * backing data provider is selected from the configured database platform
+ * (`DB_PLATFORM` env var / `dbPlatform` config): SQL Server (default) or
+ * PostgreSQL — so `mj app …` works on either backend and the engine's
+ * platform-aware install/migration paths receive a provider whose
+ * `Dialect.PlatformKey` matches the real database.
  */
 import sql from 'mssql';
 import ora from 'ora-classic';
 import { createRequire } from 'node:module';
-import type { UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import type { UserInfo, DatabaseProviderBase } from '@memberjunction/core';
+import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { PostgreSQLDataProvider, PostgreSQLProviderConfigData, type PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
 import { getValidatedConfig } from '../config.js';
 
+type ResolvedConfig = ReturnType<typeof getValidatedConfig>;
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Provider initialization (lazy singleton)
+// Provider initialization (lazy singleton) — platform-aware
 // ─────────────────────────────────────────────────────────────────────────────
 
-let _pool: sql.ConnectionPool | null = null;
-let _provider: SQLServerDataProvider | null = null;
-let _initPromise: Promise<SQLServerDataProvider> | null = null;
+let _pool: sql.ConnectionPool | null = null;          // SQL Server pool (mssql)
+let _pgProvider: PostgreSQLDataProvider | null = null; // PostgreSQL provider (owns its own pg pool)
+let _provider: DatabaseProviderBase | null = null;
+let _initPromise: Promise<DatabaseProviderBase> | null = null;
 
 /**
- * Initializes the MJ SQL Server provider if not already done.
- * Creates a connection pool, configures the provider, and populates UserCache.
+ * Initializes the MJ data provider for the configured platform if not already
+ * done, and populates UserCache. Selects SQL Server or PostgreSQL based on
+ * `config.dbPlatform` (resolved from `DB_PLATFORM`).
  */
-async function ensureProviderInitialized(): Promise<{ pool: sql.ConnectionPool; provider: SQLServerDataProvider }> {
-  if (_provider && _pool?.connected) {
-    return { pool: _pool, provider: _provider };
+async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
+  if (_provider) {
+    return _provider;
   }
-
   if (_initPromise) {
-    const provider = await _initPromise;
-    return { pool: _pool!, provider };
+    return _initPromise;
   }
 
   _initPromise = (async () => {
     const config = getValidatedConfig();
-
-    const poolConfig: sql.config = {
-      server: config.dbHost,
-      port: config.dbPort,
-      database: config.dbDatabase,
-      user: config.codeGenLogin,
-      password: config.codeGenPassword,
-      options: {
-        encrypt: config.dbHost.includes('.database.windows.net'),
-        trustServerCertificate: config.dbTrustServerCertificate ?? true,
-        enableArithAbort: true,
-      },
-    };
-
-    _pool = new sql.ConnectionPool(poolConfig);
-    await _pool.connect();
-
-    const providerConfig = new SQLServerProviderConfigData(
-      _pool,
-      config.coreSchema ?? '__mj',
-    );
-
-    _provider = await setupSQLServerClient(providerConfig);
-    return _provider;
+    return config.dbPlatform === 'postgresql'
+      ? createPostgresProvider(config)
+      : createSqlServerProvider(config);
   })();
 
-  const provider = await _initPromise;
-  return { pool: _pool!, provider };
+  _provider = await _initPromise;
+  return _provider;
 }
 
 /**
- * Closes the shared connection pool. Call on CLI exit for cleanup.
+ * Builds the SQL Server data provider (default platform).
+ */
+async function createSqlServerProvider(config: ResolvedConfig): Promise<DatabaseProviderBase> {
+  const poolConfig: sql.config = {
+    server: config.dbHost,
+    port: config.dbPort,
+    database: config.dbDatabase,
+    user: config.codeGenLogin,
+    password: config.codeGenPassword,
+    options: {
+      encrypt: config.dbHost.includes('.database.windows.net'),
+      trustServerCertificate: config.dbTrustServerCertificate ?? true,
+      enableArithAbort: true,
+    },
+  };
+
+  _pool = new sql.ConnectionPool(poolConfig);
+  await _pool.connect();
+
+  const providerConfig = new SQLServerProviderConfigData(_pool, config.coreSchema ?? '__mj');
+  return (await setupSQLServerClient(providerConfig)) as unknown as DatabaseProviderBase;
+}
+
+/**
+ * Builds the PostgreSQL data provider. SSL is resolved (see {@link resolvePostgresSsl})
+ * to work across local, self-hosted, and managed Postgres — e.g. AWS RDS/Aurora,
+ * which defaults to `rds.force_ssl=1` and rejects an unencrypted channel.
+ */
+async function createPostgresProvider(config: ResolvedConfig): Promise<DatabaseProviderBase> {
+  const connectionConfig: PGConnectionConfig = {
+    Host: config.dbHost,
+    Port: config.dbPort,
+    Database: config.dbDatabase,
+    User: config.codeGenLogin,
+    Password: config.codeGenPassword,
+    SSL: resolvePostgresSsl(config),
+  };
+
+  const pgConfig = new PostgreSQLProviderConfigData(
+    connectionConfig,
+    config.coreSchema ?? '__mj',
+    0,         // checkRefreshIntervalSeconds — CLI is one-shot; no background refresh
+    undefined, // includeSchemas
+    undefined, // excludeSchemas
+    false,     // do not reload metadata from a global provider
+  );
+
+  _pgProvider = new PostgreSQLDataProvider();
+  await _pgProvider.Config(pgConfig);
+  return _pgProvider as unknown as DatabaseProviderBase;
+}
+
+/**
+ * Resolves the PostgreSQL SSL setting so `mj app` works on every Postgres flavor:
+ *  - Managed hosts (AWS RDS/Aurora, `*.amazonaws.com`) → SSL on (Aurora defaults to
+ *    `rds.force_ssl=1`, which rejects an unencrypted connection).
+ *  - Explicit `DB_ENCRYPT` is honored (true → on, false → off).
+ *  - Otherwise `undefined` → the provider applies its own default (off in dev,
+ *    on in production).
+ * `rejectUnauthorized` follows `dbTrustServerCertificate`, mirroring the SQL Server
+ * flag — set `DB_TRUST_SERVER_CERTIFICATE=1` for RDS when you don't supply the
+ * Amazon RDS CA bundle.
+ */
+function resolvePostgresSsl(config: ResolvedConfig): PGConnectionConfig['SSL'] {
+  const host = (config.dbHost ?? '').toLowerCase();
+  const isManaged =
+    host.endsWith('.rds.amazonaws.com') || host.includes('.rds.') || host.endsWith('.amazonaws.com');
+  const explicitlySet = process.env.DB_ENCRYPT !== undefined;
+
+  if (explicitlySet && config.dbEncrypt === false) {
+    return false;
+  }
+  if (isManaged || (explicitlySet && config.dbEncrypt === true)) {
+    return { rejectUnauthorized: !config.dbTrustServerCertificate };
+  }
+  return undefined; // let the PostgreSQL provider apply its own default
+}
+
+/**
+ * Closes the shared connection(s). Call on CLI exit for cleanup.
  */
 export async function closeConnectionPool(): Promise<void> {
-  if (_pool?.connected) {
-    await _pool.close();
+  try {
+    if (_pool?.connected) {
+      await _pool.close();
+    }
+    if (_pgProvider) {
+      await _pgProvider.Dispose();
+    }
+  } finally {
     _pool = null;
+    _pgProvider = null;
+    _provider = null;
+    _initPromise = null;
   }
-  _provider = null;
-  _initPromise = null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +200,7 @@ export async function buildOrchestratorContext(
   verbose?: boolean,
 ): Promise<OrchestratorContextShape> {
   const config = getValidatedConfig();
-  const { provider } = await ensureProviderInitialized();
+  const provider = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
 
@@ -176,7 +248,7 @@ export async function buildOrchestratorContext(
  */
 interface OrchestratorContextShape {
   ContextUser: UserInfo;
-  DatabaseProvider: SQLServerDataProvider;
+  DatabaseProvider: DatabaseProviderBase;
   DatabaseConfig: {
     Host: string;
     Port: number;
