@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+  - @memberjunction/data-context@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes
