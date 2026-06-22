@@ -7,7 +7,7 @@ import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
 import { CopyScalarsAndArrays, UUIDsEqual } from "@memberjunction/global";
-import { GetReadOnlyProvider } from "../util.js";
+import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 
 /**
@@ -203,8 +203,10 @@ export class ActionResolver extends ResolverBase {
       // Parse the parameters
       const params = this.parseActionParameters(input.Params);
 
-      // Run the action
-      const result = await this.executeAction(action, user, params, input.SkipActionLog);
+      // Run the action — thread the request-scoped provider so provider-bound
+      // actions (e.g. the semantic find-* / Search Entity actions, which call
+      // params.Provider.SearchEntity) run against the caller's metadata layer.
+      const result = await this.executeAction(action, user, params, ctx.providers, input.SkipActionLog);
 
       // Return the result
       return this.createActionResult(result);
@@ -271,17 +273,23 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private async executeAction(
-    action: any, 
-    user: UserInfo, 
-    params: ActionParam[], 
+    action: any,
+    user: UserInfo,
+    params: ActionParam[],
+    providers: Array<ProviderInfo>,
     skipActionLog?: boolean
   ): Promise<ActionResult> {
+    // Resolve the request-scoped provider. Prefer read-write (actions may mutate);
+    // fall back to read-only, then to the engine's global-Metadata default when no
+    // request providers are present (preserves prior behavior).
+    const provider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) ?? undefined;
     return await ActionEngineServer.Instance.RunAction({
       Action: action,
       ContextUser: user,
       Params: params,
       SkipActionLog: skipActionLog,
-      Filters: []
+      Filters: [],
+      Provider: provider
     });
   }
 

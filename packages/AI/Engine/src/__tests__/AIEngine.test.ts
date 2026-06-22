@@ -308,20 +308,6 @@ vi.mock('@memberjunction/storage', () => ({
     FileStorageBase: class FileStorageBase {},
 }));
 
-vi.mock('../services/AgentEmbeddingService', () => ({
-    AgentEmbeddingService: {
-        GenerateAgentEmbeddings: vi.fn().mockResolvedValue([]),
-        FindSimilarAgents: vi.fn().mockResolvedValue([]),
-    },
-}));
-
-vi.mock('../services/ActionEmbeddingService', () => ({
-    ActionEmbeddingService: {
-        GenerateActionEmbeddings: vi.fn().mockResolvedValue([]),
-        FindSimilarActions: vi.fn().mockResolvedValue([]),
-    },
-}));
-
 vi.mock('@memberjunction/templates-base-types', () => ({
     TemplateEngineBase: {
         Instance: {
@@ -1103,24 +1089,6 @@ describe('AIEngine', () => {
 
             expect(() => engine.AddOrUpdateSingleExampleEmbedding(mockExample as never))
                 .toThrow('example vector service not initialized, error state');
-        });
-    });
-
-    // ======================================================================
-    // FindSimilarAgents / FindSimilarActions error validation
-    // ======================================================================
-
-    describe('FindSimilarAgents', () => {
-        it('should throw when agent embeddings are not loaded', async () => {
-            await expect(engine.FindSimilarAgents('test task'))
-                .rejects.toThrow('Agent embeddings not loaded');
-        });
-    });
-
-    describe('FindSimilarActions', () => {
-        it('should throw when action embeddings are not loaded', async () => {
-            await expect(engine.FindSimilarActions('test task'))
-                .rejects.toThrow('Action embeddings not loaded');
         });
     });
 

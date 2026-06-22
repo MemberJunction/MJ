@@ -906,7 +906,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (140 classes)
+// @memberjunction/core-actions (142 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -960,6 +960,8 @@ import {
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1795,6 +1797,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -1901,7 +1905,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 815;
+export const CLASS_REGISTRATIONS_COUNT = 817;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
