@@ -1063,7 +1063,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (140 classes)
+// @memberjunction/core-actions (142 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1117,6 +1117,8 @@ import {
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -2067,6 +2069,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     FinalizeDocumentAction,
     FindBestActionAction,
     FindBestAgentAction,
+    FindCandidateActionsAction,
+    FindCandidateAgentsAction,
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GenerateIntegrationActionAction,
@@ -2191,7 +2195,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 906;
+export const CLASS_REGISTRATIONS_COUNT = 908;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
