@@ -12,6 +12,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const searchEntityMock = vi.fn();
+// SearchEntity on the global fallback provider (Metadata.Provider), used when
+// the caller does not thread params.Provider (agents, MCP, CLI, scheduled jobs).
+const globalSearchEntityMock = vi.fn();
 
 // --- cached-engine state the actions hydrate from -------------------------
 const aiEngineState: {
@@ -45,6 +48,8 @@ vi.mock('@memberjunction/core', () => ({
             return { Success: true, Results: [] };
         }
     },
+    // Global provider the helper falls back to when params.Provider is absent.
+    Metadata: { get Provider() { return { SearchEntity: globalSearchEntityMock }; } },
 }));
 
 vi.mock('@memberjunction/aiengine', () => ({
@@ -93,6 +98,7 @@ const run = (action: any, params: unknown) => action.InternalRunAction(params);
 
 beforeEach(() => {
     searchEntityMock.mockReset().mockResolvedValue([]);
+    globalSearchEntityMock.mockReset().mockResolvedValue([]);
     accessibleAgentsMock.mockReset().mockResolvedValue([]);
     aiEngineState.systemActions = [];
     aiEngineState.agents = [];
@@ -117,13 +123,28 @@ describe('FindBestActionAction (wrapper)', () => {
         expect(r.ResultCode).toBe('INVALID_INPUT');
     });
 
-    it('returns MISSING_PROVIDER when no provider', async () => {
+    it('falls back to the global provider when none is threaded', async () => {
+        // Honors the documented RunActionParams.Provider contract
+        // (params.Provider ?? global): in-process callers that don't thread a
+        // provider (agents, MCP, CLI, scheduled jobs) still rank via the global
+        // provider's SearchEntity, just like every other action.
+        aiEngineState.systemActions = [
+            { ID: 'A1', Name: 'Web Search', Description: 'search web', Category: 'Utility', Status: 'Active', DriverClass: 'WebSearch' },
+        ];
+        globalSearchEntityMock.mockResolvedValue([
+            { recordId: 'A1', score: 0.9, matchType: 'semantic', components: {}, entityRecordDocumentId: 'e1' },
+        ]);
+
         const r = await run(new FindBestActionAction(), makeParams(
             [{ Name: 'TaskDescription', Value: 'do a thing' }],
             { withProvider: false }
         ));
-        expect(r.Success).toBe(false);
-        expect(r.ResultCode).toBe('MISSING_PROVIDER');
+
+        // The threaded provider was absent, so the global provider's SearchEntity ran.
+        expect(searchEntityMock).not.toHaveBeenCalled();
+        expect(globalSearchEntityMock).toHaveBeenCalledOnce();
+        expect(r.Success).toBe(true);
+        expect(JSON.parse(r.Message).allMatches[0].actionName).toBe('Web Search');
     });
 
     it('calls SearchEntity in semantic mode for MJ: Actions and hydrates results', async () => {

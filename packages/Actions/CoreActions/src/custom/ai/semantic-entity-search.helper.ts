@@ -1,4 +1,5 @@
 import { RunActionParams } from "@memberjunction/actions-base";
+import { Metadata } from "@memberjunction/core";
 import type { EntitySearchResult, IRunViewProvider, SearchEntityParams } from "@memberjunction/core";
 
 /**
@@ -34,10 +35,14 @@ export interface SemanticSearchOutcome {
  * `MinimumSimilarityScore` threshold maps directly onto `minScore` and the
  * returned scores stay meaningful to existing callers.
  *
- * Always threads `params.Provider` — the action must run against the same
- * metadata layer the caller is bound to (multi-server clients, request-scoped
- * server-side providers). See CLAUDE.md "Don't Reach for the Global Metadata
- * Provider in Per-Provider Code Paths".
+ * Prefers the caller's threaded `params.Provider` (multi-server clients,
+ * request-scoped server-side providers, transaction-scoped work — e.g. the
+ * GraphQL `RunAction` resolver supplies it), and falls back to the global
+ * provider when none is threaded. This honors the documented
+ * `RunActionParams.Provider` contract (`params.Provider ?? new Metadata()`),
+ * which keeps the find-* actions working on the in-process invocation paths
+ * that don't thread a provider (agents, MCP, CLI, scheduled jobs) — exactly
+ * like every other action.
  */
 export async function runSemanticEntitySearch(
     params: RunActionParams,
@@ -46,13 +51,13 @@ export async function runSemanticEntitySearch(
     topK: number,
     minScore: number
 ): Promise<SemanticSearchOutcome> {
-    const md = params.Provider as unknown as IRunViewProvider | undefined;
+    const md = (params.Provider ?? Metadata.Provider) as unknown as IRunViewProvider | undefined;
     if (!md) {
         return {
             ok: false,
             results: [],
             resultCode: 'MISSING_PROVIDER',
-            message: 'RunActionParams.Provider is required — semantic search must run against the caller\'s metadata provider.',
+            message: 'No metadata provider available — semantic search requires a configured provider (threaded or global).',
         };
     }
 
