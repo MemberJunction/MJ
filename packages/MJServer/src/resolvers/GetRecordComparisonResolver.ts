@@ -7,7 +7,7 @@ import {
     RecordComparisonEngine,
     RecordComparisonInput,
     RecordComparisonResult,
-} from '@memberjunction/core-entities-server';
+} from '@memberjunction/record-comparison';
 
 /* ───── GraphQL input ───── */
 

@@ -52,6 +52,25 @@ export interface RecordComparisonRecord {
 export type RecordFieldValue = string | number | boolean | null;
 
 /**
+ * Options for {@link RecordComparisonEngine.CompareRecordsForEntity}.
+ */
+export interface RecordComparisonOptions {
+    /**
+     * Optional include-list of field names. When omitted, all visible (non-PK, non-system)
+     * fields are compared. Matched case-insensitively against the entity's field metadata.
+     */
+    IncludeFields?: string[];
+    /**
+     * An already-constructed `RunView` to load the records through. When supplied, it is used
+     * verbatim, so callers can thread their own request-scoped/provider-bound RunView (e.g. the
+     * duplicate detector). When omitted, a RunView is built from {@link RecordComparisonOptions.Provider}.
+     */
+    RunViewInstance?: RunView;
+    /** Request-scoped metadata provider (multi-provider safety) used to build a RunView when one isn't supplied. */
+    Provider?: IMetadataProvider;
+}
+
+/**
  * The per-record value of a single field within a {@link RecordComparisonFieldDelta}.
  */
 export interface RecordComparisonFieldCell {
@@ -128,33 +147,59 @@ export class RecordComparisonEngine {
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Promise<RecordComparisonResult> {
+        const md = provider ?? Metadata.Provider;
+        const entity = md?.EntityByName(input.EntityName);
+        if (!entity) {
+            return this.errorResult(input.EntityName, `Entity '${input.EntityName}' not found in metadata`);
+        }
+        return this.CompareRecordsForEntity(entity, input.Keys, contextUser, {
+            IncludeFields: input.IncludeFields,
+            Provider: provider
+        });
+    }
+
+    /**
+     * The lower-level comparison entry point: given an already-resolved {@link EntityInfo}
+     * (no by-name metadata lookup), load the keyed records and compute the field-delta matrix.
+     *
+     * Callers that already hold the entity and a request-scoped `RunView` (e.g. the duplicate
+     * detector) use this directly via {@link RecordComparisonOptions.RunViewInstance}, avoiding a
+     * redundant metadata resolution. The by-name {@link RecordComparisonEngine.CompareRecords}
+     * resolves the entity and delegates here.
+     *
+     * @param entity the resolved entity to compare records within
+     * @param keys the composite keys to compare (column 0 is the reference/survivor candidate)
+     * @param contextUser the server-side context user (thread for correct isolation)
+     * @param options include-list, an injected RunView, and/or the request-scoped provider
+     */
+    public async CompareRecordsForEntity(
+        entity: EntityInfo,
+        keys: CompositeKey[],
+        contextUser?: UserInfo,
+        options?: RecordComparisonOptions
+    ): Promise<RecordComparisonResult> {
         try {
-            const md = provider ?? Metadata.Provider;
-            const entity = md?.EntityByName(input.EntityName);
-            if (!entity) {
-                return this.errorResult(input.EntityName, `Entity '${input.EntityName}' not found in metadata`);
-            }
-            if (!input.Keys || input.Keys.length === 0) {
-                return this.errorResult(input.EntityName, 'No keys supplied to compare');
+            if (!keys || keys.length === 0) {
+                return this.errorResult(entity.Name, 'No keys supplied to compare');
             }
 
-            const fields = this.selectFields(entity, input.IncludeFields);
-            const rawRecords = await this.loadRecords(entity, input.Keys, fields, contextUser, provider);
+            const fields = this.selectFields(entity, options?.IncludeFields);
+            const rawRecords = await this.loadRecords(entity, keys, fields, contextUser, options);
             if (rawRecords === null) {
-                return this.errorResult(input.EntityName, 'Failed to load records for comparison');
+                return this.errorResult(entity.Name, 'Failed to load records for comparison');
             }
 
-            const records = this.buildRecords(entity, input.Keys, fields, rawRecords);
+            const records = this.buildRecords(entity, keys, fields, rawRecords);
             const deltas = this.buildFieldDeltas(fields, records);
             return {
                 Success: true,
-                EntityName: input.EntityName,
+                EntityName: entity.Name,
                 Records: records,
                 Fields: deltas
             };
         } catch (e) {
             LogError(e);
-            return this.errorResult(input.EntityName, e instanceof Error ? e.message : String(e));
+            return this.errorResult(entity.Name, e instanceof Error ? e.message : String(e));
         }
     }
 
@@ -211,17 +256,19 @@ export class RecordComparisonEngine {
         entity: EntityInfo,
         keys: CompositeKey[],
         fields: EntityFieldInfo[],
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
+        contextUser: UserInfo | undefined,
+        options?: RecordComparisonOptions
     ): Promise<Record<string, RecordFieldValue>[] | null> {
         const filter = this.buildKeysFilter(keys);
         if (!filter) {
             return null;
         }
 
-        // Concrete MJ providers implement both IMetadataProvider and IRunViewProvider;
-        // this cast threads the request-scoped provider into RunView for multi-provider safety.
-        const rv = new RunView((provider as unknown as IRunViewProvider) ?? null);
+        // Prefer a caller-supplied RunView (already bound to the request-scoped provider).
+        // Otherwise build one from the provider: concrete MJ providers implement both
+        // IMetadataProvider and IRunViewProvider, so the cast threads it into RunView for
+        // multi-provider safety.
+        const rv = options?.RunViewInstance ?? new RunView((options?.Provider as unknown as IRunViewProvider) ?? null);
         const result = await rv.RunView<Record<string, RecordFieldValue>>(
             {
                 EntityName: entity.Name,

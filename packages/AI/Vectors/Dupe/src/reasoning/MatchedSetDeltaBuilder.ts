@@ -1,41 +1,40 @@
 /**
- * @fileoverview Builds the field-level deltas for a matched set, server-side.
+ * @fileoverview Projects a matched set's field-level comparison into the lean shape the
+ * reasoning template expects ({@link ReasoningFieldDelta}).
  *
- * Mirrors the shape produced by `RecordComparisonEngine` in
- * `@memberjunction/core-entities-server`, but is implemented locally in this package
- * because `core-entities-server` *depends on* `@memberjunction/ai-vector-dupe` — importing
- * it here would create a build cycle. (Phase 1.5 may unify these once the cycle is broken;
- * for now the logic is duplicated deliberately and kept small.)
+ * The record loading + field selection + delta computation lives **once** in
+ * `RecordComparisonEngine` (`@memberjunction/record-comparison`) — a low-level package
+ * both this dupe package and the server/UI comparison path can depend on without a build
+ * cycle. This adapter is the thin dupe-specific projection over that single engine:
  *
- * It loads the source record + its candidates with a single read-only `RunView`
- * (`ResultType: 'simple'`, never mutating) and emits only the fields that differ across
- * the set, so the reasoner sees signal, not noise.
+ *   - it calls {@link RecordComparisonEngine.CompareRecordsForEntity} with the already-resolved
+ *     `EntityInfo` and the detector's request-scoped `RunView` (so no redundant metadata
+ *     lookup and no second RunView), then
+ *   - keeps only the **differing** fields (the reasoner wants signal, not noise — the engine
+ *     already drops fields that are empty across every record) and
+ *   - flattens each cell to `{ RecordID: <key string>, Value: <stringified> }`.
  *
  * @module @memberjunction/ai-vector-dupe
  */
 
+import { RunView, CompositeKey, EntityInfo, UserInfo } from '@memberjunction/core';
 import {
-    RunView,
-    CompositeKey,
-    EntityInfo,
-    EntityFieldInfo,
-    UserInfo,
-    LogError
-} from '@memberjunction/core';
+    RecordComparisonEngine,
+    RecordComparisonResult,
+    RecordFieldValue,
+} from '@memberjunction/record-comparison';
 import { ReasoningFieldDelta } from './DuplicateReasoningTypes';
 
-/** A scalar field value as loaded from the database. */
-type FieldValue = string | number | boolean | null;
-
 /**
- * Loads the records for a matched set and computes the differing-field deltas in the
- * shape the reasoning template expects ({@link ReasoningFieldDelta}).
+ * Builds the differing-field deltas for a matched set by delegating to the shared
+ * {@link RecordComparisonEngine} and projecting the result into {@link ReasoningFieldDelta}.
  */
 export class MatchedSetDeltaBuilder {
     private readonly runView: RunView;
 
     /**
-     * @param runView a RunView bound to the detector's request-scoped provider
+     * @param runView a RunView bound to the detector's request-scoped provider; threaded
+     *   into the comparison engine so the load happens on the correct connection.
      */
     constructor(runView: RunView) {
         this.runView = runView;
@@ -44,10 +43,10 @@ export class MatchedSetDeltaBuilder {
     /**
      * Build the field deltas for a matched set.
      *
-     * @param entityInfo the entity being deduped
+     * @param entityInfo the entity being deduped (already resolved by the detector)
      * @param keys the source key first, then each candidate key (order preserved)
      * @param contextUser the run's context user
-     * @returns differing-field deltas, or [] when records can't be loaded
+     * @returns differing-field deltas, or [] when the comparison can't be loaded
      */
     public async Build(
         entityInfo: EntityInfo,
@@ -57,163 +56,46 @@ export class MatchedSetDeltaBuilder {
         if (keys.length === 0) {
             return [];
         }
-        const fields = this.selectFields(entityInfo);
-        const rows = await this.loadRows(entityInfo, keys, fields, contextUser);
-        if (rows === null) {
+        const engine = new RecordComparisonEngine();
+        const result = await engine.CompareRecordsForEntity(entityInfo, keys, contextUser, {
+            RunViewInstance: this.runView,
+        });
+        if (!result.Success) {
             return [];
         }
-        const valuesByKey = this.mapRowsToKeys(entityInfo, keys, rows);
-        return this.computeDeltas(fields, keys, valuesByKey);
+        return this.project(result);
     }
 
-    /** Non-PK, non-system fields, in name-field → DefaultInView → Sequence order. */
-    protected selectFields(entityInfo: EntityInfo): EntityFieldInfo[] {
-        return entityInfo.Fields
-            .filter(f => !f.IsPrimaryKey && !f.Name.startsWith('__mj_'))
-            .sort((a, b) => this.fieldOrder(a, b));
-    }
+    /**
+     * Project the engine's rich delta matrix into the reasoning contract: differing fields
+     * only, each cell flattened to its record-key string + stringified value.
+     */
+    protected project(result: RecordComparisonResult): ReasoningFieldDelta[] {
+        // Column index → record-key string. This is the same addressing the reasoner uses to
+        // refer back to records (CompositeKey.Values()), so field choices resolve cleanly.
+        const recordIdByColumn = result.Records.map(r => r.Key.Values());
 
-    /** Field ordering for stable, readable output. */
-    protected fieldOrder(a: EntityFieldInfo, b: EntityFieldInfo): number {
-        if (a.IsNameField !== b.IsNameField) {
-            return a.IsNameField ? -1 : 1;
-        }
-        if (a.DefaultInView !== b.DefaultInView) {
-            return a.DefaultInView ? -1 : 1;
-        }
-        return (a.Sequence ?? 0) - (b.Sequence ?? 0);
-    }
-
-    /** Single read-only RunView OR-ing every key. Returns rows or null on failure. */
-    protected async loadRows(
-        entityInfo: EntityInfo,
-        keys: CompositeKey[],
-        fields: EntityFieldInfo[],
-        contextUser?: UserInfo
-    ): Promise<Record<string, FieldValue>[] | null> {
-        const filter = keys
-            .filter(k => k.HasValue)
-            .map(k => `(${k.ToWhereClause()})`)
-            .join(' OR ');
-        if (!filter) {
-            return null;
-        }
-
-        const selectFields = new Set<string>();
-        for (const pk of entityInfo.PrimaryKeys) {
-            selectFields.add(pk.Name);
-        }
-        for (const f of fields) {
-            selectFields.add(f.Name);
-        }
-
-        const result = await this.runView.RunView<Record<string, FieldValue>>({
-            EntityName: entityInfo.Name,
-            ExtraFilter: filter,
-            Fields: Array.from(selectFields),
-            ResultType: 'simple',
-            MaxRows: keys.length
-        }, contextUser);
-
-        if (!result.Success) {
-            LogError(`MatchedSetDeltaBuilder.loadRows failed: ${result.ErrorMessage}`);
-            return null;
-        }
-        return result.Results ?? [];
-    }
-
-    /** Correlate each key (by its URL-segment string) to its loaded row's values. */
-    protected mapRowsToKeys(
-        entityInfo: EntityInfo,
-        keys: CompositeKey[],
-        rows: Record<string, FieldValue>[]
-    ): Map<string, Record<string, FieldValue>> {
-        const map = new Map<string, Record<string, FieldValue>>();
-        for (const key of keys) {
-            const row = rows.find(r => this.rowMatchesKey(entityInfo, key, r));
-            map.set(this.keyId(key), row ?? {});
-        }
-        return map;
-    }
-
-    /** True when every PK value on the row equals the key's value (case-insensitive). */
-    protected rowMatchesKey(
-        entityInfo: EntityInfo,
-        key: CompositeKey,
-        row: Record<string, FieldValue>
-    ): boolean {
-        return entityInfo.PrimaryKeys.every(pk => {
-            const keyValue = key.GetValueByFieldName(pk.Name);
-            return this.valuesEqual(row[pk.Name], keyValue as FieldValue);
-        });
-    }
-
-    /** Compute deltas for differing fields only. */
-    protected computeDeltas(
-        fields: EntityFieldInfo[],
-        keys: CompositeKey[],
-        valuesByKey: Map<string, Record<string, FieldValue>>
-    ): ReasoningFieldDelta[] {
         const deltas: ReasoningFieldDelta[] = [];
-        for (const field of fields) {
-            const cells = keys.map(key => {
-                const row = valuesByKey.get(this.keyId(key)) ?? {};
-                return { recordId: this.keyId(key), value: this.toStringValue(row[field.Name]) };
-            });
-            if (this.allEmpty(cells) || !this.differs(cells)) {
+        for (const field of result.Fields) {
+            if (!field.Differs) {
                 continue;
             }
             deltas.push({
-                FieldName: field.Name,
-                Values: cells.map(c => ({ RecordID: c.recordId, Value: c.value }))
+                FieldName: field.FieldName,
+                Values: field.Cells.map(cell => ({
+                    RecordID: recordIdByColumn[cell.ColumnIndex],
+                    Value: this.toStringValue(cell.Value),
+                })),
             });
         }
         return deltas;
     }
 
-    /** True when no cell carries a value. */
-    protected allEmpty(cells: { value: string | null }[]): boolean {
-        return cells.every(c => c.value === null || c.value === '');
-    }
-
-    /** True when at least one cell differs from the first (reference) cell. */
-    protected differs(cells: { value: string | null }[]): boolean {
-        const ref = cells.length > 0 ? cells[0].value : null;
-        return cells.some(c => !this.stringsEqual(c.value, ref));
-    }
-
-    /** The URL-segment string id for a key (used for correlation + reasoner addressing). */
-    protected keyId(key: CompositeKey): string {
-        return key.Values();
-    }
-
     /** Stringify a loaded value for the prompt; null/undefined → null. */
-    protected toStringValue(value: FieldValue | undefined): string | null {
+    protected toStringValue(value: RecordFieldValue): string | null {
         if (value === null || value === undefined) {
             return null;
         }
         return String(value);
-    }
-
-    /** Case-insensitive trimmed equality of two stringified values. */
-    protected stringsEqual(a: string | null, b: string | null): boolean {
-        if (a === null) {
-            return b === null;
-        }
-        if (b === null) {
-            return false;
-        }
-        return a.trim().toLowerCase() === b.trim().toLowerCase();
-    }
-
-    /** Case-insensitive trimmed equality used for PK row matching. */
-    protected valuesEqual(a: FieldValue, b: FieldValue): boolean {
-        if (a === null || a === undefined) {
-            return b === null || b === undefined;
-        }
-        if (b === null || b === undefined) {
-            return false;
-        }
-        return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
     }
 }

@@ -31,7 +31,7 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
-import { RecordComparisonEngine, RecordComparisonInput } from '../engines/RecordComparisonEngine';
+import { RecordComparisonEngine, RecordComparisonInput } from '../RecordComparisonEngine';
 
 // ─────────────────────────────────────────────
 // Fixtures — minimal duck-typed EntityInfo / EntityFieldInfo / CompositeKey shapes
@@ -348,6 +348,51 @@ describe('RecordComparisonEngine', () => {
             expect(callParams.ResultType).toBe('simple');
             expect(callParams.MaxRows).toBe(1);
             expect(callParams.Fields).toEqual(expect.arrayContaining(['ID', 'Email']));
+        });
+    });
+
+    // The lower-level entry point used by callers (e.g. the duplicate detector) that already
+    // hold the EntityInfo and a request-scoped RunView — it must skip the by-name lookup and
+    // load through the supplied RunView, never building its own.
+    describe('CompareRecordsForEntity', () => {
+        it('computes the same deltas as CompareRecords without resolving the entity by name', async () => {
+            runOk([
+                { ID: 'a', Name: 'Acme', Email: 'a@x.com' },
+                { ID: 'b', Name: 'Acme', Email: 'b@x.com' },
+            ]);
+            const result = await engine.CompareRecordsForEntity(
+                entity(STANDARD_FIELDS) as never,
+                [key('a'), key('b')] as never,
+                CONTEXT_USER as never
+            );
+            expect(result.Success).toBe(true);
+            expect(result.EntityName).toBe('Accounts');
+            const email = result.Fields.find(f => f.FieldName === 'Email')!;
+            expect(email.Differs).toBe(true);
+        });
+
+        it('loads through an injected RunView instance rather than building its own', async () => {
+            const injectedRunView = { RunView: vi.fn().mockResolvedValue({ Success: true, Results: [{ ID: 'a', Name: 'Acme', Email: 'a@x.com' }] }) };
+            const result = await engine.CompareRecordsForEntity(
+                entity(STANDARD_FIELDS) as never,
+                [key('a')] as never,
+                CONTEXT_USER as never,
+                { RunViewInstance: injectedRunView as never }
+            );
+            expect(result.Success).toBe(true);
+            expect(injectedRunView.RunView).toHaveBeenCalledTimes(1);
+            expect(mockRunViewFn).not.toHaveBeenCalled();  // never built its own RunView
+        });
+
+        it('returns Success:false (never throws) when no keys are supplied', async () => {
+            const result = await engine.CompareRecordsForEntity(
+                entity(STANDARD_FIELDS) as never,
+                [] as never,
+                CONTEXT_USER as never
+            );
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('No keys');
+            expect(result.EntityName).toBe('Accounts');
         });
     });
 });

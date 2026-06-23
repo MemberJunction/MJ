@@ -28,6 +28,7 @@
     "@memberjunction/core": "5.42.0",
     "@memberjunction/global": "5.42.0",
     "@memberjunction/core-entities": "5.42.0",
+    "@memberjunction/record-comparison": "5.42.0",
     "dotenv": "^17.2.4"
   },
   "devDependencies": {
