@@ -170,7 +170,10 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
  * If it doesn't exist, adds one before module.exports closing.
  */
 function EnsureDynamicPackagesSection(content: string): string {
-    if (content.includes('dynamicPackages')) {
+    // Match the actual `dynamicPackages:` key. A bare substring check (`includes`)
+    // false-matches a comment or unrelated text mentioning the word, which would
+    // skip section creation and silently drop the entry (B6).
+    if (/dynamicPackages\s*:/.test(content)) {
         return content;
     }
 
@@ -190,7 +193,7 @@ function EnsureDynamicPackagesSection(content: string): string {
 function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): string {
     // Skip if an entry with the same PackageName and AppName already exists
     const existsPattern = new RegExp(
-        `PackageName:\\s*'${EscapeRegex(entry.PackageName)}'[^{}]*AppName:\\s*'${EscapeRegex(entry.AppName)}'`
+        `PackageName:\\s*['"]${EscapeRegex(entry.PackageName)}['"][^{}]*AppName:\\s*['"]${EscapeRegex(entry.AppName)}['"]`
     );
     if (existsPattern.test(content)) {
         return content;
@@ -222,7 +225,7 @@ function RemoveEntriesForApp(content: string, appName: string): string {
     // Uses [^{}]* instead of [^}]* to prevent matching across nested object boundaries
     // (e.g., matching from the outer dynamicPackages { instead of just the entry {).
     const pattern = new RegExp(
-        `\\s*\\{[^{}]*AppName:\\s*'${EscapeRegex(appName)}'[^{}]*\\},?`,
+        `\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(appName)}['"][^{}]*\\},?`,
         'g'
     );
     return content.replace(pattern, '');
@@ -235,7 +238,7 @@ function ToggleEntriesForApp(content: string, appName: string, enabled: boolean)
     // Find entries with the given appName and replace enabled value.
     // Uses [^{}]* to prevent matching across nested object boundaries.
     const pattern = new RegExp(
-        `(AppName:\\s*'${EscapeRegex(appName)}'[^{}]*Enabled:\\s*)(?:true|false)`,
+        `(AppName:\\s*['"]${EscapeRegex(appName)}['"][^{}]*Enabled:\\s*)(?:true|false)`,
         'g'
     );
     return content.replace(pattern, `$1${enabled}`);
@@ -415,12 +418,25 @@ function AddEntityPackageEntry(content: string, schemaName: string, packageName:
  * Removes a schema entry from the entityPackageName Record.
  */
 function RemoveEntityPackageEntry(content: string, schemaName: string): string {
-    // Match a line like: 'schemaName': 'package-name',
+    // Anchor the removal to the entityPackageName record block ONLY. A global
+    // replace would delete an identically-named key ANYWHERE else in the config
+    // (e.g. a `'crm': 'CRM Agent'` entry under serverExtensions.SlashCommands) — B5.
+    const recordMatch = content.match(/entityPackageName\s*:\s*\{/);
+    if (!recordMatch || recordMatch.index === undefined) {
+        return content;
+    }
+    const bracePos = content.indexOf('{', recordMatch.index);
+    const closePos = FindMatchingBracket(content, bracePos);
+    if (closePos === -1) {
+        return content;
+    }
+    // Accept both quote styles for key and value (B7).
     const pattern = new RegExp(
-        `\\s*'${EscapeRegex(schemaName)}'\\s*:\\s*'[^']*'\\s*,?`,
+        `\\s*['"]${EscapeRegex(schemaName)}['"]\\s*:\\s*['"][^'"]*['"]\\s*,?`,
         'g'
     );
-    return content.replace(pattern, '');
+    const inner = content.slice(bracePos + 1, closePos).replace(pattern, '');
+    return content.slice(0, bracePos + 1) + inner + content.slice(closePos);
 }
 
 /**

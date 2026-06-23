@@ -457,3 +457,34 @@ describe('ResolveEntityPackageFromManifest (via AddEntityPackageMapping)', () =>
         expect(content).toContain("'acme': '@acme/Core-Entities'");
     });
 });
+
+describe('RemoveEntityPackageMapping — B5 regression (anchored removal)', () => {
+    it('removes the entityPackageName entry WITHOUT deleting an identically-named key elsewhere', () => {
+        const config = [
+            'module.exports = {',
+            '  dbHost: "localhost",',
+            '  entityPackageName: {',
+            "    'crm': '@acme/crm-entities',",
+            "    'events': '@acme/events-entities',",
+            '  },',
+            '  serverExtensions: {',
+            '    SlashCommands: {',
+            "      'crm': 'CRM Agent',",
+            '    },',
+            '  },',
+            '};',
+        ].join('\n');
+        setupConfigFile(config);
+
+        const result = RemoveEntityPackageMapping(REPO_ROOT, 'crm');
+
+        expect(result.Success).toBe(true);
+        const content = writtenContent();
+        // The entityPackageName 'crm' mapping is gone...
+        expect(content).not.toContain("'crm': '@acme/crm-entities'");
+        // ...but the sibling mapping AND the unrelated 'crm' key are preserved
+        // (pre-fix, the global regex deleted both).
+        expect(content).toContain("'events': '@acme/events-entities'");
+        expect(content).toContain("'crm': 'CRM Agent'");
+    });
+});
