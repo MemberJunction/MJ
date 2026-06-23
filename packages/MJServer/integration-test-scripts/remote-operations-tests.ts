@@ -25,7 +25,7 @@
  */
 import { TestRunner, Assert, AssertEqual } from './lib/harness';
 import { bootstrapAI, settle } from './lib/ai-bootstrap';
-import { RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, RemoteOpProgress } from '@memberjunction/core';
 import {
     MJTemplateEntity,
     MJTemplateContentEntity,
@@ -135,6 +135,22 @@ async function main(): Promise<void> {
                 AssertEqual(await fetchDescription(ACT_ENTITY, id, user), null, `dry-run must not write (record ${id})`);
             }
             console.log(`      → dry-run previewed ${result.Output?.processed} records, 0 writes`);
+        });
+
+        suite.Test('RO5: RecordProcess.RunNow (LongRunning) emits typed progress to an attached onProgress callback', async () => {
+            // RO-3: the executor's per-batch progress is forwarded as RemoteOpProgress to the attached caller.
+            const progressEvents: RemoteOpProgress[] = [];
+            const result = await new RecordProcessRunNowOperation().Execute(
+                { recordProcessID: rp.ID, dryRun: true, scope: { Kind: 'records', RecordIDs: catIds } },
+                { provider, user, onProgress: (p) => progressEvents.push(p) },
+            );
+            Assert(result.Success, `op failed: ${result.ErrorMessage}`);
+            Assert(progressEvents.length >= 1, `expected >= 1 progress event, got ${progressEvents.length}`);
+            for (const p of progressEvents) {
+                AssertEqual(p.OperationKey, 'RecordProcess.RunNow', 'progress OperationKey');
+                Assert(typeof p.Processed === 'number', 'progress carries a numeric Processed');
+            }
+            console.log(`      → received ${progressEvents.length} typed RemoteOpProgress event(s); last message: "${progressEvents[progressEvents.length - 1]?.Message}"`);
         });
 
         suite.Test('RO4: RecordProcess.RunNow { dryRun: false } applies the rule set (DB rows updated)', async () => {

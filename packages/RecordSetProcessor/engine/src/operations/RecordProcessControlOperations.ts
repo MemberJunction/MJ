@@ -6,7 +6,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { BaseRemotableOperation, IMetadataProvider, RemoteOpServerContext, UserInfo } from '@memberjunction/core';
 import { MJProcessRunEntity } from '@memberjunction/core-entities';
 import {
     RecordProcessRunNowOperation,
@@ -29,7 +29,7 @@ import { RecordProcessExecutor } from '../RecordProcessExecutor';
  */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.RunNow')
 export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOperation {
-    protected async InternalExecute(input: RecordProcessRunNowInput, provider: IMetadataProvider, user: UserInfo): Promise<RecordProcessRunNowOutput> {
+    protected async InternalExecute(input: RecordProcessRunNowInput, provider: IMetadataProvider, user: UserInfo, context: RemoteOpServerContext): Promise<RecordProcessRunNowOutput> {
         if (!input?.recordProcessID) {
             throw new Error('recordProcessID is required');
         }
@@ -40,6 +40,17 @@ export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOpera
             singleRecordID: input.singleRecordID,
             dryRun: input.dryRun,
             scope: input.scope,
+            // RO-3: forward the executor's per-batch progress as typed RemoteOpProgress, so an `attached`
+            // caller's onProgress (and, over the wire, the progress channel) sees live run progress.
+            onProgress: (p) =>
+                context.emitProgress({
+                    OperationKey: this.OperationKey,
+                    Processed: p.Processed,
+                    Total: p.Total ?? undefined,
+                    Status: 'Running',
+                    Message: `Processed ${p.Processed}${p.Total != null ? ` of ${p.Total}` : ''} record(s)`,
+                    Payload: { Success: p.Success, Error: p.Error, Skipped: p.Skipped, CurrentRecordID: p.CurrentRecordID },
+                }),
         });
         return {
             processRunID: result.ProcessRunID,
