@@ -254,13 +254,20 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
     }
 
-    await RecordInstallHistoryEntry(context.ContextUser, createdAppId!, 'Install', manifest, {
-      Success: true,
-      DurationSeconds: GetDurationSeconds(startTime),
-      StartedAt: new Date(startTime),
-      EndedAt: new Date(),
-      Summary: 'Initial installation',
-    });
+    // The install is complete (status is already 'Active'). The history entry is an
+    // audit record — a failure to write it must NOT throw into the outer catch and
+    // downgrade a fully-successful install to 'Error' (B31). Best-effort only.
+    try {
+      await RecordInstallHistoryEntry(context.ContextUser, createdAppId!, 'Install', manifest, {
+        Success: true,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: 'Initial installation',
+      });
+    } catch (histErr: unknown) {
+      Callbacks?.OnWarn?.('Record', `App installed, but the history audit entry could not be written: ${histErr instanceof Error ? histErr.message : String(histErr)}`);
+    }
 
     Callbacks?.OnSuccess?.('Install', `Successfully installed ${manifest.name} v${manifest.version}`);
 
