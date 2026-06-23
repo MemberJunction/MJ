@@ -1,0 +1,145 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// mj-app.json — AUTHORITATIVE REFERENCE MANIFEST
+//
+// An Open App IS its manifest. This file is the single source of truth for what an
+// app is. It can stand entirely ALONE — the smallest valid Open App is just identity:
+//
+//     {
+//       "manifestVersion": 1,
+//       "name": "my-extension",
+//       "displayName": "My Extension",
+//       "description": "A minimal manifest-only Open App.",
+//       "version": "1.0.0",
+//       "publisher": { "name": "Me" },
+//       "repository": "https://github.com/me/my-extension",
+//       "mjVersionRange": ">=5.43.0 <6.0.0"
+//     }
+//
+// Everything below the identity fields is an OPTIONAL, ADDITIVE capability block. An
+// app's "form" is simply which blocks it declares — manifest-only, metadata-extending,
+// schema-backed, packages-only, or any combination. The manifest assumes nothing about
+// which are present. This reference populates EVERY block to document them; a real app
+// includes only the ones it needs.
+//
+// This file is kept schema-valid by a unit test (manifest-reference.test.ts) that strips
+// these comments and asserts it parses against `mjAppManifestSchema` — so it can never
+// drift from the actual validator.
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // JSON Schema URL for editor validation/autocomplete (optional, informational).
+  "$schema": "https://schema.memberjunction.org/mj-app/v1.json",
+
+  // ── Identity (REQUIRED — these describe the app, not its form) ──────────────
+  "manifestVersion": 1,                                    // literal 1 (current format version)
+  "name": "acme-crm",                                      // ^[a-z][a-z0-9-]{1,62}[a-z0-9]$ — unique id
+  "displayName": "Acme CRM",                               // human-readable, 1–200 chars
+  "description": "Customer relationship management extension for MemberJunction.", // 10–500 chars
+  "version": "1.2.0",                                      // semver — MUST match the GitHub release tag
+  "license": "MIT",                                        // OPTIONAL — SPDX identifier
+  "icon": "fa-solid fa-handshake",                         // OPTIONAL — Font Awesome class or emoji
+  "color": "#264FAF",                                      // OPTIONAL — #RRGGBB for UI theming
+
+  "publisher": {                                           // REQUIRED
+    "name": "Acme Corporation",                            // REQUIRED within publisher
+    "email": "apps@acme.example.com",                      // OPTIONAL
+    "url": "https://acme.example.com"                      // OPTIONAL
+  },
+
+  "repository": "https://github.com/acme/mj-crm",          // REQUIRED — GitHub repo URL
+  "mjVersionRange": ">=5.43.0 <6.0.0",                     // REQUIRED — compatible MJ versions (semver range)
+
+  // ── Schema (OPTIONAL — the SCHEMA-BACKED form) ──────────────────────────────
+  // Present only when the app ships its own database objects. The engine creates this
+  // schema at install and drops it at remove. Omit entirely for metadata-/code-only apps.
+  "schema": {
+    "name": "acme_crm",                                    // REQUIRED within schema — SQL schema name
+    "createIfNotExists": true,                             // OPTIONAL — default true
+    "entityPackage": "@acme/mj-crm-entities"               // OPTIONAL — npm pkg exporting generated entities
+  },
+
+  // ── Migrations (OPTIONAL — present with a schema) ───────────────────────────
+  // Skyway/Flyway migrations scoped to the app's schema. On Postgres the engine reads
+  // `<directory>-pg` instead, so ship both `migrations/` and `migrations-pg/`.
+  "migrations": {
+    "directory": "migrations",                             // OPTIONAL — default "migrations"
+    "engine": "skyway"                                     // OPTIONAL — "skyway" | "flyway", default "skyway"
+  },
+
+  // ── Metadata (OPTIONAL — the METADATA-EXTENDING form) ───────────────────────
+  // mj-sync metadata. With processOnInstall=true the engine pushes it into the shared
+  // __mj schema (or wherever the records point) at install, and RETIRES it symmetrically
+  // on remove. This is how a schema-less connector seeds its Integration / IntegrationObject
+  // / IntegrationObjectField + Action rows. With processOnInstall=false (default), metadata
+  // is dev-time only (authored here, deployed by the publisher's own pipeline).
+  "metadata": {
+    "directory": "metadata",                               // OPTIONAL — default "metadata"
+    "processOnInstall": false                              // OPTIONAL — default false
+  },
+
+  // ── Packages (OPTIONAL — the PACKAGES form) ─────────────────────────────────
+  // npm packages the app contributes. Server packages load into MJAPI at boot (firing
+  // their @RegisterClass registrations); client packages load into MJExplorer. Omit
+  // entirely for a metadata-only or manifest-only app.
+  "packages": {
+    "registry": "https://registry.npmjs.org",             // OPTIONAL — default public npm
+    "prefix": "@acme/mj-crm-",                             // OPTIONAL — version-bump ALL workspace pkgs with this prefix
+    "server": [
+      {
+        "name": "@acme/mj-crm-server-bootstrap",
+        "role": "bootstrap",                               // bootstrap|actions|engine|provider|module|components|library
+        "startupExport": "LoadAcmeCRMServer"               // REQUIRED for role "bootstrap" — startup fn to call
+      },
+      { "name": "@acme/mj-crm-actions", "role": "actions" }
+    ],
+    "client": [
+      {
+        "name": "@acme/mj-crm-ng-bootstrap",
+        "role": "bootstrap",
+        "startupExport": "LoadAcmeCRMClient"
+      },
+      { "name": "@acme/mj-crm-ng", "role": "module" }
+    ],
+    "shared": [
+      { "name": "@acme/mj-crm-types", "role": "library" }
+    ]
+  },
+
+  // ── Dependencies (OPTIONAL) ─────────────────────────────────────────────────
+  // Other Open Apps this one needs. Resolved transitively and installed leaf-first.
+  // Value is a semver range string, or an object (for a dep in another / multi-app repo).
+  "dependencies": {
+    "acme-billing": ">=1.0.0",
+    "acme-contacts": {
+      "version": "^2.0.0",
+      "repository": "https://github.com/acme/mj-apps",
+      "subpath": "CRM/Contacts"                            // OPTIONAL — dep lives at this subpath of a multi-app repo
+    }
+  },
+
+  // ── Code visibility (OPTIONAL) ──────────────────────────────────────────────
+  "code": {
+    "visibility": "public",                                // "public" | "private" (default "private")
+    "sourceDirectory": "packages"                          // OPTIONAL — informational
+  },
+
+  // ── Configuration (OPTIONAL) ────────────────────────────────────────────────
+  // JSON-Schema for user-supplied settings the host collects at install.
+  "configuration": {
+    "schema": {
+      "apiBaseUrl": { "type": "string", "description": "Base URL for the Acme API" }
+    }
+  },
+
+  // ── Lifecycle hooks (OPTIONAL) ──────────────────────────────────────────────
+  // Shell commands run at lifecycle points. The native metadata retire on remove runs
+  // regardless of preRemove — a hook only complements it.
+  "hooks": {
+    "postInstall": "node scripts/post-install.js",
+    "postUpgrade": "node scripts/post-upgrade.js",
+    "preRemove": "node scripts/pre-remove.js"
+  },
+
+  // ── Discovery (OPTIONAL — MJ Central) ───────────────────────────────────────
+  "categories": ["CRM", "Sales"],                          // OPTIONAL — max 5
+  "tags": ["contacts", "deals", "pipeline"]                // OPTIONAL — max 20, lowercase + hyphens
+}

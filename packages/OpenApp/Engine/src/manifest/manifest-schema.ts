@@ -1,6 +1,17 @@
 /**
  * Zod schema for the mj-app.json manifest file.
  *
+ * An Open App **is** its manifest. The `mj-app.json` manifest is the single source of
+ * truth for what an app is: it can stand entirely alone (a manifest-only app is valid),
+ * it is what MJ persists (`MJ: Open Apps.ManifestJSON`), and it is what every lifecycle
+ * operation re-reads. Every *capability* block — `schema`, `migrations`, `metadata`,
+ * `packages`, `dependencies`, `code`, `configuration`, `hooks` — is **optional and
+ * additive**; the manifest assumes nothing about which blocks are present. An app's
+ * "form" is simply which blocks it declares (manifest-only, metadata-extending,
+ * schema-backed, packages-only, or any combination). Only the identity fields (name,
+ * version, publisher, repository, mjVersionRange, …) are required — they describe the
+ * app, not its form.
+ *
  * Validates all fields defined in the MJ Open App specification.
  * Used by the CLI to parse and validate app manifests before installation.
  */
@@ -156,8 +167,9 @@ export const mjAppManifestSchema = z.object({
     // in which case the engine pushes it at install/upgrade time.
     metadata: metadataSchema.optional(),
 
-    // NPM Packages
-    packages: packagesSchema,
+    // NPM Packages — optional, like every other capability block. An app that extends MJ
+    // purely via metadata or schema (or is manifest-only) declares no packages at all.
+    packages: packagesSchema.optional(),
 
     // App Dependencies — object keyed by app name; values can be a semver range
     // string or an object with version + repository.
