@@ -14,7 +14,8 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
+import semver from 'semver';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
@@ -959,16 +960,20 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
-    // NOTE (known limitation, tracked in #2713): we install from the dependency's
-    // repository with no Version, so it resolves to whatever its default-branch
-    // manifest reports — `dep.VersionRange` is NOT enforced for fresh installs.
-    // Declared ranges are only checked against ALREADY-installed deps (see
-    // ProcessEdge in dependency-graph-builder.ts). So a `>=1.0 <2.0` requirement
-    // can silently install 3.0 if that's the latest. Pre-existing behavior, not a
-    // regression; range-gated fresh installs are deferred follow-on work.
+    // Resolve the highest published version that satisfies the declared range, and pin the
+    // install to it. Previously the dependency installed with no Version → whatever the
+    // default-branch manifest reported, so a `>=1.0 <2.0` requirement could silently pull
+    // 3.0 (B26). A range with no satisfying version now fails loudly rather than installing
+    // the wrong major.
+    const resolved = await ResolveDependencyVersion(dep.Repository, dep.VersionRange, context.GitHubOptions);
+    if (resolved.ErrorMessage) {
+      return { Success: false, ErrorMessage: `Cannot install dependency '${dep.AppName}': ${resolved.ErrorMessage}` };
+    }
     const result = await InstallApp(
       {
         Source: dep.Repository,
+        // Pinned to satisfy the declared range; undefined ⇒ no constraint ⇒ default-branch latest.
+        Version: resolved.Version,
         _skipDependencyResolution: true,
         AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
         Verbose: inherited.Verbose,
@@ -980,6 +985,52 @@ async function InstallDependencies(
     }
   }
   return { Success: true };
+}
+
+/**
+ * Resolves the version a dependency should install at, given the declared range. Returns the
+ * highest published version (from the repo's releases + semver tags) that satisfies the range.
+ * Returns `{ Version: undefined }` when there is no real constraint (so the caller installs the
+ * default-branch latest), or `{ ErrorMessage }` when the range is invalid or unsatisfiable —
+ * failing loudly rather than silently installing the wrong major version (B26).
+ *
+ * Exported for unit testing of the range-resolution logic.
+ */
+export async function ResolveDependencyVersion(
+  repoUrl: string,
+  versionRange: string,
+  options: GitHubClientOptions,
+): Promise<{ Version?: string; ErrorMessage?: string }> {
+  const range = (versionRange ?? '').trim();
+  // No real constraint → let InstallApp resolve the default-branch latest (prior behavior).
+  if (range === '' || range === '*' || range.toLowerCase() === 'latest') {
+    return { Version: undefined };
+  }
+  // An exact version is a 1-element "range" — pin it directly.
+  if (semver.valid(range)) {
+    return { Version: range.replace(/^v/, '') };
+  }
+  if (!semver.validRange(range)) {
+    return { ErrorMessage: `version '${versionRange}' is not a valid semver version or range` };
+  }
+  // Gather candidate versions: non-draft releases + semver tags.
+  const [releases, tags] = await Promise.all([
+    ListGitHubReleases(repoUrl, options),
+    ListGitHubTags(repoUrl, options),
+  ]);
+  const candidates = [
+    ...releases.filter((r) => !r.Draft).map((r) => r.TagName.replace(/^v/, '')),
+    ...tags.map((t) => t.replace(/^v/, '')),
+  ].filter((v) => semver.valid(v) != null);
+  if (candidates.length === 0) {
+    return { ErrorMessage: `no published versions found at ${repoUrl} to satisfy '${versionRange}'` };
+  }
+  const best = semver.maxSatisfying(candidates, range);
+  if (!best) {
+    const latest = candidates.sort(semver.rcompare)[0];
+    return { ErrorMessage: `no published version at ${repoUrl} satisfies '${versionRange}' (latest available: ${latest})` };
+  }
+  return { Version: best };
 }
 
 /**

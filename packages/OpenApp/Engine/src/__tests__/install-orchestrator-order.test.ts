@@ -24,6 +24,8 @@ vi.mock('../github/github-client.js', () => ({
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
+    ListGitHubReleases: vi.fn(),
+    ListGitHubTags: vi.fn(),
 }));
 vi.mock('../install/schema-manager.js', () => ({
     CreateAppSchema: vi.fn(),
@@ -67,7 +69,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
@@ -145,6 +147,12 @@ describe('InstallApp dependency orchestration', () => {
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(FindInstalledApp).mockResolvedValue(undefined); // nothing installed yet
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+
+        // Dependency version resolution (B26): deps declare '^1.0.0'; offer a satisfying tag,
+        // and let the pinned-version tag validation pass so the dep install proceeds.
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
+        vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
 
         // The marker: capture install order as each app is recorded.
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {

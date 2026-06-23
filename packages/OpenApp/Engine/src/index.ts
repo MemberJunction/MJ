@@ -58,7 +58,8 @@ export {
     ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,
-    ParseGitHubUrl
+    ParseGitHubUrl,
+    GitHubAccessError
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
