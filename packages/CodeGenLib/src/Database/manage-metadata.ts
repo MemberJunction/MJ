@@ -1317,6 +1317,7 @@ export class ManageMetadataBase {
       const esc = (s: string) => s.replace(/'/g, "''");
       const idLit = (id: string | null | undefined) => (id ? `'${id}'` : 'NULL');
       const surrogateSQLType = this.dbProvider.getMaterializedSurrogateColumnType();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       let processedCount = 0;
       let mintedCount = 0;
 
@@ -1333,6 +1334,22 @@ export class ManageMetadataBase {
          const analysis = analyzeQueryForMaterialization({ queryName, isParameterized, fields, surrogateSQLType });
          if (!analysis.qualifies) {
             logStatus(`    > Skipping materialization of query "${queryName}": ${analysis.reason}`);
+            continue;
+         }
+
+         // RLS downgrade gate (§6.2, ships day one) — a materialized query entity does NOT inherit its
+         // source entities' row-level security. Refuse to materialize when any source entity carries a
+         // read RLS filter, to prevent a silent privilege escalation. Asymmetric risk (§10): over-restriction
+         // is harmless; the dangerous direction (protected → unprotected) must be loud.
+         const sourceLinks = await this.runQueryWithParams(pool, `SELECT EntityID FROM ${this.qs(coreSchema, 'vwQueryEntities')} WHERE QueryID = @QID`, { QID: queryId });
+         const rlsProtectedSources = sourceLinks.recordset
+            .map((r: CodeGenQueryRow) => md.Entities.find((e) => UUIDsEqual(e.ID, r.EntityID as string)))
+            .filter((e): e is EntityInfo => !!e && e.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0));
+         if (rlsProtectedSources.length > 0) {
+            const names = rlsProtectedSources.map((e) => `"${e.Name}"`).join(', ');
+            logError(
+               `    > REFUSING to materialize query "${queryName}": source entit${rlsProtectedSources.length === 1 ? 'y' : 'ies'} ${names} ${rlsProtectedSources.length === 1 ? 'is' : 'are'} read-RLS-protected, and a materialized query entity does NOT inherit source RLS (plan §6.2). Author equivalent protection on the materialized entity, or use a base-view materialization (which reuses the source entity and its RLS). Skipping to avoid a silent privilege escalation.`,
+            );
             continue;
          }
 
@@ -1396,7 +1413,6 @@ export class ManageMetadataBase {
 
       // Refresh so manageVirtualEntities (next step) syncs fields for the newly-minted entities.
       if (mintedCount > 0) {
-         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
          await md.Refresh();
       }
 
