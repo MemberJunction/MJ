@@ -111,6 +111,51 @@ Standardize its spacing with MJ tokens:
 }
 ```
 
+## Testing each section (Playwright + state injection)
+
+Empty-states have several conditions and the running env rarely has the right
+data for all of them. **Default to forcing state via Angular's debug API** — no
+DB mutation, no cleanup, deterministic. The MJExplorer dev build exposes
+`window.ng`, so from `playwright-cli run-code` you can grab any resource
+component and re-render it in any state.
+
+Reusable helper (paste once per page via `run-code`):
+
+```js
+window.__forceState = (sel, patch) => {
+  const c = window.ng.getComponent(document.querySelector(sel));
+  Object.assign(c, patch);
+  window.ng.applyChanges(c);
+  return Object.keys(patch);
+};
+```
+
+Resource components have stable selectors (`mj-<kebab-class-name>`, e.g.
+`mj-lists-browse-resource`). The property names to patch are the same ones you
+read while migrating the component's template. Examples (Lists/Browse):
+
+```js
+// onboarding (genuinely empty)
+__forceState('mj-lists-browse-resource', { allLists:[], filteredLists:[], isLoading:false })
+// no-results (filtered to nothing → reset CTA)
+__forceState('mj-lists-browse-resource', { allLists:[{}], filteredLists:[], isLoading:false, searchTerm:'zzz' })
+```
+
+Reload the page to clear the injected state. **Error** states: use
+`playwright-cli route` to fail the relevant GraphQL/REST call (don't blanket-mock
+the GraphQL endpoint — it serves metadata too). Occasionally do a **real-data**
+pass when you specifically want to validate the live data-binding path.
+
+### States to verify per section
+
+For each migrated empty-state, confirm in **both light and dark mode**:
+
+- [ ] **Populated** — the normal (non-empty) render still works (didn't break layout)
+- [ ] **Empty / onboarding** — icon (flat, no leftover circle), title, message, CTA fires
+- [ ] **No-results** — `no-results` variant tone; reset/clear CTA shows only when narrowed and fires
+- [ ] **Error** (if the component has one) — `error`/`warning` variant tone + retry CTA
+- [ ] Projected content (feature checklists) spacing correct; design tokens adapt to dark
+
 ## Progress log
 
 | Section | Files | Instances | Status | Commit |
