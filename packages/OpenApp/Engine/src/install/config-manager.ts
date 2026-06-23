@@ -177,16 +177,12 @@ function EnsureDynamicPackagesSection(content: string): string {
         return content;
     }
 
-    // Insert dynamicPackages section before the closing of module.exports
-    const insertionPoint = content.lastIndexOf('};');
-    if (insertionPoint === -1) {
-        // Can't safely place the section — fail loudly instead of writing an
-        // unchanged config and reporting success (B10).
-        throw new Error('Could not locate the end of module.exports (no "};") to insert the dynamicPackages section in mj.config.cjs.');
-    }
-
+    // Insert the section before the closing brace of the module.exports object literal.
+    // Anchored to module.exports (not the file's last `};`) so trailing code can't put the
+    // section in the wrong block (B4). Fails loudly if module.exports isn't an object
+    // literal (B10).
     const section = `\n  dynamicPackages: {\n    server: []\n  },\n`;
-    return content.slice(0, insertionPoint) + section + content.slice(insertionPoint);
+    return InsertBeforeModuleExportsClose(content, section);
 }
 
 /**
@@ -237,7 +233,29 @@ function RemoveEntriesForApp(content: string, appName: string): string {
         `\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(appName)}['"][^{}]*\\},?`,
         'g'
     );
-    return content.replace(pattern, '');
+    return NormalizeEmptyServerArray(content.replace(pattern, ''));
+}
+
+/**
+ * Collapses a now-empty (whitespace-only) `dynamicPackages.server` array to `[]`.
+ * After the last entry is removed, the array is otherwise left as `server: [\n    ]`,
+ * which is functionally identical but not byte-idempotent with a never-populated config.
+ * Anchored to dynamicPackages.server specifically (via FindMatchingBracket) so no other
+ * array in the file is touched (B12).
+ */
+function NormalizeEmptyServerArray(content: string): string {
+    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
+    if (!dynMatch || dynMatch.index === undefined) return content;
+    const afterDyn = content.slice(dynMatch.index);
+    const serverRel = afterDyn.match(/server:\s*\[/);
+    if (!serverRel || serverRel.index === undefined) return content;
+    const openBracketPos = dynMatch.index + serverRel.index + serverRel[0].length - 1; // the '['
+    const closePos = FindMatchingBracket(content, openBracketPos);
+    if (closePos === -1) return content;
+    if (content.slice(openBracketPos + 1, closePos).trim() === '') {
+        return content.slice(0, openBracketPos) + '[]' + content.slice(closePos + 1);
+    }
+    return content;
 }
 
 /**
@@ -255,20 +273,80 @@ function ToggleEntriesForApp(content: string, appName: string, enabled: boolean)
 
 /**
  * Finds the matching closing bracket for an opening bracket.
+ *
+ * Skips brackets that appear inside string literals (single/double/backtick) and inside
+ * line/block comments, so a brace or bracket in a value or comment can't throw off the
+ * depth count and mis-match the close (B11). Without this, e.g. a `description: 'a } b'`
+ * or `// closes the } here` inside the scanned object corrupts the result.
  */
 function FindMatchingBracket(content: string, openPos: number): number {
     const openChar = content[openPos];
     const closeChar = openChar === '[' ? ']' : '}';
     let depth = 1;
     let pos = openPos + 1;
+    let inString: string | null = null; // the quote char currently open, or null
+    let inLineComment = false;
+    let inBlockComment = false;
 
     while (pos < content.length && depth > 0) {
-        if (content[pos] === openChar) depth++;
-        if (content[pos] === closeChar) depth--;
+        const ch = content[pos];
+
+        if (inLineComment) {
+            if (ch === '\n') inLineComment = false;
+            pos++;
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && content[pos + 1] === '/') {
+                inBlockComment = false;
+                pos += 2;
+                continue;
+            }
+            pos++;
+            continue;
+        }
+        if (inString) {
+            if (ch === '\\') { pos += 2; continue; } // skip escaped char
+            if (ch === inString) inString = null;
+            pos++;
+            continue;
+        }
+
+        // Not currently in a string or comment.
+        if (ch === '/' && content[pos + 1] === '/') { inLineComment = true; pos += 2; continue; }
+        if (ch === '/' && content[pos + 1] === '*') { inBlockComment = true; pos += 2; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') { inString = ch; pos++; continue; }
+
+        if (ch === openChar) depth++;
+        else if (ch === closeChar) depth--;
         pos++;
     }
 
     return depth === 0 ? pos - 1 : -1;
+}
+
+/**
+ * Inserts a section just before the closing brace of the `module.exports = { ... }` object
+ * literal. Anchoring to that brace (via FindMatchingBracket) is correct even when the file
+ * has trailing code or a later `};` — unlike `lastIndexOf('};')`, which lands in the wrong
+ * block for `module.exports = { ... }; function helper() { ... };` and corrupts the config
+ * (B4). Throws (rather than silently corrupting) when module.exports is not a direct object
+ * literal — e.g. `module.exports = config;` — so the caller fails loudly.
+ */
+function InsertBeforeModuleExportsClose(content: string, section: string): string {
+    const exportMatch = content.match(/module\.exports\s*=\s*\{/);
+    if (!exportMatch || exportMatch.index === undefined) {
+        throw new Error(
+            'Could not find a `module.exports = { ... }` object literal in mj.config.cjs to insert into. ' +
+            'If module.exports references a variable (e.g. `module.exports = config;`), add the section manually.',
+        );
+    }
+    const bracePos = content.indexOf('{', exportMatch.index);
+    const closePos = FindMatchingBracket(content, bracePos);
+    if (closePos === -1) {
+        throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
+    }
+    return content.slice(0, closePos) + section + content.slice(closePos);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -373,7 +451,7 @@ function ResolveEntityPackageFromManifest(manifest: MJAppManifest): string | und
 
 /**
  * Ensures entityPackageName exists as a Record in the config.
- * If it exists as a string, converts it to a Record with the string as a fallback comment.
+ * If it exists as a string, converts it to a Record (only when safe — see B9).
  * If it doesn't exist, adds an empty Record section.
  */
 function EnsureEntityPackageNameSection(content: string): string {
@@ -386,20 +464,33 @@ function EnsureEntityPackageNameSection(content: string): string {
     // Check if entityPackageName exists as a string
     const stringMatch = content.match(/entityPackageName\s*:\s*['"]([^'"]*)['"]\s*,?/);
     if (stringMatch) {
-        // Convert string to Record, preserving the old value as a comment
         const oldValue = stringMatch[1];
-        const replacement = `entityPackageName: {\n    // Converted from string value '${oldValue}' by mj app install\n  },`;
+        // CodeGen's resolveEntityPackageName treats a STRING entityPackageName as "every
+        // non-core schema resolves to <oldValue>", but a RECORD falls back to
+        // 'mj_generatedentities' for any unlisted schema. So converting a string to an
+        // (initially empty) Record silently changes which package every OTHER schema
+        // resolves to — UNLESS the string is already the default ('' / 'mj_generatedentities'),
+        // in which case the Record fallback is identical and the conversion is lossless.
+        // The previous code dropped the value into a comment and produced an empty Record
+        // regardless, silently degrading custom defaults to 'mj_generatedentities' (B9).
+        const isDefaultString = oldValue === '' || oldValue === 'mj_generatedentities';
+        if (!isDefaultString) {
+            throw new Error(
+                `mj.config.cjs sets entityPackageName: '${oldValue}' (a string that applies to ALL non-core schemas). ` +
+                `Installing an app needs a per-schema Record, but auto-converting would silently change other schemas ` +
+                `to 'mj_generatedentities' (a Record's fallback), not '${oldValue}'. Manually convert entityPackageName ` +
+                `to a Record that preserves '${oldValue}' for your existing schemas, then re-run the install.`,
+            );
+        }
+        // Safe: a default string is equivalent to an empty Record (same resolution).
+        const replacement = `entityPackageName: {\n  },`;
         return content.replace(stringMatch[0], replacement);
     }
 
-    // entityPackageName doesn't exist at all — insert before the closing };
-    const insertionPoint = content.lastIndexOf('};');
-    if (insertionPoint === -1) {
-        throw new Error('Could not locate the end of module.exports (no "};") to insert the entityPackageName section in mj.config.cjs.');
-    }
-
+    // entityPackageName doesn't exist at all — insert into the module.exports object literal
+    // (anchored, not at the file's last `};`) — B4.
     const section = `\n  entityPackageName: {\n  },\n`;
-    return content.slice(0, insertionPoint) + section + content.slice(insertionPoint);
+    return InsertBeforeModuleExportsClose(content, section);
 }
 
 /**

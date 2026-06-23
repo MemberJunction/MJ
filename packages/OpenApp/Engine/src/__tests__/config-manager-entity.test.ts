@@ -324,8 +324,10 @@ describe('EnsureEntityPackageNameSection (via AddEntityPackageMapping)', () => {
         expect(content).toContain("'acme': '@acme/core-entities'");
     });
 
-    it('should convert string entityPackageName to Record with comment', () => {
-        setupConfigFile(configWithStringEntityPkg('@memberjunction/core-entities'));
+    it('converts a DEFAULT string (mj_generatedentities) to a Record losslessly (B9)', () => {
+        // A default string and an empty Record resolve identically (CodeGen's
+        // resolveEntityPackageName falls back to 'mj_generatedentities'), so converting is safe.
+        setupConfigFile(configWithStringEntityPkg('mj_generatedentities'));
 
         const manifest = makeManifest({
             schemaName: 'acme',
@@ -334,15 +336,36 @@ describe('EnsureEntityPackageNameSection (via AddEntityPackageMapping)', () => {
             ],
         });
 
-        AddEntityPackageMapping(REPO_ROOT, manifest);
+        const result = AddEntityPackageMapping(REPO_ROOT, manifest);
 
+        expect(result.Success).toBe(true);
         const content = writtenContent();
-        // Should be converted to Record
         expect(content).toContain('entityPackageName: {');
-        // Should contain the preservation comment with old value
-        expect(content).toContain("Converted from string value '@memberjunction/core-entities'");
-        // Should have the new entry
         expect(content).toContain("'acme': '@acme/core-entities'");
+        // The lossy "drop the value into a comment" behavior is gone.
+        expect(content).not.toContain('Converted from string value');
+    });
+
+    it('REFUSES to convert a CUSTOM string entityPackageName (would silently re-route other schemas) — B9', () => {
+        // resolveEntityPackageName returns the string for EVERY non-core schema, but a Record
+        // falls back to 'mj_generatedentities' for unlisted schemas. Converting a custom string
+        // to an (empty) Record silently changes every other schema's package — so it must fail
+        // loudly, not silently corrupt (the prior code dropped it into a comment and proceeded).
+        setupConfigFile(configWithStringEntityPkg('@acme/shared-entities'));
+
+        const manifest = makeManifest({
+            schemaName: 'acme',
+            sharedPackages: [
+                { name: '@acme/core-entities', role: 'library' },
+            ],
+        });
+
+        const result = AddEntityPackageMapping(REPO_ROOT, manifest);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('@acme/shared-entities');
+        // Nothing was written — no silent corruption.
+        expect(mockedWriteFileSync).not.toHaveBeenCalled();
     });
 
     it('should leave existing Record entityPackageName alone', () => {
