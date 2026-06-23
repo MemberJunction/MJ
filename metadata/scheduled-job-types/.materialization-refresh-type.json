@@ -1,0 +1,14 @@
+[
+  {
+    "entity": "MJ: Scheduled Job Types",
+    "fields": {
+      "Name": "Materialization Refresh",
+      "Description": "Refreshes due materialized query/entity results (MJ: Materialized Results) on a cron schedule — a full rebuild into a shadow table with an atomic wrapper-view swap, so readers never see a half-populated result. No per-job configuration: the job sweeps the whole due queue (every non-disabled, scheduled materialization whose NextRefreshAt is at/before now), refreshing each via the @memberjunction/materialization engine and advancing its NextRefreshAt from its own RefreshSchedule. Per-materialization cadence lives on the MJ: Materialized Results rows; schedule this job to run at least as often as the smallest cadence.",
+      "DriverClass": "MaterializationRefreshScheduledJobDriver",
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "9F3C2A10-7B4D-4E58-9C21-3A5E1D8F0B62"
+    }
+  }
+]

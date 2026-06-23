@@ -36,6 +36,20 @@ describe('MaterializationRefresher.buildFullRebuildStatementsSQLServer', () => {
         });
     });
 
+    describe('filterDue (due-selection for the sweep)', () => {
+        const now = new Date('2026-06-23T12:00:00Z');
+        it('includes rows never refreshed (no NextRefreshAt) and those due at/before now; excludes future', () => {
+            const rows = [
+                { id: 'never', NextRefreshAt: null },
+                { id: 'overdue', NextRefreshAt: new Date('2026-06-23T11:00:00Z') },
+                { id: 'exactly-now', NextRefreshAt: new Date('2026-06-23T12:00:00Z') },
+                { id: 'future', NextRefreshAt: new Date('2026-06-23T13:00:00Z') },
+            ];
+            const due = MaterializationRefresher.filterDue(rows, now).map((r) => r.id);
+            expect(due).toEqual(['never', 'overdue', 'exactly-now']);
+        });
+    });
+
     describe('base-view case (no surrogate — source already carries its PK)', () => {
         const stmts = MaterializationRefresher.buildFullRebuildStatementsSQLServer({
             ...base,

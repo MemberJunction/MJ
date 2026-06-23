@@ -73,10 +73,25 @@ export class MaterializationRefresher {
     }
 
     /**
-     * Full-rebuild refresh of a single materialized result, then updates LastRefreshedAt / RowCount /
-     * Status='Active'. Returns a structured result rather than throwing (errors are logged + reported).
+     * Selects the materializations due for refresh: those with no `NextRefreshAt` (never run) or whose
+     * `NextRefreshAt` is at/before `now`. Pure (unit-testable); the caller supplies the candidate rows
+     * (e.g. all non-disabled, scheduled materializations).
      */
-    public async RefreshOne(matResult: MJMaterializedResultEntity, contextUser: UserInfo, provider: IMetadataProvider): Promise<MaterializationRefreshResult> {
+    public static filterDue<T extends { NextRefreshAt?: Date | null }>(rows: T[], now: Date): T[] {
+        return rows.filter((r) => !r.NextRefreshAt || new Date(r.NextRefreshAt) <= now);
+    }
+
+    /**
+     * Full-rebuild refresh of a single materialized result, then updates LastRefreshedAt / RowCount /
+     * Status='Active' (and `NextRefreshAt` when provided via options). Returns a structured result
+     * rather than throwing (errors are logged + reported).
+     */
+    public async RefreshOne(
+        matResult: MJMaterializedResultEntity,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+        options?: { nextRefreshAt?: Date | null },
+    ): Promise<MaterializationRefreshResult> {
         try {
             const sourceSelect = await this.resolveSourceSelect(matResult, contextUser, provider);
             if (!sourceSelect) {
@@ -103,6 +118,9 @@ export class MaterializationRefresher {
             matResult.Status = 'Active';
             matResult.LastRefreshedAt = new Date();
             matResult.RowCount = rowCount;
+            if (options && Object.prototype.hasOwnProperty.call(options, 'nextRefreshAt')) {
+                matResult.NextRefreshAt = options.nextRefreshAt ?? null;
+            }
             const saved = await matResult.Save();
             if (!saved) {
                 return { Success: false, RowCount: rowCount, ErrorMessage: `Refresh ran but the MaterializedResult update failed: ${matResult.LatestResult?.CompleteMessage ?? 'unknown error'}` };
