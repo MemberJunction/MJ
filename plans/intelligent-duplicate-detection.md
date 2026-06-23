@@ -1,12 +1,12 @@
 # Intelligent Duplicate Detection & Merge — Implementation Spec
 
-**Status:** Phase 1 fully spec'd; implementation not yet started. Migration **written but not run** (no CodeGen yet); metadata seed **authored but not pushed**. Steps 2/3/5/6 are greenfield. Picking up at Step 2 (run migration + CodeGen) → Step 3 (`RecordComparisonEngine`).
+**Status:** Phase 1 partially implemented. Migration **run + CodeGen complete** (schema, typed entity props, views/sprocs, Angular forms — committed). Metadata seed (shared "Duplicate Resolution" prompt + agent) **pushed**. The reasoning runtime — dual-provider seam (`PromptReasoningProvider` / `AgentReasoningProvider`), `RecordComparisonEngine`, the `MatchedSetDeltaBuilder` projection adapter, and `CheckSingleRecord` wiring — is **implemented** (uncommitted as of 2026-06-23). Remaining: v2-A UI enrichment of the existing duplicates panel, and the merge/write-back orchestration (deferred — see §Future).
 **Branch:** `feature/intelligent-dupe-detection` (PR #2805)
 **Source design:** Amith's "MJ — Intelligent Duplicate Detection & Merge" design doc
 **Relationship to PR 2804:** This branch is cut from the 2804 bugfix HEAD (ghost/self-match, recursion fan-out, auto-merge abort, unsorted UI). 2804 merges on its own; this feature stacks on top.
 
-**Resolved decisions (previously open — now locked, 2026-06-23):**
-- **`RecordComparisonEngine` home → `@memberjunction/core-entities-server` (`MJCoreEntitiesServer`).** (Was watch-item 4.)
+**Resolved decisions (previously open — now locked):**
+- **`RecordComparisonEngine` home → new package `@memberjunction/record-comparison`** (top-level `packages/RecordComparison/`; its only dependency is `@memberjunction/core`). *(Superseded the earlier `MJCoreEntitiesServer` decision, per Amith 2026-06-23.)* The engine can't live in `MJCoreEntitiesServer` because that package **depends on** `@memberjunction/ai-vector-dupe` (home of `DuplicateRecordDetector`), so the detector sits lower in the graph and importing the engine would form a cycle (`ai-vector-dupe → core-entities-server → ai-vector-dupe`). Hoisting the engine into a low-level package both sides can reach gives **one** implementation of the load + field-select + delta logic and **no duplicated delta builder**. The dupe package's `MatchedSetDeltaBuilder` is now a thin adapter that calls `RecordComparisonEngine.CompareRecordsForEntity(...)` (passing its request-scoped `RunView`, skipping the by-name lookup) and projects the rich `RecordComparisonResult` into the lean `ReasoningFieldDelta[]` the reasoner consumes. (Was watch-item 4.)
 - **UX direction → v2-A "augment-in-place."** Extend the existing production `DuplicateDetectionResourceComponent` (vector-only today) by adding the LLM recommendation / confidence / reasoning + disagreement badge to the current panel — do **not** build a greenfield surface. (Was watch-item 5 / §2.5.)
 
 ---
@@ -76,11 +76,12 @@
 
 Build the field-delta computation once, server-side, per the Transport-Layer guide — **for the server/LLM path first**. The existing UI's swap to this client is **phase 1.5 (opportunistic)**: the comparison panel already computes diffs client-side and works; we collect the DRY win once the engine is proven, without risking a regression on a polished panel on day one.
 
-1. **Engine** — framework-agnostic class in **`@memberjunction/core-entities-server` (`MJCoreEntitiesServer`)** (home decided 2026-06-23), e.g. `RecordComparisonEngine`:
+1. **Engine** — framework-agnostic class in the new low-level package **`@memberjunction/record-comparison`** (only dep: `@memberjunction/core`; home decided 2026-06-23), `RecordComparisonEngine`:
    - Input: `EntityName`, an array of `CompositeKey`s (survivor candidate + matches), optional field-include list.
    - Loads full records (`RunView`, `simple` + targeted `Fields` since this path doesn't mutate), computes a **structured delta**: per field, the value per record, equality flag, and a "differs" marker.
-   - Output: a serializable `RecordComparisonResult` (records + per-field delta matrix). This is **both** the LLM "deltas" payload and (eventually) the UI side-by-side model.
-   - No Angular, no Router, no resolver coupling.
+   - Output: a serializable `RecordComparisonResult` (records + per-field delta matrix). This is **both** the LLM "deltas" payload (the dupe path projects it to `ReasoningFieldDelta[]` via the `MatchedSetDeltaBuilder` adapter) and the UI side-by-side model.
+   - Two entry points: public `CompareRecords(input, user, provider?)` resolves the entity by name; lower-level `CompareRecordsForEntity(entity, keys, user?, {RunViewInstance, IncludeFields, Provider})` skips the lookup and accepts an injected `RunView` (used by the detector to avoid a redundant metadata resolution / second RunView).
+   - No Angular, no Router, no resolver coupling. Sits **below** `@memberjunction/ai-vector-dupe`, so both the detector and the `MJCoreEntitiesServer`→`MJServer` resolver path depend on it with no cycle.
 2. **Resolver** — thin `ResolverBase` subclass exposing `GetRecordComparison(...)`, per-request `contextUser`.
 3. **GraphQL client** — typed `GraphQLRecordComparisonClient` in `@memberjunction/graphql-dataprovider` (no inline `gql` in components).
 4. **Angular wrapper** — thinnest service; the comparison panel switches from its bespoke diff to this client **when convenient**. One diff implementation, multiple consumers.
@@ -208,7 +209,7 @@ Phase 1 stays unaware of all of this.
 1. Reasoning **log volume** at 100k+ records — the per-set `ReasoningThreshold` gate is the control; Agent mode adds an `AIAgentRun` per set, which is why `Prompt` is the default. Monitor.
 2. Messy/incomplete source data — does the delta context suffice, or is upfront normalization warranted? (design §9.3)
 3. Memory-note conflict resolution as the learning loop matures (Phase 2) — rides `MemoryManagerAgent` contradiction detection.
-4. ~~`RecordComparisonEngine` home package~~ — **RESOLVED 2026-06-23: `MJCoreEntitiesServer`.**
+4. ~~`RecordComparisonEngine` home package~~ — **RESOLVED 2026-06-23: new package `@memberjunction/record-comparison`** (low-level, core-only dep). Initially landed in `MJCoreEntitiesServer`, then hoisted into its own package once the `ai-vector-dupe → core-entities-server` cycle made it impossible for the detector to reuse the engine without duplicating the delta logic (Amith: "create a new package"). One engine, no cycle, no duplicate `MatchedSetDeltaBuilder`.
 5. ~~Which v2 UX direction~~ — **RESOLVED 2026-06-23: v2-A augment-in-place (extend existing `DuplicateDetectionResourceComponent`).**
 
 ---
