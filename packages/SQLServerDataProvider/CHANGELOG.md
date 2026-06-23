@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.42.0
+
+### Patch Changes
+
+- 5ada858: Fix value mis-routing in the save / record-change capture table (`@ResultTable`). The capture column list was built in EntityField **Sequence** order, but the positional `INSERT INTO @ResultTable EXEC` copies the base view's `SELECT [base].*, <joins>` output (base columns first, virtual/related fields last). For entities where CodeGen sequenced a base column **after** a virtual field (newly-added columns get a `maxSequence + 100000` offset), the two orders diverged and values landed in the wrong column — producing truncation or string→bit type-conversion errors on save. The capture list is now emitted base-columns-first then virtual fields, matching the view. This is a stable partition: byte-for-byte identical output for every entity whose virtual fields already sort last (the overwhelming majority), and a correction only for the affected entities.
+- Updated dependencies [9b9b484]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectordb@5.42.0
+  - @memberjunction/ai-vector-dupe@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/encryption@5.42.0
+  - @memberjunction/queue@5.42.0
+  - @memberjunction/query-processor@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ai-provider-bundle@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

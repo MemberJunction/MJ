@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-discord",
   "type": "module",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "MemberJunction: Discord Realtime Bridge driver. Connects the realtime agent engine to a Discord VOICE CHANNEL (per-user audio in/out for diarization, video/screen via Go Live, and text-channel chat) via an injectable Discord voice/bot-gateway seam, and contributes a Meeting Controls facilitator channel. Discord is voice-CHANNEL based (on-demand only, no scheduled/invite) and surfaces NO hand-raise.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/core-entities": "5.41.0",
-    "@memberjunction/ai-bridge-base": "5.41.0"
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/core-entities": "5.42.0",
+    "@memberjunction/ai-bridge-base": "5.42.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",
