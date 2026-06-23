@@ -22,7 +22,8 @@ import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDyna
 import { AngularConfigManager } from './angular-config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
+import type { MJEntityEntity, MJEntityFieldEntity } from '@memberjunction/core-entities';
 import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
@@ -1258,23 +1259,32 @@ async function ExecuteHook(command: string, cwd: string): Promise<void> {
 /**
  * Removes all MJ entity metadata associated with an app's schema.
  * Deletes in FK-dependency order to avoid constraint violations.
+ *
+ * Exported for unit testing of the atomic-transaction semantics (PG3).
  */
-async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<{ Success: boolean; ErrorMessage?: string }> {
+export async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks, provider?: IMetadataProvider): Promise<{ Success: boolean; ErrorMessage?: string }> {
   try {
     const rv = new RunView();
     const escaped = EscapeSqlString(schemaName);
+    // All metadata deletes are queued into ONE TransactionGroup and committed once. MJ
+    // metadata FKs are NO ACTION (not CASCADE), so dependents are queued in dependency order;
+    // the group commits them in that order inside a single DB transaction. On PostgreSQL each
+    // un-grouped delete would otherwise autocommit, so an FK violation partway (e.g. an
+    // un-handled dependent) left partially-committed orphan state with no rollback — now the
+    // whole cleanup is atomic and a failure rolls back cleanly (PG3).
+    const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+    const tg = await md.CreateTransactionGroup();
 
-    // Helper: delete by filter and throw on any failure so the outer catch reports it
-    // (MJ metadata FKs are NO ACTION, not CASCADE, so dependents must be removed in order).
-    const deleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
-      const r = await DeleteEntitiesByFilter(rv, contextUser, entityName, filter);
+    // Helper: queue all matching records of an entity for delete into the shared transaction.
+    const queueDeleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
+      const r = await QueueDeleteEntitiesByFilter(rv, contextUser, entityName, filter, tg);
       if (!r.Success) {
-        throw new Error(r.ErrorMessage ?? `Failed to delete ${entityName} records`);
+        throw new Error(r.ErrorMessage ?? `Failed to queue delete of ${entityName} records`);
       }
     };
 
     // First, find all entity IDs in this schema so we can clean FK-dependent records.
-    const entityResult = await rv.RunView<BaseEntity>(
+    const entityResult = await rv.RunView<MJEntityEntity>(
       {
         EntityName: 'MJ: Entities',
         ExtraFilter: `SchemaName = '${escaped}'`,
@@ -1287,18 +1297,21 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
     }
 
     if (entityResult.Results.length === 0) {
-      // No entities found — just clean up SchemaInfo
-      await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+      // No entities found — just clean up SchemaInfo (still atomic via the group).
+      await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+      if (!(await tg.Submit())) {
+        throw new Error('Transaction failed: schema-info cleanup could not be committed');
+      }
       callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
       return { Success: true };
     }
 
-    const entityIds = entityResult.Results.map((e) => String(e.Get('ID')));
+    const entityIds = entityResult.Results.map((e) => e.ID);
     const idList = entityIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
 
     // Entity Field Values (FK on EntityFieldID) must go before the Entity Fields they
     // reference — collect this schema's field IDs first.
-    const fieldResult = await rv.RunView<BaseEntity>(
+    const fieldResult = await rv.RunView<MJEntityFieldEntity>(
       {
         EntityName: 'MJ: Entity Fields',
         ExtraFilter: `EntityID IN (${idList})`,
@@ -1309,29 +1322,33 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
     if (!fieldResult.Success) {
       throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
     }
-    const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(String(f.Get('ID')))}'`).join(',');
+    const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(f.ID)}'`).join(',');
 
-    // Delete FK-dependent records in dependency order.
+    // Queue FK-dependent deletes in dependency order (children before parents).
     if (fieldIdList.length > 0) {
-      await deleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
+      await queueDeleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
     }
-    await deleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
-    await deleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
-    await deleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
     // Entity Relationships reference EntityID on both sides
-    await deleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
     // Entity Fields (FK on EntityID)
-    await deleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
 
-    // Delete Entities themselves
+    // Queue the Entities themselves.
     for (const entity of entityResult.Results) {
-      if (!(await entity.Delete())) {
-        throw new Error(`Failed to delete entity '${String(entity.Get('Name'))}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-      }
+      entity.TransactionGroup = tg;
+      await entity.Delete();
     }
 
-    // Delete SchemaInfo last
-    await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+    // Queue SchemaInfo last.
+    await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+
+    // Commit everything atomically — all-or-nothing (PG3).
+    if (!(await tg.Submit())) {
+      throw new Error('Transaction failed: entity metadata cleanup could not be committed atomically');
+    }
 
     callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
     return { Success: true };
@@ -1343,9 +1360,11 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
 }
 
 /**
- * Helper: loads entities by filter and deletes them one by one.
+ * Helper: loads entities by filter and queues them all for delete into the shared
+ * TransactionGroup (committed by the caller's Submit). Queuing — rather than committing each
+ * delete individually — is what makes the whole metadata cleanup atomic on PostgreSQL (PG3).
  */
-async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string): Promise<{ Success: boolean; ErrorMessage?: string }> {
+async function QueueDeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string, transactionGroup: TransactionGroupBase): Promise<{ Success: boolean; ErrorMessage?: string }> {
   const result = await rv.RunView<BaseEntity>(
     {
       EntityName: entityName,
@@ -1358,9 +1377,8 @@ async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entity
     return { Success: false, ErrorMessage: `Failed to query ${entityName}: ${result.ErrorMessage}` };
   }
   for (const record of result.Results) {
-    if (!(await record.Delete())) {
-      return { Success: false, ErrorMessage: `Failed to delete a ${entityName} record: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}` };
-    }
+    record.TransactionGroup = transactionGroup;
+    await record.Delete();
   }
   return { Success: true };
 }
