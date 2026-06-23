@@ -95,6 +95,70 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
   console.log('');
 }
 
+/** One entry of `dynamicPackages.server[]` in mj.config.cjs (written by `mj app install`). */
+interface DynamicServerPackage {
+  /** npm package name to import. */
+  PackageName?: string;
+  /** Optional named export to invoke after import (a startup hook). */
+  StartupExport?: string;
+  /** Whether this package should be loaded. Treated as enabled unless explicitly `false`. */
+  Enabled?: boolean;
+}
+
+/**
+ * Imports the server packages of installed Open Apps, declared in
+ * `mj.config.cjs` under `dynamicPackages.server[]` by `mj app install`.
+ *
+ * Importing each package triggers its `@RegisterClass` decorators; if an entry
+ * declares a `StartupExport`, that named export is invoked after import. This is
+ * called AFTER {@link discoverAndLoadGeneratedPackages} (and after the bootstrap
+ * manifests imported at module load), so an app's registrations land last and
+ * therefore win via the ClassFactory's load-order priority — letting an app
+ * override a base class.
+ *
+ * Mirrors the generated-package loader's robustness contract: no-op when the
+ * section is absent, per-package try/catch, tolerate `ERR_MODULE_NOT_FOUND`
+ * (e.g. before `npm install`), warn on anything else, and never crash boot.
+ *
+ * @param configResult - The loaded MemberJunction configuration
+ */
+async function loadDynamicAppPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
+  const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
+  const serverPackages = dynamicPackages?.server;
+  if (!serverPackages || serverPackages.length === 0) {
+    // No installed Open App server packages — the common case. Stay silent.
+    return;
+  }
+
+  console.log('Loading Open App server packages...');
+
+  for (const entry of serverPackages) {
+    const pkgName = entry?.PackageName;
+    if (!pkgName || entry.Enabled === false) {
+      continue;
+    }
+    try {
+      // Dynamic import to trigger side effects (class registration).
+      const mod = (await import(pkgName)) as Record<string, unknown>;
+      // Invoke the declared startup export, if any (e.g. a registration kicker).
+      const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
+      if (typeof startup === 'function') {
+        await Promise.resolve((startup as () => unknown)());
+      }
+      console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}`);
+    } catch (error: unknown) {
+      const errObj = error as { code?: string };
+      if (errObj.code === 'ERR_MODULE_NOT_FOUND') {
+        console.log(`  Open App server package not found (run 'npm install'?): ${pkgName}`);
+      } else {
+        console.warn(`  Error loading Open App server package ${pkgName}:`, error);
+      }
+    }
+  }
+
+  console.log('');
+}
+
 /**
  * Creates and starts a MemberJunction API server with minimal configuration.
  *
@@ -153,6 +217,12 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // Discover and load generated packages automatically
   // This triggers their @RegisterClass decorators to register entities, actions, etc.
   await discoverAndLoadGeneratedPackages(configResult);
+
+  // Load installed Open App server packages (dynamicPackages.server[] from `mj app
+  // install`). Done AFTER the generated packages so an app's @RegisterClass wins via
+  // ClassFactory load-order priority. Without this, `mj app install` writes the
+  // section but nothing consumes it — the app's server classes never load.
+  await loadDynamicAppPackages(configResult);
 
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths

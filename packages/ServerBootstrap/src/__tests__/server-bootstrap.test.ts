@@ -98,6 +98,42 @@ describe('ServerBootstrap', () => {
             await createMJServer({ configPath: '/custom/path' });
             expect(mockSearch).toHaveBeenCalledWith('/custom/path');
         });
+
+        it('tolerates a missing Open App server package and still boots (never crashes)', async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [
+                            { PackageName: '@nonexistent/openapp-server', StartupExport: 'load', Enabled: true },
+                        ],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+
+            // import() of a non-existent package throws ERR_MODULE_NOT_FOUND; the loader
+            // must swallow it so boot proceeds (serve still called).
+            await expect(createMJServer()).resolves.toBeUndefined();
+            expect(serve).toHaveBeenCalled();
+        });
+
+        it('skips disabled Open App server packages', async () => {
+            const mockSearch = vi.fn().mockReturnValue({
+                config: {
+                    dynamicPackages: {
+                        server: [{ PackageName: '@nonexistent/disabled-server', Enabled: false }],
+                    },
+                },
+                filepath: '/test/mj.config.cjs',
+                isEmpty: false,
+            });
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({ search: mockSearch });
+
+            await expect(createMJServer()).resolves.toBeUndefined();
+            expect(serve).toHaveBeenCalled();
+        });
     });
 
     describe('MJServerConfig interface', () => {
