@@ -12,6 +12,7 @@ import { loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import { parseVariableFlags } from '../utils/variable-parser';
 import { loadOraclesModule } from '../utils/oracle-module-loader';
+import { installInstrumentedCacheFirst } from '@memberjunction/testing-integration';
 
 /**
  * Suite command - Execute a test suite
@@ -28,6 +29,13 @@ export class SuiteCommand {
      */
     async execute(suiteId: string | undefined, flags: SuiteFlags, contextUser?: UserInfo): Promise<void> {
         try {
+            // Integration tests must install the instrumented cache as the FIRST caller
+            // (before any provider setup) or its counters are a silent no-op. Opt-in via
+            // MJ_INTEGRATION_TEST=1 so every other suite run is byte-for-byte unchanged.
+            if (process.env.MJ_INTEGRATION_TEST === '1') {
+                await installInstrumentedCacheFirst();
+            }
+
             // Initialize MJ provider (database connection and metadata)
             console.log('Initializing MJ provider...');
             await initializeMJProvider();

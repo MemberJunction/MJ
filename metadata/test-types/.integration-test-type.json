@@ -1,0 +1,8 @@
+{
+  "fields": {
+    "Name": "Integration Test",
+    "Description": "Headless, scripted integration checks (cache integrity, RLS, API keys, …) run in a dedicated process against a live DB/transport, dispatched by IntegrationTestDriver.",
+    "DriverClass": "IntegrationTestDriver",
+    "Status": "Active"
+  }
+}

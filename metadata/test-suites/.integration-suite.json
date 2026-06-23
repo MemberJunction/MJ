@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "Name": "Integration Test Suite",
+    "Description": "Headless integration checks graduated from packages/MJServer/integration-test-scripts. Phase 1 seeds the server-cache miss/hit pair (IT01); later phases add the full cache, RLS, and RunQuery coverage.",
+    "Status": "Active"
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=IT01 - Server Cache Miss/Hit Symmetry",
+          "Sequence": 1,
+          "Status": "Active"
+        }
+      }
+    ]
+  }
+}

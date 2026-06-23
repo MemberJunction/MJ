@@ -1,0 +1,19 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT01 - Server Cache Miss/Hit Symmetry",
+    "Description": "Reproduces server-cache-tests.ts S1 (cache MISS, narrow Fields, cache write) and S2 (subsequent HIT, identical shape, ExecutionTime 0, no rewrite) against a live SQLServerDataProvider via the IntegrationTestDriver.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "S1 writes RunViewCache and returns the requested fields + PK; S2 hits the same fingerprint with identical shape, ExecutionTime 0, and no rewrite."
+    },
+    "Configuration": {
+      "transport": "server",
+      "checks": [
+        { "type": "server-cache.S1" },
+        { "type": "server-cache.S2" }
+      ]
+    },
+    "Status": "Active"
+  }
+}

@@ -1,41 +1,37 @@
 {
-  "name": "@memberjunction/testing-cli",
+  "name": "@memberjunction/testing-integration",
   "type": "module",
   "version": "5.42.0",
-  "description": "MemberJunction Testing Framework CLI - Command-line interface for test execution and management",
+  "description": "MemberJunction Integration Test bootstrap library, IntegrationCheck registry, and IntegrationTestDriver. Installs an instrumented LocalCacheManager as the first caller and owns its process.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "/dist"
   ],
   "scripts": {
-    "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
-  "devDependencies": {
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.9.3",
-    "@types/debug": "^4.1.12"
-  },
   "dependencies": {
-    "@memberjunction/global": "5.42.0",
     "@memberjunction/core": "5.42.0",
     "@memberjunction/core-entities": "5.42.0",
+    "@memberjunction/global": "5.42.0",
     "@memberjunction/testing-engine": "5.42.0",
     "@memberjunction/testing-engine-base": "5.42.0",
-    "@memberjunction/testing-integration": "5.42.0",
     "@memberjunction/sqlserver-dataprovider": "5.42.0",
-    "@oclif/core": "^3.27.0",
-    "ora-classic": "^5.4.2",
-    "chalk": "^5.6.2",
-    "rxjs": "^7.8.2",
-    "debug": "^4.4.3",
+    "@memberjunction/graphql-dataprovider": "5.42.0",
+    "@memberjunction/server-bootstrap-lite": "5.42.0",
     "cosmiconfig": "9.0.0",
     "dotenv": "17.2.4",
     "mssql": "^12.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "repository": {
     "type": "git",
