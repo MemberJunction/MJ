@@ -171,7 +171,6 @@ report.json
 report.html
 packages/MJAPI/src/generated/class-registrations-manifest.ts
 packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
-packages/MJExplorer/src/app/generated/open-app-bootstrap.generated.ts
 .needs-manifest-rebuild
 
 # Test coverage output
