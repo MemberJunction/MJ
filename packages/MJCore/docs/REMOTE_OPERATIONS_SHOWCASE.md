@@ -175,6 +175,6 @@ framework, and shared by every operation.
 
 ## See also
 
-- **[Remote Operations Guide](REMOTE_OPERATIONS_GUIDE.md)** — the full reference (authoring modes, calling, auth,
-  long-running, the `RouteOperation` power tool).
-- `plans/record-set-processing-and-record-processes.md` §16–§17 — the design history (RO-0 … RO-4).
+- **[Remote Operations Guide](../../../guides/REMOTE_OPERATIONS_GUIDE.md)** — the full reference (authoring
+  modes, calling, auth, long-running, the `RouteOperation` power tool).
+- `plans/record-set-processing-and-record-processes.md` §16–§17 (repo root) — the design history (RO-0 … RO-4).
