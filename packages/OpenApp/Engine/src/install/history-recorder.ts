@@ -290,6 +290,49 @@ export async function FindInstalledApp(contextUser: UserInfo, appName: string, p
 }
 
 /**
+ * Returns true when another (non-removed) Open App shares the given schema.
+ *
+ * RemoveApp drops the schema and wipes schema-keyed entity metadata by SchemaName;
+ * without this guard, removing one app that ADOPTED a schema another app created
+ * (manifest `schema.createIfNotExists`) would destroy the co-tenant's data and
+ * metadata — see B14. On PostgreSQL the blast radius is larger (DROP SCHEMA CASCADE).
+ *
+ * Fail-safe: if the lookup itself fails, returns true (assume shared, do NOT drop) —
+ * the conservative choice never risks co-tenant data loss on an indeterminate query.
+ *
+ * @param contextUser - The context user for the query
+ * @param schemaName - The schema being considered for removal
+ * @param excludeAppId - The app being removed (excluded from the share check)
+ * @param provider - Optional metadata provider
+ */
+export async function IsSchemaSharedByOtherApps(
+  contextUser: UserInfo,
+  schemaName: string,
+  excludeAppId: string,
+  provider?: IMetadataProvider,
+): Promise<boolean> {
+  if (!schemaName) {
+    return false;
+  }
+  const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+  const result = await rv.RunView<InstalledAppInfo>(
+    {
+      EntityName: 'MJ: Open Apps',
+      ExtraFilter:
+        `SchemaName = '${EscapeSqlFilter(schemaName)}' ` +
+        `AND ID <> '${EscapeSqlFilter(excludeAppId)}' ` +
+        `AND Status NOT IN ('Removed', 'Removing')`,
+      ResultType: 'simple',
+    },
+    contextUser,
+  );
+  if (!result.Success) {
+    return true; // fail safe — never risk dropping a possibly-shared schema
+  }
+  return result.Results.length > 0;
+}
+
+/**
  * Lists all installed apps.
  *
  * @param contextUser - The context user for the query

@@ -30,6 +30,7 @@ import {
   DeleteAppDependencies,
   SetAppStatus,
   FindInstalledApp,
+  IsSchemaSharedByOtherApps,
   FindDependentApps,
   ListInstalledApps,
   UpdateAppRecord,
@@ -642,16 +643,25 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
     }
 
-    // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.)
+    // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.) — but ONLY when
+    // no other app shares this schema. Both the metadata wipe and the schema drop key
+    // off SchemaName, so a co-tenant app that adopted the same schema must protect it (B14).
+    const schemaShared = existingApp.SchemaName
+      ? await IsSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
+      : false;
+    if (schemaShared) {
+      Callbacks?.OnWarn?.('Schema', `Schema '${existingApp.SchemaName}' is still used by another installed Open App — skipping metadata + schema removal to protect co-tenant data.`);
+    }
+
     let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
-    if (existingApp.SchemaName) {
+    if (existingApp.SchemaName && !schemaShared) {
       Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
       metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
     }
 
     // Step 7: Drop schema (unless --keep-data)
     let schemaDropError: string | undefined;
-    if (!options.KeepData && existingApp.SchemaName) {
+    if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
       const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
         allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
