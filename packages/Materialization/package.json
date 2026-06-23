@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/materialization",
+  "type": "module",
+  "version": "5.42.0",
+  "description": "MemberJunction: runtime engine that refreshes materialized query/entity results — full rebuild into a shadow table with an atomic wrapper-view swap. Invoked by the scheduled-job refresh driver (and reusable by a manual 'refresh now' path).",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/core-entities": "5.42.0",
+    "@memberjunction/global": "5.42.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
