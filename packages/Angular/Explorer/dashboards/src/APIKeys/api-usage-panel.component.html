@@ -162,10 +162,8 @@
             </div>
           }
           @if (TopEndpoints.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-code-branch"></i>
-              <span>No endpoint data</span>
-            </div>
+            <mj-empty-state Size="compact" Icon="fa-solid fa-code-branch"
+              Title="No endpoint data" />
           }
         </div>
       </div>
@@ -193,10 +191,8 @@
             </div>
           }
           @if (TopKeys.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-key"></i>
-              <span>No key data</span>
-            </div>
+            <mj-empty-state Size="compact" Icon="fa-solid fa-key"
+              Title="No key data" />
           }
         </div>
       </div>
@@ -232,10 +228,8 @@
             </div>
           }
           @if (StatusGroups.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-circle-half-stroke"></i>
-              <span>No status data</span>
-            </div>
+            <mj-empty-state Size="compact" Icon="fa-solid fa-circle-half-stroke"
+              Title="No status data" />
           }
         </div>
       </div>
@@ -279,11 +273,9 @@
         </div>
       }
       @if (RecentLogs.length === 0) {
-        <div class="empty-state large">
-          <i class="fa-solid fa-inbox"></i>
-          <span>No requests logged yet</span>
-          <p>API usage will appear here once keys are used</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-inbox"
+          Title="No requests logged yet"
+          Message="API usage will appear here once keys are used" />
       }
     </div>
   }

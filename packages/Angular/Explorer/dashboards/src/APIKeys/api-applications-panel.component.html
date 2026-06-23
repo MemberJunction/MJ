@@ -111,11 +111,9 @@
       }
       <!-- Empty State -->
       @if (Applications.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-cube"></i>
-          <span>No applications configured</span>
-          <p>Create an application to define scope ceilings for API key access</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-cube"
+          Title="No applications configured"
+          Message="Create an application to define scope ceilings for API key access" />
       }
     </div>
   }
