@@ -346,6 +346,16 @@ export abstract class CodeGenDatabaseProvider {
         throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
     }
 
+    /**
+     * Engine-native column-type clause for the **synthetic surrogate primary key** added to
+     * query-materialized tables in v1 — a full-rebuild-compatible, auto-assigned single-column key
+     * (the deterministic combined-key-set hashing in §5 is Phase 3 and replaces this for incremental).
+     * Default throws — each engine overrides (SQL Server: `int IDENTITY(1,1)`).
+     */
+    getMaterializedSurrogateColumnType(): string {
+        throw new Error(`getMaterializedSurrogateColumnType is not implemented for platform '${this.PlatformKey}'`);
+    }
+
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
 
     /**

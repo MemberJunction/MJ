@@ -1,5 +1,6 @@
 import { SQLDialect } from '@memberjunction/sql-dialect';
-import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
+import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
+import { analyzeQueryForMaterialization } from './materializationAnalysis';
 // Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
 // under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
 // `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
@@ -1290,6 +1291,119 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Processes query materialization (CodeGen materialization phase, sub-step C — plan §4.2).
+    * Scans queries flagged `IsMaterialized = 1` and, for each that *qualifies* (unparameterized,
+    * has declared output fields — see analyzeQueryForMaterialization, §9/§10):
+    *   1. derives the materialized table's column shape + synthetic surrogate key,
+    *   2. emits the physical table (materialized_<Name>) + wrapper view (materialized_vw<Name>)
+    *      via the cross-engine DDL primitive,
+    *   3. mints a read-only Virtual Entity over the wrapper view (idempotent — reuses an existing
+    *      one), linked back to the source Query,
+    *   4. upserts the "MJ: Materialized Results" row (SourceType='Query') and sets the
+    *      Query.MaterializedResultID back-link.
+    * Runs BEFORE manageVirtualEntities so the minted entity's fields get synced from the wrapper
+    * view in the same run. Population is the refresh driver's job (later phase); Status='Building'.
+    * Parameterized queries are skipped with a log (deferred to Phase 2).
+    */
+   protected async processQueryMaterializations(pool: CodeGenConnection, currentUser: UserInfo): Promise<{ success: boolean; processedCount: number; mintedCount: number }> {
+      const coreSchema = mj_core_schema();
+      const flagged = await this.runQueryWithParams(
+         pool,
+         `SELECT ID, Name FROM ${this.qs(coreSchema, 'Query')} WHERE IsMaterialized = ${this.boolLit(true)}`,
+         {},
+      );
+      if (flagged.recordset.length === 0) return { success: true, processedCount: 0, mintedCount: 0 };
+
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const idLit = (id: string | null | undefined) => (id ? `'${id}'` : 'NULL');
+      const surrogateSQLType = this.dbProvider.getMaterializedSurrogateColumnType();
+      let processedCount = 0;
+      let mintedCount = 0;
+
+      for (const q of flagged.recordset) {
+         const queryId: string = q.ID;
+         const queryName: string = q.Name;
+
+         // Qualifying inputs: parameterized? declared output fields?
+         const paramCountRes = await this.runQueryWithParams(pool, `SELECT COUNT(*) AS n FROM ${this.qs(coreSchema, 'QueryParameter')} WHERE QueryID = @QID`, { QID: queryId });
+         const isParameterized = (paramCountRes.recordset[0]?.n ?? 0) > 0;
+         const fieldsRes = await this.runQueryWithParams(pool, `SELECT Name, SQLFullType, IsComputed FROM ${this.qs(coreSchema, 'QueryField')} WHERE QueryID = @QID ORDER BY Sequence`, { QID: queryId });
+         const fields = fieldsRes.recordset.map((r: CodeGenQueryRow) => ({ Name: r.Name as string, SQLFullType: r.SQLFullType as string, IsComputed: !!r.IsComputed }));
+
+         const analysis = analyzeQueryForMaterialization({ queryName, isParameterized, fields, surrogateSQLType });
+         if (!analysis.qualifies) {
+            logStatus(`    > Skipping materialization of query "${queryName}": ${analysis.reason}`);
+            continue;
+         }
+
+         // 2) Physical table + wrapper view (create-if-absent; reuse a migration-provided table — §12).
+         const codeName = CodeNameFromString(queryName);
+         const tableName = `materialized_${codeName}`;
+         const viewName = `materialized_vw${codeName}`;
+         const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.columns);
+         const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(coreSchema, viewName, tableName);
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true);
+
+         // 3) Mint the read-only Virtual Entity over the wrapper view (idempotent by view).
+         const existingVE = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(coreSchema, 'vwEntities')} WHERE BaseView = @V AND SchemaName = @S`, { V: viewName, S: coreSchema });
+         let generatedEntityId: string | undefined = existingVE.recordset[0]?.ID;
+         if (!generatedEntityId) {
+            try {
+               const createRes = await pool.executeStoredProcedure(`${this.qs(coreSchema, 'spCreateVirtualEntity')}`, {
+                  Name: queryName,
+                  BaseView: viewName,
+                  SchemaName: coreSchema,
+                  PrimaryKeyFieldName: analysis.surrogateColumnName,
+                  Description: `Materialized result of query "${queryName}".`,
+               });
+               generatedEntityId = createRes.recordset?.[0]?.[''] || createRes.recordset?.[0]?.ID || createRes.recordset?.[0]?.Column0;
+               if (generatedEntityId) {
+                  mintedCount++;
+                  await this.addEntityToApplicationForSchema(pool, generatedEntityId, queryName, coreSchema, currentUser);
+                  await this.addDefaultPermissionsForEntity(pool, generatedEntityId, queryName);
+                  logStatus(`    > Minted materialized entity "${queryName}" (ID: ${generatedEntityId}) over [${coreSchema}].[${viewName}]`);
+               }
+            } catch (err) {
+               logError(`    > Failed to mint materialized entity for query "${queryName}": ${err instanceof Error ? err.message : String(err)}`);
+               continue;
+            }
+         }
+
+         // 4) Upsert the MJ: Materialized Results row (keyed on SourceType='Query' + SourceQueryID) + back-link.
+         const existing = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE SourceType = @T AND SourceQueryID = @QID`, { T: 'Query', QID: queryId });
+         let matResultId: string;
+         if (existing.recordset.length > 0) {
+            matResultId = existing.recordset[0].ID;
+            const sqlUpd = `UPDATE ${this.qs(coreSchema, 'MaterializedResult')}
+                              SET GeneratedEntityID=${idLit(generatedEntityId)}, SchemaName='${esc(coreSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}'
+                            WHERE ID='${matResultId}'`;
+            await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for query "${queryName}"`);
+         } else {
+            matResultId = this.createNewUUID();
+            const c = (n: string) => this.qi(n);
+            const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
+                                 ${c('ID')}, ${c('SourceType')}, ${c('SourceQueryID')}, ${c('GeneratedEntityID')}, ${c('SchemaName')}, ${c('TableName')}, ${c('ViewName')},
+                                 ${c('ParamMode')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
+                            VALUES ( '${matResultId}', 'Query', '${queryId}', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
+                                 'None', 'FullRebuild', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
+            await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
+         }
+         await this.LogSQLAndExecute(pool, `UPDATE ${this.qs(coreSchema, 'Query')} SET MaterializedResultID='${matResultId}' WHERE ID='${queryId}'`, `Set Query.MaterializedResultID back-link for "${queryName}"`);
+
+         processedCount++;
+      }
+
+      // Refresh so manageVirtualEntities (next step) syncs fields for the newly-minted entities.
+      if (mintedCount > 0) {
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+         await md.Refresh();
+      }
+
+      return { success: true, processedCount, mintedCount };
+   }
+
+   /**
     * Derives an entity name from a view name by removing common prefixes (vw, v_)
     * and converting to a human-friendly format.
     */
@@ -1432,6 +1546,14 @@ export class ManageMetadataBase {
          // in the cache — otherwise EntityByName() returns null and field sync is silently skipped
          const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
          await md.Refresh();
+      }
+
+      // Config-driven query materialization — mint read-only Virtual Entities over materialized
+      // query results. Runs BEFORE manageVirtualEntities so the minted entities' fields get synced
+      // from their wrapper views in this same run (plan §4.2). Internally refreshes metadata when it mints.
+      const queryMatResult = await this.processQueryMaterializations(pool, currentUser);
+      if (queryMatResult.processedCount > 0) {
+         logStatus(`    > Query materialization: processed ${queryMatResult.processedCount} quer${queryMatResult.processedCount === 1 ? 'y' : 'ies'} (${queryMatResult.mintedCount} new entit${queryMatResult.mintedCount === 1 ? 'y' : 'ies'})`);
       }
 
       const veResult = await this.manageVirtualEntities(pool)

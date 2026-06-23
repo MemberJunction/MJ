@@ -141,6 +141,11 @@ AS
 SELECT * FROM [${schema}].[${tableName}];`;
     }
 
+    /** SQL Server synthetic surrogate key: an auto-incrementing IDENTITY column. */
+    getMaterializedSurrogateColumnType(): string {
+        return 'int IDENTITY(1,1)';
+    }
+
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
 
     /**
