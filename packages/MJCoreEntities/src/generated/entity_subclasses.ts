@@ -23625,7 +23625,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)`),
     InputTypeIsArray: z.boolean().describe(`
         * * Field Name: InputTypeIsArray
-        * * Display Name: Is Input Array
+        * * Display Name: Input Is Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the input type is emitted as an array (TInput[])`),
@@ -23641,7 +23641,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the output shape`),
     OutputTypeIsArray: z.boolean().describe(`
         * * Field Name: OutputTypeIsArray
-        * * Display Name: Is Output Array
+        * * Display Name: Output Is Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the output type is emitted as an array (TOutput[])`),
@@ -23679,12 +23679,12 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Implementation Code
+        * * Display Name: Code
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes`),
     CodeApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
         * * Field Name: CodeApprovalStatus
-        * * Display Name: Approval Status
+        * * Display Name: Code Approval Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
@@ -23695,13 +23695,13 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.`),
     CodeApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUserID
-        * * Display Name: Approved By User ID
+        * * Display Name: Code Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Foreign key to the user who approved the generated code`),
     CodeApprovedAt: z.date().nullable().describe(`
         * * Field Name: CodeApprovedAt
-        * * Display Name: Approved At
+        * * Display Name: Code Approved At
         * * SQL Data Type: datetimeoffset
         * * Description: When the generated code was approved`),
     ContractFingerprint: z.string().nullable().describe(`
@@ -23745,13 +23745,30 @@ export const MJRemoteOperationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CodeLocked: z.boolean().describe(`
+        * * Field Name: CodeLocked
+        * * Display Name: Code Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`),
+    CodeComments: z.string().nullable().describe(`
+        * * Field Name: CodeComments
+        * * Display Name: Code Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`),
+    Libraries: z.any().nullable().describe(`
+        * * Field Name: Libraries
+        * * Display Name: Libraries
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+        * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     CodeApprovedByUser: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUser
-        * * Display Name: Approved By User
+        * * Display Name: Code Approved By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -91581,6 +91598,20 @@ export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperatio
 
 
 /**
+ * One library that an AI-authored Remote Operation body imports. CodeGen turns the `LibrariesObject` array
+ * (the strongly-typed accessor bound to `MJ: Remote Operations.Libraries` via JSONType metadata) into one
+ * `import { ...ItemsUsed } from "Library"` per entry at the top of the generated `remote_operations.ts`.
+ * The always-available default libraries (RunView / Metadata / RunQuery from @memberjunction/core) are NOT
+ * listed here — they are emitted for every operation automatically.
+ */
+export interface MJRemoteOperationEntity_RemoteOperationLibrary {
+    /** The npm package to import from, e.g. "@memberjunction/ai-prompts". */
+    Library: string;
+    /** The exported items used from that package, e.g. ["AIPromptRunner"]. */
+    ItemsUsed: string[];
+}
+
+/**
  * MJ: Remote Operations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RemoteOperation
@@ -91704,7 +91735,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: InputTypeIsArray
-    * * Display Name: Is Input Array
+    * * Display Name: Input Is Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the input type is emitted as an array (TInput[])
@@ -91744,7 +91775,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: OutputTypeIsArray
-    * * Display Name: Is Output Array
+    * * Display Name: Output Is Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the output type is emitted as an array (TOutput[])
@@ -91822,7 +91853,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: Code
-    * * Display Name: Implementation Code
+    * * Display Name: Code
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes
     */
@@ -91835,7 +91866,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovalStatus
-    * * Display Name: Approval Status
+    * * Display Name: Code Approval Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
     * * Value List Type: List
@@ -91854,7 +91885,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUserID
-    * * Display Name: Approved By User ID
+    * * Display Name: Code Approved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Foreign key to the user who approved the generated code
@@ -91868,7 +91899,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedAt
-    * * Display Name: Approved At
+    * * Display Name: Code Approved At
     * * SQL Data Type: datetimeoffset
     * * Description: When the generated code was approved
     */
@@ -91971,6 +92002,68 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
     }
 
     /**
+    * * Field Name: CodeLocked
+    * * Display Name: Code Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.
+    */
+    get CodeLocked(): boolean {
+        return this.Get('CodeLocked');
+    }
+    set CodeLocked(value: boolean) {
+        this.Set('CodeLocked', value);
+    }
+
+    /**
+    * * Field Name: CodeComments
+    * * Display Name: Code Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.
+    */
+    get CodeComments(): string | null {
+        return this.Get('CodeComments');
+    }
+    set CodeComments(value: string | null) {
+        this.Set('CodeComments', value);
+    }
+
+    /**
+    * * Field Name: Libraries
+    * * Display Name: Libraries
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+    * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.
+    */
+    get Libraries(): string | null {
+        return this.Get('Libraries');
+    }
+    set Libraries(value: string | null) {
+        this.Set('Libraries', value);
+    }
+
+    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
+    private _LibrariesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
+        const raw = this.Libraries;
+        if (raw !== this._LibrariesObject_lastRaw) {
+            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
+            this._LibrariesObject_lastRaw = raw;
+        }
+        return this._LibrariesObject_cached!;
+    }
+    set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Libraries = raw;
+        this._LibrariesObject_cached = value;
+        this._LibrariesObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
@@ -91981,7 +92074,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUser
-    * * Display Name: Approved By User
+    * * Display Name: Code Approved By User
     * * SQL Data Type: nvarchar(100)
     */
     get CodeApprovedByUser(): string | null {

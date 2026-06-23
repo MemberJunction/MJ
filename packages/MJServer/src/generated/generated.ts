@@ -68689,6 +68689,15 @@ export class MJRemoteOperation_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`}) 
+    CodeLocked: boolean;
+        
+    @Field({nullable: true, description: `The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`}) 
+    CodeComments?: string;
+        
+    @Field({nullable: true, description: `JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`}) 
+    Libraries?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -68776,6 +68785,15 @@ export class CreateMJRemoteOperationInput {
     @Field(() => Int, { nullable: true })
     MaxConcurrency: number | null;
 
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments: string | null;
+
+    @Field({ nullable: true })
+    Libraries: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -68857,6 +68875,15 @@ export class UpdateMJRemoteOperationInput {
 
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments?: string | null;
+
+    @Field({ nullable: true })
+    Libraries?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
