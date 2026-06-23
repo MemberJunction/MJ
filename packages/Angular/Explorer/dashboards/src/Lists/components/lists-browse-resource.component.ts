@@ -93,13 +93,13 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
 
       <!-- Empty State - No Lists -->
       @if (!isLoading && allLists.length === 0) {
-        <div class="empty-state">
-          <div class="empty-state-icon-wrapper">
-            <div class="icon-bg"></div>
-            <i class="fa-solid fa-list-check"></i>
-          </div>
-          <h3>No Lists Yet</h3>
-          <p>Lists help you organize and track groups of records across your data.</p>
+        <mj-empty-state Size="large"
+          Icon="fa-solid fa-list-check"
+          Title="No Lists Yet"
+          Message="Lists help you organize and track groups of records across your data."
+          ActionText="Create Your First List"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="createNewList()">
           <div class="empty-state-features">
             <div class="feature-item">
               <i class="fa-solid fa-check-circle"></i>
@@ -114,24 +114,18 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
               <span>Quick access from any view</span>
             </div>
           </div>
-          <button class="btn-create-large" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            Create Your First List
-          </button>
-        </div>
+        </mj-empty-state>
       }
-    
+
       <!-- Empty State - No Results -->
       @if (!isLoading && allLists.length > 0 && filteredLists.length === 0) {
-        <div class="empty-state search-empty">
-          <div class="empty-state-icon-wrapper search">
-            <i class="fa-solid fa-filter-circle-xmark"></i>
-          </div>
-          <h3>No Results Found</h3>
-          <p>No lists match your current filters.</p>
-          <p class="empty-hint">Try adjusting your search or filters.</p>
-          <button class="btn-clear" (click)="clearFilters()">Clear All Filters</button>
-        </div>
+        <mj-empty-state Variant="no-results"
+          Icon="fa-solid fa-filter-circle-xmark"
+          Title="No Results Found"
+          Message="No lists match your current filters. Try adjusting your search or filters."
+          ActionText="Clear All Filters"
+          ActionIcon="fa-solid fa-filter-circle-xmark"
+          (Action)="clearFilters()" />
       }
     
       <!-- Results Content -->
@@ -812,75 +806,12 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       flex: 1;
     }
 
-    /* Empty State */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      padding: 48px 40px;
-      text-align: center;
-      max-width: 480px;
-      margin: 0 auto;
-    }
-
-    .empty-state-icon-wrapper {
-      position: relative;
-      margin-bottom: 24px;
-    }
-
-    .empty-state-icon-wrapper .icon-bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    }
-
-    .empty-state-icon-wrapper > i {
-      position: relative;
-      font-size: 56px;
-      color: var(--mj-brand-primary);
-      z-index: 1;
-    }
-
-    .empty-state-icon-wrapper.search > i {
-      font-size: 48px;
-      color: var(--mj-text-disabled);
-    }
-
-    .empty-state h3 {
-      margin: 0 0 12px;
-      font-size: 22px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .empty-state p {
-      margin: 0 0 8px;
-      color: var(--mj-text-secondary);
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
-    .empty-state p:last-of-type {
-      margin-bottom: 24px;
-    }
-
-    .empty-hint {
-      color: var(--mj-text-muted) !important;
-      font-size: 13px !important;
-    }
-
+    /* Onboarding feature checklist — projected into <mj-empty-state>. */
     .empty-state-features {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 28px;
+      gap: var(--mj-space-2);
+      margin: var(--mj-space-5) 0 var(--mj-space-2);
       text-align: left;
     }
 
@@ -895,42 +826,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
     .feature-item i {
       font-size: 14px !important;
       color: var(--mj-status-success) !important;
-    }
-
-    .btn-create-large {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-    }
-
-    .btn-create-large:hover {
-      background: var(--mj-brand-primary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-    }
-
-    .btn-clear {
-      padding: 10px 20px;
-      background: var(--mj-bg-surface-sunken);
-      border: none;
-      border-radius: 6px;
-      color: var(--mj-text-secondary);
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-clear:hover {
-      background: var(--mj-border-default);
     }
 
     /* Content */
