@@ -76,6 +76,9 @@ interface ComparisonFieldRow {
     SelectedColumnIndex: number;
 }
 
+/** LLM reasoning recommendation surfaced alongside a match (null when reasoning never ran) */
+type LLMRecommendation = 'Merge' | 'NotDuplicate' | 'Uncertain';
+
 /** Parsed match info for the comparison panel columns */
 interface ComparisonMatchInfo {
     Match: MJDuplicateRunDetailMatchEntity;
@@ -83,6 +86,14 @@ interface ComparisonMatchInfo {
     Score: number;
     Metadata: RecordMetadataInfo;
     DiffCount: number;
+    /** LLM recommendation for this match (null if reasoning did not run) */
+    LLMRecommendation: LLMRecommendation | null;
+    /** LLM confidence 0-1 (distinct from the vector Score / MatchProbability) */
+    LLMConfidence: number | null;
+    /** LLM free-text rationale (may be long; shown in an expandable region) */
+    LLMReasoning: string | null;
+    /** True when the LLM verdict contradicts the vector score — the prime human-review trigger */
+    HasDisagreement: boolean;
 }
 
 /** Lightweight entity document info for the picker dropdown */
@@ -141,6 +152,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public ComparisonClosing = false;
     /** Loaded entity records keyed by record ID (populated on panel open via RunView) */
     private comparisonRecords = new Map<string, Record<string, unknown>>();
+    /** Match column indices whose LLM reasoning text is currently expanded */
+    public LLMReasoningExpandedColumns = new Set<number>();
+    /** True once the LLM proposed survivor/field-map has been applied to the selection state */
+    public LLMProposalsApplied = false;
 
     // ── Dependencies State ──
     /** Dependencies per record, keyed by composite key string */
@@ -997,6 +1012,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.DepsExpandedColumns.clear();
         this.depsEntityGroupExpanded.clear();
         this.ShowMergeConfirm = false;
+        this.LLMReasoningExpandedColumns.clear();
+        this.LLMProposalsApplied = false;
         this.cdr.detectChanges();
 
         // Load actual entity records and dependencies in parallel
@@ -1005,6 +1022,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.loadComparisonDependencies(group)
         ]);
         this.buildComparisonData();
+        // Preload the LLM-proposed survivor + per-field choices into the existing selection state
+        this.applyLLMProposals();
         this.ComparisonLoading = false;
         this.cdr.detectChanges();
     }
@@ -1022,6 +1041,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.ComparisonDependencies.clear();
             this.DepsExpandedColumns.clear();
         this.depsEntityGroupExpanded.clear();
+            this.LLMReasoningExpandedColumns.clear();
+            this.LLMProposalsApplied = false;
             this.cdr.detectChanges();
         }, 250);
     }
@@ -1269,6 +1290,153 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (columnIndex === 0) return this.ComparisonGroup.RecordName;
         const match = this.ComparisonMatches[columnIndex - 1];
         return match?.Name ?? 'Unknown';
+    }
+
+    // ════════════════════════════════════════════
+    // LLM Reasoning Display (additive — vector-only path unaffected when no LLM data)
+    // ════════════════════════════════════════════
+
+    /**
+     * Decide whether the LLM verdict contradicts the vector score for a match.
+     * The classic disagreement is a strong vector match the LLM flags as NotDuplicate,
+     * or a weak vector pair the LLM nonetheless wants to Merge. Returns false when
+     * reasoning never ran (recommendation null) so existing groups never light up.
+     */
+    private computeDisagreement(recommendation: LLMRecommendation | null, vectorScore: number): boolean {
+        if (recommendation == null) return false;
+        if (recommendation === 'NotDuplicate' && vectorScore >= 0.7) return true;
+        if (recommendation === 'Merge' && vectorScore < 0.7) return true;
+        return false;
+    }
+
+    /** True when ANY match in the current comparison carries LLM reasoning data */
+    public get HasAnyLLMData(): boolean {
+        return this.ComparisonMatches.some(m => m.LLMRecommendation != null);
+    }
+
+    /** CSS class for an LLM recommendation badge */
+    public GetLLMRecommendationClass(recommendation: LLMRecommendation | null): string {
+        switch (recommendation) {
+            case 'Merge': return 'llm-rec-merge';
+            case 'NotDuplicate': return 'llm-rec-notduplicate';
+            case 'Uncertain': return 'llm-rec-uncertain';
+            default: return '';
+        }
+    }
+
+    /** Font Awesome icon class for an LLM recommendation */
+    public GetLLMRecommendationIcon(recommendation: LLMRecommendation | null): string {
+        switch (recommendation) {
+            case 'Merge': return 'fa-code-merge';
+            case 'NotDuplicate': return 'fa-not-equal';
+            case 'Uncertain': return 'fa-circle-question';
+            default: return 'fa-robot';
+        }
+    }
+
+    /** Human-readable label for an LLM recommendation */
+    public GetLLMRecommendationLabel(recommendation: LLMRecommendation | null): string {
+        switch (recommendation) {
+            case 'Merge': return 'AI: Merge';
+            case 'NotDuplicate': return 'AI: Not a duplicate';
+            case 'Uncertain': return 'AI: Uncertain';
+            default: return '';
+        }
+    }
+
+    /** Toggle the expanded state of a match column's LLM reasoning text */
+    public ToggleLLMReasoning(columnIndex: number): void {
+        if (this.LLMReasoningExpandedColumns.has(columnIndex)) {
+            this.LLMReasoningExpandedColumns.delete(columnIndex);
+        } else {
+            this.LLMReasoningExpandedColumns.add(columnIndex);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Whether a match column's LLM reasoning is currently expanded */
+    public IsLLMReasoningExpanded(columnIndex: number): boolean {
+        return this.LLMReasoningExpandedColumns.has(columnIndex);
+    }
+
+    // ════════════════════════════════════════════
+    // LLM Proposal Preload (proposed survivor + per-field choices)
+    // ════════════════════════════════════════════
+
+    /**
+     * Preload the LLM-proposed survivor record and per-field choices into the
+     * existing selection state. Fully additive: no-op when no match carries a
+     * proposal, so the user's manual selection is the default in vector-only runs.
+     */
+    private applyLLMProposals(): void {
+        if (!this.ComparisonGroup) return;
+        const proposingMatch = this.ComparisonGroup.Matches.find(m => m.LLMProposedSurvivorRecordID);
+        if (!proposingMatch) return;
+
+        // 1. Resolve the proposed survivor record ID to a column index and set it.
+        const survivorColumn = this.resolveColumnForRecordId(proposingMatch.LLMProposedSurvivorRecordID);
+        if (survivorColumn != null) {
+            this.SetSurvivor(survivorColumn);
+        }
+
+        // 2. Overlay per-field choices from the proposed field map (overrides the survivor default per field).
+        this.applyProposedFieldMap(proposingMatch.LLMProposedFieldMap);
+
+        this.LLMProposalsApplied = true;
+    }
+
+    /** Parse the proposed field map JSON and set each field's SelectedColumnIndex to the proposed source column */
+    private applyProposedFieldMap(fieldMapJson: string | null): void {
+        const choices = this.parseProposedFieldMap(fieldMapJson);
+        for (const choice of choices) {
+            const column = this.resolveColumnForRecordId(choice.SourceRecordID);
+            if (column == null) continue;
+            const row = this.ComparisonFields.find(f => f.FieldName === choice.FieldName);
+            if (row) {
+                row.SelectedColumnIndex = column;
+            }
+        }
+    }
+
+    /** Parse LLMProposedFieldMap into typed {FieldName, SourceRecordID} entries (lenient about null/garbage) */
+    private parseProposedFieldMap(json: string | null): Array<{ FieldName: string; SourceRecordID: string }> {
+        if (!json) return [];
+        try {
+            const parsed: unknown = JSON.parse(json);
+            if (!Array.isArray(parsed)) return [];
+            const result: Array<{ FieldName: string; SourceRecordID: string }> = [];
+            for (const entry of parsed) {
+                if (entry && typeof entry === 'object') {
+                    const rec = entry as Record<string, unknown>;
+                    const fieldName = rec['FieldName'];
+                    const sourceRecordId = rec['SourceRecordID'];
+                    if (typeof fieldName === 'string' && typeof sourceRecordId === 'string') {
+                        result.push({ FieldName: fieldName, SourceRecordID: sourceRecordId });
+                    }
+                }
+            }
+            return result;
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Map a record ID (URL-segment composite key, may equal the source) to a column index.
+     * Column 0 is the source; columns 1..N are matches. Uses case-insensitive comparison
+     * because UUIDs differ in case across SQL Server (upper) and PostgreSQL (lower).
+     */
+    private resolveColumnForRecordId(recordId: string | null): number | null {
+        if (!recordId) return null;
+        const target = recordId.toLowerCase();
+        const totalColumns = 1 + this.ComparisonMatches.length;
+        for (let i = 0; i < totalColumns; i++) {
+            const keyStr = this.getCompositeKeyStringForColumn(i);
+            if (keyStr && keyStr.toLowerCase() === target) {
+                return i;
+            }
+        }
+        return null;
     }
 
     // ════════════════════════════════════════════
@@ -1563,6 +1731,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     Score: m.MatchProbability,
                     Metadata: meta,
                     DiffCount: 0,
+                    LLMRecommendation: m.LLMRecommendation,
+                    LLMConfidence: m.LLMConfidence,
+                    LLMReasoning: m.LLMReasoning,
+                    HasDisagreement: this.computeDisagreement(m.LLMRecommendation, m.MatchProbability),
                 };
             });
 

@@ -522,10 +522,43 @@
                              [class.match-rejected]="match.Match.ApprovalStatus === 'Rejected'">
                             <div class="col-header-top">
                                 <span class="col-header-name">{{ match.Name }}</span>
-                                <span class="score-indicator" [class]="GetScoreClass(match.Score)">
+                                <span class="score-indicator" [class]="GetScoreClass(match.Score)"
+                                      title="Vector similarity score">
                                     {{ (match.Score * 100).toFixed(0) }}%
                                 </span>
                             </div>
+                            <!-- LLM reasoning (additive — only renders when reasoning ran for this match) -->
+                            @if (match.LLMRecommendation) {
+                                <div class="llm-reasoning-block">
+                                    <div class="llm-badge-row">
+                                        <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(match.LLMRecommendation)">
+                                            <i class="fa-solid" [class]="GetLLMRecommendationIcon(match.LLMRecommendation)"></i>
+                                            {{ GetLLMRecommendationLabel(match.LLMRecommendation) }}
+                                        </span>
+                                        @if (match.LLMConfidence != null) {
+                                            <span class="llm-confidence-badge"
+                                                  title="AI confidence in its recommendation (distinct from vector score)">
+                                                {{ (match.LLMConfidence * 100).toFixed(0) }}% conf.
+                                            </span>
+                                        }
+                                    </div>
+                                    @if (match.HasDisagreement) {
+                                        <div class="llm-disagreement-pill" title="The AI verdict conflicts with the vector score — review recommended">
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                            AI disagrees with vector score
+                                        </div>
+                                    }
+                                    @if (match.LLMReasoning) {
+                                        <div class="llm-reasoning-toggle" (click)="ToggleLLMReasoning(mi + 1)">
+                                            <span>{{ IsLLMReasoningExpanded(mi + 1) ? 'Hide reasoning' : 'Why?' }}</span>
+                                            <i class="fa-solid" [class.fa-chevron-down]="!IsLLMReasoningExpanded(mi + 1)" [class.fa-chevron-up]="IsLLMReasoningExpanded(mi + 1)"></i>
+                                        </div>
+                                        @if (IsLLMReasoningExpanded(mi + 1)) {
+                                            <div class="llm-reasoning-text">{{ match.LLMReasoning }}</div>
+                                        }
+                                    }
+                                </div>
+                            }
                             <span class="col-header-diff-count">{{ match.DiffCount }} difference{{ match.DiffCount !== 1 ? 's' : '' }}</span>
                             <div class="surviving-selector">
                                 <input type="radio" name="survivor" class="surviving-radio"

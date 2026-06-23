@@ -888,6 +888,104 @@ app-duplicate-detection-resource {
     color: var(--mj-status-warning-text);
 }
 
+/* ── LLM reasoning display (additive — degrades gracefully when no LLM data) ── */
+.llm-reasoning-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.llm-badge-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.llm-rec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.llm-rec-merge {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border-color: var(--mj-status-success-border);
+}
+
+.llm-rec-notduplicate {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border-color: var(--mj-status-error-border);
+}
+
+.llm-rec-uncertain {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+    border-color: var(--mj-status-info-border);
+}
+
+.llm-confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+    border: 1px solid var(--mj-border-default);
+}
+
+.llm-disagreement-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+}
+
+.llm-reasoning-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: flex-start;
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: var(--mj-text-link);
+    cursor: pointer;
+    user-select: none;
+}
+
+.llm-reasoning-toggle:hover {
+    text-decoration: underline;
+}
+
+.llm-reasoning-text {
+    font-size: 0.66rem;
+    line-height: 1.4;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 6px;
+    padding: 6px 8px;
+    white-space: pre-wrap;
+    max-height: 180px;
+    overflow-y: auto;
+}
+
 /* Surviving record selector */
 .surviving-selector {
     display: flex;

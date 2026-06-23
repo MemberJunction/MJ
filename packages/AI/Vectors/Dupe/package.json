@@ -19,6 +19,8 @@
   "dependencies": {
     "@memberjunction/ai": "5.42.0",
     "@memberjunction/ai-vectordb": "5.42.0",
+    "@memberjunction/ai-core-plus": "5.42.0",
+    "@memberjunction/ai-prompts": "5.42.0",
     "@memberjunction/ai-vectors": "5.42.0",
     "@memberjunction/templates": "5.42.0",
     "@memberjunction/ai-vector-sync": "5.42.0",

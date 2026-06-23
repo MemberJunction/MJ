@@ -20,8 +20,22 @@
           "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
           "Priority": 1
+        },
+        "primaryKey": {
+          "ID": "53BF760D-E02A-4913-BF30-0384F5E3256D"
+        },
+        "sync": {
+          "lastModified": "2026-06-23T17:05:12.931Z",
+          "checksum": "ff404cea945d0ebb4e4d5b42db801ffc464d7f9e116dfa01c890abc2b27643ee"
         }
       }
     ]
+  },
+  "primaryKey": {
+    "ID": "E3D1A85A-9E15-4F9A-93F8-D8BAA8032C9D"
+  },
+  "sync": {
+    "lastModified": "2026-06-23T17:05:12.897Z",
+    "checksum": "c822b1889da526b843eae3a21db08c56a29b691c2035f6bb14cee2b1d2805396"
   }
 }

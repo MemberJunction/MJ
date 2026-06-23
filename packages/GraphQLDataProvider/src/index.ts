@@ -42,6 +42,17 @@ export type {
     RealtimeModelVoices,
     RealtimeVoiceOption
 } from './graphQLLiveKitClient';
+export { GraphQLRecordComparisonClient } from './graphQLRecordComparisonClient';
+export type {
+    GetRecordComparisonInput,
+    GetRecordComparisonResult,
+    RecordComparisonKey,
+    RecordComparisonKeyValuePair,
+    RecordComparisonRecord,
+    RecordComparisonFieldDelta,
+    RecordComparisonFieldCell,
+    RecordComparisonFieldValue
+} from './graphQLRecordComparisonClient';
 export { GraphQLClassifyClient } from './graphQLClassifyClient';
 export type {
     GenerateSeedTaxonomyInput,

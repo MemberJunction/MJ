@@ -183,6 +183,21 @@ export class PotentialDuplicateResult {
     RecordCompositeKey: CompositeKey;
     Duplicates: PotentialDuplicate[];
     DuplicateRunDetailMatchRecordIDs: string[];
+
+    /**
+     * Optional LLM recommendation for this source record's matched set, populated only
+     * when the entity has LLM reasoning enabled and the set cleared the reasoning gate.
+     * Consulted by the auto-merge step (e.g. AutoMergeAboveAbsolute additionally requires
+     * 'Merge'). Undefined means reasoning did not run for this set — the vector-only path
+     * applies, byte-for-byte unchanged.
+     */
+    ReasoningRecommendation?: 'Merge' | 'NotDuplicate' | 'Uncertain';
+    /**
+     * Optional resolved per-field survivor overrides (literal {FieldName, Value} entries)
+     * the LLM proposed for this set, ready to pass straight to Metadata.MergeRecords()'s
+     * FieldMap. Populated alongside {@link ReasoningRecommendation}.
+     */
+    ReasoningFieldMap?: { FieldName: string; Value: unknown }[];
 }
 
 /**
