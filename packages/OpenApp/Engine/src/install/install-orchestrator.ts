@@ -607,8 +607,55 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
     }
 
-    // Steps 3-6: Remove config, client bootstrap, angular.json excludes, and package refs
-    // (parallel where they write to different files)
+    // Step 3: Database cleanup FIRST — metadata + schema (the hard-to-undo, failure-prone
+    // part). Doing it BEFORE any filesystem mutation means a DB failure aborts with the
+    // config / package.json / client bootstrap still intact, instead of leaving a
+    // half-removed app whose files are stripped but whose schema/metadata remain (B20).
+    // Skipped entirely when another app shares the schema (B14).
+    const schemaShared = existingApp.SchemaName
+      ? await IsSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
+      : false;
+    if (schemaShared) {
+      Callbacks?.OnWarn?.('Schema', `Schema '${existingApp.SchemaName}' is still used by another installed Open App — skipping metadata + schema removal to protect co-tenant data.`);
+    }
+
+    let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
+    if (existingApp.SchemaName && !schemaShared) {
+      Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
+      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
+    }
+
+    let schemaDropError: string | undefined;
+    if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
+      Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
+      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+      });
+      if (!dropResult.Success) {
+        schemaDropError = dropResult.ErrorMessage;
+        Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+      }
+    }
+
+    // Abort BEFORE touching the filesystem if DB cleanup failed — the app stays installed
+    // (status Error) with its files intact, so it can be retried/removed again cleanly.
+    const removalErrors = [metadataResult.Success ? undefined : metadataResult.ErrorMessage, schemaDropError]
+      .filter((e): e is string => !!e);
+    if (removalErrors.length > 0) {
+      const combined = removalErrors.join('; ');
+      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
+        Success: false,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: `Remove failed: ${combined}`,
+      });
+      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+      return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
+    }
+
+    // Steps 4-7: Remove config, client bootstrap, angular.json excludes, and package refs
+    // (parallel where they write to different files) — only AFTER DB cleanup succeeded.
     Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
 
     // Collect other installed apps' manifests so we don't remove shared prebundle excludes
@@ -641,52 +688,6 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     const installResult = RunPackageInstall(context.RepoRoot, options.Verbose, undefined, context.PackageManager);
     if (!installResult.Success) {
       Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
-    }
-
-    // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.) — but ONLY when
-    // no other app shares this schema. Both the metadata wipe and the schema drop key
-    // off SchemaName, so a co-tenant app that adopted the same schema must protect it (B14).
-    const schemaShared = existingApp.SchemaName
-      ? await IsSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
-      : false;
-    if (schemaShared) {
-      Callbacks?.OnWarn?.('Schema', `Schema '${existingApp.SchemaName}' is still used by another installed Open App — skipping metadata + schema removal to protect co-tenant data.`);
-    }
-
-    let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
-    if (existingApp.SchemaName && !schemaShared) {
-      Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
-      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
-    }
-
-    // Step 7: Drop schema (unless --keep-data)
-    let schemaDropError: string | undefined;
-    if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
-      Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
-        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
-      });
-      if (!dropResult.Success) {
-        schemaDropError = dropResult.ErrorMessage;
-        Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
-      }
-    }
-
-    // If metadata removal or schema drop failed, the app is NOT cleanly removed — report it
-    // as a failure (don't mark the app 'Removed') instead of silently claiming success.
-    const removalErrors = [metadataResult.Success ? undefined : metadataResult.ErrorMessage, schemaDropError]
-      .filter((e): e is string => !!e);
-    if (removalErrors.length > 0) {
-      const combined = removalErrors.join('; ');
-      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
-        Success: false,
-        DurationSeconds: GetDurationSeconds(startTime),
-        StartedAt: new Date(startTime),
-        EndedAt: new Date(),
-        Summary: `Remove failed: ${combined}`,
-      });
-      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-      return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
     }
 
     // Step 8: Update records
