@@ -146,9 +146,24 @@ export class FieldRulesBuilderComponent {
     }
     get EntityName(): string { return this._entityName; }
 
+    /**
+     * Serialized form of our last emitted rule set. Consumers typically feed our `ValueChange` output
+     * straight back in as `[Value]` (controlled-component style). Re-seeding the drafts from that echo
+     * would wipe in-progress edits — most visibly a freshly-added **blank** rule, which serializes to
+     * nothing (`draftsToRuleSet` drops rules with no target), so the echo arrives as `{Rules:[]}` and
+     * resets the row the user just added. We ignore the echo and only re-seed on a genuinely different
+     * (external) value.
+     */
+    private lastEmittedJSON: string | null = null;
+
     /** The initial rule set (e.g. an existing Record Process Configuration). */
     @Input()
     set Value(value: FieldRuleSet | null | undefined) {
+        const incomingJSON = JSON.stringify(value?.Rules ?? []);
+        if (incomingJSON === this.lastEmittedJSON) {
+            return; // echo of our own emit — keep the live drafts intact
+        }
+        this.lastEmittedJSON = incomingJSON;
         this.Rules = value?.Rules ? value.Rules.map((r) => ruleToDraft(r)) : [];
         this.validate();
     }
@@ -194,6 +209,9 @@ export class FieldRulesBuilderComponent {
     /** Serializes the drafts, validates, and emits. */
     private emit(): void {
         const ruleSet = draftsToRuleSet(this.Rules);
+        // Record what we're about to emit so the echo (consumer feeding it back via [Value]) is recognized
+        // and ignored — see lastEmittedJSON. Must mirror the Value setter's comparison basis (Rules array).
+        this.lastEmittedJSON = JSON.stringify(ruleSet.Rules ?? []);
         this.validate(ruleSet);
         this.ValueChange.emit(ruleSet);
         this.cdr.detectChanges();
