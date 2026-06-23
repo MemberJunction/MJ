@@ -3,10 +3,12 @@
  *
  * Deterministic (NO model calls — uses a FunctionRecordProcessor), so it runs in the default tier.
  * Drives RecordSetProcessor.Process over an in-memory ArraySource and verifies the persisted run:
- *   - MJ: Process Runs        — Status + counts (Processed/Success/Error/Skipped)
+ *   - MJ: Process Runs        — Status + counts (Processed/Success/Error/Skipped) + the DryRun flag
  *   - MJ: Process Run Details — one terminal row per record, written fire-and-forget by the tracker's
  *     BaseEntitySaveQueue and flushed on CompleteRun (the 4th save-queue consumer — closes the loop on
  *     the de-dup migration live).
+ *   - DryRun persistence (RP7/RP8) — a dry-run pass records DryRun=1 on the run header; a normal pass
+ *     records DryRun=0, so run history can tell a compute-only preview from a real apply.
  *
  * USAGE (from the repo root):
  *   npx tsx packages/MJServer/integration-test-scripts/record-process-tests.ts
@@ -168,6 +170,41 @@ async function main(): Promise<void> {
         Assert(maxActive > 1, 'records genuinely ran concurrently');
         Assert(maxActive <= 3, `concurrency capped at maxConcurrency (peak ${maxActive})`);
         console.log(`      → peak concurrency ${maxActive} (cap 3), 6 records processed`);
+    });
+
+    suite.Test('RP7: a dry-run pass records DryRun=1 on the Process Run header', async () => {
+        const records = [1, 2].map((n) => ({ EntityID: entityID!, RecordID: `rp-dry-${n}` }));
+        const source = new ArraySource(records, entityID!, 'SingleRecord');
+        const processor = new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const }));
+
+        const result = await RecordSetProcessor.Instance.Process({
+            source, processor, contextUser: user, entityID: entityID!, triggeredBy: 'OnDemand', dryRun: true,
+        });
+        Assert(result.ProcessRunID != null, 'No Process Run was created');
+
+        await settle(500);
+        const run = await fetchRows('MJ: Process Runs', `ID='${result.ProcessRunID}'`, user);
+        AssertEqual(run.length, 1, 'process run row count');
+        AssertEqual(Boolean(run[0].DryRun), true, 'persisted DryRun flag is true for a dry-run pass');
+        console.log(`      → dry-run ${result.ProcessRunID}: persisted DryRun=${run[0].DryRun}`);
+    });
+
+    suite.Test('RP8: a normal pass records DryRun=0 (default) — distinguishable from a preview', async () => {
+        const records = [1, 2].map((n) => ({ EntityID: entityID!, RecordID: `rp-apply-${n}` }));
+        const source = new ArraySource(records, entityID!, 'SingleRecord');
+        const processor = new FunctionRecordProcessor(async () => ({ Status: 'Succeeded' as const }));
+
+        // dryRun omitted entirely — the default must persist as DryRun=0, not null.
+        const result = await RecordSetProcessor.Instance.Process({
+            source, processor, contextUser: user, entityID: entityID!, triggeredBy: 'OnDemand',
+        });
+        Assert(result.ProcessRunID != null, 'No Process Run was created');
+
+        await settle(500);
+        const run = await fetchRows('MJ: Process Runs', `ID='${result.ProcessRunID}'`, user);
+        AssertEqual(run.length, 1, 'process run row count');
+        AssertEqual(Boolean(run[0].DryRun), false, 'persisted DryRun flag is false for a normal apply');
+        console.log(`      → apply ${result.ProcessRunID}: persisted DryRun=${run[0].DryRun}`);
     });
 
     const failures = await suite.Run();
