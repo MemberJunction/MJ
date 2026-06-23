@@ -1,5 +1,5 @@
 import { SQLDialect } from '@memberjunction/sql-dialect';
-import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
+import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
 // Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
 // under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
 // `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
@@ -103,6 +103,27 @@ export interface VirtualEntityConfig {
    PrimaryKey?: string[];
    /** Optional soft foreign key definitions for the virtual entity */
    ForeignKeys?: SoftFKFieldConfig[];
+}
+
+/**
+ * Configuration for a base-view materialization in the additionalSchemaInfo config file
+ * (the "no-sprawl convenience case" — materialization plan §2.1/§4.1). Declares a 1:1
+ * snapshot of an *existing* entity's base view. Because the shape is identical to the
+ * source entity, NO new entity is minted — the existing entity is reused and its RLS
+ * applies unchanged (§6.1). CodeGen emits the physical table + wrapper view and attaches
+ * an "MJ: Materialized Results" row (SourceType='EntityBaseView') to the existing entity.
+ */
+export interface MaterializedBaseViewConfig {
+   /** Source entity name (preferred). Either this or BaseTable (+ optional SchemaName) must be set. */
+   EntityName?: string;
+   /** Source base table name — alternative to EntityName when entity names aren't stable yet. */
+   BaseTable?: string;
+   /** Optional schema for BaseTable lookups (defaults to the MJ core schema). */
+   SchemaName?: string;
+   /** Optional cron expression for scheduled refresh; omit for manual-only. */
+   RefreshSchedule?: string;
+   /** Optional note for the selection contract (§8): what this snapshot is good for. */
+   IntendedWorkload?: string;
 }
 
 /**
@@ -616,6 +637,23 @@ export class ManageMetadataBase {
          Description: (ve.Description as string) || undefined,
          PrimaryKey: Array.isArray(ve.PrimaryKey) ? (ve.PrimaryKey as string[]) : undefined,
          ForeignKeys: Array.isArray(ve.ForeignKeys) ? (ve.ForeignKeys as SoftFKFieldConfig[]) : undefined,
+      }));
+   }
+
+   /**
+    * Extracts the MaterializedBaseViews array from the additionalSchemaInfo config file.
+    * Each entry declares a 1:1 base-view materialization of an existing entity (plan §4.1).
+    */
+   protected extractMaterializedBaseViewsFromConfig(config: Record<string, unknown>): MaterializedBaseViewConfig[] {
+      const decls = config.MaterializedBaseViews;
+      if (!Array.isArray(decls)) return [];
+
+      return decls.map((d: Record<string, unknown>) => ({
+         EntityName: (d.EntityName as string) || undefined,
+         BaseTable: (d.BaseTable as string) || undefined,
+         SchemaName: (d.SchemaName as string) || undefined,
+         RefreshSchedule: (d.RefreshSchedule as string) || undefined,
+         IntendedWorkload: (d.IntendedWorkload as string) || undefined,
       }));
    }
 
@@ -1152,6 +1190,106 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Processes base-view materialization declarations from additionalSchemaInfo (plan §4.1).
+    * Each declares a 1:1 snapshot of an existing entity's base view. Because the shape is
+    * identical to the source entity, NO new entity is minted — the existing entity is reused
+    * (its RLS applies unchanged, §6.1). For each declaration this:
+    *   1. resolves the source entity,
+    *   2. derives the column shape from the entity's base-view fields (SQLFullType),
+    *   3. emits the physical table (materialized_<Name>) + wrapper view (materialized_vw<Name>)
+    *      via the cross-engine DDL primitive (create-if-absent, so a migration-provided table
+    *      is reused rather than clobbered — §12),
+    *   4. upserts the "MJ: Materialized Results" row (SourceType='EntityBaseView') keyed on the
+    *      source entity.
+    * Population is the refresh driver's job (a later phase); rows land in Status='Building'.
+    */
+   protected async processBaseViewMaterializations(pool: CodeGenConnection): Promise<{ success: boolean; processedCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, processedCount: 0 };
+
+      const decls = this.extractMaterializedBaseViewsFromConfig(config as Record<string, unknown>);
+      if (decls.length === 0) return { success: true, processedCount: 0 };
+
+      // Refresh so entity.Fields reflect this run's field sync before we snapshot the shape.
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      await md.Refresh();
+
+      const coreSchema = mj_core_schema();
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const lit = (s: string | undefined) => (s ? `'${esc(s)}'` : 'NULL');
+      let processedCount = 0;
+
+      for (const decl of decls) {
+         // 1) Resolve the source entity (by name, else by base table [+ schema]).
+         const entity = decl.EntityName
+            ? md.EntityByName(decl.EntityName)
+            : md.Entities.find(
+                 (e) =>
+                    !!decl.BaseTable &&
+                    (e.BaseTable ?? '').trim().toLowerCase() === decl.BaseTable.trim().toLowerCase() &&
+                    (!decl.SchemaName || (e.SchemaName ?? '').trim().toLowerCase() === decl.SchemaName.trim().toLowerCase()),
+              );
+         if (!entity) {
+            logError(`    > Base-view materialization: source entity not found (${decl.EntityName ?? `${decl.SchemaName ?? coreSchema}.${decl.BaseTable}`}) — skipping`);
+            continue;
+         }
+
+         // 2) Derive the snapshot column shape from the entity's base-view fields.
+         const columns: MaterializedColumnSpec[] = entity.Fields.map((f) => ({
+            Name: f.Name,
+            SQLType: f.SQLFullType,
+            Nullable: f.AllowsNull,
+            IsPrimaryKey: f.IsPrimaryKey,
+         }));
+         if (columns.length === 0) {
+            logError(`    > Base-view materialization for "${entity.Name}": no fields resolved — skipping`);
+            continue;
+         }
+
+         // 3) Emit the physical table + wrapper view (create-if-absent; reuse a migration-provided table).
+         const matSchema = entity.SchemaName;
+         const tableName = `materialized_${entity.CodeName}`;
+         const viewName = `materialized_vw${entity.CodeName}`;
+         const tableSQL = this.dbProvider.generateMaterializedTableSQL(matSchema, tableName, columns);
+         const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(matSchema, viewName, tableName);
+         // includeBatchSeparator: each is a single GO-free batch (executed via ds.query), but the
+         // migration file needs a GO between statements for Flyway/sqlcmd.
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true);
+
+         // 4) Upsert the MJ: Materialized Results row, keyed on (SourceType, SourceEntityID).
+         const existing = await this.runQueryWithParams(
+            pool,
+            `SELECT ID FROM ${this.qs(coreSchema, 'MaterializedResult')} WHERE SourceType = @SourceType AND SourceEntityID = @EntityID`,
+            { SourceType: 'EntityBaseView', EntityID: entity.ID },
+         );
+         if (existing.recordset.length > 0) {
+            const sqlUpd = `UPDATE ${this.qs(coreSchema, 'MaterializedResult')}
+                              SET SchemaName='${esc(matSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
+                                  RefreshSchedule=${lit(decl.RefreshSchedule)}, IntendedWorkload=${lit(decl.IntendedWorkload)}
+                            WHERE ID='${existing.recordset[0].ID}'`;
+            await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for base-view materialization of ${entity.Name}`);
+         } else {
+            const newId = this.createNewUUID();
+            const q = (n: string) => this.qi(n);
+            const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
+                                 ${q('ID')}, ${q('SourceType')}, ${q('SourceEntityID')}, ${q('SchemaName')}, ${q('TableName')}, ${q('ViewName')},
+                                 ${q('ParamMode')}, ${q('RefreshStrategy')}, ${q('RefreshSchedule')}, ${q('Status')}, ${q('IntendedWorkload')},
+                                 ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
+                            VALUES ( '${newId}', 'EntityBaseView', '${entity.ID}', '${esc(matSchema)}', '${esc(tableName)}', '${esc(viewName)}',
+                                 'None', 'FullRebuild', ${lit(decl.RefreshSchedule)}, 'Building', ${lit(decl.IntendedWorkload)},
+                                 ${this.utcNow()}, ${this.utcNow()} )`;
+            await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for base-view materialization of ${entity.Name}`);
+         }
+
+         processedCount++;
+         logStatus(`    > Base-view materialization ready for entity "${entity.Name}" → [${matSchema}].[${viewName}]`);
+      }
+
+      return { success: true, processedCount };
+   }
+
+   /**
     * Derives an entity name from a view name by removing common prefixes (vw, v_)
     * and converting to a human-friendly format.
     */
@@ -1324,6 +1462,14 @@ export class ManageMetadataBase {
       const organicKeyResult = await this.processOrganicKeyConfig(pool);
       if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
          logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
+      }
+
+      // Config-driven base-view materialization — emit the physical table + wrapper view and
+      // attach an "MJ: Materialized Results" row to the existing entity. Runs AFTER entity fields
+      // are managed so the snapshot shape reflects the current base view (plan §4.1).
+      const baseViewMatResult = await this.processBaseViewMaterializations(pool);
+      if (baseViewMatResult.processedCount > 0) {
+         logStatus(`    > Base-view materialization: processed ${baseViewMatResult.processedCount} declaration${baseViewMatResult.processedCount === 1 ? '' : 's'} from config`);
       }
 
       start = new Date();

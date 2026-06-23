@@ -229,6 +229,22 @@ export interface CascadeDeleteContext {
  * The orchestrator (SQLCodeGenBase) calls these methods to produce platform-specific
  * SQL while keeping the high-level generation logic database-agnostic.
  */
+/**
+ * Column specification for generating a materialized result's physical table.
+ * The caller (base-view or query materialization path) resolves these from the
+ * source shape; the provider only assembles the engine-specific DDL.
+ */
+export interface MaterializedColumnSpec {
+    /** Column name, as it appears in the source result shape. */
+    Name: string;
+    /** Engine-native SQL type string, e.g. `nvarchar(255)`, `int`, `decimal(10,2)`. */
+    SQLType: string;
+    /** Whether the column allows NULL. */
+    Nullable: boolean;
+    /** Whether this column is (part of) the single-column surrogate / primary key. */
+    IsPrimaryKey: boolean;
+}
+
 export abstract class CodeGenDatabaseProvider {
     /**
      * The SQL dialect instance for this provider.
@@ -292,6 +308,43 @@ export abstract class CodeGenDatabaseProvider {
      * so the provider only needs to assemble the platform-specific SQL.
      */
     abstract generateBaseView(context: BaseViewGenerationContext): string;
+
+    // ─── MATERIALIZATION ─────────────────────────────────────────────────
+
+    /**
+     * Generates DDL to create a materialized result's physical table — a plain table
+     * holding the snapshot rows, with a single-column surrogate/primary key. Per the
+     * materialization plan (§2.2/§12), the convention is `materialized_<Name>` and the
+     * create is **conditional** (create only if absent) so a migration-provided table
+     * with bespoke indexing is detected and reused rather than clobbered.
+     *
+     * Default throws — each engine provider overrides. (SQL Server first; PostgreSQL
+     * follows.)
+     *
+     * @param schema    Target schema for the physical table.
+     * @param tableName Physical table name (convention: `materialized_<Name>`).
+     * @param columns   Resolved column specs (name, engine-native SQL type, nullability, PK flag).
+     */
+    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        throw new Error(`generateMaterializedTableSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
+
+    /**
+     * Generates DDL for the wrapper view over a materialized table (body: `SELECT * FROM`
+     * the physical table). The wrapper view is the **stable read contract**; this same
+     * statement performs the atomic swap by repointing the view at a freshly-built table
+     * (`CREATE OR ALTER VIEW` on SQL Server / `CREATE OR REPLACE VIEW` on PostgreSQL — §11.2),
+     * so readers never see a half-populated or locked result.
+     *
+     * Default throws — each engine provider overrides.
+     *
+     * @param schema    Schema of the view and table.
+     * @param viewName  Wrapper view name (convention: `materialized_vw<Name>`).
+     * @param tableName Physical table the view selects from.
+     */
+    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+        throw new Error(`generateMaterializedWrapperViewSQL is not implemented for platform '${this.PlatformKey}'`);
+    }
 
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
 

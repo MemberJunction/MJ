@@ -5,6 +5,7 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    MaterializedColumnSpec,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { RegisterClass } from '@memberjunction/global';
@@ -98,6 +99,46 @@ SELECT
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${alias}${context.parentJoins ? '\n' + context.parentJoins : ''}${context.relatedFieldsJoins ? '\n' + context.relatedFieldsJoins : ''}${context.rootJoins}
 ${whereClause}GO`;
+    }
+
+    // ─── MATERIALIZATION ─────────────────────────────────────────────────
+
+    /**
+     * SQL Server materialized-table DDL. The create is **conditional** (only if the table
+     * is absent) so a migration-provided `materialized_<Name>` table with bespoke indexing
+     * is detected and reused rather than clobbered (plan §12). Emits the single-column
+     * surrogate PRIMARY KEY, which is itself the required unique index.
+     *
+     * Returns a single GO-free batch: it is executed directly via `LogSQLAndExecute`
+     * (`ds.query`, which doesn't split on `GO`), and the caller passes
+     * `includeBatchSeparator: true` so the migration *file* still gets a `GO` after it.
+     */
+    generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        const colLines = columns.map((c) => `        [${c.Name}] ${c.SQLType} ${c.Nullable ? 'NULL' : 'NOT NULL'}`);
+        const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
+        const pkClause = pkCols.length
+            ? `,\n        CONSTRAINT [PK_${tableName}] PRIMARY KEY (${pkCols.map((n) => `[${n}]`).join(', ')})`
+            : '';
+        return `IF OBJECT_ID('[${schema}].[${tableName}]', 'U') IS NULL
+BEGIN
+    CREATE TABLE [${schema}].[${tableName}] (
+${colLines.join(',\n')}${pkClause}
+    );
+END`;
+    }
+
+    /**
+     * SQL Server wrapper-view DDL — the stable read contract over the materialized table.
+     * Uses `CREATE OR ALTER VIEW` (SQL Server 2016 SP1+) so the same statement both creates
+     * the view and atomically repoints it at a freshly-built table during refresh (plan §11.2).
+     *
+     * Returns a single GO-free batch (executed via `ds.query`); the caller adds the file
+     * batch separator. `CREATE OR ALTER VIEW` is valid as the sole statement in its batch.
+     */
+    generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+        return `CREATE OR ALTER VIEW [${schema}].[${viewName}]
+AS
+SELECT * FROM [${schema}].[${tableName}];`;
     }
 
     // ─── CRUD ROUTINES ───────────────────────────────────────────────────
