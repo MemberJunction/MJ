@@ -625,14 +625,14 @@ export class GraphQLSystemUserClient {
     }
 
     /**
-     * Creates a new query using the CreateQuerySystemUser mutation. This method is restricted to system users only.
+     * Creates a new query using the CreateQueryExtended mutation. This method is restricted to system users only.
      * @param input - CreateQuerySystemUserInput containing all the query attributes including optional CategoryPath
      * @returns Promise containing the result of the query creation
      */
     public async CreateQuery(input: CreateQueryInput): Promise<CreateQueryResult> {
         try {
-            const query = `mutation CreateQuerySystemUser($input: CreateQuerySystemUserInput!) {
-                CreateQuerySystemUser(input: $input) {
+            const query = `mutation CreateQueryExtended($input: CreateQuerySystemUserInput!) {
+                CreateQueryExtended(input: $input) {
                     Success
                     ErrorMessage
                     Query {
@@ -692,9 +692,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { CreateQuerySystemUser: CreateQueryResult };
-            if (result && result.CreateQuerySystemUser) {
-                return result.CreateQuerySystemUser;
+            const result = await this.Client.request(query, { input }) as { CreateQueryExtended: CreateQueryResult };
+            if (result && result.CreateQueryExtended) {
+                return result.CreateQueryExtended;
             } else {
                 return {
                     Success: false,
@@ -718,8 +718,8 @@ export class GraphQLSystemUserClient {
      */
     public async UpdateQuery(input: UpdateQueryInput): Promise<UpdateQueryResult> {
         try {
-            const query = `mutation UpdateQuerySystemUser($input: UpdateQuerySystemUserInput!) {
-                UpdateQuerySystemUser(input: $input) {
+            const query = `mutation UpdateQueryExtended($input: UpdateQuerySystemUserInput!) {
+                UpdateQueryExtended(input: $input) {
                     Success
                     ErrorMessage
                     Query {
@@ -779,9 +779,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { UpdateQuerySystemUser: UpdateQueryResult };
-            if (result && result.UpdateQuerySystemUser) {
-                return result.UpdateQuerySystemUser;
+            const result = await this.Client.request(query, { input }) as { UpdateQueryExtended: UpdateQueryResult };
+            if (result && result.UpdateQueryExtended) {
+                return result.UpdateQueryExtended;
             } else {
                 return {
                     Success: false,
@@ -799,7 +799,7 @@ export class GraphQLSystemUserClient {
     }
 
     /**
-     * Deletes a query by ID using the DeleteQuerySystemResolver mutation. This method is restricted to system users only.
+     * Deletes a query by ID using the DeleteQueryExtended mutation. This method is restricted to system users only.
      * @param ID - The ID of the query to delete
      * @param options - Optional delete options controlling action execution
      * @returns Promise containing the result of the query deletion
@@ -815,8 +815,8 @@ export class GraphQLSystemUserClient {
                 };
             }
 
-            const query = `mutation DeleteQuerySystemResolver($ID: String!, $options: DeleteOptionsInput) {
-                DeleteQuerySystemResolver(ID: $ID, options: $options) {
+            const query = `mutation DeleteQueryExtended($ID: String!, $options: DeleteOptionsInput) {
+                DeleteQueryExtended(ID: $ID, options: $options) {
                     Success
                     ErrorMessage
                     ID
@@ -836,10 +836,10 @@ export class GraphQLSystemUserClient {
                 };
             }
 
-            const result = await this.Client.request(query, variables) as { DeleteQuerySystemResolver: DeleteQueryResult };
+            const result = await this.Client.request(query, variables) as { DeleteQueryExtended: DeleteQueryResult };
             
-            if (result && result.DeleteQuerySystemResolver) {
-                return result.DeleteQuerySystemResolver;
+            if (result && result.DeleteQueryExtended) {
+                return result.DeleteQueryExtended;
             } else {
                 return {
                     Success: false,

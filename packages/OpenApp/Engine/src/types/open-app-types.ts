@@ -46,6 +46,45 @@ export interface AppInstallCallbacks {
     OnLog?: (message: string) => void;
     /** Called when the engine needs user confirmation (e.g. destructive actions) */
     OnConfirm?: (message: string) => Promise<boolean>;
+
+    // ── Interactive prompt callbacks ──────────────────────────────────────────
+    // Wired by the CLI to @inquirer/prompts; absent for headless/non-interactive
+    // callers (in which case in-process hook modules should fall back to defaults).
+    /** Prompt for free-text input. */
+    OnPromptInput?: (message: string, opts?: { default?: string }) => Promise<string>;
+    /** Prompt for a yes/no confirmation with an optional default. */
+    OnPromptConfirm?: (message: string, opts?: { default?: boolean }) => Promise<boolean>;
+    /** Prompt to choose one option from a list. */
+    OnPromptSelect?: (message: string, choices: Array<{ name: string; value: string }>) => Promise<string>;
+    /** Prompt for a masked secret (e.g. an API key). */
+    OnPromptPassword?: (message: string) => Promise<string>;
+}
+
+/**
+ * Payload passed to an in-process lifecycle hook module's default export
+ * (referenced by manifest `hooks.postInstallModule` / `preRemoveModule` /
+ * `postUpgradeModule`). The engine resolves the module from the consumer's
+ * node_modules, imports it, and awaits `default(payload)`.
+ *
+ * Hook authors (e.g. the Skip Client app) import this type from
+ * `@memberjunction/open-app-engine` and type their default export against it.
+ * `Provider`/`ContextUser` are intentionally loosely typed here to avoid a hard
+ * dependency on `@memberjunction/core` from this types module; cast them to
+ * `IMetadataProvider` / `UserInfo` in the hook.
+ */
+export interface AppHookPayload {
+    /** The installed/affected app record. */
+    App: InstalledAppInfo;
+    /** Consumer monorepo root (process.cwd() at install time). */
+    RepoRoot: string;
+    /** Live MJ metadata/data provider (cast to IMetadataProvider). */
+    Provider: unknown;
+    /** Context user the engine runs entity operations as (cast to UserInfo). */
+    ContextUser: unknown;
+    /** Interactive + progress callbacks (prompt callbacks present only in interactive installs). */
+    Callbacks?: AppInstallCallbacks;
+    /** The validated manifest as a plain object (typed as MJAppManifest by consumers). */
+    Manifest: unknown;
 }
 
 /**

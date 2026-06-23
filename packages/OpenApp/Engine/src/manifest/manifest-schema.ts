@@ -105,9 +105,20 @@ const configurationSchema = z.object({
 // ── Hooks ─────────────────────────────────────────────────
 
 const hooksSchema = z.object({
+    // Shell-command hooks (run via execSync in the consumer repo root, no DB/context).
     postInstall: z.string().optional(),
     postUpgrade: z.string().optional(),
     preRemove: z.string().optional(),
+    // In-process JS hook MODULE SPECIFIERS, resolved from the consumer's node_modules
+    // (i.e. one of the app's own installed packages — NOT a repo-relative path, because
+    // the engine only downloads the manifest + migration .sql files, never the app's
+    // source/scripts). The orchestrator imports the module and awaits its default export,
+    // passing the live OrchestratorContext + interactive prompt callbacks. This enables
+    // interactive, DB-aware setup/teardown (e.g. a guided config wizard) with no execSync
+    // timeout and no need to self-bootstrap a DB connection.
+    postInstallModule: z.string().optional(),
+    postUpgradeModule: z.string().optional(),
+    preRemoveModule: z.string().optional(),
 });
 
 // ── Full Manifest ─────────────────────────────────────────

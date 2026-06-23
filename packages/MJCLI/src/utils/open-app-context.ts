@@ -7,6 +7,7 @@
  */
 import sql from 'mssql';
 import ora from 'ora-classic';
+import { input, confirm, select, password } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import type { UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
@@ -126,11 +127,16 @@ export async function buildContextUser(): Promise<UserInfo> {
 export async function buildOrchestratorContext(
   command: { log: (msg: string) => void; warn: (msg: string | Error) => void },
   verbose?: boolean,
+  interactive: boolean = true,
 ): Promise<OrchestratorContextShape> {
   const config = getValidatedConfig();
   const { provider } = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
+  // Only wire interactive prompt callbacks for a real TTY when not explicitly disabled.
+  // Their ABSENCE signals headless mode to in-process hook modules (e.g. the setup wizard),
+  // which then fall back to env/defaults instead of blocking on @inquirer (which errors in CI).
+  const wantPrompts = interactive && process.stdin.isTTY === true;
 
   return {
     ContextUser: contextUser,
@@ -166,6 +172,29 @@ export async function buildOrchestratorContext(
       OnError: (phase: string, message: string) => command.warn(`[${phase}] ${message}`),
       OnWarn: (phase: string, message: string) => command.warn(`[${phase}] ${message}`),
       OnLog: (message: string) => command.log(message),
+      // Interactive prompt callbacks for in-process hook modules (e.g. a setup wizard) are
+      // wired ONLY for an interactive TTY; the spinner is paused so the prompt renders cleanly.
+      // When omitted (non-interactive / non-TTY), hook modules take their headless path.
+      ...(wantPrompts
+        ? {
+            OnPromptInput: async (message: string, opts?: { default?: string }) => {
+              spinner?.stop();
+              return await input({ message, default: opts?.default });
+            },
+            OnPromptConfirm: async (message: string, opts?: { default?: boolean }) => {
+              spinner?.stop();
+              return await confirm({ message, default: opts?.default });
+            },
+            OnPromptSelect: async (message: string, choices: Array<{ name: string; value: string }>) => {
+              spinner?.stop();
+              return await select({ message, choices });
+            },
+            OnPromptPassword: async (message: string) => {
+              spinner?.stop();
+              return await password({ message, mask: true });
+            },
+          }
+        : {}),
     },
   };
 }
@@ -208,6 +237,10 @@ interface OrchestratorContextShape {
     OnError?: (phase: string, message: string) => void;
     OnWarn?: (phase: string, message: string) => void;
     OnLog?: (message: string) => void;
+    OnPromptInput?: (message: string, opts?: { default?: string }) => Promise<string>;
+    OnPromptConfirm?: (message: string, opts?: { default?: boolean }) => Promise<boolean>;
+    OnPromptSelect?: (message: string, choices: Array<{ name: string; value: string }>) => Promise<string>;
+    OnPromptPassword?: (message: string) => Promise<string>;
   };
 }
 
