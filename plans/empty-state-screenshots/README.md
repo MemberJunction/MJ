@@ -35,6 +35,17 @@ _Other ComponentStudio empties (preview no-selection / run-state, browser empty/
 editor panels, dialog empties) reuse already-recorded patterns; the dashboard onboarding is
 captured as it's the one with projected multi-action + re-scoped CSS._
 
+## actions/
+| State | File |
+|-------|------|
+| Explorer — empty + Create Action | `explorer-empty.png` |
+| Explorer — no-results + Reset filters | `explorer-no-results.png` |
+| Overview — compact panel empties (category stats / recent actions / executions) | `overview.png` |
+| Monitor — no executions found (no-results) | `monitor-no-results.png` |
+
+_actions-list-view and categories-list-view no-results reuse the captured
+no-results pattern._
+
 ## credentials/
 | State | File |
 |-------|------|

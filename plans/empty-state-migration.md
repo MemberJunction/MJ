@@ -178,9 +178,9 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/APIKeys | 6 | 11 | ✅ | `7d25fe43ba` |
 | dashboards/Lists | 5 | 9 | ✅ | `5c2746acc6` |
 | dashboards/AI | 11 | 13 | ✅ | `ff116e0acc` |
-| dashboards/ComponentStudio | 11 | 16 | ✅ | (this commit) |
-| dashboards/Credentials | 5 | — | | |
-| dashboards/Actions | 5 | — | | |
+| dashboards/ComponentStudio | 11 | 16 | ✅ | `e23fb54dfe` |
+| dashboards/Credentials | 6 | 9 | ✅ | `789b2359c3` |
+| dashboards/Actions | 5 | 7 | ✅ | (this commit) |
 | dashboards/{VersionHistory,Testing,Integration,Communication} | 4 each | — | | |
 | dashboards/{Scheduling,Permissions} | 3 each | — | | |
 | dashboards/{KnowledgeHub,DataExplorer} | 2 each | — | | |

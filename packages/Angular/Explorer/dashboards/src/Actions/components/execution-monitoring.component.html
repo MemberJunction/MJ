@@ -177,11 +177,9 @@
           </div>
         }
       } @else {
-        <div class="empty-state">
-          <i class="fa-solid fa-search"></i>
-          <h5>No executions found</h5>
-          <p>Try adjusting your filters or search terms</p>
-        </div>
+        <mj-empty-state Variant="no-results"
+          Title="No executions found"
+          Message="Try adjusting your filters or search terms" />
       }
     </div>
   </div>
