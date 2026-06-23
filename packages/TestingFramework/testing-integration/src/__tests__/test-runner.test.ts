@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
-    TestRunner, Assert, AssertEqual, AssertRowShape, AssertKeysInclude, AssertKeysExclude, RowKeys
+    TestRunner, EmitOutcomes, Assert, AssertEqual, AssertRowShape, AssertKeysInclude, AssertKeysExclude, RowKeys
 } from '../test-runner';
 
 describe('TestRunner', () => {
@@ -33,6 +36,26 @@ describe('TestRunner', () => {
         expect(runner.LastOutcomes).toHaveLength(2);
         expect(runner.LastOutcomes[0]).toMatchObject({ Name: 'ok', Passed: true });
         expect(runner.LastOutcomes[1]).toMatchObject({ Name: 'bad', Passed: false, Error: 'nope' });
+    });
+
+    it('EmitOutcomes writes the {name,passed,durationMs,error?} golden-diff shape', async () => {
+        const runner = new TestRunner('suite');
+        runner.Test('S1: ok', async () => { /* pass */ });
+        runner.Test('S2: bad', async () => { throw new Error('nope'); });
+        await runner.Run();
+
+        const path = join(tmpdir(), `mj-outcomes-${process.pid}.json`);
+        try {
+            await EmitOutcomes(runner, path);
+            const parsed = JSON.parse(await readFile(path, 'utf8'));
+            expect(parsed).toHaveLength(2);
+            expect(parsed[0]).toMatchObject({ name: 'S1: ok', passed: true });
+            expect(typeof parsed[0].durationMs).toBe('number');
+            expect(parsed[0].error).toBeUndefined();
+            expect(parsed[1]).toMatchObject({ name: 'S2: bad', passed: false, error: 'nope' });
+        } finally {
+            await rm(path, { force: true });
+        }
     });
 });
 

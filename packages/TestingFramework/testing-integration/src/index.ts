@@ -13,10 +13,15 @@ export * from './check-registry';
 export * from './types';
 export * from './IntegrationTestDriver';
 
-// Side-effect imports: register the bundled checks and fire the @RegisterClass decorator
-// on the IntegrationTestDriver so the ClassFactory can resolve it.
+// Re-export the bundle arrays + RunQuery fixture helpers AND, as a side effect of
+// evaluating these modules, register every bundled check on the IntegrationCheckRegistry.
+// The @RegisterClass decorator on IntegrationTestDriver fires via the export above.
+export * from './checks/server-cache.checks';
+export * from './checks/client-cache.checks';
+export * from './checks/runquery-cache.checks';
+
+// Side-effect only: the permanent Phase-0 smoke check (no exports of its own).
 import './checks/self-test.check';
-import './checks/server-cache.checks';
 
 /**
  * Tree-shake guard. Importing this module (or calling this function) ensures the

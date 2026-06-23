@@ -1,10 +1,13 @@
 /**
  * test-runner.ts — the minimal sequential TestRunner and the result-shape
- * assertion helpers, lifted verbatim from the original live harness. The ONLY
- * change is the additive `LastOutcomes` getter (so per-test outcomes can be
- * inspected for the golden-equivalence diff in later phases); the `Run()` return
- * value (failure count) and ordering semantics are unchanged.
+ * assertion helpers, lifted verbatim from the original live harness. The
+ * additive pieces (the `LastOutcomes` getter and the `EmitOutcomes` /
+ * `writeOutcomesFile` helpers) exist so per-test outcomes can be dumped for the
+ * golden-equivalence diff; the `Run()` return value (failure count) and ordering
+ * semantics are unchanged.
  */
+import { writeFile, mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 interface TestCase {
     Name: string;
@@ -16,6 +19,14 @@ export interface TestOutcome {
     Passed: boolean;
     DurationMs: number;
     Error?: string;
+}
+
+/** The serialized per-check shape both execution paths emit for the golden diff. */
+export interface EmittedOutcome {
+    name: string;
+    passed: boolean;
+    durationMs: number;
+    error?: string;
 }
 
 /**
@@ -65,6 +76,30 @@ export class TestRunner {
     public get LastOutcomes(): readonly TestOutcome[] {
         return this.lastOutcomes;
     }
+}
+
+/**
+ * Write per-check outcomes to a JSON file as `{name, passed, durationMs, error?}[]`
+ * — the shape the golden-equivalence diff (scripts/integration-golden-diff.mjs)
+ * compares. Both the tsx scripts (via EmitOutcomes) and the IntegrationTestDriver
+ * call this so the two execution paths produce identical files.
+ */
+export async function writeOutcomesFile(path: string, outcomes: readonly TestOutcome[]): Promise<void> {
+    const serialized: EmittedOutcome[] = outcomes.map(o => ({
+        name: o.Name,
+        passed: o.Passed,
+        durationMs: o.DurationMs,
+        ...(o.Error ? { error: o.Error } : {})
+    }));
+    // Create the parent directory if needed so an EMIT_OUTCOMES path like /tmp/golden/x.json
+    // "just works" without a prior mkdir (writeFile alone throws ENOENT on a missing dir).
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify(serialized, null, 2));
+}
+
+/** Dump a finished TestRunner's outcomes for the golden diff (no-op semantics on Run() preserved). */
+export async function EmitOutcomes(runner: TestRunner, path: string): Promise<void> {
+    await writeOutcomesFile(path, runner.LastOutcomes);
 }
 
 // ────────────────────────────────────────────────────────────────────────────

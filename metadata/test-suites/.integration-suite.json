@@ -1,7 +1,7 @@
 {
   "fields": {
     "Name": "Integration Test Suite",
-    "Description": "Headless integration checks graduated from packages/MJServer/integration-test-scripts. Phase 1 seeds the server-cache miss/hit pair (IT01); later phases add the full cache, RLS, and RunQuery coverage.",
+    "Description": "Headless integration checks graduated from packages/MJServer/integration-test-scripts. Phase 2 covers the full server (IT01) and RunQuery (IT02) cache integrity bundles; the client/GraphQL bundle (IT03) is seeded Skip until MJAPI is provisioned in CI (Phase 5). Later phases add RLS, dataset, and aggregate coverage.",
     "Status": "Active"
   },
   "relatedEntities": {
@@ -9,11 +9,55 @@
       {
         "fields": {
           "SuiteID": "@parent:ID",
-          "TestID": "@lookup:MJ: Tests.Name=IT01 - Server Cache Miss/Hit Symmetry",
+          "TestID": "@lookup:MJ: Tests.Name=IT01 - Server RunView Cache Integrity",
           "Sequence": 1,
           "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "ABE32720-05DF-4E11-B2B4-77D5B3E1ABBE"
+        },
+        "sync": {
+          "lastModified": "2026-06-23T19:37:27.775Z",
+          "checksum": "7e15c6066e1ce08e1659378a686cc73702262746527b5d51966c7229642b3de8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=IT02 - RunQuery Cache Integrity",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B9BC68C6-5B5C-422B-B7A1-9D3585C5BA29"
+        },
+        "sync": {
+          "lastModified": "2026-06-23T19:37:27.787Z",
+          "checksum": "6fcdec3fffb006d5be0466f04632ba7a21501b5bc63b8199be9821d43c458ab8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=IT03 - Client GraphQL Cache Integrity",
+          "Sequence": 3,
+          "Status": "Skip"
+        },
+        "primaryKey": {
+          "ID": "096429CB-F5BF-4DFF-A2C9-916E75BC6355"
+        },
+        "sync": {
+          "lastModified": "2026-06-23T19:37:27.797Z",
+          "checksum": "07b8511f1f9ff2f9fda6ac93bef011683c2752a2faf176838bda54fa9c1643c4"
         }
       }
     ]
+  },
+  "primaryKey": {
+    "ID": "B87C755D-1113-41BA-9800-B00F748C9221"
+  },
+  "sync": {
+    "lastModified": "2026-06-23T19:37:27.773Z",
+    "checksum": "e98249047a50db9298d1067692de935e5eddfe98c584488c2344c13dc7207034"
   }
 }

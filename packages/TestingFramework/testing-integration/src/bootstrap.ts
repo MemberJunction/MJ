@@ -74,6 +74,36 @@ export function getActiveIntegrationBootstrap(): IntegrationBootstrapContext | n
     return currentServerBootstrap;
 }
 
+/** The client (GraphQL) bootstrap context, or null if not client-bootstrapped in this process. */
+export function getActiveIntegrationClientBootstrap(): IntegrationClientContext | null {
+    return currentClientBootstrap;
+}
+
+/**
+ * Fail fast with a clear message when MJAPI isn't reachable, before any cache or
+ * provider state is mutated. Lifted from client-cache-tests.ts so both the driver
+ * (via bootstrapIntegrationClient) and the tsx script preflight identically.
+ */
+export async function preflightMJAPI(url: string, apiKey: string): Promise<void> {
+    let response: Response;
+    try {
+        response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-mj-api-key': apiKey },
+            body: JSON.stringify({ query: '{ __typename }' }),
+            signal: AbortSignal.timeout(5000)
+        });
+    } catch (error) {
+        throw new Error(
+            `MJAPI is not reachable at ${url} (${error instanceof Error ? error.message : String(error)}). ` +
+            `Start it first: cd packages/MJAPI && npm run start`
+        );
+    }
+    if (!response.ok) {
+        throw new Error(`MJAPI at ${url} answered HTTP ${response.status} — check MJ_API_KEY and server logs.`);
+    }
+}
+
 /**
  * Refuse to run an owning bootstrap when the cache is already initialized by some
  * other component. SetStorageProvider is a destructive global mutation with no
@@ -82,8 +112,10 @@ export function getActiveIntegrationBootstrap(): IntegrationBootstrapContext | n
 function assertOwnsProcess(): void {
     if (LocalCacheManager.Instance.IsInitialized) {
         throw new Error(
-            'Integration bootstrap must own its process — the cache is already initialized. ' +
-            'Run the integration test in a dedicated process (do not co-host it inside a serving MJAPI).'
+            'Integration bootstrap must own its process — LocalCacheManager is already initialized by another component. ' +
+            'When running via `mj test run`/`mj test suite`, set MJ_INTEGRATION_TEST=1 so the CLI installs the instrumented ' +
+            'cache as the first caller (before its own provider setup). Otherwise run in a dedicated process and never ' +
+            'co-host the integration test inside a serving MJAPI.'
         );
     }
 }
@@ -175,6 +207,8 @@ export async function bootstrapIntegrationClient(): Promise<IntegrationClientCon
     LoadEnv();
     assertOwnsProcess();
     const client = LoadClientConfig();
+    // Preflight BEFORE mutating cache/provider state — a dead MJAPI fails fast and clearly.
+    await preflightMJAPI(client.Url, client.MJAPIKey);
 
     const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());
     await LocalCacheManager.Instance.Initialize(storage, { verboseLogging: false });

@@ -1,0 +1,27 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT02 - RunQuery Cache Integrity",
+    "Description": "Ports runquery-cache-tests.ts Q1-Q9 (TTL + smart-validation query cache modes). The whole bundle mutates the DB by design: it creates/tears down a Query Category + two Queries via a driver-level try/finally inside the bundle, and creates/deletes MJ: User Settings rows the fixture queries count.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "current/stale/no_validation statuses correct; MaxRows/Parameters fingerprint separately; failed executions never cached; fixtures cleaned up."
+    },
+    "Configuration": {
+      "transport": "server",
+      "checks": [
+        {
+          "type": "runquery-cache"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "B6F6A5A6-44D0-4F79-8A21-D224D49116CB"
+  },
+  "sync": {
+    "lastModified": "2026-06-23T19:37:27.702Z",
+    "checksum": "c0fd5e8bb41957ffafb9ce5ebc84c2317d9e2474ac01052045a4365bf594dc35"
+  }
+}

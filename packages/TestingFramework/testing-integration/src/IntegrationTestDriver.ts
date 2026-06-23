@@ -5,16 +5,21 @@
  * MJGlobal.ClassFactory.CreateInstance(BaseTestDriver, 'IntegrationTestDriver').
  *
  * Execute():
- *   1) parse Configuration.checks (ordered) off the MJTestEntity;
+ *   1) parse Configuration.checks (an ordered list of check BUNDLES) off MJTestEntity;
  *   2) honor an optional env gate (skip-as-Passed with a note);
- *   3) obtain the run-scoped instrumented provider stack (installed first-caller by
- *      the CLI, or self-bootstrapped in a dedicated process);
- *   4) run each NamedCheck in array order against ONE shared IntegrationCheckContext,
- *      converting a thrown check into a failing OracleResult (never re-throwing —
- *      a re-throw would leave the TestRun stuck 'Running');
+ *   3) infer the transport (client-cache ⇒ GraphQL client, else SQL server) and obtain
+ *      the run-scoped instrumented provider stack (installed first-caller by the CLI,
+ *      or self-bootstrapped in a dedicated process);
+ *   4) for each selected bundle, run its registered NamedCheck[] in array order against
+ *      ONE shared IntegrationCheckContext — skipping RequiresMutation checks unless the
+ *      selector opts in — converting a thrown check into a failing OracleResult (never
+ *      re-throwing; a re-throw would leave the TestRun stuck 'Running'). The
+ *      runquery-cache bundle gets its Query/Category fixtures created/torn down in a
+ *      driver-level try/finally (engine suite hooks don't exist until Phase 4);
  *   5) map the OracleResult[] onto a DriverExecutionResult (counts computed exactly
  *      like AgentEvalDriver). The engine persists oracleResults verbatim to
- *      TestRun.ResultDetails as a BARE ARRAY.
+ *      TestRun.ResultDetails as a BARE ARRAY. When EMIT_OUTCOMES is set, also write a
+ *      {name,passed,durationMs,error}[] sidecar for the golden-equivalence diff.
  */
 import { RegisterClass } from '@memberjunction/global';
 import {
@@ -27,14 +32,22 @@ import type sql from 'mssql';
 import {
     getActiveIntegrationStorage,
     getActiveIntegrationBootstrap,
-    bootstrapIntegrationServer
+    getActiveIntegrationClientBootstrap,
+    bootstrapIntegrationServer,
+    bootstrapIntegrationClient
 } from './bootstrap';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import type { IntegrationCheckContext } from './check';
 import { IntegrationCheckRegistry } from './check-registry';
 import { IntegrationTestConfig } from './types';
+import { TestOutcome, writeOutcomesFile } from './test-runner';
+import { createRunQueryFixtures, teardownRunQueryFixtures } from './checks/runquery-cache.checks';
 
 const TARGET_TYPE = 'Integration Check Bundle';
+/** The one bundle that runs against the GraphQL client transport. */
+const CLIENT_BUNDLE = 'client-cache';
+/** The one bundle that needs self-contained Query/Category fixtures. */
+const FIXTURE_BUNDLE = 'runquery-cache';
 
 @RegisterClass(BaseTestDriver, 'IntegrationTestDriver')
 export class IntegrationTestDriver extends BaseTestDriver {
@@ -64,7 +77,9 @@ export class IntegrationTestDriver extends BaseTestDriver {
             return this.buildSkipResult(context, startTime, note);
         }
 
-        const checks = Array.isArray(config.checks) ? config.checks : [];
+        const selectors = Array.isArray(config.checks) ? config.checks : [];
+        const transport: 'server' | 'client' =
+            config.transport ?? (selectors.some(s => this.bundleTransport(s.type) === 'client') ? 'client' : 'server');
 
         // 3) Arm a driver-side timeout (the engine never applies one). On fire we abort the
         //    check loop between checks; partial results become a 'Timeout' result.
@@ -73,50 +88,16 @@ export class IntegrationTestDriver extends BaseTestDriver {
         const timer = setTimeout(() => { timedOut = true; }, effectiveTimeout);
 
         const oracleResults: OracleResult[] = [];
+        const outcomes: TestOutcome[] = []; // parallel array for the EMIT_OUTCOMES sidecar
         try {
-            const checkCtx = await this.buildCheckContext(context);
+            const checkCtx = await this.buildCheckContext(context, transport);
 
-            // 4) Run checks IN CONFIGURED ORDER against ONE shared context.
-            for (const sel of checks) {
+            // 4) Run each selected bundle's checks IN ORDER against ONE shared context.
+            for (const sel of selectors) {
                 if (timedOut) {
                     break;
                 }
-                const check = IntegrationCheckRegistry.Instance.Get(sel.type);
-                if (!check) {
-                    oracleResults.push({
-                        oracleType: sel.type,
-                        passed: false,
-                        score: 0,
-                        message: `Unknown integration check '${sel.type}'`,
-                        details: { DurationMs: 0 }
-                    });
-                    this.logToTestRun(context, 'error', `✗ unknown check '${sel.type}'`);
-                    continue;
-                }
-                const checkStart = Date.now();
-                try {
-                    await check.Fn(checkCtx);
-                    oracleResults.push({
-                        oracleType: check.Id,
-                        passed: true,
-                        score: 1,
-                        message: check.Name,
-                        details: {
-                            DurationMs: Date.now() - checkStart,
-                            runViewCacheSets: checkCtx.Storage.SetCount('RunViewCache')
-                        }
-                    });
-                    this.logToTestRun(context, 'info', `✓ ${check.Id}`);
-                } catch (checkErr) {
-                    oracleResults.push({
-                        oracleType: check.Id,
-                        passed: false,
-                        score: 0,
-                        message: (checkErr as Error).message,
-                        details: { DurationMs: Date.now() - checkStart }
-                    });
-                    this.logToTestRun(context, 'error', `✗ ${check.Id}: ${(checkErr as Error).message}`);
-                }
+                await this.runBundle(context, checkCtx, sel.type, sel.config?.runMutationTests === true, oracleResults, outcomes, () => timedOut);
             }
         } catch (bootErr) {
             clearTimeout(timer);
@@ -124,30 +105,150 @@ export class IntegrationTestDriver extends BaseTestDriver {
         }
         clearTimeout(timer);
 
-        // 5) Assemble the DriverExecutionResult (counts mirror AgentEvalDriver).
+        // 5a) Optional golden-diff sidecar — same shape the tsx scripts emit via EmitOutcomes.
+        const emitPath = process.env.EMIT_OUTCOMES;
+        if (emitPath) {
+            try {
+                await writeOutcomesFile(emitPath, outcomes);
+            } catch (e) {
+                this.logToTestRun(context, 'warn', `EMIT_OUTCOMES write failed: ${(e as Error).message}`);
+            }
+        }
+
+        // 5b) Assemble the DriverExecutionResult (counts mirror AgentEvalDriver).
         return this.buildResult(context, startTime, oracleResults, timedOut);
     }
 
     /**
-     * Obtain the run-scoped instrumented provider stack. Prefers the storage installed
-     * first-caller by the CLI (installInstrumentedCacheFirst); falls back to owning the
-     * process (bootstrapIntegrationServer) for a dedicated standalone process. Throws
-     * (caught upstream) if the cache was already claimed by a non-integration component.
+     * Resolve a bundle and run its ordered checks. The runquery-cache bundle wraps its
+     * checks in a driver-level fixture try/finally (engine SetupSuite/TeardownSuite hooks
+     * don't exist until Phase 4). Mutation-gated checks run only when `runMutation` is set.
      */
-    private async buildCheckContext(context: DriverExecutionContext): Promise<IntegrationCheckContext> {
+    private async runBundle(
+        context: DriverExecutionContext,
+        checkCtx: IntegrationCheckContext,
+        bundleType: string,
+        runMutation: boolean,
+        oracleResults: OracleResult[],
+        outcomes: TestOutcome[],
+        isTimedOut: () => boolean
+    ): Promise<void> {
+        const bundle = IntegrationCheckRegistry.Instance.GetBundle(bundleType);
+        if (bundle.length === 0) {
+            const message = `Unknown integration check bundle '${bundleType}'`;
+            oracleResults.push({ oracleType: bundleType, passed: false, score: 0, message, details: { DurationMs: 0 } });
+            outcomes.push({ Name: bundleType, Passed: false, DurationMs: 0, Error: message });
+            this.logToTestRun(context, 'error', `✗ ${message}`);
+            return;
+        }
+
+        const needsFixtures = bundleType === FIXTURE_BUNDLE;
+        if (needsFixtures) {
+            try {
+                checkCtx.Fixtures = await createRunQueryFixtures(checkCtx);
+            } catch (fxErr) {
+                const message = `runquery-cache fixture setup failed: ${(fxErr as Error).message}`;
+                oracleResults.push({ oracleType: `${bundleType}.fixtures`, passed: false, score: 0, message, details: { DurationMs: 0 } });
+                outcomes.push({ Name: `${bundleType}.fixtures`, Passed: false, DurationMs: 0, Error: message });
+                this.logToTestRun(context, 'error', message);
+                return;
+            }
+        }
+
+        try {
+            for (const check of bundle) {
+                if (isTimedOut()) {
+                    break;
+                }
+                if (check.RequiresMutation && !runMutation) {
+                    continue;
+                }
+                if (check.RequiresLiveModel && process.env.RUN_AGENT_TESTS !== '1') {
+                    continue;
+                }
+                await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes);
+            }
+        } finally {
+            if (needsFixtures && checkCtx.Fixtures) {
+                await teardownRunQueryFixtures(checkCtx, checkCtx.Fixtures);
+                checkCtx.Fixtures = undefined;
+            }
+        }
+    }
+
+    /** Run one check in try/catch and append one OracleResult + one TestOutcome. */
+    private async runCheck(
+        context: DriverExecutionContext,
+        checkCtx: IntegrationCheckContext,
+        id: string,
+        name: string,
+        fn: (ctx: IntegrationCheckContext) => Promise<void>,
+        oracleResults: OracleResult[],
+        outcomes: TestOutcome[]
+    ): Promise<void> {
+        const checkStart = Date.now();
+        try {
+            await fn(checkCtx);
+            const durationMs = Date.now() - checkStart;
+            oracleResults.push({
+                oracleType: id,
+                passed: true,
+                score: 1,
+                message: name,
+                details: { DurationMs: durationMs, runViewCacheSets: checkCtx.Storage.SetCount('RunViewCache') }
+            });
+            outcomes.push({ Name: name, Passed: true, DurationMs: durationMs });
+            this.logToTestRun(context, 'info', `✓ ${id}`);
+        } catch (checkErr) {
+            const durationMs = Date.now() - checkStart;
+            const message = (checkErr as Error).message;
+            oracleResults.push({ oracleType: id, passed: false, score: 0, message, details: { DurationMs: durationMs } });
+            outcomes.push({ Name: name, Passed: false, DurationMs: durationMs, Error: message });
+            this.logToTestRun(context, 'error', `✗ ${id}: ${message}`);
+        }
+    }
+
+    /** client-cache runs on the GraphQL client transport; every other bundle on SQL server. */
+    private bundleTransport(bundleType: string): 'server' | 'client' {
+        return bundleType === CLIENT_BUNDLE ? 'client' : 'server';
+    }
+
+    /**
+     * Obtain the run-scoped instrumented provider stack for the chosen transport.
+     * Prefers a stack already installed first-caller (CLI's installInstrumentedCacheFirst,
+     * or a prior bootstrap in this process); falls back to owning the process. Throws
+     * (caught upstream) when a client bundle is requested but the cache was already claimed
+     * by a SQL provider, or vice-versa.
+     */
+    private async buildCheckContext(context: DriverExecutionContext, transport: 'server' | 'client'): Promise<IntegrationCheckContext> {
+        if (transport === 'client') {
+            const client = getActiveIntegrationClientBootstrap() ?? await bootstrapIntegrationClient();
+            return {
+                User: context.contextUser,
+                Provider: this.Provider,
+                Storage: client.Storage,
+                Pool: undefined,
+                Schema: process.env.MJ_CORE_SCHEMA ?? '__mj'
+            };
+        }
+
         let storage: InstrumentedLocalStorageProvider | null = getActiveIntegrationStorage();
-        let pool: sql.ConnectionPool | undefined = getActiveIntegrationBootstrap()?.Pool;
+        const activeBootstrap = getActiveIntegrationBootstrap();
+        let pool: sql.ConnectionPool | undefined = activeBootstrap?.Pool;
+        let schema: string | undefined = activeBootstrap?.Db.Schema;
         if (!storage) {
             const ic = await bootstrapIntegrationServer();
             storage = ic.Storage;
             pool = ic.Pool;
+            schema = ic.Db.Schema;
         }
         return {
             User: context.contextUser,
             // Dedicated single-provider process: the driver's provider IS the global one.
             Provider: this.Provider,
             Storage: storage,
-            Pool: pool
+            Pool: pool,
+            Schema: schema ?? (process.env.MJ_CORE_SCHEMA ?? '__mj')
         };
     }
 

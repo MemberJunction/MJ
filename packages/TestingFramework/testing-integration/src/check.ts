@@ -8,8 +8,25 @@
  * separate per-check result interface.
  */
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import type sql from 'mssql';
 import type { InstrumentedLocalStorageProvider } from './instrumented-cache';
+
+/**
+ * The self-contained Query/Category fixtures the `runquery-cache` bundle needs:
+ * one Query Category and two Queries (TTL-mode + smart-validation-mode), created
+ * before the bundle's checks run and torn down afterwards. Lifted from
+ * runquery-cache-tests.ts's Ctx; threaded onto IntegrationCheckContext.Fixtures so
+ * the Q-checks read them identically whether driven by the driver or the tsx script.
+ */
+export interface RunQueryFixtures {
+    /** "Integration Test Queries <ts>" category owning the fixture queries. */
+    Category: MJQueryCategoryEntity;
+    /** Query WITHOUT CacheValidationSQL → TTL caching mode. */
+    TtlQuery: MJQueryEntity;
+    /** Query WITH CacheValidationSQL → smart-validation caching mode. */
+    ValidatedQuery: MJQueryEntity;
+}
 
 /** The bootstrapped, run-scoped real provider stack handed to every check. */
 export interface IntegrationCheckContext {
@@ -21,6 +38,10 @@ export interface IntegrationCheckContext {
     Storage: InstrumentedLocalStorageProvider;
     /** Present for server-side bundles that need raw SQL fixtures; undefined for client bundles. */
     Pool?: sql.ConnectionPool;
+    /** Core schema (e.g. '__mj') for fixture SQL that references views directly. */
+    Schema?: string;
+    /** Bundle-specific setup state populated by the driver/script before the bundle runs. */
+    Fixtures?: RunQueryFixtures;
 }
 
 /**

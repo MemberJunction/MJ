@@ -1,0 +1,30 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT01 - Server RunView Cache Integrity",
+    "Description": "Ports server-cache-tests.ts S1-S26 against a live SQLServerDataProvider with an InstrumentedLocalStorageProvider. The 23 deterministic checks always run; the 3 mutation checks (S17/S23/S24) run only when the selector sets runMutationTests.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All cache hit/miss/shape assertions pass; counters scoped to RunViewCache. Ordering inside the bundle is load-bearing (S1->S2->S3 share the 's1' slot)."
+    },
+    "Configuration": {
+      "transport": "server",
+      "checks": [
+        {
+          "type": "server-cache",
+          "config": {
+            "runMutationTests": false
+          }
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "5348C44D-66A8-41DE-9432-C9FF845D5324"
+  },
+  "sync": {
+    "lastModified": "2026-06-23T19:37:27.686Z",
+    "checksum": "131b0e32a06f9b03c9a428f11015bfa47024689740f3442a8fe984fb079de636"
+  }
+}

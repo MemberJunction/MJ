@@ -4,5 +4,12 @@
     "Description": "Headless, scripted integration checks (cache integrity, RLS, API keys, …) run in a dedicated process against a live DB/transport, dispatched by IntegrationTestDriver.",
     "DriverClass": "IntegrationTestDriver",
     "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "502A3E67-1D0A-4EEE-8E7C-CB4AA2479709"
+  },
+  "sync": {
+    "lastModified": "2026-06-23T18:46:45.626Z",
+    "checksum": "ec6a081d86edf820ee63d777bd461c7683b2cbc5df60c7196c9ed34b2f1de6dd"
   }
 }
