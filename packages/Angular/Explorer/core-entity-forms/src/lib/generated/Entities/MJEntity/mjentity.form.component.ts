@@ -89,7 +89,9 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
-            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
+            { sectionKey: 'mJMaterializedResultsSourceEntityID', sectionName: 'Materialized Results (Source Entity ID)', isExpanded: false },
+            { sectionKey: 'mJMaterializedResultsGeneratedEntityID', sectionName: 'Materialized Results (Generated Entity ID)', isExpanded: false }
         ]);
     }
 }
