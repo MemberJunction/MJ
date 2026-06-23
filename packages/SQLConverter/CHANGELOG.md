@@ -1,5 +1,58 @@
 # @memberjunction/sql-converter
 
+## 5.42.0
+
+### Patch Changes
+
+- 2f225e4: CodeGen + SS→PG converter type-correctness on PostgreSQL:
+  - **codegen-lib / core / actions-base**: core + codegen type correctness on PostgreSQL, plus a
+    PG-only migration repairing TypeScript that the SS→PG baseline conversion corrupted in
+    GeneratedCode rows. _(migration → minor)_
+  - **sql-converter**: never quote identifiers inside string literals during SS→PG conversion. _(code → patch)_
+
+- 8f7260b: Add inline CodeGen baking for PostgreSQL migrations (`mj migrate convert --bake-codegen` and `mj migrate rebake`) plus a one-time PG CodeGen cutover migration and a repeatable `EntityField.AllowsNull` self-heal, enabling codegen-free PostgreSQL deploys (`mj migrate` + `mj sync push`, no `mj codegen`).
+- eea5b15: Split-and-regenerate PostgreSQL migration pipeline: regenerate the machine-generated bulk of each migration and transpile only hand-authored DDL via AST-based SQLGlot dialect transforms, replacing the brittle regex-based pg-migrate path. Adds statement-level classification for unbannered baselines and end-to-end AST transforms covering the remaining DDL edge cases.
+- Updated dependencies [8f7260b]
+- Updated dependencies [eea5b15]
+  - @memberjunction/sqlglot-ts@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.41.0
+- @memberjunction/sqlglot-ts@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.40.2
+- @memberjunction/sqlglot-ts@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.40.1
+- @memberjunction/sqlglot-ts@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- 9233802: Convert and validate the consolidated baseline in the PostgreSQL migration pipeline. GrantRule now skips `GRANT CONNECT` (no PG equivalent) and ProcedureToFunctionRule skips CRUD sprocs whose `RETURNS SETOF` view is a deprecated/orphaned entity view — both emit `-- SKIPPED (INTENTIONAL)` markers instead of apply-failing SQL. Fix the MJCLI baseline roundtrip's PG conversion (it called nonexistent `--input/--output` flags) and correct the migrate-convert baseline JSDoc.
+  - @memberjunction/sql-dialect@5.40.0
+  - @memberjunction/sqlglot-ts@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.39.0
+- @memberjunction/sqlglot-ts@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

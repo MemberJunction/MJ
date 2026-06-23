@@ -18,6 +18,15 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'version',
   'help',
 
+  // Progressive-disclosure usage (tier 1 + tier 2) — composes plugin static
+  // metadata only; no bootstrap needed. Plugin entry points are light.
+  'usage',
+  'sync usage',
+  'codegen usage',
+
+  // Plugin registry editing — just writes mj-cli-plugins.json
+  'plugin add',
+
   // Bump - uses zod, fast-glob, fs only
   'bump',
 
@@ -45,6 +54,16 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // SQL conversion commands - use @memberjunction/sql-converter + sqlglot-ts only
   'sql-convert',
   'sql-audit',
+
+  // Claude pack commands - use only node stdlib + the lib/claude-pack/ helpers;
+  // no MJ runtime / bootstrap needed.
+  'install:claude',
+  'update:claude',
+
+  // CodeGen manifest - uses @memberjunction/codegen-lib for AST scanning only, no bootstrap needed.
+  // Must be light to break the circular dependency: server-bootstrap-lite's prebuild calls
+  // `mj codegen manifest`, but bootstrap-lite must be built before MJCLI's prerun can import it.
+  'codegen manifest',
 
   // DBDoc commands - already use dynamic imports internally
   'dbdoc init',

@@ -8,6 +8,13 @@
       "DomainRunEntity": "MJ: AI Agent Runs",
       "DomainRunEntityFKey": null,
       "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "D137A105-AFE6-4E7F-942A-8EA40D70F531"
+    },
+    "sync": {
+      "lastModified": "2026-06-05T02:25:21.839Z",
+      "checksum": "033843e4e7f24cd4bfa34bf3b20f72b42038fcf005bd0c23da463b274059c05a"
     }
   }
 ]

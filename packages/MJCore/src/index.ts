@@ -15,6 +15,8 @@ export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
+export * from "./generic/baseRemotableOperation";
+export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
 export * from "./generic/securityInfo";
 export * from "./generic/transactionGroup";

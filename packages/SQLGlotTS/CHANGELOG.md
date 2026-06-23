@@ -1,5 +1,22 @@
 # @memberjunction/sqlglot-ts
 
+## 5.42.0
+
+### Patch Changes
+
+- 8f7260b: Add inline CodeGen baking for PostgreSQL migrations (`mj migrate convert --bake-codegen` and `mj migrate rebake`) plus a one-time PG CodeGen cutover migration and a repeatable `EntityField.AllowsNull` self-heal, enabling codegen-free PostgreSQL deploys (`mj migrate` + `mj sync push`, no `mj codegen`).
+- eea5b15: Split-and-regenerate PostgreSQL migration pipeline: regenerate the machine-generated bulk of each migration and transpile only hand-authored DDL via AST-based SQLGlot dialect transforms, replacing the brittle regex-based pg-migrate path. Adds statement-level classification for unbannered baselines and end-to-end AST transforms covering the remaining DDL edge cases.
+
+## 5.41.0
+
+## 5.40.2
+
+## 5.40.1
+
+## 5.40.0
+
+## 5.39.0
+
 ## 5.38.0
 
 ## 5.37.0

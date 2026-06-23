@@ -1,0 +1,47 @@
+{
+  "name": "@memberjunction/ng-whiteboard",
+  "version": "5.42.0",
+  "description": "MemberJunction: Generic collaborative whiteboard for any Angular application — Angular-free state engine with undo/redo + change journal, agent perception deltas, a programmatic (AI-agent-ready) mutation tool API, sandboxed HTML widgets with an input bridge, markdown panels, and self-contained HTML/SVG export",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "ngc",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "angular",
+    "whiteboard",
+    "canvas",
+    "collaboration",
+    "ai-agent",
+    "memberjunction"
+  ],
+  "author": "MemberJunction",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3",
+    "@angular/platform-browser": "21.1.3"
+  },
+  "dependencies": {
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/ng-code-editor": "5.42.0",
+    "@memberjunction/ng-markdown": "5.42.0",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

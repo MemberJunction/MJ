@@ -1,5 +1,153 @@
 # @memberjunction/ng-react
 
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [438ce4a]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/ai-vectors-memory@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/react-runtime@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- 133dfa7: Interactive components: persist `savedUserSettings` per-user, cross-device
+
+  The existing interactive-component settings contract (`savedUserSettings` in /
+  `onSaveUserSettings` out) is now durably persisted **per-user, cross-device** via
+  `UserInfoEngine`, automatically scoped per component — with no change to the component
+  contract. The Angular host (`MJReactComponent`) seeds `savedUserSettings` from the
+  store on load and saves (debounced) on every `onSaveUserSettings` call, under the key
+  `InteractiveComponents_UserState_Root/<scope>` where scope defaults to
+  `<namespace>/<name>` (override via the new
+  `UserStateScope` input). Set the new `PersistUserSettings` input to `false` to opt out
+  and own persistence via the `userSettingsChanged` output instead.
+
+  Saves **merge, never replace**: the host overlays each `onSaveUserSettings` payload
+  onto the saved settings, so a component that passes only the changed keys (or spreads
+  a stale prop) cannot wipe other preferences. Removing a key requires explicit intent —
+  set its value to `null`.
+  - `@memberjunction/react-runtime`: new framework-agnostic `user-state` helpers
+    (`resolveUserStateScope`, `userStateStorageKey`, `parseStoredUserSettings`,
+    `mergeUserSettings`, `applyUserSettingsUpdate`) plus unit tests.
+  - `@memberjunction/react-test-harness`: `ComponentExecutionOptions.savedUserSettings`
+    seeds the prop and `onSaveUserSettings` now merges into a real in-memory snapshot
+    with the same null-removes-key semantics as the production host.
+
+  Fully additive — existing components that already use the blob gain durable
+  persistence for free.
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [34d17e2]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [133dfa7]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/graphql-dataprovider@5.41.0
+  - @memberjunction/react-runtime@5.41.0
+  - @memberjunction/ng-notifications@5.41.0
+  - @memberjunction/ai-vectors-memory@5.41.0
+  - @memberjunction/ng-base-types@5.41.0
+  - @memberjunction/interactive-component-types@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.40.2
+- @memberjunction/ng-base-types@5.40.2
+- @memberjunction/ng-notifications@5.40.2
+- @memberjunction/graphql-dataprovider@5.40.2
+- @memberjunction/interactive-component-types@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+- @memberjunction/react-runtime@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-vectors-memory@5.40.1
+  - @memberjunction/ng-base-types@5.40.1
+  - @memberjunction/ng-notifications@5.40.1
+  - @memberjunction/graphql-dataprovider@5.40.1
+  - @memberjunction/interactive-component-types@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/react-runtime@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [7bbfd62]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/graphql-dataprovider@5.40.0
+  - @memberjunction/ai-vectors-memory@5.40.0
+  - @memberjunction/ng-base-types@5.40.0
+  - @memberjunction/ng-notifications@5.40.0
+  - @memberjunction/interactive-component-types@5.40.0
+  - @memberjunction/react-runtime@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [f60e340]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [315ff4d]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/graphql-dataprovider@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/react-runtime@5.39.0
+  - @memberjunction/ai-vectors-memory@5.39.0
+  - @memberjunction/ng-base-types@5.39.0
+  - @memberjunction/ng-notifications@5.39.0
+  - @memberjunction/interactive-component-types@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

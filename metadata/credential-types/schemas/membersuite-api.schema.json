@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "MemberSuite API Credentials",
+  "description": "MemberSuite signed-request authentication. The Access Key ID / Association ID / Association Key / Secret Access Key are provisioned per-association by the customer's MemberSuite (GrowthZone) administrator; the Signing Certificate + Signing Certificate ID are optional, used for enhanced request-signing security.",
+  "properties": {
+    "AccessKeyID": { "type": "string", "title": "Access Key ID" },
+    "AssociationID": { "type": "string", "title": "Association ID" },
+    "AssociationKey": { "type": "string", "title": "Association Key" },
+    "SecretAccessKey": { "type": "string", "title": "Secret Access Key", "format": "password" },
+    "SigningCertificate": { "type": "string", "title": "Signing Certificate (PEM, optional)", "format": "password" },
+    "SigningCertificateID": { "type": "string", "title": "Signing Certificate ID (optional)" }
+  },
+  "required": ["AccessKeyID", "AssociationID", "AssociationKey", "SecretAccessKey"]
+}

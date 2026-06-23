@@ -73,7 +73,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     FormsModule,
     ReactiveFormsModule,
 
-    // MJ Consolidated Bundle (includes all MJ + Kendo modules)
+    // MJ Consolidated Bundle (includes all MJ Explorer modules)
     MJExplorerModulesBundle,
 
     // Auth (needs forRoot configuration)

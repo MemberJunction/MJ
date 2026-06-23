@@ -22,6 +22,11 @@ import {
     type DefaultIntegrationConfig,
     type IntegrationObjectInfo,
     type ActionGeneratorConfig,
+    type SourceSchemaInfo,
+    type SourceObjectInfo,
+    type SourceFieldInfo,
+    type SourceRelationshipInfo,
+    type IntrospectSchemaOptions,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -166,6 +171,36 @@ const REACH360_API_PATHS: Record<string, string> = {
     groups: '/groups',
     learningpaths: '/learning-paths',
     activityreport: '/reports/activity',
+};
+
+/**
+ * Provable implicit foreign keys, keyed by lowercase object name → (field name →
+ * referenced object's external name). Each entry is proven by a `<Sibling>Id`
+ * field whose `<Sibling>` resolves (singular/plural-aware) to ANOTHER object
+ * declared in REACH360_OBJECTS:
+ *   - ActivityReport.courseId → Courses (composite-PK part; also the FK)
+ *   - ActivityReport.userId   → Users   (composite-PK part; also the FK)
+ * Both are part of ActivityReport's composite {courseId, userId} primary key —
+ * the association/junction pattern — so each is simultaneously PK and FK.
+ */
+const REACH360_FOREIGN_KEYS: Record<string, Record<string, string>> = {
+    activityreport: {
+        courseId: 'Courses',
+        userId: 'Users',
+    },
+};
+
+/**
+ * Promotes each object's OWN declared "last changed" timestamp into the
+ * IncrementalWatermarkField slot. These are the exact fields the connector
+ * already filters on client-side in `watermarkFieldFor()` / `applyClientWatermark()`:
+ *   - ActivityReport → completedAt  (declared "Session completion timestamp (watermark field)")
+ *   - Users          → lastActiveAt (declared "Last platform activity timestamp")
+ * Objects with no declared change-timestamp are intentionally absent (honest gap).
+ */
+const REACH360_WATERMARK_FIELDS: Record<string, string> = {
+    activityreport: 'completedAt',
+    users: 'lastActiveAt',
 };
 
 // ─── Connector Implementation ─────────────────────────────────────────
@@ -335,15 +370,79 @@ export class Reach360Connector extends BaseRESTIntegrationConnector {
     ): Promise<ExternalFieldSchema[]> {
         const obj = REACH360_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
         if (!obj) return [];
-        return obj.Fields.map(f => ({
-            Name: f.Name,
-            Label: f.DisplayName,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: f.IsReadOnly,
-        }));
+        const fkMap = REACH360_FOREIGN_KEYS[objectName.toLowerCase()] ?? {};
+        return obj.Fields.map(f => {
+            const fkTarget = fkMap[f.Name];
+            return {
+                Name: f.Name,
+                Label: f.DisplayName,
+                Description: f.Description,
+                DataType: f.Type,
+                IsRequired: f.IsRequired,
+                IsPrimaryKey: f.IsPrimaryKey,
+                IsUniqueKey: f.IsPrimaryKey,
+                IsReadOnly: f.IsReadOnly,
+                IsForeignKey: fkTarget != null,
+                ForeignKeyTarget: fkTarget ?? null,
+            };
+        });
+    }
+
+    /**
+     * Builds the source-schema introspection result from the static
+     * REACH360_OBJECTS catalog. Overrides the base implementation purely to
+     * additionally surface each object's IncrementalWatermarkField — the base
+     * IntrospectSchema derives PK/FK from DiscoverFields() but does not emit a
+     * watermark. All PK/FK/watermark values here are promoted from this
+     * connector's OWN declared metadata (composite-PK association fields and the
+     * declared change-timestamps); nothing is inferred from a live API.
+     */
+    public override async IntrospectSchema(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo,
+        options?: IntrospectSchemaOptions
+    ): Promise<SourceSchemaInfo> {
+        const wanted = options?.ObjectNames && options.ObjectNames.length > 0
+            ? new Set(options.ObjectNames.map(n => n.toLowerCase()))
+            : null;
+        const objects = wanted
+            ? REACH360_OBJECTS.filter(o => wanted.has(o.Name.toLowerCase()))
+            : REACH360_OBJECTS;
+
+        const result: SourceSchemaInfo = { Objects: [] };
+        for (const obj of objects) {
+            const fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            const sourceFields: SourceFieldInfo[] = fields.map(f => ({
+                Name: f.Name,
+                Label: f.Label,
+                Description: f.Description,
+                SourceType: f.DataType,
+                IsRequired: f.IsRequired,
+                AllowsNull: f.AllowsNull,
+                MaxLength: f.MaxLength ?? null,
+                Precision: f.Precision ?? null,
+                Scale: f.Scale ?? null,
+                DefaultValue: f.DefaultValue ?? null,
+                IsPrimaryKey: f.IsPrimaryKey ?? false,
+                IsUniqueKey: f.IsUniqueKey,
+                IsReadOnly: f.IsReadOnly,
+                IsForeignKey: f.IsForeignKey ?? false,
+                ForeignKeyTarget: f.ForeignKeyTarget ?? null,
+            }));
+            const relationships: SourceRelationshipInfo[] = sourceFields
+                .filter(f => f.IsForeignKey && f.ForeignKeyTarget)
+                .map(f => ({ FieldName: f.Name, TargetObject: f.ForeignKeyTarget!, TargetField: 'ID' }));
+            result.Objects.push({
+                ExternalName: obj.Name,
+                ExternalLabel: obj.DisplayName,
+                Description: obj.Description,
+                Fields: sourceFields,
+                PrimaryKeyFields: sourceFields.filter(f => f.IsPrimaryKey).map(f => f.Name),
+                Relationships: relationships,
+                IncrementalWatermarkField: REACH360_WATERMARK_FIELDS[obj.Name.toLowerCase()],
+            });
+        }
+        return result;
     }
 
     // ─── FetchChanges (cursor pagination) ────────────────────────────
@@ -506,7 +605,7 @@ export class Reach360Connector extends BaseRESTIntegrationConnector {
             }
             const body = (resp.Body ?? {}) as Record<string, unknown>;
             const id = body['id'] != null ? String(body['id']) : (route.fallbackID ?? '');
-            return { Success: true, ExternalID: id, StatusCode: resp.Status };
+            return this.BuildCreatedResult(id, resp.Status, ctx.ObjectName);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
             return { Success: false, ErrorMessage: `Reach360 CreateRecord failed: ${message}`, StatusCode: 500 };

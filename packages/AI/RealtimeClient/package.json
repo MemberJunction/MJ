@@ -1,0 +1,31 @@
+{
+  "name": "@memberjunction/ai-realtime-client",
+  "type": "module",
+  "version": "5.42.0",
+  "description": "MemberJunction: Framework-agnostic browser client abstraction for provider-direct realtime (voice) sessions - BaseRealtimeClient + provider drivers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/ai": "5.42.0",
+    "@google/genai": "^1.40.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

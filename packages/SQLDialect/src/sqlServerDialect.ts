@@ -223,6 +223,8 @@ export class SQLServerDialect extends SQLDialect {
     get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._BooleanTypeNames; }
     get StringTypeNames(): readonly string[]   { return SQLServerDialect._StringTypeNames; }
     get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._FixedWidthStringTypeNames; }
+    /** SQL Server index keys are limited to 900 bytes → 450 NVARCHAR (2-byte) chars. */
+    override get MaxKeyStringLength(): number { return 450; }
     get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
     get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
     get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }
@@ -495,6 +497,30 @@ export class SQLServerDialect extends SQLDialect {
             `    @value = N'${escapedComment}',`,
             `    @level0type = N'SCHEMA', @level0name = N'${schema}',`,
             `    @level1type = N'${level1Type}', @level1name = N'${name}'`,
+        ].join('\n');
+    }
+
+    // ─── Idempotent (single-statement) DDL — see SQLDialect base ─────
+
+    override CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
+        // Single-statement IF guard (no BEGIN/END) so migration chunkers that split on ';\n'
+        // boundaries cannot separate the guard from the CREATE. The only ';' is the terminating ');'.
+        return `IF OBJECT_ID(N'${fullTable}', N'U') IS NULL\nCREATE TABLE ${fullTable} (\n${columnsBody}\n);`;
+    }
+
+    override CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
+        const level1Type = this.objectTypeToLevel1Type(objectType);
+        // IF NOT EXISTS governs the single EXEC that follows (sp_addextendedproperty has no internal ';').
+        return [
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'${level1Type}', N'${name}', NULL, NULL))`,
+            `${this.CommentOnObject(objectType, schema, name, comment)};`,
+        ].join('\n');
+    }
+
+    override CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
+        return [
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'TABLE', N'${table}', N'COLUMN', N'${column}'))`,
+            this.CommentOnColumn(schema, table, column, comment),
         ].join('\n');
     }
 

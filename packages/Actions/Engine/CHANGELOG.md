@@ -1,5 +1,146 @@
 # Change Log - @memberjunction/actions
 
+## 5.42.0
+
+### Minor Changes
+
+- 37c73f6: Refactor server-side engines to COMPOSE their metadata-cache base instead of extending it, eliminating duplicate metadata caches (and the "Duplicate RunView Detected" telemetry warning).
+
+  `ActionEngineServer`, `EntityActionEngineServer`, `CommunicationEngine`, and `TemplateEngineServer` each previously extended a `BaseEngine` subclass, which made each its own singleton with its own `Config()` — so on a typical server both the base and the server layer loaded, issuing a second identical RunViews batch and holding a second copy of all the cached arrays (for Templates, a second copy of the `Template_Metadata` dataset).
+
+  They now follow the `AIEngine`/`AIEngineBase` pattern: the server engine `extends BaseSingleton`, holds a private `Base` accessor to the single cache-holding base, delegates `Config()` to it, and proxies every cached collection + lookup. Each keeps its own `_contextUser` (captured on `Config()`) and all server-only behavior (action execution/logging, `RunEntityAction`, `SendMessages`/`SendSingleMessage`/`CreateDraft`, nunjucks rendering). `CommunicationEngineBase`'s `StartRun`/`EndRun`/`StartLog` send-lifecycle methods are now public so the composed server can drive them.
+
+  Also fixes incorrect singleton instantiation surfaced by the change: `new ActionEngineServer()` / `new TemplateEngineServer()` (which only compiled under the old base and produced unconfigured, empty-cache instances) are replaced with `.Instance` at the affected call sites in `@memberjunction/core-actions` and `@memberjunction/ai-agent-manager`.
+
+- 0fa3cbc: Record Set Processing & Record Processes, plus the Remote Operations primitive.
+
+  **Remote Operations** (`@memberjunction/core`, `@memberjunction/global`, `@memberjunction/graphql-dataprovider`, `@memberjunction/server`) — a typed, provider-routed capability the browser and server both invoke through one call site, the peer of `BaseEntity` (CRUD) and `RunView` (set reads):
+  - `BaseRemotableOperation<TInput,TOutput>` with `OperationKey` / `RequiredScope` / `RequiresSystemUser` / `ExecutionMode`; `Execute()` routes per-provider, `ExecuteServer()` runs in-process and never throws on logical failure.
+  - `IRemoteOperationProvider.RouteOperation` on `ProviderBase` (the documented power tool), in-process dispatch in `DatabaseProviderBase`, GraphQL marshalling in `GraphQLDataProvider`, and the single generic `ExecuteRemoteOperation` resolver that composes the existing API-key-scope + user-permission auth chain.
+  - Genericized value-mapping resolver in `@memberjunction/global` (`getValueAtPath` / `resolveMappingRef` / `resolveValueMapping`) — one canonical mapping engine over pluggable named sources.
+
+  **Record Set Processing substrate** (`@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`) — a hardened iterate-a-record-set-and-do-work engine with three pluggable seams (source / processor / run-tracker): batching, bounded concurrency, rate limiting, circuit breaker, checkpoint/resume, and pause/cancel. Ships Array/View/List/Filter/Keyset sources; Action / Agent / Infer record processors; a uniform `WriteBackProcessor` that applies an `OutputMapping` (fields / child record) to any work type; the `RecordProcessExecutor` facade (Scope→source, Work→processor); and the `RecordProcess.RunNow` / `GetRunStatus` / `Pause` / `Resume` / `Cancel` control operations.
+
+  **Record Processes facade** (`@memberjunction/core-entities`, `@memberjunction/core-entities-server`, `@memberjunction/scheduling-engine`, `@memberjunction/actions`) — the `MJ: Record Processes` definition (Work × Scope × Trigger) plus generic `MJ: Process Runs` / `Process Run Details` tracking and the `MJ: Remote Operations` registry. `MJRecordProcessEntityServer` reconciles the owned recurrence Scheduled Job on save; `RecordProcessScheduledJobDriver` runs a process on its cron schedule and links each `ProcessRun` back to its `ScheduledJobRun`; the Entity Action `GetRecordList` View/List fan-out backs scoped iteration.
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/code-execution@5.42.0
+  - @memberjunction/action-runtime@5.42.0
+  - @memberjunction/doc-utils@5.42.0
+  - @memberjunction/ai@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [8fd6f59]
+- Updated dependencies [2e48d1a]
+- Updated dependencies [84089ae]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+- Updated dependencies [1568bae]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/core-entities@5.41.0
+  - @memberjunction/ai@5.41.0
+  - @memberjunction/actions-base@5.41.0
+  - @memberjunction/code-execution@5.41.0
+  - @memberjunction/action-runtime@5.41.0
+  - @memberjunction/doc-utils@5.41.0
+  - @memberjunction/global@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai@5.40.2
+- @memberjunction/actions-base@5.40.2
+- @memberjunction/code-execution@5.40.2
+- @memberjunction/action-runtime@5.40.2
+- @memberjunction/doc-utils@5.40.2
+- @memberjunction/core@5.40.2
+- @memberjunction/core-entities@5.40.2
+- @memberjunction/global@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/actions-base@5.40.1
+  - @memberjunction/code-execution@5.40.1
+  - @memberjunction/action-runtime@5.40.1
+  - @memberjunction/doc-utils@5.40.1
+  - @memberjunction/core-entities@5.40.1
+  - @memberjunction/ai@5.40.1
+  - @memberjunction/global@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/core-entities@5.40.0
+  - @memberjunction/actions-base@5.40.0
+  - @memberjunction/code-execution@5.40.0
+  - @memberjunction/action-runtime@5.40.0
+  - @memberjunction/doc-utils@5.40.0
+  - @memberjunction/ai@5.40.0
+  - @memberjunction/global@5.40.0
+
+## 5.39.0
+
+### Minor Changes
+
+- 26761b8: fix(actions): surface real action errors instead of swallowing them
+
+  `ActionEngine.InternalRunAction`'s catch block called `LogError(message, e)`, but `LogError`'s second positional parameter is `logToFileName` — so the thrown `Error` was consumed as a (non-string) filename and never printed. Every failed action logged only `Error running action <name>:` with no message or stack. It now uses `LogErrorEx({ message, error })` so the real message and stack trace are logged, and the returned result `Message` handles non-`Error` throws.
+
+  feat(metadata-sync): only warn about missing required fields for NEW records
+
+  The "Required field X is missing" best-practice warning fired for existing records too (e.g. `BaseView` on `MJ: Entities`), even though the value is already persisted in the DB. Since metadata files commonly set only a subset of fields on an update, this produced noise that masked genuine warnings. The validator now threads the record's `primaryKey` presence down to the required-field check and runs it only for new (unsaved) records.
+
+### Patch Changes
+
+- a2aecc7: Align ActionEngine test mock with the recent LogErrorEx switch in InternalRunAction's catch block, restoring the previously failing "should catch errors from action execution" test and silencing stderr noise from two other passing tests.
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [0f9acba]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [1b0f355]
+- Updated dependencies [9bc2916]
+- Updated dependencies [34fe6d1]
+- Updated dependencies [a101a34]
+  - @memberjunction/core@5.39.0
+  - @memberjunction/core-entities@5.39.0
+  - @memberjunction/global@5.39.0
+  - @memberjunction/ai@5.39.0
+  - @memberjunction/actions-base@5.39.0
+  - @memberjunction/code-execution@5.39.0
+  - @memberjunction/action-runtime@5.39.0
+  - @memberjunction/doc-utils@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes

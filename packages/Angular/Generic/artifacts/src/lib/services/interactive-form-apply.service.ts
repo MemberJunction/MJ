@@ -89,19 +89,49 @@ export class InteractiveFormApplyService {
         // Step 3: run Create or Modify.
         const formName = (spec as unknown as { name?: string }).name ?? 'Custom Form';
         if (hasExistingActive) {
+            // MJ's Modify operates on a Component *lineage* keyed by Name — the spec
+            // name must match the existing Component across versions. A freshly
+            // generated form usually has a different name, so align it to the existing
+            // lineage (spec.name + the root `function` declaration the linter checks)
+            // before modifying.
+            if (payload?.Active?.ComponentName) {
+                this.alignSpecToLineage(spec, payload.Active.ComponentName);
+            }
             const modifyResult = await this.runActionByName(client, 'Modify Interactive Form', [
                 { Name: 'OverrideID', Value: payload!.Active!.OverrideID!, Type: 'Input' },
                 { Name: 'Spec', Value: JSON.stringify(spec), Type: 'Input' },
                 { Name: 'Notes', Value: `Applied from chat artifact at ${new Date().toISOString()}`, Type: 'Input' },
+                // A user "Apply" is a deliberate save, never an in-flight refinement —
+                // so always snapshot a new restorable version rather than risk an
+                // in-place overwrite. Passing an explicit bump makes this deterministic
+                // across every source status (the 'in-place' default only applies to a
+                // Pending source, which is the agent's iteration loop, not this path).
+                // The prior version is demoted to Inactive on activation and stays in
+                // Form Builder's version rail.
+                { Name: 'VersionBumpKind', Value: 'minor', Type: 'Input' },
             ]);
-            return this.summarize(modifyResult, 'modify', user);
+            // Auto-activate the resulting version too. "Apply to my form" is an explicit
+            // user action — they expect the applied form to go live, not sit as a Pending
+            // draft the runtime variant switcher (Active variants only) can't reach. The
+            // prior version is preserved as history and restorable from Form Builder.
+            const modifyActivated = modifyResult.Success
+                ? await this.activateCreatedOverride(client, modifyResult.Message)
+                : false;
+            return this.summarize(modifyResult, 'modify', user, modifyActivated);
         }
         const createResult = await this.runActionByName(client, 'Create Interactive Form', [
             { Name: 'EntityName', Value: entityName, Type: 'Input' },
             { Name: 'Name',       Value: formName,   Type: 'Input' },
             { Name: 'Spec',       Value: JSON.stringify(spec), Type: 'Input' },
         ]);
-        return this.summarize(createResult, 'create', user);
+        // Net-new "Apply to my form" is an explicit, confirmed user action, so we
+        // activate the freshly-created (Pending) override immediately — the form goes
+        // live in one step. Refining an EXISTING active form (the branch above) stays
+        // Pending so a live form is never silently replaced.
+        const activated = createResult.Success
+            ? await this.activateCreatedOverride(client, createResult.Message)
+            : false;
+        return this.summarize(createResult, 'create', user, activated);
     }
 
     // ── internals ────────────────────────────────────────────────────────
@@ -151,10 +181,11 @@ export class InteractiveFormApplyService {
     private async resolveActionIdByName(name: string): Promise<string | null> {
         try {
             // ActionEngine may not be initialised in the chat surface — query directly.
+            // The core Action table is registered as the "MJ: Actions" entity.
             const { RunView } = await import('@memberjunction/core');
             const rv = new RunView();
             const result = await rv.RunView<{ ID: string }>({
-                EntityName: 'Actions',
+                EntityName: 'MJ: Actions',
                 ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
                 Fields: ['ID'],
                 MaxRows: 1,
@@ -167,26 +198,72 @@ export class InteractiveFormApplyService {
         }
     }
 
+    /**
+     * Activate the override produced by a successful Create so a net-new form goes
+     * live immediately. Best-effort: on failure the form stays a Pending draft the
+     * user can activate manually, so we log and return false rather than failing the
+     * whole apply.
+     */
+    private async activateCreatedOverride(
+        client: GraphQLActionClient,
+        createMessage: string | undefined,
+    ): Promise<boolean> {
+        let overrideId: string | undefined;
+        try {
+            overrideId = (JSON.parse(createMessage ?? '{}') as { OverrideID?: string }).OverrideID;
+        } catch {
+            overrideId = undefined;
+        }
+        if (!overrideId) return false;
+        const activateResult = await this.runActionByName(client, 'Activate Interactive Form Version', [
+            { Name: 'OverrideID', Value: overrideId, Type: 'Input' },
+        ]);
+        if (!activateResult.Success) {
+            LogError(`InteractiveFormApplyService: created override ${overrideId} but auto-activation failed: ${activateResult.Message ?? 'unknown error'}`);
+        }
+        return activateResult.Success;
+    }
+
+    /**
+     * Align a freshly generated spec to an existing Component lineage before Modify.
+     * MJ identifies a form lineage by Component Name and refuses to change it between
+     * versions, so we rename the incoming spec — both `spec.name` and the root
+     * `function` declaration in `spec.code` (the linter requires them to match) — to
+     * the existing lineage name.
+     */
+    private alignSpecToLineage(spec: ComponentSpec, existingName: string): void {
+        const s = spec as { name?: string; code?: string };
+        const currentName = s.name;
+        if (!currentName || currentName === existingName) return;
+        s.name = existingName;
+        if (typeof s.code === 'string' && s.code.length > 0) {
+            const escaped = currentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            s.code = s.code.replace(new RegExp(`function\\s+${escaped}\\s*\\(`), `function ${existingName}(`);
+        }
+    }
+
     /** Show a confirmation dialog explaining what's about to happen. */
     private async confirm(
         hasExistingActive: boolean,
         entityName: string,
         currentVersion: string | null | undefined,
     ): Promise<boolean> {
+        // The dialog renders string content as plain text (not innerHTML), so use
+        // plain text here — HTML tags would show raw.
         const content = hasExistingActive
-            ? `You already have an active custom form for <strong>${escape(entityName)}</strong> (v${escape(currentVersion ?? '?')}). Applying this artifact will create a <strong>new Pending version</strong> — your live form stays active until you explicitly activate the new version in Form Builder.`
-            : `This will create a custom form for <strong>${escape(entityName)}</strong> scoped to your user. Other users will continue to see the default form.`;
+            ? `You already have a custom form for "${entityName}" (v${currentVersion ?? '?'}). Applying this will create a new version and make it your active form. The previous version is preserved and can be restored from Form Builder.`
+            : `This will create a custom form for "${entityName}" scoped to your user and make it active. Other users will continue to see the default form.`;
         // MJDialogAction surface is {text, primary?, themeColor?}; the
         // dialog's Result observable emits the entire clicked action (or
         // undefined for backdrop/X dismissal). Detect intent via the
         // `primary` flag — Apply / Create Pending are the primary actions;
         // Cancel and dismissal both resolve false.
         const ref = this.dialog.Open({
-            title: hasExistingActive ? 'Apply as new Pending version?' : 'Apply this form?',
+            title: 'Apply this form?',
             content,
             width: 540,
             actions: [
-                { text: hasExistingActive ? 'Create Pending' : 'Apply', primary: true, themeColor: 'primary' },
+                { text: 'Apply', primary: true, themeColor: 'primary' },
                 { text: 'Cancel' },
             ],
         });
@@ -198,11 +275,11 @@ export class InteractiveFormApplyService {
     }
 
     private parseActiveResult(message: string | undefined): {
-        Active?: { OverrideID?: string; ComponentVersion?: string };
+        Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string };
     } | null {
         if (!message) return null;
         try {
-            return JSON.parse(message) as { Active?: { OverrideID?: string; ComponentVersion?: string } };
+            return JSON.parse(message) as { Active?: { OverrideID?: string; ComponentVersion?: string; ComponentName?: string } };
         } catch {
             return null;
         }
@@ -212,6 +289,7 @@ export class InteractiveFormApplyService {
         result: { Success: boolean; Message?: string; ResultCode?: string },
         kind: 'create' | 'modify',
         _user: UserInfo,
+        activated: boolean = false,
     ): InteractiveFormApplyResult {
         if (!result.Success) {
             this.notifications.CreateSimpleNotification(
@@ -226,10 +304,14 @@ export class InteractiveFormApplyService {
             ? 'create'
             : (payload.Mode === 'in-place' ? 'modify-in-place' : 'modify-new-version');
         const note = kind === 'create'
-            ? 'Custom form is now active for your user.'
-            : (mode === 'modify-in-place'
-                ? 'Pending version updated. Activate it from Form Builder when ready.'
-                : `Pending v${payload.Version ?? '?'} created. Activate it from Form Builder when ready.`);
+            ? (activated
+                ? 'Custom form is now active for your user.'
+                : 'Custom form created as a Pending draft — activate it from Form Builder to go live.')
+            : (activated
+                ? `Updated form is now active${payload.Version ? ` (v${payload.Version})` : ''} for your user.`
+                : (mode === 'modify-in-place'
+                    ? 'Pending version updated. Activate it from Form Builder when ready.'
+                    : `Pending v${payload.Version ?? '?'} created. Activate it from Form Builder when ready.`));
         this.notifications.CreateSimpleNotification(note, 'success', 4000);
         return {
             Success: true,
@@ -245,11 +327,4 @@ export class InteractiveFormApplyService {
         this.notifications.CreateSimpleNotification(`Apply failed: ${message}`, 'error', 5000);
         return { Success: false, Message: message };
     }
-}
-
-/** Minimal HTML escape — the dialog content goes through `[innerHTML]` upstream. */
-function escape(s: string): string {
-    return s.replace(/[&<>"']/g, c => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    }[c] ?? c));
 }

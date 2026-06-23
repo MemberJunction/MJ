@@ -1351,6 +1351,78 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   /**
+   * One-click "find new tables": discovers every source object the connector now exposes that has
+   * NO entity map yet, and provisions them all (table + entity map + field maps) in a single
+   * ApplyAllBatch — no manual picker. This is the "find custom tables" affordance: a layer on top of
+   * entity-map selection that surfaces whole new objects the source started exposing after setup
+   * (distinct from custom COLUMNS, which the post-sync promoter handles automatically).
+   *
+   * Low-overhead by design: the only cost beyond a normal create is ONE DiscoverObjects call to
+   * learn what's new; the apply itself is identical to provisioning known tables. A no-op when the
+   * source exposes nothing new.
+   */
+  async FindAndAddNewTables(): Promise<void> {
+    if (!this.SelectedSummary || this.IsCreatingTables) return;
+    // CRITICAL: ApplyAllBatch runs RSU + CodeGen + an MJAPI restart. Doing that mid-sync would kill
+    // the running sync, so block until no sync is active (see feedback: never restart mid-sync).
+    if (this.SyncingIntegrationID) {
+      this.CreateTablesResult = {
+        Success: false,
+        Message: 'A sync is in progress — wait for it to finish before adding new tables (adding tables restarts the API).',
+      };
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.IsCreatingTables = true;
+    this.CreateTablesResult = null;
+    this.cdr.detectChanges();
+
+    try {
+      const integrationID = this.SelectedSummary.Integration.ID;
+      // 1. One live DiscoverObjects call → keep only objects that aren't already mapped.
+      const listed = await this.dataService.ListSourceObjects(integrationID);
+      if (!listed.Success) {
+        this.CreateTablesResult = { Success: false, Message: listed.Message ?? 'Discovery failed' };
+        return;
+      }
+      const mappedNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
+      const newObjects = (listed.Data ?? []).filter(o => !mappedNames.has(o.Name));
+      if (newObjects.length === 0) {
+        this.CreateTablesResult = {
+          Success: true,
+          Message: 'No new tables found — everything the source currently exposes is already mapped.',
+        };
+        return;
+      }
+
+      // 2. Provision all the new objects in a single batch (same path as the manual picker).
+      const selections = newObjects.map(o => ({
+        SourceObjectID: o.IntegrationObjectID ?? undefined,
+        SourceObjectName: o.Name,
+      }));
+      const result = await this.dataService.ApplyAllBatch(integrationID, selections);
+      this.CreateTablesResult = {
+        Success: result.Success,
+        Message: result.Success
+          ? `Added ${newObjects.length} new table${newObjects.length === 1 ? '' : 's'}: ${newObjects.map(o => o.Name).join(', ')}.`
+          : (result.Message ?? 'Apply failed'),
+      };
+
+      if (result.Success) {
+        this.DetailEntityMaps = await this.loadEntityMapsForIntegration(integrationID);
+        this.DetailFilteredMaps = this.applyDetailFilter();
+        this.EntityMapCounts = this.countMapsByIntegration(await this.loadAllEntityMaps());
+      }
+    } catch (err) {
+      this.CreateTablesResult = { Success: false, Message: err instanceof Error ? err.message : String(err) };
+    } finally {
+      this.IsCreatingTables = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
    * Search-only filter for the picker. Standard/Custom/Registered state
    * shows up as badges — never hides anything — so Select All covers
    * everything the user can see.

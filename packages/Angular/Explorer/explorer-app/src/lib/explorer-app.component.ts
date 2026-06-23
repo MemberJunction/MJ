@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -27,6 +27,7 @@ import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-ba
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -57,6 +58,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   public isChatRoute = false;
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
+
+  /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
+  private _preShellOverlayRef: ComponentRef<unknown> | null = null;
+  /** Whether a pre-shell guard overlay is blocking the shell */
+  preShellBlocked = false;
 
   /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
   public AppContextSnapshot: AppContextSnapshot | null = null;
@@ -92,9 +98,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
     private bridge: ConversationBridgeService,
+    // Injected (not just used statically) so the root singleton is constructed
+    // before handleLogin runs. Magic-link logs in instantly (token already in the
+    // URL hash, no redirect round-trip), so without this injection handleLogin can
+    // fire before anything else constructs MJNotificationService, leaving
+    // MJNotificationService.Instance undefined -> "ShouldSuppressToast" crash.
+    private notifications: MJNotificationService,
     private appManager: ApplicationManager,
     private workspaceState: WorkspaceStateManager,
     private cdr: ChangeDetectorRef,
+    @Optional() @Inject(MJ_PRE_SHELL_GUARD) private preShellGuard: PreShellGuard | null,
+    private environmentInjector: EnvironmentInjector,
+    private viewContainerRef: ViewContainerRef,
   ) {
     super();
     this.registerClientTools();
@@ -123,7 +138,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         }
 
         // Suppress toast for agent completions when the user is actively viewing the conversation
-        MJNotificationService.Instance.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
+        this.notifications.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
           const convoId = statusObj['conversationId'] as string;
           if (!convoId) return false;
           const isViewingConvo = this.bridge.ActiveConversationID$.value === convoId
@@ -137,6 +152,17 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
         this.cdr.detectChanges();
+
+        // Check if a pre-shell guard wants to block the shell (e.g., onboarding wizard)
+        if (this.preShellGuard) {
+          const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
+          if (blockComponent) {
+            this.preShellBlocked = true;
+            this.cdr.detectChanges();
+            this.renderPreShellOverlay(blockComponent);
+            return;
+          }
+        }
 
         // Navigate to initial route
         if (this.initialPath === '/') {
@@ -152,6 +178,15 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       } else if (result.error) {
         // Handle errors based on type
         if (result.error.type === 'no_roles') {
+          // Check if a pre-shell guard wants to handle the no_roles case (e.g., onboarding wizard)
+          if (this.preShellGuard) {
+            const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
+            if (blockComponent) {
+              this.preShellBlocked = true;
+              this.renderPreShellOverlay(blockComponent);
+              return;
+            }
+          }
           // Show validation banner instead of generic error
           this.showValidationOnly = true;
           this.HasError = true;
@@ -558,7 +593,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         const message = String(params['Message'] || '');
         const type = (String(params['Type'] || 'info')) as 'info' | 'success' | 'warning' | 'error';
         const duration = Number(params['DurationMs']) || 3000;
-        MJNotificationService.Instance.CreateSimpleNotification(message, type, duration);
+        this.notifications.CreateSimpleNotification(message, type, duration);
         return { Success: true, Data: { Shown: true } };
       }
     });
@@ -741,5 +776,34 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     this.IsDarkMode = !this.IsDarkMode;
     localStorage.setItem(MJExplorerAppComponent.THEME_STORAGE_KEY, this.IsDarkMode ? 'dark' : 'light');
     this.applyThemeToDOM();
+  }
+
+  /**
+   * Render a pre-shell guard component as a full-page overlay.
+   * The component should emit a 'completed' event when done.
+   */
+  private renderPreShellOverlay(componentType: Type<unknown>): void {
+    this._preShellOverlayRef = this.viewContainerRef.createComponent(componentType, {
+      environmentInjector: this.environmentInjector
+    });
+
+    // Listen for a 'completed' output if the component has one
+    const instance = this._preShellOverlayRef.instance as Record<string, unknown>;
+    if (instance['completed'] && typeof (instance['completed'] as { subscribe?: Function }).subscribe === 'function') {
+      (instance['completed'] as { subscribe: (fn: () => void) => void }).subscribe(() => {
+        this.dismissPreShellOverlay();
+      });
+    }
+  }
+
+  /**
+   * Dismiss the pre-shell overlay and proceed to normal shell rendering.
+   * Reloads the page first so the user never sees a flash of stale shell state
+   * (e.g., "No Applications") while the old context is still in memory.
+   */
+  private dismissPreShellOverlay(): void {
+    // Reload first — the shell needs a full bootstrap to pick up new roles/context.
+    // Cleanup happens implicitly when the page unloads.
+    window.location.href = '/';
   }
 }

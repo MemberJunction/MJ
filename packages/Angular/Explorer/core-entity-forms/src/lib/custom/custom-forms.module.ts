@@ -73,6 +73,15 @@ import { WebsiteCrawlerSettingsPanel } from "../panels/content-sources/website-c
 import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
 import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
 import { SearchModule } from "@memberjunction/ng-search";
+import { MJAIAgentSessionFormComponentExtended } from "./AIAgentSessions/ai-agent-session-form.component";
+import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agent-channel-form.component";
+// Realtime Bridges — custom Extended forms (Pattern 2) for the three major bridge entities.
+import { MJAIBridgeProviderFormComponentExtended, LoadMJAIBridgeProviderFormComponentExtended } from "./BridgeProviders/bridge-provider-form.component";
+import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridgeFormComponentExtended } from "./SessionBridges/session-bridge-form.component";
+import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
+// AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
+// @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
+import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/agent-realtime.panel";
 
 @NgModule({
     declarations: [
@@ -119,6 +128,12 @@ import { SearchModule } from "@memberjunction/ng-search";
         WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
     ],
     imports: [
         CommonModule,
@@ -191,6 +206,12 @@ import { SearchModule } from "@memberjunction/ng-search";
         WebsiteCrawlerSettingsPanel,
         MJSearchScopeFormComponentExtended,
         MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
         ActionsModule
     ],
     providers: [

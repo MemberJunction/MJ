@@ -60,6 +60,7 @@ These are the most-common lint failures. The Designer's validator pre-lints for 
 7. **Libraries live on the `libraries` prop**, NOT on `components`. `const ApexCharts = libraries.ApexCharts;`. `components.X` is reserved for child components in `dependencies`.
 8. **No `window.*` access.** Forms must be self-contained.
 9. **Only reference fields present in `appContext.ActiveForm.SchemaMarkdown`** (or the schema you fetched via the action). Inventing fields trips `entity-field-access-validation`.
+10. **Persist user preferences via `savedUserSettings` / `onSaveUserSettings`.** These are durably saved per-user, cross-device by the host (auto-scoped to the form). Initialize state from `savedUserSettings` with fallbacks, and on change call `onSaveUserSettings({ ...savedUserSettings, key: value })` with the full object. Use for sticky UI choices (expanded sections, active sub-tab, density); keep transient/in-flight state in plain React state. Don't namespace keys; don't await the call. The host merges your payload over the saved settings (a partial object can't wipe other keys); to remove a saved key, set it explicitly to `null`.
 
 ## Termination
 

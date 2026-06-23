@@ -16,7 +16,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
-         SearchEntityParams, EntitySearchResult, ScoredCandidate } from "@memberjunction/core";
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -46,6 +46,14 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/**
+ * Shared, stateless FieldMapper instance. FieldMapper holds no per-call state (only static
+ * prefix constants), so a single shared instance is reused everywhere instead of allocating a
+ * new FieldMapper per row in the RunView(s) deserialization loops (ConvertBackToMJFields) and
+ * per query in the field-list builders.
+ */
+const SharedFieldMapper = new FieldMapper();
 
 /**
  * The GraphQLProviderConfigData class is used to configure the GraphQLDataProvider. It is passed to the Config method of the GraphQLDataProvider
@@ -148,6 +156,14 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
+    /**
+     * Opt-in verbose logging for the real-time cache-invalidation subscription. Off by default — these
+     * messages fire on every cross-server save/delete and flood the console. Set to `true` (e.g. from
+     * the console: `GraphQLDataProvider.VerboseCacheInvalidationLogging = true`) only when debugging
+     * cache-invalidation / cross-server sync behavior.
+     */
+    public static VerboseCacheInvalidationLogging = false;
+
     /**
      * Global Object Store key — follows BaseSingleton's naming convention so the
      * singleton is discoverable in the same way as BaseSingleton-derived classes.
@@ -806,7 +822,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
 
                 // get entity metadata
-                const e = this.Entities.find(e => e.Name === entity);
+                const e = this.EntityByName(entity);
                 if (!e)
                     throw new Error(`Entity ${entity} not found in metadata`);
 
@@ -972,7 +988,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
 
                     // get entity metadata
-                    const e = this.Entities.find(e => e.Name === entity);
+                    const e = this.EntityByName(entity);
                     if (!e){
                         throw new Error(`Entity ${entity} not found in metadata`);
                     }
@@ -1299,7 +1315,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     protected getViewRunTimeFieldList(e: EntityInfo, v: MJUserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
-        const mapper = new FieldMapper();
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
@@ -1308,7 +1323,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // now add any other fields that were passed in
             params.Fields.forEach(f => {
-              fieldList.push(mapper.MapFieldName(f))
+              fieldList.push(SharedFieldMapper.MapFieldName(f))
             });
         }
         else {
@@ -1319,7 +1334,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // include all fields since no fields were passed in
                 e.Fields.forEach(f => {
                     if (!f.IsBinaryFieldType) {
-                      fieldList.push(mapper.MapFieldName(f.CodeName));
+                      fieldList.push(SharedFieldMapper.MapFieldName(f.CodeName));
                     }
                 });
             }
@@ -1342,7 +1357,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             // simply don't include it in the field list
                         }
                         else
-                            fieldList.push(mapper.MapFieldName(c.EntityField.CodeName));
+                            fieldList.push(SharedFieldMapper.MapFieldName(c.EntityField.CodeName));
                     }
                 });
             }
@@ -1584,6 +1599,44 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return [];
     }
 
+    /**
+     * Client-side transport for a Remote Operation: marshals the operation key + JSON input over the
+     * generic `ExecuteRemoteOperation` GraphQL mutation, and parses the JSON output back. The server
+     * resolves and executes the operation in-process. Overrides the no-op default on `ProviderBase`;
+     * key validation still runs in `ProviderBase.RouteOperation` before this is called.
+     */
+    protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!) {
+            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode }) {
+                success
+                resultCode
+                outputJSON
+                handle
+                errorMessage
+            }
+        }`;
+        try {
+            const data = await this.ExecuteGQL(mutation, {
+                operationKey,
+                inputJSON: JSON.stringify(input ?? null),
+                invokeMode: options.mode ?? 'attached',
+            });
+            const r = data?.ExecuteRemoteOperation;
+            if (!r) {
+                return { Success: false, ResultCode: 'NO_RESPONSE', ErrorMessage: 'No response from ExecuteRemoteOperation' };
+            }
+            return {
+                Success: !!r.success,
+                ResultCode: r.resultCode ?? undefined,
+                Output: r.outputJSON != null ? (JSON.parse(r.outputJSON) as TOutput) : undefined,
+                Handle: r.handle ?? undefined,
+                ErrorMessage: r.errorMessage ?? undefined,
+            };
+        } catch (e) {
+            return { Success: false, ResultCode: 'TRANSPORT_ERROR', ErrorMessage: e instanceof Error ? e.message : String(e) };
+        }
+    }
+
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
         const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
         if (!e || !e.AllowRecordMerge)
@@ -1681,9 +1734,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // only pass along writable fields, AND the PKEY value if this is an update
             const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
-            const mapper = new FieldMapper();
-            const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => mapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                const inner = `                ${mutationName}(input: $input) {
+                ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -1731,7 +1783,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             val = '';
                     }
                 }
-                vars.input[mapper.MapFieldName(f.CodeName)] = val;
+                vars.input[SharedFieldMapper.MapFieldName(f.CodeName)] = val;
             }
 
             // Carry restore lineage across the network.
@@ -1766,7 +1818,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         else
                             val = f.OldValue;
                     }
-                    ov.push({Key: mapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                    ov.push({Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
@@ -1866,8 +1918,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
-            const mapper = new FieldMapper();
-            const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
+                const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
                                     ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
                                       .map((f) => {
@@ -1904,8 +1955,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns
      */
     protected ConvertBackToMJFields(ret: any): any {
-        const mapper = new FieldMapper();
-        mapper.ReverseMapFields(ret);
+        SharedFieldMapper.ReverseMapFields(ret);
         return ret; // clean object to pass back here
     }
 
@@ -1914,7 +1964,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         for (let i = 0; i < entityInfo.RelatedEntities.length; i++) {
             if (EntityRelationshipsToLoad.indexOf(entityInfo.RelatedEntities[i].RelatedEntity) >= 0) {
                 const r = entityInfo.RelatedEntities[i];
-                const re = this.Entities.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
+                const re = this.EntityByID(r.RelatedEntityID);
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
                     uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;
@@ -2258,7 +2308,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (!valResult.IsValid)
             return false;
 
-        const e = this.Entities.find(e => e.Name === entityName)
+        const e = this.EntityByName(entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
 
@@ -2281,7 +2331,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
-        const e = this.Entities.find(e => e.Name === entityName)
+        const e = this.EntityByName(entityName)
         if (!e){
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
@@ -3243,11 +3293,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // Skip events that originated from this browser session — we already
                 // handled the cache update locally via the BaseEntity.Save()/Delete() event.
                 if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
-                    console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                        console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    }
                     return;
                 }
 
-                console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+                if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                    console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+                }
 
                 // Raise a MJGlobal event so BaseEngine instances can react
                 const baseEntityEvent: BaseEntityEvent = {

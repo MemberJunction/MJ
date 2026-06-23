@@ -81,7 +81,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJResourcePermissionsSharedByUserID', sectionName: 'Resource Permissions (Shared By User ID)', isExpanded: false },
             { sectionKey: 'mJScheduledActions', sectionName: 'Scheduled Actions', isExpanded: false },
             { sectionKey: 'mJScheduledJobRuns', sectionName: 'Scheduled Job Runs', isExpanded: false },
-            { sectionKey: 'mJScheduledJobsOwnerUserID', sectionName: 'Scheduled Jobs (Owner User ID)', isExpanded: false },
+            { sectionKey: 'mJScheduledJobsOwnerUserID', sectionName: 'Scheduled Jobs (Owner)', isExpanded: false },
             { sectionKey: 'mJSearchScopes', sectionName: 'Search Scopes', isExpanded: false },
             { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },
             { sectionKey: 'mJTagSuggestions', sectionName: 'Tag Suggestions', isExpanded: false },
@@ -104,7 +104,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFileStorageAccountPermissions', sectionName: 'File Storage Account Permissions', isExpanded: false },
             { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MCP Server Connection Permissions', isExpanded: false },
             { sectionKey: 'mJResourcePermissionsUserID', sectionName: 'Resource Permissions', isExpanded: false },
-            { sectionKey: 'mJScheduledJobsNotifyUserID', sectionName: 'Scheduled Jobs (Notify User ID)', isExpanded: false },
+            { sectionKey: 'mJScheduledJobsNotifyUserID', sectionName: 'Scheduled Jobs (Notify User)', isExpanded: false },
             { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false },
             { sectionKey: 'mJVersionLabels', sectionName: 'Version Labels', isExpanded: false },
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'AI Agent Permissions', isExpanded: false },
@@ -118,7 +118,14 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
             { sectionKey: 'mJListsLastRefreshedByUserID', sectionName: 'Lists (Last Refreshed By User ID)', isExpanded: false },
-            { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false }
+            { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false },
+            { sectionKey: 'mJClusterAnalysis', sectionName: 'Cluster Analysis', isExpanded: false },
+            { sectionKey: 'mJMagicLinkRedemptions', sectionName: 'Magic Link Redemptions', isExpanded: false },
+            { sectionKey: 'mJMagicLinkInvites', sectionName: 'Magic Link Invites', isExpanded: false },
+            { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
+            { sectionKey: 'mJAIAgentSessionBridgeParticipants', sectionName: 'AI Agent Session Bridge Participants', isExpanded: false },
+            { sectionKey: 'mJRemoteOperations', sectionName: 'Remote Operations', isExpanded: false },
+            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false }
         ]);
     }
 }

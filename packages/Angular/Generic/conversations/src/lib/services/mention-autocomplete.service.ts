@@ -1,13 +1,13 @@
 import { Injectable } from '@angular/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, Metadata, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 
 /**
  * Item in the autocomplete dropdown
  */
 export interface MentionSuggestion {
-  type: 'agent' | 'user';
+  type: 'agent' | 'user' | 'entity';
   id: string;
   name: string;
   displayName: string;
@@ -26,6 +26,7 @@ export interface MentionSuggestion {
 export class MentionAutocompleteService {
   private agentsCache: MJAIAgentEntityExtended[] = [];
   private usersCache: UserInfo[] = [];
+  private entitiesCache: EntityInfo[] = [];
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
 
@@ -35,7 +36,7 @@ export class MentionAutocompleteService {
    * Initialize the service by loading agents and users
    * Prevents concurrent initialization with promise lock
    */
-  async initialize(currentUser: UserInfo): Promise<void> {
+  async initialize(currentUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
     // If already initialized, return immediately
     if (this.isInitialized) {
       return;
@@ -47,7 +48,7 @@ export class MentionAutocompleteService {
     }
 
     // Create initialization promise and store it
-    this.initializationPromise = this._initializeInternal(currentUser);
+    this.initializationPromise = this._initializeInternal(currentUser, provider);
 
     try {
       await this.initializationPromise;
@@ -59,7 +60,7 @@ export class MentionAutocompleteService {
   /**
    * Internal initialization logic
    */
-  private async _initializeInternal(currentUser: UserInfo): Promise<void> {
+  private async _initializeInternal(currentUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
     try {
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
@@ -77,6 +78,9 @@ export class MentionAutocompleteService {
       // Load users from the system (optional - can be expanded later)
       // For now, we'll just use the current user
       this.usersCache = [currentUser];
+
+      // Load entities the current user can read (candidates for #entity mentions)
+      this.entitiesCache = this.loadReadableEntities(currentUser, provider);
 
       this.isInitialized = true;
     } catch (error) {
@@ -109,12 +113,38 @@ export class MentionAutocompleteService {
   }
 
   /**
+   * Load entities the current user has read permission for.
+   * These are the candidates surfaced for #entity mentions.
+   */
+  private loadReadableEntities(user: UserInfo, provider?: IMetadataProvider): EntityInfo[] {
+    try {
+      const md = provider ?? new Metadata();
+      return (md.Entities || []).filter(entity => {
+        try {
+          return entity.GetUserPermisions(user).CanRead;
+        } catch {
+          // Fail closed — exclude entity on permission-check error
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('Failed to load entities for mention autocomplete:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get suggestions based on search query
    * @param query The search text after @ symbol
    * @param includeUsers Whether to include users in suggestions
    * @returns Filtered and ranked suggestions
    */
-  getSuggestions(query: string, includeUsers: boolean = true): MentionSuggestion[] {
+  getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@'): MentionSuggestion[] {
+    // The '#' trigger searches entities; '@' searches agents + users
+    if (trigger === '#') {
+      return this.getEntitySuggestions(query);
+    }
+
     const lowerQuery = query.toLowerCase().trim();
     const suggestions: MentionSuggestion[] = [];
 
@@ -163,6 +193,32 @@ export class MentionAutocompleteService {
       // Otherwise alphabetically
       return a.name.localeCompare(b.name);
     });
+  }
+
+  /**
+   * Get entity suggestions for #entity mentions, ranked by query match.
+   * Capped to keep the dropdown light (entity sets can be large).
+   */
+  private getEntitySuggestions(query: string): MentionSuggestion[] {
+    const lowerQuery = query.toLowerCase().trim();
+    const MAX_ENTITY_SUGGESTIONS = 12;
+
+    return this.entitiesCache
+      .map(entity => ({ entity, score: this.calculateMatchScore(entity.Name || '', lowerQuery) }))
+      .filter(x => x.score > 0 || !lowerQuery)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return (a.entity.Name || '').localeCompare(b.entity.Name || '');
+      })
+      .slice(0, MAX_ENTITY_SUGGESTIONS)
+      .map(({ entity }) => ({
+        type: 'entity' as const,
+        id: entity.ID,
+        name: entity.Name,
+        displayName: entity.Name,
+        description: entity.Description || undefined,
+        icon: 'fa-solid fa-table'
+      }));
   }
 
   /**
@@ -223,6 +279,13 @@ export class MentionAutocompleteService {
    */
   getAvailableUsers(): UserInfo[] {
     return this.usersCache;
+  }
+
+  /**
+   * Get available entities for parsing
+   */
+  getAvailableEntities(): EntityInfo[] {
+    return this.entitiesCache;
   }
 
   /**

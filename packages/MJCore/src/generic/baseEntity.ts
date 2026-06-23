@@ -32,12 +32,6 @@ export class EntityField {
         "money": { min: -922337203685477.5808, max: 922337203685477.5807 },
     }
 
-    /**
-     * Indicates whether the active status of the field should be asserted when accessing or setting the value.
-     * Starts off as false and turns to true after contructor is done doing all its setup work. Internally, this can be
-     * temporarily turned off to allow for legacy fields to be created without asserting the active status.
-     */
-    private _assertActiveStatusRequired: boolean = false; 
     private _entityFieldInfo: EntityFieldInfo;
     private _OldValue: any;
     private _Value: any;
@@ -76,13 +70,14 @@ export class EntityField {
 
     /**
      * Returns the current value of the field.
+     *
+     * NOTE: This is a framework-internal accessor. It deliberately does NOT assert the field's
+     * active status (deprecated/disabled) — that assertion lives one layer up, at
+     * BaseEntity.Get/Set/SetMany, which are the entry points genuine code (and the generated
+     * strongly-typed accessors) flow through. Internal machinery (Dirty checks, validation,
+     * serialization, hydration, SQL build) reads this directly and must stay assertion-free.
      */
     get Value(): any {
-        // Asserting status here for deprecated or disabled fields, not in constructor because
-        // we legacy fields will exist
-        if (this._assertActiveStatusRequired) {
-            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
-        }
         return this._Value;
     }
 
@@ -112,12 +107,8 @@ export class EntityField {
      * Sets the value of the field. If the field is read only, nothing happens. If the field is not read only, the value is set and the internal representation of the dirty flag is flipped if the value is different from the old value.
      */
     set Value(value: any) {
-        if (this._assertActiveStatusRequired && value !== this._Value) {
-            // asserting status here becuase the flag is on AND the values
-            // are different - this avoid assertions during sysops like SetMany that often aren't changing
-            // the value of the field
-            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter');
-        }
+        // No active-status assertion here — see the Value getter note. Deprecation/disabled checks
+        // are enforced at BaseEntity.Get/Set/SetMany, not at this low-level accessor.
         if (
               !this.ReadOnly ||
               this._NeverSet  /* Allow one time set of any field because BaseEntity Object passes in ReadOnly fields when we load,
@@ -298,6 +289,10 @@ export class EntityField {
         const ef = this._entityFieldInfo;
         const result = new ValidationResult();
         result.Success = true; // assume success
+        // NOTE: Validation reads this.Value to apply metadata rules — a framework-internal read, not
+        // user use of the field. EntityField.Value no longer asserts active status (that moved to
+        // BaseEntity.Get/Set/SetMany), so validating a record containing a deprecated/disabled field
+        // no longer false-warns or throws here.
         if (!ef.ReadOnly && !ef.SkipValidation) {
             // only do validation on updatable fields and skip the special case fields defined inside the SkipValidation property (like ID/CreatedAt/UpdatedAt)
             if (!ef.AllowsNull && (this.Value === null || this.Value === undefined)) {
@@ -342,12 +337,10 @@ export class EntityField {
 
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
-        // NOTE: Do not assert EntityFieldInfo status here, because we are 
-        // creating a new EntityField object and it is possible that the field 
-        // is disabled or is deprecated, but we still need to create the object 
-        // since it is physically part of the entity. We DO assert for the status
-        // if the Value is later accessed or set.
-        
+        // NOTE: constructing an EntityField for a deprecated/disabled field is always allowed — the
+        // column is physically part of the entity and the instance must exist. Active-status is
+        // asserted only when code accesses the field by name via BaseEntity.Get/Set/SetMany, never
+        // here and never in the EntityField.Value accessor.
         this._entityFieldInfo = fieldInfo;
         if (Value) {
             this.Value = Value;
@@ -369,8 +362,9 @@ export class EntityField {
                     this.Value = null;
                 }
             }
-            else if (fieldInfo.Type.trim().toLowerCase() === "uniqueidentifier") {
-                // special handling for GUIDs, we don't want to populate anything here because the server always sets the value, leave blank
+            else if (fieldInfo.IsUniqueIdentifier) {
+                // special handling for GUIDs (SQL Server `uniqueidentifier` / PostgreSQL `uuid`),
+                // we don't want to populate anything here because the server always sets the value, leave blank
                 this.Value = null;
             }
             else if (fieldInfo.TSType === EntityFieldTSType.Date) {
@@ -440,29 +434,28 @@ export class EntityField {
             this.Value = null; // we need to set the value to null instead of being undefined as the value is defined, it is NULL
             this._NeverSet = true; // set this back to true because we are setting the value to null;
         }
-
-        this._assertActiveStatusRequired = true; // turn on assertion for active status now that we're done with constructor.
     }
 
     /**
      * This method will set the internal Old Value which is used to track dirty state, to the current value of the field. This effectively resets the dirty state of the field to false. Use this method sparingly.
      */
     public ResetOldValue() {
-        this._assertActiveStatusRequired = false; // temporarily turn off assertion for active status so we can set the old value without asserting
         this._OldValue = this.Value;
-        this._assertActiveStatusRequired = true; // turn it back on after we're done
     }
 
     /**
-     * This property temporarily will set the active status assertions for this particular instance of EntityField.
-     * It is temporary because other behaviors in the class instance could reset this value for example calling
-     * ResetOldValue() or another caller setting this property to another value.
+     * @deprecated No-op as of the active-status relocation. Active-status (deprecated/disabled)
+     * assertions are now enforced at BaseEntity.Get/Set/SetMany — the entry points genuine code uses —
+     * rather than on this low-level EntityField.Value accessor. There is therefore nothing to toggle
+     * at the field level. The getter always returns `false` and the setter is ignored; both remain
+     * only so existing callers that wrapped value reads in a save/disable/restore pattern (e.g. the
+     * provider SQL-build paths) continue to compile and behave correctly.
      */
     public get ActiveStatusAssertions(): boolean {
-        return this._assertActiveStatusRequired;
+        return false;
     }
-    public set ActiveStatusAssertions(value: boolean) {
-        this._assertActiveStatusRequired = value;
+    public set ActiveStatusAssertions(_value: boolean) {
+        // intentionally a no-op — see deprecation note above
     }
 
     /**
@@ -1711,12 +1704,35 @@ export abstract class BaseEntity<T = unknown> {
     public Set(FieldName: string, Value: any) {
         // IS-A routing: if this field belongs to a parent entity, route to parent
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
-            this._parentEntity.Set(FieldName, Value); // recursive for N-level chains
+            this._parentEntity.Set(FieldName, Value); // recursive for N-level chains (parent asserts its own field)
             // Also mirror the value on our own virtual EntityField for UI compatibility
             this.SetLocal(FieldName, Value);
         }
         else {
+            // Active-status enforcement choke point for own-field writes. Fast-path gated on the
+            // memoized EntityInfo.HasInactiveFields so all-Active entities (the overwhelming majority)
+            // pay only a single cached boolean check.
+            if (this.EntityInfo?.HasInactiveFields) {
+                this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Set');
+            }
             this.SetLocal(FieldName, Value);
+        }
+    }
+
+    /**
+     * Single choke point for field active-status (deprecated/disabled) enforcement. Called by
+     * Get()/Set()/SetMany() — the entry points genuine code and the generated strongly-typed
+     * accessors flow through. Emits a batched deprecation warning for `Deprecated` fields and throws
+     * for `Disabled` fields. Framework-internal value machinery (Dirty, Validate, GetAll, hydration,
+     * SQL build) reads EntityField.Value directly and is therefore exempt by construction.
+     *
+     * Callers should gate this behind `EntityInfo.HasInactiveFields` so the common all-Active entity
+     * skips the field lookup entirely.
+     */
+    private AssertFieldActiveStatus(fieldName: string, caller: string): void {
+        const fi = this.EntityInfo?.FieldByName(fieldName);
+        if (fi) {
+            EntityFieldInfo.AssertEntityFieldActiveStatus(fi, caller);
         }
     }
 
@@ -1771,7 +1787,14 @@ export abstract class BaseEntity<T = unknown> {
     public Get(FieldName: string): any {
         // IS-A routing: return the authoritative value from the parent entity
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
-            return this._parentEntity.Get(FieldName); // recursive for N-level chains
+            return this._parentEntity.Get(FieldName); // recursive for N-level chains (parent asserts its own field)
+        }
+
+        // Active-status enforcement choke point for own-field reads. Fast-path gated on the memoized
+        // EntityInfo.HasInactiveFields so all-Active entities pay only a single cached boolean check
+        // before the hot read paths below.
+        if (this.EntityInfo?.HasInactiveFields) {
+            this.AssertFieldActiveStatus(FieldName, 'BaseEntity.Get');
         }
 
         // Raw mode fast path: read directly from the cached data without building EntityField
@@ -1784,7 +1807,7 @@ export abstract class BaseEntity<T = unknown> {
             if (value === undefined) return null;
             // Date conversion mirrors the hydrated path. Mutating _raw to cache the converted
             // Date avoids reparsing on every read.
-            const fi = this._EntityInfo?.Fields.find(f => f.Name === FieldName);
+            const fi = this._EntityInfo?.FieldByName(FieldName);
             if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                 const d = new Date(value);
                 this._raw[FieldName] = d;
@@ -1831,21 +1854,23 @@ export abstract class BaseEntity<T = unknown> {
         if (!object)
             throw new Error('calling BaseEntity.SetMany(), object cannot be null or undefined');
 
+        // Whether to enforce active-status (deprecated warning / disabled throw) per field. Skipped
+        // when the caller opts out (`ignoreActiveStatusAssertions=true`) — the load/hydration paths
+        // pass this because populating from the DB is NOT user use of the field — and fast-path gated
+        // on the memoized EntityInfo.HasInactiveFields so all-Active entities do zero extra work.
+        const checkStatus = !ignoreActiveStatusAssertions && (this.EntityInfo?.HasInactiveFields ?? false);
+
         for (let key in object) {
             const field = this.GetFieldByName(key);
             if (field) {
                 // check to see if key matches a field name, if so, set it
-                const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
-                if (ignoreActiveStatusAssertions) {
-                    field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                if (checkStatus) {
+                    EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                 }
                 // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
                 this.SetLocal(key, object[key]);
                 if (replaceOldValues) {
                     field.ResetOldValue();
-                }
-                if (ignoreActiveStatusAssertions) {
-                    field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                 }
             }
             else {
@@ -1853,17 +1878,13 @@ export abstract class BaseEntity<T = unknown> {
                 // because some objects passed in will use the code name
                 const field = this.GetFieldByCodeName(key);
                 if (field) {
-                    const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
-                    if (ignoreActiveStatusAssertions) {
-                        field.ActiveStatusAssertions = false; // disable active status assertions for this field
+                    if (checkStatus) {
+                        EntityFieldInfo.AssertEntityFieldActiveStatus(field.EntityFieldInfo, 'BaseEntity.SetMany');
                     }
                     // Use SetLocal here so we set on OUR fields (mirrors for parent fields)
                     this.SetLocal(field.Name, object[key]);
                     if (replaceOldValues) {
                         field.ResetOldValue();
-                    }
-                    if (ignoreActiveStatusAssertions) {
-                        field.ActiveStatusAssertions = priorActiveStatusAssertions; // restore the active status assertions
                     }
                 }
                 else {
@@ -1942,15 +1963,13 @@ export abstract class BaseEntity<T = unknown> {
         let obj = {};
         for (let field of this.Fields) {
             if (!onlyDirtyFields || (onlyDirtyFields && field.Dirty)) {
-                const tempStatus = field.ActiveStatusAssertions; // save the current active status assertions
-                field.ActiveStatusAssertions = false; // disable active status assertions for this field
-
+                // Reads field.Value directly — serialization is framework-internal, so it does not
+                // (and must not) assert active status. No suppression toggle needed: the assertion no
+                // longer lives on EntityField.Value (it moved to BaseEntity.Get/Set/SetMany).
                 obj[field.Name] = oldValues ? field.OldValue : field.Value;
                 if (field.EntityFieldInfo.TSType == EntityFieldTSType.Date && obj[field.Name] && !(obj[field.Name] instanceof Date)) {
                     obj[field.Name] = new Date(obj[field.Name]); // a timestamp, convert to JS Date Object
                 }
-
-                field.ActiveStatusAssertions = tempStatus; // restore the prior status for assertions
             }
         }
 
@@ -2125,6 +2144,10 @@ export abstract class BaseEntity<T = unknown> {
             for (const field of this._Fields) {
                 const value = this._raw[field.Name];
                 if (value !== undefined) {
+                    // Populating fields from the loaded row writes EntityField.Value directly, which does
+                    // not assert active status — so a deprecated column still present in the table emits
+                    // no warning on load (hydration is not user use of the field). No suppression toggle
+                    // is needed now that the assertion lives at BaseEntity.Get/Set/SetMany.
                     // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
                     if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
                         field.Value = new Date(value);
@@ -2196,11 +2219,12 @@ export abstract class BaseEntity<T = unknown> {
         this._childEntity = null;
         this._childEntities = null;
         this._childEntityDiscoveryDone = false;
-        // Generate UUID for non-auto-increment uniqueidentifier primary keys
+        // Generate UUID for non-auto-increment GUID/UUID primary keys
+        // (SQL Server `uniqueidentifier` / PostgreSQL `uuid`)
         if (this.EntityInfo.PrimaryKeys.length === 1) {
             const pk = this.EntityInfo.PrimaryKeys[0];
             if (!pk.AutoIncrement &&
-                pk.Type.toLowerCase().trim() === 'uniqueidentifier' &&
+                pk.IsUniqueIdentifier &&
                 !this.Get(pk.Name)) {
                 // Generate and set UUID for this primary key
                 const uuid = uuidv4();

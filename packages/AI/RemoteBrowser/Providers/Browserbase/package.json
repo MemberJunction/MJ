@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/remote-browser-browserbase",
+  "type": "module",
+  "version": "5.42.0",
+  "description": "MemberJunction: Browserbase backend driver for the Remote Browser channel. Acquires a CDP session from Browserbase via an injectable client seam, exposes its hosted live-view URL, and delegates native AI control to Browserbase Stagehand (act/extract/observe). Everything else is inherited from @memberjunction/remote-browser-cdp.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/remote-browser-base": "5.42.0",
+    "@memberjunction/remote-browser-cdp": "5.42.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

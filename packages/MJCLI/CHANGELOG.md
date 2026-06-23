@@ -1,5 +1,208 @@
 # Change Log - @memberjunction/cli
 
+## 5.42.0
+
+### Minor Changes
+
+- d4c12e5: Add MJ Claude Pack: a curated bundle of `CLAUDE.md` guidance, slash commands, and skills that ships with every MemberJunction install for users of Claude Code.
+
+  New CLI commands:
+  - `mj install:claude` — installs the pack into the current directory, preserving any user content above and below the managed CLAUDE.md markers. Supports `--from <path>` for offline installs and `--dry-run` to preview.
+  - `mj update:claude` — refreshes the pack to the latest version published with the MJ major you're on. Supports `--check`, `--refresh-commands`, and `--refresh-skills` for selective updates.
+
+  `mj doctor` gains a `claude-pack` check group (5 checks: managed-block presence, VERSION file, MANIFEST integrity, managed-file hash drift, SessionStart hook wired). "No pack installed" surfaces as info, not warn — the pack is optional.
+
+  New public API:
+  - `@memberjunction/installer` exports `FileSystemAdapter.ReadBytes()` for binary file reads (used by the pack doctor's hash checks).
+
+  The pack is shipped via three paths: (1) auto-included in `mj install` and `mj bundle` via the `DistributionAssembler` sparse-checkout (replaces the legacy bootstrap-ZIP injection retired by PR #2725; opt out with `--no-claude-pack`), (2) installed onto an existing project via `mj install:claude` against a remote fetch from `raw.githubusercontent.com`, (3) refreshed via the SessionStart hook helper that nags when a newer version is available.
+
+  **Two post-M10 follow-ups from end-to-end testing against a real distribution install:**
+  - `mj install:claude` / `mj update:claude` now detect the MJ major (and full semver) by walking `apps/*/package.json` and `packages/*/package.json` when the root `package.json` is a workspace shell with no direct `@memberjunction/*` deps. Distribution-style installs put @mj deps under `apps/MJAPI` and `apps/MJExplorer`, so the previous root-only detection required every distribution-install user to pass `--major <N>` manually. Source-style monorepo checkouts and simple consumer projects are unaffected (they hit the root-level path first, exactly as before).
+  - The `InstallResult` (and `--json` output, §7.5) now has a `notes: string[]` field alongside `warnings`. "Pack is up to date" and "Update available: v… → v…" report as `notes` (informational); `warnings` is reserved for states the caller may want to act on (no local pack, customized file would be overwritten, malformed managed block). Both arrays are always present, so downstream JSON consumers can iterate without optional-chaining.
+
+### Patch Changes
+
+- 8f7260b: Add inline CodeGen baking for PostgreSQL migrations (`mj migrate convert --bake-codegen` and `mj migrate rebake`) plus a one-time PG CodeGen cutover migration and a repeatable `EntityField.AllowsNull` self-heal, enabling codegen-free PostgreSQL deploys (`mj migrate` + `mj sync push`, no `mj codegen`).
+- eea5b15: Split-and-regenerate PostgreSQL migration pipeline: regenerate the machine-generated bulk of each migration and transpile only hand-authored DDL via AST-based SQLGlot dialect transforms, replacing the brittle regex-based pg-migrate path. Adds statement-level classification for unbannered baselines and end-to-end AST transforms covering the remaining DDL edge cases.
+- 34152e1: Pluggable mj CLI with AI agent and automation friendly output: new cli-core package (BaseCLIPlugin + runtime host), json formatting for machine readable output and two tier progressive disclosure. with per-command runtime/timeout hints, and a fix for sync/push/pull hanging on DB-pool teardown after emitting results
+- Updated dependencies [9b9b484]
+- Updated dependencies [a72af01]
+- Updated dependencies [d4c12e5]
+- Updated dependencies [5ada858]
+- Updated dependencies [ded7a20]
+- Updated dependencies [6ac8ca4]
+- Updated dependencies [63d7610]
+- Updated dependencies [2f225e4]
+- Updated dependencies [b7092ca]
+- Updated dependencies [8f7260b]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [eea5b15]
+- Updated dependencies [34152e1]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/server-bootstrap-lite@5.42.0
+  - @memberjunction/metadata-sync@5.42.0
+  - @memberjunction/installer@5.42.0
+  - @memberjunction/sqlserver-dataprovider@5.42.0
+  - @memberjunction/codegen-lib@5.42.0
+  - @memberjunction/open-app-engine@5.42.0
+  - @memberjunction/db-auto-doc@5.42.0
+  - @memberjunction/sql-converter@5.42.0
+  - @memberjunction/sqlglot-ts@5.42.0
+  - @memberjunction/cli-core@5.42.0
+  - @memberjunction/ai-cli@5.42.0
+  - @memberjunction/query-gen@5.42.0
+  - @memberjunction/testing-cli@5.42.0
+  - @memberjunction/config@5.42.0
+
+## 5.41.0
+
+### Minor Changes
+
+- a5f5472: Remote Browser channel + new realtime voice providers + computer-use enrichment.
+  - **Remote Browser channel** (`@memberjunction/remote-browser-*`): an in-house realtime channel where an agent drives a live, CDP-connected browser while it talks (sales demos, support walkthroughs, trainer agents). New `AIRemoteBrowserProvider` registry (migration V202606161000) with JSONType capability gating; a universal `remote-browser-base` (driver family + `RemoteBrowserEngineBase`), a shared `remote-browser-cdp` kit (one lossless action mapper + `CdpRemoteBrowserSession`), a `remote-browser-server` engine + `RemoteBrowserChannel` (control arbiter, control modes AgentOnly/ViewOnly/Collaborative vs strategies ComputerUse/NativeAI), and five thin backends (Self-Hosted Chrome, Browserbase, Steel, Browserless, Hyperbrowser).
+  - **computer-use** enriched additively into a complete browser-I/O + perception engine: CSS-selector-aware actions, CDP screencast, MouseMove, accessibility-snapshot/QueryElement/GetVisibleText/GetTitle/WaitForLoadState — every consumer benefits, existing vision/coordinate path unchanged.
+  - **New realtime model providers**: xAI Grok Voice (`@memberjunction/ai-xai`, OpenAI-Realtime-compatible) and Inworld (`@memberjunction/ai-inworld`), with vendor/model seeds.
+  - **Console logging improvements** across `@memberjunction/ai-core-plus`, `ai-engine-base`, `ai-prompts`, `aiengine`, `cli`, `generic-database-provider`, `metadata-sync`, and the bootstrap/forms packages.
+
+### Patch Changes
+
+- a69b0fa: Fix CodeGen SP generation for PK-only entities, fix mj sync push exit code on failure, and use GetSystemUser for API Key scope checks
+- efb5381: chore(cli): bump Skyway dependencies (skyway-core, skyway-postgres, skyway-sqlserver) to ^0.6.2
+- Updated dependencies [8fd6f59]
+- Updated dependencies [a69b0fa]
+- Updated dependencies [cd6c5f0]
+- Updated dependencies [8c8b658]
+- Updated dependencies [659ee5b]
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [ddaa30e]
+  - @memberjunction/core@5.41.0
+  - @memberjunction/codegen-lib@5.41.0
+  - @memberjunction/metadata-sync@5.41.0
+  - @memberjunction/server-bootstrap-lite@5.41.0
+  - @memberjunction/generic-database-provider@5.41.0
+  - @memberjunction/ai-cli@5.41.0
+  - @memberjunction/db-auto-doc@5.41.0
+  - @memberjunction/open-app-engine@5.41.0
+  - @memberjunction/query-gen@5.41.0
+  - @memberjunction/sqlserver-dataprovider@5.41.0
+  - @memberjunction/testing-cli@5.41.0
+  - @memberjunction/config@5.41.0
+  - @memberjunction/installer@5.41.0
+  - @memberjunction/sql-converter@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- 3da89ef: Add configurable CORS origins and opt-in rate limiting to MJ Server, add client-side permission evaluation for component artifacts, and fix CI publish failures in light-command and db-auto-doc bootstrap
+- Updated dependencies [3da89ef]
+  - @memberjunction/db-auto-doc@5.40.2
+  - @memberjunction/sqlserver-dataprovider@5.40.2
+  - @memberjunction/ai-cli@5.40.2
+  - @memberjunction/codegen-lib@5.40.2
+  - @memberjunction/metadata-sync@5.40.2
+  - @memberjunction/server-bootstrap-lite@5.40.2
+  - @memberjunction/query-gen@5.40.2
+  - @memberjunction/testing-cli@5.40.2
+  - @memberjunction/config@5.40.2
+  - @memberjunction/generic-database-provider@5.40.2
+  - @memberjunction/core@5.40.2
+  - @memberjunction/installer@5.40.2
+  - @memberjunction/open-app-engine@5.40.2
+  - @memberjunction/sql-converter@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- Updated dependencies [e50381b]
+  - @memberjunction/core@5.40.1
+  - @memberjunction/ai-cli@5.40.1
+  - @memberjunction/codegen-lib@5.40.1
+  - @memberjunction/db-auto-doc@5.40.1
+  - @memberjunction/generic-database-provider@5.40.1
+  - @memberjunction/metadata-sync@5.40.1
+  - @memberjunction/open-app-engine@5.40.1
+  - @memberjunction/query-gen@5.40.1
+  - @memberjunction/sqlserver-dataprovider@5.40.1
+  - @memberjunction/server-bootstrap-lite@5.40.1
+  - @memberjunction/testing-cli@5.40.1
+  - @memberjunction/config@5.40.1
+  - @memberjunction/installer@5.40.1
+  - @memberjunction/sql-converter@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- 9233802: Convert and validate the consolidated baseline in the PostgreSQL migration pipeline. GrantRule now skips `GRANT CONNECT` (no PG equivalent) and ProcedureToFunctionRule skips CRUD sprocs whose `RETURNS SETOF` view is a deprecated/orphaned entity view — both emit `-- SKIPPED (INTENTIONAL)` markers instead of apply-failing SQL. Fix the MJCLI baseline roundtrip's PG conversion (it called nonexistent `--input/--output` flags) and correct the migrate-convert baseline JSDoc.
+- Updated dependencies [804f9f6]
+- Updated dependencies [73bb233]
+- Updated dependencies [43e6c0f]
+- Updated dependencies [253a188]
+- Updated dependencies [9233802]
+  - @memberjunction/core@5.40.0
+  - @memberjunction/codegen-lib@5.40.0
+  - @memberjunction/generic-database-provider@5.40.0
+  - @memberjunction/sqlserver-dataprovider@5.40.0
+  - @memberjunction/server-bootstrap-lite@5.40.0
+  - @memberjunction/sql-converter@5.40.0
+  - @memberjunction/ai-cli@5.40.0
+  - @memberjunction/db-auto-doc@5.40.0
+  - @memberjunction/metadata-sync@5.40.0
+  - @memberjunction/open-app-engine@5.40.0
+  - @memberjunction/query-gen@5.40.0
+  - @memberjunction/testing-cli@5.40.0
+  - @memberjunction/config@5.40.0
+  - @memberjunction/installer@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- 361eb4c: Azure-safe principal creation in baseline emitter, plus a freshly-generated v5.38.x baseline (`B202605291452__v5.38.x__Baseline.sql`).
+  - `emitPrincipals` now wraps cross-database `master.*` lookups inside `sp_executesql N'...'` string literals so Azure SQL's submission-time parser can't reject the batch. The `SERVERPROPERTY('EngineEdition') = 5` check sets `@associate = 1` on Azure, so the `master.dbo.syslogins` path never executes there — but only the dynamic-SQL wrapper prevents the parser from rejecting the batch before the IF can short-circuit it.
+  - New emitter test (`keeps cross-DB references inside string literals (Azure-safe)`) strips quoted literals from the emitted SQL and asserts zero `master.*` references survive outside string literals — regressions surface immediately.
+  - New v5.38.x baseline ships with the fix: 0 `master.*` refs outside string literals, 4 `sp_executesql` wrappers (one per SQL user), byte-equivalent to a V-stack-built source DB (0 object/row diffs across 46,432 rows). Previously published v5.34.x and v5.37.x baselines are intentionally untouched — Skyway auto-picks the latest baseline for fresh installs.
+
+- cd4f6e7: Remote distribution fetch for `mj install`, plus a new `mj bundle` command.
+  - `mj install` (distribution mode) now blobless-sparse-checks-out the source at the resolved tag and assembles the distribution layout on demand, replacing the committed bootstrap zip.
+  - New `mj bundle` builds a self-contained distribution zip for offline/air-gapped installs. `--with-migrations` ships both the SQL Server (`migrations/`) and PostgreSQL (`migrations-pg/`) trees by default; `--db-platform sqlserver|postgresql` narrows to one.
+  - `mj migrate` fetches only the migration slice it needs. It first reads the database's current version from the Skyway history table and chooses accordingly: a **fresh** database gets `baseline + tail`, while an **existing** database is upgraded with the versioned migrations _after_ its current version (no baseline) — fixing a gap where upgrading a database that sits below a newer baseline silently skipped the intermediate migrations. The detected version is shown in the CLI output.
+  - `mj migrate` also runs a TLS-aware connection preflight (also available standalone via `--check-connection`) that surfaces an actionable hint — e.g. set `DB_TRUST_SERVER_CERTIFICATE=1` for a self-signed cert — instead of a cryptic mid-migration error.
+  - The installer-generated MJExplorer environment files are emitted `as const` so union fields keep their literal types.
+
+- Updated dependencies [26761b8]
+- Updated dependencies [361eb4c]
+- Updated dependencies [f4bf584]
+- Updated dependencies [7dfacc7]
+- Updated dependencies [eaee99f]
+- Updated dependencies [2d1b4e1]
+- Updated dependencies [3c53858]
+- Updated dependencies [db4addf]
+- Updated dependencies [ae74fd5]
+- Updated dependencies [9bc2916]
+- Updated dependencies [cd4f6e7]
+- Updated dependencies [a101a34]
+  - @memberjunction/metadata-sync@5.39.0
+  - @memberjunction/core@5.39.0
+  - @memberjunction/sqlserver-dataprovider@5.39.0
+  - @memberjunction/server-bootstrap-lite@5.39.0
+  - @memberjunction/generic-database-provider@5.39.0
+  - @memberjunction/codegen-lib@5.39.0
+  - @memberjunction/installer@5.39.0
+  - @memberjunction/ai-cli@5.39.0
+  - @memberjunction/db-auto-doc@5.39.0
+  - @memberjunction/open-app-engine@5.39.0
+  - @memberjunction/query-gen@5.39.0
+  - @memberjunction/testing-cli@5.39.0
+  - @memberjunction/config@5.39.0
+  - @memberjunction/sql-converter@5.39.0
+
 ## 5.38.0
 
 ### Patch Changes
