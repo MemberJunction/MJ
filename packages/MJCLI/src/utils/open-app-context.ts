@@ -3,149 +3,66 @@
  *
  * Constructs the OrchestratorContext needed by the engine's install/upgrade/remove
  * functions, using the MJ entity framework (Metadata, RunView, BaseEntity). The
- * backing data provider is db-generic: it is selected from the configured platform
- * (`DB_PLATFORM` / `dbPlatform`) — SQL Server (default) or PostgreSQL — so `mj app …`
- * works on either backend and the engine's platform-aware install/migration paths
- * receive a provider whose `Dialect.PlatformKey` matches the real database.
+ * backing data provider is db-generic and is bootstrapped by MetadataSync's shared
+ * provider lifecycle (`initializeProvider`), which selects SQL Server (default) or
+ * PostgreSQL from the configured platform — so `mj app …` and `mj sync` share ONE
+ * provider-init implementation, and the engine's platform-aware install/migration
+ * paths receive a provider whose `Dialect.PlatformKey` matches the real database.
  */
-import sql from 'mssql';
 import ora from 'ora-classic';
 import { createRequire } from 'node:module';
-import { UserInfo, SetProvider, type DatabaseProviderBase } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
+import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
 import { getValidatedConfig } from '../config.js';
 
 type ResolvedConfig = ReturnType<typeof getValidatedConfig>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Provider initialization (lazy singleton) — db-generic (SQL Server or PostgreSQL)
+// Provider initialization — delegated to MetadataSync's shared, db-generic
+// provider lifecycle (lazy singleton; SQL Server or PostgreSQL). It builds +
+// registers the provider and, on both platforms, populates UserCache (PG via its
+// vwUsers/vwUserRoles bootstrap) — so getSystemUserInfo() reads UserCache uniformly.
 // ─────────────────────────────────────────────────────────────────────────────
 
-let _pool: sql.ConnectionPool | null = null;           // SQL Server pool (mssql)
-let _pgProvider: PostgreSQLDataProvider | null = null;  // PostgreSQL provider (owns its own pg pool)
-let _provider: DatabaseProviderBase | null = null;
-let _initPromise: Promise<DatabaseProviderBase> | null = null;
-// System user resolved by the PostgreSQL path. UserCache is SQL-Server-specific (its
-// Refresh() takes an mssql pool), so PG resolves the user directly and stores it here;
-// null on SQL Server, where getSystemUserInfo() reads UserCache as before.
-let _systemUser: UserInfo | null = null;
-
 /**
- * Initializes the MJ data provider for the configured platform if not already done,
- * registers it as the global provider, and resolves the system user.
+ * Initializes (or returns the already-initialized) MJ data provider for the
+ * configured platform, by adapting MJCLI's config to the `MJConfig` shape that
+ * MetadataSync's shared `initializeProvider` consumes.
  */
 async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
-  if (_provider) {
-    return _provider;
-  }
-  if (_initPromise) {
-    return _initPromise;
-  }
-
-  _initPromise = (async () => {
-    const config = getValidatedConfig();
-    return config.dbPlatform === 'postgresql'
-      ? createPostgreSQLProvider(config)
-      : createSQLServerProvider(config);
-  })();
-
-  _provider = await _initPromise;
-  return _provider;
-}
-
-/** Builds and registers the SQL Server data provider (default platform). */
-async function createSQLServerProvider(config: ResolvedConfig): Promise<DatabaseProviderBase> {
-  _pool = new sql.ConnectionPool({
-    server: config.dbHost,
-    port: config.dbPort,
-    database: config.dbDatabase,
-    user: config.codeGenLogin,
-    password: config.codeGenPassword,
-    options: {
-      encrypt: config.dbHost.includes('.database.windows.net'),
-      trustServerCertificate: config.dbTrustServerCertificate ?? true,
-      enableArithAbort: true,
-    },
-  });
-  await _pool.connect();
-
-  // setupSQLServerClient registers the global provider AND populates UserCache.
-  const providerConfig = new SQLServerProviderConfigData(_pool, config.coreSchema ?? '__mj');
-  return (await setupSQLServerClient(providerConfig)) as unknown as DatabaseProviderBase;
+  return initializeProvider(toMJConfig(getValidatedConfig()));
 }
 
 /**
- * Builds and registers the PostgreSQL data provider. SSL is left to the provider's
- * own default (off in dev, on in production — which covers managed Postgres like AWS
- * RDS/Aurora). The system user is resolved directly from vwUsers/vwUserRoles because
- * UserCache is SQL-Server-specific. Mirrors CodeGen's setupPostgreSQLDataSource.
+ * Adapts MJCLI's `ResolvedConfig` to MetadataSync's `MJConfig`. The two carry the
+ * same connection facts under different names (codeGenLogin/coreSchema vs
+ * dbUsername/mjCoreSchema). `dbTrustServerCertificate` and `dbEncrypt` are passed as
+ * the Y/N strings MetadataSync reads; encrypt preserves the prior behavior of
+ * auto-detecting Azure SQL only (DB_ENCRYPT is not honored for local SQL Server,
+ * where encrypt-on without a trusted cert would break the connection).
  */
-async function createPostgreSQLProvider(config: ResolvedConfig): Promise<DatabaseProviderBase> {
-  const coreSchema = config.coreSchema ?? '__mj';
-  _pgProvider = new PostgreSQLDataProvider();
-  // SSL is intentionally not set here. Like `mj sync`, it is driven by the standard
-  // PG* environment (e.g. PGSSLMODE) and the provider's own `NODE_ENV`-based default —
-  // which is how connections to managed Postgres (AWS Aurora/RDS `rds.force_ssl=1`)
-  // are enabled in production. Setting an explicit `ssl` here would override that env.
-  await _pgProvider.Config(
-    new PostgreSQLProviderConfigData(
-      {
-        Host: config.dbHost,
-        Port: config.dbPort,
-        Database: config.dbDatabase,
-        User: config.codeGenLogin,
-        Password: config.codeGenPassword,
-      },
-      coreSchema,
-      1, // checkRefreshIntervalSeconds — must be > 0 to trigger the provider's initial metadata load
-    ),
-  );
-  // setupSQLServerClient does this for the SS path; the PG path must register the
-  // global provider explicitly so Metadata/BaseEntity RunView calls resolve to it.
-  SetProvider(_pgProvider);
-  _systemUser = await resolvePostgreSQLSystemUser(_pgProvider, coreSchema);
-  return _pgProvider as unknown as DatabaseProviderBase;
+function toMJConfig(config: ResolvedConfig) {
+  return {
+    dbPlatform: config.dbPlatform,
+    dbHost: config.dbHost,
+    dbPort: config.dbPort,
+    dbDatabase: config.dbDatabase,
+    dbUsername: config.codeGenLogin,
+    dbPassword: config.codeGenPassword,
+    dbEncrypt: config.dbHost.includes('.database.windows.net') ? 'Y' : 'N',
+    dbTrustServerCertificate: config.dbTrustServerCertificate ? 'Y' : 'N',
+    mjCoreSchema: config.coreSchema ?? '__mj',
+  };
 }
 
 /**
- * Resolves the system user (Owner preferred, else first user) from the PostgreSQL
- * vwUsers/vwUserRoles views — the db-generic equivalent of UserCache, which is
- * SQL-Server-only. Mirrors CodeGen's setupPostgreSQLDataSource.
- */
-async function resolvePostgreSQLSystemUser(provider: PostgreSQLDataProvider, coreSchema: string): Promise<UserInfo> {
-  // ExecuteSQL auto-quotes the PascalCase view names; the lowercase schema is left as-is.
-  const users = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM ${coreSchema}.vwUsers`);
-  const roles = await provider.ExecuteSQL<Record<string, unknown>>(`SELECT * FROM ${coreSchema}.vwUserRoles`);
-  const userInfos = users.map((user) => {
-    user.UserRoles = roles.filter((role) => String(role.UserID).toLowerCase() === String(user.ID).toLowerCase());
-    return new UserInfo(provider, user);
-  });
-  const systemUser = userInfos.find((u) => u?.Type?.trim().toLowerCase() === 'owner') ?? userInfos[0];
-  if (!systemUser) {
-    throw new Error(`No users found in ${coreSchema}.vwUsers. Cannot determine system user for Open App operations.`);
-  }
-  return systemUser;
-}
-
-/**
- * Closes the shared connection(s). Call on CLI exit for cleanup.
+ * Closes the shared connection(s). Call on CLI exit for cleanup. Delegates to
+ * MetadataSync's `cleanupProvider`, which tears down whichever pool (mssql or pg)
+ * was opened and resets the shared provider singleton.
  */
 export async function closeConnectionPool(): Promise<void> {
-  try {
-    if (_pool?.connected) {
-      await _pool.close();
-    }
-    if (_pgProvider) {
-      await _pgProvider.Dispose();
-    }
-  } finally {
-    _pool = null;
-    _pgProvider = null;
-    _provider = null;
-    _initPromise = null;
-    _systemUser = null;
-  }
+  await cleanupProvider();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,12 +74,8 @@ export async function closeConnectionPool(): Promise<void> {
  * Falls back to Owner user, then first active user if no system user exists.
  */
 function getSystemUserInfo(): UserInfo {
-  // PostgreSQL resolves the system user during provider init (UserCache is
-  // SQL-Server-specific and is never populated on PG).
-  if (_systemUser) {
-    return _systemUser;
-  }
-
+  // UserCache is populated by initializeProvider on BOTH platforms (PG via its
+  // vwUsers/vwUserRoles bootstrap), so the same lookup works regardless of backend.
   const sysUser = UserCache.Instance.GetSystemUser();
   if (sysUser) {
     return sysUser;

@@ -65,7 +65,6 @@
     "@memberjunction/db-auto-doc": "5.42.0",
     "@memberjunction/metadata-sync": "5.42.0",
     "@memberjunction/open-app-engine": "5.42.0",
-    "@memberjunction/postgresql-dataprovider": "5.42.0",
     "@memberjunction/query-gen": "5.42.0",
     "@memberjunction/server-bootstrap-lite": "5.42.0",
     "@memberjunction/skyway-core": "^0.6.2",
