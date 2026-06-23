@@ -60,11 +60,9 @@
           <!-- Configurations Content -->
           @if (!isLoading && !error) {
             @if (filteredConfigurations.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-sliders"></i>
-                <h3>No configurations found</h3>
-                <p>No AI configurations match your current filters. Try adjusting your search criteria or create a new configuration.</p>
-              </div>
+              <mj-empty-state Icon="fa-solid fa-sliders"
+                Title="No configurations found"
+                Message="No AI configurations match your current filters. Try adjusting your search criteria or create a new configuration." />
             } @else {
               <!-- Grid View -->
               @if (viewMode === 'grid') {

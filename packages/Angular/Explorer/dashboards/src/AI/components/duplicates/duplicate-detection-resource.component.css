@@ -333,34 +333,6 @@ app-duplicate-detection-resource {
     min-height: 200px;
 }
 
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    min-height: 200px;
-    gap: 8px;
-}
-
-.empty-icon {
-    font-size: 48px;
-    color: var(--mj-text-disabled);
-}
-
-.empty-text {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    margin: 0;
-}
-
-.empty-subtext {
-    font-size: 13px;
-    color: var(--mj-text-muted);
-    margin: 0;
-}
-
 /* ---- Kanban Board ---- */
 
 .kanban-board {

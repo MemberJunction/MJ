@@ -61,6 +61,7 @@ describe('MJEmptyStateComponent', () => {
   describe('variant host-class bindings', () => {
     it('should set no variant class for the default "empty" variant', () => {
       expect(cmp.IsNoResults).toBe(false);
+      expect(cmp.IsSuccess).toBe(false);
       expect(cmp.IsWarning).toBe(false);
       expect(cmp.IsError).toBe(false);
     });
@@ -68,6 +69,12 @@ describe('MJEmptyStateComponent', () => {
       cmp.Variant = 'no-results';
       expect(cmp.IsNoResults).toBe(true);
       expect(cmp.IsWarning).toBe(false);
+      expect(cmp.IsError).toBe(false);
+    });
+    it('should set IsSuccess only when Variant is "success"', () => {
+      cmp.Variant = 'success';
+      expect(cmp.IsSuccess).toBe(true);
+      expect(cmp.IsNoResults).toBe(false);
       expect(cmp.IsError).toBe(false);
     });
     it('should set IsWarning only when Variant is "warning"', () => {
@@ -93,6 +100,11 @@ describe('MJEmptyStateComponent', () => {
       cmp.Variant = 'no-results';
       expect(cmp.ResolvedIcon).toBe('fa-solid fa-magnifying-glass');
       expect(MJEmptyStateComponent.DefaultIconForVariant('no-results')).toBe('fa-solid fa-magnifying-glass');
+    });
+    it('should use the circle-check default for the "success" variant', () => {
+      cmp.Variant = 'success';
+      expect(cmp.ResolvedIcon).toBe('fa-solid fa-circle-check');
+      expect(MJEmptyStateComponent.DefaultIconForVariant('success')).toBe('fa-solid fa-circle-check');
     });
     it('should use the triangle default for the "warning" variant', () => {
       cmp.Variant = 'warning';

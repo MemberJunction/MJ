@@ -7,10 +7,11 @@ import { MJButtonDirective } from '../button/button.directive';
  *
  * - `empty`      — nothing exists yet (default). Neutral/disabled icon tone.
  * - `no-results` — a search/filter matched nothing. Muted icon tone, magnifier default.
+ * - `success`    — a positive "all clear" empty (e.g. "No Errors Found"). Success icon tone, check default.
  * - `warning`    — a non-error blocking condition (disabled/misconfigured feature). Warning icon tone.
  * - `error`      — a load/operation failed. Error icon tone, triangle default.
  */
-export type MJEmptyStateVariant = 'empty' | 'no-results' | 'warning' | 'error';
+export type MJEmptyStateVariant = 'empty' | 'no-results' | 'success' | 'warning' | 'error';
 
 /** Density of an `<mj-empty-state>` — controls padding and icon size. */
 export type MJEmptyStateSize = 'compact' | 'default' | 'large';
@@ -156,6 +157,9 @@ export type MJEmptyStateSize = 'compact' | 'default' | 'large';
     :host(.mj-empty-state--no-results) .mj-empty-state__icon {
       color: var(--mj-text-muted);
     }
+    :host(.mj-empty-state--success) .mj-empty-state__icon {
+      color: var(--mj-status-success);
+    }
     :host(.mj-empty-state--warning) .mj-empty-state__icon {
       color: var(--mj-status-warning);
     }
@@ -205,6 +209,9 @@ export class MJEmptyStateComponent {
   @HostBinding('class.mj-empty-state--no-results')
   get IsNoResults(): boolean { return this.Variant === 'no-results'; }
 
+  @HostBinding('class.mj-empty-state--success')
+  get IsSuccess(): boolean { return this.Variant === 'success'; }
+
   @HostBinding('class.mj-empty-state--warning')
   get IsWarning(): boolean { return this.Variant === 'warning'; }
 
@@ -227,6 +234,8 @@ export class MJEmptyStateComponent {
     switch (variant) {
       case 'no-results':
         return 'fa-solid fa-magnifying-glass';
+      case 'success':
+        return 'fa-solid fa-circle-check';
       case 'warning':
       case 'error':
         return 'fa-solid fa-triangle-exclamation';

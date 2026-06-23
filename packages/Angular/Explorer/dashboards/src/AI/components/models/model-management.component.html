@@ -70,17 +70,14 @@
 
     <mj-page-body [Flex]="true">
           @if (filteredModels.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-microchip fa-4x"></i>
-              <h3>No models found</h3>
-              <p>{{ hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI model to get started' }}</p>
-              @if (!hasActiveFilters) {
-                <button class="primary-action" (click)="createNewModel()">
-                  <i class="fa-solid fa-plus"></i>
-                  Create First Model
-                </button>
-              }
-            </div>
+            <mj-empty-state
+              [Variant]="hasActiveFilters ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-microchip"
+              Title="No models found"
+              [Message]="hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI model to get started'"
+              [ActionText]="hasActiveFilters ? 'Clear filters' : 'Create First Model'"
+              [ActionIcon]="hasActiveFilters ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
+              (Action)="onEmptyStateAction()" />
           } @else {
             @switch (viewMode) {
               @case ('grid') {

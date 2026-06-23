@@ -696,6 +696,15 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
     this.saveUserPreferencesDebounced();
   }
 
+  /** Empty-state CTA: clear filters when the list is narrowed, otherwise create. */
+  public onEmptyStateAction(): void {
+    if (this.hasActiveFilters) {
+      this.clearFilters();
+    } else {
+      this.createNewPrompt();
+    }
+  }
+
   // BaseResourceComponent abstract method implementations
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return 'Prompts';

@@ -175,11 +175,9 @@
             <mj-loading text="Loading duplicate detection results..."></mj-loading>
         </div>
     } @else if (TotalGroupCount === 0) {
-        <div class="empty-state">
-            <i class="fa-solid fa-clone empty-icon"></i>
-            <p class="empty-text">No duplicate detection results found.</p>
-            <p class="empty-subtext">Select an entity document and click "Run Detection" to start.</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-clone"
+            Title="No duplicate detection results found."
+            Message="Select an entity document and click &quot;Run Detection&quot; to start." />
     } @else {
         <!-- Kanban Board -->
         <div class="kanban-board">

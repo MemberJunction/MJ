@@ -17,7 +17,7 @@ convention every section migration follows, plus the running progress log.
 | `ActionText` | `string` | renders the built-in primary CTA when set |
 | `ActionIcon` | `string` | FA icon inside the CTA |
 | `ActionVariant` | `'primary'\|'secondary'\|'outline'\|'flat'` | default `primary` |
-| `Variant` | `'empty'\|'no-results'\|'warning'\|'error'` | drives default icon + icon tone |
+| `Variant` | `'empty'\|'no-results'\|'success'\|'warning'\|'error'` | drives default icon + icon tone |
 | `Size` | `'compact'\|'default'\|'large'` | padding + icon size |
 | `Action` (output) | `EventEmitter<MouseEvent>` | CTA click |
 
@@ -25,7 +25,7 @@ Slots: default `<ng-content>` (rich body — feature lists, dynamic text), and
 `[actions]` (multi/bespoke CTAs; self-collapses via `:empty`).
 
 Variant default icons: `empty`→inbox, `no-results`→magnifying-glass,
-`warning`/`error`→triangle-exclamation.
+`success`→circle-check, `warning`/`error`→triangle-exclamation.
 
 ## Migration rules
 
@@ -162,8 +162,8 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 |---------|-------|-----------|--------|--------|
 | explorer-settings (pilot) | 9 | 14 | ✅ | `c637bfd304` |
 | dashboards/APIKeys | 6 | 11 | ✅ | `7d25fe43ba` |
-| dashboards/Lists | 5 | 9 | ✅ | (this commit) |
-| dashboards/AI | 11 | — | ⏳ next | |
+| dashboards/Lists | 5 | 9 | ✅ | `5c2746acc6` |
+| dashboards/AI | 11 | 13 | ✅ | (this commit) |
 | dashboards/ComponentStudio | 9 | — | | |
 | dashboards/Credentials | 5 | — | | |
 | dashboards/Actions | 5 | — | | |
