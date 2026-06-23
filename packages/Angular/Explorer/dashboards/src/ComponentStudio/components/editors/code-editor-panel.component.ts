@@ -105,10 +105,8 @@ type CodeViewMode = 'current' | 'original' | 'diff';
             }
           }
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-file-code"></i>
-            <p>No code sections available. Select a component to view its code.</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-file-code"
+            Title="No code sections available. Select a component to view its code." />
         }
       </div>
     </div>
@@ -305,28 +303,6 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       background: color-mix(in srgb, var(--mj-status-error) 8%, transparent);
     }
 
-    /* ---- Empty state ---- */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      color: var(--mj-text-secondary);
-      flex: 1;
-    }
-
-    .empty-state i {
-      font-size: 32px;
-      margin-bottom: 12px;
-      opacity: 0.4;
-    }
-
-    .empty-state p {
-      margin: 0;
-      font-size: 13px;
-      text-align: center;
-    }
   `]
 })
 export class CodeEditorPanelComponent {

@@ -53,10 +53,8 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
             </mj-code-editor>
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-database"></i>
-            <p>Select a component to edit its data requirements.</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-database"
+            Title="Select a component to edit its data requirements." />
         }
       </div>
     </div>
@@ -126,24 +124,6 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
     .json-editor-container mj-code-editor {
       display: block;
       height: 100%;
-    }
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      color: var(--mj-text-secondary);
-      flex: 1;
-    }
-    .empty-state i {
-      font-size: 32px;
-      margin-bottom: 12px;
-    }
-    .empty-state p {
-      margin: 0;
-      font-size: 13px;
-      text-align: center;
     }
   `]
 })

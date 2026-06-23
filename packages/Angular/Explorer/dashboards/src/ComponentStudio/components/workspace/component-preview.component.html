@@ -100,21 +100,17 @@
   <div class="preview-area">
     @if (!State.SelectedComponent) {
       <!-- Empty State: No component selected -->
-      <div class="empty-state">
-        <i class="fa-solid fa-eye fa-3x"></i>
-        <h3>Select a component to preview</h3>
-        <p>Choose a component from the sidebar to see its live preview here.</p>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-eye"
+        Title="Select a component to preview"
+        Message="Choose a component from the sidebar to see its live preview here." />
     } @else if (!State.IsRunning) {
       <!-- Component selected but not running -->
-      <div class="empty-state run-state">
-        <i class="fa-solid fa-play-circle fa-3x"></i>
-        <h3>{{ GetComponentName() }}</h3>
-        <p>{{ GetComponentDescription() || 'No description available' }}</p>
-        <button class="run-component-btn" (click)="RunSelectedComponent()">
-          <i class="fa-solid fa-play"></i> Run Component
-        </button>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-play-circle"
+        [Title]="GetComponentName()"
+        [Message]="GetComponentDescription() || 'No description available'"
+        ActionText="Run Component"
+        ActionIcon="fa-solid fa-play"
+        (Action)="RunSelectedComponent()" />
     } @else if (LocalComponentSpec) {
       <!-- Live Preview Container -->
       <div class="preview-container"

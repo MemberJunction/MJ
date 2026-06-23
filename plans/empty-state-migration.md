@@ -169,8 +169,8 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | explorer-settings (pilot) | 9 | 14 | ✅ | `c637bfd304` |
 | dashboards/APIKeys | 6 | 11 | ✅ | `7d25fe43ba` |
 | dashboards/Lists | 5 | 9 | ✅ | `5c2746acc6` |
-| dashboards/AI | 11 | 13 | ✅ | (this commit) |
-| dashboards/ComponentStudio | 9 | — | | |
+| dashboards/AI | 11 | 13 | ✅ | `ff116e0acc` |
+| dashboards/ComponentStudio | 11 | 16 | ✅ | (this commit) |
 | dashboards/Credentials | 5 | — | | |
 | dashboards/Actions | 5 | — | | |
 | dashboards/{VersionHistory,Testing,Integration,Communication} | 4 each | — | | |

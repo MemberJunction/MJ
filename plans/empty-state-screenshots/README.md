@@ -26,6 +26,15 @@ Each state has a light and a `-dark` shot. Folders mirror the migration sections
 | Usage Patterns — no data | `usage-patterns-empty.png` |
 | System Configuration — empty | `system-config-empty.png` |
 
+## component-studio/
+| State | File |
+|-------|------|
+| Dashboard — "Ready to Build" onboarding (projected actions + quick-start row) | `dashboard-ready.png` |
+
+_Other ComponentStudio empties (preview no-selection / run-state, browser empty/no-results,
+editor panels, dialog empties) reuse already-recorded patterns; the dashboard onboarding is
+captured as it's the one with projected multi-action + re-scoped CSS._
+
 ## explorer-settings/
 | State | File |
 |-------|------|

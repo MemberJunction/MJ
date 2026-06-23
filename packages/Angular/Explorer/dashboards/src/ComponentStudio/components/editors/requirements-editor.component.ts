@@ -66,10 +66,8 @@ type EditorMode = 'preview' | 'edit';
             </div>
           }
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-file-lines"></i>
-            <p>Select a component to view its {{ Title | lowercase }}.</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-file-lines"
+            [Title]="'Select a component to view its ' + (Title || '').toLowerCase() + '.'" />
         }
       </div>
     </div>
@@ -221,27 +219,6 @@ type EditorMode = 'preview' | 'edit';
       background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      color: var(--mj-text-secondary);
-      flex: 1;
-    }
-
-    .empty-state i {
-      font-size: 32px;
-      margin-bottom: 12px;
-      opacity: 0.4;
-    }
-
-    .empty-state p {
-      margin: 0;
-      font-size: 13px;
-      text-align: center;
-    }
   `]
 })
 export class RequirementsEditorComponent implements OnInit, OnDestroy {
