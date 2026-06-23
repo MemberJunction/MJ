@@ -1646,6 +1646,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     /* best-effort: swallow progress-channel errors so they never fail the call */
                 },
             });
+            // Give the subscription socket a moment to establish before the op runs, so a fast op's early
+            // progress isn't missed. Negligible for LongRunning ops (the only ones that emit progress).
+            await new Promise((resolve) => setTimeout(resolve, 400));
         }
 
         try {
@@ -2872,6 +2875,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // freshly-refreshed token instead of reusing the stale one.
                 connectionParams: () => ({
                     Authorization: 'Bearer ' + this.ConfigData.Token,
+                    // Also carry the API keys (if configured) so API-key / MCP / Node clients can authenticate
+                    // the subscription socket — the server validates these the same way it does the HTTP headers.
+                    ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
+                    ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
                 }),
                 keepAlive: 30000, // Send keepalive ping every 30 seconds
                 retryAttempts: 3,
