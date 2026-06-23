@@ -1547,6 +1547,37 @@ This library is written in TypeScript and provides full type definitions. All ge
 
 ISC License - see LICENSE file for details.
 
+## Remote Operations (the 4th Data Primitive)
+
+`BaseRemotableOperation<TInput, TOutput>` (defined in this package) is a typed, provider-routed server capability invoked from **one call site** on both the client (marshalled over GraphQL) and the server (in-process) — the missing peer of the three primitives MJCore already gives you:
+
+```mermaid
+graph LR
+    subgraph "MJ data primitives — one call site, provider-routed"
+        A["BaseEntity<br/><i>record CRUD</i>"]
+        B["RunView<br/><i>dynamic set reads</i>"]
+        C["RunQuery<br/><i>stored queries</i>"]
+        D["BaseRemotableOperation<br/><b>typed RPC</b>"]
+    end
+    style D fill:#8b5cf6,color:#fff,stroke:#6d28d9
+```
+
+`entity.Save()` · `rv.RunView()` · `rq.RunQuery()` · **`op.Execute()`** — same shape, same tier-agnostic DX.
+
+Before this primitive, exposing one non-CRUD capability ("render a template", "run a process") to the browser meant hand-writing a stack — a TypeGraphQL resolver, a typed GraphQL client (or an inline `gql` string + a provider cast), an Angular wrapper, **and** the input/output types twice (client + server), kept in sync by hand. A Remote Operation replaces all of it with one typed object:
+
+```typescript
+// typed in, typed out — identical on client and server; a wrong field is a compile error
+const result = await new TemplateRunOperation().Execute({ templateID, data });
+result.Output?.output;
+```
+
+New operations are declared as `MJ: Remote Operations` metadata rows; CodeGen emits the typed base, and the body is written by hand (**Manual**), authored by an LLM from the row's `Description` and approved (**AI**), or left as emitted boilerplate (**Default**). Transport, auth, the long-running progress channel, and approval gating are written **once** in the framework and shared by every operation.
+
+> **Visual before/after**: See the [**Remote Operations Showcase**](./docs/REMOTE_OPERATIONS_SHOWCASE.md) — a diagram-driven tour of the layers this removes, built from two real migrations. *(Best starting point for sharing with the team.)*
+>
+> **Full Guide**: See the [**Remote Operations Guide**](../../guides/REMOTE_OPERATIONS_GUIDE.md) for when to use it (vs. an Action or a bespoke resolver), the three authoring modes, calling conventions, the auth chain, and long-running progress.
+
 ## Virtual Entities
 
 Virtual entities are **read-only entities backed by SQL views** rather than physical database tables. They appear in the metadata catalog alongside regular entities but have no underlying base table — only a base view. This makes them ideal for exposing aggregated data, cross-database views, or complex computed datasets as first-class entities.
