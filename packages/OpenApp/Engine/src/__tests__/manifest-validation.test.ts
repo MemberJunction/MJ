@@ -99,14 +99,19 @@ describe('Manifest Validation', () => {
             expect(result.Manifest!.dependencies).toEqual({ 'dep-app-one': '^1.0.0' });
         });
 
-        it('should reject the array form (only the record form is supported)', () => {
+        it('should accept the array form and normalize it to the record form', () => {
             const m = {
                 ...minimalManifest(),
                 dependencies: [
                     { name: 'mj-bizapps-common', repository: 'https://github.com/MemberJunction/bizapps-common', versionRange: '>=5.30.0 <6.0.0' },
                 ],
             };
-            expect(ValidateManifestObject(m).Success).toBe(false);
+            const result = ValidateManifestObject(m);
+            expect(result.Success).toBe(true);
+            // The array entry is normalized to the canonical record (versionRange -> version).
+            expect(result.Manifest!.dependencies).toEqual({
+                'mj-bizapps-common': { version: '>=5.30.0 <6.0.0', repository: 'https://github.com/MemberJunction/bizapps-common' },
+            });
         });
     });
 
