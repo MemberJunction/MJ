@@ -14,7 +14,7 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
@@ -950,7 +950,7 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, manifest.migrations.directory, tempDir, context.GitHubOptions);
+  const downloadResult = await DownloadAppMigrations(manifest, context, tempDir);
 
   if (!downloadResult.Success) {
     return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
@@ -969,6 +969,36 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
+}
+
+/**
+ * Downloads an app's migration files for the LIVE database platform.
+ *
+ * On PostgreSQL, prefer a sibling `<directory>-pg` folder (the `.pg.sql` set) —
+ * mirroring core `mj migrate`'s `migrations` → `migrations-pg` swap — and fall
+ * back to the declared directory when no PG variant exists (dialect-neutral or
+ * SQL-Server-only apps). On SQL Server, always use the declared directory.
+ */
+async function DownloadAppMigrations(
+  manifest: MJAppManifest,
+  context: OrchestratorContext,
+  tempDir: string,
+): Promise<MigrationDownloadResult> {
+  const baseDir = manifest.migrations!.directory;
+  const isPG = context.DatabaseProvider.Dialect.PlatformKey === 'postgresql';
+
+  if (isPG) {
+    const pgDir = `${baseDir.replace(/\/+$/, '')}-pg`;
+    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions);
+    // Use the PG-specific set only if it exists AND has files; otherwise fall
+    // back to the declared directory (a 404 yields Success:false, an empty dir
+    // yields Success:true with no files — both mean "no PG variant here").
+    if (pgResult.Success && (pgResult.Files?.length ?? 0) > 0) {
+      return pgResult;
+    }
+  }
+
+  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions);
 }
 
 /**
