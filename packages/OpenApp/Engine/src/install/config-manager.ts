@@ -180,7 +180,9 @@ function EnsureDynamicPackagesSection(content: string): string {
     // Insert dynamicPackages section before the closing of module.exports
     const insertionPoint = content.lastIndexOf('};');
     if (insertionPoint === -1) {
-        return content;
+        // Can't safely place the section — fail loudly instead of writing an
+        // unchanged config and reporting success (B10).
+        throw new Error('Could not locate the end of module.exports (no "};") to insert the dynamicPackages section in mj.config.cjs.');
     }
 
     const section = `\n  dynamicPackages: {\n    server: []\n  },\n`;
@@ -199,19 +201,26 @@ function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): str
         return content;
     }
 
-    // Find the server array
-    const serverArrayMatch = content.match(/server:\s*\[/);
-    if (!serverArrayMatch || serverArrayMatch.index === undefined) {
-        return content;
+    // Anchor the server array to the dynamicPackages section — NOT the first
+    // `server: [` anywhere in the file (which could be an unrelated nested config) — B8.
+    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
+    if (!dynMatch || dynMatch.index === undefined) {
+        throw new Error('dynamicPackages section not found in mj.config.cjs when adding a server package.');
     }
+    const afterDyn = content.slice(dynMatch.index);
+    const serverRel = afterDyn.match(/server:\s*\[/);
+    if (!serverRel || serverRel.index === undefined) {
+        throw new Error('dynamicPackages.server array not found in mj.config.cjs.');
+    }
+    const serverArrayIndex = dynMatch.index + serverRel.index;
 
     const entryStr = `\n      {\n        PackageName: '${entry.PackageName}',\n        StartupExport: '${entry.StartupExport}',\n        AppName: '${entry.AppName}',\n        Enabled: ${entry.Enabled}\n      },`;
 
     // Find the closing bracket of the server array
-    const arrayStart = serverArrayMatch.index + serverArrayMatch[0].length;
+    const arrayStart = serverArrayIndex + serverRel[0].length;
     const closingBracket = FindMatchingBracket(content, arrayStart - 1);
     if (closingBracket === -1) {
-        return content;
+        throw new Error('Could not find the closing bracket of dynamicPackages.server in mj.config.cjs.');
     }
 
     return content.slice(0, closingBracket) + entryStr + '\n    ' + content.slice(closingBracket);
@@ -386,7 +395,7 @@ function EnsureEntityPackageNameSection(content: string): string {
     // entityPackageName doesn't exist at all — insert before the closing };
     const insertionPoint = content.lastIndexOf('};');
     if (insertionPoint === -1) {
-        return content;
+        throw new Error('Could not locate the end of module.exports (no "};") to insert the entityPackageName section in mj.config.cjs.');
     }
 
     const section = `\n  entityPackageName: {\n  },\n`;
@@ -404,7 +413,7 @@ function AddEntityPackageEntry(content: string, schemaName: string, packageName:
     // Find the entityPackageName Record opening brace
     const recordMatch = content.match(/entityPackageName\s*:\s*\{/);
     if (!recordMatch || recordMatch.index === undefined) {
-        return content;
+        throw new Error('entityPackageName record not found in mj.config.cjs when adding a schema mapping.');
     }
 
     const bracePos = content.indexOf('{', recordMatch.index);

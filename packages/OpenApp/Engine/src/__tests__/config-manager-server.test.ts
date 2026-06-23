@@ -63,6 +63,39 @@ describe('AddServerDynamicPackages — B6 regression (precise key detection)', (
     });
 });
 
+describe('AddServerDynamicPackages — B10 (fail loudly, not silently)', () => {
+    it('returns Success:false (no silent write) when there is no module.exports end to anchor to', () => {
+        setupConfigFile('module.exports = {}'); // no `};` → can't place the section
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest('acme-app', '@acme/server'));
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toBeDefined();
+        // Pre-fix this returned the unchanged content + Success:true; now it must not
+        // silently write a config that's missing the entry.
+        expect(mockedWriteFileSync).not.toHaveBeenCalled();
+    });
+});
+
+describe('AddServerDynamicPackages — B8 (anchor to dynamicPackages, not an unrelated server array)', () => {
+    it('adds the entry to dynamicPackages.server, not an earlier unrelated `server: [ ]`', () => {
+        const config = [
+            'module.exports = {',
+            "  someOtherThing: { server: ['a', 'b'] },",
+            '  dynamicPackages: {',
+            '    server: []',
+            '  },',
+            '};',
+        ].join('\n');
+        setupConfigFile(config);
+
+        const result = AddServerDynamicPackages(REPO_ROOT, makeServerManifest('acme-app', '@acme/server'));
+
+        expect(result.Success).toBe(true);
+        const content = writtenContent();
+        expect(content).toContain("someOtherThing: { server: ['a', 'b'] }"); // unrelated array untouched
+        expect(content).toMatch(/dynamicPackages:[\s\S]*@acme\/server/); // entry landed in the right array
+    });
+});
+
 describe('RemoveServerDynamicPackages — B7 regression (both quote styles)', () => {
     it('removes a double-quoted server entry', () => {
         const config = [
