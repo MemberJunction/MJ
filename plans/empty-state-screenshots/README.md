@@ -35,6 +35,18 @@ _Other ComponentStudio empties (preview no-selection / run-state, browser empty/
 editor panels, dialog empties) reuse already-recorded patterns; the dashboard onboarding is
 captured as it's the one with projected multi-action + re-scoped CSS._
 
+## credentials/
+| State | File |
+|-------|------|
+| Types — no-results + Reset filters | `types-no-results.png` |
+| Types — empty + Create Type | `types-empty.png` |
+| Types — no-selection (detail pane, filled via height:100%) | `types-no-selection.png` |
+| Audit Log — no-results + Reset filters | `audit-no-results.png` |
+| Overview — compact panel empties (no credentials / no types) | `overview.png` |
+
+_Categories (mirrors Types: empty/Create + search no-results/Clear + no-selection)
+and the Credentials list (mirrors Types) reuse the captured patterns._
+
 ## explorer-settings/
 | State | File |
 |-------|------|
