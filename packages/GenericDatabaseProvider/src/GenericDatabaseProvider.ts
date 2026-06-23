@@ -1192,11 +1192,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     protected BuildTotalRowCountSQL(
         entityInfo: EntityInfo,
         usingPagination: boolean,
-        maxRowsForQuery: number
+        maxRowsForQuery: number,
+        baseViewOverride?: string
     ): string | null {
         const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
         if (!rowsAreLimited) return null;
-        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
+        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, baseViewOverride ?? entityInfo.BaseView)}`;
+    }
+
+    /**
+     * Resolves the view a RunView reads from: the entity's live base view by default, or its materialized
+     * wrapper view (`materialized_vw<CodeName>`) when the caller opts into the snapshot via
+     * `DataSource: 'Materialized'` (base-view materialization — plan §7). The choice is explicit (never
+     * silent), so the same RLS/paging/field-selection apply against the identical shape.
+     *
+     * Convention-based: if the entity has no base-view materialization, the wrapper view won't exist and
+     * the read will error — opting into `'Materialized'` asserts the snapshot exists.
+     */
+    protected GetEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams): string {
+        if (params.DataSource === 'Materialized') {
+            return `materialized_vw${entityInfo.CodeName}`;
+        }
+        return entityInfo.BaseView;
     }
 
     /**
@@ -1496,14 +1513,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
             // ── Build SELECT and COUNT SQL ──
+            // DataSource:'Materialized' routes the read to the entity's materialized wrapper view
+            // (same shape, so RLS/paging/fields all apply identically); default stays the live base view.
+            const effectiveBaseView = this.GetEffectiveBaseView(entityInfo, params);
             const topFragment = topSQL ? topSQL + ' ' : '';
-            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
+            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`;
             // count_only ALWAYS needs the count query — BuildTotalRowCountSQL only emits
             // it when rows are limited (its pagination purpose), which previously left
             // count_only with no COUNT at all (silently returned TotalRowCount 0).
             let countSQL: string | null = params.ResultType === 'count_only'
-                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
-                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+                ? `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, effectiveBaseView)}`
+                : this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery, effectiveBaseView);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';

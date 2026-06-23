@@ -12,6 +12,8 @@ import {
     UserInfo,
     RunQueryParams,
     RunQueryResult,
+    RunViewParams,
+    EntityInfo,
 } from '@memberjunction/core';
 import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
@@ -107,6 +109,10 @@ class TestPipelineProvider extends GenericDatabaseProvider {
         params: RunQueryParams,
     ): { paginatedResult: Record<string, unknown>[]; totalRowCount: number } {
         return this.applyQueryPagination(results, params);
+    }
+
+    public testGetEffectiveBaseView(entityInfo: EntityInfo, params: RunViewParams): string {
+        return this.GetEffectiveBaseView(entityInfo, params);
     }
 
     public testAuditQueryExecution(
@@ -848,5 +854,23 @@ ORDER BY bridge.LastName, bridge.FirstName`,
 
             expect(createAuditSpy).toHaveBeenCalled();
         });
+    });
+});
+
+describe('GenericDatabaseProvider — DataSource (Live vs Materialized) read routing', () => {
+    const provider = new TestPipelineProvider();
+    // GetEffectiveBaseView only reads BaseView + CodeName off the entity.
+    const entity = { BaseView: 'vwDemoCustomers', CodeName: 'DemoCustomers', SchemaName: '__mj' } as unknown as EntityInfo;
+
+    it('defaults to the live base view when DataSource is omitted', () => {
+        expect(provider.testGetEffectiveBaseView(entity, {} as RunViewParams)).toBe('vwDemoCustomers');
+    });
+
+    it("defaults to the live base view when DataSource is 'Live'", () => {
+        expect(provider.testGetEffectiveBaseView(entity, { DataSource: 'Live' } as RunViewParams)).toBe('vwDemoCustomers');
+    });
+
+    it("routes to the materialized wrapper view (materialized_vw<CodeName>) when DataSource is 'Materialized'", () => {
+        expect(provider.testGetEffectiveBaseView(entity, { DataSource: 'Materialized' } as RunViewParams)).toBe('materialized_vwDemoCustomers');
     });
 });

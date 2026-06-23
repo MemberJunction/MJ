@@ -147,6 +147,16 @@ export class RunViewParams {
      */
     EntityName?: string;
     /**
+     * optional - choose the live source-of-truth vs the materialized snapshot, for entities that have a
+     * base-view materialization (an `MJ: Materialized Results` row with `SourceType='EntityBaseView'`).
+     * Defaults to `'Live'`. When `'Materialized'`, the read is routed to the materialized wrapper view
+     * (`materialized_vw<Name>`) instead of the entity's live base view — RLS, paging, and field selection
+     * apply identically because it's the same entity/shape. Choosing the snapshot is an explicit caller
+     * decision (never silent). No effect on entities that have no base-view materialization (the wrapper
+     * view won't exist). The enum (vs. a bare boolean) leaves room for future modes without a breaking change.
+     */
+    DataSource?: 'Live' | 'Materialized';
+    /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
      *
