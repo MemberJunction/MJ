@@ -190,8 +190,9 @@ out in `plans/record-set-processing-and-record-processes.md` §17. Deliberately 
 - **Metadata gate**: `RemoteOperationEngineBase` (`@memberjunction/core-entities`).
 - **Operations**: `Template.Run` (`@memberjunction/templates`); `RecordProcess.RunNow` (LongRunning, emits
   progress) / `GetRunStatus` / `PauseRun` / `ResumeRun` / `CancelRun` (`@memberjunction/record-set-processor`).
-- **Transport**: `dispatchRemoteOperationInProcess` + `DatabaseProviderBase.InternalRouteOperation` (server);
-  `GraphQLDataProvider.InternalRouteOperation` (client); `ExecuteRemoteOperationResolver` (`@memberjunction/server`).
+- **Transport**: `DatabaseProviderBase.InternalRouteOperation` → `dispatchRemoteOperationInProcess` (server,
+  in `@memberjunction/core`); `GraphQLDataProvider.InternalRouteOperation` (client, `@memberjunction/graphql-dataprovider`);
+  the generic `ExecuteRemoteOperationResolver` + `RemoteOperationProgress` subscription (`@memberjunction/server`).
 
 ## Status
 

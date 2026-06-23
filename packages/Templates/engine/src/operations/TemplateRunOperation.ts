@@ -1,8 +1,9 @@
 /**
  * @fileoverview Server implementation of the `Template.Run` Remote Operation — renders a template by ID
- * with optional render data. Extends the client-safe {@link TemplateRunOperation} base in
- * `@memberjunction/templates-base-types` (operation key + typed I/O) and supplies the server body via
- * `TemplateEngineServer`. Registered under `Template.Run`; replaces the bespoke `RunTemplate` GraphQL
+ * with optional render data. Extends the CodeGen-emitted {@link TemplateRunOperation} base in
+ * `@memberjunction/core-entities` (`generated/remote_operations.ts` — operation key + typed I/O, from the
+ * `MJ: Remote Operations` row) and supplies the server body via `TemplateEngineServer`. Registered under
+ * `Template.Run`; replaces the bespoke `RunTemplate` GraphQL
  * resolver (which remains as a deprecated backcompat shim).
  * @module @memberjunction/templates
  */

@@ -51,7 +51,8 @@ These are method parameters — use them directly:
 - **`user: UserInfo`** — the acting user. **Always pass `user`** to `GetEntityObject` / `RunView` so server-side
   permissions + auditing use the right session.
 - **`context: RemoteOpServerContext`** — the execution context. For `LongRunning` operations you may report
-  progress with `context.progress({ message, processed, total })`; for `Sync` operations you typically ignore it.
+  progress with `context.emitProgress({ OperationKey: this.OperationKey, Processed, Total, Message })` (note the
+  PascalCase fields); for `Sync` operations you typically ignore it.
 
 ## Default libraries (already imported for every operation)
 

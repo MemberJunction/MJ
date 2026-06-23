@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     const config = new GraphQLProviderConfigData('', client.Url, wsUrl, async () => '', '__mj', undefined, undefined, client.MJAPIKey);
     await setupGraphQLClient(config);
 
-    const provider = Metadata.Provider;
+    const provider = Metadata.Provider; // global-provider-ok: the GraphQLDataProvider just configured by setupGraphQLClient — this Node test IS the single global provider
     const user = provider.CurrentUser;
     const suite = new TestRunner('Remote Operations RO-3 over-the-wire progress (GraphQLDataProvider -> live MJAPI)');
 
