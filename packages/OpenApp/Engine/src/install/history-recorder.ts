@@ -8,6 +8,7 @@
  */
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, TransactionGroupBase, BaseEntity, IMetadataProvider } from '@memberjunction/core';
+import type { MJOpenAppEntity, MJOpenAppInstallHistoryEntity, MJOpenAppDependencyEntity } from '@memberjunction/core-entities';
 import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
@@ -43,7 +44,7 @@ export async function RecordAppInstallation(
   callbacks?.OnProgress?.('Record', 'Recording app installation...');
 
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-  const entity = await md.GetEntityObject('MJ: Open Apps', contextUser);
+  const entity = await md.GetEntityObject<MJOpenAppEntity>('MJ: Open Apps', contextUser);
 
   // Check for existing record (e.g. previously removed app being reinstalled)
   const existing = await FindInstalledApp(contextUser, manifest.name, provider);
@@ -66,7 +67,7 @@ export async function RecordAppInstallation(
   }
 
   callbacks?.OnSuccess?.('Record', `App '${manifest.name}' recorded as installed`);
-  return String(entity.Get('ID'));
+  return entity.ID;
 }
 
 /**
@@ -74,28 +75,28 @@ export async function RecordAppInstallation(
  * Shared between new installs and reinstalls.
  */
 function SetAppFields(
-  entity: { Set: (field: string, value: unknown) => void },
+  entity: MJOpenAppEntity,
   manifest: MJAppManifest,
   contextUser: UserInfo,
   status: AppStatus = 'Active',
 ): void {
-  entity.Set('Name', manifest.name);
-  entity.Set('DisplayName', manifest.displayName);
-  entity.Set('Description', manifest.description ?? null);
-  entity.Set('Version', manifest.version);
-  entity.Set('Publisher', manifest.publisher.name);
-  entity.Set('PublisherEmail', manifest.publisher.email ?? null);
-  entity.Set('PublisherURL', manifest.publisher.url ?? null);
-  entity.Set('RepositoryURL', manifest.repository);
-  entity.Set('SchemaName', manifest.schema?.name ?? null);
-  entity.Set('MJVersionRange', manifest.mjVersionRange);
-  entity.Set('License', manifest.license ?? null);
-  entity.Set('Icon', manifest.icon ?? null);
-  entity.Set('Color', manifest.color ?? null);
-  entity.Set('ManifestJSON', JSON.stringify(manifest));
-  entity.Set('ConfigurationSchemaJSON', manifest.configuration ? JSON.stringify(manifest.configuration) : null);
-  entity.Set('InstalledByUserID', contextUser.ID);
-  entity.Set('Status', status);
+  entity.Name = manifest.name;
+  entity.DisplayName = manifest.displayName;
+  entity.Description = manifest.description ?? null;
+  entity.Version = manifest.version;
+  entity.Publisher = manifest.publisher.name;
+  entity.PublisherEmail = manifest.publisher.email ?? null;
+  entity.PublisherURL = manifest.publisher.url ?? null;
+  entity.RepositoryURL = manifest.repository;
+  entity.SchemaName = manifest.schema?.name ?? null;
+  entity.MJVersionRange = manifest.mjVersionRange;
+  entity.License = manifest.license ?? null;
+  entity.Icon = manifest.icon ?? null;
+  entity.Color = manifest.color ?? null;
+  entity.ManifestJSON = JSON.stringify(manifest);
+  entity.ConfigurationSchemaJSON = manifest.configuration ? JSON.stringify(manifest.configuration) : null;
+  entity.InstalledByUserID = contextUser.ID;
+  entity.Status = status;
 }
 
 /**
@@ -107,7 +108,7 @@ function SetAppFields(
  */
 export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Record<string, unknown>, provider?: IMetadataProvider): Promise<void> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-  const entity = await md.GetEntityObject('MJ: Open Apps', contextUser);
+  const entity = await md.GetEntityObject<MJOpenAppEntity>('MJ: Open Apps', contextUser);
   const loaded = await entity.InnerLoad(CompositeKey.FromID(appId));
   if (!loaded) {
     throw new Error(`Open App record not found: ${appId}`);
@@ -156,21 +157,21 @@ export async function RecordInstallHistoryEntry(
   provider?: IMetadataProvider,
 ): Promise<string> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-  const entity = await md.GetEntityObject('MJ: Open App Install Histories', contextUser);
+  const entity = await md.GetEntityObject<MJOpenAppInstallHistoryEntity>('MJ: Open App Install Histories', contextUser);
   entity.NewRecord();
-  entity.Set('OpenAppID', appId);
-  entity.Set('Version', manifest.version);
-  entity.Set('PreviousVersion', details.PreviousVersion ?? null);
-  entity.Set('Action', action);
-  entity.Set('ManifestJSON', JSON.stringify(manifest));
-  entity.Set('Summary', details.Summary ?? null);
-  entity.Set('ExecutedByUserID', contextUser.ID);
-  entity.Set('DurationSeconds', details.DurationSeconds ?? null);
-  entity.Set('StartedAt', details.StartedAt ?? null);
-  entity.Set('EndedAt', details.EndedAt ?? null);
-  entity.Set('Success', details.Success);
-  entity.Set('ErrorMessage', details.ErrorMessage ?? null);
-  entity.Set('ErrorPhase', details.ErrorPhase ?? null);
+  entity.OpenAppID = appId;
+  entity.Version = manifest.version;
+  entity.PreviousVersion = details.PreviousVersion ?? null;
+  entity.Action = action;
+  entity.ManifestJSON = JSON.stringify(manifest);
+  entity.Summary = details.Summary ?? null;
+  entity.ExecutedByUserID = contextUser.ID;
+  entity.DurationSeconds = details.DurationSeconds ?? null;
+  entity.StartedAt = details.StartedAt ?? null;
+  entity.EndedAt = details.EndedAt ?? null;
+  entity.Success = details.Success;
+  entity.ErrorMessage = details.ErrorMessage ?? null;
+  entity.ErrorPhase = details.ErrorPhase ?? null;
 
   if (transactionGroup) {
     entity.TransactionGroup = transactionGroup;
@@ -180,7 +181,7 @@ export async function RecordInstallHistoryEntry(
   if (!transactionGroup && !saved) {
     throw new Error(`Failed to record install history: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
-  return String(entity.Get('ID'));
+  return entity.ID;
 }
 
 /**
@@ -215,14 +216,14 @@ export async function RecordAppDependencies(
     );
     const depApp = depResult.Success && depResult.Results.length > 0 ? depResult.Results[0] : null;
 
-    const entity = await md.GetEntityObject('MJ: Open App Dependencies', contextUser);
+    const entity = await md.GetEntityObject<MJOpenAppDependencyEntity>('MJ: Open App Dependencies', contextUser);
     entity.NewRecord();
-    entity.Set('OpenAppID', appId);
-    entity.Set('DependsOnAppName', depName);
-    entity.Set('DependsOnAppID', depApp?.ID ?? null);
-    entity.Set('VersionRange', versionRange);
-    entity.Set('InstalledVersion', depApp?.Version ?? null);
-    entity.Set('Status', depApp ? 'Satisfied' : 'Missing');
+    entity.OpenAppID = appId;
+    entity.DependsOnAppName = depName;
+    entity.DependsOnAppID = depApp?.ID ?? null;
+    entity.VersionRange = versionRange;
+    entity.InstalledVersion = depApp?.Version ?? null;
+    entity.Status = depApp ? 'Satisfied' : 'Missing';
 
     if (transactionGroup) {
       entity.TransactionGroup = transactionGroup;
