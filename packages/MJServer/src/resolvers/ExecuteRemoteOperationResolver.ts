@@ -1,10 +1,13 @@
-import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, ID, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Resolver, Root, Subscription } from 'type-graphql';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRemotableOperation, RemoteOpInvokeMode } from '@memberjunction/core';
+import { BaseRemotableOperation, RemoteOpInvokeMode, RemoteOpProgress } from '@memberjunction/core';
 import { RemoteOperationEngineBase } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
+
+/** PubSub topic carrying RemoteOpProgress envelopes for attached over-the-wire callers (RO-3). */
+const REMOTE_OP_PROGRESS_TOPIC = 'RemoteOperationProgress';
 
 /** Input for the generic Remote Operation transport mutation. */
 @InputType()
@@ -17,6 +20,25 @@ export class ExecuteRemoteOperationInput {
 
     @Field()
     invokeMode: string;
+
+    /**
+     * Optional client-generated channel id. When set (attached mode over the wire), the server publishes every
+     * `RemoteOpProgress` the operation emits to the `RemoteOperationProgress` subscription filtered by this id,
+     * so the caller's `onProgress` fires live while the operation runs. Omitted for sync / no-progress calls.
+     */
+    @Field(() => String, { nullable: true })
+    progressChannelId?: string;
+}
+
+/** A single streamed progress envelope delivered over the `RemoteOperationProgress` subscription. */
+@ObjectType()
+export class RemoteOperationProgressNotification {
+    @Field()
+    ChannelId: string;
+
+    /** JSON-serialized {@link RemoteOpProgress}. */
+    @Field()
+    ProgressJSON: string;
 }
 
 /** Result of the generic Remote Operation transport mutation. */
@@ -51,6 +73,7 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
     async ExecuteRemoteOperation(
         @Arg('input') input: ExecuteRemoteOperationInput,
         @Ctx() ctx: AppContext,
+        @PubSub() pubSub: PubSubEngine,
     ): Promise<ExecuteRemoteOperationResultType> {
         try {
             const key = input.operationKey?.trim();
@@ -95,8 +118,16 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
                 return fail('INVALID_INPUT_JSON', `Invalid input JSON: ${e instanceof Error ? e.message : String(e)}`);
             }
 
+            // Attached over-the-wire (RO-3): forward each emitted RemoteOpProgress to the progress channel so a
+            // remote caller's onProgress fires live. No-op when the caller didn't open a channel (sync calls).
+            const onProgress = input.progressChannelId
+                ? (p: RemoteOpProgress) => {
+                      void pubSub.publish(REMOTE_OP_PROGRESS_TOPIC, { ChannelId: input.progressChannelId!, ProgressJSON: JSON.stringify(p) });
+                  }
+                : undefined;
+
             // Route through the per-request provider (server in-process path; runs the op's Authorize + InternalExecute).
-            const result = await provider.RouteOperation(key, parsedInput, { user, mode: input.invokeMode as RemoteOpInvokeMode });
+            const result = await provider.RouteOperation(key, parsedInput, { user, mode: input.invokeMode as RemoteOpInvokeMode, onProgress });
 
             return {
                 success: result.Success,
@@ -108,6 +139,22 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
         } catch (e) {
             return fail('ERROR', e instanceof Error ? e.message : String(e));
         }
+    }
+
+    /**
+     * Subscription the client opens (with a self-generated `channelId`) immediately before calling
+     * `ExecuteRemoteOperation` with the same id in `progressChannelId`. The server publishes one event per
+     * `RemoteOpProgress` the operation emits; filtered by `channelId` so concurrent calls never interleave.
+     */
+    @Subscription(() => RemoteOperationProgressNotification, {
+        topics: REMOTE_OP_PROGRESS_TOPIC,
+        filter: ({ payload, args }: { payload: RemoteOperationProgressNotification; args: { channelId: string } }) => payload.ChannelId === args.channelId,
+    })
+    RemoteOperationProgress(
+        @Root() notification: RemoteOperationProgressNotification,
+        @Arg('channelId', () => ID) _channelId: string,
+    ): RemoteOperationProgressNotification {
+        return notification;
     }
 }
 

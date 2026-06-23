@@ -160,15 +160,24 @@ the run ID, and the body reports progress through the execution context:
 context.emitProgress({ OperationKey: this.OperationKey, Processed: n, Total: t, Status: 'Running', Message: `…` });
 ```
 
-**Shipped:** operations *emit* typed `RemoteOpProgress`, and an **attached** caller's `onProgress` receives it
-— immediately in-process (`emitProgress → onProgress`). `RecordProcess.RunNow` forwards the `RecordSetProcessor`'s
-per-batch progress this way.
+**Attached, both tiers (shipped).** Operations *emit* typed `RemoteOpProgress`, and an **attached** caller's
+`onProgress` receives it:
 
-**Designed / remaining transport:** the **over-the-wire** progress channel (a `@Subscription`/`PubSub` topic
-correlating progress to a client call, so a browser caller's `onProgress` fires during a `LongRunning` mutation)
-and **detached** mode (return the handle immediately, run in the background, notify on completion via the push
-channel + poll `RecordProcess.GetRunStatus`). These reuse MJ's existing subscription/push infrastructure and
-should land with a running-server subscription test harness.
+- **In-process** — immediate (`emitProgress → onProgress`). `RecordProcess.RunNow` forwards the
+  `RecordSetProcessor`'s per-batch progress this way.
+- **Over the wire** — the client (`GraphQLDataProvider`) opens a `RemoteOperationProgress` GraphQL subscription
+  with a self-generated `channelId`, passes that id to the `ExecuteRemoteOperation` mutation, and the server
+  publishes each emitted `RemoteOpProgress` to that channel (`@Subscription`/`@PubSub` in
+  `ExecuteRemoteOperationResolver`). Filtered by `channelId` so concurrent calls never interleave; progress is
+  best-effort (a channel error never fails the call); the subscription is torn down when the call ends. A
+  browser caller's `onProgress` fires live during a `LongRunning` mutation — no API change, just pass `onProgress`.
+
+**Detached mode (partial).** Today `mode: 'detached'` still completes synchronously and returns the run handle
+(`ProcessRunID`), which the caller can poll via `RecordProcess.GetRunStatus` — correct, but not yet
+*fire-and-forget*. True return-immediately background execution + completion notification is the remaining
+piece; it needs a durable execution context (so the run outlives the request) and a completion-notification
+mechanism — the latter is an open design decision (reuse the push/notification entity vs. a new one) called
+out in `plans/record-set-processing-and-record-processes.md` §17. Deliberately not rushed.
 
 ## Reference implementations
 
@@ -188,7 +197,7 @@ should land with a running-server subscription test harness.
 | RO-0 | `BaseRemotableOperation` + `IRemoteOperationProvider` + in-process dispatch | ✅ shipped |
 | RO-1 | `ExecuteRemoteOperation` resolver + auth chain | ✅ shipped |
 | RO-2 | `MJ: Remote Operations` metadata + **CodeGen emitter** + `RemoteOperationEngineBase` cache | ✅ shipped |
-| RO-3 | LongRunning **progress emission** (attached) | ✅ shipped · over-the-wire channel + detached mode designed |
+| RO-3 | LongRunning progress — **attached, in-process AND over-the-wire** (subscription channel) | ✅ shipped · detached fire-and-forget partial |
 | RO-4 | **AI-from-Description** operation bodies | ✅ shipped |
 
 See `plans/record-set-processing-and-record-processes.md` §16–§17 for the full design history.
