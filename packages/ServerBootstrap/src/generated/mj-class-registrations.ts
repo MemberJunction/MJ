@@ -1394,10 +1394,6 @@ import {
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
     SkipProxyAgent,
-} from '@memberjunction/server';
-
-/**
- * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
