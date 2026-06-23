@@ -145,17 +145,26 @@ export async function DropAppSchema(
     return validation;
   }
 
-  const exists = await SchemaExists(schemaName, provider);
-  if (!exists) {
-    return { Success: true };
-  }
-
   try {
     if (provider.Dialect.PlatformKey === 'postgresql') {
-      // PostgreSQL supports CASCADE: drop the schema and everything it contains atomically.
-      await provider.ExecuteSQL(`DROP SCHEMA ${QuoteSchemaIdentifier(schemaName, provider)} CASCADE`);
+      // PostgreSQL folds unquoted identifiers to lowercase, so an app whose manifest
+      // declares a mixed-case schema (`__mj_BizAppsCommon`) ends up with its tables in
+      // the folded schema (`__mj_bizappscommon`) created by its unquoted migration DDL,
+      // while Skyway's quoted history table lands in the mixed-case schema. Dropping
+      // only the declared name would orphan one of them. Resolve every schema whose name
+      // matches case-insensitively and CASCADE-drop each so teardown is complete.
+      const matches = await provider.ExecuteSQL<{ schema_name: string }>(
+        `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSqlString(schemaName)}')`
+      );
+      for (const m of matches) {
+        await provider.ExecuteSQL(`DROP SCHEMA ${QuoteSchemaIdentifier(m.schema_name, provider)} CASCADE`);
+      }
     } else {
-      // SQL Server has no CASCADE on DROP SCHEMA — the schema must be emptied first.
+      // SQL Server is case-insensitive for identifiers (one schema) and has no CASCADE
+      // on DROP SCHEMA — the schema must be emptied first.
+      if (!(await SchemaExists(schemaName, provider))) {
+        return { Success: true };
+      }
       await DropAllSchemaObjects(schemaName, provider);
       await provider.ExecuteSQL(`DROP SCHEMA ${QuoteSchemaIdentifier(schemaName, provider)}`);
     }

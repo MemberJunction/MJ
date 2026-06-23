@@ -653,8 +653,14 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     let schemaDropError: string | undefined;
     if (!options.KeepData && existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
+      // Tearing down a RECORDED app's own schema is always legitimate — the name came
+      // from its persisted install record, not arbitrary user input — so the `__` guard
+      // (which exists to stop apps CLAIMING reserved schemas at install) must not block
+      // removal. Install can opt into `__` schemas via the dangerous flag but removal has
+      // no such flag, which left `__`-schema apps uninstallable. Exact-match reserved
+      // names (e.g. `__mj`) remain blocked by ValidateSchemaName's RESERVED_SCHEMAS check.
       const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
-        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+        allowDoubleUnderscore: true,
       });
       if (!dropResult.Success) {
         schemaDropError = dropResult.ErrorMessage;
