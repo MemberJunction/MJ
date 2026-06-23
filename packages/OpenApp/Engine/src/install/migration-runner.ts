@@ -213,8 +213,10 @@ async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: Skyway
 
 /**
  * Builds the SkywayConfig for running app migrations.
+ *
+ * Exported for unit testing of the baseline semantics (B19).
  */
-function BuildSkywayConfig(
+export function BuildSkywayConfig(
     migrationsDir: string,
     schemaName: string,
     dbConfig: SkywayDatabaseConfig,
@@ -249,7 +251,15 @@ function BuildSkywayConfig(
         Migrations: {
             Locations: [absoluteDir],
             DefaultSchema: schemaName,
-            BaselineVersion: '1',
+            // Baseline at '0', NOT '1'. BaselineOnMigrate fires only against a *non-empty*
+            // schema with no history table — i.e. an adopted schema, or a `--keep-data`
+            // reinstall whose history was lost. With BaselineVersion '1' Flyway stamps
+            // "v1 already applied" and SKIPS the app's `V1__` migration, leaving its objects
+            // un-created. '0' baselines below every real migration so V1+ all apply. A fresh
+            // empty-schema install is unaffected (Flyway never baselines an empty schema), and
+            // a normal `--keep-data` reinstall keeps its history table → no baseline at all,
+            // Flyway just resumes. (B19)
+            BaselineVersion: '0',
             BaselineOnMigrate: true,
         },
         Placeholders: {
