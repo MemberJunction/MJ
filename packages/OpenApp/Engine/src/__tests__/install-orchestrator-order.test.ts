@@ -65,9 +65,9 @@ vi.mock('@memberjunction/core', () => ({
     DatabaseProviderBase: class {},
 }));
 
-import { InstallApp } from '../install/install-orchestrator.js';
+import { InstallApp, UpgradeApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadMigrations } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
@@ -430,5 +430,61 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         // Pre-fix `schemaCreated = !isReinstall` → true on a fresh install → it would DROP a
         // schema it merely adopted (someone else's data). Post-fix: Created=false → no drop.
         expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled();
+    });
+});
+
+describe('UpgradeApp — migration failure is honest + recoverable (B21)', () => {
+    const migContext = {
+        ...context,
+        DatabaseProvider: { Dialect: { PlatformKey: 'sqlserver' } },
+    } as unknown as OrchestratorContext;
+
+    function v2ManifestWithMigrations(name: string): string {
+        return JSON.stringify({
+            manifestVersion: 1,
+            name,
+            displayName: name,
+            description: `${name} test app description`,
+            version: '2.0.0',
+            publisher: { name: 'Test' },
+            repository: `https://github.com/test/${name}`,
+            mjVersionRange: '>=5.0.0 <6.0.0',
+            schema: { name: `test_${name.replace(/-/g, '_')}` },
+            migrations: { directory: 'migrations' },
+            packages: {},
+            dependencies: {},
+        });
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(true);
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
+        vi.mocked(FindInstalledApp).mockResolvedValue({
+            ID: 'app-x-id', Name: 'app-x', Version: '1.0.0', Status: 'Active',
+            RepositoryURL: 'https://github.com/test/app-x', SchemaName: 'test_app_x',
+        } as unknown as Awaited<ReturnType<typeof FindInstalledApp>>);
+        serveManifests({ 'https://github.com/test/app-x': v2ManifestWithMigrations('app-x') });
+        vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, Files: [] } as unknown as Awaited<ReturnType<typeof DownloadMigrations>>);
+        // The new version's migration fails partway.
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: false, ErrorMessage: 'DDL boom on V2' });
+    });
+
+    it('marks the app Error and returns a message stating forward-only + how to resume', async () => {
+        const result = await UpgradeApp({ AppName: 'app-x' }, migContext);
+
+        expect(result.Success).toBe(false);
+        // Pre-fix: a bare "Migration failed" implied an unrecoverable dead-end. Now it explains
+        // the partial-upgrade state and that re-running the upgrade resumes via Skyway history.
+        const msg = (result.ErrorMessage ?? '').toLowerCase();
+        expect(msg).toContain('forward-only');
+        expect(msg).toContain('resume');
+        // Original failure detail is preserved.
+        expect(msg).toContain('ddl boom on v2');
+        // App is flipped to Error (retryable: B17 makes Error reinstallable; upgrade resumes).
+        expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), 'app-x-id', 'Error');
     });
 });

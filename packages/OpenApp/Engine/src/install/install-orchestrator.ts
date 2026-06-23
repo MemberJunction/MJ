@@ -27,7 +27,7 @@ import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
   RecordAppDependencies,
-  DeleteAppDependencies,
+  ReplaceAppDependenciesAtomically,
   SetAppStatus,
   FindInstalledApp,
   IsSchemaSharedByOtherApps,
@@ -492,9 +492,21 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     if (manifest.migrations && manifest.schema) {
       const migrationResult = await HandleMigrations(manifest, context);
       if (!migrationResult.Success) {
-        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Migration', migrationResult.ErrorMessage ?? 'Migration failed', startTime, previousVersion);
+        // OpenApp migrations are forward-only — there is no automatic down/rollback, so the
+        // schema may be partially upgraded. Skyway records each applied migration in the app
+        // schema's history table, so the upgrade IS recoverable: fix the cause and re-run
+        // `mj app upgrade`, which resumes from the last successful migration (the app's Version
+        // is not advanced on failure, so the upgrade still validates). State this honestly
+        // instead of leaving a bare "Migration failed" that reads as unrecoverable (B21).
+        const detail = migrationResult.ErrorMessage ?? 'Migration failed';
+        const recoverable =
+          `${detail}\n\nThe schema may be partially upgraded (migrations are forward-only; there is no ` +
+          `automatic rollback). Skyway tracks applied migrations, so once the cause is fixed, re-run ` +
+          `'mj app upgrade ${options.AppName}' to resume from the last successful migration. If the schema ` +
+          `is left inconsistent, restore it from a backup taken before the upgrade.`;
+        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Migration', recoverable, startTime, previousVersion);
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Migration', startTime, recoverable);
       }
     }
 
@@ -543,10 +555,15 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
     }
 
-    // Update dependency records to reflect new manifest
+    // Update dependency records to reflect new manifest. Delete + re-add atomically so a
+    // crash mid-rewrite can't leave the app with zero dependency rows (B23). The upgrade
+    // itself is already complete (status Active) at this point, so a failure to update the
+    // dependency-tracking rows is a warning, not an upgrade failure.
     if (manifest.dependencies) {
-      await DeleteAppDependencies(context.ContextUser, existingApp.ID);
-      await RecordAppDependencies(context.ContextUser, existingApp.ID, manifest.dependencies);
+      const depsReplaced = await ReplaceAppDependenciesAtomically(context.ContextUser, existingApp.ID, manifest.dependencies);
+      if (!depsReplaced) {
+        Callbacks?.OnWarn?.('Record', 'App upgraded, but its dependency records could not be updated atomically — re-run the upgrade to refresh them.');
+      }
     }
 
     await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Upgrade', manifest, {

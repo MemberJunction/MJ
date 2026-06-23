@@ -239,8 +239,16 @@ export async function RecordAppDependencies(
 /**
  * Deletes all dependency records for an app.
  * Used during upgrade to replace stale dependency records with fresh ones.
+ *
+ * When a `transactionGroup` is supplied, the deletes are queued into it (committed by
+ * the caller's `Submit()`) rather than committed individually — so an upgrade can delete
+ * the old rows and insert the new ones in a single atomic unit (B23).
  */
-export async function DeleteAppDependencies(contextUser: UserInfo, appId: string): Promise<void> {
+export async function DeleteAppDependencies(
+  contextUser: UserInfo,
+  appId: string,
+  transactionGroup?: TransactionGroupBase,
+): Promise<void> {
   const rv = new RunView();
   const result = await rv.RunView<BaseEntity>(
     {
@@ -256,6 +264,12 @@ export async function DeleteAppDependencies(contextUser: UserInfo, appId: string
     throw new Error(`Failed to load dependencies for app ${appId}: ${result.ErrorMessage ?? 'unknown error'}`);
   }
   for (const record of result.Results) {
+    if (transactionGroup) {
+      // Queue the delete into the caller's transaction — committed atomically on Submit().
+      record.TransactionGroup = transactionGroup;
+      await record.Delete();
+      continue;
+    }
     // BaseEntity.Delete() returns false on failure (it does not throw) — check it,
     // or stale dependency rows survive silently and corrupt later FindDependentApps.
     const deleted = await record.Delete();
@@ -263,6 +277,28 @@ export async function DeleteAppDependencies(contextUser: UserInfo, appId: string
       throw new Error(`Failed to delete a dependency for app ${appId}: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
   }
+}
+
+/**
+ * Atomically replaces an app's dependency rows: deletes the existing rows and inserts the
+ * new set inside a single TransactionGroup. Used by upgrade so a crash mid-rewrite can
+ * never leave the app with zero dependency rows (the prior code deleted then re-added in
+ * two un-grouped steps) — B23.
+ *
+ * @returns the TransactionGroup Submit result (true = both delete + insert committed).
+ */
+export async function ReplaceAppDependenciesAtomically(
+  contextUser: UserInfo,
+  appId: string,
+  dependencies: Record<string, string | { version?: string; repository?: string }>,
+  provider?: IMetadataProvider,
+): Promise<boolean> {
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+  const tg = await md.CreateTransactionGroup();
+  // Both queue into `tg`; nothing commits until Submit().
+  await DeleteAppDependencies(contextUser, appId, tg);
+  await RecordAppDependencies(contextUser, appId, dependencies, tg, provider);
+  return tg.Submit();
 }
 
 /**
