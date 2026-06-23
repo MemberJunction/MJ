@@ -240,10 +240,15 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     // Step 13: Update angular.json prebundle excludes
     HandleAngularPrebundleExcludes(manifest, context);
 
-    // Step 14: Flip status to Active BEFORE regenerating the client bootstrap,
-    // so the regen reads the new status and emits enabled imports.
+    // Step 14: Flip status BEFORE regenerating the client bootstrap so the regen
+    // reads the new status. If `npm install` failed (deps unresolved), finalize as
+    // 'Disabled' rather than 'Active' — otherwise the app is advertised as healthy
+    // while its packages can't be imported. Disabled → the client bootstrap emits
+    // commented-out imports, and the server loader tolerates the missing module
+    // until the user runs `npm install` (B15).
     Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
-    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
+    const finalStatus = npmInstallWarning ? 'Disabled' : 'Active';
+    await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
 
     // Step 15: Update client imports (reads current app status from DB)
     await HandleClientBootstrapRegeneration(context);
@@ -271,10 +276,9 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     Callbacks?.OnSuccess?.('Install', `Successfully installed ${manifest.name} v${manifest.version}`);
 
-    const baseSummary = 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.';
     const summary = npmInstallWarning
-      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' to complete the setup.`
-      : baseSummary;
+      ? `App installed but left DISABLED — npm install failed, so its packages are not resolved. package.json and config were updated; log in to npm ('npm login') or fix your .npmrc, run 'npm install', then 'mj app enable ${manifest.name}'.`
+      : 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.';
 
     return {
       Success: true,
