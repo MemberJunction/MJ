@@ -192,11 +192,14 @@
         }
 
         @if (filteredApplications.length === 0) {
-          <div class="empty-state">
-            <i class="fa-solid fa-cubes empty-icon" aria-hidden="true"></i>
-            <p class="empty-text">No applications found</p>
-            <p class="empty-subtext">Try adjusting your filters or create a new application</p>
-          </div>
+          <mj-empty-state
+            [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+            Icon="fa-solid fa-cubes"
+            Title="No applications found"
+            Message="Try adjusting your filters or create a new application"
+            [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+            ActionIcon="fa-solid fa-rotate-left"
+            (Action)="resetAllFiltersAndSearch()" />
         }
     </div>
   }

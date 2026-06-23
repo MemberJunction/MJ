@@ -575,20 +575,4 @@
   .list-header {
     padding: 0.625rem 0.75rem;
   }
-
-  .empty-state {
-    padding: 2rem 1rem;
-  }
-
-  .empty-state .empty-icon {
-    font-size: 3rem;
-  }
-
-  .empty-state .empty-text {
-    font-size: 1.0625rem;
-  }
-
-  .empty-state .empty-subtext {
-    font-size: 0.875rem;
-  }
 }

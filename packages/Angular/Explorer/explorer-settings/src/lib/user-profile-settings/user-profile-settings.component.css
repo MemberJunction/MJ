@@ -577,31 +577,6 @@
   background: var(--mj-text-muted);
 }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 3rem 1.5rem;
-}
-
-.empty-state .empty-icon {
-  font-size: 3rem;
-  color: var(--mj-border-strong);
-  margin-bottom: 1rem;
-}
-
-.empty-state .empty-text {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-  margin: 0 0 0.5rem 0;
-}
-
-.empty-state .empty-subtext {
-  font-size: 1rem;
-  color: var(--mj-text-muted);
-  margin: 0;
-}
-
 /* -----------------------------------------------------------------------------
    Provider Section
    ----------------------------------------------------------------------------- */

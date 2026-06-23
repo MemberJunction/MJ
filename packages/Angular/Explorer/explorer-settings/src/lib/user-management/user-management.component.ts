@@ -533,6 +533,21 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
     this.updateFilter({ status: 'all', role: '' });
   }
 
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Status + Role) and refresh
+   *  immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ status: 'all', role: '', search: '' });
+    this.applyFilters();
+    this.cdr.markForCheck();
+  }
+
   public toggleSelectAll(): void {
     if (this.isAllSelected) {
       // Deselect all filtered users
