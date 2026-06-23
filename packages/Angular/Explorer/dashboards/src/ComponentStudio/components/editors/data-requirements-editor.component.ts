@@ -125,6 +125,8 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       display: block;
       height: 100%;
     }
+    /* Fill the flex-fill editor body so the placeholder centers. */
+    mj-empty-state { flex: 1; }
   `]
 })
 export class DataRequirementsEditorComponent implements OnInit, OnDestroy {

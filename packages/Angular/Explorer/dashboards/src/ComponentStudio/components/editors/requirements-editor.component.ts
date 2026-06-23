@@ -219,6 +219,8 @@ type EditorMode = 'preview' | 'edit';
       background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
+    /* Fill the flex-fill editor body so the placeholder centers. */
+    mj-empty-state { flex: 1; }
   `]
 })
 export class RequirementsEditorComponent implements OnInit, OnDestroy {

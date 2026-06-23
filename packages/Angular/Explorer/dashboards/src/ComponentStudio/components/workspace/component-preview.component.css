@@ -211,6 +211,14 @@
    EMPTY STATES
    ============================================================ */
 
+/* The preview-area is a flex-fill container; the empty/run-state placeholder
+   must fill it so its content centers (restores the old .empty-state
+   width/height:100%). */
+mj-empty-state {
+  width: 100%;
+  height: 100%;
+}
+
 /* ============================================================
    ERROR OVERLAY
    ============================================================ */

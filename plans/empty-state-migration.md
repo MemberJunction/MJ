@@ -43,6 +43,14 @@ Variant default icons: `empty`→inbox, `no-results`→magnifying-glass,
 6. **Dynamic messages** (search term echoed, filter-dependent copy): compute in a
    component getter (e.g. `EmptyStateTitle` / `NoResultsMessage`) and bind
    `[Title]`/`[Message]` — don't cram conditionals into the template.
+6b. **Flex-parent gotcha** — `<mj-empty-state>`'s host centers its *content* but
+   does NOT grow to fill the parent. In a **block** parent it's full-width
+   (centers fine). In a **flex-row** parent it shrinks to content width and
+   sits flush-left; in a flex-fill panel it won't fill vertically either. If the
+   old `.empty-state` had `flex: 1` or `width/height: 100%` (i.e. it was a
+   full-area placeholder), re-add that on the `mj-empty-state` element in the
+   consumer's CSS (e.g. `.canvas mj-empty-state { flex: 1; }`). Caught on
+   ComponentStudio's dashboard canvas + editors + preview.
 7. **Delete the displaced bespoke CSS** (`.empty-state*`, `.empty-icon`,
    `.no-selection`, `.btn-create-large`, `.btn-clear`, etc.). Keep only CSS that
    styles **projected** content (see onboarding below). Leave **shared**
@@ -188,3 +196,11 @@ For each migrated empty-state, confirm in **both light and dark mode**:
   class that maps onto the `error` variant — fold them in during their sections.
 - **`api-key-list`** reset-filters (parent-owned `Filter` @Input) — see deferral
   above.
+- **FINAL CLEANUP (do last, once ALL sections migrated)**: delete the shared
+  `.empty-state` / `.empty-icon` / `.empty-text` / `.empty-subtext` definitions in
+  explorer-settings' `shared/styles/_admin-patterns.css`, `_md3-shared.css`, and
+  `shared-settings.css`. These are app-wide fallbacks still feeding unmigrated
+  sections, so they can only go once nothing renders `.empty-state` markup
+  anywhere. (explorer-settings itself already has zero `.empty-state` markup.)
+  Also drop the pre-existing dead `.no-data` rule in
+  `AI/components/charts/performance-heatmap.component.ts` (no matching markup).

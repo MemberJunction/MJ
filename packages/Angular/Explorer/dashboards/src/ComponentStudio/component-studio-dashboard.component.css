@@ -566,11 +566,21 @@
    EMPTY STATE
    ============================================================ */
 
-/* Onboarding actions + quick-start row are projected into <mj-empty-state>. */
+/* The canvas (.panel-center) is a flex-row container, so the empty-state must
+   grow to fill it and center — restores the old .empty-state flex:1 + bg. */
+.component-studio mj-empty-state {
+  flex: 1;
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* Onboarding actions + quick-start row are projected into <mj-empty-state>.
+   The actions need a top margin to separate from the message — the old layout
+   got this from the message paragraph's margin-bottom, removed with its CSS. */
 .component-studio .empty-state-actions {
   display: flex;
   gap: 8px;
   justify-content: center;
+  margin-top: var(--mj-space-6);
 }
 
 .component-studio .quick-start-templates {

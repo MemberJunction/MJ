@@ -303,6 +303,8 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       background: color-mix(in srgb, var(--mj-status-error) 8%, transparent);
     }
 
+    /* Fill the flex-fill editor body so the placeholder centers. */
+    mj-empty-state { flex: 1; }
   `]
 })
 export class CodeEditorPanelComponent {
