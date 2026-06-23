@@ -1,5 +1,77 @@
 # @memberjunction/ai-prompts
 
+## 5.42.0
+
+### Patch Changes
+
+- 256ab06: Fix agent-run steps (and prompt runs) occasionally stuck at `Status='Running'` / `CompletedAt=NULL`.
+
+  When a step finished fast enough that its fire-and-forget INSERT was still in flight, the in-memory
+  finalize mutation (`Completed`) was reverted by the INSERT's post-save reload
+  (`BaseEntity.finalizeSave` → `init()` + `SetMany(insertedRow)`), and the chained force-persisted UPDATE
+  then wrote the stale `Running` row. Predominantly hit fast Actions, but any fast step (e.g. a
+  quick/cached prompt) could be affected.
+
+  The fire-and-forget save queue now applies finalize/`TargetLogID` mutations INSIDE the post-INSERT
+  continuation (after the reload), so they survive: `AgentRunStepSaveQueue.QueueUpdate` gains an optional
+  `applyMutation` callback, `finalizeAgentRunStep` gains a `completedAt` option for deterministic re-apply,
+  and `BaseAgent.finalizeStepEntity` + the three `TargetLogID` callback sites re-assert their values
+  post-INSERT. `AIPromptRunner.updatePromptRun` now awaits the initial INSERT before mutating the final
+  state. This mirrors the already-correct `ActionEngine.finalizeActionLog` pattern (which has zero stuck
+  rows). Adds regression tests covering the race and the legacy clobber.
+
+  Also removes a per-chunk `console.log` in `RunAIAgentResolver`'s streaming callback (debug noise that
+  became hot once single-model prompt streaming was enabled).
+
+- c871a4d: Reuse model selection's credential probes in the failover loop instead of recomputing them.
+
+  `selectModelWithAPIKeyTracked` already walks the priority-ordered candidate list and probes
+  `hasCredentialsAvailable` until it finds the highest-priority credentialed candidate. Last night's
+  failover fix (skip uncredentialed candidates) re-derived those same probes from scratch inside
+  `executeModelWithFailover`, duplicating work selection had already done.
+
+  `selectModel` now threads the credential-availability it computed (keyed `driverClass:modelID:vendorId`,
+  the same key the failover loop uses) through `ModelSelectionResult` →
+  `executeWithValidationRetries` → `executeModelWithFailover`, which seeds its failover credential cache
+  from it. On the happy path failover does ZERO redundant `hasCredentialsAvailable` calls; the
+  not-evaluated tail (intentionally absent from the map, preserving the selection short-circuit) is still
+  probed lazily only if a real failure forces failover to walk down to it. No behavior change — purely
+  removes recomputation. Adds regression tests covering the reuse, the seeded-map authority, and the
+  lazy tail probe.
+
+  Also unifies the parallel execution path with the single-model path to eliminate logic drift.
+  `ParallelExecutionCoordinator` now extends `AIPromptRunner` and delegates each task's model call to
+  the inherited `executeModel`, so credential resolution (full hierarchical chain, not just legacy env
+  keys), driver/vendor selection, ChatParams construction (temperature/topP/effort/stop/response-format/
+  prefill), media handling, and streaming all live in ONE place. This removes the coordinator's duplicate
+  `buildMessageArray`/`Provider`/credential logic, fixes the `model.DriverClass` fallback that diverged
+  from the single path, and fixes a latent bug where per-task model parameters mutated the shared params
+  object. The base resolves the coordinator via the ClassFactory (`@RegisterClass`) to avoid a circular
+  import. Streaming is now also wired on the single-model path (`params.onStreaming`), which previously
+  hardcoded `StreamingEnabled = false`. Adds tests that lock in the inheritance/delegation so the paths
+  can't silently drift again.
+
+- d185a5c: Fix model vendor driver resolution by threading full ModelSelectionResult through the execution pipeline instead of discarding and re-deriving vendor data at the ExecutePrompt → executeSinglePrompt boundary
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/templates@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/credentials@5.42.0
+  - @memberjunction/templates-base-types@5.42.0
+  - @memberjunction/ai@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

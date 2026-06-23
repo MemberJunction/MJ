@@ -1,5 +1,129 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.42.0
+
+### Minor Changes
+
+- 2f225e4: CodeGen + SS→PG converter type-correctness on PostgreSQL:
+  - **codegen-lib / core / actions-base**: core + codegen type correctness on PostgreSQL, plus a
+    PG-only migration repairing TypeScript that the SS→PG baseline conversion corrupted in
+    GeneratedCode rows. _(migration → minor)_
+  - **sql-converter**: never quote identifiers inside string literals during SS→PG conversion. _(code → patch)_
+
+- b7092ca: PostgreSQL runtime correctness, found during fresh-DB PG end-to-end testing:
+  - **codegen-lib**: clean MJAPI engine load on PostgreSQL — `AutoUpdatePath` written as a
+    dialect-correct boolean literal, plus a PG-only migration removing orphan related-entity-name
+    virtual EntityField rows whose column the generated PG base view never emits (these crashed
+    EntityActionEngine / AI Credential Bindings / Scheduling with `column "..." does not exist`).
+  - **open-app-engine**: app uninstall now deletes all FK-dependent metadata (Entity Field Values,
+    Entity Settings) in dependency order and reports a real failure instead of swallowing errors
+    into a false "success".
+  - **postgresql-dataprovider**: dialect-correct per-field entity-search predicate (no `N'...'`
+    literal prefix, no `ESCAPE` clause) — fixes `syntax error at or near "ESCAPE"` on live search.
+
+### Patch Changes
+
+- ded7a20: Install-pipeline + codegen-lib bug fixes surfaced during E2E testing.
+
+  **Installer (`@memberjunction/installer`):**
+  - **ConfigurePhase** — checkpoint resume no longer corrupts `.env` on restart. The resume path now reads-then-merges instead of re-writing empty defaults, so a partially-completed install can pick up where it left off without losing user-entered credentials.
+  - **ConfigurePhase** — `syncEnvFieldsFromRoot()` now propagates `PG_HOST` / `PG_PORT` / `PG_DATABASE` / `PG_USERNAME` / `PG_PASSWORD` in addition to the SQL-Server-style `DB_*` keys, so a PostgreSQL install whose root `.env` uses PG-prefixed env vars keeps the MJAPI `.env` in sync on re-run.
+  - **ConfigurePhase / DependencyPhase** — `tagToNpmVersion()` does strict semver validation and falls back to `latest` for non-semver tags, so branch refs like `feature/some-branch` no longer get passed to `npm install --tag` (npm interprets those as GitHub shorthand and ssh-clones).
+  - **DatabaseProvisionPhase** — `mj-db-setup.sql` skips `CREATE LOGIN`, `CREATE USER`, `ALTER ROLE`, and `GRANT EXECUTE` when the configured DB user is a SQL Server built-in sysadmin (`sa`). `isBuiltInSysadmin()` guard added with 5 unit tests.
+  - **MigratePhase** — migration timeout is now configurable via the `MJ_INSTALL_MIGRATE_TIMEOUT_MIN` env var, with an accurate error message on timeout.
+  - **PreflightPhase + DatabaseProvisionPhase** — both phases now honor the actual `.env` target path during connectivity preflight, reading `PG_HOST` / `PG_PORT` first then falling back to `DB_HOST` / `DB_PORT`. Matches `codegen-lib`'s `DEFAULT_CODEGEN_CONFIG` precedence so a PG `.env` doesn't yield a false-negative "missing credentials" warning.
+  - **models/InstallConfig** — accept user-facing `AuthProviderValues` key shapes (`ClientID` / `TenantID` for entra, `Domain` / `ClientID` for auth0) and add a legacy-alias compat layer so existing camelCase `install.config.json` files (`dbUrl` / `codeGenLogin` / `msalWebClientId` / etc.) keep working alongside the new PascalCase shape.
+
+  **CodeGen-lib (`@memberjunction/codegen-lib`):**
+  - **`Config/db-connection.ts`** — mssql config is now built lazily inside `MSSQLConnection()` instead of destructured at module load. The previous behavior captured empty defaults before `initializeConfig()` populated them, producing `"config.server property is required"` at codegen time. The exported mutable `sqlConfig` `let` was refactored into a `getSqlConfig()` accessor function (no exposed mutable storage). JSDoc explicitly clarifies the file is SQL-Server-only.
+  - **`Config/config.ts`** — schema-validation failures in `initializeConfig()` now surface via `LogError`. A visible error beats a silent empty `configInfo` plus a downstream `"config.server"` crash.
+  - **`runCodeGen.ts`** — single consumer updated to use the new `getSqlConfig()` accessor instead of importing `sqlConfig` directly.
+
+- 6ac8ca4: feat(integration): v2 integration framework + unified connector set (GrowthZone, OpenWater, ORCID, PropFuel, Path LMS)
+
+  Consolidated integration-v2 work — framework hardening + five connectors — proven end-to-end via the
+  GraphQL stand-up path (clean DB, CreateConnection → ApplyAll → StartSync) on SQL Server.
+
+  **Integration core (`integration-engine`, `integration-engine-base`, `integration-schema-builder`):**
+  - Deterministic §4 content-hash identity stamp for keyless rows (stable storage key + idempotent re-sync).
+  - Door-before-child dependency ordering derived from soft-FK `parentObjectName`/`ReferencedType` — children
+    land in one pass (no ZERO_PARENTS, no second-sync self-heal).
+  - Adaptive rate-limit hooks (`RateLimitAcquire`/`Report`/`MaxConcurrency`) on `FetchContext`.
+  - Shared `auth-helpers` (`OAuth2TokenManager`); `KeySerialization`/`RecordFlatten` committed (were
+    imported-but-untracked — fresh clones could not build); `IntegrationEngineBase.SeedForTesting` for
+    offline replay harnesses.
+
+  **Schema correctness + sizing (`integration-engine`, `integration-schema-builder`):**
+  - `json`/`text`/`array`/`object` and unsized strings map to `NVARCHAR(MAX)`/unbounded text instead of
+    being collapsed to `nvarchar(255)` — a nested-array JSON or long field routinely exceeds 255 and was
+    dropped at sync time (OpenWater `Program.rounds` went from **0** rows to all of them). Bounded scalar
+    strings keep a small, space-efficient size (255 floor; declared length + headroom when the source
+    reports one; PK strings capped at the dialect index-key limit). Soft-PK columns are emitted nullable.
+  - String-overflow is **skip-and-surface** (`STRING_OVERFLOW_SKIPPED` SyncWarning via the new
+    `StringOverflowError`), not truncate or fail-the-batch.
+  - **Active-only materialization (phantom-skip):** `buildSourceSchemaFromPersistedRows` materializes only
+    `Status='Active'` objects/fields — no empty phantom tables, no wasted per-entity CodeGen/advancedGen cost.
+
+  **StartSync honesty (`server`):**
+  - `IntegrationStartSync` no longer returns optimistic `{Success:true, RunID:null}` for fast/no-op syncs;
+    it resolves the run by recency over a bounded poll (real `RunID`), and returns `Success:false` with a
+    message when no run record appears.
+
+  **Soft-PK config cache (`codegen-lib`):**
+  - `RunInProcess` invalidates `ManageMetadataBase`'s soft-PK/FK config cache per in-process run — the
+    path-keyed cache went stale in the long-lived MJAPI RSU CodeGen path ("No primary key found" → entity
+    never created → 0 rows synced until restart). Deterministic; the CLI `Run()` path is unchanged.
+
+  **Unified connector set (`integration-connectors`):**
+  - **GrowthZone** — OAuth2, 38 objects, idempotency + probe-amended pagination metadata.
+  - **OpenWater** — 25 objects, OpenAPI-complete.
+  - **ORCID** — 12 per-record objects, public-API live-verified.
+  - **PropFuel** — file-feed slice (rich REST API documented out-of-scope).
+  - **Path LMS (Blue Sky eLearn)** — GraphQL Reporting API, pull-only; GraphQL over `/graphql`, two-step
+    app-credential → bearer auth; credential-free discovery from the public SpectaQL schema (84 record
+    types / 1175 fields); per-object `AccessPath` walks the 16 GraphQL query doors to leaf records;
+    content-hash idempotency.
+  - All five validated under the v2 architecture (RealityProbe / completeness-diff / T12 idempotency).
+
+  **Migration + metadata (additive schema → minor):** ships forward migration(s) + integration metadata
+  seeds; additive only — no column drops, narrowing, renames, or new required params — backward-compatible
+  **minor** per the publish-then-no-breaking-changes policy.
+
+- 34152e1: Pluggable mj CLI with AI agent and automation friendly output: new cli-core package (BaseCLIPlugin + runtime host), json formatting for machine readable output and two tier progressive disclosure. with per-command runtime/timeout hints, and a fix for sync/push/pull hanging on DB-pool teardown after emitting results
+- Updated dependencies [256ab06]
+- Updated dependencies [c871a4d]
+- Updated dependencies [9b9b484]
+- Updated dependencies [d185a5c]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [5ada858]
+- Updated dependencies [2f225e4]
+- Updated dependencies [b7092ca]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+- Updated dependencies [34152e1]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/ai-prompts@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/generic-database-provider@5.42.0
+  - @memberjunction/server-bootstrap-lite@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/sqlserver-dataprovider@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/postgresql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/core-entities-server@5.42.0
+  - @memberjunction/cli-core@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ai-provider-bundle@5.42.0
+  - @memberjunction/config@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+  - @memberjunction/sql-parser@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes
