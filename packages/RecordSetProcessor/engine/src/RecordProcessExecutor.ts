@@ -76,6 +76,7 @@ export class RecordProcessExecutor {
             processor: this.buildProcessor(rp, options.dryRun),
             contextUser: options.contextUser,
             provider,
+            dryRun: options.dryRun,
             recordProcessID: rp.ID,
             scheduledJobRunID: options.scheduledJobRunID,
             entityID: rp.EntityID,

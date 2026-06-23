@@ -14,7 +14,7 @@ import { parseAppliedRunDetailChanges, displayRunValue, type RunDetailChange } f
 interface RawRun {
     ID: string; RecordProcessID: string; EntityID: string; Status: string;
     StartTime?: string | Date; SuccessCount?: number; ErrorCount?: number; SkippedCount?: number;
-    TotalItemCount?: number; TriggeredBy?: string; SourceType?: string;
+    TotalItemCount?: number; TriggeredBy?: string; SourceType?: string; DryRun?: boolean;
 }
 interface RunRow extends RawRun { ProcessName: string; EntityName: string; }
 
@@ -45,7 +45,7 @@ interface DetailRow { RecordID: string; Status: string; Changes: RunDetailChange
                             <div class="rph-nm">{{ r.ProcessName }}</div>
                             <div>{{ r.EntityName }}</div>
                             <div class="rph-sub">{{ r.TriggeredBy || '—' }}</div>
-                            <div><span class="st" [class.ok]="r.Status==='Completed'" [class.err]="r.Status==='Failed'"><span class="dot"></span> {{ r.Status }}</span></div>
+                            <div><span class="st" [class.ok]="r.Status==='Completed'" [class.err]="r.Status==='Failed'"><span class="dot"></span> {{ r.Status }}</span>@if (r.DryRun) { <span class="dryrun" title="Compute-only preview — no changes were written">Dry Run</span> }</div>
                             <div class="counts">
                                 <span class="cbadge ok">{{ r.SuccessCount || 0 }} ok</span>
                                 @if (r.ErrorCount) { <span class="cbadge err">{{ r.ErrorCount }} err</span> }
@@ -59,6 +59,7 @@ interface DetailRow { RecordID: string; Status: string; Changes: RunDetailChange
             <div class="rph-bar">
                 <button mjButton variant="flat" (click)="backToList()"><i class="fa-solid fa-arrow-left"></i> Back</button>
                 <h3 class="rph-title">{{ OpenRunRow?.ProcessName }} · {{ fmt(OpenRunRow?.StartTime) }}</h3>
+                @if (OpenRunRow?.DryRun) { <span class="dryrun" title="Compute-only preview — no changes were written">Dry Run</span> }
             </div>
             @if (DetailLoading) {
                 <div class="rph-msg"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading details…</div>
@@ -108,6 +109,7 @@ interface DetailRow { RecordID: string; Status: string; Changes: RunDetailChange
         .st.sm{font-size:11.5px}
         .counts{display:flex;gap:6px;flex-wrap:wrap}
         .cbadge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--mj-bg-surface-sunken);color:var(--mj-text-secondary)}
+        .dryrun{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:6px;margin-left:6px;background:var(--mj-status-info-bg);color:var(--mj-status-info-text);border:1px solid var(--mj-status-info-border)}
         .cbadge.ok{background:var(--mj-status-success-bg);color:var(--mj-status-success-text)}
         .cbadge.err{background:var(--mj-status-error-bg);color:var(--mj-status-error-text)}
         .rph-details{border:1px solid var(--mj-border-subtle);border-radius:var(--mj-radius-md,10px);overflow:hidden;max-height:560px;overflow-y:auto}
@@ -147,7 +149,7 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
         const [runs, procs] = await rv.RunViews([
             {
                 EntityName: 'MJ: Process Runs',
-                Fields: ['ID', 'RecordProcessID', 'EntityID', 'Status', 'StartTime', 'SuccessCount', 'ErrorCount', 'SkippedCount', 'TotalItemCount', 'TriggeredBy', 'SourceType'],
+                Fields: ['ID', 'RecordProcessID', 'EntityID', 'Status', 'StartTime', 'SuccessCount', 'ErrorCount', 'SkippedCount', 'TotalItemCount', 'TriggeredBy', 'SourceType', 'DryRun'],
                 ExtraFilter: filter, OrderBy: 'StartTime DESC', MaxRows: 200, ResultType: 'simple',
             },
             { EntityName: 'MJ: Record Processes', Fields: ['ID', 'Name'], ResultType: 'simple' },

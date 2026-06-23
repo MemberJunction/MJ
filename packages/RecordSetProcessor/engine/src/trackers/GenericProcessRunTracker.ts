@@ -53,6 +53,7 @@ export class GenericProcessRunTracker implements IProcessRunTracker {
         run.SkippedCount = 0;
         run.BatchSize = meta.BatchSize ?? null;
         run.CancellationRequested = false;
+        run.DryRun = meta.DryRun ?? false;
         run.StartedByUserID = contextUser?.ID ?? null;
         if (meta.Configuration !== undefined) {
             run.Configuration = JSON.stringify(meta.Configuration);
