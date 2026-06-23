@@ -21,6 +21,9 @@ typed output."* Running a record process, rendering a template, kicking off clus
 
 > **Read this before hand-writing a TypeGraphQL resolver + a typed GraphQL client + duplicated I/O types for a
 > non-CRUD capability.** That ceremony is exactly what Remote Operations replaces.
+>
+> 📊 **New to the idea?** Start with the **[Remote Operations Showcase](REMOTE_OPERATIONS_SHOWCASE.md)** — a
+> visual before/after (with diagrams) of the layers this removes, built from two real migrations in this PR.
 
 ## When to use what
 
