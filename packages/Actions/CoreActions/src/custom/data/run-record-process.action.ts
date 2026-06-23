@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RecordProcessExecutor } from "@memberjunction/record-set-processor";
-import { type RecordProcessScopeOverride } from "@memberjunction/record-set-processor-base";
+import { type RecordProcessScopeOverride } from "@memberjunction/core-entities";
 
 /**
  * Runs a `MJ: Record Processes` definition — the agent / workflow / low-code surface for the same engine

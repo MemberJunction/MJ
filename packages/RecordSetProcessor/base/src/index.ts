@@ -7,4 +7,6 @@
 export * from './types';
 export * from './interfaces';
 export * from './sources';
-export * from './operations/recordProcessRunNow';
+// The RecordProcess.RunNow Remote Operation base + RecordProcessScopeOverride/RecordProcessRunNowInput/Output
+// are now CodeGen-emitted into @memberjunction/core-entities (generated/remote_operations.ts) from the
+// MJ: Remote Operations metadata row.

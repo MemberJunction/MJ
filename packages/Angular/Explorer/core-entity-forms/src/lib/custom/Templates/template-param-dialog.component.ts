@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { MJTemplateEntity, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
-import { TemplateRunOperation } from '@memberjunction/templates-base-types';
+import { TemplateRunOperation } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';

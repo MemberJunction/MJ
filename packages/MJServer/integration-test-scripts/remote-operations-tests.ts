@@ -34,8 +34,7 @@ import {
     MJProcessRunEntity,
     MJTemplateParamEntity,
 } from '@memberjunction/core-entities';
-import { TemplateRunOperation } from '@memberjunction/templates-base-types';
-import { RecordProcessRunNowOperation } from '@memberjunction/record-set-processor-base';
+import { TemplateRunOperation, RecordProcessRunNowOperation } from '@memberjunction/core-entities';
 
 const ACT_ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-remote-op-test';

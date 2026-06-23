@@ -8,7 +8,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJProcessRunEntity } from '@memberjunction/core-entities';
-import { RecordProcessRunNowOperation, type RecordProcessRunNowInput, type RecordProcessRunNowOutput } from '@memberjunction/record-set-processor-base';
+import { RecordProcessRunNowOperation, type RecordProcessRunNowInput, type RecordProcessRunNowOutput } from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '../RecordProcessExecutor';
 
 /**

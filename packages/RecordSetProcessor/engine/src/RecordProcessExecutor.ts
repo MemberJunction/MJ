@@ -16,10 +16,11 @@ import {
     ListSource,
     ProcessRunResult,
     ProgressInfo,
-    type RecordProcessScopeOverride,
     TriggeredByValue,
     ViewSource,
 } from '@memberjunction/record-set-processor-base';
+// The Remote Operation base + its scope-override type are now CodeGen-emitted into @memberjunction/core-entities.
+import { type RecordProcessScopeOverride } from '@memberjunction/core-entities';
 import { RecordSetProcessor } from './RecordSetProcessor';
 import { ActionRecordProcessor } from './processors/ActionRecordProcessor';
 import { AgentRecordProcessor } from './processors/AgentRecordProcessor';

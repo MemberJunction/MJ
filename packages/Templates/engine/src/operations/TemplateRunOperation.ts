@@ -9,7 +9,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
-import { TemplateRunOperation, type TemplateRunInput, type TemplateRunOutput } from '@memberjunction/templates-base-types';
+import { TemplateRunOperation, type TemplateRunInput, type TemplateRunOutput } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '../TemplateEngine';
 
 @RegisterClass(BaseRemotableOperation, 'Template.Run')

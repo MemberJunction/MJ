@@ -3,7 +3,7 @@
  * {@link RecordProcessScope}. Extracted so it's unit-testable without instantiating a component.
  * @module @memberjunction/ng-entity-action-ux
  */
-import type { RecordProcessScopeOverride } from '@memberjunction/record-set-processor-base';
+import type { RecordProcessScopeOverride } from '@memberjunction/core-entities';
 import type { EntityActionUXContext } from './runtime-ux-context';
 
 /** Builds the run scope from the grid/list context the host assembled. */

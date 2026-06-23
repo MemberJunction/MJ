@@ -15,7 +15,7 @@ import {
     type RecordProcessRunNowInput,
     type RecordProcessRunNowOutput,
     type RecordProcessScopeOverride,
-} from '@memberjunction/record-set-processor-base';
+} from '@memberjunction/core-entities';
 import type { RemoteOpResult } from '@memberjunction/core';
 import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { BaseEntityActionRuntimeUX } from '../base-entity-action-runtime-ux';
