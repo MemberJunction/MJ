@@ -227,24 +227,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ImportanceScore"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Consolidation & History Section -->
-    <mj-collapsible-panel
-        SectionKey="consolidationHistory"
-        SectionName="Consolidation & History"
-        Icon="fa fa-code-branch"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="ConsolidatedIntoNoteID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -272,6 +254,14 @@
             [ShowLabel]="true"
             FieldName="ProtectionTier"
             Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ImportanceScore"
+            Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

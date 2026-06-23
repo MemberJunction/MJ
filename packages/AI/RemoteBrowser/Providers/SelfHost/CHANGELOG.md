@@ -1,5 +1,21 @@
 # @memberjunction/remote-browser-selfhost
 
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [3080b58]
+- Updated dependencies [e7c2437]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [e4235fd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/computer-use@5.42.0
+  - @memberjunction/remote-browser-cdp@5.42.0
+  - @memberjunction/remote-browser-base@5.42.0
+  - @memberjunction/global@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

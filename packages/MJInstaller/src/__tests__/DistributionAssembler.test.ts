@@ -88,6 +88,13 @@ beforeAll(async () => {
   await writeUnder(sourceDir, 'migrations/CLAUDE.md', '# docs');
   await writeUnder(sourceDir, 'migrations-pg/v5/V202601010000__x.sql', 'PG MIGRATION');
   await writeUnder(sourceDir, 'migrations-pg/CLAUDE.md', '# docs');
+
+  // Claude pack source (always present in main fixture so default-include is exercised)
+  await writeUnder(sourceDir, 'templates/claude-pack/dist/v5/CLAUDE.md', '# Project Instructions');
+  await writeUnder(sourceDir, 'templates/claude-pack/dist/v5/.claude/mj/VERSION', '5.1.0');
+  await writeUnder(sourceDir, 'templates/claude-pack/dist/v5/.claude/mj/core.md', '# core guidance');
+  await writeUnder(sourceDir, 'templates/claude-pack/dist/v5/.claude/commands/commit.md', '# /commit');
+  await writeUnder(sourceDir, 'templates/claude-pack/dist/v5/.claude/settings.json', '{}');
 });
 
 afterAll(async () => {
@@ -211,6 +218,90 @@ describe('distributionSourcePaths', () => {
     const paths = distributionSourcePaths(true, 'postgresql');
     expect(paths).toContain('migrations-pg');
     expect(paths).not.toContain('migrations');
+  });
+
+  it('includes the claude pack source by default', () => {
+    const paths = distributionSourcePaths();
+    expect(paths).toContain('templates/claude-pack/dist');
+  });
+
+  it('omits the claude pack source when explicitly excluded', () => {
+    const paths = distributionSourcePaths(false, undefined, false);
+    expect(paths).not.toContain('templates/claude-pack/dist');
+  });
+});
+
+describe('DistributionAssembler claude pack', () => {
+  it('lays down CLAUDE.md and .claude/ from the pack source by default', async () => {
+    const d = dests(await new DistributionAssembler().Plan({ SourceDir: sourceDir }));
+    expect(d).toContain('CLAUDE.md');
+    expect(d).toContain('.claude/mj/VERSION');
+    expect(d).toContain('.claude/mj/core.md');
+    expect(d).toContain('.claude/commands/commit.md');
+    expect(d).toContain('.claude/settings.json');
+  });
+
+  it('the CLAUDE.md copy points at the pack source, not a distribution.* template', async () => {
+    const ops = await new DistributionAssembler().Plan({ SourceDir: sourceDir });
+    const claudeMd = byDest(ops, 'CLAUDE.md');
+    expect(claudeMd?.Kind).toBe('copy');
+    if (claudeMd?.Kind === 'copy') {
+      expect(claudeMd.SourceAbs).toContain(path.join('templates', 'claude-pack', 'dist', 'v5', 'CLAUDE.md'));
+    }
+  });
+
+  it('IncludeClaudePack: false excludes CLAUDE.md and the .claude/ tree', async () => {
+    const d = dests(await new DistributionAssembler().Plan({ SourceDir: sourceDir, IncludeClaudePack: false }));
+    expect(d).not.toContain('CLAUDE.md');
+    expect(d.some((p) => p.startsWith('.claude/'))).toBe(false);
+  });
+
+  it('silently skips when the pack source is absent at the source dir', async () => {
+    const noPack = await mkdtemp(path.join(tmpdir(), 'mj-asm-nopack-'));
+    try {
+      await seedBaseFixture(noPack);
+      const d = dests(await new DistributionAssembler().Plan({ SourceDir: noPack }));
+      expect(d).not.toContain('CLAUDE.md');
+      expect(d.some((p) => p.startsWith('.claude/'))).toBe(false);
+    } finally {
+      await rm(noPack, { recursive: true, force: true });
+    }
+  });
+
+  it('picks the highest available pack major when multiple v{N}/ directories exist', async () => {
+    const multi = await mkdtemp(path.join(tmpdir(), 'mj-asm-multi-'));
+    try {
+      await seedBaseFixture(multi);
+      // Two pack majors side-by-side — v5 (older) and v6 (newer). Discovery picks v6.
+      await writeUnder(multi, 'templates/claude-pack/dist/v5/CLAUDE.md', '# v5 root');
+      await writeUnder(multi, 'templates/claude-pack/dist/v5/.claude/mj/VERSION', '5.1.0');
+      await writeUnder(multi, 'templates/claude-pack/dist/v6/CLAUDE.md', '# v6 root');
+      await writeUnder(multi, 'templates/claude-pack/dist/v6/.claude/mj/VERSION', '6.0.0');
+
+      const ops = await new DistributionAssembler().Plan({ SourceDir: multi });
+      const versionOp = byDest(ops, '.claude/mj/VERSION');
+      expect(versionOp?.Kind).toBe('copy');
+      if (versionOp?.Kind === 'copy') {
+        expect(versionOp.SourceAbs).toContain(path.join('dist', 'v6'));
+        expect(versionOp.SourceAbs).not.toContain(path.join('dist', 'v5'));
+      }
+    } finally {
+      await rm(multi, { recursive: true, force: true });
+    }
+  });
+
+  it('AssembleToDir writes the pack files at the target root', async () => {
+    const dest = await mkdtemp(path.join(tmpdir(), 'mj-asm-pack-dest-'));
+    try {
+      await new DistributionAssembler().AssembleToDir({ SourceDir: sourceDir }, dest);
+      const version = await readFile(path.join(dest, '.claude', 'mj', 'VERSION'), 'utf-8');
+      expect(version).toBe('5.1.0');
+      const rootEntries = await readdir(dest);
+      expect(rootEntries).toContain('CLAUDE.md');
+      expect(rootEntries).toContain('.claude');
+    } finally {
+      await rm(dest, { recursive: true, force: true });
+    }
   });
 });
 

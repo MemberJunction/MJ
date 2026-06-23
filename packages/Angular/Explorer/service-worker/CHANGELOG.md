@@ -1,5 +1,7 @@
 # @memberjunction/ng-explorer-service-worker
 
+## 5.42.0
+
 ## 5.41.0
 
 ## 5.40.2

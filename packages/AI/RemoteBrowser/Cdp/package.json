@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/remote-browser-cdp",
   "type": "module",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "description": "MemberJunction: Shared CDP kit for the Remote Browser channel — the DRY layer that wraps the enriched @memberjunction/computer-use Playwright adapter so the 5 backend drivers only fill their session lifecycle (AcquireSession + ICdpSessionBackend). Implements the universal CDP control path once: maps the Base action/input/frame vocabulary to/from computer-use, gates capability-gated session methods, and wires Connect/Disconnect around the adapter.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/computer-use": "5.41.0",
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/remote-browser-base": "5.41.0"
+    "@memberjunction/computer-use": "5.42.0",
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0",
+    "@memberjunction/remote-browser-base": "5.42.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

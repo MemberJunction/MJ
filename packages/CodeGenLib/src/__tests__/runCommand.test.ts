@@ -10,9 +10,18 @@ vi.mock('tree-kill', () => ({
     default: vi.fn()
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-}));
+// Partially mock @memberjunction/global: stub RegisterClass as a no-op, but
+// preserve every other real export. runCommand.ts transitively imports
+// @memberjunction/core, whose baseEngine.ts does `extends BaseSingleton` at
+// module load — a full replacement mock would make BaseSingleton undefined and
+// throw during collection.
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+    };
+});
 
 vi.mock('@memberjunction/generic-database-provider', () => ({
     resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),

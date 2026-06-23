@@ -172,6 +172,22 @@ The same tool-execution semantics run in two transport topologies. The shared pi
 | Delegation cancel | Explicit-only: the overlay's per-card ✕ → `CancelRealtimeSessionTool` mutation → the service's in-flight registry aborts the run. **Barge-in never aborts delegations** (deliberate host policy — the narration design expects the user to keep talking while work runs) | Barge-in aborts the in-flight delegated run via `RealtimeToolBroker.AbortInFlight` (no human ✕ exists on this topology) |
 | Usage telemetry | Browser accumulates `OnUsage` deltas → debounced (10 s) + teardown-flushed `RelayRealtimeUsage` mutation → accumulated onto the co-agent `AIPromptRun` | Runner checkpoints accumulated usage onto the long-lived `AIPromptRun` (debounced 5 s, crash-safe) |
 
+### 🚨 Single source of truth: ONE prep, the precedence cascade, the core↔host boundary
+
+Every realtime host — native chat, **LiveKit**, and future **Zoom/Teams/GoToMeeting/Webex** — must be the **same agent**: same identity, personality, model/voice, delegation, and session tracking. Only **media transport** and **host UX tools** vary. The full rationale + roadmap is in [`plans/realtime/realtime-core-host-convergence.md`](../plans/realtime/realtime-core-host-convergence.md).
+
+**There is exactly ONE producer of realtime session prep:** `RealtimeClientSessionService.PrepareRealtimeSessionParams` (`packages/AI/Agents/src/realtime/realtime-client-session-service.ts`). It resolves the model, builds the **target-identity** system prompt (via the single `BuildRealtimeAgentFraming` in `realtime-tool-broker.ts` — first-person AS the target, never the co-agent), the stable tool set (always incl. `invoke-target-agent`), voice, and memory. **Do NOT build session prep in a host.** The LiveKit bridge (`BaseAgent.StartBridgeRealtimeSession`) *consumes* it and differs only in opening server-side (`StartSession`) vs the browser mint (`CreateClientSession`); a bridge re-implementing prep is exactly the drift this convergence removed (guarded by `__tests__/realtime-convergence-drift.test.ts`).
+
+**Model + voice resolve through ONE precedence cascade** (`ResolveEffectiveRealtimeConfig`), identical on every host:
+
+```
+runtime override  >  target agent's TypeConfiguration  >  co-agent config  >  agent-type default
+```
+
+The **target** layer is what lets a voiced agent (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with. The runtime-override input funnels into one slot — the native picker builds `ConfigOverridesJson` client-side (`BuildRealtimeConfigOverridesJson`), the server-bridged hosts build the **identical** envelope via `BuildRealtimeOverridesJson` — so both ride the same highest-precedence cascade layer.
+
+**Core (one place, all hosts):** identity, model/voice precedence, base prompt + memory, `invoke-target-agent` delegation, session/run tracking. **Host (varies):** media transport (LiveKit audio → video) + host UX tools (whiteboard/browser/… — injected via `RealtimeSessionRunnerDeps.ExtraTools`/`ExecuteTool`, never baked into core).
+
 ### Client-direct flow (the shipped path)
 
 1. **Mint.** The browser (`VoiceSessionService.StartVoiceSession`) calls `StartRealtimeClientSession(targetAgentId, conversationId?, lastSessionId?, preferredModelId?, clientToolsJson?, coAgentId?)`. The resolver authorizes `CanRun` on the **target** agent, resolves the co-agent (chain in §1), creates the durable `AIAgentSession` via `SessionManager.CreateSession` (storing `targetAgentID` **server-side** in the session's `Config` column — accessed as `Config_` on the generated entity), then `RealtimeClientSessionService.PrepareClientSession` resolves the model, assembles the companion system prompt (framing + co-agent prompt + target identity + history + memory via `AgentMemoryContextBuilder` — the same context a loop agent injects), builds the stable tool set, and asks the driver to `CreateClientSession`. When a `lastSessionId` is supplied, the resolver also loads the **prior session chain's transcript** (`loadPriorTranscript` — ownership-checked, hidden/error rows skipped, capped at 30 newest turns / 8,000 chars / 5 chain legs, with a cycle guard) and frames it into the system prompt so the resumed model *remembers* the last leg. Strictly best-effort — any problem yields no hydration, never a failed start. On mint failure the just-created session is closed with `CloseReason = 'Error'` so nothing half-open leaks.

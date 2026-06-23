@@ -284,4 +284,37 @@ describe('IntegrationProgressEmitter', () => {
             expect(result.exitReason).toBe('completed');
         });
     });
+
+    describe('run-dir retention', () => {
+        async function listDirs(): Promise<string[]> {
+            const entries = await fs.readdir(rootDir, { withFileTypes: true });
+            return entries.filter(e => e.isDirectory()).map(e => e.name).sort();
+        }
+
+        it('prunes oldest run dirs beyond maxRunDirs, always keeping the newest', async () => {
+            // Create old-1 and force its mtime to the epoch so it is deterministically the oldest.
+            const e1 = new IntegrationProgressEmitter(makeManifest('old-1'), { rootDir, maxRunDirs: 2 });
+            await e1.flush();
+            await fs.utimes(join(rootDir, 'old-1'), new Date(0), new Date(0));
+
+            const e2 = new IntegrationProgressEmitter(makeManifest('old-2'), { rootDir, maxRunDirs: 2 });
+            await e2.flush();
+            // Third run: 3 dirs > cap of 2 → bootstrap prunes the single oldest (old-1).
+            const e3 = new IntegrationProgressEmitter(makeManifest('new-3'), { rootDir, maxRunDirs: 2 });
+            await e3.flush();
+
+            const remaining = await listDirs();
+            expect(remaining.length).toBe(2);
+            expect(remaining).toContain('new-3');     // newest always kept
+            expect(remaining).not.toContain('old-1');  // oldest pruned
+        });
+
+        it('disables pruning when maxRunDirs is 0', async () => {
+            for (const id of ['a', 'b', 'c']) {
+                const e = new IntegrationProgressEmitter(makeManifest(id), { rootDir, maxRunDirs: 0 });
+                await e.flush();
+            }
+            expect((await listDirs()).length).toBe(3); // nothing pruned
+        });
+    });
 });

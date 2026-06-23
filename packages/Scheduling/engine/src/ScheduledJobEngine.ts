@@ -1144,11 +1144,13 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         newExpectedCompletionAt: Date
     ): Promise<boolean> {
         const provider = this.Base.ProviderToUse as DatabaseProviderBase;
-        const schema = provider.MJCoreSchemaName;
-        // MJ pattern: positional placeholders; see tryAcquireLock for rationale.
+        // MJ pattern: positional parameter array. buildLockSprocCall picks the
+        // dialect-correct call wrapper (EXEC on SQL Server, SELECT * FROM fn() on
+        // PostgreSQL) — the previous hardcoded `EXEC [schema].[…]` form crashed on
+        // PG. The SAME value array serves both. See tryAcquireLock for rationale.
         const rows = await provider.ExecuteSQL<{ Extended: number }>(
-            `EXEC [${schema}].[spExtendScheduledJobLease] ` +
-                `@JobID=@p0, @ExpectedToken=@p1, @NewExpectedCompletionAt=@p2`,
+            this.buildLockSprocCall(provider, 'spExtendScheduledJobLease',
+                ['JobID', 'ExpectedToken', 'NewExpectedCompletionAt']),
             [jobId, expectedToken, newExpectedCompletionAt],
             { isMutation: true, description: 'spExtendScheduledJobLease' },
             this.Base.ContextUser
@@ -1303,6 +1305,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             ExtraFilter: `ID IN (${idList}) AND (LockToken IS NULL OR ExpectedCompletionAt IS NULL OR ExpectedCompletionAt < '${nowIso}')`,
             Fields: ['ID', 'Name', 'ExpectedCompletionAt'],
             ResultType: 'simple',
+            // Deliberately a fresh, narrowly-filtered read of LIVE lock/lease state — the cached
+            // SchedulingEngineBase copy would be stale (and possibly cross-process stale). Exempt it
+            // from the "Entity Already in Engine" optimization analyzer rather than have it flagged.
+            Telemetry: { Exempt: true, Reason: 'Live lock-state read for hung-job sweep; engine cache would be stale' },
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return 0;

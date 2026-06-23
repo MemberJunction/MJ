@@ -14,17 +14,17 @@ node stats/repo-stats.mjs <commit>     # backfill a historical commit
 node stats/repo-stats.mjs --render     # re-render README from data.csv (no recount)
 ```
 
-**Latest** (2026-06-11, `ade23a0282`): **2,094,406** hand-written source LOC · 2,290,578 source incl. generated · **11,935,925** total LOC (66% generated) · 13,760 files
+**Latest** (2026-06-20, `77f7a12456`): **2,218,083** hand-written source LOC · 2,423,361 source incl. generated · **13,546,105** total LOC (68% generated) · 14,646 files
 
-## Latest analysis (2026-06-11)
+## Latest analysis (2026-06-20)
 
-Hand-written source code (TypeScript, JavaScript, HTML, CSS, Markdown) grew by roughly 499,000 lines since the 2026-03-31 snapshot, a solid 31% jump driven by a concentrated burst of feature work rather than any single headline addition. TypeScript alone added 289K hand-written lines, HTML 46K, CSS 29K, and Markdown 130K — the Markdown growth reflecting a wave of guides, CLAUDE.md files, and package READMEs that the team has been disciplined about keeping current. The largest feature areas visible in the git log are the AI agent session infrastructure (PRs #2787, #2823), the integration framework expansion (#2752), the colocated vector search (#2720), the Auth0 magic-link feature (#2726), the Knowledge Hub classify redesign (#2737), and the real-time voice co-agent work (the active `an-dev-26`/`an-dev-27` branch series). Several security and correctness fixes also landed — XSS mitigation for entity communication (#2782), a RunView cache-miss fields-projection fix (#2814), agent run watchdog (#2744), and a scheduled-job poll/execution decoupling (#2750).
+This is a short, nine-day snapshot rather than a quarterly one, so the deltas are smaller and more concentrated than usual. Hand-written source code (TypeScript, JavaScript, HTML, CSS, Markdown) grew by roughly 124,000 lines, almost three-quarters of it TypeScript (+90.5K hand-written). The single largest feature area is the unified integration-connector framework (PRs #2832 connectors/integration-v2-unified, #2888 sharepoint-dynamics, #2891 integration-deploy-fix): `packages/Integration/connectors/src` added ~11K lines of source plus ~8.9K of tests, with another ~3.6K in the integration engine. Realtime work continued to land as well — the RealtimeBridge server native-SDK bindings (#2877), the realtime/remote-browser conversation UI, and the whiteboard component — together accounting for most of the remaining TypeScript and the +4.2K hand-written HTML / +1.4K CSS. Markdown added 26K lines, the usual steady cadence of guides, CLAUDE.md files, and package READMEs.
 
-The raw line-count headline is dominated by SQL, which added nearly 5 million lines — but 4.69M of those are machine-emitted. The migration split breaks down as follows: the `migrations-pg` directory (PostgreSQL mirror conversions) accounts for roughly 2.43M net insertions across 179 files, while the `migrations` directory contributed another 3.03M net insertions across 94 files. Within the `migrations` tree, the bulk is a PostgreSQL baseline consolidation (`CB-baseline-pg-migration`, PR #2794) that landed as a family of `B*__*.sql` files — large snapshot-in-time baselines that the repo now tracks so downstream PostgreSQL deployments can onboard without replaying every historical migration. The remainder of the SQL growth is the normal cadence of CodeGen-run files and mj-sync metadata-export migrations that accumulate with each release cycle (v5.38 through v5.40.x shipped in this window).
+The raw line-count headline is again dominated by tool output. JSON jumped +1.24M lines, of which +1.23M is generated — and this is almost entirely connector action metadata under `metadata/integrations/**`. Two files alone drive it: the Salesforce integration metadata (+829K lines) and Microsoft Dynamics 365 (+346K), with iMIS, Cvent, Hivebrite, Path LMS, NetSuite, Fonteva, and Neon CRM each adding tens of thousands more. This is the `generate-integration-actions` tooling emitting the full action surface for the v2 connector rollout, and it is correctly classified as generated.
 
-JSON grew by 642K lines total, of which 520K is generated — overwhelmingly the integration-actions metadata that the `generate-integration-actions` tooling emits for connectors, plus the package-lock.json churn from new dependencies. The 122K hand-written JSON lines represent new metadata seed files, schema definitions, and application configuration added as the metadata-sync workflow continues to replace SQL INSERT statements for reference-data seeding.
+SQL grew +235K (+184K generated), driven by the PostgreSQL split-and-regenerate pipeline (#2795 feature/pg-split-and-regenerate, #2884 fix/pg-codegen-pipeline, #2881/#2883 pg-runtime fixes). The largest single file is `migrations-pg/v5/…PG_CodeGen_Cutover.pg-only.sql` at +176K lines — a one-time CodeGen cutover mirror — alongside the dual-dialect migration pairs for Realtime Bridges, AI Agent Sessions/Channels, Agent in-flight Memory Writes, Metadata Sync, and the new Record Set Processing migration. The hand-written SQL delta (+50K) is the normal release-cycle accumulation of v5.41–v5.42 migrations authored on the SQL Server side before their pg mirrors are generated.
 
-This is the first snapshot that separates hand-written from generated code, and the ratio is striking: 66% of all tracked lines (7.83M of 11.94M) are deterministic tool output. Within "source" languages — TypeScript, HTML, CSS, JavaScript, Markdown — the generated fraction is only 9%, meaning the human-authored surface of the product is well under control. The high overall generated percentage is almost entirely the SQL migration corpus. That ratio will grow further as PostgreSQL parity work matures and each new migration cycle adds another set of CodeGen-run and pg-mirror files; it is a sign of a healthy automation pipeline rather than a problem, but worth watching so the baselines are periodically consolidated rather than left to accumulate unbounded.
+The hand-written-vs-generated ratio held essentially flat: source-language code is still only 8% generated (2.22M hand-written of 2.42M), confirming the human-authored product surface remains well under control. Overall generated share ticked up from 66% to 68% of all tracked lines, entirely because of the connector-metadata JSON and the pg-cutover SQL in this window — both expected, both deterministic. The classification is holding up well; no new generated-artifact family appeared that `GENERATED_PATTERNS` is failing to catch.
 
 ## Hand-written vs generated over time
 
@@ -33,11 +33,11 @@ Lines in top-to-bottom legend order: **hand-written source (TS+JS+HTML+CSS+MD), 
 ```mermaid
 xychart-beta
     title "Hand-written source vs generated code (thousands of lines)"
-    x-axis ["2023-11-10", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-11"]
+    x-axis ["2023-11-10", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-11", "2026-06-20"]
     y-axis "KLOC"
-    line [0, 34, 60, 77, 91, 121, 338, 521, 860, 1595, 2094]
-    line [0, 40, 135, 99, 100, 105, 123, 100, 140, 162, 196]
-    line [0, 65, 162, 130, 131, 141, 162, 154, 1611, 2582, 7828]
+    line [0, 34, 60, 77, 91, 121, 338, 521, 860, 1595, 2094, 2218]
+    line [0, 40, 135, 99, 100, 105, 123, 100, 140, 162, 196, 205]
+    line [0, 65, 162, 130, 131, 141, 162, 154, 1611, 2582, 7828, 9252]
 ```
 
 ## Source code over time
@@ -47,13 +47,13 @@ Lines in top-to-bottom legend order: **TypeScript, HTML, Markdown, CSS, JavaScri
 ```mermaid
 xychart-beta
     title "Source LOC by language, incl. generated (thousands of lines)"
-    x-axis ["2023-11-10", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-11"]
+    x-axis ["2023-11-10", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-11", "2026-06-20"]
     y-axis "KLOC"
-    line [0, 64, 168, 137, 142, 153, 263, 299, 433, 737, 1048]
-    line [0, 6, 10, 11, 12, 12, 27, 46, 91, 328, 385]
-    line [0, 0, 12, 23, 31, 56, 138, 202, 368, 517, 648]
-    line [0, 3, 4, 4, 4, 5, 29, 40, 68, 132, 161]
-    line [0, 1, 1, 1, 1, 1, 4, 33, 40, 42, 49]
+    line [0, 64, 168, 137, 142, 153, 263, 299, 433, 737, 1048, 1145]
+    line [0, 6, 10, 11, 12, 12, 27, 46, 91, 328, 385, 392]
+    line [0, 0, 12, 23, 31, 56, 138, 202, 368, 517, 648, 674]
+    line [0, 3, 4, 4, 4, 5, 29, 40, 68, 132, 161, 162]
+    line [0, 1, 1, 1, 1, 1, 4, 33, 40, 42, 49, 50]
 ```
 
 ## Source vs generated/data over time
@@ -64,11 +64,11 @@ JSON is mostly declarative metadata and committed tool outputs.
 ```mermaid
 xychart-beta
     title "Source vs SQL vs JSON (thousands of lines)"
-    x-axis ["2023-11-10", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-11"]
+    x-axis ["2023-11-10", "2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-11", "2026-06-20"]
     y-axis "KLOC"
-    line [0, 74, 195, 176, 190, 227, 461, 621, 1000, 1757, 2291]
-    line [0, 17, 191, 253, 258, 282, 405, 650, 1166, 2399, 7351]
-    line [0, 29, 86, 145, 183, 257, 299, 340, 1572, 1631, 2273]
+    line [0, 74, 195, 176, 190, 227, 461, 621, 1000, 1757, 2291, 2423]
+    line [0, 17, 191, 253, 258, 282, 405, 650, 1166, 2399, 7351, 7586]
+    line [0, 29, 86, 145, 183, 257, 299, 340, 1572, 1631, 2273, 3514]
 ```
 
 ## History
@@ -88,6 +88,7 @@ Per-language cells show total LOC with the generated share in parentheses. **Han
 | [2025-12-31](reports/2025-12-31.md) · [analysis](analysis/2025-12-31.md) | `fc0d67833f` | 432,542 (19%) | 40,442 | 91,124 (45%) | 67,869 | 367,894 (4%) | **860,252** | 1,165,550 (22%) | 1,572,071 (77%) | 3,739,626 | 5,214 |
 | [2026-03-31](reports/2026-03-31.md) · [analysis](analysis/2026-03-31.md) | `ada6e1a5d1` | 737,301 (14%) | 42,256 | 327,894 (15%) | 132,178 | 517,314 (3%) | **1,594,996** | 2,399,109 (49%) | 1,630,992 (76%) | 5,801,931 | 7,772 |
 | [2026-06-11](reports/2026-06-11.md) · [analysis](analysis/2026-06-11.md) | `ade23a0282` | 1,048,378 (12%) | 48,944 | 384,574 (15%) | 161,048 | 647,634 (2%) | **2,094,406** | 7,351,084 (80%) | 2,273,191 (78%) | 11,935,925 | 13,760 |
+| [2026-06-20](reports/2026-06-20.md) · [analysis](analysis/2026-06-20.md) | `77f7a12456` | 1,145,187 (11%) | 50,223 | 391,642 (16%) | 162,430 | 673,879 (2%) | **2,218,083** | 7,586,164 (80%) | 3,514,176 (85%) | 13,546,105 | 14,646 |
 
 Full per-language breakdowns and snapshot-over-snapshot deltas are in [reports/](reports/);
 narrative analyses in [analysis/](analysis/). Raw time series: [data.csv](data.csv).

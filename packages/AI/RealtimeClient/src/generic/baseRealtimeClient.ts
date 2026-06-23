@@ -208,6 +208,7 @@ export abstract class BaseRealtimeClient {
     private errorHandler?: (error: RealtimeClientError) => void;
     private interruptionHandler?: () => void;
     private usageHandler?: (usage: RealtimeClientUsage) => void;
+    private remoteVideoHandler?: (stream: MediaStream) => void;
 
     // ── Audio-activity metering (capability surface — see driver obligation #9) ─
     /** Meter over the USER's microphone, when the driver attached one. */
@@ -262,8 +263,12 @@ export abstract class BaseRealtimeClient {
      * @param micStream The user's microphone capture stream. The caller acquires it (so IT owns
      *   the permission prompt UX); the client attaches it to the transport and stops its tracks
      *   on {@link Disconnect}.
+     * @param cameraStream OPTIONAL camera capture stream for a VIDEO session (the model "sees" the
+     *   user). Only attached by video-capable drivers; audio-only drivers ignore it (back-compatible —
+     *   existing callers and drivers need not pass or read it). The model/avatar's video comes BACK via
+     *   {@link OnRemoteVideo}.
      */
-    public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream): Promise<void>;
+    public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void>;
 
     /**
      * Injects typed text into the live session as a USER turn and asks the model to respond.
@@ -430,6 +435,21 @@ export abstract class BaseRealtimeClient {
         this.usageHandler = handler;
     }
 
+    /**
+     * Registers the (single) remote-VIDEO handler — the model/avatar's video track for a VIDEO session
+     * (a talking-head the host renders, e.g. as the agent's tile). Invoked once the provider publishes
+     * its video track.
+     *
+     * **Optional capability:** audio-only drivers (the default) never emit — registering is always safe,
+     * but hosts must not assume a video track arrives. Video-capable drivers
+     * ({@link BaseRealtimeModel.SupportsVideo}) call {@link emitRemoteVideo} when the track is live.
+     *
+     * @param handler Invoked with the remote video `MediaStream` when it becomes available.
+     */
+    public OnRemoteVideo(handler: (stream: MediaStream) => void): void {
+        this.remoteVideoHandler = handler;
+    }
+
     // ── Protected emit helpers for concrete drivers ───────────────────────────
 
     /** Emits a transcript event to the registered handler (if any). */
@@ -460,5 +480,10 @@ export abstract class BaseRealtimeClient {
     /** Emits a usage update (token deltas for a completed response/turn) to the registered handler (if any). */
     protected emitUsage(usage: RealtimeClientUsage): void {
         this.usageHandler?.(usage);
+    }
+
+    /** Emits the model/avatar's remote video stream to the registered handler (video drivers only). */
+    protected emitRemoteVideo(stream: MediaStream): void {
+        this.remoteVideoHandler?.(stream);
     }
 }

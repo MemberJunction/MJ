@@ -1,0 +1,158 @@
+[
+  {
+    "fields": {
+      "Name": "DriveItems"
+    },
+    "primaryKey": {
+      "ID": "6E5F6710-F8EA-43CA-9283-C3B922A5DD82"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Drives"
+    },
+    "primaryKey": {
+      "ID": "22B4F0C3-D784-4FDC-A55C-4F5D1980DCB4"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shares"
+    },
+    "primaryKey": {
+      "ID": "64CD8E2A-F2FA-422D-BF9E-7C666B2546A7"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiteAnalytics"
+    },
+    "primaryKey": {
+      "ID": "23E4FB65-5187-42AB-8F6C-D29EAB0C4F8E"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiteColumns"
+    },
+    "primaryKey": {
+      "ID": "5DEF87AA-8E71-4957-90A7-A7F939E34777"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiteContentTypes"
+    },
+    "primaryKey": {
+      "ID": "D7EE4AFE-62B7-428D-8693-7C3C0CBFC020"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiteListColumns"
+    },
+    "primaryKey": {
+      "ID": "5ADC3169-C75C-4159-9702-705FC2542579"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiteListItems"
+    },
+    "primaryKey": {
+      "ID": "8E42BD41-A197-4224-A824-602A34912EAE"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiteLists"
+    },
+    "primaryKey": {
+      "ID": "4D1FF34B-9379-462B-8E16-AA6F526BD730"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SiteListSubscriptions"
+    },
+    "primaryKey": {
+      "ID": "4D3D2A00-E41B-4B5B-A0A4-7022CF8BD77A"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SitePages"
+    },
+    "primaryKey": {
+      "ID": "5C385077-89EF-42EA-A50B-A821EB24A0E1"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SitePermissions"
+    },
+    "primaryKey": {
+      "ID": "66A86103-C40A-4537-9A8A-077755CD8946"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sites"
+    },
+    "primaryKey": {
+      "ID": "98F9FAED-998A-485A-A94B-F74D26D3F7B5"
+    },
+    "deleteRecord": {
+      "delete": true,
+      "deletedAt": "2026-06-21T00:00:00.000Z"
+    }
+  }
+]

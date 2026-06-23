@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
+import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int, Float } from "type-graphql";
 import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
@@ -28,6 +28,7 @@ import {
     IntegrationSyncOptions,
     SourceSchemaInfo,
     IntegrationSchemaSync,
+    decideSchemaLimitViolations,
     IntegrationConnectorCreationPipeline,
     IntegrationActionGenerator
 } from "@memberjunction/integration-engine";
@@ -50,6 +51,7 @@ import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-bui
 import { IntegrationProgressReader } from "@memberjunction/integration-progress-artifacts";
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
+import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
@@ -570,6 +572,78 @@ class MutationResultOutput {
     @Field() Message: string;
 }
 
+// ─── Typed sync-config (rate-limit / concurrency / time-budget as STRUCTURED fields, not a raw
+//     Configuration JSON blob). These map to the CompanyIntegration.Configuration keys the engine
+//     reads at runtime, so they are customizable per-connection via the API instead of hidden code
+//     constants. Set merges (preserves other Configuration keys); Get reads them back typed. ──────
+@InputType()
+class IntegrationSyncConfigInput {
+    @Field(() => Int, { nullable: true, description: 'Entity maps processed concurrently within a dependency layer (clamped 1-16). Default 1 (sequential).' }) SyncConcurrency?: number;
+    @Field(() => Int, { nullable: true, description: 'Upper bound the per-layer AIMD controller ramps toward. Default = connector MaxConcurrencyHint.' }) MaxConcurrency?: number;
+    @Field(() => Float, { nullable: true, description: 'Override the source rate limit (requests/sec). Default = connector RateLimitPolicy / derived.' }) RateLimitTokensPerSec?: number;
+    @Field(() => Int, { nullable: true, description: 'Override the rate-limiter burst capacity (tokens).' }) RateLimitBurst?: number;
+    @Field(() => Boolean, { nullable: true, description: '§4 cross-layer pipelining: a child map starts when ITS parents finish, not the whole layer.' }) CrossLayerPipeline?: boolean;
+    @Field(() => Boolean, { nullable: true, description: 'Merkle/partition hash-diff reconcile for watermark-less change detection (buffers the set in RAM).' }) PartitionReconcile?: boolean;
+    @Field(() => Int, { nullable: true, description: 'Time budget (ms) for stage-2 streaming field discovery before it stops and uses what it gathered.' }) DiscoveryTimeBudgetMs?: number;
+    @Field(() => Int, { nullable: true, description: 'Batch size for stage-2 streaming field discovery (records per FetchChanges page). Default 500.' }) DiscoveryBatchSize?: number;
+    @Field(() => Int, { nullable: true, description: 'Max records sampled in stage-2 streaming field discovery (a column corpus + PK guess; NOT a full scan). Default 500.' }) DiscoveryMaxRecords?: number;
+    @Field(() => Boolean, { nullable: true, description: '§7 Comprehensive refresh deactivates Declared objects/fields ABSENT from an AUTHORITATIVE discovery (reversible). Default false.' }) DeactivateAbsent?: boolean;
+    // NOTE: §B table/column caps (MJ_INTEGRATION_MAX_TABLES / _MAX_COLUMNS_PER_TABLE) are DELIBERATELY NOT here —
+    // they are operator/env guardrails, not per-connection user settings (a user-raisable cap is toothless).
+}
+
+@ObjectType()
+class IntegrationSyncConfigOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => Int, { nullable: true }) SyncConcurrency?: number;
+    @Field(() => Int, { nullable: true }) MaxConcurrency?: number;
+    @Field(() => Float, { nullable: true }) RateLimitTokensPerSec?: number;
+    @Field(() => Int, { nullable: true }) RateLimitBurst?: number;
+    @Field(() => Boolean, { nullable: true }) CrossLayerPipeline?: boolean;
+    @Field(() => Boolean, { nullable: true }) PartitionReconcile?: boolean;
+    @Field(() => Int, { nullable: true }) DiscoveryTimeBudgetMs?: number;
+    @Field(() => Int, { nullable: true }) DiscoveryBatchSize?: number;
+    @Field(() => Int, { nullable: true }) DiscoveryMaxRecords?: number;
+    @Field(() => Boolean, { nullable: true }) DeactivateAbsent?: boolean;
+}
+
+@ObjectType()
+class CustomColumnCandidate {
+    @Field() EntityName: string;
+    /** The source field key as captured in the overflow column. */
+    @Field() SourceKey: string;
+    /** The sanitized, collision-resolved column name that would be created. */
+    @Field() ColumnName: string;
+    /** Inferred schema-field type family ('string' | 'number' | 'boolean' | 'datetime'). */
+    @Field() InferredType: string;
+    /** true = the real column does not exist yet (ADD COLUMN); false = recovery (column exists, mapping missing). */
+    @Field() NeedsColumn: boolean;
+}
+
+@ObjectType()
+class CustomColumnCandidatesOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [CustomColumnCandidate]) Candidates: CustomColumnCandidate[];
+}
+
+@ObjectType()
+class PromotedColumn {
+    @Field() EntityName: string;
+    @Field() ColumnName: string;
+}
+
+@ObjectType()
+class PromoteCustomColumnsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field() Promoted: boolean;
+    @Field(() => [PromotedColumn]) ColumnsAdded: PromotedColumn[];
+    /** true when an RSU schema change ran (a server restart may be pending to expose the new columns). */
+    @Field() SchemaUpdatePending: boolean;
+}
+
 @InputType()
 class FieldMapInput {
     @Field() SourceFieldName: string;
@@ -628,6 +702,10 @@ class CreateScheduleInput {
     @Field({ nullable: true }) Description?: string;
     @Field({ nullable: true }) SyncDirection?: string;
     @Field({ nullable: true }) FullSync?: boolean;
+    /** §13 — 'sync' (default; moves data via RunSync) or 'discovery' (schema-only RefreshConnectorSchema on cron, evolving the IO/IOF catalog — no RSU, no data sync). */
+    @Field({ nullable: true, defaultValue: 'sync' }) JobKind?: string;
+    /** Discovery-job only: deactivate objects/fields absent from an authoritative refresh (reversible). Default true. */
+    @Field({ nullable: true }) DeactivateAbsent?: boolean;
 }
 
 @ObjectType()
@@ -1181,9 +1259,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * `<cwd>/logs/integration-runs/<runID>/progress.jsonl` artifact.
      */
     @Mutation(() => RefreshConnectorSchemaOutput)
+    @RequireSystemUser()
     async IntegrationRefreshConnectorSchema(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK convention hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Arg("deactivateAbsent", { nullable: true, description: "Comprehensive refresh (default true): objects/fields ABSENT from this discovery are deactivated (Status='Disabled', never deleted, reversible on a later rediscovery). Pass false for a scoped/partial discovery so it never disables what it didn't probe." }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
         try {
@@ -1204,6 +1284,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 UniversalPKConvention: universalPKConvention || undefined,
                 ConsoleMirror: true,
                 TriggerType: 'Manual' as const,
+                // §7 — explicit RefreshConnectorSchema is a comprehensive re-discovery: default to
+                // deactivating objects/fields the source no longer exposes (reversible). Precedence:
+                // explicit arg > persisted Configuration.deactivateAbsent (set via IntegrationSetSyncConfig) >
+                // comprehensive default (true). Caller can opt out per-call or per-connection.
+                DeactivateAbsent: deactivateAbsent ?? this.readConfigBool(companyIntegration.Configuration, 'deactivateAbsent') ?? true,
             };
             const result = await pipeline.Run(runOpts as unknown as Parameters<typeof pipeline.Run>[0]);
 
@@ -1260,6 +1345,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * the IntegrationActionExecutor (CoreActions) is the single runtime dispatcher.
      */
     @Mutation(() => IntegrationGenerateActionOutput)
+    @RequireSystemUser()
     async IntegrationGenerateAction(
         @Arg("integrationName") integrationName: string,
         @Arg("objectName") objectName: string,
@@ -1553,14 +1639,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     SourceFieldName: f.Name,
                     TargetColumnName: f.Name.replace(/[^A-Za-z0-9_]/g, '_'),
                     TargetSqlType: targetSqlType,
-                    // Synced shadow tables must NOT enforce NOT NULL on non-PK
-                    // columns. The external system (SF, HubSpot, etc.) is the
-                    // source of truth for business data, not for MJ's schema
-                    // constraints — and its describe output often declares
-                    // fields required when real records actually have nulls
-                    // (deprecated, calculated, or edge-case fields). Enforcing
-                    // NOT NULL here just aborts entire batches on one bad row.
-                    IsNullable: !f.IsPrimaryKey,
+                    // Synced shadow tables must NOT enforce NOT NULL on ANY
+                    // column — including the PK. The external system (SF, HubSpot,
+                    // GrowthZone, etc.) is the source of truth for business data,
+                    // not for MJ's schema constraints — and its describe output
+                    // often declares fields required when real records actually
+                    // have nulls (deprecated, calculated, or edge-case fields).
+                    // Integration PKs are SOFT (tracked via SchemaBuilder.SoftPrimaryKeys
+                    // for upsert/dedup; identity falls back to a content-hash when the
+                    // PK is null/partial — §4). Emitting the PK column NOT NULL breaks
+                    // that fallback: a source row with a null PK (e.g. nested/derived
+                    // records like event sponsors, contact phones) aborts the insert
+                    // before content-hash can save it. So the soft-PK column is nullable
+                    // too; uniqueness/identity is enforced logically, not by the DDL.
+                    IsNullable: true,
                     MaxLength: f.MaxLength,
                     Precision: f.Precision,
                     Scale: f.Scale,
@@ -1581,12 +1673,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 continue;
             }
 
-            // If columns exist but no PK was found, log diagnostic info and skip rather than
-            // generating broken DDL with UNIQUE ([ID]) on a non-existent column.
+            // Provable-only: no PK we could prove from the streamed data (single OR composite) means
+            // the object is NOT added — and we say so clearly. We never fabricate a key (e.g. "all
+            // columns as the PK"); a wrong identity is worse than an honest omission. The fix for a
+            // missing PK is to STREAM MORE DATA at discovery time so the stats can prove one, not to
+            // invent a key here.
             if (primaryKeyFields.length === 0 && columns.length > 0) {
                 droppedNoPrimaryKey.push(obj.SourceObjectName);
                 const fieldNames = sourceObj.Fields.map(f => `${f.Name}(pk=${f.IsPrimaryKey})`).join(', ');
-                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — ${columns.length} columns but NO primary key field found. Fields: [${fieldNames}]`);
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — ${columns.length} columns but NO provable primary key. Fields: [${fieldNames}]`);
                 continue;
             }
 
@@ -2124,7 +2219,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         requestedNames?: string[],
     ): SourceSchemaInfo {
         const engine = IntegrationEngineBase.Instance;
-        const ios = engine.GetIntegrationObjectsByIntegrationID(integrationID);
+        // ACTIVE-only materialization: an object/field a given tenant doesn't expose is marked
+        // Status='Inactive' by discovery (the phantom-skip), and MUST NOT be materialized — creating
+        // empty tables/columns for absent objects wastes storage AND, more importantly, blows up the
+        // per-entity CodeGen + advancedGen (AI form-layout) time on every ApplyAll. The sync path
+        // already filters active (GetActiveIntegrationObjects); this build site now matches it.
+        const ios = engine.GetActiveIntegrationObjects(integrationID);
         const filter = requestedNames && requestedNames.length > 0
             ? new Set(requestedNames.map(n => n.toLowerCase()))
             : null;
@@ -2137,7 +2237,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const result: SourceSchemaInfo = { Objects: [] };
         for (const io of ios) {
             if (filter && !filter.has(io.Name.toLowerCase())) continue;
-            const iofs = engine.GetIntegrationObjectFields(io.ID);
+            // Active fields only — an inactive (source-absent / deactivated) field is not materialized.
+            const iofs = engine.GetIntegrationObjectFields(io.ID).filter(iof => iof.Status === 'Active');
 
             const fields = iofs.map(iof => {
                 const targetIOName = iof.RelatedIntegrationObjectID
@@ -2388,6 +2489,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Creates a CompanyIntegration with a linked Credential entity for encrypted credential storage.
      */
     @Mutation(() => CreateConnectionOutput)
+    @RequireSystemUser()
     async IntegrationCreateConnection(
         @Arg("input") input: CreateConnectionInput,
         @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
@@ -2574,6 +2676,174 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Sets the per-connection sync tuning (rate limit, concurrency, time budget, pipeline flags) as
+     * STRUCTURED typed fields, merged into CompanyIntegration.Configuration (other keys preserved).
+     * These are the exact keys the IntegrationEngine reads at runtime, so they become customizable
+     * via the API instead of hidden code constants. Returns the merged config typed.
+     */
+    @Mutation(() => IntegrationSyncConfigOutput)
+    async IntegrationSetSyncConfig(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("config", () => IntegrationSyncConfigInput) config: IntegrationSyncConfigInput,
+        @Ctx() ctx: AppContext
+    ): Promise<IntegrationSyncConfigOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (!await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID))) {
+                return { Success: false, Message: 'CompanyIntegration not found' };
+            }
+            let cfg: Record<string, unknown> = {};
+            try { if (ci.Configuration) cfg = JSON.parse(ci.Configuration) as Record<string, unknown>; } catch { cfg = {}; }
+            const set = (key: string, val: unknown) => { if (val !== undefined && val !== null) cfg[key] = val; };
+            set('syncConcurrency', config.SyncConcurrency);
+            set('maxConcurrency', config.MaxConcurrency);
+            set('rateLimitTokensPerSec', config.RateLimitTokensPerSec);
+            set('rateLimitBurst', config.RateLimitBurst);
+            set('crossLayerPipeline', config.CrossLayerPipeline);
+            set('partitionReconcile', config.PartitionReconcile);
+            set('discoveryTimeBudgetMs', config.DiscoveryTimeBudgetMs);
+            set('discoveryBatchSize', config.DiscoveryBatchSize);
+            set('discoveryMaxRecords', config.DiscoveryMaxRecords);
+            set('deactivateAbsent', config.DeactivateAbsent);
+            ci.Configuration = JSON.stringify(cfg);
+            if (!await ci.Save()) return { Success: false, Message: `Failed to save: ${ci.LatestResult?.CompleteMessage ?? 'unknown'}` };
+            return { Success: true, Message: 'Sync config updated', ...this.readSyncConfig(cfg) };
+        } catch (e) {
+            LogError(`IntegrationSetSyncConfig error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /** Reads the per-connection sync tuning back as STRUCTURED typed fields. */
+    @Query(() => IntegrationSyncConfigOutput)
+    async IntegrationGetSyncConfig(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<IntegrationSyncConfigOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (!await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID))) {
+                return { Success: false, Message: 'CompanyIntegration not found' };
+            }
+            let cfg: Record<string, unknown> = {};
+            try { if (ci.Configuration) cfg = JSON.parse(ci.Configuration) as Record<string, unknown>; } catch { cfg = {}; }
+            return { Success: true, Message: 'OK', ...this.readSyncConfig(cfg) };
+        } catch (e) {
+            LogError(`IntegrationGetSyncConfig error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /** Reads a single boolean key from a CompanyIntegration.Configuration JSON string (undefined if absent/malformed). */
+    private readConfigBool(configuration: string | null | undefined, key: string): boolean | undefined {
+        try {
+            if (!configuration) return undefined;
+            const v = (JSON.parse(configuration) as Record<string, unknown>)[key];
+            return typeof v === 'boolean' ? v : undefined;
+        } catch { return undefined; }
+    }
+
+    /** Extracts the typed sync-config fields from a parsed Configuration object (type-guarded). */
+    private readSyncConfig(cfg: Record<string, unknown>): Partial<IntegrationSyncConfigOutput> {
+        const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined);
+        const bool = (v: unknown) => (typeof v === 'boolean' ? v : undefined);
+        return {
+            SyncConcurrency: num(cfg.syncConcurrency),
+            MaxConcurrency: num(cfg.maxConcurrency),
+            RateLimitTokensPerSec: num(cfg.rateLimitTokensPerSec),
+            RateLimitBurst: num(cfg.rateLimitBurst),
+            CrossLayerPipeline: bool(cfg.crossLayerPipeline),
+            PartitionReconcile: bool(cfg.partitionReconcile),
+            DiscoveryTimeBudgetMs: num(cfg.discoveryTimeBudgetMs),
+            DiscoveryBatchSize: num(cfg.discoveryBatchSize),
+            DiscoveryMaxRecords: num(cfg.discoveryMaxRecords),
+            DeactivateAbsent: bool(cfg.deactivateAbsent),
+        };
+    }
+
+    /** The MJ entity names this connection has entity maps for (for whole-connection scope). */
+    private async getMappedEntityNames(companyIntegrationID: string, user: UserInfo): Promise<string[]> {
+        const rv = new RunView();
+        const res = await rv.RunView<{ Entity: string }>({
+            EntityName: 'MJ: Company Integration Entity Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+            Fields: ['Entity'],
+            ResultType: 'simple',
+        }, user);
+        if (!res.Success) return [];
+        return Array.from(new Set((res.Results ?? []).map(r => r.Entity).filter((e): e is string => !!e)));
+    }
+
+    /**
+     * Lists the custom-column CANDIDATES captured in the overflow column awaiting promotion — the "new
+     * columns found" for a connection. READ-ONLY (no schema change, no RSU). Scope to one entity via
+     * entityName, or omit to list across all the connection's mapped entities. Computed live (overflow keys
+     * minus already-mapped/already-a-column), so it is inherently deduped against anything a concurrent
+     * discovery already promoted.
+     */
+    @Query(() => CustomColumnCandidatesOutput)
+    async IntegrationListCustomColumnCandidates(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("entityName", { nullable: true }) entityName: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<CustomColumnCandidatesOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const promoter = new IntegrationCustomColumnPromoter(user, provider);
+            const entityNames = entityName ? [entityName] : await this.getMappedEntityNames(companyIntegrationID, user);
+            const candidates: CustomColumnCandidate[] = [];
+            for (const en of entityNames) {
+                candidates.push(...await promoter.ListCandidates(companyIntegrationID, en));
+            }
+            return { Success: true, Message: `${candidates.length} candidate column(s) found`, Candidates: candidates };
+        } catch (e) {
+            LogError(`IntegrationListCustomColumnCandidates error: ${e}`);
+            return { Success: false, Message: this.formatError(e), Candidates: [] };
+        }
+    }
+
+    /**
+     * On-demand promotion of captured custom columns: runs RSU (ADD COLUMN + register EntityField + field map),
+     * which may require a server restart to expose them over GraphQL. This is the USER-ACCEPTED trigger — by
+     * default a sync only CAPTURES to the overflow column (auto-promote is opt-in per connection via
+     * Configuration.autoPromoteCustomColumns). Scope via entityNames, or omit to promote across all mapped
+     * entities. Idempotent: already-promoted/mapped keys are skipped (safe to re-run / run alongside discovery).
+     */
+    @Mutation(() => PromoteCustomColumnsOutput)
+    @RequireSystemUser()
+    async IntegrationPromoteCustomColumns(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("entityNames", () => [String], { nullable: true }) entityNames: string[] | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<PromoteCustomColumnsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+            const targets = (entityNames && entityNames.length > 0) ? entityNames : await this.getMappedEntityNames(companyIntegrationID, user);
+            if (targets.length === 0) {
+                return { Success: true, Message: 'No mapped entities to promote', Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
+            }
+            const promoter = new IntegrationCustomColumnPromoter(user, provider);
+            const result = await promoter.PromoteForSync(companyIntegrationID, targets);
+            return {
+                Success: true,
+                Message: result.Promoted ? `Promoted ${result.ColumnsAdded.length} column(s)` : 'No columns required promotion',
+                Promoted: result.Promoted,
+                ColumnsAdded: result.ColumnsAdded.map(c => ({ EntityName: c.EntityName, ColumnName: c.ColumnName })),
+                SchemaUpdatePending: result.SchemaUpdatePending,
+            };
+        } catch (e) {
+            LogError(`IntegrationPromoteCustomColumns error: ${e}`);
+            return { Success: false, Message: this.formatError(e), Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
+        }
+    }
+
+    /**
      * Soft-deletes a CompanyIntegration by setting IsActive=false.
      */
     @Mutation(() => MutationResultOutput)
@@ -2751,6 +3021,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * pattern. Use IntegrationSchemaPreview to preview generated SQL without applying.
      */
     @Mutation(() => ApplySchemaOutput)
+    @RequireSystemUser()
     async IntegrationApplySchema(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("objects", () => [SchemaPreviewObjectInput]) objects: SchemaPreviewObjectInput[],
@@ -2841,6 +3112,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * All migrations run sequentially, then ONE CodeGen, ONE compile, ONE git PR, ONE restart.
      */
     @Mutation(() => ApplySchemaBatchOutput)
+    @RequireSystemUser()
     async IntegrationApplySchemaBatch(
         @Arg("items", () => [ApplySchemaBatchItemInput]) items: ApplySchemaBatchItemInput[],
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
@@ -2913,6 +3185,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * 6. Starts sync for the integration
      */
     @Mutation(() => ApplyAllOutput)
+    @RequireSystemUser()
     async IntegrationApplyAll(
         @Arg("input") input: ApplyAllInput,
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
@@ -3351,6 +3624,38 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Build schema artifacts for a single connector's objects.
      * Shared by IntegrationApplySchema (single) and IntegrationApplySchemaBatch (batch).
      */
+    /**
+     * §B — enforce OPTIONAL table/column caps at the create-tables (RSU) gate. These are OPERATOR
+     * (deployment) guardrails read from ENV — `MJ_INTEGRATION_MAX_TABLES` / `MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE`
+     * (absent or ≤0 = unbounded, the common case). They are DELIBERATELY env-only, NOT per-connection
+     * `Configuration`/GraphQL: a guardrail a user can raise via the same API they apply with is toothless.
+     * THROWS a clear error when the selection exceeds a cap so NOTHING partial is created — the caller surfaces
+     * it and the user narrows the selection (the cap itself is an operator concern). NEVER truncates. Discovery
+     * still surfaces every object/field; only materialization is capped. Per-table column count = the selected
+     * field subset, or the object's full discovered field count when all fields are selected.
+     */
+    private enforceSchemaLimits(
+        objects: SchemaPreviewObjectInput[],
+        filteredSchema: SourceSchemaInfo,
+    ): void {
+        const envInt = (name: string): number | null => {
+            const v = parseInt(process.env[name] ?? '', 10);
+            return Number.isFinite(v) && v > 0 ? v : null;
+        };
+        const fullCountByName = new Map(filteredSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.Fields.length]));
+        // Delegate the cap decision to the engine's pure, unit-tested decideSchemaLimitViolations.
+        const violations = decideSchemaLimitViolations({
+            TableCount: objects.length,
+            ColumnCountByTable: objects.map(o => ({
+                Name: o.SourceObjectName,
+                ColumnCount: o.Fields?.length ?? fullCountByName.get(o.SourceObjectName.toLowerCase()) ?? 0,
+            })),
+            MaxTables: envInt('MJ_INTEGRATION_MAX_TABLES'),
+            MaxColumnsPerTable: envInt('MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE'),
+        });
+        if (violations.length > 0) throw new Error(violations.join(' '));
+    }
+
     private async buildSchemaForConnector(
         companyIntegrationID: string,
         objects: SchemaPreviewObjectInput[],
@@ -3409,6 +3714,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
         };
 
+        // §B — reject an over-limit table/column SELECTION before ANY table is materialized. This is the
+        // single shared gate for ApplyAll / ApplyAllBatch / ApplySchemaBatch (all route through here).
+        // Caps are operator/env guardrails (MJ_INTEGRATION_MAX_TABLES / _MAX_COLUMNS_PER_TABLE).
+        this.enforceSchemaLimits(objects, filteredSchema);
+
         const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform, connector);
 
         const input: SchemaBuilderInput = {
@@ -3442,6 +3752,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Sends a webhook to the registered callback when complete.
      */
     @Mutation(() => StartSyncOutput)
+    @RequireSystemUser()
     async IntegrationStartSync(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("webhookURL", { nullable: true }) webhookURL: string,
@@ -3469,6 +3780,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (fullSync) syncOptions.FullSync = true;
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
             if (syncDirection) syncOptions.SyncDirection = syncDirection;
+
+            // Capture the fire instant BEFORE launching the sync. The run-record lookup below
+            // finds the run by recency (StartedAt >= firedAt) rather than by transient status, so
+            // a fast run (0-record / empty connector / quick failure) that finishes before we poll
+            // is still reported with its real RunID instead of an untrackable null. RunSync stamps
+            // StartedAt with an app-side `new Date()`, so this clock is consistent with the row.
+            const firedAt = new Date();
 
             // Fire and forget — progress is tracked inside IntegrationEngine
             const syncPromise = IntegrationEngine.Instance.RunSync(
@@ -3507,25 +3825,45 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     }
                 });
 
-            // Small delay to let the run record get created
-            await new Promise(resolve => setTimeout(resolve, 200));
+            // Resolve the run record by RECENCY, not by transient 'In Progress' status. The prior
+            // implementation slept a fixed 200ms then filtered Status='In Progress' — when the run
+            // finished in under 200ms (an empty connector, a 0-record sync, or a fast synchronous
+            // failure) there was no 'In Progress' row to find, so it returned Success:true with a
+            // null RunID: an optimistic, untrackable result that read as "started" when nothing
+            // could be followed. Poll briefly for ANY run for this connector stamped at/after the
+            // fire instant; that catches both the still-running and the already-finished cases.
+            const firedAtFilter = firedAt.toISOString();
+            let run: { ID: string; Status: string } | null = null;
+            for (let attempt = 0; attempt < 15 && !run; attempt++) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+                const rv = new RunView();
+                const runResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
+                    EntityName: 'MJ: Company Integration Runs',
+                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND StartedAt >= '${firedAtFilter}'`,
+                    OrderBy: 'StartedAt DESC',
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                    Fields: ['ID', 'Status', 'StartedAt']
+                }, user);
+                if (runResult.Success && runResult.Results.length > 0) {
+                    run = runResult.Results[0];
+                }
+            }
 
-            const rv = new RunView();
-            const runResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
-                EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND Status='In Progress'`,
-                OrderBy: '__mj_CreatedAt DESC',
-                MaxRows: 1,
-                ResultType: 'simple',
-                Fields: ['ID', 'Status', 'StartedAt']
-            }, user);
-
-            const run = runResult.Success && runResult.Results.length > 0 ? runResult.Results[0] : null;
+            // No run record after the poll window ⇒ the sync genuinely did not start (it no-op'd
+            // before creating a run). Report that honestly rather than claiming Success with a null
+            // RunID — a caller/scheduler can act on a false, but a true+null silently strands it.
+            if (!run) {
+                return {
+                    Success: false,
+                    Message: 'Sync did not start — no run record was created (the connector may be gated or misconfigured)'
+                };
+            }
 
             return {
                 Success: true,
                 Message: 'Sync started',
-                RunID: run?.ID
+                RunID: run.ID
             };
         } catch (e) {
             LogError(`IntegrationStartSync error: ${e}`);
@@ -3562,6 +3900,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Supports create, update, and delete operations.
      */
     @Mutation(() => WriteRecordOutput)
+    @RequireSystemUser()
     async IntegrationWriteRecord(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("objectName") objectName: string,
@@ -3651,16 +3990,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const rv = new RunView();
 
-            // Find IntegrationSync job type
+            // §13 — select the driver by job-kind: 'discovery' = schema-only refresh on a cron;
+            // 'sync' (default) = the data-moving RunSync job.
+            const jobKind = (input.JobKind ?? 'sync').toLowerCase();
+            const driverClass = jobKind === 'discovery'
+                ? 'IntegrationDiscoveryScheduledJobDriver'
+                : 'IntegrationSyncScheduledJobDriver';
+
             const jobTypeResult = await rv.RunView<MJScheduledJobTypeEntity>({
                 EntityName: 'MJ: Scheduled Job Types',
-                ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
+                ExtraFilter: `DriverClass='${driverClass}'`,
                 MaxRows: 1,
                 ResultType: 'simple',
                 Fields: ['ID']
             }, user);
             if (!jobTypeResult.Success || jobTypeResult.Results.length === 0) {
-                return { Success: false, Message: 'IntegrationSync scheduled job type not found' };
+                return { Success: false, Message: `Scheduled job type not found for driver '${driverClass}' (kind='${jobKind}')` };
             }
             const jobTypeID = jobTypeResult.Results[0].ID;
 
@@ -3674,8 +4019,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             job.Status = 'Active';
             job.OwnerUserID = user.ID;
             const jobConfig: Record<string, unknown> = { CompanyIntegrationID: input.CompanyIntegrationID };
-            if (input.SyncDirection) jobConfig.SyncDirection = input.SyncDirection;
-            if (input.FullSync) jobConfig.FullSync = input.FullSync;
+            if (jobKind === 'discovery') {
+                // Discovery job: schema-only. SyncDirection/FullSync are meaningless here; carry the
+                // deactivate toggle instead (driver defaults it to true when omitted).
+                if (input.DeactivateAbsent !== undefined && input.DeactivateAbsent !== null) jobConfig.DeactivateAbsent = input.DeactivateAbsent;
+            } else {
+                if (input.SyncDirection) jobConfig.SyncDirection = input.SyncDirection;
+                if (input.FullSync) jobConfig.FullSync = input.FullSync;
+            }
             job.Configuration = JSON.stringify(jobConfig);
             job.NextRunAt = CronExpressionHelper.GetNextRunTime(input.CronExpression, input.Timezone || 'UTC');
 
@@ -4437,6 +4788,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Post-pipeline: create entity/field maps and start sync for each success.
      */
     @Mutation(() => ApplyAllBatchOutput)
+    @RequireSystemUser()
     async IntegrationApplyAllBatch(
         @Arg("input") input: ApplyAllBatchInput,
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
@@ -5024,13 +5376,19 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 return { Success: false, Message: 'Transaction failed — all deletes rolled back' };
             }
 
-            if (deleteData) {
-                LogError(`IntegrationDeleteConnection: deleteData=true requested but table deletion not yet implemented for ${companyIntegrationID}`);
-            }
+            // deleteData=true asks us to also DROP the physical mirror tables. We deliberately do NOT:
+            // RuntimeSchemaManager rejects DROP TABLE on the __mj schema by design (a destructive-op
+            // safety guard), and there is no DROP generator. Dropping integration tables is real data
+            // loss and must be an explicit, separately-designed operation — not a silent side effect of
+            // removing a connection. So we delete the connection + all METADATA (maps/fields/schedules/
+            // credential) and RETAIN the data tables, and we say so honestly rather than claim otherwise.
+            const dataNote = deleteData
+                ? ' The physical data tables were RETAINED (dropping integration tables is not performed automatically — it is a separate, explicit operation).'
+                : '';
 
             return {
                 Success: true,
-                Message: `Deleted connection and all associated records`,
+                Message: `Deleted connection and all associated metadata records.${dataNote}`,
                 EntityMapsDeleted: entityMapsDeleted,
                 FieldMapsDeleted: fieldMapsDeleted,
                 SchedulesDeleted: schedulesDeleted,
@@ -5050,6 +5408,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Compares the current connector introspection against existing MJ entities.
      */
     @Mutation(() => SchemaEvolutionOutput)
+    @RequireSystemUser()
     async IntegrationSchemaEvolution(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
