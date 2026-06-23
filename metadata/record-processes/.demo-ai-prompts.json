@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "Demo: stamp Description (AI Prompts)",
+      "Description": "Demo FieldRules process: sets Description on the selected AI Prompts. Used to exercise the Record Process Runner UX (dry-run preview → confirm → apply). Stored ScopeFilter is '1=0' so a non-UI run is a safe no-op; the grid passes the real selection as a runtime scope override.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Prompts",
+      "WorkType": "FieldRules",
+      "ScopeType": "Filter",
+      "ScopeFilter": "1=0",
+      "Status": "Active",
+      "Configuration": "{\"Rules\":[{\"TargetField\":\"Description\",\"Source\":{\"Kind\":\"static\",\"Value\":\"Updated via Field Rules demo\"}}]}"
+    },
+    "primaryKey": {
+      "ID": "0E12E42D-D122-487D-8F40-DDB1704F9B79"
+    },
+    "sync": {
+      "lastModified": "2026-06-23T00:52:03.250Z",
+      "checksum": "519ecb9f011b208f5d33342a60cb7729e086207a110478f9c1c804df629ef63d"
+    }
+  }
+]
