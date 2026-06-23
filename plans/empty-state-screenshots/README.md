@@ -27,7 +27,26 @@ Each state has a light and a `-dark` shot. Folders mirror the migration sections
 | System Configuration — empty | `system-config-empty.png` |
 
 ## explorer-settings/
-_(backfill in progress — Admin-shell nav)_
+| State | File |
+|-------|------|
+| Users — empty (no reset button) | `users-empty.png` |
+| Users — no-results + Reset filters | `users-no-results.png` |
+| Roles — no-results + Reset filters | `roles-no-results.png` |
+| Permissions — no-results + Reset filters | `permissions-no-results.png` |
+| Apps — no-results + Reset filters | `apps-no-results.png` |
+| SQL Logging — access denied (error variant) | `sql-logging-access-denied.png` |
+| SQL Logging — disabled (warning variant + info-box slot) | `sql-logging-disabled-warning.png` |
+| SQL Logging — no active sessions (empty + CTA) | `sql-logging-no-sessions.png` |
+
+_Not yet captured (Settings-gear nav, reuse already-shown patterns): Profile icon-picker
+no-results, Notification preferences empty, Application-settings / user-app-config compact
+in-panel empties._
 
 ## apikeys/
-_(backfill in progress — Admin-shell nav)_
+| State | File |
+|-------|------|
+| Overview — compact panel empties (no keys / no recent activity) | `overview.png` |
+| Keys list — empty + Generate Your First Key | `key-list-empty.png` |
+
+_Scopes / Applications / Usage panel empties not captured (this env has data; same
+icon+title+message pattern as those shown)._
