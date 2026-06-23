@@ -23,9 +23,10 @@ const dbConfig: SkywayDatabaseConfig = {
 describe('BuildSkywayConfig — baseline version (B19)', () => {
     it("baselines at '0' so a non-empty/history-less schema does not skip the app's V1 migration", () => {
         const cfg = BuildSkywayConfig('migrations', 'app_schema', dbConfig, '__mj', undefined, 'sqlserver');
-        // Pre-fix this was '1', which stamped "v1 applied" and skipped a V1__ migration on
-        // any adopted / keep-data-reinstalled schema.
-        expect(cfg.Migrations.BaselineVersion).toBe('0');
+        // Setting 1 here signals SkyWay to find the latest B prefixed migration and run it.
+        // Any other value would be treated as an explicit baseline version and likely break
+        // the open app install process.
+        expect(cfg.Migrations.BaselineVersion).toBe('1');
     });
 
     it('still baselines-on-migrate (adopting a populated schema applies migrations on top)', () => {
@@ -35,7 +36,7 @@ describe('BuildSkywayConfig — baseline version (B19)', () => {
 
     it("uses '0' on PostgreSQL too (dialect-independent baseline floor)", () => {
         const cfg = BuildSkywayConfig('migrations', 'app_schema', dbConfig, '__mj', undefined, 'postgres');
-        expect(cfg.Migrations.BaselineVersion).toBe('0');
+        expect(cfg.Migrations.BaselineVersion).toBe('1');
         expect(cfg.Migrations.BaselineOnMigrate).toBe(true);
     });
 
