@@ -87,7 +87,8 @@ interface CategoryNode {
         <mj-empty-state Variant="no-results"
           Title="No Results Found"
           [Message]="NoResultsMessage"
-          ActionText="Clear Search"
+          ActionText="Clear search"
+          ActionIcon="fa-solid fa-rotate-left"
           (Action)="clearSearch()" />
       }
     

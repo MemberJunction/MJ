@@ -43,7 +43,7 @@
             Icon="fa-solid fa-inbox"
             [Title]="Requests.length === 0 ? 'No agent requests yet' : 'No requests match your filters'"
             [Message]="Requests.length === 0 ? 'When agents need human input, their requests will appear here.' : ''"
-            [ActionText]="Requests.length === 0 ? '' : 'Clear Filters'"
+            [ActionText]="Requests.length === 0 ? '' : 'Reset filters'"
             ActionIcon="fa-solid fa-rotate-left"
             (Action)="ClearFilters()" />
     } @else {

@@ -75,7 +75,7 @@
               Icon="fa-solid fa-microchip"
               Title="No models found"
               [Message]="hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI model to get started'"
-              [ActionText]="hasActiveFilters ? 'Clear filters' : 'Create First Model'"
+              [ActionText]="hasActiveFilters ? 'Reset filters' : 'Create First Model'"
               [ActionIcon]="hasActiveFilters ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
               (Action)="onEmptyStateAction()" />
           } @else {

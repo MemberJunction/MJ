@@ -61,7 +61,7 @@
                 Icon="fa-solid fa-message"
                 Title="No prompts found"
                 [Message]="hasActiveFilters ? 'Try adjusting your filters' : 'Create your first AI prompt to get started'"
-                [ActionText]="hasActiveFilters ? 'Clear filters' : (UserCanCreatePrompts ? 'Create New Prompt' : '')"
+                [ActionText]="hasActiveFilters ? 'Reset filters' : (UserCanCreatePrompts ? 'Create New Prompt' : '')"
                 [ActionIcon]="hasActiveFilters ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
                 (Action)="onEmptyStateAction()" />
             } @else {

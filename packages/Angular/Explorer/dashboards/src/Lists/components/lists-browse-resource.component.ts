@@ -123,8 +123,8 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           Icon="fa-solid fa-filter-circle-xmark"
           Title="No Results Found"
           Message="No lists match your current filters. Try adjusting your search or filters."
-          ActionText="Clear All Filters"
-          ActionIcon="fa-solid fa-filter-circle-xmark"
+          ActionText="Reset filters"
+          ActionIcon="fa-solid fa-rotate-left"
           (Action)="clearFilters()" />
       }
     

@@ -83,6 +83,12 @@ public resetAllFiltersAndSearch(): void {
 }
 ```
 
+- **Canonical label is "Reset filters" with `fa-rotate-left`** — matches the
+  shared `mj-filter-panel`'s built-in reset button (which these same pages render
+  in their filter popover). Do NOT use "Clear filters" / "Clear All Filters" —
+  that contradicts the popover's wording on the same page. (Search-only empties
+  with no filter panel may use "Clear search" since they reset a search box, not
+  filters.)
 - Show the reset CTA **only when narrowed** (no button on a genuinely-empty list).
 - Clear **search AND filters** — the filter-panel's own `clearAllAppliedFilters()`
   deliberately preserves search, so a separate `resetAllFiltersAndSearch()` is
