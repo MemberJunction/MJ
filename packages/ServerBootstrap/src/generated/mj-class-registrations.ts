@@ -1022,7 +1022,7 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-entities-server (29 classes)
+// @memberjunction/core-entities-server (30 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1047,6 +1047,7 @@ import {
     MJEntityDocumentEntityServer,
     MJQueryEntityServer,
     MJRecordProcessEntityServer,
+    MJRemoteOperationEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2007,6 +2008,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityDocumentEntityServer,
     MJQueryEntityServer,
     MJRecordProcessEntityServer,
+    MJRemoteOperationEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
@@ -2195,7 +2197,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 908;
+export const CLASS_REGISTRATIONS_COUNT = 909;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

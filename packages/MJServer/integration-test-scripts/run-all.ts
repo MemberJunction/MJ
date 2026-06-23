@@ -30,6 +30,7 @@ const SCRIPTS = [
     'prompt-runner-tests.ts',
     'agent-runner-tests.ts',
     'concurrent-tests.ts',
+    'remote-op-ai-authoring-tests.ts',
 ];
 
 const results: { Script: string; Code: number }[] = [];

@@ -1674,5 +1674,53 @@
       "lastModified": "2026-05-05T15:49:00.413Z",
       "checksum": "58c5a32b26dbd537e582dbf4e529ecb30e9a1ac298435277fe32df922914eb48"
     }
+  },
+  {
+    "fields": {
+      "Name": "Generate Remote Operation Code",
+      "Description": "Authors the TypeScript body of a Remote Operation's InternalExecute method from its Description + typed Input/Output contract, against the ambient input/provider/user/context. Used by MJRemoteOperationEntityServer for GenerationType=AI operations.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/remote-operation-generation.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Actions&Parent=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "90F01050-8CC7-4004-A404-551DE6B5E83F"
+          },
+          "sync": {
+            "lastModified": "2026-06-23T01:13:24.814Z",
+            "checksum": "ffd5b9eff3841d49c631cb7772a65010a059ac43aff2b953fa14672b0936741b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DA1A8AB7-16B9-497B-BB80-3AB1D7D253EF"
+    },
+    "sync": {
+      "lastModified": "2026-06-23T01:13:24.750Z",
+      "checksum": "e75b5fd68ed741cb1827cde43be016911200d073cac8e9c09ccba5806ae85fea"
+    }
   }
 ]
