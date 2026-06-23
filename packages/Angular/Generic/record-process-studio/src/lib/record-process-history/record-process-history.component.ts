@@ -4,10 +4,11 @@
  * audit surface. Generic + reusable.
  * @module @memberjunction/ng-record-process-studio
  */
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnInit, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, OnDestroy, OnInit, inject } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { RunView } from '@memberjunction/core';
-import { NormalizeUUID } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal, NormalizeUUID } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { parseAppliedRunDetailChanges, displayRunValue, type RunDetailChange } from '../run-detail';
 
@@ -125,7 +126,7 @@ interface DetailRow { RecordID: string; Status: string; Changes: RunDetailChange
         .rph-chg.err-msg{color:var(--mj-status-error-text)}
     `],
 })
-export class RecordProcessHistoryComponent extends BaseAngularComponent implements OnInit {
+export class RecordProcessHistoryComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
 
     /** Optional: show runs for one Record Process only. */
@@ -138,8 +139,58 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
     public Details: DetailRow[] = [];
     public OpenRunRow: RunRow | null = null;
 
+    /**
+     * There is no RecordProcess BaseEngine to observe — Process Runs is an unbounded log table, so we don't
+     * bulk-cache it. Instead we re-query on demand AND keep the list live by listening for BaseEntity save/
+     * delete events on the run tables: a run started/finished anywhere (this view, the editor preview, a grid
+     * runner, the scheduler) fires an event, and we debounce-reload so history never goes stale behind a run.
+     */
+    private eventSub?: Subscription;
+    private pendingReload = false;
+    private reloadTimer: ReturnType<typeof setTimeout> | null = null;
+
     async ngOnInit(): Promise<void> {
         await this.reload();
+        this.subscribeToRunChanges();
+    }
+
+    ngOnDestroy(): void {
+        this.eventSub?.unsubscribe();
+        if (this.reloadTimer) {
+            clearTimeout(this.reloadTimer);
+        }
+    }
+
+    /** Subscribe to BaseEntity events and debounce-reload whenever a Process Run (or its details) changes. */
+    private subscribeToRunChanges(): void {
+        this.eventSub = MJGlobal.Instance.GetEventListener(false).subscribe((event: MJEvent) => {
+            if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) {
+                return;
+            }
+            const e = event.args as BaseEntityEvent;
+            if (e.type !== 'save' && e.type !== 'delete' && e.type !== 'remote-invalidate') {
+                return;
+            }
+            const name = e.baseEntity?.EntityInfo?.Name ?? e.entityName;
+            if (name === 'MJ: Process Runs' || name === 'MJ: Process Run Details') {
+                this.scheduleReload();
+            }
+        });
+    }
+
+    /** Debounce a burst of run/detail/checkpoint saves into a single reload; defer if the user is drilled into a detail. */
+    private scheduleReload(): void {
+        if (this.Mode !== 'list') {
+            this.pendingReload = true; // refresh when they return to the list — don't yank them out of a drill-in
+            return;
+        }
+        if (this.reloadTimer) {
+            clearTimeout(this.reloadTimer);
+        }
+        this.reloadTimer = setTimeout(() => {
+            this.reloadTimer = null;
+            void this.reload();
+        }, 400);
     }
 
     async reload(): Promise<void> {
@@ -182,7 +233,15 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
         this.cdr.detectChanges();
     }
 
-    backToList(): void { this.Mode = 'list'; this.OpenRunRow = null; this.cdr.detectChanges(); }
+    backToList(): void {
+        this.Mode = 'list';
+        this.OpenRunRow = null;
+        this.cdr.detectChanges();
+        if (this.pendingReload) {
+            this.pendingReload = false;
+            void this.reload(); // a run changed while we were drilled into a detail — refresh now
+        }
+    }
 
     fmt(value?: string | Date): string {
         if (!value) return '—';
