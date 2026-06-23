@@ -1,0 +1,50 @@
+[
+  {
+    "fields": {
+      "Name": "Skip Service Account",
+      "FirstName": "Skip",
+      "LastName": "Service",
+      "Email": "skip-service@skip.internal",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI"
+          },
+          "primaryKey": {
+            "ID": "65BC9077-D7B9-49BE-B610-90CA037217DC"
+          },
+          "sync": {
+            "lastModified": "2026-06-11T17:53:47.553Z",
+            "checksum": "4e123a385c7623f2e303780ba477e827c76cf9f5cbb387b72da9185701ac7e13"
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Skip Service"
+          },
+          "primaryKey": {
+            "ID": "60022E69-E534-4AE6-B399-814B36F721A3"
+          },
+          "sync": {
+            "lastModified": "2026-06-11T17:53:47.567Z",
+            "checksum": "6547214a273950b0449212f4eb4412489f9e8dfef2c6e92f864e1fec5a5dde29"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0199FC9E-1468-57FC-8A4E-EF1131DA76EB"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T04:53:12.872Z",
+      "checksum": "5cb83a61748a5d23d5d8114cff73e15976d7616dab1ac02e3aa2407e08b55120"
+    }
+  }
+]

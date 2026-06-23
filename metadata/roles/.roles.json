@@ -11,5 +11,18 @@
       "lastModified": "2026-06-09T06:32:36.750Z",
       "checksum": "54180cf11a738544eed68a64b8b5fe38ba34c68adeaf416e6a2cefe2cdbfd8e8"
     }
+  },
+  {
+    "fields": {
+      "Name": "Skip Service",
+      "Description": "Role for the Skip Service Account. Grants CRUD on query-related entities needed for Skip callback operations (query creation, update, deletion). Pair with the UI role for broad read access."
+    },
+    "primaryKey": {
+      "ID": "9933BBB6-4139-4256-8087-64F4B9E4351F"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.227Z",
+      "checksum": "e8bce35e3f3394735a1c69504dcd22f429e88d006585aec75994e115b0680ad9"
+    }
   }
 ]

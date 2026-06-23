@@ -1,10 +1,10 @@
 {
-  "entity": "MJ: Entity Permissions",
+  "entity": "MJ: Users",
   "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
-    "newFileName": ".entity-permissions.json",
+    "newFileName": ".users.json",
     "appendRecordsToExistingFile": true,
     "updateExistingRecords": true,
     "preserveFields": [],
@@ -12,11 +12,16 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name IN ('Magic Link Baseline', 'Skip Service'))",
+    "filter": "Email='skip-service@skip.internal'",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,
     "lookupFields": {},
-    "relatedEntities": {}
+    "relatedEntities": {
+      "MJ: User Roles": {
+        "entity": "MJ: User Roles",
+        "foreignKey": "UserID"
+      }
+    }
   }
 }

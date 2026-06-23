@@ -154,5 +154,141 @@
       "lastModified": "2026-06-09T06:32:37.016Z",
       "checksum": "6b43ad0f9ccf2ed20b57fe820c11d7d822abda933a1ba55c3b8e5322332f645d"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "B7C1A009-197B-4987-9C45-11AE070AE02F"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.287Z",
+      "checksum": "fe5466b93e76dbce22da78da443642cdbf2fa92e1f56180d1095e1e0eee53284"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Categories",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "14E94742-B25D-478A-9409-394E658B32A7"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.361Z",
+      "checksum": "16dd78dabf82ccadf6efe1e591775f8582d92eef28e0841231f5d1439720b00c"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Fields",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "F1BD10D7-86C7-43BD-A8E0-75B77C2BA503"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.391Z",
+      "checksum": "67677936d8d1bca8f32154bb7091f13e62455a6020c5ba280d34c1b8079856b2"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Parameters",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "7E6AD1F0-1DAB-4441-923C-338997702ABC"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.416Z",
+      "checksum": "f595b90985a0aaa40621a89cd9954eb22d8eb2709685ea88e7005021a8be2d20"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Entities",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "52D4A00C-AE6A-4C73-B4B0-C40D922054EE"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.440Z",
+      "checksum": "67a89c59fb3640e91e23d13a0577947fd826aefe29556837ac3243379450a93d"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "22A6A4DC-39DF-4E3D-AC46-CAB491F7B308"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.464Z",
+      "checksum": "ce46ceb379349d85fa3121d8d0d468cac6c88d2d35ac67c0b5255438c689d797"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Query Dependencies",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "21E86DC8-3E03-41DC-B8E6-B36324666C21"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.487Z",
+      "checksum": "714033336834420cb584c22f86d3c67dcb1ddefc34f4a98752304c69c71ad80b"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Query SQLs",
+      "RoleID": "@lookup:MJ: Roles.Name=Skip Service",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "14BA1F89-0FB7-43E9-A283-2EB9A9FF4BBF"
+    },
+    "sync": {
+      "lastModified": "2026-06-11T17:53:47.511Z",
+      "checksum": "c044e30b3e361c357c2a0193b2a5d2090efdfb30304d819e581a5e984dc8f7eb"
+    }
   }
 ]

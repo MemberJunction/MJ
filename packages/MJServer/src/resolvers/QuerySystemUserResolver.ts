@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { LogError, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
-import { RequireSystemUser } from '../directives/RequireSystemUser.js';
+// RequireSystemUser removed — these resolvers now use CheckAPIKeyScopeAuthorization
 import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity, QueryEngine } from '@memberjunction/core-entities';
 import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEntity_, MJQueryPermission_ } from '../generated/generated.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -229,19 +229,21 @@ export class DeleteQueryResultType {
 @Resolver()
 export class MJQueryResolverExtended extends MJQueryResolver {
     /**
-     * Creates a new query with the provided attributes. This mutation is restricted to system users only.
+     * Creates a new query with the provided attributes. Requires `query:create` scope for API key users;
+     * entity-level create permission on MJ: Queries for all users.
      * @param input - CreateQuerySystemUserInput containing all the query attributes
      * @param context - Application context containing user information
      * @returns CreateQueryResultType with success status and query data
      */
-    @RequireSystemUser()
     @Mutation(() => QueryMutationResultType)
-    async CreateQuerySystemUser(
+    async CreateQueryExtended(
         @Arg('input', () => CreateQuerySystemUserInput) input: CreateQuerySystemUserInput,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<QueryMutationResultType> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('query:create', '*', context.userPayload);
+
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
             const provider = GetReadWriteProvider(context.providers);
@@ -443,19 +445,21 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     }
 
     /**
-     * Updates an existing query with the provided attributes. This mutation is restricted to system users only.
+     * Updates an existing query with the provided attributes. Requires `query:update` scope for API key users;
+     * entity-level update permission on MJ: Queries for all users.
      * @param input - UpdateQuerySystemUserInput containing the query ID and fields to update
      * @param context - Application context containing user information
      * @returns UpdateQueryResultType with success status and updated query data including related entities
      */
-    @RequireSystemUser()
     @Mutation(() => QueryMutationResultType)
-    async UpdateQuerySystemUser(
+    async UpdateQueryExtended(
         @Arg('input', () => UpdateQuerySystemUserInput) input: UpdateQuerySystemUserInput,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<QueryMutationResultType> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('query:update', input.ID, context.userPayload);
+
             // Load the existing query using MJQueryEntityServer
             const provider = GetReadWriteProvider(context.providers);
             const queryEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', context.userPayload.userRecord);
@@ -547,21 +551,22 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     }
 
     /**
-     * Deletes a query by ID. This mutation is restricted to system users only.
+     * Deletes a query by ID. Requires `query:delete` scope for API key users;
+     * entity-level delete permission on MJ: Queries is enforced by the entity framework.
      * @param ID - The ID of the query to delete
      * @param options - Delete options controlling action execution
      * @param context - Application context containing user information
      * @returns DeleteQueryResultType with success status and deleted query data
      */
-    @RequireSystemUser()
     @Mutation(() => DeleteQueryResultType)
-    async DeleteQuerySystemResolver(
+    async DeleteQueryExtended(
         @Arg('ID', () => String) ID: string,
         @Arg('options', () => DeleteOptionsInput, { nullable: true }) options: DeleteOptionsInput | null,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
     ): Promise<DeleteQueryResultType> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('query:delete', ID, context.userPayload);
             // Validate ID is not null/undefined/empty
             if (!ID || ID.trim() === '') {
                 return {
