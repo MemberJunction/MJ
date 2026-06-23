@@ -1,4 +1,4 @@
-name: UI design tokens — hex color enforcement
+name: UI design tokens — hardcoded color enforcement
 
 on:
   pull_request:
@@ -13,7 +13,7 @@ on:
 
 jobs:
   check-hex-tokens:
-    name: Check changed CSS/SCSS for hardcoded hex
+    name: Check changed CSS/SCSS for hardcoded colors
     runs-on: ubuntu-latest
     steps:
       - name: Checkout PR
@@ -27,6 +27,6 @@ jobs:
           # fetch-depth: 0 ensures we have full history for the diff.
           echo "BASE_REF=origin/${{ github.base_ref }}" >> "$GITHUB_ENV"
 
-      - name: Check changed files for hardcoded hex
+      - name: Check changed files for hardcoded colors
         run: |
           ./.github/scripts/check-css-hex-tokens.sh --base "$BASE_REF"

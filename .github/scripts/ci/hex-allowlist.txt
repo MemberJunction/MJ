@@ -1,16 +1,20 @@
-# Hex Color Allowlist
+# Hardcoded Color Allowlist
 #
-# Files listed here are allowed to contain hardcoded hex color values.
-# Each line is either:
+# Files listed here are allowed to contain hardcoded color values
+# (hex, rgb, rgba, hsl, hsla). Each line is either:
 #   - A repo-relative path
 #   - A comment (starts with #)
 #   - An empty line (ignored)
 #
 # Any .css or .scss file not on this list MUST use design tokens
-# (e.g., var(--mj-brand-primary)) instead of hardcoded hex values.
+# (e.g., var(--mj-brand-primary)) instead of hardcoded colors.
 #
-# Hex values inside `var(--token, #fallback)` patterns are always allowed
-# (they only render when the token is undefined — correct CSS behavior).
+# Two universal exceptions (no allowlist entry needed):
+#   1. Color values inside `var(--token, <fallback>)` patterns
+#      — they only render when the token is undefined.
+#   2. rgba(0, 0, 0, X) and rgba(255, 255, 255, X) — neutral
+#      black/white opacities for shadows/overlays have no
+#      semantic token equivalent.
 #
 # Maintained per design token migration plan
 # (plans/complete/DESIGN_TOKEN_MIGRATION_PLAN.md). When adding a file

@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 #
-# CI gate: hex-color enforcement
+# CI gate: hardcoded-color enforcement
 #
-# Fails if any changed .css or .scss file contains hardcoded hex color values
-# outside the documented allowlist or outside `var(--token, #fallback)` syntax.
+# Fails if any changed .css or .scss file contains hardcoded color values
+# (hex, rgb, rgba, hsl, hsla) outside the documented allowlist or outside
+# `var(--token, <fallback>)` syntax.
+#
+# Exception: rgba(0, 0, 0, X) and rgba(255, 255, 255, X) are allowed —
+# these are neutral black/white opacities used for shadows/overlays where
+# no semantic token equivalent exists.
 #
 # Usage:
 #   ./check-css-hex-tokens.sh                # check files changed vs origin/next
@@ -44,10 +49,15 @@ is_allowlisted() {
 find_offending_hex() {
     local file="$1"
     # Use perl to:
-    #   1. Strip /* ... */ block comments (including multi-line) per file
+    #   1. Strip /* ... */ block comments (including multi-line)
     #   2. Strip // line comments
-    #   3. Strip var(--token, #hex) fallback patterns
-    #   4. Then emit "lineno:content" for any remaining hex
+    #   3. Strip var(--token, <color>) fallback patterns
+    #   4. Detect hardcoded colors:
+    #      - Hex literals: #fff, #264FAF, #ffffff80, etc.
+    #      - rgb()/rgba() with non-neutral colors (R=G=B=0 and R=G=B=255 are
+    #        allowed — black/white opacity for shadows/overlays have no
+    #        semantic token equivalent)
+    #      - hsl()/hsla() with any value
     perl -0777 -ne '
         # Strip block comments globally (across newlines)
         s{/\*.*?\*/}{ "\n" x ($& =~ tr/\n//) }gse;
@@ -56,11 +66,37 @@ find_offending_hex() {
             my $line = $lines[$i];
             # Strip // line comments
             $line =~ s{//.*$}{};
-            # Strip var(--token, #hex) fallback patterns
-            $line =~ s/var\([^)]*#[0-9a-fA-F]{3,8}[^)]*\)//g;
+            # Strip var(--token, ...) fallback patterns entirely (hex, rgb, hsl)
+            $line =~ s/var\([^)]*\)//g;
+
+            my $flagged = 0;
+
+            # Hex literals
             if ($line =~ /#[0-9a-fA-F]{3,8}\b/) {
-                printf "%d:%s\n", $i + 1, $lines[$i];
+                $flagged = 1;
             }
+
+            # rgb()/rgba() — allow only fully-neutral (000 or 255,255,255).
+            # Capture R, G, B (alpha is ignored for the neutral check).
+            if (!$flagged) {
+                my $scan = $line;
+                while ($scan =~ /\b(rgba?)\(\s*([0-9.]+)[\s,]+([0-9.]+)[\s,]+([0-9.]+)/g) {
+                    my ($r, $g, $b) = ($2, $3, $4);
+                    my $neutral_black = ($r == 0 && $g == 0 && $b == 0);
+                    my $neutral_white = ($r == 255 && $g == 255 && $b == 255);
+                    unless ($neutral_black || $neutral_white) {
+                        $flagged = 1;
+                        last;
+                    }
+                }
+            }
+
+            # hsl()/hsla() — always flag (no legitimate hardcoded-hsl use case yet)
+            if (!$flagged && $line =~ /\bhsla?\(/) {
+                $flagged = 1;
+            }
+
+            printf "%d:%s\n", $i + 1, $lines[$i] if $flagged;
         }
     ' "$file" 2>/dev/null || true
 }
@@ -104,7 +140,7 @@ while IFS= read -r file; do
     CHECKED=$((CHECKED + 1))
     offending=$(find_offending_hex "$REPO_ROOT/$file")
     if [ -n "$offending" ]; then
-        echo "::error file=$file::Hardcoded hex values detected. Use design tokens instead."
+        echo "::error file=$file::Hardcoded color values detected. Use design tokens instead."
         echo ""
         echo "❌ $file"
         echo "$offending" | sed 's/^/    /'
@@ -115,13 +151,16 @@ done < <(get_files_to_check)
 
 echo ""
 echo "─────────────────────────────────────────"
-echo "Hex color enforcement: $CHECKED checked, $ALLOWLISTED allowlisted, $VIOLATIONS violations"
+echo "Hardcoded color enforcement: $CHECKED checked, $ALLOWLISTED allowlisted, $VIOLATIONS violations"
 echo "─────────────────────────────────────────"
 
 if [ "$VIOLATIONS" -gt 0 ]; then
     cat <<EOF
 
-Hardcoded hex values are not allowed in component CSS/SCSS.
+Hardcoded color values are not allowed in component CSS/SCSS.
+Detected forms: hex (#fff), rgb(...), rgba(...), hsl(...), hsla(...).
+Exception: rgba(0, 0, 0, X) and rgba(255, 255, 255, X) are allowed for
+shadow/overlay neutrals (no semantic token equivalent).
 
 Use design tokens instead:
   • Text:        var(--mj-text-primary), var(--mj-text-secondary), ...
