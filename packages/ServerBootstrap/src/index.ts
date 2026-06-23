@@ -116,18 +116,31 @@ interface DynamicServerPackage {
  * therefore win via the ClassFactory's load-order priority — letting an app
  * override a base class.
  *
+ * It ALSO collects each package's exported `RESOLVER_PATHS` (absolute paths to the
+ * package's generated resolver files) and returns them. This is required for the app's
+ * GraphQL mutations/queries to actually enter the live schema: side-effect-importing a
+ * resolver class only registers type-graphql metadata, but `buildSchema` includes a
+ * resolver ONLY if it is PASSED in. `serve()` builds its resolver set by globbing the
+ * paths it is given — so the caller must hand these paths to `serve()`, or the app's
+ * entity-specific mutations (e.g. `CreateXxx`) never appear in the API. The app's own
+ * `packages/MJAPI/src/generated/generated.ts` does NOT regenerate the app's entities, so
+ * the package is the only source of these resolvers.
+ *
  * Mirrors the generated-package loader's robustness contract: no-op when the
  * section is absent, per-package try/catch, tolerate `ERR_MODULE_NOT_FOUND`
  * (e.g. before `npm install`), warn on anything else, and never crash boot.
  *
  * @param configResult - The loaded MemberJunction configuration
+ * @returns absolute resolver-file paths to add to `serve()`'s resolver globs (empty when
+ *          no Open App server packages are installed — the common case).
  */
-async function loadDynamicAppPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
+async function loadDynamicAppPackages(configResult: { config: Record<string, unknown> }): Promise<string[]> {
   const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
   const serverPackages = dynamicPackages?.server;
+  const resolverPaths: string[] = [];
   if (!serverPackages || serverPackages.length === 0) {
-    // No installed Open App server packages — the common case. Stay silent.
-    return;
+    // No installed Open App server packages — the common case. Stay silent, no paths.
+    return resolverPaths;
   }
 
   console.log('Loading Open App server packages...');
@@ -145,7 +158,18 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
       if (typeof startup === 'function') {
         await Promise.resolve((startup as () => unknown)());
       }
-      console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}`);
+      // Collect the package's exported resolver paths so serve() globs them into the schema.
+      const pkgResolverPaths = mod.RESOLVER_PATHS;
+      let added = 0;
+      if (Array.isArray(pkgResolverPaths)) {
+        for (const p of pkgResolverPaths) {
+          if (typeof p === 'string' && p.length > 0) {
+            resolverPaths.push(p);
+            added++;
+          }
+        }
+      }
+      console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}`);
     } catch (error: unknown) {
       const errObj = error as { code?: string };
       if (errObj.code === 'ERR_MODULE_NOT_FOUND') {
@@ -157,6 +181,7 @@ async function loadDynamicAppPackages(configResult: { config: Record<string, unk
   }
 
   console.log('');
+  return resolverPaths;
 }
 
 /**
@@ -221,17 +246,22 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // Load installed Open App server packages (dynamicPackages.server[] from `mj app
   // install`). Done AFTER the generated packages so an app's @RegisterClass wins via
   // ClassFactory load-order priority. Without this, `mj app install` writes the
-  // section but nothing consumes it — the app's server classes never load.
-  await loadDynamicAppPackages(configResult);
+  // section but nothing consumes it — the app's server classes never load. The returned
+  // resolver paths are the app packages' generated resolver files, which must be globbed
+  // into the schema below (loading the classes alone does NOT put their mutations/queries
+  // in the GraphQL schema — type-graphql only includes resolvers passed to serve()).
+  const dynamicResolverPaths = await loadDynamicAppPackages(configResult);
 
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths
-  const resolverPaths = options.resolverPaths || [
+  const baseResolverPaths = options.resolverPaths || [
     // Standard locations where generated resolvers may exist
     './src/generated/generated.{js,ts}',
     './dist/generated/generated.{js,ts}',
     './generated/generated.{js,ts}',
   ];
+  // Append the installed Open Apps' resolver paths so their GraphQL operations are served.
+  const resolverPaths = [...baseResolverPaths, ...dynamicResolverPaths];
 
   // Optional pre-start hook
   if (options.beforeStart) {
