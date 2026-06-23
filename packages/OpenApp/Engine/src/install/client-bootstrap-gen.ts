@@ -53,16 +53,24 @@ export function RegenerateClientBootstrap(
 
 /**
  * Builds the full content of the bootstrap file.
+ *
+ * The file ALWAYS ends with `export {};` so it is a valid ES module even when it contains no
+ * active imports — i.e. no apps installed, OR every installed app is disabled (all imports
+ * commented out). A comment-only file is a global script, which fails the MJExplorer build
+ * under isolatedModules with TS1208 ("...considered a global script file. Add an import,
+ * export, or an empty 'export {}' statement to make it a module."). app.module.ts
+ * side-effect-imports this file, so it must always be a module. Matches the ensure-script stub.
  */
 function BuildBootstrapFileContent(entries: ClientBootstrapEntry[]): string {
     const header = BuildFileHeader();
+    const moduleMarker = 'export {};\n';
 
     if (entries.length === 0) {
-        return header + '\n// No Open Apps installed\n';
+        return header + '\n// No Open Apps installed\n' + moduleMarker;
     }
 
     const importLines = entries.map(entry => BuildImportLine(entry)).join('\n');
-    return header + '\n' + importLines + '\n';
+    return header + '\n' + importLines + '\n' + moduleMarker;
 }
 
 /**
