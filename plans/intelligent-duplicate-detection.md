@@ -1,9 +1,13 @@
 # Intelligent Duplicate Detection & Merge — Implementation Spec
 
-**Status:** Implementation started (Phase 1) — migration landed; CodeGen + reasoning layer next
+**Status:** Phase 1 fully spec'd; implementation not yet started. Migration **written but not run** (no CodeGen yet); metadata seed **authored but not pushed**. Steps 2/3/5/6 are greenfield. Picking up at Step 2 (run migration + CodeGen) → Step 3 (`RecordComparisonEngine`).
 **Branch:** `feature/intelligent-dupe-detection` (PR #2805)
 **Source design:** Amith's "MJ — Intelligent Duplicate Detection & Merge" design doc
 **Relationship to PR 2804:** This branch is cut from the 2804 bugfix HEAD (ghost/self-match, recursion fan-out, auto-merge abort, unsorted UI). 2804 merges on its own; this feature stacks on top.
+
+**Resolved decisions (previously open — now locked, 2026-06-23):**
+- **`RecordComparisonEngine` home → `@memberjunction/core-entities-server` (`MJCoreEntitiesServer`).** (Was watch-item 4.)
+- **UX direction → v2-A "augment-in-place."** Extend the existing production `DuplicateDetectionResourceComponent` (vector-only today) by adding the LLM recommendation / confidence / reasoning + disagreement badge to the current panel — do **not** build a greenfield surface. (Was watch-item 5 / §2.5.)
 
 ---
 
@@ -72,7 +76,7 @@
 
 Build the field-delta computation once, server-side, per the Transport-Layer guide — **for the server/LLM path first**. The existing UI's swap to this client is **phase 1.5 (opportunistic)**: the comparison panel already computes diffs client-side and works; we collect the DRY win once the engine is proven, without risking a regression on a polished panel on day one.
 
-1. **Engine** — framework-agnostic class (home TBD: `@memberjunction/core-entities-server` vs. a small dedicated package — see watch-item 4), e.g. `RecordComparisonEngine`:
+1. **Engine** — framework-agnostic class in **`@memberjunction/core-entities-server` (`MJCoreEntitiesServer`)** (home decided 2026-06-23), e.g. `RecordComparisonEngine`:
    - Input: `EntityName`, an array of `CompositeKey`s (survivor candidate + matches), optional field-include list.
    - Loads full records (`RunView`, `simple` + targeted `Fields` since this path doesn't mutate), computes a **structured delta**: per field, the value per record, equality flag, and a "differs" marker.
    - Output: a serializable `RecordComparisonResult` (records + per-field delta matrix). This is **both** the LLM "deltas" payload and (eventually) the UI side-by-side model.
@@ -136,6 +140,8 @@ After migration: run CodeGen, then write TS exclusively against the generated ty
 - Locked dependent records: surface as per-match `MergeStatus='Error'` with a specific reason; never abort the run.
 
 ### 2.5 UI enrichment
+
+**Direction: v2-A "augment-in-place" (locked 2026-06-23).** Extend the existing production `DuplicateDetectionResourceComponent` rather than building a greenfield surface (recommendation board / reasoning copilot are not pursued in Phase 1). The panel already does side-by-side diffs + per-field survivor selection; we layer the reasoning signal onto it.
 
 - Surface per match: LLM recommendation, confidence (vs. vector `MatchProbability`), and reasoning.
 - **Disagreement badge:** when the LLM recommendation contradicts the vector score (e.g. 0.98 vector but `NotDuplicate`), badge it and show *why* — this is the prime human-intervention trigger.
@@ -202,7 +208,8 @@ Phase 1 stays unaware of all of this.
 1. Reasoning **log volume** at 100k+ records — the per-set `ReasoningThreshold` gate is the control; Agent mode adds an `AIAgentRun` per set, which is why `Prompt` is the default. Monitor.
 2. Messy/incomplete source data — does the delta context suffice, or is upfront normalization warranted? (design §9.3)
 3. Memory-note conflict resolution as the learning loop matures (Phase 2) — rides `MemoryManagerAgent` contradiction detection.
-4. `RecordComparisonEngine` home package — confirm `MJCoreEntitiesServer` vs. a dedicated package before building.
+4. ~~`RecordComparisonEngine` home package~~ — **RESOLVED 2026-06-23: `MJCoreEntitiesServer`.**
+5. ~~Which v2 UX direction~~ — **RESOLVED 2026-06-23: v2-A augment-in-place (extend existing `DuplicateDetectionResourceComponent`).**
 
 ---
 
