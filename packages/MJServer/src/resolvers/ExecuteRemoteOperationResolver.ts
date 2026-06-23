@@ -1,6 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, Resolver } from 'type-graphql';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseRemotableOperation, RemoteOpInvokeMode } from '@memberjunction/core';
+import { RemoteOperationEngineBase } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -78,6 +79,15 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
                 return fail('NO_USER', 'Not authenticated');
             }
 
+            // (4) Metadata gate (defense-in-depth): honor the op's MJ: Remote Operations Status/approval, so a
+            // registered-but-disabled (or unapproved AI) op is rejected even though its class is still in code.
+            const provider = GetReadWriteProvider(ctx.providers);
+            await RemoteOperationEngineBase.Instance.Config(false, user, provider);
+            const invokability = RemoteOperationEngineBase.Instance.IsInvokable(key);
+            if (!invokability.Invokable) {
+                return fail(invokability.ResultCode ?? 'OPERATION_UNAVAILABLE', invokability.Reason ?? `Operation '${key}' is unavailable`);
+            }
+
             let parsedInput: unknown;
             try {
                 parsedInput = input.inputJSON ? JSON.parse(input.inputJSON) : {};
@@ -86,7 +96,6 @@ export class ExecuteRemoteOperationResolver extends ResolverBase {
             }
 
             // Route through the per-request provider (server in-process path; runs the op's Authorize + InternalExecute).
-            const provider = GetReadWriteProvider(ctx.providers);
             const result = await provider.RouteOperation(key, parsedInput, { user, mode: input.invokeMode as RemoteOpInvokeMode });
 
             return {

@@ -1090,10 +1090,10 @@ import {
 
 // @memberjunction/record-set-processor (5 classes)
 import {
-    RecordProcessCancelRunOperation,
-    RecordProcessGetRunStatusOperation,
-    RecordProcessPauseRunOperation,
-    RecordProcessResumeRunOperation,
+    RecordProcessCancelRunServerOperation,
+    RecordProcessGetRunStatusServerOperation,
+    RecordProcessPauseRunServerOperation,
+    RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
@@ -2031,10 +2031,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     ValidateEntitySchemaAction,
     SlackMessagingExtension,
     TeamsMessagingExtension,
-    RecordProcessCancelRunOperation,
-    RecordProcessGetRunStatusOperation,
-    RecordProcessPauseRunOperation,
-    RecordProcessResumeRunOperation,
+    RecordProcessCancelRunServerOperation,
+    RecordProcessGetRunStatusServerOperation,
+    RecordProcessPauseRunServerOperation,
+    RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     APIRateLimiterAction,
     ActionSmithAgent,

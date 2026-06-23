@@ -8,7 +8,16 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseRemotableOperation, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJProcessRunEntity } from '@memberjunction/core-entities';
-import { RecordProcessRunNowOperation, type RecordProcessRunNowInput, type RecordProcessRunNowOutput } from '@memberjunction/core-entities';
+import {
+    RecordProcessRunNowOperation,
+    RecordProcessPauseRunOperation,
+    RecordProcessCancelRunOperation,
+    RecordProcessResumeRunOperation,
+    type RecordProcessRunNowInput,
+    type RecordProcessRunNowOutput,
+    type ProcessRunControlInput,
+    type ProcessRunControlOutput,
+} from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '../RecordProcessExecutor';
 
 /**
@@ -44,15 +53,8 @@ export class RecordProcessRunNowServerOperation extends RecordProcessRunNowOpera
     }
 }
 
-/** Input for the pause/resume/cancel control operations. */
-export interface ProcessRunControlInput {
-    processRunID: string;
-}
-
-/** Output of the control operations. */
-export interface ProcessRunControlOutput {
-    status: string;
-}
+// ProcessRunControlInput / ProcessRunControlOutput are now CodeGen-emitted into @memberjunction/core-entities
+// (generated/remote_operations.ts) from the MJ: Remote Operations rows, and imported above.
 
 /** Sets `CancellationRequested` on a run to the given value, returning the run's status. */
 async function setCancellation(processRunID: string, value: boolean, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
@@ -72,11 +74,12 @@ async function setCancellation(processRunID: string, value: boolean, provider: I
     return { status: run.Status };
 }
 
+// Each server operation extends its CodeGen-emitted base (which carries OperationKey / ExecutionMode /
+// RequiredScope / RequiresSystemUser from metadata) and supplies only the InternalExecute body + @RegisterClass.
+
 /** Requests a graceful pause of a running process (honored at the next checkpoint). */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.PauseRun')
-export class RecordProcessPauseRunOperation extends BaseRemotableOperation<ProcessRunControlInput, ProcessRunControlOutput> {
-    public readonly OperationKey = 'RecordProcess.PauseRun';
-    public readonly RequiredScope = 'recordprocess:execute';
+export class RecordProcessPauseRunServerOperation extends RecordProcessPauseRunOperation {
     protected async InternalExecute(input: ProcessRunControlInput, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
         return setCancellation(input.processRunID, true, provider, user);
     }
@@ -84,9 +87,7 @@ export class RecordProcessPauseRunOperation extends BaseRemotableOperation<Proce
 
 /** Requests cancellation of a running process (honored at the next checkpoint). */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.CancelRun')
-export class RecordProcessCancelRunOperation extends BaseRemotableOperation<ProcessRunControlInput, ProcessRunControlOutput> {
-    public readonly OperationKey = 'RecordProcess.CancelRun';
-    public readonly RequiredScope = 'recordprocess:execute';
+export class RecordProcessCancelRunServerOperation extends RecordProcessCancelRunOperation {
     protected async InternalExecute(input: ProcessRunControlInput, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
         return setCancellation(input.processRunID, true, provider, user);
     }
@@ -94,9 +95,7 @@ export class RecordProcessCancelRunOperation extends BaseRemotableOperation<Proc
 
 /** Clears a paused run's cancellation flag so it can be resumed by a subsequent run. */
 @RegisterClass(BaseRemotableOperation, 'RecordProcess.ResumeRun')
-export class RecordProcessResumeRunOperation extends BaseRemotableOperation<ProcessRunControlInput, ProcessRunControlOutput> {
-    public readonly OperationKey = 'RecordProcess.ResumeRun';
-    public readonly RequiredScope = 'recordprocess:execute';
+export class RecordProcessResumeRunServerOperation extends RecordProcessResumeRunOperation {
     protected async InternalExecute(input: ProcessRunControlInput, provider: IMetadataProvider, user: UserInfo): Promise<ProcessRunControlOutput> {
         return setCancellation(input.processRunID, false, provider, user);
     }
