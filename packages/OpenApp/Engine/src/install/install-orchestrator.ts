@@ -733,7 +733,12 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  ToggleServerDynamicPackages(context.RepoRoot, appName, false);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false);
+  if (!toggle.Success) {
+    // Don't flip the DB status when the config edit failed — that desyncs the DB
+    // from mj.config.cjs and would report success on a half-applied disable (B25).
+    return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
+  }
   await SetAppStatus(context.ContextUser, app.ID, 'Disabled');
   await HandleClientBootstrapRegeneration(context);
 
@@ -757,7 +762,10 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  ToggleServerDynamicPackages(context.RepoRoot, appName, true);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true);
+  if (!toggle.Success) {
+    return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
+  }
   await SetAppStatus(context.ContextUser, app.ID, 'Active');
   await HandleClientBootstrapRegeneration(context);
 

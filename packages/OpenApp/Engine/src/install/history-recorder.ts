@@ -62,7 +62,7 @@ export async function RecordAppInstallation(
 
   const saved = await entity.Save();
   if (!transactionGroup && !saved) {
-    throw new Error(`Failed to record app installation: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+    throw new Error(`Failed to record app installation: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
 
   callbacks?.OnSuccess?.('Record', `App '${manifest.name}' recorded as installed`);
@@ -117,7 +117,7 @@ export async function UpdateAppRecord(contextUser: UserInfo, appId: string, upda
   }
   const saved = await entity.Save();
   if (!saved) {
-    throw new Error(`Failed to update Open App record ${appId}: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+    throw new Error(`Failed to update Open App record ${appId}: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
 }
 
@@ -178,7 +178,7 @@ export async function RecordInstallHistoryEntry(
 
   const saved = await entity.Save();
   if (!transactionGroup && !saved) {
-    throw new Error(`Failed to record install history: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+    throw new Error(`Failed to record install history: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
   return String(entity.Get('ID'));
 }
@@ -230,7 +230,7 @@ export async function RecordAppDependencies(
 
     const saved = await entity.Save();
     if (!transactionGroup && !saved) {
-      throw new Error(`Failed to record dependency '${depName}': ${entity.LatestResult?.Message ?? 'unknown error'}`);
+      throw new Error(`Failed to record dependency '${depName}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
   }
 }
@@ -249,9 +249,17 @@ export async function DeleteAppDependencies(contextUser: UserInfo, appId: string
     },
     contextUser,
   );
-  if (result.Success) {
-    for (const record of result.Results) {
-      await record.Delete();
+  if (!result.Success) {
+    // A failed query must not be swallowed — it would leave stale dependency rows
+    // that the caller (upgrade) then re-inserts, accumulating duplicates (B30).
+    throw new Error(`Failed to load dependencies for app ${appId}: ${result.ErrorMessage ?? 'unknown error'}`);
+  }
+  for (const record of result.Results) {
+    // BaseEntity.Delete() returns false on failure (it does not throw) — check it,
+    // or stale dependency rows survive silently and corrupt later FindDependentApps.
+    const deleted = await record.Delete();
+    if (!deleted) {
+      throw new Error(`Failed to delete a dependency for app ${appId}: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
   }
 }
