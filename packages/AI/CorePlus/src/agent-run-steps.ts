@@ -93,20 +93,27 @@ export interface FinalizeAgentRunStepOptions {
     targetLogID?: string | null;
     /** Optional output payload; wrapped in a standard `{ success, durationMs, errorMessage }` context envelope. */
     outputData?: Record<string, unknown> | null;
+    /**
+     * Optional completion timestamp. Capture it at the moment the step actually finished and pass it in,
+     * so that re-applying this finalize later (e.g. the queue re-asserts it AFTER the INSERT lands) yields
+     * the SAME `CompletedAt`/`durationMs` rather than drifting to "now". Defaults to `new Date()`.
+     */
+    completedAt?: Date;
 }
 
 /**
  * Applies the completion state to an agent-run-step entity: `Status`, `CompletedAt`, `Success`,
  * `ErrorMessage`, an optional late `TargetLogID`, and (when `outputData` is supplied) an `OutputData`
  * envelope carrying `{ success, durationMs, errorMessage }` (duration measured from `StartedAt`). Pure —
- * the caller persists.
+ * the caller persists. Idempotent: re-applying with the same `opts` (capture `completedAt`) is a no-op.
  *
  * @param step The step entity to finalize (must already have `StartedAt` set, i.e. been init'd).
  * @param opts The completion values.
  */
 export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: FinalizeAgentRunStepOptions): void {
+    const completedAt = opts.completedAt ?? new Date();
     step.Status = opts.success ? 'Completed' : 'Failed';
-    step.CompletedAt = new Date();
+    step.CompletedAt = completedAt;
     step.Success = opts.success;
     step.ErrorMessage = opts.errorMessage || null;
     if (opts.targetLogID) {
@@ -117,7 +124,7 @@ export function finalizeAgentRunStep(step: MJAIAgentRunStepEntity, opts: Finaliz
             ...opts.outputData,
             context: {
                 success: opts.success,
-                durationMs: step.CompletedAt.getTime() - step.StartedAt.getTime(),
+                durationMs: completedAt.getTime() - step.StartedAt.getTime(),
                 errorMessage: opts.errorMessage,
             },
         });
@@ -172,14 +179,34 @@ export class AgentRunStepSaveQueue {
     }
 
     /**
-     * Queues a fire-and-forget force-persisted UPDATE of a step whose fields the caller has ALREADY mutated,
-     * chained after the step's INSERT (and any prior queued UPDATE) so it never races the INSERT.
+     * Queues a fire-and-forget force-persisted UPDATE of a step, chained after the step's INSERT (and any
+     * prior queued UPDATE) so it never races the INSERT.
      *
-     * @param step The step entity (already mutated to its new state).
+     * **Pass `applyMutation` for any field change made after the INSERT was fired.** It runs INSIDE the
+     * post-insert continuation — i.e. AFTER the INSERT (and its `BaseEntity.finalizeSave` post-save reload,
+     * which does `init()` + `SetMany(insertedRow)`) has landed. Mutating the shared entity BEFORE the INSERT
+     * resolves is unsafe: the reload reverts the early mutation, and the force-persisted UPDATE then writes
+     * the stale (pre-mutation) values — the "step stuck at Running / null TargetLogID" race. Applying the
+     * mutation here guarantees it survives. (Mirrors `ActionEngine.finalizeActionLog`.)
+     *
+     * Calling with no `applyMutation` (fields already mutated and guaranteed not racing an in-flight INSERT)
+     * stays valid for backward compatibility.
+     *
+     * @param step The step entity.
+     * @param applyMutation Optional mutation applied post-INSERT, immediately before the UPDATE save.
      */
-    public QueueUpdate(step: MJAIAgentRunStepEntity): void {
+    public QueueUpdate(step: MJAIAgentRunStepEntity, applyMutation?: (step: MJAIAgentRunStepEntity) => void): void {
         const previous = this.updatePromises.get(step) ?? this.insertPromises.get(step) ?? Promise.resolve(true);
-        const current = previous.then(() => this.save(step, 'update'));
+        const current = previous.then(() => {
+            if (applyMutation) {
+                try {
+                    applyMutation(step);
+                } catch (err) {
+                    LogError(`applyMutation threw before agent run step update ${step.ID || '(unsaved)'}: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+            return this.save(step, 'update');
+        });
         this.updatePromises.set(step, current);
         this.pending.push(current);
     }

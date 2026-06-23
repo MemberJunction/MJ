@@ -1,5 +1,34 @@
 # @memberjunction/ai-form-builder
 
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [256ab06]
+- Updated dependencies [c871a4d]
+- Updated dependencies [9b9b484]
+- Updated dependencies [d185a5c]
+- Updated dependencies [e7c2437]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [78f834d]
+- Updated dependencies [4ec1732]
+- Updated dependencies [008f449]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ai-agents@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/ai-prompts@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

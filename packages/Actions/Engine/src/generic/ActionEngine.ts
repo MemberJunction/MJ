@@ -1,6 +1,6 @@
-import { LogError, LogErrorEx, Metadata } from "@memberjunction/core";
-import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { LogError, LogErrorEx, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionCategoryEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { BaseSingleton, MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
 import {
     ActionEngineBase,
@@ -21,12 +21,67 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  * Base class for executing actions. This class can be sub-classed if desired if you would like to modify the logic across ALL actions. To do so, sub-class this class and use the 
  * @RegisterClass decorator from the @memberjunction/global package to register your sub-class with the ClassFactory. This will cause your sub-class to be used instead of this base class when the Metadata object insantiates the ActionEngine.
  */
-export class ActionEngineServer extends ActionEngineBase {
+export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
 
 
    public static get Instance(): ActionEngineServer {
       return super.getInstance<ActionEngineServer>();
    }
+
+   /**
+    * ActionEngineServer is the server-side CAPABILITY layer (action execution, filters, logging). It
+    * does NOT extend ActionEngineBase and NEVER caches its own copy of the action metadata — it would
+    * otherwise be a second BaseEngine singleton issuing a duplicate RunViews batch and holding a second
+    * copy of all 6 cached arrays (the "Duplicate RunView Detected" telemetry warning). Instead it
+    * COMPOSES the single ActionEngineBase cache and proxies every cached collection / lookup to it,
+    * exactly like {@link AIEngine} wraps AIEngineBase. {@link Config} delegates to the base so there is
+    * one cache, loaded once, shared by every consumer (and reused by AIEngine.RefreshActions via the
+    * BaseEngineRegistry).
+    */
+   private get Base(): ActionEngineBase {
+      return ActionEngineBase.Instance;
+   }
+
+   /**
+    * Server-side context user for action execution and log stamping. Held HERE (not borrowed from the
+    * base) and captured on Config(), mirroring AIEngine which keeps its own _contextUser distinct from
+    * the shared base cache. Falls back to the base's context user when not explicitly set.
+    */
+   private _contextUser?: UserInfo;
+
+   /**
+    * Ensures the single ActionEngineBase metadata cache is loaded. Delegates entirely to the base —
+    * ActionEngineServer holds no metadata of its own.
+    */
+   public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+      if (contextUser) {
+         this._contextUser = contextUser;
+      }
+      await this.Base.Config(forceRefresh, contextUser, provider);
+   }
+
+   /** True once the underlying ActionEngineBase cache has loaded. */
+   public get Loaded(): boolean { return this.Base.Loaded; }
+
+   public get ContextUser(): UserInfo { return (this._contextUser ?? this.Base.ContextUser) as UserInfo; }
+   public set ContextUser(value: UserInfo) { this._contextUser = value; }
+
+   // ── Proxied cached collections (single source of truth: ActionEngineBase.Instance) ──
+   public get Actions(): MJActionEntityExtended[] { return this.Base.Actions; }
+   public get ActionCategories(): MJActionCategoryEntity[] { return this.Base.ActionCategories; }
+   public get ActionParams(): MJActionParamEntity[] { return this.Base.ActionParams; }
+   public get ActionFilters(): MJActionFilterEntity[] { return this.Base.ActionFilters; }
+   public get ActionResultCodes(): MJActionResultCodeEntity[] { return this.Base.ActionResultCodes; }
+   public get ActionLibraries(): MJActionLibraryEntity[] { return this.Base.ActionLibraries; }
+   public get CoreActions(): MJActionEntityExtended[] { return this.Base.CoreActions; }
+   public get NonCoreActions(): MJActionEntityExtended[] { return this.Base.NonCoreActions; }
+   public get CoreActionsRootCategoryID(): string { return this.Base.CoreActionsRootCategoryID; }
+
+   // ── Proxied lookups ──
+   public IsChildCategoryOf(categoryId: string, parentCategoryId: string): boolean { return this.Base.IsChildCategoryOf(categoryId, parentCategoryId); }
+   public IsCoreAction(action: MJActionEntityExtended): boolean { return this.Base.IsCoreAction(action); }
+   public IsCoreActionCategory(categoryId: string): boolean { return this.Base.IsCoreActionCategory(categoryId); }
+   public GetActionByName(actionName: string): MJActionEntityExtended | undefined { return this.Base.GetActionByName(actionName); }
 
    /**
     * Per-invocation 'started'-INSERT promises, keyed by the action-execution-log entity instance.

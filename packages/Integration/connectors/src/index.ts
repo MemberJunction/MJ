@@ -17,6 +17,7 @@ export { IMISConnector, LoadIMISConnector, type IMISConnectionConfig } from './I
 export { ConstantContactConnector } from './ConstantContactConnector.js';
 export { MailchimpConnector } from './MailchimpConnector.js';
 export { SharePointConnector } from './SharePointConnector.js';
+export { DynamicsDataverseConnector, LoadDynamicsDataverseConnector, type DynamicsConnectionConfig } from './DynamicsDataverseConnector.js';
 export { MagnetMailConnector } from './MagnetMailConnector.js';
 export { WildApricotConnector } from './WildApricotConnector.js';
 export { Reach360Connector } from './Reach360Connector.js';
@@ -30,3 +31,6 @@ export { HivebriteConnector, LoadHivebriteConnector, type HivebriteConnectionCon
 export { CventConnector, LoadCventConnector, type CventConnectionConfig } from './CventConnector.js';
 export { NeonCRMConnector, LoadNeonCRMConnector, type NeonCRMConnectionConfig } from './NeonCRMConnector.js';
 export { PheedLoopConnector } from './PheedLoopConnector.js';
+export { RhythmConnector, LoadRhythmConnector, type RhythmConnectionConfig } from './RhythmConnector.js';
+export { NoviConnector, LoadNoviConnector, type NoviConnectionConfig } from './NoviConnector.js';
+export { MemberSuiteConnector } from './MemberSuiteConnector.js';

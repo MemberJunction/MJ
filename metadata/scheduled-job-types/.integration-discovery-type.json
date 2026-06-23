@@ -6,6 +6,13 @@
       "Description": "Re-discovers a company integration's SCHEMA on a cron (RefreshConnectorSchema only — no data sync, no table creation). Evolves the Integration Objects / Integration Object Fields catalog so the entity-map / field-map picker keeps offering newly-appeared tables and columns, and deactivates (reversibly) objects/fields the source no longer exposes when discovery is authoritative.",
       "DriverClass": "IntegrationDiscoveryScheduledJobDriver",
       "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "440D226B-3741-4A7B-B5F1-800D4DCED54A"
+    },
+    "sync": {
+      "lastModified": "2026-06-22T03:38:24.643Z",
+      "checksum": "f66e21fcaaf375bcb222461ab5dcb55ea154d276b4e770154413968e6c2d01d4"
     }
   }
 ]

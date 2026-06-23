@@ -16,7 +16,7 @@
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, LogStatus, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { IRealtimeSession } from '@memberjunction/ai';
-import { RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
+import { AlwaysAddressedMatcher, RegexAddressedMatcher, type BridgeDisconnectReason, type BridgeTurnMode } from '@memberjunction/ai-bridge-base';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { LiveKitTokenService } from './livekit-token-service';
 
@@ -32,12 +32,27 @@ export interface RealtimeSessionStartContext {
   AgentID?: string;
   /** The agent's display name (used for the bot name + turn-taking matcher). */
   AgentName?: string;
+  /** The TARGET agent the co-agent voices via `invoke-target-agent` (the one being "called"). */
+  TargetAgentID?: string;
+  /** Optional per-session Realtime MODEL override (Name or ID). */
+  RealtimeModelID?: string;
+  /** Optional per-session VOICE override (provider-native voice id). */
+  RealtimeVoice?: string;
   /** The room being joined. */
   RoomName: string;
   /** The user the session runs as. */
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
   MetadataProvider?: IMetadataProvider;
+  /** The MJ agent-session id — threaded into the co-agent observability run for session grouping. */
+  AgentSessionID?: string;
+  /**
+   * Multi-agent meeting mode — set when the agent joins a room that already has agents. Flows to the
+   * realtime session so its model's auto-response is disabled (speaks only when addressed).
+   */
+  MeetingMode?: boolean;
+  /** The names the agent answers to (display name + aliases) — phrasing for the meeting prompt. */
+  SelfNames?: string[];
 }
 
 /**
@@ -56,6 +71,15 @@ export interface StartAgentRoomSessionParams {
   AgentID?: string;
   /** The agent's display name (bot name + addressing). */
   AgentName?: string;
+  /**
+   * The TARGET agent the co-agent voices (the one being "called"). Passed through to the realtime
+   * session factory so the Realtime Co-Agent has someone to delegate to via `invoke-target-agent`.
+   */
+  TargetAgentID?: string;
+  /** Optional per-session Realtime MODEL override (Name or ID) — wins over the co-agent config preference. */
+  RealtimeModelID?: string;
+  /** Optional per-session VOICE override (provider-native voice id) — gives this agent a distinct voice. */
+  RealtimeVoice?: string;
   /** Extra aliases the agent answers to (for Passive turn-taking). */
   AgentAliases?: string[];
   /** Turn-taking mode. Default: `'Passive'` (speak only when addressed). */
@@ -64,6 +88,16 @@ export interface StartAgentRoomSessionParams {
   ContextUser?: UserInfo;
   /** The metadata provider for the session. */
   MetadataProvider?: IMetadataProvider;
+}
+
+/** One agent's membership in a room's roster (for multi-agent meeting detection). */
+interface RoomAgentEntry {
+  /** The MJ agent-session id of this agent in the room. */
+  AgentSessionID: string;
+  /** The durable bridge row id — the key {@link LiveKitAgentRoomCoordinator.StopAgentRoomSession} removes by. */
+  SessionBridgeID: string;
+  /** The names this agent answers to (display name + aliases) — used to build its addressing matcher. */
+  Names: string[];
 }
 
 /** The result of starting an agent room session. */
@@ -83,6 +117,16 @@ export interface AgentRoomSession {
  */
 export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomCoordinator> {
   private tokenService: LiveKitTokenService = new LiveKitTokenService();
+
+  /**
+   * Per-room roster of the agents currently bridged in (keyed by lowercased room name). Drives
+   * **multi-agent meeting detection**: when an agent joins a room that ALREADY holds an agent, the new
+   * agent starts in meeting mode (auto-response off + addressed-only) so several agents can share a room
+   * without all answering every utterance. The first agent stays a normal 1:1 voice (it isn't
+   * retroactively re-gated — that needs a live session re-config, a follow-up). See
+   * `plans/realtime/multi-agent-meeting-turn-taking.md`.
+   */
+  private roomRosters = new Map<string, RoomAgentEntry[]>();
   private bridgeOps: BridgeOps = AIBridgeEngine.Instance;
   private sessionFactory: RealtimeSessionFactory = () => {
     throw new Error(
@@ -152,22 +196,43 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     const botIdentity = `agent-${params.AgentSessionID}`;
     const botToken = await this.tokenService.MintBotToken(params.RoomName, botIdentity, botName);
 
+    // Multi-agent MEETING detection: if the room already holds an agent, THIS agent joins as a meeting
+    // participant — auto-response OFF, speaks only when addressed by name. The first agent in a room stays
+    // a normal 1:1 voice (it answers freely; it isn't retroactively re-gated). The names the agent answers
+    // to drive both its addressing matcher (the GATE) and the meeting prompt phrasing.
+    const roomKey = params.RoomName.trim().toLowerCase();
+    const selfNames = [botName, ...(params.AgentAliases ?? [])].map(n => n.trim()).filter(n => n.length > 0);
+    const isMeeting = (this.roomRosters.get(roomKey)?.length ?? 0) > 0;
+
     const session = await this.sessionFactory({
       AgentID: params.AgentID,
       AgentName: params.AgentName,
+      TargetAgentID: params.TargetAgentID,
+      RealtimeModelID: params.RealtimeModelID,
+      RealtimeVoice: params.RealtimeVoice,
       RoomName: params.RoomName,
       ContextUser: params.ContextUser,
       MetadataProvider: params.MetadataProvider,
+      // So the co-agent observability run groups under THIS agent session (parity with native chat).
+      AgentSessionID: params.AgentSessionID,
+      MeetingMode: isMeeting || undefined,
+      SelfNames: isMeeting ? selfNames : undefined,
     });
 
     const active = await this.bridgeOps.StartBridgeSession({
       AgentSessionID: params.AgentSessionID,
+      AgentID: params.AgentID,
       Provider: provider,
       RealtimeSession: session,
       Address: botToken.ServerUrl,
       JoinMethod: 'OnDemand',
       TurnMode: params.TurnMode ?? 'Passive',
-      TurnMatcher: new RegexAddressedMatcher([botName, ...(params.AgentAliases ?? [])]),
+      // Meeting: gate speech to ADDRESSED turns (RegexAddressedMatcher on the agent's names) AND tell the
+      // engine the model's auto-response is off so the bridge becomes the sole trigger. Solo 1:1: respond to
+      // ALL the user's speech (AlwaysAddressedMatcher) with the model's own auto-response — Passive's
+      // name-match would otherwise leave a single agent silent unless you said its name each turn.
+      TurnMatcher: isMeeting ? new RegexAddressedMatcher(selfNames) : new AlwaysAddressedMatcher(),
+      DisableAutoResponse: isMeeting || undefined,
       // NativeModuleSpecifier tells LiveKitNativeMeetingSdk which native room-client wrapper to load — the
       // @livekit/rtc-node-backed @memberjunction/ai-bridge-livekit-native by default, overridable via env
       // (e.g. a one-line module setting Gemini's 16 kHz inbound rate). AccessToken is the pre-signed bot
@@ -182,8 +247,38 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
       MetadataProvider: params.MetadataProvider,
     });
 
-    LogStatus(`[LiveKitAgentRoomCoordinator] Agent ${botName} bridged into LiveKit room ${params.RoomName} (bridge ${active.SessionBridgeID})`);
+    this.addToRoster(roomKey, { AgentSessionID: params.AgentSessionID, SessionBridgeID: active.SessionBridgeID, Names: selfNames });
+    LogStatus(
+      `[LiveKitAgentRoomCoordinator] Agent ${botName} bridged into LiveKit room ${params.RoomName} ` +
+        `(bridge ${active.SessionBridgeID}, ${isMeeting ? 'MEETING — addressed-only' : 'solo 1:1'})`,
+    );
     return { SessionBridgeID: active.SessionBridgeID, RoomName: params.RoomName, ServerUrl: botToken.ServerUrl };
+  }
+
+  /** Appends an agent to a room's roster (creating the room's list on first join). */
+  private addToRoster(roomKey: string, entry: RoomAgentEntry): void {
+    const roster = this.roomRosters.get(roomKey);
+    if (roster) {
+      roster.push(entry);
+    } else {
+      this.roomRosters.set(roomKey, [entry]);
+    }
+  }
+
+  /** Removes an agent from whatever room roster holds its bridge id; prunes the room when it empties. */
+  private removeFromRoster(sessionBridgeID: string): void {
+    for (const [roomKey, roster] of this.roomRosters) {
+      const next = roster.filter(e => e.SessionBridgeID !== sessionBridgeID);
+      if (next.length === roster.length) {
+        continue;
+      }
+      if (next.length === 0) {
+        this.roomRosters.delete(roomKey);
+      } else {
+        this.roomRosters.set(roomKey, next);
+      }
+      return;
+    }
   }
 
   /** The default native room-client wrapper specifier — the @livekit/rtc-node package this repo ships. */
@@ -234,6 +329,10 @@ export class LiveKitAgentRoomCoordinator extends BaseSingleton<LiveKitAgentRoomC
     } catch (err) {
       LogError(`[LiveKitAgentRoomCoordinator] StopAgentRoomSession failed: ${err instanceof Error ? err.message : String(err)}`);
       return false;
+    } finally {
+      // Drop this agent from its room roster so the count reflects who's actually present (the NEXT agent's
+      // meeting-vs-solo decision reads it). Done in finally — even a failed stop means we asked it to leave.
+      this.removeFromRoster(sessionBridgeID);
     }
   }
 }

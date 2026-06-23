@@ -1,5 +1,56 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [ccaf49b]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ng-ui-components@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/ng-entity-viewer@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-testing@5.42.0
+  - @memberjunction/ng-action-gallery@5.42.0
+  - @memberjunction/ng-ai-test-harness@5.42.0
+  - @memberjunction/ng-base-forms@5.42.0
+  - @memberjunction/ng-entity-relationship-diagram@5.42.0
+  - @memberjunction/ng-join-grid@5.42.0
+  - @memberjunction/ng-list-management@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/ng-shared@5.42.0
+  - @memberjunction/ng-agents@5.42.0
+  - @memberjunction/ng-base-application@5.42.0
+  - @memberjunction/ng-link-directives@5.42.0
+  - @memberjunction/ng-actions@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-code-editor@5.42.0
+  - @memberjunction/ng-deep-diff@5.42.0
+  - @memberjunction/ng-flow-editor@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/ng-search@5.42.0
+  - @memberjunction/ng-shared-generic@5.42.0
+  - @memberjunction/ng-timeline@5.42.0
+  - @memberjunction/ng-trees@5.42.0
+  - @memberjunction/ng-versions@5.42.0
+  - @memberjunction/templates-base-types@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ng-tabstrip@5.42.0
+  - @memberjunction/ng-markdown@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

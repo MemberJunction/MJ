@@ -6,8 +6,8 @@
       "ImportPath": "@memberjunction/connector-pheedloop",
       "NavigationBaseURL": "https://api.pheedloop.com/api/v3",
       "Description": "PheedLoop event-management connector — syncs attendees, events, sessions, speakers, exhibitors, sponsors, registrations, memberships and 20+ objects via PheedLoop REST API v3 (dual API-key + API-secret headers, org-scoped URL paths).",
-      "BatchMaxRequestCount": null,
-      "BatchRequestWaitTime": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=PheedLoop API",
       "Configuration": {
         "AuthFlow": "api-key",
