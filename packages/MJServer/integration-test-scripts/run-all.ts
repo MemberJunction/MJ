@@ -26,6 +26,7 @@ const SCRIPTS = [
     'scheduled-jobs-tests.ts',
     'field-rules-bulk-update-tests.ts',
     'remote-operations-tests.ts',
+    'remote-op-wire-progress-tests.ts',
     // Live model tier — skips unless RUN_AGENT_TESTS=1:
     'prompt-runner-tests.ts',
     'agent-runner-tests.ts',

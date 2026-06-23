@@ -34,7 +34,14 @@ import {
     MJProcessRunEntity,
     MJTemplateParamEntity,
 } from '@memberjunction/core-entities';
-import { TemplateRunOperation, RecordProcessRunNowOperation } from '@memberjunction/core-entities';
+import {
+    TemplateRunOperation,
+    RecordProcessRunNowOperation,
+    RecordProcessGetRunStatusOperation,
+    RecordProcessPauseRunOperation,
+    RecordProcessResumeRunOperation,
+    RecordProcessCancelRunOperation,
+} from '@memberjunction/core-entities';
 
 const ACT_ENTITY = 'MJ: Action Categories';
 const PREFIX = 'mj-remote-op-test';
@@ -44,6 +51,13 @@ async function fetchDescription(entity: string, id: string, user: UserInfo): Pro
         { EntityName: entity, ExtraFilter: `ID='${id}'`, Fields: ['Description'], ResultType: 'simple', BypassCache: true }, user,
     );
     return (r.Results?.[0] as { Description?: string | null } | undefined)?.Description ?? null;
+}
+
+async function fetchCancellationRequested(processRunID: string, user: UserInfo): Promise<boolean> {
+    const r = await new RunView().RunView(
+        { EntityName: 'MJ: Process Runs', ExtraFilter: `ID='${processRunID}'`, Fields: ['CancellationRequested'], ResultType: 'simple', BypassCache: true }, user,
+    );
+    return (r.Results?.[0] as { CancellationRequested?: boolean } | undefined)?.CancellationRequested === true;
 }
 
 async function resolveID(entity: string, filter: string, user: UserInfo): Promise<string> {
@@ -168,6 +182,39 @@ async function main(): Promise<void> {
                 );
             }
             console.log(`      → applied ${result.Output?.processed} updates (write-back verified)`);
+        });
+
+        let controlRunID: string | undefined;
+        suite.Test('RO6: RecordProcess.GetRunStatus returns a run\'s status + counts by ProcessRunID', async () => {
+            const run = await new RecordProcessRunNowOperation().Execute(
+                { recordProcessID: rp.ID, dryRun: true, scope: { Kind: 'records', RecordIDs: catIds } }, { provider, user },
+            );
+            Assert(run.Success && !!run.Output?.processRunID, `seed run failed: ${run.ErrorMessage}`);
+            controlRunID = run.Output!.processRunID!;
+            const status = await new RecordProcessGetRunStatusOperation().Execute({ processRunID: controlRunID }, { provider, user });
+            Assert(status.Success, `GetRunStatus failed: ${status.ErrorMessage}`);
+            AssertEqual(status.Output?.status, 'Completed', 'run status');
+            AssertEqual(status.Output?.processed, 2, 'processed count');
+            console.log(`      → GetRunStatus: ${status.Output?.status}, processed ${status.Output?.processed}`);
+        });
+
+        suite.Test('RO7: Pause / Resume / Cancel control ops toggle CancellationRequested and return the status', async () => {
+            Assert(!!controlRunID, 'RO6 did not yield a run id');
+            const pause = await new RecordProcessPauseRunOperation().Execute({ processRunID: controlRunID! }, { provider, user });
+            Assert(pause.Success && typeof pause.Output?.status === 'string', `PauseRun failed: ${pause.ErrorMessage}`);
+            await settle(200);
+            AssertEqual(await fetchCancellationRequested(controlRunID!, user), true, 'PauseRun set CancellationRequested');
+
+            const resume = await new RecordProcessResumeRunOperation().Execute({ processRunID: controlRunID! }, { provider, user });
+            Assert(resume.Success, `ResumeRun failed: ${resume.ErrorMessage}`);
+            await settle(200);
+            AssertEqual(await fetchCancellationRequested(controlRunID!, user), false, 'ResumeRun cleared CancellationRequested');
+
+            const cancel = await new RecordProcessCancelRunOperation().Execute({ processRunID: controlRunID! }, { provider, user });
+            Assert(cancel.Success && typeof cancel.Output?.status === 'string', `CancelRun failed: ${cancel.ErrorMessage}`);
+            await settle(200);
+            AssertEqual(await fetchCancellationRequested(controlRunID!, user), true, 'CancelRun set CancellationRequested');
+            console.log('      → Pause set, Resume cleared, Cancel set CancellationRequested; all returned status');
         });
 
         failures = await suite.Run();
