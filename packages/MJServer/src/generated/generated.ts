@@ -62049,6 +62049,9 @@ export class MJProcessRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`}) 
+    DryRun: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -62144,6 +62147,9 @@ export class CreateMJProcessRunInput {
     @Field({ nullable: true })
     StartedByUserID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -62222,6 +62228,9 @@ export class UpdateMJProcessRunInput {
 
     @Field({ nullable: true })
     StartedByUserID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

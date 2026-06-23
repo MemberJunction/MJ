@@ -21395,7 +21395,7 @@ export const MJProcessRunSchema = z.object({
         * * Description: Pause/cancel handshake flag honored by the processor between batches`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration
+        * * Display Name: Configuration JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON snapshot of the effective configuration for this run`),
     ErrorMessage: z.string().nullable().describe(`
@@ -21419,6 +21419,12 @@ export const MJProcessRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DryRun: z.boolean().describe(`
+        * * Field Name: DryRun
+        * * Display Name: Is Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -86096,7 +86102,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration
+    * * Display Name: Configuration JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON snapshot of the effective configuration for this run
     */
@@ -86152,6 +86158,20 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DryRun
+    * * Display Name: Is Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.
+    */
+    get DryRun(): boolean {
+        return this.Get('DryRun');
+    }
+    set DryRun(value: boolean) {
+        this.Set('DryRun', value);
     }
 
     /**
