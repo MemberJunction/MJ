@@ -213,7 +213,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     Callbacks?.OnProgress?.('Config', 'Updating configuration files...');
 
     // Steps 10-11: Packages
-    const pkgResult = await HandlePackageInstallation(manifest, context, effectivePackageVersion, effectiveVersionStrategy);
+    const pkgResult = await HandlePackageInstallation(manifest, context, effectivePackageVersion, effectiveVersionStrategy, options.Verbose);
     let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
       if (pkgResult.PackageJsonUpdated) {
@@ -481,7 +481,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     // When upgrading to an explicit version, pin packages exactly; otherwise use default strategy
     const effectiveUpgradeVersion = explicitUpgradeVersion ? targetVersion.replace(/^v/, '') : manifest.version;
     const effectiveUpgradeStrategy: VersionStrategy | undefined = explicitUpgradeVersion ? 'exact' : context.VersionStrategy;
-    const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy);
+    const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
     let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
       if (pkgResult.PackageJsonUpdated) {
@@ -668,7 +668,15 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // Collect other installed apps' manifests so we don't remove shared prebundle excludes
     const otherApps = (await ListInstalledApps(context.ContextUser))
       .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
-    const otherManifests = otherApps.map(a => JSON.parse(a.ManifestJSON) as MJAppManifest);
+    // Skip a corrupt OTHER-app manifest — it must not break THIS app's removal (B24).
+    const otherManifests = otherApps.flatMap(a => {
+      try {
+        return [JSON.parse(a.ManifestJSON) as MJAppManifest];
+      } catch {
+        Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
+        return [];
+      }
+    });
 
     await Promise.all([
       Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
@@ -1008,6 +1016,7 @@ async function HandlePackageInstallation(
   context: OrchestratorContext,
   packageVersion?: string,
   versionStrategy?: VersionStrategy,
+  verbose?: boolean,
 ): Promise<InternalResult> {
   if (!manifest.packages) {
     return { Success: true };
@@ -1044,7 +1053,7 @@ async function HandlePackageInstallation(
   }
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
-  const installResult = RunPackageInstall(context.RepoRoot, undefined, manifest.packages.registry, context.PackageManager);
+  const installResult = RunPackageInstall(context.RepoRoot, verbose, manifest.packages.registry, context.PackageManager);
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
@@ -1125,10 +1134,23 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
 
   const apps = await ListInstalledApps(context.ContextUser);
 
+  // Parse each app's manifest ONCE, skipping (with a warning) any corrupt row — a
+  // single bad ManifestJSON must not throw and break bootstrap regen (which runs on
+  // essentially every op) for every other installed app (B24).
+  const manifestsByName = new Map<string, MJAppManifest>();
+  for (const app of apps) {
+    try {
+      manifestsByName.set(app.Name, JSON.parse(app.ManifestJSON) as MJAppManifest);
+    } catch (err: unknown) {
+      context.Callbacks?.OnWarn?.('Config', `Skipping app '${app.Name}' in client bootstrap — its ManifestJSON could not be parsed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   // Build dependency graph for topological sort
   const appDeps = new Map<string, string[]>();
   for (const app of apps) {
-    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
+    const manifest = manifestsByName.get(app.Name);
+    if (!manifest) continue;
     const depNames = manifest.dependencies ? Object.keys(manifest.dependencies) : [];
     appDeps.set(app.Name, depNames);
   }
@@ -1142,7 +1164,8 @@ async function HandleClientBootstrapRegeneration(context: OrchestratorContext): 
   for (const name of sortedNames) {
     const app = appsByName.get(name);
     if (!app) continue;
-    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
+    const manifest = manifestsByName.get(app.Name);
+    if (!manifest) continue;
     const clientPkgs = [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])];
 
     for (const pkg of clientPkgs) {
