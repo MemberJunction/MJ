@@ -11,22 +11,27 @@
 
 _Updated continuously. Newest status at the top of each phase section._
 
-**Where things stand (updated through W0–W4, T0–T1, M0):**
-- **Widget text+voice path COMPLETE offline**: W0 (D5 spike) ✅, W1 (guest-session backend) ✅,
-  W2 (entity+CodeGen ✅ / seed push DB-blocked), W3 (embeddable bundle) ✅, W4 (voice + abuse
-  ceilings) ✅. New package `@memberjunction/web-widget` builds + 27 tests pass + self-contained
-  esbuild bundle. Live end-to-end is Auth0/MJAPI-gated (never faked).
-- **Telephony**: T0 (G.711 codec + resampler, 107 tests) ✅; T1 (Twilio native bindings + ingress,
-  67 tests) ✅ offline — live MJAPI router + integration are creds-gated.
-- **Meetings**: M0 Slack **NO-GO** (parked) ✅.
-- **Remaining**: W5/W6 (widget upgrade/host-identity + hardening), T2/T3 (Vonage/RingCentral —
-  near-repeats of T1), T4, M1 (Teams native SDK), M2 (calendar/identity provisioners). M3 parked.
+**Where things stand (final — W0–W6, T0–T4, M0–M4 all triaged):**
+- **WIDGET (the priority) — text + voice complete offline.** W0 ✅ (D5 spike), W1 ✅ (guest-session
+  backend), W2 ✅ entity+CodeGen (seed push DB-blocked), W3 ✅ (embeddable shadow-DOM bundle),
+  W4 ✅ (voice + abuse ceilings), W5 ⚠ (host-passed identity DONE; magic-link upgrade documented),
+  W6 ⚠ (most controls built into W1–W5; remainder documented in `spikes/W6-hardening-notes.md`).
+  New pkg `@memberjunction/web-widget`: builds, **27 tests**, self-contained esbuild bundle.
+- **TELEPHONY — all three vendors bound offline.** T0 ✅ (G.711 codec + resampler, 107 tests),
+  T1 ✅ Twilio (67), T2 ✅ Vonage (72), T3 ✅ RingCentral (63) — native bindings + ingress, all
+  reusing the T0 codec, drivers untouched. T4 (shared hardening) not started — mostly live-wiring.
+- **MEETINGS** — M0 Slack **NO-GO/parked** ✅; M1 ⚠ Teams binding + Graph ingress (87 tests);
+  M2 ⏳ calendar + identity provisioners (delegated, offline); M3 parked; M4 not started.
+- **Everything labelled "live"/"creds-gated" is the credential/DB/Auth0-dependent activation layer
+  (MJAPI routers, real vendor SDK wiring, integration tests) — code paths are complete + unit-tested,
+  documented in the per-vendor `spikes/*-notes.md`, never faked.**
 
 **Review-first order (for tomorrow):**
-1. `OVERNIGHT-JOURNAL.md` phase board + the two hard blockers (DB outage, Auth0) — 2 min.
-2. `packages/Web/Widget/` (W1–W4 widget) + `packages/MJServer/src/widget/` (backend) — the bulk of the work.
-3. `plans/realtime/bridges-and-widget/spikes/` — W0/M0/T0/T1 findings + notes (the decision trail).
-4. `migrations/v5/V202606242115__*Widget_Instances.sql` + `metadata/widget-instances|roles|entity-permissions` (W2).
+1. This phase board + the two hard blockers (DB outage, Auth0) — 2 min.
+2. `packages/Web/Widget/` + `packages/MJServer/src/widget/` — the widget (priority); ~66 widget+host tests.
+3. `plans/realtime/bridges-and-widget/spikes/` — every phase's findings/notes (the decision + blocker trail).
+4. The vendor bindings: `packages/AI/RealtimeBridge/Providers/{Twilio,Vonage,RingCentral,Teams}/src/real-*-bindings.ts` + `*-ingress.ts` + `Base/src/audio/` (T0 codec).
+5. `migrations/v5/V202606242115__*Widget_Instances.sql` + `metadata/{widget-instances,roles,entity-permissions}` (W2).
 
 **Hard blockers encountered:**
 - **🔴 DB outage (NEW, mid-session):** `sql-claude` became unreachable (DNS unresolved) after the
@@ -64,17 +69,17 @@ _Updated continuously. Newest status at the top of each phase section._
 | W3 | Embeddable bundle (text MVP) | ✅ DONE (live e2e Auth0-gated) |
 | W4 | Voice modality | ✅ DONE (live voice Auth0/mic-gated) |
 | W5 | Magic-link upgrade + host identity | ⚠ host-identity DONE / upgrade documented |
-| W6 | Hardening & embed polish | TODO |
+| W6 | Hardening & embed polish | ⚠ much built in W1–W5 / remainder documented |
 | T0 | Media-plane spike | ✅ DONE |
 | T1 | Twilio end-to-end | ⚠ binding+ingress DONE / live router creds-gated |
-| T2 | Vonage | TODO |
-| T3 | RingCentral | TODO |
-| T4 | Telephony shared hardening | TODO |
+| T2 | Vonage | ⚠ binding+ingress DONE / live router creds-gated |
+| T3 | RingCentral | ⚠ binding+ingress DONE / live router creds-gated |
+| T4 | Telephony shared hardening | ⛔ not started (signature mw shared; rest live-wiring) |
 | M0 | Slack media-access verification spike | ✅ DONE (NO-GO, parked) |
 | M1 | Teams native SDK | ⚠ binding+ingress DONE / live join Azure-gated |
-| M2 | Calendar + identity provisioners | TODO |
-| M3 | Slack binding (gated on M0) | TODO |
-| M4 | Meeting shared hardening | TODO |
+| M2 | Calendar + identity provisioners | ⏳ in progress (delegated, offline) |
+| M3 | Slack binding (gated on M0) | ⛔ PARKED (M0 NO-GO) |
+| M4 | Meeting shared hardening | ⛔ not started (depends on live meeting wiring) |
 
 ---
 
@@ -239,7 +244,17 @@ modality gating, start/stop, transcript render, abuse-abort surfacing). Bundle s
   not implemented — honest gap for tomorrow.
 
 ### W6 — Hardening & embed polish
-_Status: TODO_
+**Status: PARTIAL (much built into W1–W5; remainder documented)**
+
+Several W6 controls already shipped inside earlier phases: origin allowlist (fail-closed,
+W1), IP rate-limiting (W1), enumeration-resistant 403s (W1), short-TTL tokens + refresh (W3),
+voice abuse ceilings (W4), fail-closed host-identity (W5), ARIA/keyboard (W3/W4), README +
+examples (W3). Full per-item status + the cross-cutting hardening backlog is in
+`spikes/W6-hardening-notes.md`. **Top remaining item (flagged 🔴):** cross-guest conversation
+isolation — guests share the Anonymous principal, so per-UserID RLS won't isolate one guest's
+conversation from another's; needs an `mj_sid`/ownership-keyed RLS filter before public deploy.
+Other tracked items: per-instance rate limit, host-key-per-instance column, bundle-size
+reduction, a dedicated widget-session audit entity, server-side voice cost ceiling plumbing.
 
 ### T0 — Media-plane spike
 **Status: DONE** ✅
@@ -277,10 +292,26 @@ _Status: TODO_
   `telephony.twilio` config schema. All specified in `spikes/T1-twilio-ingress-notes.md`.
 
 ### T2 — Vonage
-_Status: TODO_
+**Status: PARTIAL — offline binding + ingress DONE; live router creds-gated**
+
+- `RealVonageBindings` over injected SDK-free surfaces; **NCCO `connect`-websocket** action (not
+  TwiML), Voice API for create/hangup/transfer/DTMF, media `{event:'media',payload}` (`close`=end).
+- `vonage-ingress`: `verifyVonageSignature` (HMAC-SHA256) + `verifyVonageJwt` (HS256) + NCCO answer
+  builder. μ-law↔PCM16 via the T0 codec. `@vonage/server-sdk` optionalDep (never imported).
+- **Build:** clean. **Tests:** 72 passed (33 new). Driver untouched.
+- ⛔ Live MJAPI `POST /telephony/vonage/answer|event` + `WSS /media` + PlaceCall + integration:
+  creds/DB-gated. See `spikes/T2-T3-vonage-ringcentral-notes.md`.
 
 ### T3 — RingCentral
-_Status: TODO_
+**Status: PARTIAL — offline binding + ingress DONE; live router creds-gated**
+
+- `RealRingCentralBindings` over injected surfaces; **Call-Control session vocab**
+  (createSession/answerParty/dropSession/transferParty), create-session payload, media
+  `{event:'media',media:{data}}` (`stop`=end).
+- `ringcentral-ingress`: validation-token registration handshake + constant-time verification-token
+  check. μ-law↔PCM16 via the T0 codec. `@ringcentral/sdk` optionalDep (never imported).
+- **Build:** clean. **Tests:** 63 passed (24 new). Driver untouched.
+- ⛔ Live MJAPI routers + PlaceCall + OAuth token lifecycle + integration: creds/DB-gated. Same notes file.
 
 ### T4 — Telephony shared hardening
 _Status: TODO_
@@ -317,22 +348,52 @@ _Status: TODO_
   `Meeting.JoinByUrl` mutation (needs CodeGen), integration tests. See `spikes/M1-teams-binding-notes.md`.
 
 ### M2 — Calendar + identity provisioners
-_Status: TODO_
+**Status: IN PROGRESS (delegated, offline) — see end-of-run note**
+
+Implementing `GraphCalendarSource`/`GoogleCalendarSource.ListUpcomingInvites` + the identity
+provisioner over injected SDK-free surfaces with unit tests, in `RealtimeBridge/Server`. Live
+scheduler hooks (`CalendarWatcher.Sweep`, `ScheduledBridgeRunner.RunDueBridges`, orphan janitor) +
+real Graph/Google tenant creds remain gated. _(Status finalized below once the build/test verify lands.)_
 
 ### M3 — Slack binding
-_Status: TODO_
+**Status: PARKED** ⛔ — gated by M0 (NO-GO). Driver scaffold stays valid + unit-tested; do not build
+until Slack ships a supported huddle media path (re-eval triggers in `spikes/M0-slack-media-findings.md`).
+When parking is confirmed in the DB, set the Slack provider row `Status='Disabled'` (metadata; DB down now).
 
 ### M4 — Meeting shared hardening
-_Status: TODO_
+**Status: NOT STARTED** ⛔ — Meeting Controls channel end-to-end, multi-node room-state affinity, and
+recording governance all depend on the live meeting wiring (M1 activation) being in place first. No
+offline-completable slice without that. Deferred.
 
 ---
 
 ## Open questions for the human
 
-_(none yet)_
+1. **Cross-guest conversation isolation (🔴 must-resolve before public deploy).** Anonymous guests
+   share the seeded Anonymous principal, so per-UserID RLS won't isolate one guest's conversation from
+   another's. What's the intended isolation key — per-session `mj_sid`, or a forge-proof owner column
+   set at conversation create? This needs a metadata RLS filter design. (See `spikes/W6-hardening-notes.md` #1.)
+2. **Magic-link upgrade endpoint.** `/magic-link/create` is authenticated, so a guest can't call it.
+   OK to add a guest-scoped `POST /widget/upgrade` that mints an email magic-link on the guest session's
+   behalf (scoped to the widget's app/role)? That's the missing piece for W5's upgrade path.
+3. **Host public key storage.** W5 reads host-identity keys from `widget.hostPublicKeys` config (interim).
+   Confirm adding a `HostPublicKey` column to `WidgetInstance` (a migration) for per-instance keys + rotation.
+4. **Widget bundle size.** ~2.9 MB minified (full runtime + GraphQL provider). Acceptable to invest in
+   code-splitting the voice path + tree-shaking, or ship as-is for v1?
+5. **Pinned support agent for the example widget.** The seed uses `Sage` (general assistant) as a
+   placeholder. Which agent should be the real support-scoped pinned agent (with a least-privilege tool set)?
 
 ---
 
-## Commits
+## Commits (on `claude/bridges-widget-impl`, local only — not pushed)
 
-_(local commits land on `claude/bridges-widget-impl`; listed here as they happen)_
+In order: W0+M0 docs → W2 entity (migration+CodeGen) → W1 backend → T0 codec → W2 seed → journal →
+W3 widget bundle → journal → W4 voice → T1 Twilio → journal → W5 host-identity → M1 Teams → journal →
+W6 notes → T2+T3 Vonage/RingCentral → journal. (M2 pending verify at end of run.) Run `git log --oneline`
+on the branch for the full list. Every code commit states its build + test results in the message.
+
+## Test totals (offline, all green)
+
+- `@memberjunction/web-widget`: 27 · `@memberjunction/server` (incl. widget+host-identity): 560 ·
+  `ai-bridge-base` (incl. T0): 107 · Twilio: 67 · Vonage: 72 · RingCentral: 63 · Teams: 87.
+  (M2 / RealtimeBridge-Server totals appended after verify.)
