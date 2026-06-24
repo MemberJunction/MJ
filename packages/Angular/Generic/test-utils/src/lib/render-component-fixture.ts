@@ -1,4 +1,4 @@
-import { ComponentRef, ModuleWithProviders, Type } from '@angular/core';
+import { ComponentRef, ModuleWithProviders, Provider, Type } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 /**
@@ -38,6 +38,16 @@ export interface RenderComponentFixtureOptions<T> {
   declarations?: Type<unknown>[];
 
   /**
+   * Providers to register in the testing module — supply stub/fake versions of any
+   * services the component injects via its constructor. A component with
+   * constructor-injected services cannot even be *constructed* without these, so this
+   * is the seam for presentational components that take services but only touch them in
+   * event handlers (not during render). Prefer minimal `{ provide: X, useValue: ... }`
+   * stubs over the real service. See `guides/ANGULAR_TESTING_GUIDE.md`.
+   */
+  providers?: Provider[];
+
+  /**
    * Use `autoDetectChanges()` instead of a single `detectChanges()`. Set this for
    * components that mutate their own state during init/CD (recompute a bound value in
    * `ngOnInit`/`ngOnChanges`), which would otherwise trip the dev-mode `NG0100` check.
@@ -66,10 +76,11 @@ export interface RenderComponentFixtureOptions<T> {
  * (For a component that needs projected *children*, use `renderTemplate` instead.)
  */
 export function renderComponentFixture<T>(component: Type<T>, options: RenderComponentFixtureOptions<T> = {}): ComponentFixture<T> {
-  if (options.imports || options.declarations) {
+  if (options.imports || options.declarations || options.providers) {
     TestBed.configureTestingModule({
       imports: options.imports ?? [],
       declarations: options.declarations ?? [],
+      providers: options.providers ?? [],
     });
   }
   const fixture = TestBed.createComponent(component);
