@@ -47,6 +47,15 @@ _Updated continuously. Newest status at the top of each phase section._
 - `deep-research` skill unusable in sandbox (PreToolUse hook errors under `/bin/sh`:
   `set: Illegal option -o pipefail`). Worked around via a general-purpose agent.
 
+**Setup note for the reviewer:**
+- A new workspace package `packages/Web/Widget/` was added and `packages/Web/*` appended to the root
+  `package.json` `workspaces`. **Run `npm install` at the repo root** to reconcile `package-lock.json`
+  (left uncommitted — it also carried pre-existing unrelated churn from before this session, so it was
+  deliberately not staged). All packages build + test against the current symlinked workspace today.
+- New/changed config knobs (all default-off / safe): `widget` block in `mj.config.cjs`
+  (`enabled:false` by default), and `optionalDependencies` added to the Twilio/Vonage/RingCentral/Teams
+  and RealtimeBridge-Server packages (declared only — no install performed; never statically imported).
+
 ---
 
 ## Environment verified
