@@ -154,5 +154,25 @@
       "lastModified": "2026-06-09T06:32:37.016Z",
       "checksum": "6b43ad0f9ccf2ed20b57fe820c11d7d822abda933a1ba55c3b8e5322332f645d"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversations",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Details",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    }
   }
 ]

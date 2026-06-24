@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Example Support Widget (Chat)",
+      "PublicKey": "pk_test_example_support_widget",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Chat",
+      "PinnedAgentID": "@lookup:MJ: AI Agents.Name=Sage",
+      "GuestRoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "AllowedOrigins": "[\"http://localhost:4200\", \"http://localhost:8080\"]",
+      "Modality": "Both",
+      "AuthStrategy": "Anonymous",
+      "Status": "Active",
+      "SessionTTLMinutes": 15,
+      "RateLimitPerMinute": 30,
+      "VoiceMaxSessionMinutes": 10
+    }
+  }
+]

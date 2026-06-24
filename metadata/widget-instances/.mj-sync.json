@@ -1,10 +1,10 @@
 {
-  "entity": "MJ: Entity Permissions",
+  "entity": "MJ: Widget Instances",
   "filePattern": "**/.*.json",
   "defaults": {},
   "pull": {
     "createNewFileIfNotFound": true,
-    "newFileName": ".entity-permissions.json",
+    "newFileName": ".widget-instances.json",
     "appendRecordsToExistingFile": true,
     "updateExistingRecords": true,
     "preserveFields": [],
@@ -12,7 +12,7 @@
     "mergeStrategy": "merge",
     "backupBeforeUpdate": true,
     "backupDirectory": ".backups",
-    "filter": "RoleID IN (SELECT ID FROM __mj.Role WHERE Name IN ('Magic Link Baseline', 'Widget Guest'))",
+    "filter": "",
     "externalizeFields": [],
     "ignoreNullFields": true,
     "ignoreVirtualFields": true,
