@@ -62,7 +62,7 @@ _Updated continuously. Newest status at the top of each phase section._
 | W0 | Spike & guardrails | ✅ DONE |
 | W1 | Guest-session backend | ✅ DONE (live curl Auth0-gated) |
 | W2 | Widget-instance metadata | ✅ entity+CodeGen / ⚠ seed push DB-blocked |
-| W3 | Embeddable bundle (text MVP) | TODO |
+| W3 | Embeddable bundle (text MVP) | ✅ DONE (live e2e Auth0-gated) |
 | W4 | Voice modality | TODO |
 | W5 | Magic-link upgrade + host identity | TODO |
 | W6 | Hardening & embed polish | TODO |
@@ -161,7 +161,38 @@ tamper rejection).
   genuine **W6 hardening** item — flagged, not silently assumed.
 
 ### W3 — Embeddable bundle (text MVP)
-_Status: TODO_
+**Status: DONE** ✅ (offline build/test/bundle; live end-to-end MJAPI/Auth0-gated)
+
+New package **`@memberjunction/web-widget`** at `packages/Web/Widget/` (added `packages/Web/*` to
+root workspaces; `npm install` run to wire symlinks):
+- **`<mj-support-widget>`** custom element — shadow DOM + `all: initial` isolation; `--mj-chat-*`
+  design tokens injected into the **shadow root** (never `<head>`); launcher/panel/transcript/
+  composer; ARIA roles + keyboard (Enter send / Esc close). No hardcoded-color rules (all tokens).
+- **`WidgetSessionClient`** — mints/refreshes the guest JWT via `POST /widget/session`; injectable
+  fetch; refresh-lead math.
+- **`IWidgetTransport`** seam → **`RuntimeWidgetTransport`** (prod): reuses
+  `setupGraphQLClient(guest token)` + `ConversationsRuntime.AgentRunner.processMessage` **always
+  passing the pinned `explicitAgentId`** (D5); confirms **open-Q #2** — `GraphQLDataProvider` runs
+  fine outside Angular, no slimmer client needed. **`MockWidgetTransport`** for tests/offline.
+- **`loader`** — `data-widget-key`/`data-api-url` bootstrap, notification adapter routed into the
+  widget transcript, token-refresh scheduling.
+- **Examples**: `blank-host.html` (one mount div + one `<script>`, with hostile host CSS to prove
+  isolation) + `offline-demo.html`; **README** documents embed/auth/security/build.
+
+**Build:** clean (tsc). **Tests:** **15 passed** (vitest + jsdom) — mint/refresh + field validation,
+shadow-DOM style isolation (asserts no leak into `document.head`), launcher open, send→user+agent
+bubbles, **pinned-agent pass-through (D5)**, no-transport system message, loader mount + refresh
+scheduling. **Bundle:** `npm run bundle` (esbuild) produces a self-contained browser ESM with **no
+unresolved node built-ins** (~2.9 MB minified — tree-shaking/code-splitting is W6).
+
+**Acceptance status:**
+- ✅ Shadow-DOM isolation verified by unit test; embed contract (1 div + 1 script) demonstrated.
+- ✅ Self-contained bundle builds.
+- ⛔ Live `blank-host.html` → mint → real text turn is **MJAPI/Auth0-gated** (needs MJAPI booted with
+  `widget.enabled=true`). Code path complete + ready; offline demo exercises the full UI via the mock.
+
+**Decisions noted:** vanilla custom element (no Lit) for zero-dependency isolation (open-Q #4);
+new entity over magic-link reuse (open-Q #3, in W2); direct-mint guest (open-Q #1, in W1).
 
 ### W4 — Voice modality
 _Status: TODO_
