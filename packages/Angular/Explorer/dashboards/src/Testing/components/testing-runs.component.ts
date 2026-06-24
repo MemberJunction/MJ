@@ -166,11 +166,9 @@ interface FilteredStats {
             <mj-loading text="Loading test runs..."></mj-loading>
           </div>
         } @else if ((FilteredRuns$ | async)?.length === 0) {
-          <div class="table-empty">
-            <i class="fa-solid fa-inbox"></i>
-            <p>No test runs found</p>
-            <span class="empty-hint">Try adjusting your filters or run a new test.</span>
-          </div>
+          <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+            Title="No test runs found"
+            Message="Try adjusting your filters or run a new test." />
         } @else {
           @for (run of FilteredRuns$ | async; track TrackByRunId($index, run)) {
             <div
@@ -780,28 +778,6 @@ interface FilteredStats {
       justify-content: center;
       align-items: center;
       padding: 80px 40px;
-    }
-
-    .table-empty {
-      padding: 80px 40px;
-      text-align: center;
-    }
-
-    .table-empty i {
-      font-size: 48px;
-      color: var(--mj-border-strong);
-      margin-bottom: 16px;
-    }
-
-    .table-empty p {
-      font-size: 16px;
-      color: var(--mj-text-muted);
-      margin: 0 0 8px 0;
-    }
-
-    .empty-hint {
-      font-size: 13px;
-      color: var(--mj-text-disabled);
     }
 
     /* Detail Panel Overlay */

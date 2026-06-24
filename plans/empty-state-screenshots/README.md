@@ -35,6 +35,18 @@ _Other ComponentStudio empties (preview no-selection / run-state, browser empty/
 editor panels, dialog empties) reuse already-recorded patterns; the dashboard onboarding is
 captured as it's the one with projected multi-action + re-scoped CSS._
 
+## testing/
+| State | File |
+|-------|------|
+| Review — **success** "All caught up!" | `review-success.png` |
+| Explorer — no-results | `explorer-no-results.png` |
+| Analytics — chart-card placeholders (compact; incl. success "No failing tests") | `analytics.png` |
+
+_Also migrated (reuse patterns): testing-review "No reviewed items", dashboard-tab
+3 list empties (incl. success "No alerts"), runs table-empty, oracle no-results,
+and 9 analytics empty-mini chart placeholders. The "Loading versions…" spinner
+stays as a loading indicator (not an empty state)._
+
 ## version-history/
 | State | File |
 |-------|------|
