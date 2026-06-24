@@ -2,24 +2,12 @@
 
 ## Overview
 
-This document defines the **MJ Open App** standard — a packaging, distribution, and installation format for pluggable extensions to the MemberJunction platform, published as a GitHub repository with tagged releases.
-
-> **An Open App IS its manifest.** The `mj-app.json` manifest is the single source of truth for what an app is: it can stand entirely alone (a manifest-only app is valid), it is what MJ persists (`MJ: Open Apps.ManifestJSON`), and it is what every lifecycle operation re-reads. Every *capability* block — `schema`, `migrations`, `metadata`, `packages`, `dependencies`, `code`, `configuration`, `hooks` — is **optional and additive**; the manifest assumes nothing about which blocks are present. An app's "form" is simply which blocks it declares (manifest-only, metadata-extending, schema-backed, packages-only, or any combination). Nothing about the manifest is heavyweight. Only the identity fields (name, version, publisher, repository, mjVersionRange, …) are required — they describe the app, not its form.
-
-### Forms of an Open App
-
-The same install pipeline serves every form; each is just a different subset of optional blocks, and each is first-class:
-
-- **Manifest-only** — identity + nothing else. Valid; records itself in `MJ: Open Apps` and has no side effects. A grouping/marker, or a placeholder a later version fills in.
-- **Metadata-extending** — declares `metadata` with `metadata.processOnInstall: true`. At install the engine pushes the metadata into the **shared `__mj`** schema (or any target the records name) via a scoped `mj sync push`; at remove it retires those rows symmetrically. This is the connector-profile form (an integration's Integration / IntegrationObject / IntegrationObjectField + Action rows) — no dedicated schema needed.
-- **Schema-backed** — declares `schema` (+ usually `migrations`). The engine creates the app's own schema and runs its migrations (Skyway). Portable across SQL Server and PostgreSQL: the engine runs `migrations/` on SS and `migrations-pg/` on PG, so ship both. This is the `bizapps-common` form.
-- **Packages-only** — declares only `packages` (and optionally `configuration`/`code`). Adds code/providers to the host via dynamic package loading, with no schema or metadata.
-- **Any combination** — e.g. schema + migrations + metadata + packages (a full app), or metadata + packages (a connector with a bootstrap package).
+This document defines the **MJ Open App** standard — a packaging, distribution, and installation format for self-contained applications that run on the MemberJunction platform. An "app" is a deployable unit consisting of a database schema, metadata, and npm packages — published as a GitHub repository with tagged releases.
 
 ### Goals
 
 1. **Standardized packaging** — Any developer can create and distribute an MJ app using a well-defined manifest format.
-2. **Schema isolation** — Apps that include database objects operate in their own dedicated schema, preventing collisions with MJ core (`__mj`) or other apps. Apps that extend MJ via metadata or code declare no schema at all.
+2. **Schema isolation** — Each app owns a dedicated database schema, preventing collisions with MJ core (`__mj`) or other apps.
 3. **Version management** — Apps use semver via GitHub release tags. Migrations manage schema evolution across versions.
 4. **Metadata portability** — App metadata (entities, actions, prompts, agents, dashboards, etc.) is packaged using the existing mj-sync format and pushed into the target MJ installation at install time.
 5. **npm integration** — App code ships as npm packages (public or private registry) and integrates with MJ's dynamic package loading system.
@@ -41,9 +29,9 @@ The same install pipeline serves every form; each is just a different subset of 
 
 | Term | Definition |
 |------|-----------|
-| **Open App** | A pluggable extension to MemberJunction, defined by — and equal to — its manifest |
-| **App Manifest** | A `mj-app.json` file at the repository root; the single source of truth for the app |
-| **App Schema** | The dedicated database schema owned by an app *that declares one* (e.g., `acme_crm`, `oss_helpdesk`) — optional |
+| **Open App** | A distributable unit of functionality for MemberJunction, defined by a manifest |
+| **App Manifest** | A `mj-app.json` file at the repository root describing the app |
+| **App Schema** | The dedicated database schema owned by the app (e.g., `acme_crm`, `oss_helpdesk`) |
 | **App Version** | A semver version corresponding to a GitHub release tag |
 | **App Registry** | A service (like MJ Central) that indexes available apps and their versions |
 | **Core Schema** | The `__mj` schema where MemberJunction core entities live |
@@ -59,12 +47,12 @@ An MJ Open App is a **GitHub repository** (public or private) that conforms to t
 
 ```
 my-mj-app/
-├── mj-app.json                    # App manifest (REQUIRED — the only required element)
-├── migrations/                     # Database migrations (OPTIONAL — present with a schema)
+├── mj-app.json                    # App manifest (REQUIRED)
+├── migrations/                     # Database migrations (REQUIRED if app has schema)
 │   ├── V202602010000__v1.0.x__Initial_Schema.sql
 │   ├── V202603150000__v1.1.x__Add_Status_Column.sql
 │   └── ...
-├── metadata/                       # mj-sync metadata files (OPTIONAL — the metadata-extending form)
+├── metadata/                       # mj-sync metadata files (REQUIRED)
 │   ├── .mj-sync.json              # Sync configuration with directoryOrder
 │   ├── entities/                   # Entity metadata registrations
 │   ├── actions/                    # Action definitions
@@ -74,9 +62,9 @@ my-mj-app/
 │   ├── applications/               # Application nav definitions
 │   ├── dashboards/                 # Dashboard definitions
 │   └── ...                         # Any mj-sync entity directories
-├── packages/                       # Source code (OPTIONAL — the packages form)
-│   ├── server-bootstrap/          # Server bootstrap package (present when the app ships server code)
-│   ├── ng-bootstrap/              # Angular bootstrap package (present when the app ships UI)
+├── packages/                       # Source code (OPTIONAL for closed-source)
+│   ├── server-bootstrap/          # Server bootstrap package (REQUIRED)
+│   ├── ng-bootstrap/              # Angular bootstrap package (REQUIRED if app has UI)
 │   ├── server/                    # Server-side packages
 │   ├── client/                    # Client-side packages (Angular, etc.)
 │   └── types/                     # Shared TypeScript types
@@ -128,8 +116,6 @@ The MJ `config` package will expose a generic config loader where you provide a 
 
 ### Full Example
 
-> The authoritative, always-in-sync annotated reference manifest is **[`packages/OpenApp/Engine/manifest.reference.jsonc`](../packages/OpenApp/Engine/manifest.reference.jsonc)** — it documents every block (with the minimal manifest-only form at the top) and is kept schema-valid by a unit test. The example below mirrors it.
-
 ```jsonc
 {
   // ── Identity ──────────────────────────────────────────────
@@ -157,28 +143,24 @@ The MJ `config` package will expose a generic config loader where you provide a 
   "mjVersionRange": ">=4.0.0 <5.0.0",            // REQUIRED - semver range of compatible MJ versions
 
   // ── Database Schema ───────────────────────────────────────
-  "schema": {                                     // OPTIONAL - present only for the schema-backed form
-    "name": "acme_crm",                           // REQUIRED within schema - SQL schema name (unique per app)
+  "schema": {                                     // REQUIRED if app has database objects
+    "name": "acme_crm",                           // REQUIRED - SQL schema name (unique per app)
     "createIfNotExists": true                     // OPTIONAL - default: true
   },
 
   // ── Migrations ────────────────────────────────────────────
-  // DUAL-DIALECT: on SQL Server the engine runs `<directory>/`; on PostgreSQL it runs
-  // `<directory>-pg/`. Ship BOTH (e.g. `migrations/` + `migrations-pg/`) for a portable app.
-  "migrations": {                                 // OPTIONAL - present with a schema
-    "directory": "migrations",                    // OPTIONAL - default: "migrations" (PG reads "migrations-pg")
-    "engine": "skyway"                            // OPTIONAL - default: "skyway" (Flyway-compatible, runs on SS + PG)
+  "migrations": {                                 // REQUIRED if app has database objects
+    "directory": "migrations",                    // OPTIONAL - default: "migrations"
+    "engine": "flyway"                            // OPTIONAL - default: "flyway"
   },
 
   // ── Metadata ──────────────────────────────────────────────
-  // Dialect-agnostic: pushed/retired through mj-sync (provider-routed), works on SS + PG.
-  "metadata": {                                   // OPTIONAL - the metadata-extending form
-    "directory": "metadata",                      // OPTIONAL - default: "metadata"
-    "processOnInstall": false                     // OPTIONAL - true seeds metadata into __mj at install (connector profile)
+  "metadata": {                                   // REQUIRED
+    "directory": "metadata"                       // OPTIONAL - default: "metadata"
   },
 
   // ── NPM Packages ─────────────────────────────────────────
-  "packages": {                                   // OPTIONAL - the packages form
+  "packages": {                                   // REQUIRED
     "registry": "https://registry.npmjs.org",     // OPTIONAL - default: npm public registry
     "server": [                                   // Server-side packages
       {
@@ -284,21 +266,19 @@ The MJ `config` package will expose a generic config loader where you provide a 
 | `mjVersionRange` | string | Yes | Semver range of compatible MJ versions |
 | `dependencies` | object | No | Map of app name to semver range for required peer apps. Transitive dependencies are resolved and auto-installed by the CLI. |
 
-Every capability block below (`schema`, `migrations`, `metadata`, `packages`, `dependencies`, `code`, `configuration`, `hooks`) is **optional**. "Required" inside a block means "required *when the block is present*" — never that the block itself must appear. A manifest with none of them is valid.
-
 #### Database Schema
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `schema.name` | string | Yes (within `schema`) | SQL Server schema name. Convention: `{publisher}_{app}`. |
+| `schema.name` | string | Yes (if DB) | SQL Server schema name. Convention: `{publisher}_{app}`. |
 | `schema.createIfNotExists` | boolean | No | Create the schema at install time. Default: `true`. |
 
 #### Migrations
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `migrations.directory` | string | No | Relative path to migrations. Default: `"migrations"`. On Postgres the engine reads `<directory>-pg`. |
-| `migrations.engine` | string | No | `"skyway"` or `"flyway"`. Default: `"skyway"`. |
+| `migrations.directory` | string | No | Relative path to migrations. Default: `"migrations"`. |
+| `migrations.engine` | string | No | Only `"flyway"` supported. Default: `"flyway"`. |
 
 #### Packages
 
