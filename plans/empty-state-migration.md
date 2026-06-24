@@ -180,9 +180,9 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/AI | 11 | 13 | ✅ | `ff116e0acc` |
 | dashboards/ComponentStudio | 11 | 16 | ✅ | `e23fb54dfe` |
 | dashboards/Credentials | 6 | 9 | ✅ | `789b2359c3` |
-| dashboards/Actions | 5 | 7 | ✅ | (this commit) |
-| dashboards/Integration | 5 | 5 | ✅ | (this commit) |
-| dashboards/Communication | 4 | 7 | ✅ | (this commit) |
+| dashboards/Actions | 5 | 7 | ✅ | `65183c5cfd` |
+| dashboards/Integration | 5 | 5 | ✅ | `d602f3721f` |
+| dashboards/Communication | 4 | 7 | ✅ | `28f78fa80b` |
 | dashboards/{VersionHistory,Testing} | 4 each | — | | |
 | dashboards/{Scheduling,Permissions} | 3 each | — | | |
 | dashboards/{KnowledgeHub,DataExplorer} | 2 each | — | | |
