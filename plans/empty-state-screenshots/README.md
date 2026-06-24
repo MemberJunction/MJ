@@ -127,6 +127,58 @@ the grid instead of sitting in one 350px column._
 _Also migrated (reuse patterns): optimization-insights success, performance
 telemetry/filter/events compact empties (nested perf sub-tabs)._
 
+## autotagging/ (AI app — Classify pipeline + Tags resource, `at-*` prefixed)
+Every file has a `-dark` companion (36 files / 18 states). 23 instances migrated
+across 7 files (history/inbox/pipeline/sources/tags/taxonomy tabs + tags-resource).
+
+**Classify pipeline tabs** (forced-mount via `_activeTab`):
+| State | File |
+|-------|------|
+| Inbox — "No pending suggestions" (success list) + "Select a suggestion…" (at-fill pane) | `inbox-empty.png` |
+| Pipeline feed — empty | `pipeline-feed-empty.png` |
+| Pipeline feed — no-results (search) | `pipeline-feed-no-results.png` |
+| History — "No per-source detail…" + "No content items found." | `history-no-detail.png` |
+| Tags (classify) — drilldown "No content items found for this tag." | `classify-tags-drilldown-empty.png` |
+| Taxonomy — tree "No tags found" + "Select a tag…" (at-fill) | `taxonomy-tree-empty.png` |
+| Taxonomy — **success** "No duplicate tags detected" | `taxonomy-duplicates-success.png` |
+| Taxonomy — **success** "No orphaned tags" | `taxonomy-orphans-success.png` |
+| Taxonomy — "No taxonomy data to visualize" | `taxonomy-treemap-empty.png` |
+| Taxonomy — no-results "No audit events…" | `taxonomy-audit-no-results.png` |
+
+**Tags resource** (KH "Tags" page — the live taxonomy UI):
+| State | File |
+|-------|------|
+| Tree — "No tags found" + "Select a tag…" (at-fill) + Tag Cloud "No tags yet" | `tags-taxonomy-no-selection.png` |
+| Duplicates — **success** | `tags-duplicates-success.png` |
+| Orphans — **success** | `tags-orphans-success.png` |
+| Treemap — "No taxonomy data to visualize" | `tags-treemap-empty.png` |
+| Audit — no-results | `tags-audit-no-results.png` |
+| Suggestions — **success** "No pending suggestions." | `tags-suggestions-success.png` |
+| Health/Runs — "No runs yet." | `tags-runs-empty.png` |
+| Tag library — drilldown "No content items found for this tag." + Tag Cloud "No tags yet" | `tags-drilldown-empty.png` |
+
+_Includes success variants, no-results, the `at-fill` no-selection detail/reading panes,
+and the Tag-Cloud "No tags yet" (fa-tag) + drilldown (fa-inbox) — all icons explicit.
+Dead `.at-empty-state` CSS removed from both `ViewEncapsulation.None` parents; replaced
+with `.at-fill` (flex:1) so no-selection empties grow to fill their panes._
+
+**Build-verified, not screenshotted:** `sources-tab` detail empty / no-results
+(2 states). Markup compiles and matches the canonical compact pattern, but live
+state-injection trips a **pre-existing** `formatNumber(undefined)` in the
+source-detail header (`classify.format.ts` — unrelated to this migration; real
+hydrated data renders fine). Identical compact icon+text empties to ~25 captured._
+
+## dev-tools/
+| State | File |
+|-------|------|
+| Event Monitor — listening (captured 0) | `event-monitor-listening.png` |
+| Event Monitor — **paused** (warning variant, dynamic count) | `event-monitor-paused.png` |
+| Event Monitor — no filter match (no-results, dynamic count) | `event-monitor-no-match.png` |
+
+_One `<mj-empty-state>` whose Variant/Icon/Title/Message are driven by getters
+(`EmptyVariant`/`EmptyIcon`/`EmptyTitle`/`EmptyMessage`) — collapsed a 3-branch
+`@if`/`@else` into one component. Dead `.em-empty*` CSS removed._
+
 ## version-history/
 | State | File |
 |-------|------|

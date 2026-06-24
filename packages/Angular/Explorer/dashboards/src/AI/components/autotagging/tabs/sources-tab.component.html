@@ -211,9 +211,9 @@
           </div>
           <div class="at-detail-content-list">
             @if (FilteredSourceDetailItems.length === 0) {
-              <div class="at-empty-state" style="padding: 16px;">
-                <p>{{ SourceDetailStatusFilter === 'All' ? 'No content items yet.' : 'No items match this filter.' }}</p>
-              </div>
+              <mj-empty-state Size="compact"
+                [Variant]="SourceDetailStatusFilter === 'All' ? 'empty' : 'no-results'"
+                [Title]="SourceDetailStatusFilter === 'All' ? 'No content items yet.' : 'No items match this filter.'" />
             }
             @for (ci of FilteredSourceDetailItems; track ci.ID) {
               <div class="at-detail-content-item" (click)="OpenContentItemDetail(ci)">

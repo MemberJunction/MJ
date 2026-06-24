@@ -192,7 +192,9 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/QueryBrowser | 1 | 3 | ✅ | (this commit) |
 | dashboards/MCP | 1 | 4 | ✅ | (this commit) |
 | dashboards/SystemDiagnostics | 1 | 8 | ✅ | (this commit) |
-| dashboards/Home | 1 | 2 | ✅ | (this commit) |
+| dashboards/Home | 1 | 2 | ✅ | (prior commit) |
+| dashboards/AI-autotagging (stragglers) | 8 | 23 | ✅ | (this commit) |
+| dashboards/DevTools event-monitor | 1 | 3→1 | ✅ | (this commit) |
 | Explorer/core-entity-forms | ~22 | — | | |
 | Generic/conversations | ~12 | — | | |
 | Generic/{dashboard-viewer,artifacts,entity-viewer,...} | misc | — | | |
