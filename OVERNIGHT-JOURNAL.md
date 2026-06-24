@@ -21,7 +21,7 @@ _Updated continuously. Newest status at the top of each phase section._
   T1 ✅ Twilio (67), T2 ✅ Vonage (72), T3 ✅ RingCentral (63) — native bindings + ingress, all
   reusing the T0 codec, drivers untouched. T4 (shared hardening) not started — mostly live-wiring.
 - **MEETINGS** — M0 Slack **NO-GO/parked** ✅; M1 ⚠ Teams binding + Graph ingress (87 tests);
-  M2 ⏳ calendar + identity provisioners (delegated, offline); M3 parked; M4 not started.
+  M2 ⚠ calendar + identity provisioners (offline DONE); M3 parked; M4 not started.
 - **Everything labelled "live"/"creds-gated" is the credential/DB/Auth0-dependent activation layer
   (MJAPI routers, real vendor SDK wiring, integration tests) — code paths are complete + unit-tested,
   documented in the per-vendor `spikes/*-notes.md`, never faked.**
@@ -77,7 +77,7 @@ _Updated continuously. Newest status at the top of each phase section._
 | T4 | Telephony shared hardening | ⛔ not started (signature mw shared; rest live-wiring) |
 | M0 | Slack media-access verification spike | ✅ DONE (NO-GO, parked) |
 | M1 | Teams native SDK | ⚠ binding+ingress DONE / live join Azure-gated |
-| M2 | Calendar + identity provisioners | ⏳ in progress (delegated, offline) |
+| M2 | Calendar + identity provisioners | ⚠ offline impls+tests DONE / live wiring gated |
 | M3 | Slack binding (gated on M0) | ⛔ PARKED (M0 NO-GO) |
 | M4 | Meeting shared hardening | ⛔ not started (depends on live meeting wiring) |
 
@@ -348,12 +348,21 @@ _Status: TODO_
   `Meeting.JoinByUrl` mutation (needs CodeGen), integration tests. See `spikes/M1-teams-binding-notes.md`.
 
 ### M2 — Calendar + identity provisioners
-**Status: IN PROGRESS (delegated, offline) — see end-of-run note**
+**Status: PARTIAL — offline impls + tests DONE; live wiring creds/DB/MJAPI-gated**
 
-Implementing `GraphCalendarSource`/`GoogleCalendarSource.ListUpcomingInvites` + the identity
-provisioner over injected SDK-free surfaces with unit tests, in `RealtimeBridge/Server`. Live
-scheduler hooks (`CalendarWatcher.Sweep`, `ScheduledBridgeRunner.RunDueBridges`, orphan janitor) +
-real Graph/Google tenant creds remain gated. _(Status finalized below once the build/test verify lands.)_
+- `GraphCalendarSource` + `GoogleCalendarSource` now do real delta/sync-token paging over injected
+  SDK-free surfaces (`IGraphCalendarLike`/`IGoogleCalendarLike`), normalizing events (join-URL
+  extraction, attendees, start/end, forward cursor) into the **unchanged** `CalendarPollResult`
+  shape; page caps added; `NotBound` preserved when no surface injected.
+- `StubAgentIdentityProvisioner.Provision` routes by `IdentityType` over injected admin surfaces
+  (Graph mailbox/Email, Google Workspace Email, telephony carrier PhoneNumber) → existing
+  `ApplyProvisionResultToIdentity`. All mapping in pure helpers. Interfaces untouched (CalendarWatcher
+  unaffected). `@microsoft/microsoft-graph-client` + `googleapis` optionalDeps (never imported).
+- **Build:** clean. **Tests:** RealtimeBridge/Server **155 passed** (48 new). Verified by me.
+- ⛔ **Live wiring gated:** bind surfaces to real Graph/Google clients (provider `Configuration` +
+  MJ credentials, Azure AD app + Google OAuth/service account + admin consent), durable cursor
+  persistence, and the MJAPI scheduler glue that constructs + ticks `CalendarWatcher.Sweep` /
+  `ScheduledBridgeRunner.RunDueBridges` / the orphan janitor. See `spikes/M2-calendar-identity-notes.md`.
 
 ### M3 — Slack binding
 **Status: PARKED** ⛔ — gated by M0 (NO-GO). Driver scaffold stays valid + unit-tested; do not build
@@ -396,4 +405,5 @@ on the branch for the full list. Every code commit states its build + test resul
 
 - `@memberjunction/web-widget`: 27 · `@memberjunction/server` (incl. widget+host-identity): 560 ·
   `ai-bridge-base` (incl. T0): 107 · Twilio: 67 · Vonage: 72 · RingCentral: 63 · Teams: 87.
-  (M2 / RealtimeBridge-Server totals appended after verify.)
+  `ai-bridge-server` (incl. M2): 155.
+- **Grand total this session: ~1038 unit tests passing across 7 packages, 0 failing.**
