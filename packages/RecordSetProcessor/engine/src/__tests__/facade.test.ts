@@ -16,6 +16,7 @@ import {
 import {
     ActionRecordProcessor,
     AgentRecordProcessor,
+    FieldRulesProcessor,
     InferProcessor,
     RecordProcessExecutor,
     WriteBackProcessor,
@@ -46,6 +47,26 @@ describe('RecordProcessExecutor.buildSource', () => {
     });
     it('throws when View scope is missing its ViewID', () => {
         expect(() => exec.buildSource(rp({ ScopeType: 'View' }), provider)).toThrow(/ScopeViewID/);
+    });
+
+    describe('runtime scope override (UI invocation — overrides stored Scope)', () => {
+        it('records → ArraySource (selected rows)', () => {
+            const src = exec.buildSource(rp({ ScopeType: 'Filter', ScopeFilter: 'X=1' }), provider, undefined, { Kind: 'records', RecordIDs: ['a', 'b'] });
+            expect(src).toBeInstanceOf(ArraySource);
+        });
+        it('view → ViewSource', () => {
+            expect(exec.buildSource(rp({ ScopeType: 'Filter' }), provider, undefined, { Kind: 'view', ViewID: 'V9' })).toBeInstanceOf(ViewSource);
+        });
+        it('list → ListSource', () => {
+            expect(exec.buildSource(rp({ ScopeType: 'View', ScopeViewID: 'V1' }), provider, undefined, { Kind: 'list', ListID: 'L9' })).toBeInstanceOf(ListSource);
+        });
+        it('filter → FilterSource', () => {
+            expect(exec.buildSource(rp({ ScopeType: 'View' }), provider, undefined, { Kind: 'filter', Filter: 'Status=\'Active\'' })).toBeInstanceOf(FilterSource);
+        });
+        it('takes precedence over the stored ScopeType', () => {
+            // stored scope is View (would need ScopeViewID), but the override wins so no throw
+            expect(exec.buildSource(rp({ ScopeType: 'View' }), provider, undefined, { Kind: 'view', ViewID: 'V9' })).toBeInstanceOf(ViewSource);
+        });
     });
 });
 
@@ -80,6 +101,29 @@ describe('RecordProcessExecutor.buildProcessor', () => {
     });
     it('throws when Action work is missing its ActionID', () => {
         expect(() => exec.buildProcessor(rp({ WorkType: 'Action' }))).toThrow(/ActionID/);
+    });
+
+    describe('WorkType=FieldRules', () => {
+        const ruleSet = JSON.stringify({ Rules: [{ TargetField: 'Status', Source: { Kind: 'static', Value: 'Inactive' } }] });
+
+        it('builds a FieldRulesProcessor from a rule set in Configuration', () => {
+            expect(exec.buildProcessor(rp({ WorkType: 'FieldRules', Configuration: ruleSet }))).toBeInstanceOf(FieldRulesProcessor);
+        });
+        it('passes the dry-run flag through', () => {
+            const proc = exec.buildProcessor(rp({ WorkType: 'FieldRules', Configuration: ruleSet }), true) as FieldRulesProcessor;
+            expect((proc as unknown as { options: { DryRun?: boolean } }).options.DryRun).toBe(true);
+        });
+        it('does NOT wrap with WriteBackProcessor (FieldRules writes itself) even if OutputMapping is set', () => {
+            const proc = exec.buildProcessor(rp({ WorkType: 'FieldRules', Configuration: ruleSet, OutputMapping: JSON.stringify({ fields: { S: '$.s' } }) }));
+            expect(proc).toBeInstanceOf(FieldRulesProcessor);
+            expect(proc).not.toBeInstanceOf(WriteBackProcessor);
+        });
+        it('throws when Configuration is missing', () => {
+            expect(() => exec.buildProcessor(rp({ WorkType: 'FieldRules' }))).toThrow(/FieldRuleSet/);
+        });
+        it('throws when Configuration has no Rules array', () => {
+            expect(() => exec.buildProcessor(rp({ WorkType: 'FieldRules', Configuration: '{"foo":1}' }))).toThrow(/Rules array/);
+        });
     });
 });
 

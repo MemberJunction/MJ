@@ -78,6 +78,8 @@ import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agen
 // Realtime Bridges — custom Extended forms (Pattern 2) for the three major bridge entities.
 import { MJAIBridgeProviderFormComponentExtended, LoadMJAIBridgeProviderFormComponentExtended } from "./BridgeProviders/bridge-provider-form.component";
 import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridgeFormComponentExtended } from "./SessionBridges/session-bridge-form.component";
+import { RecordProcessFormComponentExtended } from "./RecordProcesses/record-process-form.component";
+import { RecordProcessEditorComponent } from "@memberjunction/ng-record-process-studio";
 import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
 // AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
 // @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
@@ -134,6 +136,7 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         MJAIAgentSessionBridgeFormComponentExtended,
         MJAIBridgeAgentIdentityFormComponentExtended,
         AgentRealtimePanel,
+        RecordProcessFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -175,7 +178,8 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         AngularSplitModule,
         MjSlidePanelComponent,
         MjFormDialogComponent,
-        SearchModule
+        SearchModule,
+        RecordProcessEditorComponent
     ],
     exports: [
         MJEntityFormComponentExtended,
@@ -212,7 +216,8 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         MJAIAgentSessionBridgeFormComponentExtended,
         MJAIBridgeAgentIdentityFormComponentExtended,
         AgentRealtimePanel,
-        ActionsModule
+        ActionsModule,
+        RecordProcessFormComponentExtended
     ],
     providers: [
         NewAgentDialogService,

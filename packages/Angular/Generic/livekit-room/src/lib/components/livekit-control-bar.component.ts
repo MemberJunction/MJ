@@ -88,9 +88,32 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
         </button>
       }
       @if (EnableLeaveControl) {
-        <button type="button" class="lk-bar__btn lk-bar__btn--leave" title="Leave" (click)="Leave.emit()">
-          <i class="fa-solid fa-phone-slash"></i>
-        </button>
+        @if (CanEndForAll) {
+          <!-- Zoom/Teams-style split: the red button opens a menu offering Leave (you go, meeting continues)
+               vs. End meeting for everyone (tears down all agents). The backdrop closes the menu on outside click. -->
+          @if (LeaveMenuOpen) {
+            <div class="lk-bar__leave-backdrop" (click)="LeaveMenuOpen = false"></div>
+            <div class="lk-bar__leave-menu" role="menu">
+              <button type="button" class="lk-bar__leave-item lk-bar__leave-item--end" role="menuitem"
+                (click)="LeaveMenuOpen = false; EndForAll.emit()">
+                <i class="fa-solid fa-circle-stop"></i> End meeting for everyone
+              </button>
+              <button type="button" class="lk-bar__leave-item" role="menuitem"
+                (click)="LeaveMenuOpen = false; Leave.emit()">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> Leave meeting
+              </button>
+            </div>
+          }
+          <button type="button" class="lk-bar__btn lk-bar__btn--leave" title="Leave or end the meeting"
+            [class.lk-bar__btn--leave-open]="LeaveMenuOpen" (click)="LeaveMenuOpen = !LeaveMenuOpen">
+            <i class="fa-solid fa-phone-slash"></i>
+            <i class="fa-solid fa-caret-up lk-bar__leave-caret"></i>
+          </button>
+        } @else {
+          <button type="button" class="lk-bar__btn lk-bar__btn--leave" title="Leave" (click)="Leave.emit()">
+            <i class="fa-solid fa-phone-slash"></i>
+          </button>
+        }
       }
     </div>
   `,
@@ -146,11 +169,71 @@ import type { LiveKitLocalMediaState } from '@memberjunction/livekit-room-core';
         }
       }
       .lk-bar__btn--leave {
+        position: relative;
         color: var(--mj-text-inverse, #fff);
         background: var(--mj-status-error, #ef4444);
       }
-      .lk-bar__btn--leave:hover {
+      .lk-bar__btn--leave:hover,
+      .lk-bar__btn--leave-open {
         background: var(--mj-status-error-text, #b91c1c);
+      }
+      .lk-bar__leave-caret {
+        position: absolute;
+        right: 3px;
+        bottom: 3px;
+        font-size: 0.55rem;
+        opacity: 0.85;
+      }
+      /* Transparent full-screen catcher so a click anywhere outside the menu closes it. */
+      .lk-bar__leave-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+      }
+      .lk-bar__leave-menu {
+        position: absolute;
+        bottom: calc(100% + 8px);
+        right: 0;
+        z-index: 61;
+        display: flex;
+        flex-direction: column;
+        min-width: 230px;
+        padding: 6px;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 10px;
+        background: var(--mj-bg-surface-elevated, var(--mj-bg-surface));
+        box-shadow: var(--mj-shadow-md, 0 6px 20px rgba(0, 0, 0, 0.25));
+      }
+      .lk-bar__leave-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 100%;
+        padding: 9px 12px;
+        border: none;
+        border-radius: 7px;
+        cursor: pointer;
+        font-size: 0.85rem;
+        text-align: left;
+        color: var(--mj-text-primary);
+        background: transparent;
+      }
+      .lk-bar__leave-item:hover {
+        background: var(--mj-bg-surface-hover);
+      }
+      .lk-bar__leave-item i {
+        width: 16px;
+        text-align: center;
+        color: var(--mj-text-muted);
+      }
+      .lk-bar__leave-item--end {
+        color: var(--mj-status-error-text, var(--mj-status-error));
+      }
+      .lk-bar__leave-item--end:hover {
+        background: var(--mj-status-error-bg, color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface)));
+      }
+      .lk-bar__leave-item--end i {
+        color: var(--mj-status-error, #ef4444);
       }
       .lk-bar__badge {
         position: absolute;
@@ -195,6 +278,13 @@ export class LiveKitControlBarComponent {
   @Input() public EnableParticipantsToggle = true;
   /** Show the leave button. */
   @Input() public EnableLeaveControl = true;
+  /**
+   * When `true`, the leave button becomes a Zoom/Teams-style split that opens a menu offering **Leave**
+   * (you disconnect, the meeting continues) vs. **End meeting for everyone** (the host tears it down).
+   * When `false` (default), the button is a plain Leave — the parent decides whether ending-for-all is
+   * even possible (this generic component knows nothing about agents/MJ; it only emits {@link EndForAll}).
+   */
+  @Input() public CanEndForAll = false;
   /** Show the recording toggle (server-authorized; the host wires the actual egress call). */
   @Input() public EnableRecordingControl = false;
   /** Whether a recording is currently in progress. */
@@ -225,6 +315,11 @@ export class LiveKitControlBarComponent {
   @Output() public ToggleLayoutMenu = new EventEmitter<void>();
   /** The user clicked the whiteboard toggle. */
   @Output() public ToggleWhiteboard = new EventEmitter<void>();
-  /** The user clicked leave. */
+  /** The user clicked leave (they disconnect; any meeting continues for everyone else). */
   @Output() public Leave = new EventEmitter<void>();
+  /** The user chose "End meeting for everyone" from the split-leave menu (only reachable when {@link CanEndForAll}). */
+  @Output() public EndForAll = new EventEmitter<void>();
+
+  /** Whether the Zoom-style leave menu (Leave vs. End for everyone) is open. */
+  public LeaveMenuOpen = false;
 }

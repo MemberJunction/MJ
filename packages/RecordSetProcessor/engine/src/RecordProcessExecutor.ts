@@ -6,7 +6,7 @@
  */
 
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, type FieldRuleSet } from '@memberjunction/global';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
@@ -19,10 +19,13 @@ import {
     TriggeredByValue,
     ViewSource,
 } from '@memberjunction/record-set-processor-base';
+// The Remote Operation base + its scope-override type are now CodeGen-emitted into @memberjunction/core-entities.
+import { type RecordProcessScopeOverride } from '@memberjunction/core-entities';
 import { RecordSetProcessor } from './RecordSetProcessor';
 import { ActionRecordProcessor } from './processors/ActionRecordProcessor';
 import { AgentRecordProcessor } from './processors/AgentRecordProcessor';
 import { InferProcessor } from './processors/InferProcessor';
+import { FieldRulesProcessor } from './processors/FieldRulesProcessor';
 import { WriteBackProcessor } from './processors/WriteBackProcessor';
 import { OutputMappingConfig } from './writeBack';
 
@@ -36,6 +39,16 @@ export interface RunRecordProcessOptions {
     triggeredBy?: TriggeredByValue;
     /** Process a single record (the on-change / on-demand single-record case) instead of the scope. */
     singleRecordID?: string;
+    /**
+     * Runtime scope override (selected rows / a view / a list / a filter), used instead of the stored
+     * Scope. This is how a grid/list UI runs a process against exactly what the user is looking at.
+     */
+    scope?: RecordProcessScopeOverride;
+    /**
+     * Compute-only: for work types that support it (currently `FieldRules`), produce the per-record diff
+     * WITHOUT writing. Powers the preview step of the bulk-update UX.
+     */
+    dryRun?: boolean;
     /** FK to the owning `ScheduledJobRun` when launched by the scheduler (links the Process Run back). */
     scheduledJobRunID?: string;
     /** Progress callback. */
@@ -59,10 +72,11 @@ export class RecordProcessExecutor {
     public async Run(rp: MJRecordProcessEntity, options: RunRecordProcessOptions): Promise<ProcessRunResult> {
         const provider = options.provider ?? Metadata.Provider;
         return RecordSetProcessor.Instance.Process({
-            source: this.buildSource(rp, provider, options.singleRecordID),
-            processor: this.buildProcessor(rp),
+            source: this.buildSource(rp, provider, options.singleRecordID, options.scope),
+            processor: this.buildProcessor(rp, options.dryRun),
             contextUser: options.contextUser,
             provider,
+            dryRun: options.dryRun,
             recordProcessID: rp.ID,
             scheduledJobRunID: options.scheduledJobRunID,
             entityID: rp.EntityID,
@@ -74,10 +88,13 @@ export class RecordProcessExecutor {
         });
     }
 
-    /** Builds the record-set source from the process's Scope (or a single-record override). */
-    public buildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string): IRecordSetSource {
+    /** Builds the record-set source from a single-record override, a runtime scope override, or the process's stored Scope. */
+    public buildSource(rp: MJRecordProcessEntity, provider: IMetadataProvider, singleRecordID?: string, scope?: RecordProcessScopeOverride): IRecordSetSource {
         if (singleRecordID) {
             return new ArraySource([{ EntityID: rp.EntityID, RecordID: singleRecordID }], rp.EntityID, 'SingleRecord');
+        }
+        if (scope) {
+            return this.buildSourceFromScope(rp, provider, scope);
         }
         switch (rp.ScopeType) {
             case 'View':
@@ -104,8 +121,40 @@ export class RecordProcessExecutor {
         }
     }
 
-    /** Builds the processor from the process's Work, wrapping with output-mapping write-back when configured. */
-    public buildProcessor(rp: MJRecordProcessEntity): IRecordProcessor {
+    /** Resolves a runtime scope override (UI invocation: selection / view / list / filter) to a source. */
+    private buildSourceFromScope(rp: MJRecordProcessEntity, provider: IMetadataProvider, scope: RecordProcessScopeOverride): IRecordSetSource {
+        switch (scope.Kind) {
+            case 'records':
+                return new ArraySource(scope.RecordIDs.map((id) => ({ EntityID: rp.EntityID, RecordID: id })), rp.EntityID, 'Array');
+            case 'view':
+                return new ViewSource(scope.ViewID);
+            case 'list':
+                return new ListSource(scope.ListID);
+            case 'filter': {
+                const entity = provider.EntityByID(rp.EntityID);
+                if (!entity) {
+                    throw new Error(`Record Process '${rp.Name}': entity '${rp.EntityID}' not found in metadata`);
+                }
+                return new FilterSource(entity.Name, scope.Filter);
+            }
+        }
+    }
+
+    /**
+     * Builds the processor from the process's Work. `FieldRules` reads its rule set from `Configuration`
+     * and writes itself (honoring `dryRun`); the other work types build a base processor wrapped with
+     * output-mapping write-back when configured.
+     */
+    public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
+        if (rp.WorkType === 'FieldRules') {
+            const ruleSet = rp.Configuration ? SafeJSONParse<FieldRuleSet>(rp.Configuration) : undefined;
+            if (!ruleSet || !Array.isArray(ruleSet.Rules)) {
+                throw new Error(`Record Process '${rp.Name}': WorkType=FieldRules requires a FieldRuleSet (with a Rules array) in Configuration`);
+            }
+            // FieldRules owns its own write / dry-run preview — no output-mapping write-back wrapper.
+            return new FieldRulesProcessor({ RuleSet: ruleSet, DryRun: dryRun });
+        }
+
         const inputMapping = rp.InputMapping ? SafeJSONParse(rp.InputMapping) : undefined;
         let base: IRecordProcessor;
         if (rp.WorkType === 'Action') {
