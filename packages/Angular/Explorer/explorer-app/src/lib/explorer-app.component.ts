@@ -98,6 +98,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
     private bridge: ConversationBridgeService,
+    // Injected (not just used statically) so the root singleton is constructed
+    // before handleLogin runs. Magic-link logs in instantly (token already in the
+    // URL hash, no redirect round-trip), so without this injection handleLogin can
+    // fire before anything else constructs MJNotificationService, leaving
+    // MJNotificationService.Instance undefined -> "ShouldSuppressToast" crash.
+    private notifications: MJNotificationService,
     private appManager: ApplicationManager,
     private workspaceState: WorkspaceStateManager,
     private cdr: ChangeDetectorRef,
@@ -132,7 +138,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         }
 
         // Suppress toast for agent completions when the user is actively viewing the conversation
-        MJNotificationService.Instance.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
+        this.notifications.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
           const convoId = statusObj['conversationId'] as string;
           if (!convoId) return false;
           const isViewingConvo = this.bridge.ActiveConversationID$.value === convoId
@@ -587,7 +593,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         const message = String(params['Message'] || '');
         const type = (String(params['Type'] || 'info')) as 'info' | 'success' | 'warning' | 'error';
         const duration = Number(params['DurationMs']) || 3000;
-        MJNotificationService.Instance.CreateSimpleNotification(message, type, duration);
+        this.notifications.CreateSimpleNotification(message, type, duration);
         return { Success: true, Data: { Shown: true } };
       }
     });

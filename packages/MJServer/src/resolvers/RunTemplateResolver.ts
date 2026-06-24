@@ -21,8 +21,16 @@ export class TemplateRunResult {
     executionTimeMs?: number;
 }
 
+/**
+ * @deprecated Prefer the `Template.Run` Remote Operation (`@memberjunction/templates-base-types`
+ * `TemplateRunOperation`) — one typed call site that routes over the generic `ExecuteRemoteOperation`
+ * transport on the client and in-process on the server. This bespoke `RunTemplate` mutation is retained
+ * only for backward compatibility with existing external API consumers and may be removed in a future
+ * major version.
+ */
 @Resolver()
 export class RunTemplateResolver extends ResolverBase {
+    /** @deprecated Use the `Template.Run` Remote Operation instead. Retained for backcompat. */
     @Mutation(() => TemplateRunResult)
     async RunTemplate(
         @Arg('templateId') templateId: string,
