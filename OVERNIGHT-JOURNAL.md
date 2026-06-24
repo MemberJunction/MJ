@@ -63,7 +63,7 @@ _Updated continuously. Newest status at the top of each phase section._
 | W2 | Widget-instance metadata | ✅ entity+CodeGen / ⚠ seed push DB-blocked |
 | W3 | Embeddable bundle (text MVP) | ✅ DONE (live e2e Auth0-gated) |
 | W4 | Voice modality | ✅ DONE (live voice Auth0/mic-gated) |
-| W5 | Magic-link upgrade + host identity | TODO |
+| W5 | Magic-link upgrade + host identity | ⚠ host-identity DONE / upgrade documented |
 | W6 | Hardening & embed polish | TODO |
 | T0 | Media-plane spike | ✅ DONE |
 | T1 | Twilio end-to-end | ⚠ binding+ingress DONE / live router creds-gated |
@@ -71,7 +71,7 @@ _Updated continuously. Newest status at the top of each phase section._
 | T3 | RingCentral | TODO |
 | T4 | Telephony shared hardening | TODO |
 | M0 | Slack media-access verification spike | ✅ DONE (NO-GO, parked) |
-| M1 | Teams native SDK | TODO |
+| M1 | Teams native SDK | ⚠ binding+ingress DONE / live join Azure-gated |
 | M2 | Calendar + identity provisioners | TODO |
 | M3 | Slack binding (gated on M0) | TODO |
 | M4 | Meeting shared hardening | TODO |
@@ -216,7 +216,27 @@ modality gating, start/stop, transcript render, abuse-abort surfacing). Bundle s
 ✅ the abuse ceilings (the "biggest cost/abuse surface" control) are unit-tested; offline demo covers UX.
 
 ### W5 — Magic-link upgrade + host identity
-_Status: TODO_
+**Status: PARTIAL — host-passed identity (D1) DONE; magic-link upgrade designed, not built**
+
+- **Host-passed identity (DONE, tested):** `packages/MJServer/src/widget/host-identity.ts` — pure
+  `verifyHostAssertion` (RS256, audience=widget key, fail-closed) + `extractHostIdentity`.
+  `WidgetSessionService` requires a valid host assertion for `AuthStrategy='HostIdentity'` widgets
+  (verified against a config-registered host key keyed by `PublicKey`), else `host_assertion_invalid`.
+  `buildWidgetGuestClaims` folds the host identity into **informational** claims
+  (`given_name`/`family_name`/additive `mj_host_email`) while the principal-resolving `email`/`sub`
+  STAY the shared Anonymous principal — **a host cannot escalate a guest into a real account.**
+  Converges on the same magic-link validation path (host-identity is a mint-time strategy, not a
+  second session-validation provider — noted interpretation of the plan).
+  **Tests:** 9 new (valid/missing/no-key/bad-sig/wrong-aud/expired/no-email + claims folding).
+  Full MJServer suite **560 passed / 0 failed**.
+- **Config:** `widget.hostPublicKeys` interim store. _Follow-up:_ a per-instance `HostPublicKey`
+  column on `WidgetInstance` (pending a migration — DB down).
+- **Magic-link upgrade (NOT built — documented):** the plan's "verify it's you → /magic-link/create
+  → swap token" can't use `/magic-link/create` directly because that endpoint is **authenticated**
+  (a guest can't call it). It needs a dedicated **guest-scoped `POST /widget/upgrade`** that mints an
+  email magic-link on the guest session's behalf, plus the email redeem round-trip (live/Auth0-gated)
+  to deliver the verified token back (poll or postMessage) for `transport.UpdateToken`. Designed,
+  not implemented — honest gap for tomorrow.
 
 ### W6 — Hardening & embed polish
 _Status: TODO_
@@ -279,7 +299,22 @@ _Status: TODO_
   see M-phase notes). Driver scaffold remains valid + unit-tested; not deleted.
 
 ### M1 — Teams native SDK
-_Status: TODO_
+**Status: PARTIAL — offline binding + Graph ingress DONE; live join Azure/creds-gated**
+
+- **`RealTeamsBindings`** implements `ITeamsMeetingSdk` over injected SDK-free surfaces
+  (`IGraphCallsLike` control plane + `IAcsMediaLike` audio plane): `join`→Graph create-call,
+  roster/chat/mute/hangup→Graph, audio in/out→ACS sockets transcoded via the **T0 resampler**,
+  `onHandRaise` absence explicitly tolerated (won't throw on tenants lacking it). Join-payload
+  build, Teams `meetup-join` URL/coordinate parse, and roster normalization are pure functions.
+- **`teams-ingress`** (pure): `validateGraphNotification` (validation-token + constant-time
+  clientState handshake), `parseCallNotification`, `buildJoinByUrlRequest` — MJAPI-ready.
+- `@microsoft/microsoft-graph-client` + `@azure/communication-call-automation` in
+  `optionalDependencies` (never statically imported). **Driver + its tests untouched.**
+- **Build:** clean. **Tests:** **87 passed** (42 new). P5 confirmed NOT a blocker
+  (`wireTransportSeam` already covers media once a binding is injected).
+- ⛔ **Blocked on Azure/Teams creds + DB:** AAD app registration + cloud-communications/chat admin
+  consent, public `POST /meetings/teams/notifications` webhook, live ACS media socket, the
+  `Meeting.JoinByUrl` mutation (needs CodeGen), integration tests. See `spikes/M1-teams-binding-notes.md`.
 
 ### M2 — Calendar + identity provisioners
 _Status: TODO_
