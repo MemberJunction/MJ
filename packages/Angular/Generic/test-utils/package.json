@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-test-utils",
-  "version": "5.41.0",
+  "version": "5.42.0",
   "private": true,
   "description": "MemberJunction: Shared DOM-test helpers for Angular component unit tests (zoneless-safe render() fixture factory).",
   "type": "module",
