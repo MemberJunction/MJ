@@ -34,7 +34,7 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "fs";
 import { dirname, basename, join, relative } from "path";
 import { fileURLToPath } from "url";
-import ts from "typescript";
+import { parseComponentSurface } from "./lib/component-surface.mjs";
 
 const file = process.argv[2];
 const write = process.argv.includes("--write");
@@ -47,88 +47,20 @@ if (!file || !file.endsWith(".component.ts")) {
 // repo root = parent of this script's /scripts dir. fileURLToPath handles spaces in the path.
 const repoRoot = dirname(fileURLToPath(import.meta.url)).replace(/[\\/]scripts$/, "");
 
-const src = readFileSync(file, "utf-8");
-const sf = ts.createSourceFile(file, src, ts.ScriptTarget.Latest, /* setParentNodes */ true);
+const { className, selector, standalone, inputs: uniqInputs, outputs: uniqOutputs, loopVars, behaviors } = parseComponentSurface(file);
 
-const decoratorName = (dec) => {
-  const expr = ts.isCallExpression(dec.expression) ? dec.expression.expression : dec.expression;
-  return ts.isIdentifier(expr) ? expr.text : "";
-};
-const decoratorsOf = (node) => (ts.canHaveDecorators(node) ? ts.getDecorators(node) : undefined) || [];
-
-// --- find the @Component-decorated class (skips helper classes in the same file) ---
-let componentClass;
-let componentArg;
-const visit = (node) => {
-  if (ts.isClassDeclaration(node)) {
-    for (const dec of decoratorsOf(node)) {
-      if (decoratorName(dec) === "Component" && ts.isCallExpression(dec.expression)) {
-        componentClass = node;
-        componentArg = dec.expression.arguments[0];
-      }
-    }
-  }
-  ts.forEachChild(node, visit);
-};
-ts.forEachChild(sf, visit);
-
-const className = componentClass?.name?.text ?? "TheComponent";
-
-// --- read the @Component({...}) metadata ---
-let selector = "";
-let standalone = true; // Angular 21 defaults to standalone when omitted
-let template = "";
-let templateUrl = "";
-if (componentArg && ts.isObjectLiteralExpression(componentArg)) {
-  for (const prop of componentArg.properties) {
-    if (!ts.isPropertyAssignment(prop)) continue;
-    const key = prop.name.getText(sf);
-    const init = prop.initializer;
-    if (key === "selector" && ts.isStringLiteralLike(init)) selector = init.text;
-    else if (key === "standalone") standalone = init.kind === ts.SyntaxKind.TrueKeyword;
-    else if (key === "template" && ts.isStringLiteralLike(init)) template = init.text;
-    else if (key === "templateUrl" && ts.isStringLiteralLike(init)) templateUrl = init.text;
-  }
-}
-
-// --- @Input / @Output members (properties + get/set accessors; dedupe getter+setter pairs) ---
-const inputs = [];
-const outputs = [];
-if (componentClass) {
-  for (const member of componentClass.members) {
-    if (!member.name || !ts.isIdentifier(member.name)) continue;
-    for (const dec of decoratorsOf(member)) {
-      const dn = decoratorName(dec);
-      if (dn === "Input") inputs.push(member.name.text);
-      else if (dn === "Output") outputs.push(member.name.text);
-    }
-  }
-}
-const uniqInputs = [...new Set(inputs)];
-const uniqOutputs = [...new Set(outputs)];
-
-// --- resolve the template (inline captured above, else read templateUrl) ---
-if (!template && templateUrl) {
-  const htmlPath = join(dirname(file), templateUrl);
-  if (existsSync(htmlPath)) template = readFileSync(htmlPath, "utf-8");
-}
-
-// --- derive test ideas from the template's dynamic bits ---
-// Collect @for loop variables (e.g. `@for (day of days; ...)` → "day"). A TODO whose
-// expression references one is NOT settable via an @Input — it must be asserted on a
-// rendered item — so we flag it rather than implying it's a simple input test.
-const loopVars = new Set([...template.matchAll(/@for\s*\(\s*(\w+)\s+of\b/g)].map((m) => m[1]));
+// flag a TODO whose expression references a @for loop var — it's NOT settable via an @Input,
+// so it must be asserted on a rendered item rather than implying a simple input test.
 const loopFlag = (expr) =>
-  [...loopVars].some((v) => new RegExp(`\\b${v}\\b`).test(expr)) ? "  [↻ references a @for loop var — assert via a rendered item, not an @Input]" : "";
+  loopVars.some((v) => new RegExp(`\\b${v}\\b`).test(expr)) ? "  [↻ references a @for loop var — assert via a rendered item, not an @Input]" : "";
 
 const todos = [];
-for (const m of template.matchAll(/@if\s*\(([^)]+)\)/g)) todos.push(`gating: shows/hides the right element when \`${m[1].trim()}\`${loopFlag(m[1])}`);
-for (const m of template.matchAll(/\[class\.([\w-]+)\]="([^"]+)"/g))
-  todos.push(`conditional class: \`${m[1]}\` applied when \`${m[2].trim()}\`${loopFlag(m[2])}`);
-for (const m of template.matchAll(/\[attr\.([\w-]+)\]="([^"]+)"/g)) todos.push(`attribute: \`${m[1]}\` reflects \`${m[2].trim()}\`${loopFlag(m[2])}`);
-for (const m of template.matchAll(/\((\w+)\)="([^"]+)"/g))
-  todos.push(`event: \`(${m[1]})\` → \`${m[2].trim()}\` (assert the @Output emits / handler runs)${loopFlag(m[2])}`);
-for (const m of template.matchAll(/\{\{\s*([\w.?]+)\s*\}\}/g)) todos.push(`renders \`${m[1]}\`${loopFlag(m[1])}`);
+for (const expr of behaviors.gating) todos.push(`gating: shows/hides the right element when \`${expr}\`${loopFlag(expr)}`);
+for (const { cls, expr } of behaviors.conditionalClasses) todos.push(`conditional class: \`${cls}\` applied when \`${expr}\`${loopFlag(expr)}`);
+for (const { name, expr } of behaviors.attrs) todos.push(`attribute: \`${name}\` reflects \`${expr}\`${loopFlag(expr)}`);
+for (const { event, handler } of behaviors.events)
+  todos.push(`event: \`(${event})\` → \`${handler}\` (assert the @Output emits / handler runs)${loopFlag(handler)}`);
+for (const expr of behaviors.renders) todos.push(`renders \`${expr}\`${loopFlag(expr)}`);
 const uniqTodos = [...new Set(todos)];
 
 // --- emit ---

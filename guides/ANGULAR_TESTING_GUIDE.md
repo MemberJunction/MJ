@@ -344,3 +344,39 @@ unresolved import until its `dist/` exists. `npx turbo run test` handles this au
 does not. Build it once with `cd packages/Angular/Generic/test-utils && npm run build` (or
 `npx turbo run build --filter=@memberjunction/ng-test-utils`). The same applies to any other
 unbuilt MJ package a component-under-test imports — build its dependency graph before the DOM run.
+
+---
+
+## 11. Visibility: what's tested? (`dom-test-report.mjs`)
+
+`scripts/dom-test-report.mjs` is a read-only report that scores **how well each component is
+DOM-tested** — not just whether a spec file exists. It reuses the same component parser as the stub
+generator (`scripts/lib/component-surface.mjs`), so it scores against exactly the surface a generated
+stub would have asked you to cover.
+
+```bash
+node scripts/dom-test-report.mjs                                   # default: packages/Angular/Generic
+node scripts/dom-test-report.mjs packages/Angular/Generic/conversations   # one package
+node scripts/dom-test-report.mjs packages/Angular/Generic/livekit-room --all   # every component, not just gaps
+node scripts/dom-test-report.mjs packages/Angular --top=100        # wider scope, more rows
+node scripts/dom-test-report.mjs packages/Angular/Generic --json   # machine-readable
+```
+
+Per component it reports:
+
+- **status** — `solid` / `partial` / `stub` / `none`:
+  - **none** — no `*.component.dom.test.ts`.
+  - **stub** — a spec exists but is an unfilled generated starter (still has `// TODO:` lines, or its
+    only test is the `toBeTruthy()` smoke check).
+  - **solid** — ≥ 3 `it()` tests **and** (no name-checkable behaviors, or ≥ 60% of them referenced).
+  - **partial** — real tests, but below that bar — a "look closer," not a verdict.
+- **COVERS `a/b`** — behavior coverage: of the component's *named* contract bits — `@Output` names,
+  `[class.X]` names, `[attr.X]` names — how many the spec references. (Gating `@if` conditions and
+  `{{ }}` interpolations are **not** counted: a spec asserts the rendered element/text, not the source
+  expression, so they can't be matched by name. So `COVERS` is a floor, not a ceiling.)
+- **USED** — how many places render the component (selector occurrences across `packages/Angular`) —
+  the "how much it matters" signal, so heavily-used gaps rank to the top.
+
+Gaps are ranked by severity × usage. **Skipped/deferred components still count as gaps**, annotated with
+the reason (e.g. `media/WebRTC → e2e`) — an intentional skip is surfaced, not hidden. This is a
+**team-visibility backlog tool, not a CI gate** (gating is a Phase 4 conversation).

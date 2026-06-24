@@ -17,11 +17,11 @@ I am not going to personally author a test for every component. My job is to mak
 
 The first three make writing tests cheap and trackable; the last two keep them honest.
 
-1. **Grow `ng-test-utils`** — the shared helper library. Small helpers so a test is a few lines, not a chore: click/read/emit helpers, fake data for components that load from the server, and `render` extensions (providers, imports, async) for the harder components. _Everything else builds on this._
-2. **Auto test-stub generator** — a tool that reads a component and emits a starter test file (using the helpers above), so people fill in blanks instead of starting from scratch.
-3. **Visibility tooling** — a simple report showing which components have tests and which don't, so progress is visible and the backlog is clear.
-4. **Guardrails (later)** — lint/CI rules that stop people writing tests the wrong way (naming, anti-patterns).
-5. **Mutation testing (last)** — a check that proves the tests actually catch bugs, once there's a real body of tests to verify.
+1. ✅ **Grow `ng-test-utils`** — the shared helper library. Small helpers so a test is a few lines, not a chore: click/read/emit helpers, fake data for components that load from the server, and `render` extensions (providers, imports, async) for the harder components. _Everything else builds on this._ **Shipped:** `renderComponentFixture` (+ `providers`/`imports`/`declarations`), `renderTemplate`, `createFakeProvider`, `useFakeGlobalProvider`, dom-helpers.
+2. ✅ **Auto test-stub generator** — a tool that reads a component and emits a starter test file (using the helpers above), so people fill in blanks instead of starting from scratch. **Shipped:** `scripts/gen-dom-stub.mjs` (parses via the shared `scripts/lib/component-surface.mjs`, bootstraps the package's DOM config).
+3. ✅ **Visibility tooling (first iteration)** — `scripts/dom-test-report.mjs`. Goes beyond "has a spec file?": per component it scores **solid / partial / stub / none**, how many of its named behaviors (`@Output`s, `[class.X]`, `[attr.X]`) the spec actually references, and **how heavily the component is used** — so the backlog ranks by leverage (it surfaced `MjFormFieldComponent`: 4,144 usages, 0 DOM tests). Skipped/deferred components still count as gaps, annotated with why. Reuses the generator's parser so it scores against the same surface. (Deliberately leans on this rather than re-deriving Vitest's line coverage; deeper coverage signals can fold in later.)
+4. **Guardrails** — lint/CI rules that stop people writing tests the wrong way (naming, anti-patterns). **Lands with Phase 4** (CI gates).
+5. **Mutation testing** — a check that proves the tests actually catch bugs, once there's a real body of tests to verify. **Lands with Phase 4.**
 
 ---
 
