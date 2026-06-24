@@ -179,6 +179,16 @@ export class PostgreSQLDialect extends SQLDialect {
         return `"${aliasName}"`;
     }
 
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, so the physical schema an
+     * unquoted `CREATE SCHEMA __mj_BizAppsCommon` produces is `__mj_bizappscommon`.
+     * Canonicalize to that lowercase form so the engine's quoted operations target the
+     * same physical schema as the app's (typically unquoted) migration DDL.
+     */
+    CanonicalSchemaName(name: string): string {
+        return name.toLowerCase();
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {

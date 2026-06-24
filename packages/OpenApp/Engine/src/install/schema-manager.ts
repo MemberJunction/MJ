@@ -107,7 +107,12 @@ export async function CreateAppSchema(
     return validation;
   }
 
-  const exists = await SchemaExists(schemaName, provider);
+  // Create the schema under its platform-canonical name (PG folds unquoted DDL to lowercase),
+  // so this is the SAME physical schema the app's (typically unquoted) migration DDL will
+  // target — a mixed-case name can't split into a quoted-mixed + folded-lowercase pair.
+  const canonical = provider.Dialect.CanonicalSchemaName(schemaName);
+
+  const exists = await SchemaExists(canonical, provider);
   if (exists) {
     return {
       Success: false,
@@ -116,7 +121,7 @@ export async function CreateAppSchema(
   }
 
   try {
-    await provider.ExecuteSQL(`CREATE SCHEMA ${QuoteSchemaIdentifier(schemaName, provider)}`);
+    await provider.ExecuteSQL(`CREATE SCHEMA ${provider.Dialect.QuoteIdentifier(canonical)}`);
     return { Success: true };
   }
   catch (error: unknown) {
@@ -147,17 +152,16 @@ export async function DropAppSchema(
 
   try {
     if (provider.Dialect.PlatformKey === 'postgresql') {
-      // PostgreSQL folds unquoted identifiers to lowercase, so an app whose manifest
-      // declares a mixed-case schema (`__mj_BizAppsCommon`) ends up with its tables in
-      // the folded schema (`__mj_bizappscommon`) created by its unquoted migration DDL,
-      // while Skyway's quoted history table lands in the mixed-case schema. Dropping
-      // only the declared name would orphan one of them. Resolve every schema whose name
-      // matches case-insensitively and CASCADE-drop each so teardown is complete.
+      // Schema CREATE now canonicalizes the name (see CreateAppSchema), so a fresh install has a
+      // single physical schema. This case-insensitive sweep additionally cleans up any LEGACY
+      // split — a mixed-case schema that fragmented (folded-lowercase tables + quoted-mixed
+      // Skyway history) before canonicalization existed. Every schema whose name matches
+      // case-insensitively is CASCADE-dropped, so teardown is always complete.
       const matches = await provider.ExecuteSQL<{ schema_name: string }>(
         `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSqlString(schemaName)}')`
       );
       for (const m of matches) {
-        await provider.ExecuteSQL(`DROP SCHEMA ${QuoteSchemaIdentifier(m.schema_name, provider)} CASCADE`);
+        await provider.ExecuteSQL(`DROP SCHEMA ${provider.Dialect.QuoteIdentifier(m.schema_name)} CASCADE`);
       }
     } else {
       // SQL Server is case-insensitive for identifiers (one schema) and has no CASCADE
@@ -166,7 +170,7 @@ export async function DropAppSchema(
         return { Success: true };
       }
       await DropAllSchemaObjects(schemaName, provider);
-      await provider.ExecuteSQL(`DROP SCHEMA ${QuoteSchemaIdentifier(schemaName, provider)}`);
+      await provider.ExecuteSQL(`DROP SCHEMA ${provider.Dialect.QuoteIdentifier(schemaName)}`);
     }
     return { Success: true };
   }
@@ -263,16 +267,4 @@ async function DropAllSchemaObjects(
  */
 export function EscapeSqlString(value: string): string {
   return value.replace(/'/g, "''");
-}
-
-/**
- * Quotes a schema name as a SQL identifier for the provider's dialect, escaping
- * the dialect's own quote character. SQL Server -> `[name]` (`]` doubled);
- * PostgreSQL -> `"name"` (`"` doubled).
- */
-function QuoteSchemaIdentifier(value: string, provider: DatabaseProviderBase): string {
-  if (provider.Dialect.PlatformKey === 'postgresql') {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return `[${value.replace(/\]/g, ']]')}]`;
 }

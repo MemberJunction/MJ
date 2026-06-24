@@ -10,6 +10,7 @@
  */
 import path from 'node:path';
 import type { DatabasePlatform } from '@memberjunction/core';
+import { GetDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Minimal type definition for Skyway config so we don't need
@@ -226,6 +227,11 @@ function BuildSkywayConfig(
         ? migrationsDir
         : path.resolve(migrationsDir);
 
+    // Canonicalize the schema for the platform (PG folds unquoted DDL to lowercase) so Skyway's
+    // history table AND the `${flyway:defaultSchema}` the app's migrations resolve to both land in
+    // the SAME physical schema the app's (unquoted) DDL creates — no mixed-case/lowercase split.
+    const canonicalSchema = GetDialect(platform).CanonicalSchemaName(schemaName);
+
     // Azure SQL auto-detection is SQL-Server-specific (host ends with
     // .database.windows.net → encryption required). For PostgreSQL the encrypt/
     // trust flags are honored as provided and never Azure-inferred.
@@ -248,12 +254,12 @@ function BuildSkywayConfig(
         },
         Migrations: {
             Locations: [absoluteDir],
-            DefaultSchema: schemaName,
+            DefaultSchema: canonicalSchema,
             BaselineVersion: '1',
             BaselineOnMigrate: true,
         },
         Placeholders: {
-            'flyway:defaultSchema': schemaName,
+            'flyway:defaultSchema': canonicalSchema,
             mjSchema: mjCoreSchema ?? '__mj',
             ...(extraPlaceholders ?? {}),
         },
