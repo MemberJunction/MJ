@@ -480,6 +480,33 @@ These apply to every component objective (4–13). Don't re-read per objective �
 
 ---
 
+## 21. Scheduled audit routine | ~½ day
+
+*Depends on: O4 complete (need at least one canonical shipped to prove the routine reports usefully). Follow-up from PR #2933 review (per AN-BC).*
+
+| KR | Start | Target |
+|----|-------|--------|
+| Claude Code Routine scheduled and running | 0 | 1 |
+
+**Why this exists**: The CI gates from O2 only check files **changed in a PR**. That leaves two gaps the gates can't close on their own:
+1. **Pre-existing violations** in files no one happens to modify — they sit untouched until something forces the file open
+2. **Stuff that bypasses PR checks** — direct commits to `next`, merges from branches that didn't run our gates, third-party PRs that don't trigger the workflows
+
+**Scope**: Set up a Claude Code Routine on the web that runs on a recurring schedule (start with weekly) and does:
+- Run `npm run check:ui:adoption` → produces the latest `plans/adoption-metrics.md`
+- Run `npm run check:ui:all` → reports full-codebase violations
+- Compare against last week's snapshot → highlights any new violations that snuck in
+- Identify the highest-violation files as cleanup candidates
+- Post the report somewhere visible (GitHub issue, Slack, or commit to a tracking doc — TBD)
+
+**Done when**: Routine is configured, has run at least 2 cycles successfully, and the report format is useful enough to act on without manual reformatting.
+
+**Out of scope (for now)**:
+- Auto-creating cleanup PRs (manual review for now)
+- Routine for non-UI consistency work (focus on what we have)
+
+---
+
 ## Effort summary
 
 | # | Objective | Effort | Quarter | Validated |
@@ -504,9 +531,10 @@ These apply to every component objective (4–13). Don't re-read per objective �
 | 16 | Brand + icons | 1 day | Q3 | — |
 | 17 | Typography + spacing tokens | 1½ days | Q3 | — |
 | 18 | Dark-mode audit | 1 day | Q3 | — |
-| | **Q2 total** | **~6 days** | | |
+| 21 | Scheduled audit routine | ½ day | Q2 (after O4) | ✅ Follow-up from PR #2933 review |
+| | **Q2 total** | **~6½ days** | | |
 | | **Q3 total** | **~39–44 days** | | |
-| | **Grand total** | **~45–50 days** | | |
+| | **Grand total** | **~45½–50½ days** | | |
 
 ---
 
@@ -521,6 +549,9 @@ KR1:  1 → 2 → 3 (foundation — all done in 1 day)
            ↓
 KR2:  4 (empty-state), 8 (collapsible), 6 (confirm), 10 (alert+toast)
       (4 quick components — ~5-6 days total)
+           ↓
+KR1:  21 (scheduled audit routine — after O4 lands so it has a real
+      canonical to monitor)
 ```
 
 ### Q3 2026 (July–September)
