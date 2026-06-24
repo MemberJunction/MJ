@@ -32,6 +32,9 @@
       "SupportsNativeQueries": true,
       "SupportsReadWrite": false,
       "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "94E7A2F9-42B8-4942-964F-3BCD94981BBA"
     }
   },
   {
@@ -46,6 +49,9 @@
       "SupportsNativeQueries": true,
       "SupportsReadWrite": false,
       "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D38EF7F6-8C96-4ED1-A626-11770D7B84ED"
     }
   },
   {
@@ -60,6 +66,9 @@
       "SupportsNativeQueries": true,
       "SupportsReadWrite": false,
       "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B80C2CE0-A17B-43C1-95E3-C6A24117CE61"
     }
   },
   {
@@ -74,6 +83,9 @@
       "SupportsNativeQueries": true,
       "SupportsReadWrite": false,
       "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2464B6AE-1F10-4F0B-8499-C6EBFABBE60D"
     }
   },
   {
@@ -88,6 +100,9 @@
       "SupportsNativeQueries": true,
       "SupportsReadWrite": false,
       "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DEE445E3-8135-4B29-A904-B40BD5D8FC7F"
     }
   }
 ]

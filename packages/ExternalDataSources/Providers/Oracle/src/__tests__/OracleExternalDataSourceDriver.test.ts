@@ -15,8 +15,9 @@ class TestableOracleDriver extends OracleExternalDataSourceDriver {
   public mapType(t: string) {
     return this.mapObjectType(t);
   }
-  public groupFks(rows: Parameters<TestableOracleDriver['groupForeignKeys']>[0]) {
-    return this.groupForeignKeys(rows);
+  // Exercise Oracle's UPPERCASE-catalog normalization feeding the shared (lowercase) grouping.
+  public groupFks(rows: Parameters<TestableOracleDriver['normalizeForeignKeyRows']>[0]) {
+    return this.groupForeignKeys(this.normalizeForeignKeyRows(rows));
   }
 }
 

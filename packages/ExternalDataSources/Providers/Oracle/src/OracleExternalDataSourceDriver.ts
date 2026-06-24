@@ -2,16 +2,16 @@ import oracledb from 'oracledb';
 import { RegisterClass } from "@memberjunction/global";
 import {
   UserInfo,
-  ExternalObjectType,
   ExternalSchemaColumn,
   ExternalSchemaDescriptor,
   ExternalSchemaObject,
-  ExternalSchemaRelationship,
 } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import {
   BaseExternalDataSourceDriver,
+  BaseSqlExternalDataSourceDriver,
   ExternalConnectionTestResult,
+  ExternalFkRow,
   ExternalViewParams,
   ExternalViewResult,
   ExternalQueryParameter,
@@ -61,7 +61,7 @@ type FkRow = { CONSTRAINT_NAME: string; TABLE_NAME: string; COLUMN_NAME: string;
  * Registered as `OracleExternalDriver` — set `ExternalDataSourceType.DriverClass` to that value.
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'OracleExternalDriver')
-export class OracleExternalDataSourceDriver extends BaseExternalDataSourceDriver<oracledb.Pool> {
+export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<oracledb.Pool> {
   private pools = new Map<string, oracledb.Pool>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<oracledb.Pool> {
@@ -218,16 +218,12 @@ export class OracleExternalDataSourceDriver extends BaseExternalDataSourceDriver
     }
   }
 
-  protected buildSelectSql(target: string, params: ExternalViewParams): string {
-    const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
-    let sql = `SELECT ${projection} FROM ${target}`;
-    if (params.filter) {
-      sql += ` WHERE ${params.filter}`; // trusted dialect filter, same contract as MJ RunView ExtraFilter
-    }
+  /** Oracle 12c+ paging: ORDER BY + OFFSET m ROWS FETCH NEXT n ROWS ONLY (FETCH alone == FETCH FIRST). */
+  protected orderAndPageClause(params: ExternalViewParams): string {
+    let sql = '';
     if (params.orderBy) {
       sql += ` ORDER BY ${params.orderBy}`;
     }
-    // Oracle 12c+ row-limiting clause: OFFSET m ROWS FETCH NEXT n ROWS ONLY (FETCH alone == FETCH FIRST).
     if (params.offset != null) {
       sql += ` OFFSET ${Number(params.offset)} ROWS`;
     }
@@ -264,7 +260,7 @@ export class OracleExternalDataSourceDriver extends BaseExternalDataSourceDriver
       });
       columnsByTable.set(c.TABLE_NAME, list);
     }
-    const relationshipsByTable = this.groupForeignKeys(fkRows);
+    const relationshipsByTable = this.groupForeignKeys(this.normalizeForeignKeyRows(fkRows));
     return objectRows.map((o) => ({
       Name: o.OBJECT_NAME,
       ObjectType: this.mapObjectType(o.OBJECT_TYPE),
@@ -274,49 +270,23 @@ export class OracleExternalDataSourceDriver extends BaseExternalDataSourceDriver
     }));
   }
 
-  /** Group flat FK-column rows into one relationship per constraint (composite-key aware). */
-  protected groupForeignKeys(fkRows: FkRow[]): Map<string, ExternalSchemaRelationship[]> {
-    const byTable = new Map<string, Map<string, ExternalSchemaRelationship>>();
-    for (const r of fkRows) {
-      const constraints = byTable.get(r.TABLE_NAME) ?? new Map<string, ExternalSchemaRelationship>();
-      const rel = constraints.get(r.CONSTRAINT_NAME) ?? {
-        Name: r.CONSTRAINT_NAME,
-        ReferencedObject: r.REFERENCED_TABLE,
-        ReferencedSchema: r.REFERENCED_SCHEMA,
-        Columns: [],
-      };
-      rel.Columns.push({ Column: r.COLUMN_NAME, ReferencedColumn: r.REFERENCED_COLUMN });
-      constraints.set(r.CONSTRAINT_NAME, rel);
-      byTable.set(r.TABLE_NAME, constraints);
-    }
-    const out = new Map<string, ExternalSchemaRelationship[]>();
-    for (const [table, constraints] of byTable) {
-      out.set(table, Array.from(constraints.values()));
-    }
-    return out;
-  }
-
-  protected mapObjectType(objectType: string): ExternalObjectType {
-    return objectType === 'VIEW' ? 'view' : 'table';
+  /**
+   * Normalize Oracle's UPPERCASE catalog FK rows (OUT_FORMAT_OBJECT yields uppercase keys) to the
+   * shared lowercase {@link ExternalFkRow} shape consumed by the inherited `groupForeignKeys`.
+   */
+  protected normalizeForeignKeyRows(fkRows: FkRow[]): ExternalFkRow[] {
+    return fkRows.map((r) => ({
+      constraint_name: r.CONSTRAINT_NAME,
+      table_name: r.TABLE_NAME,
+      column_name: r.COLUMN_NAME,
+      referenced_table: r.REFERENCED_TABLE,
+      referenced_schema: r.REFERENCED_SCHEMA,
+      referenced_column: r.REFERENCED_COLUMN,
+    }));
   }
 
   /** Quote a SQL identifier with double-quotes (Oracle: case-sensitive when quoted), escaping `"`. */
   protected quoteIdent(name: string): string {
     return `"${name.replace(/"/g, '""')}"`;
-  }
-
-  /** Resolve an object name to a quoted, schema-qualified reference. */
-  protected qualifyObject(dataSource: MJExternalDataSourceEntity, objectName: string): string {
-    if (objectName.includes('.')) {
-      return objectName.split('.').map((p) => this.quoteIdent(p)).join('.');
-    }
-    if (dataSource.DefaultSchema) {
-      return `${this.quoteIdent(dataSource.DefaultSchema)}.${this.quoteIdent(objectName)}`;
-    }
-    return this.quoteIdent(objectName);
-  }
-
-  private errorText(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 }

@@ -39,13 +39,21 @@ describe('MongoFilterTranslator', () => {
     expect(t('email IS NOT NULL')).toEqual({ email: { $ne: null } });
   });
 
-  it('translates LIKE to an anchored, escaped, case-insensitive regex (% -> .*, _ -> .)', () => {
-    // Case-insensitive ($options: 'i') is a deliberate choice to match SQL Server's default
-    // collation (MJ's most common backend). Postgres LIKE is case-sensitive; this diverges
-    // from that on purpose. See personal notes — flagged for boss/code-review sign-off.
+  it('translates LIKE to an anchored, escaped, case-insensitive regex by default (% -> .*, _ -> .)', () => {
+    // Case-insensitive ($options: 'i') is the default to match SQL Server's default collation
+    // (MJ's most common backend). It is now configurable per data source (caseInsensitiveLike) for
+    // PostgreSQL-style case-sensitive matching — see the dedicated test below.
     expect(t("name LIKE 'Ac%'")).toEqual({ name: { $regex: '^Ac.*$', $options: 'i' } });
     expect(t("code LIKE 'A_C'")).toEqual({ code: { $regex: '^A.C$', $options: 'i' } });
     expect(t("v LIKE 'a.b%'")).toEqual({ v: { $regex: '^a\\.b.*$', $options: 'i' } }); // dot escaped
+  });
+
+  it('LIKE is case-sensitive (no $options) when caseInsensitiveLike is false', () => {
+    expect(MongoFilterTranslator.translate("name LIKE 'Ac%'", { caseInsensitiveLike: false }))
+      .toEqual({ name: { $regex: '^Ac.*$' } });
+    // explicit true matches the default
+    expect(MongoFilterTranslator.translate("name LIKE 'Ac%'", { caseInsensitiveLike: true }))
+      .toEqual({ name: { $regex: '^Ac.*$', $options: 'i' } });
   });
 
   it('combines predicates with AND / OR (AND binds tighter)', () => {

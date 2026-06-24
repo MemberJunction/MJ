@@ -2,15 +2,14 @@ import pg from 'pg';
 import { RegisterClass } from "@memberjunction/global";
 import {
   UserInfo,
-  ExternalObjectType,
   ExternalSchemaColumn,
   ExternalSchemaDescriptor,
   ExternalSchemaObject,
-  ExternalSchemaRelationship,
 } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import {
   BaseExternalDataSourceDriver,
+  BaseSqlExternalDataSourceDriver,
   ExternalConnectionTestResult,
   ExternalViewParams,
   ExternalViewResult,
@@ -57,7 +56,7 @@ interface PostgresCredentialValues extends Record<string, string> {
  * to that value to use this driver.
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'PostgresExternalDriver')
-export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriver<pg.Pool> {
+export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<pg.Pool> {
   private pools = new Map<string, pg.Pool>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<pg.Pool> {
@@ -211,12 +210,9 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
 
   // ---- helpers -------------------------------------------------------------
 
-  protected buildSelectSql(target: string, params: ExternalViewParams): string {
-    const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
-    let sql = `SELECT ${projection} FROM ${target}`;
-    if (params.filter) {
-      sql += ` WHERE ${params.filter}`; // trusted dialect filter, same contract as MJ RunView ExtraFilter
-    }
+  /** PostgreSQL paging: ORDER BY + LIMIT/OFFSET. */
+  protected orderAndPageClause(params: ExternalViewParams): string {
+    let sql = '';
     if (params.orderBy) {
       sql += ` ORDER BY ${params.orderBy}`;
     }
@@ -267,51 +263,8 @@ export class PostgresExternalDataSourceDriver extends BaseExternalDataSourceDriv
     }));
   }
 
-  /** Group flat FK-column rows into one relationship per constraint (composite-key aware). */
-  protected groupForeignKeys(
-    fkRows: Array<{ constraint_name: string; table_name: string; column_name: string; referenced_table: string; referenced_schema: string; referenced_column: string }>,
-  ): Map<string, ExternalSchemaRelationship[]> {
-    const byTable = new Map<string, Map<string, ExternalSchemaRelationship>>();
-    for (const r of fkRows) {
-      const constraints = byTable.get(r.table_name) ?? new Map<string, ExternalSchemaRelationship>();
-      const rel = constraints.get(r.constraint_name) ?? {
-        Name: r.constraint_name,
-        ReferencedObject: r.referenced_table,
-        ReferencedSchema: r.referenced_schema,
-        Columns: [],
-      };
-      rel.Columns.push({ Column: r.column_name, ReferencedColumn: r.referenced_column });
-      constraints.set(r.constraint_name, rel);
-      byTable.set(r.table_name, constraints);
-    }
-    const out = new Map<string, ExternalSchemaRelationship[]>();
-    for (const [table, constraints] of byTable) {
-      out.set(table, Array.from(constraints.values()));
-    }
-    return out;
-  }
-
-  protected mapObjectType(tableType: string): ExternalObjectType {
-    return tableType === 'VIEW' ? 'view' : 'table';
-  }
-
   /** Quote a SQL identifier, escaping embedded double-quotes. */
   protected quoteIdent(name: string): string {
     return `"${name.replace(/"/g, '""')}"`;
-  }
-
-  /** Resolve an object name to a quoted, schema-qualified reference. */
-  protected qualifyObject(dataSource: MJExternalDataSourceEntity, objectName: string): string {
-    if (objectName.includes('.')) {
-      return objectName.split('.').map((p) => this.quoteIdent(p)).join('.');
-    }
-    if (dataSource.DefaultSchema) {
-      return `${this.quoteIdent(dataSource.DefaultSchema)}.${this.quoteIdent(objectName)}`;
-    }
-    return this.quoteIdent(objectName);
-  }
-
-  private errorText(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 }

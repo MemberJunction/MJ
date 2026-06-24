@@ -400,7 +400,10 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         pkParamNames.push(pk.CodeName);
       }
       const pkParamsList = pkParamNames.join(', ');
-      const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.CodeName}', Value: ${pk.CodeName} }`).join(', ');
+      // CompositeKey.Validate() matches FieldName against entity.Fields…Name (the DB field name), so the
+      // key MUST use pk.Name — not pk.CodeName, which diverges for PKs whose DB name needs sanitizing
+      // (spaces, leading digit, reserved word). The bound value still comes from the CodeName arg variable.
+      const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.Name}', Value: ${pk.CodeName} }`).join(', ');
 
       if (entity.ExternalDataSourceID) {
         // External-data-source entities have no MJ base view to query — proxy the single-record

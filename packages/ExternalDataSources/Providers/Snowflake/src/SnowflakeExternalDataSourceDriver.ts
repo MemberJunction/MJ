@@ -2,11 +2,10 @@
 // it transitively pulls @aws-sdk, which we don't want forced into the monorepo
 // install. Types come from @types/snowflake-sdk at build time; the runtime module
 // is loaded via dynamic import() only when this driver is actually used.
-import type { Connection, ConnectionOptions, Binds } from 'snowflake-sdk';
+import type { ConnectionOptions, Binds, createPool } from 'snowflake-sdk';
 import { RegisterClass } from '@memberjunction/global';
 import {
   UserInfo,
-  ExternalObjectType,
   ExternalSchemaColumn,
   ExternalSchemaDescriptor,
   ExternalSchemaObject,
@@ -14,6 +13,7 @@ import {
 import { MJExternalDataSourceEntity } from '@memberjunction/core-entities';
 import {
   BaseExternalDataSourceDriver,
+  BaseSqlExternalDataSourceDriver,
   ExternalConnectionTestResult,
   ExternalViewParams,
   ExternalViewResult,
@@ -24,6 +24,25 @@ import {
 
 type SnowflakeBind = string | number | boolean | Date | null;
 
+/**
+ * The snowflake-sdk connection pool type (generic-pool `Pool<Connection>`), derived from `createPool`'s
+ * return type so we don't have to import `generic-pool` (a transitive dep) directly.
+ */
+type SnowflakePool = ReturnType<typeof createPool>;
+
+/**
+ * Memoized loader for the optional `snowflake-sdk` peer dependency (CLAUDE.md rule #8, category 2).
+ * Cached behind a single module-level promise so the dynamic import resolves once per process rather
+ * than on every connection open.
+ */
+let snowflakeSdkPromise: Promise<typeof import('snowflake-sdk')> | undefined;
+function loadSnowflakeSdk(): Promise<typeof import('snowflake-sdk')> {
+  if (!snowflakeSdkPromise) {
+    snowflakeSdkPromise = import('snowflake-sdk');
+  }
+  return snowflakeSdkPromise;
+}
+
 /** Non-secret connection config stored in ExternalDataSource.ConnectionConfig (JSON). */
 interface SnowflakeConnectionConfig {
   /** Account identifier (e.g. 'xy12345.us-east-1'). Required. */
@@ -33,6 +52,8 @@ interface SnowflakeConnectionConfig {
   region?: string;
   /** Override authenticator (e.g. 'SNOWFLAKE_JWT' for key-pair). Inferred when a privateKey credential is present. */
   authenticator?: string;
+  /** Max pooled connections per data source (default 5). */
+  maxPoolSize?: number;
 }
 
 /** Decrypted credential values; password, programmatic access token (PAT/OAuth), or key-pair auth. */
@@ -48,17 +69,19 @@ interface SnowflakeCredentialValues extends Record<string, string> {
  * Snowflake driver for External Data Sources. Read-only, live-proxied access to a
  * Snowflake account via the official `snowflake-sdk`. Structurally mirrors the
  * PostgreSQL driver (ANSI SQL, LIMIT/OFFSET paging, double-quoted identifiers);
- * the callback-based SDK is promisified. One connection per `ExternalDataSource.ID`.
+ * the callback-based SDK is promisified. A connection pool (generic-pool, via
+ * `snowflake-sdk.createPool`) per `ExternalDataSource.ID`, so concurrent reads don't
+ * serialize behind a single shared connection.
  *
  * Supports password or key-pair (SNOWFLAKE_JWT) auth depending on the resolved
  * credential. Registered as `SnowflakeExternalDriver`.
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'SnowflakeExternalDriver')
-export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDriver<Connection> {
-  private connections = new Map<string, Connection>();
+export class SnowflakeExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<SnowflakePool> {
+  private pools = new Map<string, SnowflakePool>();
 
-  protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<Connection> {
-    const existing = this.connections.get(dataSource.ID);
+  protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<SnowflakePool> {
+    const existing = this.pools.get(dataSource.ID);
     if (existing) {
       return existing;
     }
@@ -91,30 +114,29 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
       options.password = cred?.values.password;
     }
 
-    // snowflake-sdk is CommonJS; under ESM dynamic import its exports live on `.default`.
-    const sdkModule = await import('snowflake-sdk');
-    const sdk = sdkModule.default ?? sdkModule;
-    const connection = sdk.createConnection(options);
-    await new Promise<void>((resolve, reject) => {
-      connection.connect((err) => (err ? reject(err) : resolve()));
-    });
-    this.connections.set(dataSource.ID, connection);
-    return connection;
+    // snowflake-sdk is CommonJS; under ESM dynamic import its exports may live on `.default`. The
+    // synthetic default isn't present on the `typeof import()` type query, so widen structurally to
+    // read it when present (interop), else fall back to the namespace itself.
+    const sdkModule = await loadSnowflakeSdk();
+    const sdk = (sdkModule as typeof sdkModule & { default?: typeof sdkModule }).default ?? sdkModule;
+    // generic-pool: connections are created lazily on first use and reused across concurrent queries,
+    // so distinct concurrent reads no longer serialize behind a single cached connection.
+    const pool = sdk.createPool(options, { max: config.maxPoolSize ?? 5, min: 0 });
+    this.pools.set(dataSource.ID, pool);
+    return pool;
   }
 
   protected async invalidateConnection(dataSourceId: string): Promise<void> {
-    const conn = this.connections.get(dataSourceId);
-    if (conn) {
-      this.connections.delete(dataSourceId);
-      await new Promise<void>((resolve) => {
-        try { conn.destroy(() => resolve()); } catch { resolve(); /* best-effort close */ }
-      });
+    const pool = this.pools.get(dataSourceId);
+    if (pool) {
+      this.pools.delete(dataSourceId);
+      try { await pool.drain(); await pool.clear(); } catch { /* best-effort close on the failure path */ }
     }
   }
 
-  /** Promisified statement execution. */
-  private execute<TRow extends ExternalRow = ExternalRow>(conn: Connection, sqlText: string, binds?: SnowflakeBind[]): Promise<TRow[]> {
-    return new Promise<TRow[]>((resolve, reject) => {
+  /** Promisified statement execution against a pooled connection (acquired for the call, then released). */
+  private execute<TRow extends ExternalRow = ExternalRow>(pool: SnowflakePool, sqlText: string, binds?: SnowflakeBind[]): Promise<TRow[]> {
+    return pool.use((conn) => new Promise<TRow[]>((resolve, reject) => {
       conn.execute({
         sqlText,
         // @types/snowflake-sdk types Bind as string|number, narrower than the SDK's
@@ -122,14 +144,14 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
         binds: binds as unknown as Binds,
         complete: (err, _stmt, rows) => (err ? reject(err) : resolve((rows ?? []) as TRow[])),
       });
-    });
+    }));
   }
 
   public async TestConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<ExternalConnectionTestResult> {
     const start = Date.now();
     try {
-      const conn = await this.getConnection(dataSource, contextUser);
-      await this.execute(conn, 'SELECT 1 AS ok');
+      const pool = await this.getConnection(dataSource, contextUser);
+      await this.execute(pool, 'SELECT 1 AS ok');
       return { success: true, message: 'Connection successful.', testedAt: new Date(), latencyMs: Date.now() - start };
     } catch (e) {
       return { success: false, message: this.errorText(e), testedAt: new Date(), latencyMs: Date.now() - start };
@@ -144,10 +166,10 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     const start = Date.now();
     try {
       return await this.withConnectionRetry(dataSource, async () => {
-        const conn = await this.getConnection(dataSource, contextUser);
+        const pool = await this.getConnection(dataSource, contextUser);
         const target = this.qualifyObject(dataSource, params.objectName);
-        const rows = await this.execute<TRow>(conn, this.buildSelectSql(target, params));
-        const totalRowCount = await this.maybeCount(conn, target, params);
+        const rows = await this.execute<TRow>(pool, this.buildSelectSql(target, params));
+        const totalRowCount = await this.maybeCount(pool, target, params);
         return { success: true, rows, totalRowCount, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
@@ -161,9 +183,9 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     primaryKey: ExternalQueryParameter,
     contextUser?: UserInfo,
   ): Promise<TRow | null> {
-    const conn = await this.getConnection(dataSource, contextUser);
+    const pool = await this.getConnection(dataSource, contextUser);
     const target = this.qualifyObject(dataSource, objectName);
-    const rows = await this.execute<TRow>(conn, `SELECT * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = ? LIMIT 1`, [primaryKey.value]);
+    const rows = await this.execute<TRow>(pool, `SELECT * FROM ${target} WHERE ${this.quoteIdent(primaryKey.name)} = ? LIMIT 1`, [primaryKey.value]);
     return rows[0] ?? null;
   }
 
@@ -176,9 +198,9 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     const start = Date.now();
     try {
       return await this.withConnectionRetry(dataSource, async () => {
-        const conn = await this.getConnection(dataSource, contextUser);
+        const pool = await this.getConnection(dataSource, contextUser);
         const binds = params?.length ? params.map((p) => p.value) : undefined;
-        const rows = await this.execute<TRow>(conn, queryText, binds);
+        const rows = await this.execute<TRow>(pool, queryText, binds);
         return { success: true, rows, rowCount: rows.length, executionTimeMs: Date.now() - start };
       });
     } catch (e) {
@@ -191,37 +213,34 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     schemaName: string | undefined,
     contextUser?: UserInfo,
   ): Promise<ExternalSchemaDescriptor> {
-    const conn = await this.getConnection(dataSource, contextUser);
+    const pool = await this.getConnection(dataSource, contextUser);
     const schema = schemaName ?? dataSource.DefaultSchema ?? 'PUBLIC';
     const tables = await this.execute<{ TABLE_NAME: string; TABLE_TYPE: string }>(
-      conn,
+      pool,
       `SELECT TABLE_NAME, TABLE_TYPE FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME`,
       [schema],
     );
     const columns = await this.execute<{ TABLE_NAME: string; COLUMN_NAME: string; DATA_TYPE: string; IS_NULLABLE: string }>(
-      conn,
+      pool,
       `SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, ORDINAL_POSITION`,
       [schema],
     );
     return { Database: dataSource.DefaultDatabase ?? undefined, Objects: this.assembleSchema(schema, tables, columns) };
   }
 
-  /** Close all cached connections (graceful shutdown). */
+  /** Drain + clear all cached pools (graceful shutdown). */
   public async Close(): Promise<void> {
-    for (const conn of this.connections.values()) {
-      await new Promise<void>((resolve) => conn.destroy(() => resolve()));
+    for (const pool of this.pools.values()) {
+      try { await pool.drain(); await pool.clear(); } catch { /* best-effort close */ }
     }
-    this.connections.clear();
+    this.pools.clear();
   }
 
   // ---- helpers (mirror the proven PostgreSQL driver) -----------------------
 
-  protected buildSelectSql(target: string, params: ExternalViewParams): string {
-    const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
-    let sql = `SELECT ${projection} FROM ${target}`;
-    if (params.filter) {
-      sql += ` WHERE ${params.filter}`; // trusted dialect filter, same contract as MJ RunView ExtraFilter
-    }
+  /** Snowflake paging: ANSI ORDER BY + LIMIT/OFFSET. */
+  protected orderAndPageClause(params: ExternalViewParams): string {
+    let sql = '';
     if (params.orderBy) {
       sql += ` ORDER BY ${params.orderBy}`;
     }
@@ -234,11 +253,11 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     return sql;
   }
 
-  private async maybeCount(conn: Connection, target: string, params: ExternalViewParams): Promise<number | undefined> {
+  private async maybeCount(pool: SnowflakePool, target: string, params: ExternalViewParams): Promise<number | undefined> {
     if (params.maxRows == null) {
       return undefined;
     }
-    const rows = await this.execute<{ CNT: number }>(conn, `SELECT COUNT(*) AS CNT FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
+    const rows = await this.execute<{ CNT: number }>(pool, `SELECT COUNT(*) AS CNT FROM ${target}${params.filter ? ` WHERE ${params.filter}` : ''}`);
     return Number(rows[0]?.CNT ?? 0);
   }
 
@@ -262,25 +281,7 @@ export class SnowflakeExternalDataSourceDriver extends BaseExternalDataSourceDri
     }));
   }
 
-  protected mapObjectType(tableType: string): ExternalObjectType {
-    return tableType.toUpperCase() === 'VIEW' ? 'view' : 'table';
-  }
-
   protected quoteIdent(name: string): string {
     return `"${name.replace(/"/g, '""')}"`;
-  }
-
-  protected qualifyObject(dataSource: MJExternalDataSourceEntity, objectName: string): string {
-    if (objectName.includes('.')) {
-      return objectName.split('.').map((p) => this.quoteIdent(p)).join('.');
-    }
-    if (dataSource.DefaultSchema) {
-      return `${this.quoteIdent(dataSource.DefaultSchema)}.${this.quoteIdent(objectName)}`;
-    }
-    return this.quoteIdent(objectName);
-  }
-
-  private errorText(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 }

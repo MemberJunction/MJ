@@ -2,15 +2,14 @@ import mysql from 'mysql2/promise';
 import { RegisterClass } from "@memberjunction/global";
 import {
   UserInfo,
-  ExternalObjectType,
   ExternalSchemaColumn,
   ExternalSchemaDescriptor,
   ExternalSchemaObject,
-  ExternalSchemaRelationship,
 } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import {
   BaseExternalDataSourceDriver,
+  BaseSqlExternalDataSourceDriver,
   ExternalConnectionTestResult,
   ExternalViewParams,
   ExternalViewResult,
@@ -65,7 +64,7 @@ type FkRow = { constraint_name: string; table_name: string; column_name: string;
  * to that value to use this driver.
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'MySQLExternalDriver')
-export class MySQLExternalDataSourceDriver extends BaseExternalDataSourceDriver<mysql.Pool> {
+export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<mysql.Pool> {
   private pools = new Map<string, mysql.Pool>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<mysql.Pool> {
@@ -203,12 +202,9 @@ export class MySQLExternalDataSourceDriver extends BaseExternalDataSourceDriver<
 
   // ---- helpers (mirror the proven PostgreSQL driver, MySQL dialect) --------
 
-  protected buildSelectSql(target: string, params: ExternalViewParams): string {
-    const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
-    let sql = `SELECT ${projection} FROM ${target}`;
-    if (params.filter) {
-      sql += ` WHERE ${params.filter}`; // trusted dialect filter, same contract as MJ RunView ExtraFilter
-    }
+  /** MySQL paging: ORDER BY + LIMIT/OFFSET (LIMIT must precede OFFSET; ceiling supplied for offset-only). */
+  protected orderAndPageClause(params: ExternalViewParams): string {
+    let sql = '';
     if (params.orderBy) {
       sql += ` ORDER BY ${params.orderBy}`;
     }
@@ -263,49 +259,8 @@ export class MySQLExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     }));
   }
 
-  /** Group flat FK-column rows into one relationship per constraint (composite-key aware). */
-  protected groupForeignKeys(fkRows: FkRow[]): Map<string, ExternalSchemaRelationship[]> {
-    const byTable = new Map<string, Map<string, ExternalSchemaRelationship>>();
-    for (const r of fkRows) {
-      const constraints = byTable.get(r.table_name) ?? new Map<string, ExternalSchemaRelationship>();
-      const rel = constraints.get(r.constraint_name) ?? {
-        Name: r.constraint_name,
-        ReferencedObject: r.referenced_table,
-        ReferencedSchema: r.referenced_schema,
-        Columns: [],
-      };
-      rel.Columns.push({ Column: r.column_name, ReferencedColumn: r.referenced_column });
-      constraints.set(r.constraint_name, rel);
-      byTable.set(r.table_name, constraints);
-    }
-    const out = new Map<string, ExternalSchemaRelationship[]>();
-    for (const [table, constraints] of byTable) {
-      out.set(table, Array.from(constraints.values()));
-    }
-    return out;
-  }
-
-  protected mapObjectType(tableType: string): ExternalObjectType {
-    return tableType === 'VIEW' ? 'view' : 'table';
-  }
-
   /** Quote a SQL identifier with backticks, escaping embedded backticks. */
   protected quoteIdent(name: string): string {
     return `\`${name.replace(/`/g, '``')}\``;
-  }
-
-  /** Resolve an object name to a quoted, schema-qualified reference. */
-  protected qualifyObject(dataSource: MJExternalDataSourceEntity, objectName: string): string {
-    if (objectName.includes('.')) {
-      return objectName.split('.').map((p) => this.quoteIdent(p)).join('.');
-    }
-    if (dataSource.DefaultSchema) {
-      return `${this.quoteIdent(dataSource.DefaultSchema)}.${this.quoteIdent(objectName)}`;
-    }
-    return this.quoteIdent(objectName);
-  }
-
-  private errorText(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 }

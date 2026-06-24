@@ -28,6 +28,11 @@ interface MongoConnectionConfig {
    * refuses plaintext to a remote host (local hosts are always allowed).
    */
   allowInsecureTransport?: boolean;
+  /**
+   * When false, `LIKE` filters translate to case-SENSITIVE regex (PostgreSQL-style). Default true
+   * (case-insensitive), matching SQL Server's default collation. See {@link MongoFilterTranslator}.
+   */
+  caseInsensitiveLike?: boolean;
 }
 
 /** Decrypted credential values expected from the Credential Engine. */
@@ -125,8 +130,9 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     try {
       return await this.withConnectionRetry(dataSource, async () => {
         const db = await this.getConnection(dataSource, contextUser);
+        const config = this.parseConnectionConfig<MongoConnectionConfig>(dataSource);
         const coll = db.collection(params.objectName);
-        const filter = MongoFilterTranslator.translate(params.filter);
+        const filter = MongoFilterTranslator.translate(params.filter, { caseInsensitiveLike: config.caseInsensitiveLike });
         const options: FindOptions = {};
         if (params.fields?.length) options.projection = this.buildProjection(params.fields);
         if (params.orderBy) options.sort = this.parseSort(params.orderBy);
@@ -167,6 +173,10 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
         if (!spec.collection || !Array.isArray(spec.pipeline)) {
           throw new Error('MongoDB native query must be JSON of the form { "collection": "<name>", "pipeline": [ ... ] }.');
         }
+        // Read-only enforcement (defense-in-depth): reject aggregation write stages even though the
+        // query text is admin-authored. `$out` / `$merge` persist the pipeline result to a collection,
+        // which violates the read-only contract of an external data source.
+        this.assertReadOnlyPipeline(spec.pipeline);
         const rows = await db.collection(spec.collection).aggregate(spec.pipeline as Document[]).toArray();
         return { success: true, rows: rows as unknown as TRow[], rowCount: rows.length, executionTimeMs: Date.now() - start };
       });
@@ -199,6 +209,22 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
   }
 
   // ---- helpers -------------------------------------------------------------
+
+  /** Forbidden aggregation stages that would write/persist data (violating read-only access). */
+  private static readonly WriteStages = new Set(['$out', '$merge']);
+
+  /** Throw if any pipeline stage is a write stage ($out / $merge). */
+  protected assertReadOnlyPipeline(pipeline: unknown[]): void {
+    for (const stage of pipeline) {
+      if (stage && typeof stage === 'object') {
+        for (const key of Object.keys(stage)) {
+          if (MongoExternalDataSourceDriver.WriteStages.has(key)) {
+            throw new Error(`MongoDB native query contains a forbidden write stage '${key}'. External data sources are read-only.`);
+          }
+        }
+      }
+    }
+  }
 
   private buildProjection(fields: string[]): Document {
     const proj: Record<string, 0 | 1> = {};
@@ -238,9 +264,5 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
     if (Array.isArray(v)) return 'array';
     if (v !== null && typeof v === 'object') return 'object';
     return typeof v;
-  }
-
-  private errorText(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 }

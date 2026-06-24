@@ -2,15 +2,14 @@ import sql from 'mssql';
 import { RegisterClass } from "@memberjunction/global";
 import {
   UserInfo,
-  ExternalObjectType,
   ExternalSchemaColumn,
   ExternalSchemaDescriptor,
   ExternalSchemaObject,
-  ExternalSchemaRelationship,
 } from "@memberjunction/core";
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import {
   BaseExternalDataSourceDriver,
+  BaseSqlExternalDataSourceDriver,
   ExternalConnectionTestResult,
   ExternalViewParams,
   ExternalViewResult,
@@ -62,7 +61,7 @@ interface SQLServerCredentialValues extends Record<string, string> {
  * to that value to use this driver.
  */
 @RegisterClass(BaseExternalDataSourceDriver, 'SQLServerExternalDriver')
-export class SQLServerExternalDataSourceDriver extends BaseExternalDataSourceDriver<sql.ConnectionPool> {
+export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSourceDriver<sql.ConnectionPool> {
   private pools = new Map<string, sql.ConnectionPool>();
 
   protected async getConnection(dataSource: MJExternalDataSourceEntity, contextUser?: UserInfo): Promise<sql.ConnectionPool> {
@@ -218,16 +217,19 @@ export class SQLServerExternalDataSourceDriver extends BaseExternalDataSourceDri
 
   // ---- helpers (mirror the proven PostgreSQL driver, T-SQL dialect) --------
 
-  protected buildSelectSql(target: string, params: ExternalViewParams): string {
-    const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
-    // TOP is only valid for a non-paginated bound; paging uses OFFSET..FETCH (which requires ORDER BY).
-    const top = params.maxRows != null && params.offset == null ? `TOP (${Number(params.maxRows)}) ` : '';
-    let sql = `SELECT ${top}${projection} FROM ${target}`;
-    if (params.filter) {
-      sql += ` WHERE ${params.filter}`; // trusted dialect filter, same contract as MJ RunView ExtraFilter
-    }
+  /** T-SQL row cap: `TOP (n)` is valid only for a non-paginated bound; paging uses OFFSET..FETCH. */
+  protected selectTopClause(params: ExternalViewParams): string {
+    return params.maxRows != null && params.offset == null ? `TOP (${Number(params.maxRows)}) ` : '';
+  }
+
+  /** T-SQL paging: OFFSET..FETCH (requires ORDER BY) when offsetting, else a plain ORDER BY. */
+  protected orderAndPageClause(params: ExternalViewParams): string {
+    let sql = '';
     if (params.offset != null) {
-      // OFFSET/FETCH requires ORDER BY in T-SQL; fall back to a stable no-op ordering when none given.
+      // T-SQL OFFSET/FETCH requires ORDER BY. The external read router defaults orderBy to the
+      // entity's introspected primary key for paginated reads (so page order is deterministic);
+      // (SELECT NULL) remains only as a last resort for a PK-less object, where no stable order
+      // is possible anyway.
       sql += ` ORDER BY ${params.orderBy ? params.orderBy : '(SELECT NULL)'} OFFSET ${Number(params.offset)} ROWS`;
       if (params.maxRows != null) {
         sql += ` FETCH NEXT ${Number(params.maxRows)} ROWS ONLY`;
@@ -275,51 +277,8 @@ export class SQLServerExternalDataSourceDriver extends BaseExternalDataSourceDri
     }));
   }
 
-  /** Group flat FK-column rows into one relationship per constraint (composite-key aware). */
-  protected groupForeignKeys(
-    fkRows: Array<{ constraint_name: string; table_name: string; column_name: string; referenced_table: string; referenced_schema: string; referenced_column: string }>,
-  ): Map<string, ExternalSchemaRelationship[]> {
-    const byTable = new Map<string, Map<string, ExternalSchemaRelationship>>();
-    for (const r of fkRows) {
-      const constraints = byTable.get(r.table_name) ?? new Map<string, ExternalSchemaRelationship>();
-      const rel = constraints.get(r.constraint_name) ?? {
-        Name: r.constraint_name,
-        ReferencedObject: r.referenced_table,
-        ReferencedSchema: r.referenced_schema,
-        Columns: [],
-      };
-      rel.Columns.push({ Column: r.column_name, ReferencedColumn: r.referenced_column });
-      constraints.set(r.constraint_name, rel);
-      byTable.set(r.table_name, constraints);
-    }
-    const out = new Map<string, ExternalSchemaRelationship[]>();
-    for (const [table, constraints] of byTable) {
-      out.set(table, Array.from(constraints.values()));
-    }
-    return out;
-  }
-
-  protected mapObjectType(tableType: string): ExternalObjectType {
-    return tableType === 'VIEW' ? 'view' : 'table';
-  }
-
   /** Quote a SQL identifier with T-SQL brackets, escaping embedded `]`. */
   protected quoteIdent(name: string): string {
     return `[${name.replace(/]/g, ']]')}]`;
-  }
-
-  /** Resolve an object name to a quoted, schema-qualified reference. */
-  protected qualifyObject(dataSource: MJExternalDataSourceEntity, objectName: string): string {
-    if (objectName.includes('.')) {
-      return objectName.split('.').map((p) => this.quoteIdent(p)).join('.');
-    }
-    if (dataSource.DefaultSchema) {
-      return `${this.quoteIdent(dataSource.DefaultSchema)}.${this.quoteIdent(objectName)}`;
-    }
-    return this.quoteIdent(objectName);
-  }
-
-  private errorText(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 }

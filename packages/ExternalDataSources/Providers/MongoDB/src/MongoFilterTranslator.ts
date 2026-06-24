@@ -7,7 +7,7 @@
  *   - comparisons: =, !=, <>, >, <, >=, <=
  *   - IN (...) / NOT IN (...)
  *   - IS NULL / IS NOT NULL
- *   - LIKE 'pattern'  (% -> .*, _ -> ., anchored, case-sensitive)
+ *   - LIKE 'pattern'  (% -> .*, _ -> ., anchored; case-insensitive by default, configurable)
  *   - AND / OR with parentheses (AND binds tighter than OR)
  *   - values: numbers, single-quoted strings, NULL, TRUE/FALSE
  *   - dotted field paths (e.g. address.city) for nested documents
@@ -19,6 +19,16 @@
 
 type MongoFilter = Record<string, unknown>;
 type Primitive = string | number | boolean | null;
+
+/** Options controlling SQL-WHERE → Mongo translation. */
+export interface MongoFilterOptions {
+  /**
+   * When true (default), `LIKE` becomes a case-insensitive regex (`$options: 'i'`), matching SQL
+   * Server's default collation — MJ's most common backend. When false, `LIKE` is case-sensitive
+   * (PostgreSQL-style). Configurable per data source via `ConnectionConfig.caseInsensitiveLike`.
+   */
+  caseInsensitiveLike?: boolean;
+}
 
 type Token =
   | { kind: 'ident'; value: string }
@@ -87,7 +97,7 @@ function tokenize(input: string): Token[] {
 
 class Parser {
   private pos = 0;
-  constructor(private readonly tokens: Token[]) {}
+  constructor(private readonly tokens: Token[], private readonly caseInsensitiveLike: boolean) {}
 
   private peek(): Token | undefined { return this.tokens[this.pos]; }
   private next(): Token | undefined { return this.tokens[this.pos++]; }
@@ -145,7 +155,13 @@ class Parser {
       this.next();
       return { [field]: negated ? { $ne: null } : { $eq: null } };
     }
-    if (this.isKw('LIKE')) { this.next(); const pat = this.expect('string').value as string; return { [field]: { $regex: MongoFilterTranslator.likeToRegex(pat), $options: 'i' } }; }
+    if (this.isKw('LIKE')) {
+      this.next();
+      const pat = this.expect('string').value as string;
+      const regex: MongoFilter = { $regex: MongoFilterTranslator.likeToRegex(pat) };
+      if (this.caseInsensitiveLike) regex.$options = 'i';
+      return { [field]: regex };
+    }
 
     throw new Error(`Unsupported predicate for field '${field}' in filter.`);
   }
@@ -172,9 +188,9 @@ class Parser {
 
 export class MongoFilterTranslator {
   /** Translate a SQL-WHERE-subset string into a Mongo filter document. Empty -> {}. */
-  public static translate(sql: string | undefined): MongoFilter {
+  public static translate(sql: string | undefined, options?: MongoFilterOptions): MongoFilter {
     if (!sql || !sql.trim()) return {};
-    return new Parser(tokenize(sql)).parse();
+    return new Parser(tokenize(sql), options?.caseInsensitiveLike ?? true).parse();
   }
 
   static comparison(field: string, op: string, value: Primitive): MongoFilter {

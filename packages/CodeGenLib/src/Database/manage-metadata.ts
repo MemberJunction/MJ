@@ -1518,6 +1518,15 @@ export class ManageMetadataBase {
             logError(`   External entity ${externalEntity.Name}: remote object '${externalEntity.ExternalObjectName ?? externalEntity.Name}' not found in introspected schema — skipping`);
             return {success: false, updatedEntity: false, relationshipsUpdated: false};
          }
+         // Guard the degenerate "found but zero columns" case the same way as "not found": a
+         // permission-limited / transient / partial introspection that returns an object shell with
+         // no columns must NOT be treated as "the entity now has no fields" — that would make the
+         // remove-list below every existing EntityField and DELETE them all (silent metadata loss).
+         // Bail with a warning instead and leave the existing fields untouched.
+         if (!obj.Columns || obj.Columns.length === 0) {
+            logError(`   External entity ${externalEntity.Name}: remote object '${obj.Name}' introspected with zero columns — skipping field sync to avoid destroying existing field metadata`);
+            return {success: false, updatedEntity: false, relationshipsUpdated: false};
+         }
 
          // Map each introspected column into the veField shape that manageSingleVirtualEntityField consumes.
          const eeFields = obj.Columns.map(c => {
@@ -1695,8 +1704,11 @@ export class ManageMetadataBase {
       if (entity) {
          const field = entity.Fields.find(f => f.Name.trim().toLowerCase() === veField.FieldName.trim().toLowerCase());
          if (field) {
-            // have a match, so the field exists in the entity definition, now check to see if it needs to be updated
-            if (makePrimaryKey ||
+            // have a match, so the field exists in the entity definition, now check to see if it needs to be updated.
+            // Only force an update for the PK flag when the field is NOT already a primary key — otherwise
+            // makePrimaryKey would re-UPDATE the row every CodeGen run (bumping __mj_UpdatedAt + logging a
+            // spurious change) even when nothing actually changed.
+            if ((makePrimaryKey && !field.IsPrimaryKey) ||
                 field.Type.trim().toLowerCase() !== veField.Type.trim().toLowerCase() ||
                 field.Length !== veField.Length ||
                 field.AllowsNull !== veField.AllowsNull ||
@@ -1735,7 +1747,7 @@ export class ManageMetadataBase {
                                       ${q('Length')}, ${q('Precision')}, ${q('Scale')},
                                       ${q('Sequence')}, ${q('IsPrimaryKey')}, ${q('IsUnique')},
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
-                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
+                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${String(veField.FieldName).replace(/'/g, "''")}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
                                        ${safeSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
                                        ${this.utcNow()}, ${this.utcNow()}
@@ -2709,9 +2721,9 @@ export class ManageMetadataBase {
                // lives on a remote system). Skip them here. This is the analogue of the VirtualEntity
                // exclusion, but kept as a single dialect-agnostic code guard rather than baked into the
                // per-dialect filter (getEntitiesWithMissingBaseTablesFilter) or the view, so it applies
-               // uniformly across SQL Server and PostgreSQL. (The v5.42 migration only recreates the
-               // view to re-expose the ExternalDataSourceID column to this guard; it does not exclude
-               // external entities at the SQL level.)
+               // uniformly across SQL Server and PostgreSQL. (The External Data Sources migration only
+               // recreates the view to re-expose the ExternalDataSourceID column to this guard; it does
+               // not exclude external entities at the SQL level.)
                if (e.ExternalDataSourceID) {
                   continue;
                }

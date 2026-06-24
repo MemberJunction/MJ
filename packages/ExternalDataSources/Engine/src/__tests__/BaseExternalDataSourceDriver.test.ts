@@ -88,18 +88,25 @@ describe('BaseExternalDataSourceDriver', () => {
   });
 
   describe('isAuthError', () => {
-    it('flags auth/credential failures', () => {
+    it('flags auth/credential failures by message', () => {
       for (const m of [
-        'password authentication failed for user "x"',
+        'password authentication failed for user "x"', // matched via 'authentic'
         'Authentication failed.',
         'not authorized on db to execute command',
         'invalid credential',
         'login failed for user',
-        'permission denied for relation foo',
+        'access denied for user',
         'SQLSTATE 28P01',
       ]) {
         expect(driver.exposeIsAuthError(new Error(m))).toBe(true);
       }
+    });
+
+    it('flags auth failures by structured vendor error code (preferred over message text)', () => {
+      expect(driver.exposeIsAuthError({ code: '28P01' })).toBe(true);     // PostgreSQL
+      expect(driver.exposeIsAuthError({ errno: 1045 })).toBe(true);       // MySQL ER_ACCESS_DENIED_ERROR
+      expect(driver.exposeIsAuthError({ number: 18456 })).toBe(true);     // SQL Server login failed
+      expect(driver.exposeIsAuthError({ errorNum: 1017 })).toBe(true);    // Oracle invalid username/password
     });
 
     it('does not flag query / network errors', () => {
@@ -108,6 +115,11 @@ describe('BaseExternalDataSourceDriver', () => {
         'syntax error at or near "SELCT"',
         'connection timeout',
         'ECONNREFUSED 127.0.0.1:5432',
+        // Object-level "permission denied" (not a credential failure) and a table literally named
+        // "password_resets" must NOT be treated as auth errors — these are the false positives the
+        // structured-code-first approach deliberately avoids.
+        'permission denied for relation foo',
+        'relation "password_resets" does not exist',
       ]) {
         expect(driver.exposeIsAuthError(new Error(m))).toBe(false);
       }
@@ -162,9 +174,15 @@ describe('BaseExternalDataSourceDriver', () => {
     const call = (over: Partial<{ host: string; tlsEnabled: boolean; allowInsecure: boolean }>) =>
       () => driver.exposeAssertSecureTransport({ host: 'db.example.com', tlsEnabled: false, allowInsecure: false, dataSourceName: 'X', ...over });
 
-    it('allows local hosts over plaintext (dev convenience)', () => {
-      for (const host of ['localhost', '127.0.0.1', '::1', '', undefined as unknown as string]) {
+    it('allows loopback hosts over plaintext (dev convenience)', () => {
+      for (const host of ['localhost', 'db.localhost', '127.0.0.1', '127.0.0.5', '::1', '[::1]']) {
         expect(call({ host })).not.toThrow();
+      }
+    });
+
+    it('fails closed on an empty / unparseable host (not assumed local)', () => {
+      for (const host of ['', '   ', undefined as unknown as string]) {
+        expect(call({ host })).toThrow(/unencrypted connection/);
       }
     });
 

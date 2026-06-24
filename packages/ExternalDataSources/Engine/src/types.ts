@@ -53,6 +53,21 @@ export interface ExternalViewResult<TRow extends ExternalRow = ExternalRow> {
   executionTimeMs: number;
 }
 
+/**
+ * Normalized flat foreign-key row shape consumed by {@link BaseSqlExternalDataSourceDriver.groupForeignKeys}.
+ * Each row pairs one referencing column with its referenced column; a composite key spans multiple rows
+ * sharing a `constraint_name`. SQL drivers map their dialect-specific catalog rows into this shape so the
+ * grouping logic lives once in the shared base.
+ */
+export interface ExternalFkRow {
+  constraint_name: string;
+  table_name: string;
+  column_name: string;
+  referenced_table: string;
+  referenced_schema: string;
+  referenced_column: string;
+}
+
 /** A bound parameter for native-dialect query execution. */
 export interface ExternalQueryParameter {
   name: string;

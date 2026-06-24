@@ -45,20 +45,32 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
         contextUser,
         provider,
       );
+      const offset = params.StartRow && params.StartRow > 0 ? params.StartRow : undefined;
+      // Deterministic paging: OFFSET-based paging needs a stable ORDER BY or pages can repeat/skip
+      // rows (T-SQL even forces a synthesized no-op ORDER BY when none is given). When the caller
+      // supplied no order and we're paginating, default to the entity's introspected primary key so
+      // page boundaries are well-defined uniformly across every SQL dialect. PK names come from MJ
+      // metadata (trusted), so they bypass the caller-clause keyword screen applied upstream.
+      let orderBy = (params.OrderBy as string) || undefined;
+      if (!orderBy && offset != null && entity.PrimaryKeys.length > 0) {
+        orderBy = entity.PrimaryKeys.map((pk) => pk.Name).join(', ');
+      }
       const viewParams: ExternalViewParams = {
         objectName: entity.ExternalObjectName || entity.BaseTable || entity.Name,
         fields: params.Fields && params.Fields.length ? params.Fields : undefined,
         filter: (params.ExtraFilter as string) || undefined,
-        orderBy: (params.OrderBy as string) || undefined,
-        // Bound the fetch: explicit MaxRows wins; else the entity's UserViewMaxRows; else a
-        // sane default cap so an unbounded RunView can't stream an entire remote table.
+        orderBy,
+        // Bound the fetch: explicit MaxRows wins; else the entity's UserViewMaxRows; else a sane
+        // default cap so an unbounded RunView can't stream an entire remote table. This is the
+        // external-path analogue of the MJ-DB branch's UserViewMaxRows cap (which the external
+        // dispatch returns before reaching).
         maxRows:
           params.MaxRows && params.MaxRows > 0
             ? params.MaxRows
             : entity.UserViewMaxRows && entity.UserViewMaxRows > 0
               ? entity.UserViewMaxRows
               : DEFAULT_EXTERNAL_MAX_ROWS,
-        offset: params.StartRow && params.StartRow > 0 ? params.StartRow : undefined,
+        offset,
       };
       const res = await driver.RunView<ExternalRow>(dataSource, viewParams, contextUser);
       if (!res.success) {
