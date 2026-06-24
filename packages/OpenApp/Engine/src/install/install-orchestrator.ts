@@ -246,15 +246,19 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     // Step 13: Update angular.json prebundle excludes
     HandleAngularPrebundleExcludes(manifest, context);
 
-    // Step 14: Flip status BEFORE regenerating the client bootstrap so the regen
-    // reads the new status. If `npm install` failed (deps unresolved), finalize as
-    // 'Disabled' rather than 'Active' — otherwise the app is advertised as healthy
-    // while its packages can't be imported. Disabled → the client bootstrap emits
-    // commented-out imports, and the server loader tolerates the missing module
-    // until the user runs `npm install` (B15).
+    // Step 14: Finalize status. If `npm install` failed (deps unresolved), finalize as
+    // 'Disabled' rather than 'Active' — otherwise the app is advertised as healthy while
+    // its packages can't be imported. When Disabled, also flip the app's dynamicPackages
+    // entries to Enabled:false so `mj codegen manifest --open-app-client-bootstrap` emits
+    // commented-out client imports (a static import of an uninstalled package would break
+    // the MJExplorer build) and the server loader skips it until `mj app enable` (B15).
     Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
     const finalStatus = npmInstallWarning ? 'Disabled' : 'Active';
     await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
+    if (finalStatus !== 'Active') {
+      // Array-agnostic by AppName — sweeps both the server and client arrays.
+      ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false);
+    }
 
     // Step 16: Execute hooks
     if (manifest.hooks?.postInstall) {

@@ -73,7 +73,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddClientDynamicPackages, AddEntityPackageMapping } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -375,6 +375,46 @@ describe('InstallApp — reinstall over a prior install (B17: Error apps are rei
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage?.toLowerCase()).toContain('already installed');
         expect(installSequence).toEqual([]);
+    });
+});
+
+describe('InstallApp — npm-install failure disables the app AND its dynamicPackages (client-bootstrap build safety)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        installSequence.length = 0;
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+        // npm install fails AFTER package.json was updated → app finalizes Disabled.
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: false, ErrorMessage: 'peer dep conflict' });
+        vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(ToggleServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
+        vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
+            installSequence.push(manifest.name);
+            return `id-${manifest.name}`;
+        });
+        serveManifests({ 'https://github.com/test/app-x': manifestJSON('app-x', {}) });
+    });
+
+    it('finalizes Disabled and flips dynamicPackages Enabled:false so the client manifest comments out (not imports) uninstalled packages', async () => {
+        const result = await InstallApp({ Source: 'https://github.com/test/app-x' }, context);
+        // Install still succeeds — it's installed-but-Disabled, not failed.
+        expect(result.Success).toBe(true);
+        // App finalized Disabled (npm couldn't resolve the deps).
+        expect(vi.mocked(SetAppStatus)).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'Disabled');
+        // The app's dynamicPackages entries are flipped off (array-agnostic by AppName → both
+        // server and client) so `mj codegen manifest --open-app-client-bootstrap` emits commented
+        // imports — a static import of a not-yet-installed package would break the MJExplorer build.
+        expect(vi.mocked(ToggleServerDynamicPackages)).toHaveBeenCalledWith(expect.anything(), 'app-x', false);
     });
 });
 
