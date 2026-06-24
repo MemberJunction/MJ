@@ -24,7 +24,8 @@ import { AngularConfigManager } from './angular-config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
-import type { MJEntityEntity, MJEntityFieldEntity } from '@memberjunction/core-entities';
+import { NormalizeUUID } from '@memberjunction/global';
+import type { MJEntityEntity, MJEntityFieldEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
@@ -1375,6 +1376,13 @@ export async function RemoveAppEntityMetadata(schemaName: string, contextUser: U
     }
     const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(f.ID)}'`).join(',');
 
+    // Capture the app's OWN Application row(s) NOW — before the ApplicationEntity links below
+    // are deleted — so they can be cleaned up post-commit (see DeleteAppOwnedApplications). An
+    // app's metadata-sync migration registers an Application (fixed UUID) grouping its entities;
+    // historically the link rows were removed but the Application itself was orphaned, so a
+    // reinstall's migration re-INSERTed the same fixed UUID and failed with a PK collision.
+    const ownedAppIds = await FindAppOwnedApplications(rv, contextUser, entityIds, idList);
+
     // Queue FK-dependent deletes in dependency order (children before parents).
     if (fieldIdList.length > 0) {
       await queueDeleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
@@ -1401,12 +1409,91 @@ export async function RemoveAppEntityMetadata(schemaName: string, contextUser: U
       throw new Error('Transaction failed: entity metadata cleanup could not be committed atomically');
     }
 
+    // Best-effort: drop the app's now-entity-less Application row(s) so a reinstall's migration
+    // doesn't collide on the app's fixed Application PK. Done AFTER the atomic metadata commit —
+    // the ApplicationEntity links are gone, so a wholly-owned Application is childless — and it is
+    // best-effort because a user may have added other dependents (dashboards, role/user
+    // assignments); such a row is left intact and simply reused on reinstall.
+    await DeleteAppOwnedApplications(rv, ownedAppIds, contextUser, callbacks);
+
     callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
     return { Success: true };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     callbacks?.OnError?.('Metadata', `Failed to remove entity metadata: ${message}`);
     return { Success: false, ErrorMessage: `Failed to remove entity metadata for schema '${schemaName}': ${message}` };
+  }
+}
+
+/**
+ * Finds the Application row(s) an Open App OWNS — i.e. an Application all of whose
+ * `ApplicationEntity` links point at the schema's entities (`entityIds`). An Application
+ * that also groups OTHER apps' entities is excluded (not wholly owned), so a shared
+ * Application is never selected for removal. Returns the owned Application IDs.
+ *
+ * `idList` is the pre-quoted, comma-joined SQL list of the schema's entity IDs (reused so we
+ * don't re-quote). Read-only — actual deletion is deferred to {@link DeleteAppOwnedApplications}.
+ */
+async function FindAppOwnedApplications(rv: RunView, contextUser: UserInfo, entityIds: string[], idList: string): Promise<string[]> {
+  const ours = new Set(entityIds.map((id) => NormalizeUUID(id)));
+  // Candidate Applications: those linked to ANY of this schema's entities.
+  const linked = await rv.RunView<{ ApplicationID: string }>(
+    { EntityName: 'MJ: Application Entities', ExtraFilter: `EntityID IN (${idList})`, Fields: ['ApplicationID'], ResultType: 'simple' },
+    contextUser,
+  );
+  if (!linked.Success) {
+    return [];
+  }
+  const candidateIds = [...new Set(linked.Results.map((r) => r.ApplicationID))];
+  if (candidateIds.length === 0) {
+    return [];
+  }
+  // Re-read ALL links for the candidates: an Application is "owned" only if EVERY one of its
+  // links is to an entity we're removing (otherwise it groups another app's entities too).
+  const candList = candidateIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const allLinks = await rv.RunView<{ ApplicationID: string; EntityID: string }>(
+    { EntityName: 'MJ: Application Entities', ExtraFilter: `ApplicationID IN (${candList})`, Fields: ['ApplicationID', 'EntityID'], ResultType: 'simple' },
+    contextUser,
+  );
+  if (!allLinks.Success) {
+    return [];
+  }
+  const allOursByApp = new Map<string, boolean>();
+  for (const link of allLinks.Results) {
+    const wasAllOurs = allOursByApp.get(link.ApplicationID) ?? true;
+    allOursByApp.set(link.ApplicationID, wasAllOurs && ours.has(NormalizeUUID(link.EntityID)));
+  }
+  return [...allOursByApp.entries()].filter(([, allOurs]) => allOurs).map(([appId]) => appId);
+}
+
+/**
+ * Deletes the app-owned Application row(s) from {@link FindAppOwnedApplications}, BEST-EFFORT.
+ * Called after the metadata-removal transaction commits (so the rows are already link-less).
+ * `BaseEntity.Delete()` returns `false` on a logical failure — e.g. a remaining FK dependent
+ * (a user-created Dashboard, role/user assignment, conversation) — in which case the Application
+ * is left intact (a reinstall reuses it) and a warning is surfaced. A leftover Application is the
+ * prior behavior, so this can never regress or fail the remove.
+ */
+async function DeleteAppOwnedApplications(rv: RunView, applicationIds: string[], contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<void> {
+  if (applicationIds.length === 0) {
+    return;
+  }
+  const idList = applicationIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const appsResult = await rv.RunView<MJApplicationEntity>(
+    { EntityName: 'MJ: Applications', ExtraFilter: `ID IN (${idList})`, ResultType: 'entity_object' },
+    contextUser,
+  );
+  if (!appsResult.Success) {
+    return;
+  }
+  for (const app of appsResult.Results) {
+    try {
+      if (!(await app.Delete())) {
+        callbacks?.OnWarn?.('Metadata', `Left Application '${app.Name}' — it still has dependents; a reinstall will reuse it (${app.LatestResult?.CompleteMessage ?? 'has FK references'}).`);
+      }
+    } catch (error: unknown) {
+      callbacks?.OnWarn?.('Metadata', `Could not remove app-owned Application '${app.Name}': ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 }
 
