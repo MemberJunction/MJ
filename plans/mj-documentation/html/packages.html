@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Packages — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+    <span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a>.</span>
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html" class="active">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+            <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()">
+                <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<main>
+
+<section class="section" style="padding-bottom: var(--space-8);">
+    <div class="container">
+        <div class="breadcrumb" style="justify-content: center;">
+            <a href="../index.html">Docs</a>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <span>Packages</span>
+        </div>
+        <div class="section-header">
+            <div class="section-eyebrow">175+ Modular packages</div>
+            <h1>Package directory</h1>
+            <p class="lead">Every package matched by the <code>workspaces</code> globs in <code>package.json</code>. Auto-generated — new packages appear here on the next build.</p>
+        </div>
+
+        <div style="display: flex; justify-content: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-6);">
+            <button class="search-trigger" style="min-width: 360px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <span class="search-text">Filter packages by name or category…</span>
+                <kbd>/</kbd>
+            </button>
+            <a href="#" class="btn btn-outline btn-sm">API Reference ↗</a>
+        </div>
+        <div style="display: flex; justify-content: center; gap: var(--space-2); flex-wrap: wrap; margin-bottom: var(--space-8);">
+            <button class="badge badge-brand" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">All</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">Core</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">AI</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">Angular</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">Actions</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">CodeGen</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">Data</button>
+            <button class="badge" style="border-radius: 999px; padding: 6px 14px; font-size: 12.5px;">Apps &amp; Tools</button>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+
+        <!-- Core Framework -->
+        <div class="pkg-category-block">
+            <h3>Core Framework <span class="pkg-count">8 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/core</div><div class="pkg-desc">Metadata engine, BaseEntity, RunView, the platform foundation.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/global</div><div class="pkg-desc">Global object store, ClassFactory, cross-cutting utilities.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/core-entities</div><div class="pkg-desc">Generated entity classes for every MJ core entity.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 14h18"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/core-entities-server</div><div class="pkg-desc">Server-side BaseEntity subclasses with persisted embeddings + invariants.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V8"/><path d="m5 12 7-4 7 4"/><path d="M5 16l7-4 7 4"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/server</div><div class="pkg-desc">GraphQL Apollo server, auth provider abstraction, MJAPI base.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/server-bootstrap</div><div class="pkg-desc">Bootstrap class manifest preventing tree-shake of @RegisterClass classes.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/server-extensions-core</div><div class="pkg-desc">Common server-side extensions and middleware.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 9h6v6H9z"/></svg></div><div class="pkg-body"><div class="pkg-name">mj_generatedentities</div><div class="pkg-desc">CodeGen output: typed entities for your application's schema.</div></div></a>
+            </div>
+        </div>
+
+        <!-- Data Providers -->
+        <div class="pkg-category-block">
+            <h3>Data Providers <span class="pkg-count">5 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/sqlserver-dataprovider</div><div class="pkg-desc">Direct SQL Server access via mssql driver.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/postgresql-dataprovider</div><div class="pkg-desc">Direct PostgreSQL access via pg driver.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/graphql-dataprovider</div><div class="pkg-desc">Browser-side provider talking to MJAPI's GraphQL endpoint.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/generic-database-provider</div><div class="pkg-desc">Shared base for engine-specific data providers.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11h.01"/><path d="M15 11h.01"/><path d="M21 12c0 5-4.5 9-9 9s-9-4-9-9 4-9 9-9 9 4 9 9z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/redis-provider</div><div class="pkg-desc">Redis-backed pub/sub for cross-server entity event distribution.</div></div></a>
+            </div>
+        </div>
+
+        <!-- AI Core & Agents -->
+        <div class="pkg-category-block">
+            <h3>AI Core &amp; Agents <span class="pkg-count">14 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M12 8V4H8"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai</div><div class="pkg-desc">Provider abstraction, model registry, prompt running.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="12" x="4" y="8" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-core-plus</div><div class="pkg-desc">Enhanced AI core types and helpers used by prompt runner.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/aiengine</div><div class="pkg-desc">High-level AI Engine — model routing, caching, execution.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-agents</div><div class="pkg-desc">Agent framework — BaseAgent, Loop/Flow agents, conductor.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-agents-client</div><div class="pkg-desc">Browser-side client for invoking agents via GraphQL.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="7"/><circle cx="15" cy="15" r="7"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-agent-manager</div><div class="pkg-desc">Agent administration: configs, runs, metrics, debugging.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-prompts</div><div class="pkg-desc">Prompt template engine, AIPromptParams, AIPromptRunner.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-base-engine</div><div class="pkg-desc">Shared base classes for AI runtime engines.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6"/><path d="m10 14-8 8"/><path d="m20 4-12 12"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-reranker</div><div class="pkg-desc">Result reranking for retrieval pipelines.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-mcp-server</div><div class="pkg-desc">Model Context Protocol server — entities, actions, prompts.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-mcp-client</div><div class="pkg-desc">MCP client to invoke remote MCP servers from inside MJ agents.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-a2a-server</div><div class="pkg-desc">Agent-to-Agent protocol server — MJ agents callable by external systems.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><circle cx="9" cy="9" r="2"/><circle cx="15" cy="15" r="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-computer-use</div><div class="pkg-desc">Computer-use action provider for agents that drive a desktop.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 7.27 12 12l-8.5-4.73"/><path d="M12 22V12"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/aicli</div><div class="pkg-desc">AI-powered CLI for running prompts, agents, and ad-hoc tasks.</div></div></a>
+            </div>
+        </div>
+
+        <!-- AI Providers -->
+        <div class="pkg-category-block">
+            <h3>AI Providers <span class="pkg-count">26 packages</span></h3>
+            <div class="provider-grid">
+                <div class="provider-tile"><div class="provider-mark">A</div><div class="provider-name">Anthropic</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">O</div><div class="provider-name">OpenAI</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">Az</div><div class="provider-name">Azure OpenAI</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">Aw</div><div class="provider-name">AWS Bedrock</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">V</div><div class="provider-name">Google Vertex</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">G</div><div class="provider-name">Gemini</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">M</div><div class="provider-name">Mistral</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">Gr</div><div class="provider-name">Groq</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">C</div><div class="provider-name">Cohere</div><div class="provider-type">LLM + Embed</div></div>
+                <div class="provider-tile"><div class="provider-mark">Ce</div><div class="provider-name">Cerebras</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">F</div><div class="provider-name">Fireworks</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">Or</div><div class="provider-name">OpenRouter</div><div class="provider-type">LLM proxy</div></div>
+                <div class="provider-tile"><div class="provider-mark">Ol</div><div class="provider-name">Ollama</div><div class="provider-type">Local LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">L</div><div class="provider-name">LMStudio</div><div class="provider-type">Local LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">Lc</div><div class="provider-name">LlamaCpp</div><div class="provider-type">Local LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">X</div><div class="provider-name">xAI Grok</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">Z</div><div class="provider-name">Zhipu</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">Mm</div><div class="provider-name">MiniMax</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">I</div><div class="provider-name">Inception</div><div class="provider-type">LLM</div></div>
+                <div class="provider-tile"><div class="provider-mark">E</div><div class="provider-name">ElevenLabs</div><div class="provider-type">Voice</div></div>
+                <div class="provider-tile"><div class="provider-mark">H</div><div class="provider-name">HeyGen</div><div class="provider-type">Video</div></div>
+                <div class="provider-tile"><div class="provider-mark">Bf</div><div class="provider-name">Black Forest</div><div class="provider-type">Image</div></div>
+                <div class="provider-tile"><div class="provider-mark">Bb</div><div class="provider-name">BettyBot</div><div class="provider-type">Chat</div></div>
+                <div class="provider-tile"><div class="provider-mark">Le</div><div class="provider-name">LocalEmbeddings</div><div class="provider-type">Embed</div></div>
+                <div class="provider-tile"><div class="provider-mark">Rx</div><div class="provider-name">Rex (Recs)</div><div class="provider-type">Recommender</div></div>
+                <div class="provider-tile"><div class="provider-mark">Bu</div><div class="provider-name">Bundle</div><div class="provider-type">Meta</div></div>
+            </div>
+        </div>
+
+        <!-- AI Vectors & Knowledge -->
+        <div class="pkg-category-block">
+            <h3>AI Vectors &amp; Knowledge <span class="pkg-count">8 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-vectors</div><div class="pkg-desc">Vector base — embedding storage, search, distance.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-vectors-database</div><div class="pkg-desc">Vector store backed by SQL Server / PostgreSQL.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-vectors-dupe</div><div class="pkg-desc">Duplicate detection via semantic similarity.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M21 3 4 20"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-vectors-sync</div><div class="pkg-desc">Batch sync of entity embeddings on changes.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-knowledge</div><div class="pkg-desc">Knowledge Hub — taxonomy, autotagging, RAG+ context.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-recommendations</div><div class="pkg-desc">Recommendation engine integration (Rex provider).</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-database-designer</div><div class="pkg-desc">AI-assisted schema design — generates entity SQL from a prompt.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ai-form-builder</div><div class="pkg-desc">AI-assisted form layout & component generation.</div></div></a>
+            </div>
+        </div>
+
+        <!-- Angular Explorer -->
+        <div class="pkg-category-block">
+            <h3>Angular Explorer <span class="pkg-count">8 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 0 1 2-2h.93a2 2 0 0 0 1.664-.89l.812-1.22A2 2 0 0 1 10.07 4h3.86a2 2 0 0 1 1.664.89l.812 1.22A2 2 0 0 0 18.07 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-explorer-app</div><div class="pkg-desc">MJ Explorer Angular application shell.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-explorer-core</div><div class="pkg-desc">Explorer-specific services: NavigationService, BaseResource.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-explorer-modules</div><div class="pkg-desc">Lazy-loaded feature modules wrapping dashboard sets.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-explorer-settings</div><div class="pkg-desc">Settings dashboards (entities, fields, users, permissions).</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-core-entity-forms</div><div class="pkg-desc">Auto-generated CRUD forms for every core entity.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-dashboards</div><div class="pkg-desc">Dashboard framework (BaseDashboard, page chrome, slots).</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 0 1 2-2h.93a2 2 0 0 0 1.664-.89l.812-1.22A2 2 0 0 1 10.07 4h3.86a2 2 0 0 1 1.664.89l.812 1.22A2 2 0 0 0 18.07 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-base-application</div><div class="pkg-desc">Base Angular application bootstrapping for MJ shells.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-auth-services</div><div class="pkg-desc">MSAL, Auth0, custom auth provider integration.</div></div></a>
+            </div>
+        </div>
+
+        <!-- Angular Generic -->
+        <div class="pkg-category-block">
+            <h3>Angular Generic Components <span class="pkg-count">~50 libraries</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="3" y="3" rx="2"/><rect width="14" height="14" x="7" y="7" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-ui-components</div><div class="pkg-desc">Primary UI library — buttons, dialogs, dropdowns, inputs.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-chat</div><div class="pkg-desc">Chat UI primitives — message list, composer, streaming.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-conversations</div><div class="pkg-desc">Full conversations UI for Skip Chat &amp; agent conversations.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="9"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-agents</div><div class="pkg-desc">Agent admin UI — runs, traces, configuration.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-agent-client</div><div class="pkg-desc">Browser-side agent invocation + streaming.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11h.01"/><path d="M15 11h.01"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-agent-requests</div><div class="pkg-desc">Agent request approval queue UI.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-ai-test-harness</div><div class="pkg-desc">Test harness for prompts &amp; agents in the browser.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m8 14 2 2 4-4"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-flow-editor</div><div class="pkg-desc">Visual editor for Flow Agents (drag-and-drop nodes).</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="6" height="18" x="3" y="3"/><rect width="6" height="11" x="9" y="3"/><rect width="6" height="14" x="15" y="3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-kanban</div><div class="pkg-desc">Kanban board for entity workflow visualization.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="6" y2="6"/><line x1="3" x2="21" y1="12" y2="12"/><line x1="3" x2="21" y1="18" y2="18"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-gantt</div><div class="pkg-desc">Gantt chart component for project / scheduling entities.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-code-editor</div><div class="pkg-desc">Monaco-backed code editor with TS/JS/SQL highlighting.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-react</div><div class="pkg-desc">React-in-Angular component bridge (for Skip components).</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-word-cloud</div><div class="pkg-desc">D3 word cloud component for tag/topic visualization.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-search</div><div class="pkg-desc">Global &amp; entity search components.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 15-5-5L5 21"/><circle cx="9" cy="9" r="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-file-storage</div><div class="pkg-desc">File upload &amp; preview backed by storage providers.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M6 9v6a3 3 0 0 0 3 3h6"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/ng-entity-relationship-diagram</div><div class="pkg-desc">Interactive ER diagram of the schema.</div></div></a>
+                <a href="#" class="pkg-card" style="grid-column: 1 / -1; text-align: center; justify-content: center;"><span class="muted" style="font-size: 13px;">…and ~35 more components. <a href="#" class="inline-link">Browse all on GitHub →</a></span></a>
+            </div>
+        </div>
+
+        <!-- Actions & BizApps -->
+        <div class="pkg-category-block">
+            <h3>Actions Framework &amp; BizApps <span class="pkg-count">~30 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions</div><div class="pkg-desc">Actions Framework runtime — discovery, parameter validation, execution.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-base</div><div class="pkg-desc">BaseAction class &amp; common action helpers.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/core-actions</div><div class="pkg-desc">Built-in actions: send email, run query, execute prompt, etc.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-runtime</div><div class="pkg-desc">Runtime host for executing actions in sandboxed contexts.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-code-execution</div><div class="pkg-desc">JS code execution sandbox for dynamic action bodies.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-bizapps-crm</div><div class="pkg-desc">CRM BizApp — accounts, contacts, opportunities, pipelines.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7H3"/><path d="M21 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-bizapps-accounting</div><div class="pkg-desc">Accounting BizApp — chart of accounts, AR/AP, journal entries.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-bizapps-lms</div><div class="pkg-desc">Learning Management — courses, enrollments, certifications.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><path d="M5 21v-4a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v4"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-bizapps-social</div><div class="pkg-desc">Social — community, channels, posts, reactions, threading.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2"/><line x1="9" x2="15" y1="6" y2="6"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-bizapps-formbuilders</div><div class="pkg-desc">Form builders for membership / event registration flows.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-apollo-enrichment</div><div class="pkg-desc">Apollo.io data enrichment integration.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-content-autotag</div><div class="pkg-desc">Knowledge Hub autotagging pipeline — extraction, weighting, bridging.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/actions-scheduled</div><div class="pkg-desc">Scheduled actions — cron-based action invocation.</div></div></a>
+            </div>
+        </div>
+
+        <!-- CodeGen -->
+        <div class="pkg-category-block">
+            <h3>CodeGen &amp; Schema <span class="pkg-count">10 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/codegen-lib</div><div class="pkg-desc">The CodeGen library — entities, sprocs, views, Angular forms.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/codegen-api</div><div class="pkg-desc">CodeGen as a GraphQL-callable service.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/schema-engine</div><div class="pkg-desc">Schema introspection &amp; comparison against metadata.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/db-auto-doc</div><div class="pkg-desc">Automatic database documentation generation.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/sql-converter</div><div class="pkg-desc">SQL Server ↔ PostgreSQL dialect conversion.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/sql-dialect</div><div class="pkg-desc">SQL dialect abstraction layer.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/sqlglot-ts</div><div class="pkg-desc">SQLGlot TypeScript bindings for query parsing.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/sql-parser</div><div class="pkg-desc">SQL parser with AST manipulation.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/query-gen</div><div class="pkg-desc">Generate SQL/GraphQL queries from natural language.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/query-processor</div><div class="pkg-desc">Query execution &amp; result caching.</div></div></a>
+            </div>
+        </div>
+
+        <!-- Apps & Tooling -->
+        <div class="pkg-category-block">
+            <h3>Apps &amp; Tooling <span class="pkg-count">~16 packages</span></h3>
+            <div class="pkg-grid">
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg></div><div class="pkg-body"><div class="pkg-name">mjapi</div><div class="pkg-desc">The MJAPI Apollo GraphQL server application.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">mjexplorer</div><div class="pkg-desc">MJ Explorer Angular application — main client UI.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/cli</div><div class="pkg-desc">The mj CLI — scaffolding, codegen, migrations, sync, deploy.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/installer</div><div class="pkg-desc">Project bootstrap &amp; first-run installer logic.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="m21 3-7 7"/><path d="M8 21H3v-5"/><path d="m3 21 7-7"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/metadata-sync</div><div class="pkg-desc">Declarative metadata in files; push/pull to/from the database.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/storage</div><div class="pkg-desc">File storage provider abstraction (S3, Azure Blob, local).</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/queue</div><div class="pkg-desc">Background job queue for long-running entity work.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 2 14 8 20 8"/><path d="M4 22h16a2 2 0 0 0 2-2V8l-6-6H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/export-engine</div><div class="pkg-desc">XLSX/CSV/PDF export of entity views.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/data-context</div><div class="pkg-desc">Data context abstraction for AI prompts &amp; analytics.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="M12 18v4"/><path d="m4.93 4.93 2.83 2.83"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/open-app</div><div class="pkg-desc">OpenApp deployment model — packaged Skip apps + brain.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/mobile-app</div><div class="pkg-desc">Mobile shell &amp; native bridge for MJ apps.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/testing-framework</div><div class="pkg-desc">Test utilities for entity mocking + assertions.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/scheduling</div><div class="pkg-desc">Cron + scheduled job runtime.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/search-engine</div><div class="pkg-desc">Search Scopes runtime + full-text/embedding integration.</div></div></a>
+                <a href="#" class="pkg-card"><div class="pkg-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 4.4 8 12 8 12s8-7.6 8-12a8 8 0 0 0-8-8z"/></svg></div><div class="pkg-body"><div class="pkg-name">@memberjunction/geo</div><div class="pkg-desc">Geocoding &amp; mapping integrations.</div></div></a>
+            </div>
+        </div>
+
+        <div style="text-align: center; padding: var(--space-12) 0;">
+            <p class="muted">Plus Communication providers (Email/SMS/Slack), Templates engine, MetadataSync, Notifications, EntityComm, MJStorage, MJQueue, and several others.</p>
+            <a href="https://github.com/MemberJunction/MJ/tree/main/packages" class="btn btn-outline mt-4">View all packages on GitHub →</a>
+        </div>
+
+    </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand"><div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div><p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p></div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>

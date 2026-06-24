@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI &amp; Agents — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+    <span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a>.</span>
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html" class="active">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+            <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()">
+                <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<div class="docs-layout">
+
+    <aside class="sidebar">
+        <div class="sidebar-section">
+            <h5>AI &amp; Agents</h5>
+            <nav class="sidebar-nav">
+                <a href="#overview" class="active">Overview</a>
+                <a href="#providers">AI Providers</a>
+                <a href="#engine">AI Engine</a>
+                <a href="#agents">Agent Framework</a>
+                <a href="#prompts">Prompt Engine</a>
+                <a href="#vectors">Vectors &amp; RAG+</a>
+                <a href="#mcp">MCP Server</a>
+                <a href="#a2a">A2A Server</a>
+                <a href="#skills">Claude Code Skills</a>
+            </nav>
+        </div>
+        <div class="sidebar-section">
+            <h5>Related guides</h5>
+            <nav class="sidebar-nav">
+                <a href="guides.html">Search Scopes &amp; RAG+</a>
+                <a href="guides.html">Content Autotagging</a>
+                <a href="guides.html">Taxonomy &amp; Tagging</a>
+            </nav>
+        </div>
+    </aside>
+
+    <main class="docs-main">
+        <div class="breadcrumb">
+            <a href="../index.html">Docs</a>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <span>AI &amp; Agents</span>
+        </div>
+
+        <h1>AI &amp; Agents</h1>
+        <p class="docs-lede">MJ's AI stack covers everything from raw provider abstraction up to autonomous agent workflows. 26 providers, a unified prompt engine, the agent framework, native MCP &amp; A2A support, and a published catalog of Claude Code skills for developers using MJ in their own projects.</p>
+
+        <h2 id="overview">Overview</h2>
+        <p>The AI layer is split into five concerns, each with its own package or set of packages:</p>
+        <ul>
+            <li><strong>Providers</strong> — adapters for each LLM / embedding / voice / image vendor. Uniform interface.</li>
+            <li><strong>AI Engine</strong> — model routing, caching, cost tracking, retries.</li>
+            <li><strong>Agent Framework</strong> — Loop &amp; Flow agents, sub-agent composition, conductor orchestration.</li>
+            <li><strong>Prompt Engine</strong> — database-managed prompt templates, runners, context injection.</li>
+            <li><strong>Vectors / Knowledge</strong> — embedding storage, similarity search, autotagging, RAG+.</li>
+        </ul>
+
+        <h2 id="providers">26 AI Providers</h2>
+        <p>Every provider implements the same <code>BaseLLM</code> interface (or <code>BaseEmbeddings</code>, <code>BaseImageGenerator</code>, etc.). Application code never imports a provider directly — it asks the AI Engine for a model by name and gets the right driver back.</p>
+
+        <div class="provider-grid">
+            <div class="provider-tile"><div class="provider-mark">A</div><div class="provider-name">Anthropic</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">O</div><div class="provider-name">OpenAI</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">Az</div><div class="provider-name">Azure OpenAI</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">Aw</div><div class="provider-name">Bedrock</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">V</div><div class="provider-name">Vertex</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">G</div><div class="provider-name">Gemini</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">M</div><div class="provider-name">Mistral</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">Gr</div><div class="provider-name">Groq</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">C</div><div class="provider-name">Cohere</div><div class="provider-type">LLM + Embed</div></div>
+            <div class="provider-tile"><div class="provider-mark">Ce</div><div class="provider-name">Cerebras</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">F</div><div class="provider-name">Fireworks</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">Or</div><div class="provider-name">OpenRouter</div><div class="provider-type">Proxy</div></div>
+            <div class="provider-tile"><div class="provider-mark">Ol</div><div class="provider-name">Ollama</div><div class="provider-type">Local</div></div>
+            <div class="provider-tile"><div class="provider-mark">L</div><div class="provider-name">LMStudio</div><div class="provider-type">Local</div></div>
+            <div class="provider-tile"><div class="provider-mark">Lc</div><div class="provider-name">LlamaCpp</div><div class="provider-type">Local</div></div>
+            <div class="provider-tile"><div class="provider-mark">X</div><div class="provider-name">xAI</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">Z</div><div class="provider-name">Zhipu</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">Mm</div><div class="provider-name">MiniMax</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">I</div><div class="provider-name">Inception</div><div class="provider-type">LLM</div></div>
+            <div class="provider-tile"><div class="provider-mark">E</div><div class="provider-name">ElevenLabs</div><div class="provider-type">Voice</div></div>
+            <div class="provider-tile"><div class="provider-mark">H</div><div class="provider-name">HeyGen</div><div class="provider-type">Video</div></div>
+            <div class="provider-tile"><div class="provider-mark">Bf</div><div class="provider-name">Black Forest</div><div class="provider-type">Image</div></div>
+            <div class="provider-tile"><div class="provider-mark">Bb</div><div class="provider-name">BettyBot</div><div class="provider-type">Chat</div></div>
+            <div class="provider-tile"><div class="provider-mark">Le</div><div class="provider-name">LocalEmbed</div><div class="provider-type">Embed</div></div>
+            <div class="provider-tile"><div class="provider-mark">Rx</div><div class="provider-name">Rex</div><div class="provider-type">Recs</div></div>
+            <div class="provider-tile"><div class="provider-mark">Bu</div><div class="provider-name">Bundle</div><div class="provider-type">Meta</div></div>
+        </div>
+
+        <h2 id="engine">AI Engine</h2>
+        <p>The <code>AIEngine</code> handles model selection, vendor routing, cost tracking, response caching, and retries. You configure a model in metadata (cost, capabilities, max tokens) and the engine matches your request to the cheapest model that meets your requirements:</p>
+
+        <pre><code><span class="tk-kw">import</span> { AIEngine } <span class="tk-kw">from</span> <span class="tk-str">'@memberjunction/aiengine'</span>;
+
+<span class="tk-kw">const</span> result = <span class="tk-kw">await</span> AIEngine.<span class="tk-ty">Instance</span>.<span class="tk-fn">RunPrompt</span>({
+    <span class="tk-attr">SystemPrompt</span>: <span class="tk-str">'Classify this support ticket.'</span>,
+    <span class="tk-attr">UserMessage</span>: ticket.Body,
+    <span class="tk-attr">ModelType</span>: <span class="tk-str">'classification'</span>,    <span class="tk-com">// engine picks an appropriate model</span>
+    <span class="tk-attr">MinPowerRank</span>: <span class="tk-num">2</span>,                  <span class="tk-com">// require at least this much capability</span>
+    <span class="tk-attr">ResponseFormat</span>: <span class="tk-str">'JSON'</span>,
+    <span class="tk-attr">Temperature</span>: <span class="tk-num">0</span>
+});</code></pre>
+
+        <h2 id="agents">Agent Framework</h2>
+        <p>MJ ships two agent execution strategies — both extend <code>BaseAgent</code>:</p>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-tile tile-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="m17 8 4 4-4 4"/></svg>
+                </div>
+                <h3>Loop Agents</h3>
+                <p>The classic ReAct-style agent: think → call a tool → observe → repeat. Best for open-ended tasks where the next step depends on what came back from the last one.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h4l3-9 4 18 3-9h4"/></svg>
+                </div>
+                <h3>Flow Agents</h3>
+                <p>Deterministic, node-based workflows you build in the Flow Editor. Best for processes where the steps and branches are known in advance.</p>
+            </div>
+        </div>
+
+        <p>Both agent types can:</p>
+        <ul>
+            <li>Invoke any registered Action via the Actions Framework.</li>
+            <li>Spawn sub-agents (conductor pattern).</li>
+            <li>Stream output progressively to the client.</li>
+            <li>Pause for human approval via the agent request queue.</li>
+            <li>Be triggered manually, on a schedule, or by entity events.</li>
+        </ul>
+
+        <pre><code><span class="tk-kw">import</span> { BaseAgent, RegisterClass } <span class="tk-kw">from</span> <span class="tk-str">'@memberjunction/ai-agents'</span>;
+
+@<span class="tk-fn">RegisterClass</span>(<span class="tk-ty">BaseAgent</span>, <span class="tk-str">'TicketTriage'</span>)
+<span class="tk-kw">export class</span> <span class="tk-ty">TicketTriageAgent</span> <span class="tk-kw">extends</span> <span class="tk-ty">BaseAgent</span> {
+    <span class="tk-kw">protected async</span> <span class="tk-fn">runStep</span>(ctx: <span class="tk-ty">AgentContext</span>) {
+        <span class="tk-com">// loop logic, action invocations, sub-agent calls...</span>
+    }
+}</code></pre>
+
+        <h2 id="prompts">Prompt Engine</h2>
+        <p>Prompts live in the database — versioned, organization-scoped, and composable. The <code>AIPromptRunner</code> handles template rendering, context injection, model selection, and result parsing in one call:</p>
+
+        <pre><code><span class="tk-kw">const</span> params = <span class="tk-kw">new</span> <span class="tk-ty">AIPromptParams</span>();
+params.prompt = <span class="tk-kw">await</span> promptEngine.<span class="tk-fn">GetPrompt</span>(<span class="tk-str">'Summarize Document'</span>);
+params.data = { document: doc.Body, audience: <span class="tk-str">'executive'</span> };
+
+<span class="tk-kw">const</span> result = <span class="tk-kw">await</span> <span class="tk-kw">new</span> <span class="tk-ty">AIPromptRunner</span>().<span class="tk-fn">ExecutePrompt</span>(params);</code></pre>
+
+        <h2 id="vectors">Vectors &amp; RAG+</h2>
+        <p>Every entity can have its content embedded into vectors using the <code>EmbedTextLocal</code> pattern from the <a href="guides.html" class="inline-link">BaseEntity Server-Side Patterns guide</a>. The vector store lives in your database (no separate vector DB to operate). Semantic search and RAG+ are first-class — see the <a href="guides.html" class="inline-link">Search Scopes &amp; RAG+ guide</a>.</p>
+
+        <h2 id="mcp">MCP Server</h2>
+        <p>MJ exposes its entities, actions, queries, and prompts as MCP tools. Connect Claude Desktop or Cursor to your MJ instance and your agents can read and write entities, run actions, and execute queries — all governed by your MJ permission model.</p>
+
+        <pre><code><span class="tk-com">// In Claude Desktop's claude_desktop_config.json</span>
+{
+    <span class="tk-str">"mcpServers"</span>: {
+        <span class="tk-str">"memberjunction"</span>: {
+            <span class="tk-str">"command"</span>: <span class="tk-str">"npx"</span>,
+            <span class="tk-str">"args"</span>: [<span class="tk-str">"-y"</span>, <span class="tk-str">"@memberjunction/ai-mcp-server"</span>],
+            <span class="tk-str">"env"</span>: { <span class="tk-str">"MJ_API_URL"</span>: <span class="tk-str">"https://your-mj.example.com/graphql"</span> }
+        }
+    }
+}</code></pre>
+
+        <h2 id="a2a">A2A Server</h2>
+        <p>MJ also speaks the Agent-to-Agent protocol, letting your agents be invoked by external systems (or other MJ deployments) over a standardized HTTP/JSON contract. Pair with the MCP server when you want both protocols on the same backend.</p>
+
+        <h2 id="skills">Claude Code Skills Catalog</h2>
+        <p>If you're using Claude Code to develop on MJ, the repo ships a growing set of <em>skills</em> — task-specific playbooks Claude can invoke. Install one into your project and Claude gains that capability for any subsequent task.</p>
+
+        <div class="callout callout-info">
+            <svg class="callout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+            <div>
+                <div class="callout-title">Skills are auto-discovered</div>
+                <p>The build scans <code>.claude/skills/</code> and <code>packages/*/skills/</code> on every nightly rebuild. New skills appear here automatically — no docs edit needed.</p>
+            </div>
+        </div>
+
+        <div class="skill-grid">
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge badge-brand">in-repo</span>
+                    playwright-cli
+                </div>
+                <p class="skill-desc">Automates browser interactions for web testing, form filling, screenshots, and data extraction. Launch a headed browser with persistent auth, click, type, take snapshots.</p>
+                <div class="skill-install">
+                    npm install -g @memberjunction/skill-playwright-cli
+                    <button title="Copy">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    pg-migrate
+                </div>
+                <p class="skill-desc">PostgreSQL migration sync skill for MJ projects. Generates &amp; applies SQL Server → PostgreSQL parity migrations.</p>
+                <div class="skill-install">@memberjunction/skill-pg-migrate</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    docker-workbench
+                </div>
+                <p class="skill-desc">Manage the Claude Code Docker workbench — start, stop, rebuild, exec into the containerized dev environment.</p>
+                <div class="skill-install">@memberjunction/skill-docker-workbench</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    verify
+                </div>
+                <p class="skill-desc">Verify a code change actually does what it's supposed to by running the app and observing behavior. Use before declaring a fix done.</p>
+                <div class="skill-install">@memberjunction/skill-verify</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    create-pr
+                </div>
+                <p class="skill-desc">Create a pull request with a polished title, body, and test plan — pulling context from the diff and recent commits.</p>
+                <div class="skill-install">@memberjunction/skill-create-pr</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    code-review
+                </div>
+                <p class="skill-desc">Review the current diff for correctness bugs &amp; simplifications at low/medium/high/ultra effort levels. Optionally post inline PR comments.</p>
+                <div class="skill-install">@memberjunction/skill-code-review</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    debug-agent-run
+                </div>
+                <p class="skill-desc">Debug a failing AI Agent Run — inspect the trace, find the failing step, propose &amp; apply a fix.</p>
+                <div class="skill-install">@memberjunction/skill-debug-agent-run</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    add-ai-model
+                </div>
+                <p class="skill-desc">Add a new AI model to the metadata catalog — vendor relationships, capabilities, pricing, all the fiddly fields.</p>
+                <div class="skill-install">@memberjunction/skill-add-ai-model</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    audit-memory-leaks
+                </div>
+                <p class="skill-desc">Audit a TS/Angular package for memory &amp; resource leaks — uncleared subscriptions, missing teardown, unbounded caches.</p>
+                <div class="skill-install">@memberjunction/skill-audit-memory-leaks</div>
+            </div>
+
+            <div class="skill-card">
+                <div class="skill-name">
+                    <span class="badge">global</span>
+                    generate-integration-actions
+                </div>
+                <p class="skill-desc">Generate (or regenerate) integration action metadata for one or all connectors in a BizApp.</p>
+                <div class="skill-install">@memberjunction/skill-generate-integration-actions</div>
+            </div>
+
+        </div>
+
+        <div style="text-align: center; padding: var(--space-8) 0;">
+            <a href="#" class="btn btn-outline">Browse the full skills catalog →</a>
+        </div>
+    </main>
+
+    <aside class="on-this-page">
+        <h5>On this page</h5>
+        <ul>
+            <li><a href="#overview" class="active">Overview</a></li>
+            <li><a href="#providers">AI Providers</a></li>
+            <li><a href="#engine">AI Engine</a></li>
+            <li><a href="#agents">Agent Framework</a></li>
+            <li><a href="#prompts">Prompt Engine</a></li>
+            <li><a href="#vectors">Vectors &amp; RAG+</a></li>
+            <li><a href="#mcp">MCP Server</a></li>
+            <li><a href="#a2a">A2A Server</a></li>
+            <li><a href="#skills">Skills Catalog</a></li>
+        </ul>
+    </aside>
+
+</div>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand"><div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div><p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p></div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>
