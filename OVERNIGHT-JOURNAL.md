@@ -11,23 +11,22 @@
 
 _Updated continuously. Newest status at the top of each phase section._
 
-**Where things stand (updated through W0/M0/W1/W2/T0):**
-- **W0 DONE** (empirical): D5 footgun confirmed — an unconstrained guest exposes all 17 active
-  top-level agents as handoff targets. Constrained principal is mandatory.
-- **M0 DONE**: Slack media bridge **NO-GO** (parked) with full evidence + re-eval triggers.
-- **W2 DONE (entity)**: `MJ: Widget Instances` migration + CodeGen applied & committed; metadata
-  seed (Widget Guest role + perms + example instance) authored & committed. Seed *push* + denied-
-  RunView check blocked by the DB outage (below).
-- **W1 DONE**: guest-session backend (`packages/MJServer/src/widget/`) — service + public router +
-  pure core, **551/56-skip/0-fail** MJServer tests (incl. 21 new). Live curl Auth0-gated.
-- **T0 DONE**: G.711 μ-law codec + PCM16 resampler in `ai-bridge-base`, 107 tests pass; P5 ruled
-  out as a telephony blocker.
-- **Next:** W3 (embeddable widget bundle) — the priority remaining piece; offline-buildable. Then
-  T1 telephony native-SDK scaffolding, M1 Teams scaffolding (all offline + unit-tested).
+**Where things stand (updated through W0–W4, T0–T1, M0):**
+- **Widget text+voice path COMPLETE offline**: W0 (D5 spike) ✅, W1 (guest-session backend) ✅,
+  W2 (entity+CodeGen ✅ / seed push DB-blocked), W3 (embeddable bundle) ✅, W4 (voice + abuse
+  ceilings) ✅. New package `@memberjunction/web-widget` builds + 27 tests pass + self-contained
+  esbuild bundle. Live end-to-end is Auth0/MJAPI-gated (never faked).
+- **Telephony**: T0 (G.711 codec + resampler, 107 tests) ✅; T1 (Twilio native bindings + ingress,
+  67 tests) ✅ offline — live MJAPI router + integration are creds-gated.
+- **Meetings**: M0 Slack **NO-GO** (parked) ✅.
+- **Remaining**: W5/W6 (widget upgrade/host-identity + hardening), T2/T3 (Vonage/RingCentral —
+  near-repeats of T1), T4, M1 (Teams native SDK), M2 (calendar/identity provisioners). M3 parked.
 
 **Review-first order (for tomorrow):**
-1. `plans/realtime/bridges-and-widget/spikes/W0-findings.md` — the D5 confirmation that shapes W1/W2 (constrained principal is mandatory, not just pinning).
-2. `plans/realtime/bridges-and-widget/spikes/M0-slack-media-findings.md` + the M0 gate added to `meeting-vendor-bindings-teams-slack.md` — Slack NO-GO with re-evaluation triggers.
+1. `OVERNIGHT-JOURNAL.md` phase board + the two hard blockers (DB outage, Auth0) — 2 min.
+2. `packages/Web/Widget/` (W1–W4 widget) + `packages/MJServer/src/widget/` (backend) — the bulk of the work.
+3. `plans/realtime/bridges-and-widget/spikes/` — W0/M0/T0/T1 findings + notes (the decision trail).
+4. `migrations/v5/V202606242115__*Widget_Instances.sql` + `metadata/widget-instances|roles|entity-permissions` (W2).
 
 **Hard blockers encountered:**
 - **🔴 DB outage (NEW, mid-session):** `sql-claude` became unreachable (DNS unresolved) after the
@@ -63,11 +62,11 @@ _Updated continuously. Newest status at the top of each phase section._
 | W1 | Guest-session backend | ✅ DONE (live curl Auth0-gated) |
 | W2 | Widget-instance metadata | ✅ entity+CodeGen / ⚠ seed push DB-blocked |
 | W3 | Embeddable bundle (text MVP) | ✅ DONE (live e2e Auth0-gated) |
-| W4 | Voice modality | TODO |
+| W4 | Voice modality | ✅ DONE (live voice Auth0/mic-gated) |
 | W5 | Magic-link upgrade + host identity | TODO |
 | W6 | Hardening & embed polish | TODO |
 | T0 | Media-plane spike | ✅ DONE |
-| T1 | Twilio end-to-end | TODO |
+| T1 | Twilio end-to-end | ⚠ binding+ingress DONE / live router creds-gated |
 | T2 | Vonage | TODO |
 | T3 | RingCentral | TODO |
 | T4 | Telephony shared hardening | TODO |
@@ -195,7 +194,26 @@ unresolved node built-ins** (~2.9 MB minified — tree-shaking/code-splitting is
 new entity over magic-link reuse (open-Q #3, in W2); direct-mint guest (open-Q #1, in W1).
 
 ### W4 — Voice modality
-_Status: TODO_
+**Status: DONE** ✅ (offline build/test; live voice MJAPI/Auth0 + mic gated)
+
+Added the voice surface to `@memberjunction/web-widget`, reusing
+`@memberjunction/ai-realtime-client` verbatim (no new driver):
+- **`VoiceAbuseGuard`** (pure, the public-safety control the plan stresses): per-session
+  max-minutes + output-token cost ceiling; the controller polls it and aborts cleanly.
+- **`IVoiceController`** seam → **`RealtimeVoiceController`** (prod): injected mint →
+  `MJGlobal.Instance.ClassFactory.CreateInstance(BaseRealtimeClient, provider)` → `getUserMedia`
+  → `Connect`; wires `OnTranscript/OnStateChange/OnUsage/OnError`; mic teardown on stop/abort.
+  **`MockVoiceController`** for tests.
+- **`guest-voice-mint`**: live `StartRealtimeClientSession` mutation for the **pinned** agent,
+  mapped to `ClientRealtimeSessionConfig` exactly like Explorer's `buildClientConfig`.
+- **Element**: modality-gated 🎤 button (Voice/Both only), start/stop toggle, final transcripts
+  rendered as messages, voice-state progress line, abuse aborts surfaced as system messages.
+- **loader** wires the controller for voice-enabled instances (injectable factory for tests).
+
+**Build:** clean. **Tests:** **27 passed** total (12 new: guard ceilings incl. cost+time, mic-button
+modality gating, start/stop, transcript render, abuse-abort surfacing). Bundle still self-contained.
+**Acceptance:** ⛔ live two-way voice needs MJAPI realtime mint + mic permission (Auth0/MJAPI-gated);
+✅ the abuse ceilings (the "biggest cost/abuse surface" control) are unit-tested; offline demo covers UX.
 
 ### W5 — Magic-link upgrade + host identity
 _Status: TODO_
@@ -220,7 +238,23 @@ _Status: TODO_
   `ai-bridge-engine.ts` already wires the realtime session SendInput/OnOutput).
 
 ### T1 — Twilio end-to-end
-_Status: TODO_
+**Status: PARTIAL — offline binding+ingress DONE; live MJAPI router + integration creds-gated**
+
+- **`RealTwilioBindings`** implements `ITwilioClientBindings` over injected SDK-free surfaces
+  (`ITwilioRestLike` + `ITwilioMediaPump`): `createCall`→REST POST /Calls with `<Connect><Stream>`
+  TwiML; `completeCall`/`redirectCall`/`playDigits`→REST update; `pushStreamAudio`/`onStreamAudio`→
+  Media-Streams frames **transcoded base64-μ-law↔PCM16 strictly via the T0 codec**. All TwiML +
+  frame logic in pure exported helpers. **No driver files touched** (work is in the native SDK).
+- **`twilio-ingress`** (pure, framework-free): `verifyTwilioSignature` (HMAC-SHA1, constant-time),
+  inbound voice TwiML, webhook→`{callSid,from,to}` mapper — ready for the MJAPI router to call verbatim.
+- `twilio` declared in `optionalDependencies` (never statically imported; rule 8 cat 2). _(Fixed a
+  JSON hazard from the sub-agent: a `"//"` comment key inside `optionalDependencies` would make npm
+  try to install a package named `//` — moved it to a top-level `"//optionalDependencies"` key.)_
+- **Build:** clean. **Tests:** **67 passed** (27 new bindings+ingress; 40 pre-existing kept green).
+- ⛔ **BLOCKED on real Twilio creds + public URL + DB:** the live MJAPI Express `POST
+  /telephony/twilio/voice` + `WSS /telephony/twilio/media` router, the `Telephony.PlaceCall` mutation
+  (needs CodeGen + DID→agent-identity lookup), credential-gated integration tests, and the
+  `telephony.twilio` config schema. All specified in `spikes/T1-twilio-ingress-notes.md`.
 
 ### T2 — Vonage
 _Status: TODO_
