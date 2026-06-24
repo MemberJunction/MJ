@@ -199,9 +199,13 @@ is documented in-spec** with its reason — no silent gaps, no faked green.
   Heavier components (resource wrappers, dashboards) lean on mocked providers + `NavigationService` fakes.
 - **Exit criteria:** Explorer packages covered to the agreed threshold.
 
-### Phase 4 — Gates & coverage
+### Phase 4 — Gates & coverage (incl. tooling-roadmap #4 + #5)
+
+The "keep tests honest" half of the tooling gameplan lands here, alongside the coverage gate:
 
 - Add a coverage threshold for Angular packages in CI (start lenient, ratchet up).
+- **Guardrails** (tooling-roadmap #4): lint/CI rules for spec naming + anti-patterns.
+- **Mutation testing** (tooling-roadmap #5): verify the tests actually catch bugs, once there's a real body of them.
 - Document the live-media e2e suite location/runner for the excluded WebRTC paths.
 
 ### LiveKit pilot — shipped + remaining
