@@ -1,0 +1,5 @@
+{
+  "entity": "MJ: Action Params",
+  "filePattern": "**/.*.json",
+  "defaults": {}
+}
