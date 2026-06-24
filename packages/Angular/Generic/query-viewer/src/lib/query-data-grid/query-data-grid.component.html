@@ -89,11 +89,12 @@
 
   <!-- Empty state -->
   @if (!IsLoading && RowCount === 0) {
-    <div class="empty-state" @fadeIn>
-      <i class="fa-solid fa-database empty-icon"></i>
-      <p class="empty-message">No results</p>
-      <p class="empty-hint">Run the query to see results</p>
-    </div>
+    <mj-empty-state
+      class="empty-state"
+      @fadeIn
+      Icon="fa-solid fa-database"
+      Title="No results"
+      Message="Run the query to see results" />
   }
 </div>
 
