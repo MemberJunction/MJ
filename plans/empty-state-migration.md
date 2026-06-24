@@ -195,8 +195,8 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/Home | 1 | 2 | ✅ | (prior commit) |
 | dashboards/AI-autotagging (stragglers) | 8 | 23 | ✅ | (this commit) |
 | dashboards/DevTools event-monitor | 1 | 3→1 | ✅ | (this commit) |
-| Explorer/core-entity-forms (24 files) | 24 | 85 | ✅ (build-verified)¹ | (this commit) |
-| Generic/conversations | ~12 | — | | |
+| Explorer/core-entity-forms (24 files) | 24 | 85 | ✅ (build-verified)¹ | `3351196622` |
+| Generic/conversations (11 files) | 11 | 13 | ✅ (build-verified)¹ | (this commit) |
 | Generic/{dashboard-viewer,artifacts,entity-viewer,...} | misc | — | | |
 | Explorer/explorer-core | ~5 | — | | |
 

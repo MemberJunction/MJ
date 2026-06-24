@@ -124,21 +124,3 @@
   background: var(--mj-border-strong);
 }
 
-/* Empty State */
-.mention-empty-state {
-  padding: 24px;
-  text-align: center;
-  color: var(--mj-text-muted);
-}
-
-.mention-empty-state i {
-  font-size: 32px;
-  margin-bottom: 8px;
-  opacity: 0.5;
-}
-
-.mention-empty-state p {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 500;
-}

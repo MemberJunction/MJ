@@ -665,13 +665,9 @@
   gap: 16px;
 }
 
-.empty-state {
+/* Empty-state spans the full artifacts grid */
+.artifacts-empty-fill {
   grid-column: 1/-1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
 }
 
 .artifact-modal-card {
