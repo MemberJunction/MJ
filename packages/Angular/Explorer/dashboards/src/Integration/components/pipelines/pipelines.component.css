@@ -160,8 +160,7 @@
   min-height: 0;
 }
 
-.content-loading,
-.content-empty {
+.content-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -173,9 +172,9 @@
 
 .content-loading i { font-size: 28px; color: var(--mj-color-indigo-500); }
 .content-loading span { font-size: 14px; }
-.content-empty .empty-icon { font-size: 48px; color: var(--mj-color-neutral-300); }
-.content-empty h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--mj-text-muted); }
-.content-empty p { margin: 0; font-size: 13px; color: var(--mj-text-disabled); }
+
+/* The empty placeholder fills the content area so it centers. */
+mj-empty-state { height: 100%; }
 
 /* ---------------------------------------------------------------------------
    Cards list

@@ -34,15 +34,12 @@
 
     <!-- Empty state -->
     @if (!IsLoading && Connections.length === 0) {
-      <div class="empty-state">
-        <i class="fa-solid fa-plug empty-icon"></i>
-        <h3>No integrations yet</h3>
-        <p>Connect your first external system to start syncing data.</p>
-        <button mjButton variant="primary" (click)="OpenWizard()">
-          <i class="fa-solid fa-plus"></i>
-          Add Your First Integration
-        </button>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-plug"
+        Title="No integrations yet"
+        Message="Connect your first external system to start syncing data."
+        ActionText="Add Your First Integration"
+        ActionIcon="fa-solid fa-plus"
+        (Action)="OpenWizard()" />
     }
 
     <!-- Card grid -->

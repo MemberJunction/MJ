@@ -598,22 +598,6 @@
    Empty State
    -------------------------------------------------------------------------- */
 
-.empty-state {
-  text-align: center;
-  padding: 60px 24px;
-  color: var(--mj-text-disabled);
-}
-
-.empty-state i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  display: block;
-}
-
-.empty-state p {
-  font-size: 15px;
-  margin: 0;
-}
 
 /* --------------------------------------------------------------------------
    Responsive

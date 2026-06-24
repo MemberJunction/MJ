@@ -50,10 +50,8 @@
 
   <!-- Empty state -->
   @if (!IsLoading && FilteredRuns.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-inbox"></i>
-      <p>No runs found for the selected filters.</p>
-    </div>
+    <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+      Title="No runs found for the selected filters." />
   }
 
   <!-- Split View: Run List + Detail Panel -->

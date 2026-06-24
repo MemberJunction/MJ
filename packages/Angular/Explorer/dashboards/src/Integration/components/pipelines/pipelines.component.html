@@ -40,11 +40,9 @@
           <span>Loading pipelines...</span>
         </div>
       } @else if (PipelineCards.length === 0) {
-        <div class="content-empty">
-          <i class="fa-solid fa-diagram-project empty-icon"></i>
-          <h3>No Integration Pipelines</h3>
-          <p>Configure integrations to see data flow pipelines here.</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-diagram-project"
+          Title="No Integration Pipelines"
+          Message="Configure integrations to see data flow pipelines here." />
       } @else {
         <div class="cards-list">
           @for (card of FilteredCards; track card.IntegrationID) {

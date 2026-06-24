@@ -35,6 +35,17 @@ _Other ComponentStudio empties (preview no-selection / run-state, browser empty/
 editor panels, dialog empties) reuse already-recorded patterns; the dashboard onboarding is
 captured as it's the one with projected multi-action + re-scoped CSS._
 
+## integration/
+| State | File |
+|-------|------|
+| Connections — onboarding + Add Your First Integration | `connections-onboarding.png` |
+| Overview — no integrations configured | `overview.png` |
+| Activity — no-results (no runs for filters) | `activity-no-results.png` |
+| Schedules — no integrations found | `schedules-empty.png` |
+
+_pipelines "No Integration Pipelines" (same icon+title+message pattern) covered
+in code; not screenshotted (nested sub-view)._
+
 ## actions/
 | State | File |
 |-------|------|
