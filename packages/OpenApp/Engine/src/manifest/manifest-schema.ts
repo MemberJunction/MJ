@@ -1,6 +1,17 @@
 /**
  * Zod schema for the mj-app.json manifest file.
  *
+ * An Open App **is** its manifest. The `mj-app.json` manifest is the single source of
+ * truth for what an app is: it can stand entirely alone (a manifest-only app is valid),
+ * it is what MJ persists (`MJ: Open Apps.ManifestJSON`), and it is what every lifecycle
+ * operation re-reads. Every *capability* block — `schema`, `migrations`, `metadata`,
+ * `packages`, `dependencies`, `code`, `configuration`, `hooks` — is **optional and
+ * additive**; the manifest assumes nothing about which blocks are present. An app's
+ * "form" is simply which blocks it declares (manifest-only, metadata-extending,
+ * schema-backed, packages-only, or any combination). Only the identity fields (name,
+ * version, publisher, repository, mjVersionRange, …) are required — they describe the
+ * app, not its form.
+ *
  * Validates all fields defined in the MJ Open App specification.
  * Used by the CLI to parse and validate app manifests before installation.
  */
@@ -156,23 +167,42 @@ export const mjAppManifestSchema = z.object({
     // in which case the engine pushes it at install/upgrade time.
     metadata: metadataSchema.optional(),
 
-    // NPM Packages
-    packages: packagesSchema,
+    // NPM Packages — optional, like every other capability block. An app that extends MJ
+    // purely via metadata or schema (or is manifest-only) declares no packages at all.
+    packages: packagesSchema.optional(),
 
-    // App Dependencies — object keyed by app name; values can be a semver range
-    // string or an object with version + repository.
-    dependencies: z.record(
-        z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
-        z.union([
-            z.string().min(1),
-            z.object({
-                version: z.string().min(1),
-                repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
-                /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
-                subpath: z.string().optional(),
-            })
-        ])
-    ).optional(),
+    // App Dependencies — accepted in TWO authoring forms, normalized to the same
+    // internal record (app name -> semver range string | { version, repository, subpath? }):
+    //   (1) object/record keyed by app name (canonical), or
+    //   (2) an array of { name, repository, versionRange, subpath? } entries (the form
+    //       several published apps ship, e.g. bizapps-tasks / bizapps-issues). The array
+    //       is transformed to the record so downstream resolution sees a single shape.
+    dependencies: z.union([
+        z.array(z.object({
+            name: z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
+            repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+            versionRange: z.string().min(1),
+            /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
+            subpath: z.string().optional(),
+        })).transform((arr) =>
+            Object.fromEntries(arr.map((d) => [
+                d.name,
+                { version: d.versionRange, repository: d.repository, ...(d.subpath ? { subpath: d.subpath } : {}) },
+            ]))
+        ),
+        z.record(
+            z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
+            z.union([
+                z.string().min(1),
+                z.object({
+                    version: z.string().min(1),
+                    repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+                    /** In-repo subpath to the dependency app, for dependencies that live in a multi-app repo. */
+                    subpath: z.string().optional(),
+                })
+            ])
+        ),
+    ]).optional(),
 
     // Code Visibility
     code: codeSchema.optional(),

@@ -99,14 +99,19 @@ describe('Manifest Validation', () => {
             expect(result.Manifest!.dependencies).toEqual({ 'dep-app-one': '^1.0.0' });
         });
 
-        it('should reject the array form (only the record form is supported)', () => {
+        it('should accept the array form and normalize it to the record form', () => {
             const m = {
                 ...minimalManifest(),
                 dependencies: [
                     { name: 'mj-bizapps-common', repository: 'https://github.com/MemberJunction/bizapps-common', versionRange: '>=5.30.0 <6.0.0' },
                 ],
             };
-            expect(ValidateManifestObject(m).Success).toBe(false);
+            const result = ValidateManifestObject(m);
+            expect(result.Success).toBe(true);
+            // The array entry is normalized to the canonical record (versionRange -> version).
+            expect(result.Manifest!.dependencies).toEqual({
+                'mj-bizapps-common': { version: '>=5.30.0 <6.0.0', repository: 'https://github.com/MemberJunction/bizapps-common' },
+            });
         });
     });
 
@@ -300,4 +305,79 @@ describe('Manifest Validation', () => {
             expect(ValidateManifestObject(m).Success).toBe(true);
         });
     });
+
+    // Every capability block is optional — the manifest is the source of truth and can
+    // stand alone. `packages` was the last required capability block; it is now optional.
+    describe('Optional Capability Blocks', () => {
+        it('should accept a manifest with NO packages block (metadata-/schema-/manifest-only forms)', () => {
+            const m = minimalManifest();
+            delete m.packages;
+            expect(ValidateManifestObject(m).Success).toBe(true);
+        });
+
+        it('should accept a manifest-only app (identity, zero capability blocks)', () => {
+            const m = minimalManifest();
+            for (const block of ['packages', 'schema', 'migrations', 'metadata', 'dependencies', 'code', 'configuration', 'hooks']) {
+                delete m[block];
+            }
+            expect(ValidateManifestObject(m).Success).toBe(true);
+        });
+
+        it('should accept a metadata-extending connector profile (metadata.processOnInstall, no schema/packages)', () => {
+            const m = minimalManifest();
+            delete m.packages;
+            m.metadata = { directory: 'metadata', processOnInstall: true };
+            expect(ValidateManifestObject(m).Success).toBe(true);
+        });
+    });
+
+    // The authoritative reference manifest must never drift from the validator.
+    describe('Reference Manifest', () => {
+        it('packages/OpenApp/Engine/manifest.reference.jsonc parses against the schema', async () => {
+            const { readFileSync } = await import('node:fs');
+            const { fileURLToPath } = await import('node:url');
+            const { join, dirname } = await import('node:path');
+            const here = dirname(fileURLToPath(import.meta.url));
+            const refPath = join(here, '..', '..', 'manifest.reference.jsonc');
+            const obj = JSON.parse(stripJsonComments(readFileSync(refPath, 'utf-8')));
+            const result = ValidateManifestObject(obj);
+            expect(result.Success, result.ErrorMessage).toBe(true);
+        });
+    });
 });
+
+/**
+ * String-aware JSONC comment stripper: removes `//` line and `/* *\/` block comments
+ * while preserving comment-like sequences (e.g. `https://`) inside quoted strings.
+ */
+function stripJsonComments(input: string): string {
+    let out = '';
+    let inString = false;
+    let escaped = false;
+    let inLine = false;
+    let inBlock = false;
+    for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        const next = input[i + 1];
+        if (inLine) {
+            if (ch === '\n') { inLine = false; out += ch; }
+            continue;
+        }
+        if (inBlock) {
+            if (ch === '*' && next === '/') { inBlock = false; i++; }
+            continue;
+        }
+        if (inString) {
+            out += ch;
+            if (escaped) { escaped = false; }
+            else if (ch === '\\') { escaped = true; }
+            else if (ch === '"') { inString = false; }
+            continue;
+        }
+        if (ch === '"') { inString = true; out += ch; continue; }
+        if (ch === '/' && next === '/') { inLine = true; i++; continue; }
+        if (ch === '/' && next === '*') { inBlock = true; i++; continue; }
+        out += ch;
+    }
+    return out;
+}
