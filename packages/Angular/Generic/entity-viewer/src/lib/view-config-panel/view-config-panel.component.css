@@ -415,20 +415,6 @@
   font-size: 12px;
 }
 
-/* Empty List */
-.empty-list {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px;
-  color: var(--mj-text-muted);
-  font-size: 13px;
-}
-
-.empty-list i {
-  color: var(--mj-text-disabled);
-}
-
 /* Format Editor */
 .format-editor {
   padding: 0;
@@ -932,37 +918,6 @@
 .sort-hint i {
   color: var(--mj-text-disabled);
   margin-top: 1px;
-}
-
-/* Sort Empty State */
-.sort-empty-state,
-.aggregates-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 32px 16px;
-  color: var(--mj-text-muted);
-  text-align: center;
-}
-
-.sort-empty-state i,
-.aggregates-empty-state i {
-  font-size: 32px;
-  opacity: 0.4;
-}
-
-.sort-empty-state span,
-.aggregates-empty-state span {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.sort-empty-hint,
-.empty-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--mj-text-disabled);
 }
 
 /* Filter Mode Selector */
