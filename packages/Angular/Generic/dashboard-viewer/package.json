@@ -26,7 +26,7 @@
   "devDependencies": {
     "@angular/compiler": "21.1.3",
     "@angular/compiler-cli": "21.1.3",
-    "@memberjunction/ng-test-utils": "5.41.0",
+    "@memberjunction/ng-test-utils": "5.42.0",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {

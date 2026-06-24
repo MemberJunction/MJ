@@ -35,7 +35,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "devDependencies": {
-    "@memberjunction/ng-test-utils": "5.41.0",
+    "@memberjunction/ng-test-utils": "5.42.0",
     "vitest": "^4.0.18"
   }
 }
