@@ -19,9 +19,8 @@ import semver from 'semver';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
-import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
-import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
@@ -68,8 +67,6 @@ export interface OrchestratorContext {
   VersionStrategy?: VersionStrategy;
   /** Additional workspace targets beyond the default server/client pair */
   AdditionalTargets?: WorkspaceTarget[];
-  /** File subpath within client workspace for bootstrap file (default: 'src/app/generated/open-app-bootstrap.generated.ts') */
-  ClientBootstrapSubpath?: string;
   /** MJ core schema name. Used to resolve `${mjSchema}` placeholder in app migrations. Defaults to '__mj'. */
   MJCoreSchema?: string;
   /** Extra user placeholders merged into the Skyway Placeholders map for migration SQL substitution. */
@@ -97,11 +94,11 @@ export interface OrchestratorContext {
  * 9.  Record installation with 'Installing' status
  * 10. Update package.json files
  * 11. Run npm install
- * 12. Update server config (dynamicPackages in mj.config.cjs)
+ * 12. Update server + client config (dynamicPackages.server/.client in mj.config.cjs;
+ *     client imports are materialized into MJExplorer's manifest at its next prebuild)
  * 13. Update angular.json prebundle excludes (prevents Vite singleton duplication)
- * 14. Update client imports (open-app-bootstrap.generated.ts)
- * 15. Execute hooks (postInstall)
- * 16. Finalize status to 'Active'
+ * 14. Execute hooks (postInstall)
+ * 15. Finalize status to 'Active'
  */
 export async function InstallApp(options: InstallOptions, context: OrchestratorContext): Promise<AppOperationResult> {
   const startTime = Date.now();
@@ -258,9 +255,6 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
     const finalStatus = npmInstallWarning ? 'Disabled' : 'Active';
     await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
-
-    // Step 15: Update client imports (reads current app status from DB)
-    await HandleClientBootstrapRegeneration(context);
 
     // Step 16: Execute hooks
     if (manifest.hooks?.postInstall) {
@@ -549,9 +543,6 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       Status: 'Active',
     });
 
-    // Step 10: Regenerate client imports
-    await HandleClientBootstrapRegeneration(context);
-
     // Step 11: Execute hooks
     if (manifest.hooks?.postUpgrade) {
       Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
@@ -723,7 +714,6 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
       Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name) : undefined),
       Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
-      HandleClientBootstrapRegeneration(context),
       Promise.resolve(
         RemoveAppPackages({
           RepoRoot: context.RepoRoot,
@@ -807,7 +797,6 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
     return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
   }
   await SetAppStatus(context.ContextUser, app.ID, 'Disabled');
-  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -834,7 +823,6 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
     return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
   }
   await SetAppStatus(context.ContextUser, app.ID, 'Active');
-  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -1164,6 +1152,16 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
     return { Success: false, ErrorMessage: dynamicResult.ErrorMessage };
   }
 
+  // Record the app's client packages in dynamicPackages.client. `mj codegen manifest
+  // --open-app-client-bootstrap` (run by MJExplorer's prebuild) turns each into a
+  // side-effect import in the class-registrations manifest MJExplorer already imports —
+  // so the client load path lives in distributed packages, not a bespoke MJExplorer file.
+  // Runs on both install and upgrade (both call HandleServerConfig); idempotent per entry.
+  const clientResult = AddClientDynamicPackages(context.RepoRoot, manifest);
+  if (!clientResult.Success) {
+    return { Success: false, ErrorMessage: clientResult.ErrorMessage };
+  }
+
   // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
   const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest);
   if (!entityResult.Success) {
@@ -1216,88 +1214,6 @@ function HandleAngularPrebundleExcludeRemoval(
 
   manager.RemovePrebundleExcludes(manifest, otherManifests);
   manager.Save();
-}
-
-/**
- * Regenerates the client bootstrap file with imports ordered by dependency.
- * Apps that are depended on appear before the apps that depend on them.
- */
-async function HandleClientBootstrapRegeneration(context: OrchestratorContext): Promise<void> {
-  context.Callbacks?.OnProgress?.('Config', 'Regenerating client bootstrap...');
-
-  const apps = await ListInstalledApps(context.ContextUser);
-
-  // Parse each app's manifest ONCE, skipping (with a warning) any corrupt row — a
-  // single bad ManifestJSON must not throw and break bootstrap regen (which runs on
-  // essentially every op) for every other installed app (B24).
-  const manifestsByName = new Map<string, MJAppManifest>();
-  for (const app of apps) {
-    try {
-      manifestsByName.set(app.Name, JSON.parse(app.ManifestJSON) as MJAppManifest);
-    } catch (err: unknown) {
-      context.Callbacks?.OnWarn?.('Config', `Skipping app '${app.Name}' in client bootstrap — its ManifestJSON could not be parsed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
-
-  // Build dependency graph for topological sort
-  const appDeps = new Map<string, string[]>();
-  for (const app of apps) {
-    const manifest = manifestsByName.get(app.Name);
-    if (!manifest) continue;
-    const depNames = manifest.dependencies ? Object.keys(manifest.dependencies) : [];
-    appDeps.set(app.Name, depNames);
-  }
-
-  // Topological sort: apps with no deps first, then apps depending on them
-  const sortedNames = TopologicalSortApps(appDeps);
-
-  // Build entries in sorted order
-  const entries: ClientBootstrapEntry[] = [];
-  const appsByName = new Map(apps.map((a) => [a.Name, a]));
-  for (const name of sortedNames) {
-    const app = appsByName.get(name);
-    if (!app) continue;
-    const manifest = manifestsByName.get(app.Name);
-    if (!manifest) continue;
-    const clientPkgs = [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])];
-
-    for (const pkg of clientPkgs) {
-      entries.push({
-        AppName: app.Name,
-        Version: app.Version,
-        PackageName: pkg.name,
-        Enabled: app.Status === 'Active',
-      });
-    }
-  }
-
-  RegenerateClientBootstrap(context.RepoRoot, entries, context.ClientPackagePath, context.ClientBootstrapSubpath);
-}
-
-/**
- * Simple topological sort for installed apps by their dependency names.
- * Returns app names in dependency order (leaf-first).
- */
-function TopologicalSortApps(appDeps: Map<string, string[]>): string[] {
-  const visited = new Set<string>();
-  const result: string[] = [];
-
-  function Visit(name: string): void {
-    if (visited.has(name)) return;
-    visited.add(name);
-    const deps = appDeps.get(name) ?? [];
-    for (const dep of deps) {
-      if (appDeps.has(dep)) {
-        Visit(dep);
-      }
-    }
-    result.push(name);
-  }
-
-  for (const name of appDeps.keys()) {
-    Visit(name);
-  }
-  return result;
 }
 
 /**

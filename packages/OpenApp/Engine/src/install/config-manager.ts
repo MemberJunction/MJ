@@ -1,8 +1,13 @@
 /**
  * Configuration manager for MJ Open Apps.
  *
- * Manages the `dynamicPackages.server` section in the MJ config file,
- * adding/removing/toggling entries for installed app server packages.
+ * Manages the `dynamicPackages.server` and `dynamicPackages.client` sections in the
+ * MJ config file, adding/removing/toggling entries for an installed app's packages.
+ * The `server` array is loaded at MJAPI boot by @memberjunction/server-bootstrap (B1);
+ * the `client` array is consumed by `mj codegen manifest --open-app-client-bootstrap`,
+ * which appends a side-effect import per entry to MJExplorer's class-registrations
+ * manifest — so the client load mechanism lives in distributed npm packages (the CLI +
+ * the generated manifest MJExplorer already imports) rather than a bespoke MJExplorer file.
  *
  * Operates on the standard mj.config.cjs file using string-based manipulation
  * to preserve formatting and comments.
@@ -20,8 +25,8 @@ const CONFIG_FILE_NAME = 'mj.config.cjs';
 export interface DynamicPackageEntry {
     /** npm package name */
     PackageName: string;
-    /** Named export to call after import */
-    StartupExport: string;
+    /** Named export to call after import (server entries only; client entries are side-effect imports) */
+    StartupExport?: string;
     /** Open App name this package belongs to */
     AppName: string;
     /** Whether this package should be loaded */
@@ -62,9 +67,10 @@ export function AddServerDynamicPackages(
     try {
         let content = readFileSync(configPath, 'utf-8');
         content = EnsureDynamicPackagesSection(content);
+        content = EnsureDynamicArrayPresent(content, 'server');
 
         for (const entry of serverPackages) {
-            content = AddEntryToServerArray(content, entry);
+            content = AddEntryToDynamicArray(content, entry, 'server');
         }
 
         writeFileSync(configPath, content, 'utf-8');
@@ -77,7 +83,54 @@ export function AddServerDynamicPackages(
 }
 
 /**
- * Removes all server dynamic package entries for an app from mj.config.cjs.
+ * Adds client dynamic package entries to mj.config.cjs for an installed app.
+ *
+ * Mirrors {@link AddServerDynamicPackages} but targets the `dynamicPackages.client`
+ * array. Client entries are pure side-effect imports (no StartupExport): the
+ * `mj codegen manifest --open-app-client-bootstrap` command turns each into an
+ * `import '<PackageName>';` line in MJExplorer's class-registrations manifest so the
+ * app's @RegisterClass decorators fire when the client bundle loads.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param manifest - The app's validated manifest
+ * @returns Operation result
+ */
+export function AddClientDynamicPackages(
+    repoRoot: string,
+    manifest: MJAppManifest
+): ConfigOperationResult {
+    const configPath = resolveConfigPath(repoRoot);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
+    }
+    const clientPackages = GetClientPackagesFromManifest(manifest);
+
+    if (clientPackages.length === 0) {
+        return { Success: true };
+    }
+
+    try {
+        let content = readFileSync(configPath, 'utf-8');
+        content = EnsureDynamicPackagesSection(content);
+        content = EnsureDynamicArrayPresent(content, 'client');
+
+        for (const entry of clientPackages) {
+            content = AddEntryToDynamicArray(content, entry, 'client');
+        }
+
+        writeFileSync(configPath, content, 'utf-8');
+        return { Success: true };
+    }
+    catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: `Failed to update config: ${message}` };
+    }
+}
+
+/**
+ * Removes all server and client dynamic package entries for an app from mj.config.cjs.
+ * Entry removal is keyed by AppName and is array-agnostic — it sweeps both the
+ * `server` and `client` arrays in one pass.
  *
  * @param repoRoot - Absolute path to the monorepo root
  * @param appName - The app name to remove entries for
@@ -166,8 +219,31 @@ function GetServerPackagesFromManifest(manifest: MJAppManifest): DynamicPackageE
 }
 
 /**
- * Ensures the config file has a dynamicPackages.server section.
- * If it doesn't exist, adds one before module.exports closing.
+ * Extracts client package entries from a manifest's packages section.
+ * Includes `client` and `shared` packages (shared packages run in both the server
+ * and client bundles). Unlike server entries, every client/shared package is emitted
+ * regardless of startupExport — client entries are side-effect imports.
+ */
+function GetClientPackagesFromManifest(manifest: MJAppManifest): DynamicPackageEntry[] {
+    const entries: DynamicPackageEntry[] = [];
+    const clientPkgs = manifest.packages?.client ?? [];
+    const sharedPkgs = manifest.packages?.shared ?? [];
+
+    for (const pkg of [...clientPkgs, ...sharedPkgs]) {
+        entries.push({
+            PackageName: pkg.name,
+            AppName: manifest.name,
+            Enabled: true
+        });
+    }
+
+    return entries;
+}
+
+/**
+ * Ensures the config file has a dynamicPackages section.
+ * If it doesn't exist, adds one (with empty server + client arrays) before
+ * module.exports closing.
  */
 function EnsureDynamicPackagesSection(content: string): string {
     // Match the actual `dynamicPackages:` key. A bare substring check (`includes`)
@@ -181,14 +257,39 @@ function EnsureDynamicPackagesSection(content: string): string {
     // Anchored to module.exports (not the file's last `};`) so trailing code can't put the
     // section in the wrong block (B4). Fails loudly if module.exports isn't an object
     // literal (B10).
-    const section = `\n  dynamicPackages: {\n    server: []\n  },\n`;
+    const section = `\n  dynamicPackages: {\n    server: [],\n    client: []\n  },\n`;
     return InsertBeforeModuleExportsClose(content, section);
 }
 
 /**
- * Adds a single entry to the dynamicPackages.server array in the config string.
+ * Ensures the named array (`server` | `client`) exists inside an already-present
+ * dynamicPackages section. Configs created before the `client` array existed have only
+ * `server`, so the array must be injected before its first entry is added.
  */
-function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): string {
+function EnsureDynamicArrayPresent(content: string, arrayName: 'server' | 'client'): string {
+    const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
+    if (!dynMatch || dynMatch.index === undefined) {
+        throw new Error('dynamicPackages section not found in mj.config.cjs.');
+    }
+    const openBracePos = dynMatch.index + dynMatch[0].length - 1; // the '{'
+    const closeBracePos = FindMatchingBracket(content, openBracePos);
+    if (closeBracePos === -1) {
+        throw new Error('Could not find the closing brace of the dynamicPackages section in mj.config.cjs.');
+    }
+    const sectionBody = content.slice(openBracePos, closeBracePos);
+    // Already present within THIS section — done.
+    if (new RegExp(`${arrayName}\\s*:\\s*\\[`).test(sectionBody)) {
+        return content;
+    }
+    // Insert `    <arrayName>: [],` right after the section's opening brace.
+    return content.slice(0, openBracePos + 1) + `\n    ${arrayName}: [],` + content.slice(openBracePos + 1);
+}
+
+/**
+ * Adds a single entry to the named dynamicPackages array (`server` | `client`) in the
+ * config string. Client entries omit the StartupExport line (they are side-effect imports).
+ */
+function AddEntryToDynamicArray(content: string, entry: DynamicPackageEntry, arrayName: 'server' | 'client'): string {
     // Skip if an entry with the same PackageName and AppName already exists
     const existsPattern = new RegExp(
         `PackageName:\\s*['"]${EscapeRegex(entry.PackageName)}['"][^{}]*AppName:\\s*['"]${EscapeRegex(entry.AppName)}['"]`
@@ -197,33 +298,36 @@ function AddEntryToServerArray(content: string, entry: DynamicPackageEntry): str
         return content;
     }
 
-    // Anchor the server array to the dynamicPackages section — NOT the first
-    // `server: [` anywhere in the file (which could be an unrelated nested config) — B8.
+    // Anchor the target array to the dynamicPackages section — NOT the first
+    // `<arrayName>: [` anywhere in the file (which could be an unrelated nested config) — B8.
     const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
     if (!dynMatch || dynMatch.index === undefined) {
-        throw new Error('dynamicPackages section not found in mj.config.cjs when adding a server package.');
+        throw new Error(`dynamicPackages section not found in mj.config.cjs when adding a ${arrayName} package.`);
     }
     const afterDyn = content.slice(dynMatch.index);
-    const serverRel = afterDyn.match(/server:\s*\[/);
-    if (!serverRel || serverRel.index === undefined) {
-        throw new Error('dynamicPackages.server array not found in mj.config.cjs.');
+    const arrayRel = afterDyn.match(new RegExp(`${arrayName}:\\s*\\[`));
+    if (!arrayRel || arrayRel.index === undefined) {
+        throw new Error(`dynamicPackages.${arrayName} array not found in mj.config.cjs.`);
     }
-    const serverArrayIndex = dynMatch.index + serverRel.index;
+    const arrayIndex = dynMatch.index + arrayRel.index;
 
-    const entryStr = `\n      {\n        PackageName: '${entry.PackageName}',\n        StartupExport: '${entry.StartupExport}',\n        AppName: '${entry.AppName}',\n        Enabled: ${entry.Enabled}\n      },`;
+    const startupLine = entry.StartupExport ? `\n        StartupExport: '${entry.StartupExport}',` : '';
+    const entryStr = `\n      {\n        PackageName: '${entry.PackageName}',${startupLine}\n        AppName: '${entry.AppName}',\n        Enabled: ${entry.Enabled}\n      },`;
 
-    // Find the closing bracket of the server array
-    const arrayStart = serverArrayIndex + serverRel[0].length;
+    // Find the closing bracket of the target array
+    const arrayStart = arrayIndex + arrayRel[0].length;
     const closingBracket = FindMatchingBracket(content, arrayStart - 1);
     if (closingBracket === -1) {
-        throw new Error('Could not find the closing bracket of dynamicPackages.server in mj.config.cjs.');
+        throw new Error(`Could not find the closing bracket of dynamicPackages.${arrayName} in mj.config.cjs.`);
     }
 
     return content.slice(0, closingBracket) + entryStr + '\n    ' + content.slice(closingBracket);
 }
 
 /**
- * Removes all entries with a given appName from the server array.
+ * Removes all entries with a given appName from both the server and client arrays.
+ * The entry-block match is keyed by AppName only, so a single pass sweeps whichever
+ * array(s) the app's packages landed in.
  */
 function RemoveEntriesForApp(content: string, appName: string): string {
     // Match entry-level object blocks containing the appName.
@@ -233,23 +337,26 @@ function RemoveEntriesForApp(content: string, appName: string): string {
         `\\s*\\{[^{}]*AppName:\\s*['"]${EscapeRegex(appName)}['"][^{}]*\\},?`,
         'g'
     );
-    return NormalizeEmptyServerArray(content.replace(pattern, ''));
+    let result = content.replace(pattern, '');
+    result = NormalizeEmptyDynamicArray(result, 'server');
+    result = NormalizeEmptyDynamicArray(result, 'client');
+    return result;
 }
 
 /**
- * Collapses a now-empty (whitespace-only) `dynamicPackages.server` array to `[]`.
- * After the last entry is removed, the array is otherwise left as `server: [\n    ]`,
+ * Collapses a now-empty (whitespace-only) `dynamicPackages.<arrayName>` array to `[]`.
+ * After the last entry is removed, the array is otherwise left as `<arrayName>: [\n    ]`,
  * which is functionally identical but not byte-idempotent with a never-populated config.
- * Anchored to dynamicPackages.server specifically (via FindMatchingBracket) so no other
- * array in the file is touched (B12).
+ * Anchored to that specific array (via FindMatchingBracket) so no other array in the
+ * file is touched (B12).
  */
-function NormalizeEmptyServerArray(content: string): string {
+function NormalizeEmptyDynamicArray(content: string, arrayName: 'server' | 'client'): string {
     const dynMatch = content.match(/dynamicPackages\s*:\s*\{/);
     if (!dynMatch || dynMatch.index === undefined) return content;
     const afterDyn = content.slice(dynMatch.index);
-    const serverRel = afterDyn.match(/server:\s*\[/);
-    if (!serverRel || serverRel.index === undefined) return content;
-    const openBracketPos = dynMatch.index + serverRel.index + serverRel[0].length - 1; // the '['
+    const arrayRel = afterDyn.match(new RegExp(`${arrayName}:\\s*\\[`));
+    if (!arrayRel || arrayRel.index === undefined) return content;
+    const openBracketPos = dynMatch.index + arrayRel.index + arrayRel[0].length - 1; // the '['
     const closePos = FindMatchingBracket(content, openBracketPos);
     if (closePos === -1) return content;
     if (content.slice(openBracketPos + 1, closePos).trim() === '') {

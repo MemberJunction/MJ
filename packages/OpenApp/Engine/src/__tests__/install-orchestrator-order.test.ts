@@ -42,12 +42,12 @@ vi.mock('../install/package-manager.js', () => ({
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
+    AddClientDynamicPackages: vi.fn(),
     RemoveServerDynamicPackages: vi.fn(),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
 }));
-vi.mock('../install/client-bootstrap-gen.js', () => ({ RegenerateClientBootstrap: vi.fn() }));
 vi.mock('../install/history-recorder.js', () => ({
     RecordAppInstallation: vi.fn(),
     RecordInstallHistoryEntry: vi.fn(),
@@ -73,7 +73,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitH
 import { CreateAppSchema, SchemaExists, DropAppSchema } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
-import { AddServerDynamicPackages, AddEntityPackageMapping } from '../install/config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, AddEntityPackageMapping } from '../install/config-manager.js';
 import {
     RecordAppInstallation,
     RecordInstallHistoryEntry,
@@ -141,6 +141,7 @@ describe('InstallApp dependency orchestration', () => {
         vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
@@ -287,6 +288,7 @@ describe('InstallApp — post-install summary (B16: schema-only shell needs Code
         vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
@@ -329,6 +331,7 @@ describe('InstallApp — reinstall over a prior install (B17: Error apps are rei
         vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
@@ -397,6 +400,7 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
         vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
         vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
         vi.mocked(SetAppStatus).mockResolvedValue(undefined);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
