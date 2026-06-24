@@ -35,6 +35,20 @@ _Other ComponentStudio empties (preview no-selection / run-state, browser empty/
 editor panels, dialog empties) reuse already-recorded patterns; the dashboard onboarding is
 captured as it's the one with projected multi-action + re-scoped CSS._
 
+## version-history/
+| State | File |
+|-------|------|
+| Labels — empty + Create Your First Label | `labels-empty.png` |
+| Labels — no-results + Reset filters | `labels-no-results.png` |
+| Diff Viewer — select labels to compare | `diff-select-labels.png` |
+| Diff Viewer — **success** (no differences found) | `diff-success.png` |
+| Dependency Graph — no-selection (fills detail pane) | `graph-no-selection.png` |
+| Dependency Graph — relationship empties (Referenced By / Depends On, compact) | `graph-relationships-empty.png` |
+
+_restore-resource (no-results/Reset + empty) reuses the captured patterns. The
+graph's entity-list + both relationship empties are migrated (compact); only the
+tiny inline diff-fields-empty span is left as-is._
+
 ## integration/
 | State | File |
 |-------|------|

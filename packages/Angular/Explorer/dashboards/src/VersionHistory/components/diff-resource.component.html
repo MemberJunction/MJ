@@ -250,20 +250,16 @@
       }
       <!-- No changes -->
       @if (FilteredEntityGroups.length === 0 && TotalChanges === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-check-circle empty-icon" style="color: #10b981;"></i>
-          <h3>No differences found</h3>
-          <p>The compared states are identical.</p>
-        </div>
+        <mj-empty-state Variant="success"
+          Title="No differences found"
+          Message="The compared states are identical." />
       }
     }
     <!-- No results yet -->
     @if (!HasDiffResult && !IsDiffLoading) {
-      <div class="empty-state">
-        <i class="fa-solid fa-code-compare empty-icon"></i>
-        <h3>Select labels to compare</h3>
-        <p>Choose a diff mode and select labels above, then click Compare.</p>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-code-compare"
+        Title="Select labels to compare"
+        Message="Choose a diff mode and select labels above, then click Compare." />
     }
   }
   </mj-page-body>
