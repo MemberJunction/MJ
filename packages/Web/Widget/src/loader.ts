@@ -13,6 +13,9 @@ import type { WidgetMountOptions, WidgetSession } from './types.js';
 import { WidgetSessionClient } from './session/widget-session-client.js';
 import type { IWidgetTransport } from './transport/widget-transport.js';
 import { RuntimeWidgetTransport } from './transport/runtime-widget-transport.js';
+import type { IVoiceController } from './voice/voice-controller.js';
+import { RealtimeVoiceController } from './voice/realtime-voice-controller.js';
+import { createGuestVoiceMint } from './voice/guest-voice-mint.js';
 import { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
 
 /** Optional injection points so the loader is unit-testable without a network/runtime. */
@@ -21,6 +24,8 @@ export interface WidgetMountDeps {
     sessionClientFactory?: (apiUrl: string, widgetKey: string) => WidgetSessionClient;
     /** Builds the transport (defaults to RuntimeWidgetTransport; tests inject a mock). */
     transportFactory?: (apiUrl: string) => IWidgetTransport;
+    /** Builds the voice controller for voice-enabled instances (defaults to RealtimeVoiceController). */
+    voiceControllerFactory?: (session: WidgetSession) => IVoiceController;
     /** Schedules refresh (defaults to setTimeout); tests can stub. */
     scheduler?: (cb: () => void, delayMs: number) => void;
 }
@@ -41,6 +46,10 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
     element.Configure({ title: options.title, greeting: options.greeting });
     element.SetSession(session);
     element.SetTransport(transport);
+
+    if (session.modality === 'Voice' || session.modality === 'Both') {
+        element.SetVoiceController((deps.voiceControllerFactory ?? defaultVoiceController)(session));
+    }
 
     resolveMountTarget(options.mountTarget).appendChild(element);
     registerNotificationAdapter(element);
@@ -72,6 +81,11 @@ function defaultSessionClient(apiUrl: string, widgetKey: string): WidgetSessionC
 
 function defaultTransport(apiUrl: string): IWidgetTransport {
     return new RuntimeWidgetTransport(apiUrl);
+}
+
+/** Default voice controller: reuses the realtime client + the guest realtime mint. */
+function defaultVoiceController(session: WidgetSession): IVoiceController {
+    return new RealtimeVoiceController(createGuestVoiceMint(session));
 }
 
 function defaultScheduler(cb: () => void, delayMs: number): void {

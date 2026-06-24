@@ -11,6 +11,24 @@ export { WidgetSessionClient, type FetchLike } from './session/widget-session-cl
 export type { IWidgetTransport, WidgetProgressCallback, WidgetTurnResult } from './transport/widget-transport.js';
 export { MockWidgetTransport } from './transport/mock-widget-transport.js';
 export { RuntimeWidgetTransport } from './transport/runtime-widget-transport.js';
+export type {
+    IVoiceController,
+    VoiceControllerCallbacks,
+    WidgetVoiceState,
+    WidgetVoiceTranscript,
+} from './voice/voice-controller.js';
+export { MockVoiceController } from './voice/mock-voice-controller.js';
+export {
+    RealtimeVoiceController,
+    type VoiceMintFn,
+    type VoiceMintResult,
+} from './voice/realtime-voice-controller.js';
+export {
+    VoiceAbuseGuard,
+    DEFAULT_VOICE_LIMITS,
+    type VoiceAbuseLimits,
+    type VoiceAbortReason,
+} from './voice/voice-abuse-guard.js';
 export { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
 export { WIDGET_SHADOW_STYLES } from './ui/tokens.js';
 export { mountWidget, bootstrapFromDocument, type WidgetMountDeps } from './loader.js';

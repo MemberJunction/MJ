@@ -10,6 +10,7 @@
 
 import type { WidgetChatMessage, WidgetSession } from '../types.js';
 import type { IWidgetTransport } from '../transport/widget-transport.js';
+import type { IVoiceController, WidgetVoiceState } from '../voice/voice-controller.js';
 import { WIDGET_SHADOW_STYLES } from './tokens.js';
 
 /** The registered custom-element tag name. */
@@ -19,9 +20,11 @@ export const WIDGET_TAG_NAME = 'mj-support-widget';
 export class SupportWidgetElement extends HTMLElement {
     private readonly root: ShadowRoot;
     private transport: IWidgetTransport | null = null;
+    private voiceController: IVoiceController | null = null;
     private session: WidgetSession | null = null;
     private readonly messages: WidgetChatMessage[] = [];
     private sending = false;
+    private voiceActive = false;
     private headerTitle = 'Support';
     private greeting = 'Hi! How can we help you today?';
 
@@ -49,6 +52,12 @@ export class SupportWidgetElement extends HTMLElement {
     /** Injects the transport the element sends turns through. */
     public SetTransport(transport: IWidgetTransport): void {
         this.transport = transport;
+    }
+
+    /** Injects the voice controller (enables the mic button when modality allows voice). */
+    public SetVoiceController(controller: IVoiceController): void {
+        this.voiceController = controller;
+        if (this.isConnected) this.render();
     }
 
     /** Opens the chat panel and focuses the composer. */
@@ -97,13 +106,18 @@ export class SupportWidgetElement extends HTMLElement {
         header.className = 'mj-widget-header';
         const title = document.createElement('span');
         title.textContent = this.headerTitle;
+        const controls = document.createElement('span');
+        if (this.voiceEnabled()) {
+            controls.appendChild(this.buildVoiceButton());
+        }
         const close = document.createElement('button');
         close.className = 'mj-widget-close';
         close.type = 'button';
         close.textContent = '×';
         close.setAttribute('aria-label', 'Close support chat');
         close.addEventListener('click', () => this.Close());
-        header.append(title, close);
+        controls.appendChild(close);
+        header.append(title, controls);
         return header;
     }
 
@@ -226,6 +240,68 @@ export class SupportWidgetElement extends HTMLElement {
         this.sending = sending;
         const send = this.query('.mj-widget-send') as HTMLButtonElement | null;
         if (send) send.disabled = sending;
+    }
+
+    // ── voice (W4) ─────────────────────────────────────────────────────────────
+
+    /** Voice is offered only when a controller is wired AND the instance enables Voice/Both. */
+    private voiceEnabled(): boolean {
+        return this.voiceController !== null && (this.session?.modality === 'Voice' || this.session?.modality === 'Both');
+    }
+
+    private buildVoiceButton(): HTMLButtonElement {
+        const btn = document.createElement('button');
+        btn.className = 'mj-widget-close mj-widget-voice';
+        btn.type = 'button';
+        btn.textContent = this.voiceActive ? '⏹' : '🎤';
+        btn.setAttribute('aria-label', this.voiceActive ? 'Stop voice' : 'Start voice');
+        btn.setAttribute('aria-pressed', String(this.voiceActive));
+        btn.addEventListener('click', () => void this.toggleVoice());
+        return btn;
+    }
+
+    /** Starts or stops a voice session via the injected controller. */
+    private async toggleVoice(): Promise<void> {
+        if (!this.voiceController) return;
+        if (this.voiceActive) {
+            await this.voiceController.Stop();
+            return;
+        }
+        try {
+            await this.voiceController.Start({
+                onState: (s) => this.onVoiceState(s),
+                onTranscript: (t) => {
+                    if (t.isFinal && t.text.trim()) this.appendMessage(t.role, t.text);
+                },
+                onEnded: (reason) => this.onVoiceEnded(reason),
+            });
+        } catch (err) {
+            this.appendMessage('system', err instanceof Error ? err.message : 'Could not start voice.');
+            this.onVoiceEnded();
+        }
+    }
+
+    private onVoiceState(state: WidgetVoiceState): void {
+        this.voiceActive = state !== 'idle' && state !== 'ended' && state !== 'error';
+        this.refreshVoiceButton();
+        if (state === 'listening') this.showProgress('🎙 Listening…');
+        else if (state === 'speaking') this.showProgress('🔊 Speaking…');
+        else this.hideProgress();
+    }
+
+    private onVoiceEnded(reason?: string): void {
+        this.voiceActive = false;
+        this.refreshVoiceButton();
+        this.hideProgress();
+        if (reason) this.appendMessage('system', reason);
+    }
+
+    private refreshVoiceButton(): void {
+        const btn = this.query('.mj-widget-voice');
+        if (!btn) return;
+        btn.textContent = this.voiceActive ? '⏹' : '🎤';
+        btn.setAttribute('aria-label', this.voiceActive ? 'Stop voice' : 'Start voice');
+        btn.setAttribute('aria-pressed', String(this.voiceActive));
     }
 
     // ── small DOM accessors (testable) ─────────────────────────────────────────
