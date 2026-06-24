@@ -7,6 +7,15 @@
  * @module @memberjunction/livekit-room-server
  */
 
+import { LoadLiveKitBridge } from '@memberjunction/ai-bridge-livekit';
+
+// The coordinator's StartAgentRoomSession resolves the 'LiveKitBridge' driver via the engine's
+// ClassFactory, so its @RegisterClass registration MUST have run. Importing the driver package here —
+// the server-side LiveKit layer that DEPENDS on the driver — guarantees it: loading this package (which
+// MJServer does) registers the bridge. The no-op call is a tree-shake guard. Without this the room start
+// fails with "No bridge driver registered for DriverClass 'LiveKitBridge'".
+LoadLiveKitBridge();
+
 export { LiveKitTokenService, type LiveKitServerConfig, type LiveKitTokenRole, type MintTokenParams, type MintedToken } from './livekit-token-service';
 
 export {

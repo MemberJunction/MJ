@@ -186,6 +186,12 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   @Input() public EnableDeviceSettings = true;
   /** Allow leaving the room from the control bar. */
   @Input() public EnableLeaveControl = true;
+  /**
+   * Turns the leave button into a Zoom/Teams-style split offering **Leave** vs. **End meeting for everyone**.
+   * Purely presentational here — this generic component has no notion of "ending for everyone"; it just emits
+   * {@link EndForAll} so the host (e.g. the MJ binding) can tear down agents/the room. Default `false` (plain Leave).
+   */
+  @Input() public CanEndForAll = false;
   /** Enable the data-channel chat feature (toggle + panel). */
   @Input() public ShowChat = true;
   /** Enable the participants roster panel (toggle + panel). */
@@ -234,6 +240,11 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   @Output() public Connected = new EventEmitter<LiveKitRoomState>();
   /** Fired when the room disconnects. */
   @Output() public Disconnected = new EventEmitter<LiveKitDisconnectedEvent>();
+  /**
+   * Fired when the user chooses "End meeting for everyone" from the split-leave menu (only reachable when
+   * {@link CanEndForAll}). The host should tear down the meeting (e.g. stop all agents), then disconnect.
+   */
+  @Output() public EndForAll = new EventEmitter<void>();
   /** Fired when reconnection begins. */
   @Output() public Reconnecting = new EventEmitter<void>();
   /** Fired when reconnection succeeds. */
@@ -289,6 +300,12 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   ];
   /** The device lists for the device menu. */
   public Devices: LiveKitDeviceLists = { Microphones: [], Cameras: [], Speakers: [] };
+  /** The active microphone `deviceId`, used to pre-select it in the device menu. */
+  public SelectedMicrophoneId: string | null = null;
+  /** The active camera `deviceId`, used to pre-select it in the device menu. */
+  public SelectedCameraId: string | null = null;
+  /** The active speaker `deviceId`, used to pre-select it in the device menu. */
+  public SelectedSpeakerId: string | null = null;
   /** The last room error message, surfaced in the overlay. */
   public LastErrorMessage: string | null = null;
   /** The identity of the pinned participant (drives spotlight when {@link EnablePinning}). */
@@ -425,7 +442,23 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
   }
   /** Switches a device. */
   public onDeviceSelected(selection: LiveKitDeviceSelection): void {
-    void this.controller.SwitchDevice(selection.Kind, selection.DeviceId);
+    // Optimistically reflect the user's choice immediately, then reconcile with the
+    // controller's actual active device once the async switch resolves.
+    this.applySelectedDeviceId(selection.Kind, selection.DeviceId);
+    void this.controller.SwitchDevice(selection.Kind, selection.DeviceId).then(() => {
+      this.runInZone(() => this.refreshSelectedDeviceIds());
+    });
+  }
+
+  /** Updates the locally-tracked selected device id for a kind. */
+  private applySelectedDeviceId(kind: LiveKitDeviceSelection['Kind'], deviceId: string): void {
+    if (kind === 'audioinput') {
+      this.SelectedMicrophoneId = deviceId;
+    } else if (kind === 'videoinput') {
+      this.SelectedCameraId = deviceId;
+    } else {
+      this.SelectedSpeakerId = deviceId;
+    }
   }
   /** Toggles the Krisp noise filter. */
   public onNoiseFilterToggled(enabled: boolean): void {
@@ -510,9 +543,14 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     return selectSpotlight(this.State, this.PinnedIdentity, this.EnablePinning);
   }
 
-  /** The agent participant in the room, if present. */
+  /**
+   * The agent participant whose name/state the agent indicator shows. In a MULTI-agent room this prefers the
+   * agent that is currently speaking (so the indicator reads e.g. "Marketing Agent · speaking", not whichever
+   * agent merely joined first), falling back to the first agent when none is speaking.
+   */
   public get AgentParticipant(): LiveKitParticipantView | null {
-    return this.State.Remote.find((p) => p.Role === 'agent') ?? null;
+    const agents = this.State.Remote.filter((p) => p.Role === 'agent');
+    return agents.find((p) => p.IsSpeaking) ?? agents[0] ?? null;
   }
 
   /** The participant currently sharing their screen (for split view), if any. */
@@ -670,7 +708,15 @@ export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, After
     ]);
     this.runInZone(() => {
       this.Devices = { Microphones: mics, Cameras: cams, Speakers: speakers };
+      this.refreshSelectedDeviceIds();
     });
+  }
+
+  /** Reads the active device ids from the controller so the menu pre-selects them. */
+  private refreshSelectedDeviceIds(): void {
+    this.SelectedMicrophoneId = this.controller.GetActiveDeviceId('audioinput');
+    this.SelectedCameraId = this.controller.GetActiveDeviceId('videoinput');
+    this.SelectedSpeakerId = this.controller.GetActiveDeviceId('audiooutput');
   }
 
   /** Runs a function inside the Angular zone and marks the view for check (LiveKit fires outside the zone). */

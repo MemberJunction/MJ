@@ -432,3 +432,14 @@
   [config]="exportDialogConfig"
   (closed)="onExportDialogClosed($event)">
 </mj-export-dialog>
+
+<!-- Runtime-UX driver for an entity action that names a RuntimeUXDriverClass (e.g. the Record Process
+     bulk-update runner). Mounted in-place over the grid — no parent wiring required. -->
+@if (ActiveRuntimeDriver) {
+  <mj-entity-action-ux-host
+    [DriverClass]="ActiveRuntimeDriver.DriverClass"
+    [Context]="ActiveRuntimeDriver.Context"
+    (Completed)="OnRuntimeDriverCompleted($event)"
+    (Cancelled)="OnRuntimeDriverCancelled()">
+  </mj-entity-action-ux-host>
+}

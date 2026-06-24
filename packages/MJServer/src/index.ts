@@ -9,6 +9,7 @@ import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provi
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
+import { registerIntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -26,7 +27,7 @@ import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
-import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
+import { configInfo, configFilePath, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
@@ -230,6 +231,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // LogStatusEx({ verboseOnly: true }) lines (cache, scheduling, integration, MCP, …) honor the
   // configured level instead of defaulting to hidden. Without this, "verbose-only" is "always hidden".
   SetVerboseLogging(startupLog.IsAtLeast('verbose'));
+  // Transient boot spinner (standard level + TTY only); cleared by PrintSummary.
+  startupLog.StartBoot();
   const lap = (label: string, since: number) => startupLog.EndPhase(label, since);
 
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
@@ -250,6 +253,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   if (dbType === 'postgresql') {
     // ─── PostgreSQL Path ───────────────────────────────────────────
+    startupLog.BeginPhase('Connecting to database');
     startupLog.LogIf('verbose', 'Database type: PostgreSQL');
     const pg = await import('pg');
     const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
@@ -421,7 +425,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   } else {
     // ─── SQL Server Path (existing behavior) ───────────────────────
     startupLog.LogIf('verbose', 'Database type: SQL Server');
-    let tPhase = performance.now();
+    let tPhase = startupLog.BeginPhase('Connecting to database');
     const pool = new sql.ConnectionPool(createMSSQLConfig());
 
     // Handle connection-level errors from dead/stale connections in the pool.
@@ -432,7 +436,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     });
 
     await pool.connect();
-    tPhase = lap('DB Pool Connect', tPhase);
+    lap('DB Pool Connect', tPhase);
+    tPhase = startupLog.BeginPhase('Loading metadata + providers');
 
     dataSources.push(new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername}));
 
@@ -457,7 +462,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
     await setupSQLServerClient(config);
-    tPhase = lap('Metadata + Provider Setup', tPhase);
+    lap('Metadata + Provider Setup', tPhase);
+    startupLog.BeginPhase('Initializing data provider');
     const md = new Metadata(); // global-provider-ok: bootstrap
     const entityCount = md?.Entities ? md.Entities.length : 0;
     startupLog.LogIf('verbose', `Data Source has been initialized. ${entityCount} entities loaded.`);
@@ -538,7 +544,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   }
 
-  let tServe = performance.now();
+  // Register the post-sync custom-column promotion hook (gaps.md §2). Safe to call regardless of
+  // RSU config: the hook self-gates on captured overflow data and uses RSU only at fire time.
+  try {
+    registerIntegrationCustomColumnPromoter();
+  } catch (err) {
+    console.warn(`Custom-column promoter registration failed (post-sync promotion disabled): ${(err as Error).message}`);
+  }
+
+  let tServe = startupLog.BeginPhase('Initializing services');
 
   // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can
   // read it without a circular dependency on MJServer
@@ -645,7 +659,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
 
-  tServe = lap('Telemetry + Cache + APIKey Init', tServe);
+  lap('Telemetry + Cache + APIKey Init', tServe);
+  tServe = startupLog.BeginPhase('Discovering resolvers');
 
   const dynamicModules = await Promise.all(
     paths.map((modulePath) => {
@@ -802,7 +817,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   });
 
-  tServe = lap('Resolver + Middleware Discovery', tServe);
+  lap('Resolver + Middleware Discovery', tServe);
+  tServe = startupLog.BeginPhase('Building GraphQL schema');
 
   let schema = mergeSchemas({
     schemas: [
@@ -829,7 +845,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     schema = transformer(schema);
   }
 
-  tServe = lap('Schema Build', tServe);
+  lap('Schema Build', tServe);
+  tServe = startupLog.BeginPhase('Starting HTTP server');
 
   const httpServer = createServer(app);
 
@@ -846,7 +863,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       onConnect: async (ctx) => {
         try {
           const token = String(ctx.connectionParams?.Authorization);
-          const userPayload = await getUserPayload(token, undefined, dataSources);
+          // Carry API keys from connectionParams so API-key / MCP / Node clients can authenticate the socket
+          // (validated the same way as the HTTP x-mj-api-key / x-mj-user-api-key headers).
+          const systemApiKey = ctx.connectionParams?.['x-mj-api-key'] ? String(ctx.connectionParams['x-mj-api-key']) : undefined;
+          const userApiKey = ctx.connectionParams?.['x-mj-user-api-key'] ? String(ctx.connectionParams['x-mj-user-api-key']) : undefined;
+          const userPayload = await getUserPayload(token, undefined, dataSources, undefined, systemApiKey, userApiKey);
 
           // Store validated payload on the connection for use in context()
           ctx.extra.userPayload = userPayload;
@@ -1116,18 +1137,20 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     await Promise.resolve(options.onBeforeServe());
   }
 
-  tServe = lap('Apollo + Express Setup', tServe);
+  lap('Apollo + Express Setup', tServe);
 
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
-  // Total startup measured but not pushed as a phase row — the per-phase rows already
-  // sum to the total in the collapsed summary line. Keep the measurement for verbose.
-  startupLog.EndPhase('Total Startup', t0);
+  // The summary headline reports TRUE wall-clock since process start (see
+  // StartupLogger.buildStartupLine), so we don't push a synthetic "total" phase row
+  // (that double-counted the headline). Keep a verbose-only line for the serve()-scoped span.
+  startupLog.LogIf('verbose', `serve() startup: ${((performance.now() - t0) / 1000).toFixed(1)}s`);
   startupLog.SetReadyUrl(`http://localhost:${graphqlPort}/`);
   // Populate summary fields that are known only now, then print the one summary block.
   for (const provider of AuthProviderFactory.Instance.getAllProviders()) {
     startupLog.AddAuthProvider(provider.name);
   }
   startupLog.SetVersion(resolveServerVersion());
+  startupLog.SetConfigPath(configFilePath);
   if (scheduledJobsService) {
     startupLog.SetScheduledJobCount(scheduledJobsService.GetStatus().activeJobs);
   }

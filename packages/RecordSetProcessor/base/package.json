@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/record-set-processor-base",
+  "type": "module",
+  "version": "5.42.0",
+  "description": "MemberJunction: Record Set Processor Base - interfaces, types, and source adapters for batched, resumable record-set processing. Client-safe.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.42.0",
+    "@memberjunction/global": "5.42.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

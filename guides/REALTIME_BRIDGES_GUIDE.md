@@ -61,6 +61,19 @@ The single biggest design win is **reuse**. The realtime session contract `IReal
 `OnOutput(handler)` is *what the agent says* — but it had **no client-facing pipe**. A bridge **is**
 that pipe.
 
+> **🚨 A bridge is transport + host UX tools ONLY — it does NOT build the agent.** Identity (the agent
+> speaks first-person AS the target), the model/voice **precedence cascade**, the base prompt + memory, the
+> `invoke-target-agent` delegation, and session/run tracking all come from the **one** core producer,
+> `RealtimeClientSessionService.PrepareRealtimeSessionParams`, which the bridge *consumes* (see
+> `BaseAgent.StartBridgeRealtimeSession`). A bridge that re-implements any of that is drift — exactly what
+> the convergence in [`plans/realtime/realtime-core-host-convergence.md`](../plans/realtime/realtime-core-host-convergence.md)
+> removed (and what `ai-agents/src/__tests__/realtime-convergence-drift.test.ts` guards). What a bridge DOES
+> own: media transport (audio/video/screen) and any **host-specific** UX tools, injected via
+> `RealtimeSessionRunnerDeps.ExtraTools`/`ExecuteTool` — never baked into core. So the agent is the *same
+> agent* (identity, voice, delegation, tracking) whether you reach it in native chat, LiveKit, or Zoom/Teams;
+> only how it's heard and what surfaces it can touch differ. See the boundary table in the
+> [Co-Agents Guide §3](REALTIME_CO_AGENTS_GUIDE.md#-single-source-of-truth-one-prep-the-precedence-cascade-the-corehost-boundary).
+
 ### The transport seam
 
 ```
@@ -760,6 +773,15 @@ are multi-party media transports — so LiveKit is "*another bridge, not a speci
 - Capabilities: on-demand join, A/V/screen in+out, diarization, data-channel chat, room-admin mute. No
   scheduled/invite/telephony — those gated base methods throw `BridgeCapabilityNotSupportedError`.
 
+> **Running LiveKit: local dev vs production (Cloud).** The LiveKit SFU runs *alongside* MJAPI — MJAPI
+> only mints join tokens (`LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`), it never proxies
+> media. For **local dev**, run a throwaway server — Docker for browser-only testing, or native
+> `livekit-server --config docker/livekit/livekit.yaml` for the agent-bot path on macOS (Docker NAT
+> breaks the bot's WebRTC media there). For **production / real-world deployments**, use
+> [**LiveKit Cloud**](https://cloud.livekit.io) — drop its `wss://…livekit.cloud` URL + key + secret into
+> `.env`, no server to run. The canonical how-to (both options, the macOS gotcha, env vars) lives in
+> [`docker/livekit/README.md`](../docker/livekit/README.md).
+
 ### Inter-agent speaking discipline — `MultiAgentRoomCoordinator`
 
 The one genuinely new problem is keeping multiple agents from **talking over each other or looping**. The
@@ -778,12 +800,114 @@ The one genuinely new problem is keeping multiple agents from **talking over eac
   non-overlapping.
 - Distinct rooms are fully isolated; single-agent rooms impose no contention.
 
-Wire it through the engine's **additive** hooks — `AIBridgeEngine.RegisterRoomParticipant(roomId,
+It is wired through the engine's **additive** hooks — `AIBridgeEngine.RegisterRoomParticipant(roomId,
 agentSessionId, isFacilitator?)` / `UnregisterRoomParticipant(...)` — keyed on the shared external room id
-(the driver's `ExternalConnectionID` / the `ConversationID`). **Single-agent sessions never call these and
-are wholly unaffected**; arbitration engages only once 2+ sessions name the same room. The runner-
-constructing layer runs `CanTakeFloor`/`TakeFloor`/`ReleaseFloor` around an agent's generation via
-`AIBridgeEngine.RoomCoordinator`.
+(the driver's `ExternalConnectionID`). **Every bridged session registers on connect and unregisters on
+teardown**, so a single-agent room is a 1-member room whose floor is always free (no contention) and a 2+-
+member room takes turns. The engine's `Speak` turn-decision (`applyTurnDecision`) now runs the floor
+internally: `TakeFloor` → denied ⇒ stay silent; granted ⇒ `armFloorHold` (a `floorMaxHoldMs` safety
+release) then trigger speech; the floor releases on the agent's own final assistant transcript, the safety
+timer, or teardown.
+
+### Meeting mode — "hear everything, speak when addressed"
+
+The actual fix for agents reacting to *all* room audio (spiral / "picked up the last conversation"): in a
+multi-agent room each agent's model **auto-response is disabled** and the **bridge becomes the sole speech
+trigger**, gated by the addressing matcher. The lever is a host-neutral `Config.disableAutoResponse` flag
+each driver translates to its own mechanism — **OpenAI** → `turn_detection.create_response=false` (keeps
+VAD/transcription, suppresses the auto-reply); **Gemini** → `realtimeInputConfig.automaticActivityDetection.
+disabled=true` + manual `activityStart`/`activityEnd` turns (it has no detect-but-don't-respond lever). The
+`LiveKitAgentRoomCoordinator` detects the multi-agent transition and starts the 2nd+ agent in meeting mode
+(`RegexAddressedMatcher` on its names + a meeting-discipline prompt clause). *Gemini's manual-activity turn
+boundaries are unit-tested at the send-shape level but await live validation in a busy room.*
+
+### Retroactive re-gating — capability-gated (`IRealtimeSession.Reconfigure`)
+
+When a room becomes multi-agent, the agents **already in it** are switched into meeting mode too, *if their
+provider can reconfigure a live socket*. This is gated by the realtime-session **capability surface**
+(`RealtimeSessionCapabilities.CanReconfigureTurnMode`, see the Co-Agents guide §4): OpenAI reports `true`
+and implements `Reconfigure({DisableAutoResponse:true})` via a partial `session.update` (+ a
+`SendContextNote` so the agent knows it's now in a meeting); Gemini reports `false` and is left
+conversational — no dead-method call. Engine: `AIBridgeEngine.ReconfigureSessionToMeeting(bridgeId,
+matcher)`; coordinator re-gates each existing roster agent.
+
+### Turn moderator — room-level "who speaks next" (engine seam)
+
+Per-agent addressing (the `RegexAddressedMatcher` broadcast above) routes *direct address* but can't bring a
+relevant-but-unaddressed agent in, can't let two agents have a productive exchange, and can't distinguish a
+useful back-and-forth from an unproductive loop. The **turn moderator** is an optional engine seam that
+replaces the matcher with a single room-level decision per turn. The *LLM specifics* (it's a prompt not an
+agent run, the config cascade, the model, proactive vs addressed-only) live in the
+[Co-Agents guide §4](REALTIME_CO_AGENTS_GUIDE.md#turn-moderator-multi-agent-turn-taking); this is the
+engine-side mechanics.
+
+- **The seam.** `AIBridgeEngine.SetTurnModerator(moderator)` injects a `TurnModerator` —
+  `(ctx: TurnModeratorContext) => Promise<string[]>` returning the ordered `AgentSessionID`s to trigger
+  (0+). It is analogous to `SetTranscriptSink` / `SetSessionRunFinalizer`: the engine stays
+  framework-agnostic (it knows only the function signature + the `TurnModeratorContext` /
+  `ModeratorRosterAgent` / `ModeratorLookbackTurn` shapes it exports); the `@memberjunction/ai-agents`
+  `RealtimeTurnModerator` supplies the implementation, wired at MJServer schema-build time
+  (`RealtimeBridgeResolver` calls `SetTurnModerator(RealtimeTurnModeratorDecision)`).
+- **Broadcast → moderator → serialized queue.** In a multi-agent room `dispatchUserTurn` branches: when a
+  moderator is set it routes the turn through `runRoomModerator` (one decision) instead of broadcasting to
+  each agent's matcher. `runRoomModerator` builds the context from the live roster + diarized lookback, calls
+  the moderator, filters the result to valid roster sessions, sets the room's ordered `roomSpeakerQueue`, and
+  `drainSpeakerQueue` triggers speakers **one at a time through the floor** (`MultiAgentRoomCoordinator`) — a
+  multi-agent route is heard as a clean sequence, never overlap. Per-room re-entrancy is guarded
+  (`roomModeratorBusy`); the floor-release path drains the next queued speaker.
+- **Lookback buffer.** The engine keeps a bounded per-room diarized lookback (`roomLookback`, capped at
+  `ROOM_LOOKBACK_MAX_TURNS = 50`, each turn clipped) appended on every final transcript via `recordRoomTurn`.
+  That buffer is the moderator's conversation window (the moderator narrows it further to its configured
+  `contextWindowTurns`). The engine also tracks `roomConsecutiveAgentTurns` (reset on any human turn) for the
+  optional agent-only-loop backstop.
+- **Pre-stage on agent speech.** The moderator also runs on **agent** turns (`onAgentTurnCompleted`), not just
+  human ones — powering both agent↔agent continuation and pre-staging: because it fires on the agent's FINAL
+  TEXT while that agent's audio is *still playing out*, the next decision's latency is hidden behind playback.
+- **Barge-in invalidation.** A human barge-in clears the room's staged speaker queue
+  (`clearRoomModeratorState(roomKey, /*full*/ false)`) so a pre-staged agent→agent hand-off is discarded when
+  the user changes the topic; teardown clears the full moderator state (lookback + queue + counter).
+- **Matcher fallback.** When no moderator is injected, `dispatchUserTurn` keeps using the existing per-agent
+  `RegexAddressedMatcher` broadcast — single-agent rooms and no-moderator deployments are entirely unaffected.
+
+### Unified room transcript + per-speaker diarization
+
+The engine elects **one scribe per room** (the first agent; re-elected on departure) and feeds its FINAL
+transcripts to a registered `BridgeTranscriptSink`. The app-layer sink (`CreateBridgeRoomTranscriptSink`,
+`@memberjunction/ai-agents`) writes **one `MJ: Conversations` of `Type='Meeting Room'` per room** (linked to
+the **Meet** application by name, scoped out of normal chat) + **one `MJ: Conversation Details` per
+utterance**. **Diarization**: the model transcript has no speaker label, so the engine tracks
+`LastInboundSpeaker` from the inbound frame's `SpeakerLabel` (which the drivers populate; see §4 media-track
+translation) and stamps it on each `User` line — so a heard line resolves to the actual participant (human
+or another agent), not a generic "User". UserID resolution (vs. display name) is the remaining refinement.
+
+**Surfacing**: the **Voice Transcripts** nav item in the AI Analytics dashboard
+(`@memberjunction/ng-dashboards`, `AnalyticsRealtimeTranscriptsComponent` + `realtime-transcripts-data.ts`)
+is a master-detail, diarized browser over these meeting transcripts.
+
+### Session reaping — auto-leave + idle sweep + run finalization
+
+Three same-process safeguards keep abandoned sessions from lingering `Connected` with a `Running` co-agent
+run: (1) **auto-leave** — once a human has been seen and the roster drops to agents-only, an `emptyGraceMs`
+timer (cancelled on re-join) stops the session; (2) **idle/TTL sweep** — `SweepStaleSessions` (self-scheduled
+from `HandleStartup`) reaps sessions idle past `idleTtlMs` or over `maxDurationMs`, the same-process
+complement to the prior-boot `ReconcileOrphans`; (3) **run finalization on every teardown path** — a
+registered finalizer (called from `markBridgeDisconnected`) closes the co-agent run even on orphan/cross-host
+reaps. All thresholds are overridable via `AIBridgeEngine.ConfigureSessionTimings({...})`.
+
+### ⚠️ Single-node room state (a multi-node hardening constraint)
+
+The room-scoped coordination state — the `MultiAgentRoomCoordinator` floor, the transcript **scribe
+election**, and the **room roster** (membership for meeting-mode detection + re-gating) — all live
+**in-memory per engine instance**, i.e. **per MJAPI node**. The design therefore assumes **all agents in a
+given room land on the same host**. Single-node deployments are unaffected.
+
+In a **multi-node** deployment behind a load balancer, two "add agent to room" requests can hit different
+nodes, splitting the state: two scribes could both write the transcript, the floor wouldn't arbitrate
+across hosts, and meeting-mode detection (which counts roster members on *this* node) could miss agents on
+another node. Bridge rows already carry `HostInstanceID` (used by the prior-boot janitor), so the
+hardening paths are: (a) **room-affinity routing** — pin all of a room's agents to one node, or (b)
+**shared room state** — move the floor/scribe/roster to a shared store (DB or Redis). Until one of those
+lands, treat single-node-per-room as a deployment invariant.
 
 ### Echo / self-audio
 
@@ -857,6 +981,8 @@ graph LR
 | Zoom driver (first real platform) | `packages/AI/Providers/BridgeZoom/src/zoom-bridge.ts`, `zoom-sdk.ts`, `zoom-meeting-controls.ts` |
 | LiveKit driver (MJ-native room) | `packages/AI/RealtimeBridge/Providers/LiveKit/src/livekit-bridge.ts`, `livekit-sdk.ts`, `livekit-meeting-controls.ts` |
 | Multi-agent floor arbitration (one speaker at a time + facilitator) | `packages/AI/Bridge/src/multi-agent-room-coordinator.ts` (engine hooks: `AIBridgeEngine.RegisterRoomParticipant` / `UnregisterRoomParticipant` / `RoomCoordinator`) |
+| Turn-moderator engine seam (`SetTurnModerator`, lookback, serialized queue, pre-stage, barge-in invalidation) | `packages/AI/RealtimeBridge/Server/src/ai-bridge-engine.ts` |
+| Turn-moderator LLM plugin (prompt-not-agent, config cascade, name→session mapping) | `packages/AI/Agents/src/realtime/realtime-turn-moderator.ts`, `realtime-coagent-config.ts` |
 | Server channel host + Meeting Controls channel | `packages/AI/Agents/src/realtime/realtime-channel-server-host.ts`, `meeting-controls-channel-server.ts` |
 | Capability interface | `metadata/entities/JSONType-interfaces/IBridgeProviderFeatures.ts` |
 | Entity invariants | `packages/MJCoreEntitiesServer/src/custom/MJAIBridge*EntityServer.server.ts`, `MJAIAgentSessionBridge*EntityServer.server.ts` |

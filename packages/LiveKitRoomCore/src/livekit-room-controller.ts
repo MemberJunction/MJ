@@ -104,6 +104,20 @@ export class LiveKitRoomController {
   private readonly textEncoder = new TextEncoder();
 
   /**
+   * Per-identity epoch-ms of the last moment a participant's raw `isSpeaking` was true. Used to DEBOUNCE the
+   * speaking indicator: `livekit-client`'s `isSpeaking` flickers off during the natural micro-pauses of speech,
+   * which made the tile ring + active-speaker name flash on/off mid-sentence. We HOLD the "speaking" state for
+   * {@link LiveKitRoomController.SPEAKING_HOLD_MS} after the flag drops so it reads as one continuous turn.
+   */
+  private readonly speakingLastTrueMs = new Map<string, number>();
+
+  /** Pending timer that re-evaluates state when a speaking-hold window expires (so the ring clears cleanly). */
+  private speakingHoldTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** How long the "speaking" indicator persists after `isSpeaking` goes false — long enough to bridge a breath/pause mid-turn. */
+  private static readonly SPEAKING_HOLD_MS = 1500;
+
+  /**
    * The room's cancelable event bus (Before-events + notifications). Subscribe with `Events.On(...)`;
    * the Angular layer re-surfaces these as `@Output()` emitters. See {@link LiveKitRoomEventBus}.
    */
@@ -211,6 +225,11 @@ export class LiveKitRoomController {
   /** Disposes the controller, tears down the connection, and clears all subscribers. */
   public Dispose(): void {
     void this.Disconnect(false);
+    if (this.speakingHoldTimer) {
+      clearTimeout(this.speakingHoldTimer);
+      this.speakingHoldTimer = null;
+    }
+    this.speakingLastTrueMs.clear();
     this.stateSubject.complete();
     this.Events.Clear();
   }
@@ -351,6 +370,21 @@ export class LiveKitRoomController {
       this.emitError('device', `Failed to enumerate ${kind} devices.`, err);
       return [];
     }
+  }
+
+  /**
+   * Returns the `deviceId` of the currently-active device for a given kind, or `null`
+   * when no room is connected or the active device is unknown. Used by hosts to
+   * pre-select the active device in a device-picker UI.
+   *
+   * @param kind The device kind to query.
+   * @returns The active `deviceId`, or `null` if unavailable.
+   */
+  public GetActiveDeviceId(kind: LiveKitDevice['Kind']): string | null {
+    if (!this.room) {
+      return null;
+    }
+    return this.room.getActiveDevice(kind) ?? null;
   }
 
   /**
@@ -513,7 +547,7 @@ export class LiveKitRoomController {
       DisplayName: participant.name && participant.name.length > 0 ? participant.name : participant.identity,
       IsLocal: this.room?.localParticipant === participant,
       Role: this.roleResolver(participant),
-      IsSpeaking: participant.isSpeaking,
+      IsSpeaking: this.computeIsSpeaking(participant),
       AudioLevel: participant.audioLevel ?? 0,
       HasAudio: this.hasLiveTrack(participant, Track.Source.Microphone),
       HasVideo: this.hasLiveTrack(participant, Track.Source.Camera),
@@ -521,6 +555,39 @@ export class LiveKitRoomController {
       ConnectionQuality: this.mapConnectionQuality(participant.connectionQuality),
       Raw: participant,
     };
+  }
+
+  /**
+   * Debounced "is speaking": true while the raw flag is set OR within {@link LiveKitRoomController.SPEAKING_HOLD_MS}
+   * of the last time it was set. Bridges the micro-pauses that make `livekit-client`'s `isSpeaking` flicker, so
+   * the tile ring + active-speaker name stay steady for a whole turn instead of flashing. Schedules a state
+   * refresh at the end of the hold so the indicator clears on its own when the participant truly stops.
+   */
+  private computeIsSpeaking(participant: Participant): boolean {
+    const now = Date.now();
+    if (participant.isSpeaking) {
+      this.speakingLastTrueMs.set(participant.identity, now);
+      return true;
+    }
+    const last = this.speakingLastTrueMs.get(participant.identity);
+    if (last != null && now - last < LiveKitRoomController.SPEAKING_HOLD_MS) {
+      this.scheduleSpeakingHoldRefresh(last + LiveKitRoomController.SPEAKING_HOLD_MS - now);
+      return true;
+    }
+    return false;
+  }
+
+  /** Ensures one pending state rebuild fires when the active speaking-hold window expires (clears a stuck ring). */
+  private scheduleSpeakingHoldRefresh(delayMs: number): void {
+    if (this.speakingHoldTimer) {
+      return; // a refresh is already pending — one is enough
+    }
+    this.speakingHoldTimer = setTimeout(() => {
+      this.speakingHoldTimer = null;
+      if (this.room) {
+        this.rebuildState();
+      }
+    }, Math.max(50, delayMs));
   }
 
   /** Whether the participant has a published, unmuted track for the given source. */

@@ -32,7 +32,8 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRunsParentRunID', sectionName: 'AI Agent Runs (Parent Run)', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResumingAgentRunID', sectionName: 'AI Agent Requests (Resuming Agent Run)', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
-            { sectionKey: 'mJAIAgentRunsLastRunID', sectionName: 'AI Agent Runs (Last Run)', isExpanded: false }
+            { sectionKey: 'mJAIAgentRunsLastRunID', sectionName: 'AI Agent Runs (Last Run)', isExpanded: false },
+            { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false }
         ]);
     }
 }

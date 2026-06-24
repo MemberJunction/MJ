@@ -135,10 +135,9 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
  * ```
  */
 export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
-  // Single-line banner — the detailed startup summary is printed by serve()'s
-  // StartupLogger once boot completes. (Dropped the `=====` separator + the
-  // surrounding blank lines that doubled this up.)
-  console.log('🚀 MemberJunction Server Bootstrap');
+  // No banner here: serve()'s StartupLogger shows a transient "Bootstrapping…"
+  // indicator while booting and prints the 🚀 summary block once ready, so the
+  // rocket appears only after launch.
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time
   // We just need to load the raw user config to access codeGeneration.packages setting

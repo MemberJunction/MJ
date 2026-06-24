@@ -23,7 +23,8 @@ export class MJListFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJListDetails', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'mJListInvitations', sectionName: 'List Invitations', isExpanded: false },
-            { sectionKey: 'mJListShares', sectionName: 'List Shares', isExpanded: false }
+            { sectionKey: 'mJListShares', sectionName: 'List Shares', isExpanded: false },
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
         ]);
     }
 }

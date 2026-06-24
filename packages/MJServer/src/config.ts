@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
@@ -586,6 +586,14 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   ].filter(Boolean),
 };
 
+/**
+ * Absolute path to the resolved config file, captured during {@link loadConfig}.
+ * `undefined` when no config file was found (defaults in use). Rendered in the
+ * startup summary `Config` line. Declared before `configInfo` so the assignment
+ * inside `loadConfig()` (invoked below) is not in its temporal dead zone.
+ */
+export let configFilePath: string | undefined;
+
 export const configInfo: ConfigInfo = loadConfig();
 
 export const {
@@ -621,7 +629,10 @@ export function loadConfig() {
 
   // If user config exists, merge it with defaults
   if (configSearchResult && !configSearchResult.isEmpty) {
-    LogStatus(`Config file found at ${configSearchResult.filepath}`);
+    // Resolved config-file path. Surfaced in the startup summary `Config` line at standard
+    // level (see StartupLogger). Demoted to verbose-only here to avoid a duplicate inline line.
+    configFilePath = configSearchResult.filepath;
+    LogStatusEx({ message: `Config file found at ${configSearchResult.filepath}`, verboseOnly: true });
 
     // Merge user config with defaults (user config takes precedence)
     mergedConfig = mergeConfigs(DEFAULT_SERVER_CONFIG, configSearchResult.config);

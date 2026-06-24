@@ -118,6 +118,7 @@ export interface GridViewConfig {
       [GridState]="config.gridState ?? null"
       [Height]="'auto'"
       [AllowLoad]="false"
+      [AutoLoadEntityActions]="AutoLoadEntityActions"
       [ShowToolbar]="effectiveShowToolbar"
       [ToolbarConfig]="config.toolbarConfig ?? {}"
       [SelectionMode]="effectiveSelectionMode"
@@ -199,6 +200,13 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
 
   /** Opaque per-view configuration. Seeds the grid bindings; mutated + re-emitted on grid changes. */
   @Input() config: GridViewConfig = {};
+
+  /**
+   * When true (default), the grid self-loads the entity's active EntityActions and shows them — buttons
+   * appear only for entities that actually have actions (data-driven). Actions whose invocation names a
+   * `RuntimeUXDriverClass` mount that interactive driver (e.g. the Record Process runner) in-place.
+   */
+  @Input() AutoLoadEntityActions = true;
 
   // ---- IViewRenderer generic data-context inputs ----
 

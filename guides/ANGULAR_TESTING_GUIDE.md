@@ -43,6 +43,12 @@ DOM testing is a repo-level infrastructure addition; a package then **opts in**.
 - **Change detection**: **zoneless** — there is no `zone.js` anywhere in this path. The shared
   setup applies `provideZonelessChangeDetection()` to every spec via a global `beforeEach`, and
   you drive CD explicitly with `fixture.detectChanges()` / `await fixture.whenStable()`.
+- **TestBed teardown**: relied on implicitly — Angular's default `destroyAfterEach: true` (active
+  whenever `platformBrowserTesting` is initialized, as our setup does) tears down each fixture and
+  resets the testing module between specs, so the global `beforeEach` re-configures a clean module
+  every test. We do **not** call `TestBed.resetTestingModule()` ourselves. If you ever see
+  cross-test state leakage (a spec passing alone but failing in-suite), suspect module-level
+  singletons or a provider that escaped the per-test module — not the teardown itself.
 
 Two root files implement it (peers of the node preset `vitest.shared.ts`):
 
@@ -323,3 +329,11 @@ npm run test:watch
 # changed packages only (from repo root)
 npx turbo run test --filter=...[HEAD~1]
 ```
+
+**Build `@memberjunction/ng-test-utils` first for a bare package run.** It resolves via
+`main: dist/public-api.js` (no source path-mapping), so `cd <pkg> && npm run test` fails with an
+unresolved import until its `dist/` exists. `npx turbo run test` handles this automatically (the
+`test` task `dependsOn: ["build"]`, and `^build` builds `ng-test-utils` first); a manual one-off run
+does not. Build it once with `cd packages/Angular/Generic/test-utils && npm run build` (or
+`npx turbo run build --filter=@memberjunction/ng-test-utils`). The same applies to any other
+unbuilt MJ package a component-under-test imports — build its dependency graph before the DOM run.

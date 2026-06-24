@@ -1,0 +1,20 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "title": "Neon CRM API Key",
+  "description": "Neon CRM HTTP Basic auth: the Organization ID is the username and the API Key is the password.",
+  "properties": {
+    "OrgID": {
+      "type": "string",
+      "title": "Organization ID",
+      "description": "Neon CRM organization identifier (used as the HTTP Basic username)."
+    },
+    "APIKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Neon CRM API key (used as the HTTP Basic password).",
+      "format": "password"
+    }
+  },
+  "required": ["OrgID", "APIKey"]
+}

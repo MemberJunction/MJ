@@ -32,6 +32,7 @@
  */
 
 import { BaseSingleton, GetGlobalObjectStore, WarningManager } from '@memberjunction/global';
+import { Metadata } from './metadata.js';
 
 // ============================================================================
 // TYPES - Using union types per MJ style guide
@@ -99,14 +100,20 @@ export interface TelemetryRunViewParams {
     ResultType?: RunViewResultType;
     /** Maximum rows to return */
     MaxRows?: number;
-    /** Starting row for pagination */
+    /** Starting row for offset pagination */
     StartRow?: number;
+    /** Serialized keyset pagination cursor (CompositeKey) when present — keeps each sweep page a distinct fingerprint */
+    AfterKey?: string;
     /** Whether to cache locally */
     CacheLocal?: boolean;
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
     /** Whether result was served from cache (set after operation completes) */
     cacheHit?: boolean;
+    /** When true, this view opted out of optimization/redundancy analyzers (RunViewParams.Telemetry.Exempt). */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (RunViewParams.Telemetry.Reason). */
+    ExemptReason?: string;
 }
 
 /**
@@ -133,6 +140,10 @@ export interface TelemetryRunViewsBatchParams {
     OrderBys?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
+    /** When true, every view in the batch opted out of optimization/redundancy analyzers. */
+    Exempt?: boolean;
+    /** Optional caller-provided justification for the exemption (first non-empty across the batch). */
+    ExemptReason?: string;
 }
 
 /**
@@ -1156,6 +1167,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private updatePattern(event: TelemetryEvent): void {
         if (!this._settings.duplicateDetection.enabled) return;
+        // Exempt events don't form or contribute to duplicate-RunView patterns.
+        if (this.isEventExempt(event)) return;
 
         let pattern = this._patterns.get(event.fingerprint);
         const now = this.getTimestamp();
@@ -1340,8 +1353,39 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         return results;
     }
 
+    /**
+     * True when an event opted out of the optimization/redundancy analyzers via
+     * `RunViewParams.Telemetry.Exempt` (threaded into the event params as `Exempt`).
+     */
+    private isEventExempt(event: TelemetryEvent): boolean {
+        const p = event.params as { Exempt?: boolean } | undefined;
+        return p?.Exempt === true;
+    }
+
+    /**
+     * Verbose-only breadcrumb so an exempted query — and the caller's justification — is still
+     * auditable in telemetry logging even though it produced no warning.
+     */
+    private logExemptEvent(event: TelemetryEvent): void {
+        const level = this.GetLevelForCategory(event.category);
+        if (this.GetLevelValue(level) < TelemetryLevelValue['verbose']) return;
+        const p = event.params as { EntityName?: string; Entities?: string[]; ExemptReason?: string };
+        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.join(', ') : event.operation);
+        const reason = p.ExemptReason ? ` — ${p.ExemptReason}` : '';
+        // eslint-disable-next-line no-console
+        console.log(`💡 [Telemetry] Analysis exempt for ${event.category} "${target}"${reason}`);
+    }
+
     private runAnalyzers(event: TelemetryEvent): void {
         if (!this._settings.analyzers.enabled) return;
+
+        // Caller explicitly opted this query out of the optimization/redundancy analyzers. It is also
+        // excluded from the analyzer context (buildAnalyzerContext) and from duplicate-pattern counts
+        // (updatePattern), so it neither produces nor contributes to noise warnings.
+        if (this.isEventExempt(event)) {
+            this.logExemptEvent(event);
+            return;
+        }
 
         const context = this.buildAnalyzerContext();
 
@@ -1349,6 +1393,9 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             try {
                 const insight = analyzer.analyze(event, context);
                 if (insight && this.shouldEmitInsight(insight)) {
+                    // Correct cache-oriented advice for entities that have caching disabled — the
+                    // finding stands, but "cache it" is replaced with a dedupe/consolidate suggestion.
+                    this.adjustSuggestionForCacheability(insight);
                     this._insights.push(insight);
                     this.emitInsightWarning(insight);
                 }
@@ -1361,7 +1408,8 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
 
     private buildAnalyzerContext(): TelemetryAnalyzerContext {
         return {
-            recentEvents: this._events.slice(-1000),
+            // Exclude exempt events so they don't inflate per-entity / sequential counts for OTHER queries.
+            recentEvents: this._events.slice(-1000).filter(e => !this.isEventExempt(e)),
             patterns: this._patterns,
             getEngineLoadedEntities: () => {
                 // Integration with BaseEngineRegistry
@@ -1374,7 +1422,78 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         };
     }
 
+    /**
+     * Analyzers whose advice is "load/cache this entity in a dedicated engine". That advice is
+     * nonsensical for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching`
+     * = false) — typically large, append-only tables (agent sessions, prompt runs, record changes)
+     * that should never be bulk-loaded into a process-wide engine cache.
+     */
+    private static readonly ENGINE_CACHE_SUGGESTION_ANALYZERS = new Set<string>([
+        'SameEntityMultipleCallsAnalyzer',
+        'EngineOverlapAnalyzer',
+    ]);
+
+    /**
+     * Analyzers whose FINDING is valid for any entity, but whose default suggestion recommends
+     * caching. For an `AllowCaching=false` entity we keep the finding (a real duplicate / redundant
+     * read is worth knowing) but swap the suggestion — "cache it" is not actionable when caching is
+     * deliberately disabled, so we steer the reader to dedupe/consolidate at the call site instead.
+     */
+    private static readonly CACHE_SUGGESTION_REWRITE_ANALYZERS = new Set<string>([
+        'DuplicateRunViewAnalyzer',
+    ]);
+
+    /** Replacement suggestion for cache-oriented findings on a non-cacheable entity. */
+    private static readonly NON_CACHEABLE_DEDUPE_SUGGESTION =
+        'This entity has caching disabled (AllowCaching=false), so caching is not an option — ' +
+        'deduplicate or consolidate the identical call at the call site (read once and reuse), or ' +
+        'mark an intentional repeat with RunView Telemetry.Exempt';
+
+    /**
+     * True when the entity has explicitly opted out of caching (`EntityInfo.AllowCaching = false`).
+     * Reuses that metadata flag as the single source of truth. Fails open (false) when metadata is
+     * unavailable, or when `entityName` isn't a single resolvable entity (e.g. a batch insight whose
+     * entityName is a comma-joined list).
+     */
+    private isNonCacheableEntity(entityName?: string): boolean {
+        if (!entityName) return false;
+        try {
+            // telemetry aggregates RunView calls process-wide; AllowCaching is structural entity
+            // metadata and this check fails open if the provider is unavailable.
+            return Metadata.Provider?.EntityByName?.(entityName)?.AllowCaching === false; // global-provider-ok: process-wide telemetry, structural metadata, fails open
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * True when `insight` is a pure engine-caching suggestion for an entity that has caching disabled.
+     * Such insights have no residual value once the cache advice is removed, so they are fully suppressed.
+     */
+    private isCacheSuggestionForNonCachedEntity(insight: TelemetryInsight): boolean {
+        return TelemetryManager.ENGINE_CACHE_SUGGESTION_ANALYZERS.has(insight.analyzerName)
+            && this.isNonCacheableEntity(insight.entityName);
+    }
+
+    /**
+     * For a non-cacheable entity, rewrite a caching-oriented suggestion (e.g. DuplicateRunView's
+     * "Cache the result or use an engine") to a dedupe/consolidate one. The finding is unchanged and
+     * still emitted — only the advice is corrected. No-op for cacheable entities and other analyzers.
+     */
+    private adjustSuggestionForCacheability(insight: TelemetryInsight): void {
+        if (TelemetryManager.CACHE_SUGGESTION_REWRITE_ANALYZERS.has(insight.analyzerName)
+            && this.isNonCacheableEntity(insight.entityName)) {
+            insight.suggestion = TelemetryManager.NON_CACHEABLE_DEDUPE_SUGGESTION;
+        }
+    }
+
     private shouldEmitInsight(insight: TelemetryInsight): boolean {
+        // Suppress "create/use a dedicated engine" suggestions for entities that have opted out of
+        // caching — the AllowCaching=false flag already declares them unsuitable for engine caching.
+        if (this.isCacheSuggestionForNonCachedEntity(insight)) {
+            return false;
+        }
+
         // Dedupe similar insights within a time window
         const dedupeKey = `${insight.analyzerName}:${insight.entityName || ''}:${insight.title}`;
         const lastEmit = this._insightDedupeWindow.get(dedupeKey);
@@ -1488,12 +1607,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
                 views: viewKey
             };
         } else {
-            // Single operation
+            // Single operation. Pagination cursors (StartRow / AfterKey) are part of the key so that
+            // consecutive pages of a sweep over the same entity+filter+orderBy are DISTINCT
+            // fingerprints — otherwise page 2 collides with page 1 and trips the Duplicate analyzer.
             return {
                 entity: params.EntityName?.toLowerCase().trim(),
                 filter: params.ExtraFilter?.toLowerCase().trim(),
                 orderBy: params.OrderBy?.toLowerCase().trim(),
-                resultType: params.ResultType
+                resultType: params.ResultType,
+                startRow: params.StartRow,
+                afterKey: params.AfterKey
             };
         }
     }

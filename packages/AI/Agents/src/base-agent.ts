@@ -29,12 +29,15 @@ import {
 } from './realtime/realtime-session-runner';
 import { ResolveNarrationInstructionsTemplate } from './realtime/realtime-narration';
 import {
+    BuildRealtimeOverridesJson,
     BuildVoiceMannerSection,
     GetNarrationPaceMs,
     GetProviderVoiceSettings,
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig
 } from './realtime/realtime-coagent-config';
+import { RealtimeClientSessionService, PrepareClientSessionInput } from './realtime/realtime-client-session-service';
+import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -1640,27 +1643,74 @@ export class BaseAgent {
     public async StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
         // Mirror Execute()'s provider wiring so the realtime helpers operate on the request-scoped provider.
         this._activeProvider = params.provider ?? Metadata.Provider;
-        await AIEngine.Instance.Config(false, params.contextUser, params.provider);
+        const provider = params.provider ?? Metadata.Provider;
 
-        const config = await this.loadAgentConfiguration(params.agent);
-        if (!config.success) {
-            throw new Error(config.errorMessage ?? `Failed to load configuration for agent '${params.agent.Name}'.`);
-        }
-
-        const modelResolution = await this.resolveRealtimeModel(params);
-        if (!modelResolution) {
+        // A LiveKit / Zoom / Teams bridge is a thin TRANSPORT over the realtime co-agent — it does NOT build
+        // session prep itself. It CONSUMES the one shared producer
+        // ({@link RealtimeClientSessionService.PrepareRealtimeSessionParams}) so the agent's identity (it
+        // speaks first-person AS the target — Sage / Marketing Agent / …), the model + voice precedence
+        // cascade, the tool set (always incl. invoke-target-agent), and memory are byte-for-byte identical to
+        // the native realtime chat. Bridges differ ONLY in opening the session server-side (StartSession) and
+        // their media transport. See plans/realtime/realtime-core-host-convergence.md.
+        // ONE service instance: it produces the prep AND wires the long-lived runtime, so the in-flight
+        // delegation registry (barge-in cancel) is shared between them.
+        const service = new RealtimeClientSessionService();
+        const input = this.buildBridgePrepInput(params);
+        const contextUser = params.contextUser as UserInfo;
+        const prep = await service.PrepareRealtimeSessionParams(input, contextUser, provider);
+        if (!prep.Success || !prep.Resolution || !prep.SessionParams) {
             throw new Error(
-                `No usable Realtime model resolved for agent '${params.agent.Name}'. Configure an Active ` +
-                    `AIModelType 'Realtime' model with an active vendor whose DriverClass has a resolvable API key.`,
+                prep.ErrorMessage ?? `Failed to prepare a realtime session for agent '${params.agent.Name}'. ` +
+                    `Configure an Active AIModelType 'Realtime' model with an active vendor whose DriverClass has a ` +
+                    `resolvable API key.`,
             );
         }
+        const session = await prep.Resolution.Model.StartSession(prep.SessionParams);
 
-        const effectiveConfig = this.resolveRealtimeEffectiveConfig(params.agent);
-        const sessionParams = await this.buildRealtimeSessionParams(
-            params, config, modelResolution.apiName, effectiveConfig, modelResolution.driverClass,
-        );
+        // Phase 2: wire the SAME core runtime the native chat uses — real `invoke-target-agent` delegation
+        // (target runs via AgentRunner, nested + tracked) + co-agent run/prompt-run observability, finalized
+        // when the bridge calls `session.Close()`. No host-local tool re-implementation. The runtime handle's
+        // side effects live on `session` (OnToolCall + a finalize-wrapped Close), so the bridge just owns the
+        // session. See plans/realtime/realtime-core-host-convergence.md (Phase 2).
+        await service.WireBridgeRealtimeSession(session, input, prep, contextUser, provider);
+        return session;
+    }
 
-        return await modelResolution.model.StartSession(sessionParams);
+    /**
+     * Adapts {@link ExecuteAgentParams} → the core {@link PrepareClientSessionInput} for a server-bridged
+     * session. The CO-AGENT is the executed agent; the TARGET agent + the per-session model/voice override
+     * ride `params.data` (the same conduit the native dev picker uses, funneled into the one
+     * `ConfigOverridesJson` cascade slot via {@link BuildRealtimeOverridesJson}). Tools are left empty — a
+     * bridge host injects its OWN UX tools (none for LiveKit audio today); identity/precedence/invoke-target
+     * come from the core. `AgentSessionID` groups this session's observability runs (see
+     * {@link RealtimeClientSessionService.WireBridgeRealtimeSession}).
+     *
+     * @param params The bridge execution parameters.
+     * @returns The core prep input.
+     */
+    private buildBridgePrepInput(params: ExecuteAgentParams): PrepareClientSessionInput {
+        const modelID = (params.data?.realtimeModelID as string | undefined)?.trim() || undefined;
+        const voice = (params.data?.realtimeVoice as string | undefined)?.trim() || undefined;
+        const targetID = (params.data?.targetAgentID as string | undefined)?.trim() || '';
+        // Multi-agent meeting signal (set by the room coordinator when the agent joins a room that already
+        // has agents): disable the model's blind auto-response + add meeting discipline to the prompt so it
+        // hears everything but speaks only when addressed. SelfNames feed only the prompt phrasing; the
+        // addressing GATE is the bridge's matcher. See plans/realtime/multi-agent-meeting-turn-taking.md.
+        const meetingMode = params.data?.realtimeMeetingMode === true;
+        const selfNames = Array.isArray(params.data?.realtimeSelfNames)
+            ? (params.data?.realtimeSelfNames as unknown[]).filter((n): n is string => typeof n === 'string')
+            : undefined;
+        return {
+            CoAgent: params.agent,
+            TargetAgentID: targetID,
+            AgentSessionID: (params.data?.agentSessionId as string | undefined) ?? '',
+            PreferredModelID: modelID,
+            ConfigOverridesJson: BuildRealtimeOverridesJson(modelID, voice) ?? undefined,
+            ConversationMessages: params.conversationMessages,
+            UserID: params.contextUser?.ID,
+            DisableAutoResponse: meetingMode || undefined,
+            SelfNames: selfNames,
+        };
     }
 
     /**
@@ -1681,62 +1731,74 @@ export class BaseAgent {
      * @returns The resolved model instance plus its model/vendor identifiers, or `null`.
      */
     protected async resolveRealtimeModel(
-        params: ExecuteAgentParams
+        params: ExecuteAgentParams,
+        overrideModelID?: string
     ): Promise<{ model: BaseRealtimeModel; modelID: string; vendorID: string; apiName: string; driverClass?: string } | null> {
-        const model = this.selectRealtimeModelEntity(params.agent);
-        if (!model) {
-            return null;
+        // Walk candidates in resolution order (preference first, then highest PowerRank), returning the
+        // FIRST that FULLY resolves (active vendor + resolvable API key + ClassFactory driver). Single-pick
+        // would dead-end whenever the top model lacked a key — e.g. a power-11 model with no env key
+        // (Inworld/AssemblyAI) outranking GPT Realtime — and surface "No usable Realtime model" even though
+        // a usable model exists. This mirrors the same fix in RealtimeClientSessionService.
+        const candidates = this.selectRealtimeModelCandidates(params.agent, overrideModelID);
+        for (const model of candidates) {
+            const vendor = this.selectRealtimeVendor(model.ID);
+            if (!vendor) {
+                continue;
+            }
+            const apiKey = GetAIAPIKey(vendor.driverClass);
+            if (!apiKey) {
+                continue;
+            }
+            const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
+                BaseRealtimeModel,
+                vendor.driverClass,
+                apiKey
+            );
+            if (!instance) {
+                continue;
+            }
+            return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
         }
-
-        const vendor = this.selectRealtimeVendor(model.ID);
-        if (!vendor) {
-            return null;
-        }
-
-        const apiKey = GetAIAPIKey(vendor.driverClass);
-        if (!apiKey) {
-            return null;
-        }
-
-        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
-            BaseRealtimeModel,
-            vendor.driverClass,
-            apiKey
-        );
-        if (!instance) {
-            return null;
-        }
-
-        return { model: instance, modelID: model.ID, vendorID: vendor.vendorID, apiName: vendor.apiName, driverClass: vendor.driverClass };
+        return null;
     }
 
     /**
-     * Selects the `MJ: AI Models` row to use for a realtime session: the highest-power active
-     * model of AIModelType `Realtime`. Returns `null` when no `Realtime` model exists in metadata
-     * (expected before P4).
+     * The active `Realtime`-AIModelType models to try, in resolution order — the candidate list
+     * {@link resolveRealtimeModel} walks until one yields a usable vendor + key + driver. Returns ALL
+     * candidates (not just the top pick) so a keyless / undriveable higher-power model falls through to
+     * the next usable one instead of dead-ending the whole resolution.
      *
-     * @param agent The agent being executed (reserved for future per-agent model preference).
-     * @returns The chosen model entity, or `null`.
+     * Ordering: an effective-config model preference (`realtime.modelPreference`, an MJ: AI Models Name
+     * or ID) goes FIRST when it resolves, followed by the rest by descending PowerRank (so even a keyless
+     * preferred model degrades gracefully). An unsatisfiable preference logs and is ignored.
+     *
+     * @param agent The agent being executed.
+     * @returns The candidate models in resolution order (empty when none are active).
      */
-    private selectRealtimeModelEntity(agent: MJAIAgentEntityExtended): MJAIModelEntityExtended | null {
+    private selectRealtimeModelCandidates(agent: MJAIAgentEntityExtended, overrideModelID?: string): MJAIModelEntityExtended[] {
         const isRealtime = (m: MJAIModelEntityExtended): boolean =>
             typeof m.AIModelType === 'string' && m.AIModelType.trim().toLowerCase() === 'realtime';
 
         const realtimeModels = AIEngine.Instance.Models.filter(m => m.IsActive && isRealtime(m));
         if (realtimeModels.length === 0) {
-            return null;
+            return [];
         }
 
-        // Effective-config model preference (realtime.modelPreference, an MJ: AI Models Name or
-        // ID) participates first. METADATA preferences degrade gracefully: an unsatisfiable
-        // preference logs and falls through to the default highest-PowerRank selection.
-        const preference = this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
+        const byPower = [...realtimeModels].sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0));
+
+        // A per-session override (a dev picking a specific Realtime model for this bridged agent) wins over
+        // the config's modelPreference — same "preferred first, rest by power as fallback" semantics.
+        const preference = (overrideModelID && overrideModelID.trim().length > 0)
+            ? overrideModelID.trim()
+            : this.resolveRealtimeEffectiveConfig(agent).realtime?.modelPreference;
         if (preference) {
             const wanted = preference.trim().toLowerCase();
             const preferred = realtimeModels.find(m => UUIDsEqual(m.ID, preference))
                 ?? realtimeModels.find(m => m.Name?.trim().toLowerCase() === wanted);
             if (preferred) {
-                return preferred;
+                // Preference first, the rest (by power) as fallback so a keyless preferred model still
+                // falls through to a usable one rather than dead-ending.
+                return [preferred, ...byPower.filter(m => !UUIDsEqual(m.ID, preferred.ID))];
             }
             this.logError(
                 `Realtime model preference '${preference}' for agent '${agent.Name}' matches no Active Realtime ` +
@@ -1745,7 +1807,7 @@ export class BaseAgent {
             );
         }
 
-        return realtimeModels.sort((a, b) => (b.PowerRank ?? 0) - (a.PowerRank ?? 0))[0];
+        return byPower;
     }
 
     /**
@@ -1903,17 +1965,11 @@ export class BaseAgent {
         effectiveConfig?: RealtimeCoAgentConfig,
         driverClass?: string
     ): Promise<RealtimeSessionParams> {
-        const framing =
-            `You are the real-time voice for the agent "${params.agent.Name}". Hold a natural, ` +
-            `low-latency conversation with the user. When actual work is required, call the ` +
-            `'invoke-target-agent' tool and narrate progress while it runs — do not attempt to do ` +
-            `the work yourself. ONE EXCEPTION: besides 'invoke-target-agent' you may have been given ` +
-            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user ` +
-            `can watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by ` +
-            `YOU, directly — when the user asks to use one (e.g. "open/show a browser", "go to a ` +
-            `site", "add to the whiteboard"), call the matching tool yourself immediately and narrate ` +
-            `what you're doing. NEVER route an interactive-surface request through 'invoke-target-agent', ` +
-            `and never claim you lack a session — calling the tool is all that's needed.`;
+        // Identity framing comes from the ONE shared producer so the agent speaks first-person AS the
+        // TARGET (Sage / Marketing Agent / …), identical to every other realtime host — not as the co-agent.
+        // See BuildRealtimeAgentFraming + plans/realtime/realtime-core-host-convergence.md.
+        const targetAgent = this.resolveRealtimeTargetAgent(params);
+        const framing = BuildRealtimeAgentFraming(targetAgent?.Name ?? 'the configured target agent');
 
         const basePrompt = config.systemPrompt?.TemplateText ? config.systemPrompt.TemplateText : '';
         // Effective-config voice persona (realtime.voice.default) → short "Voice & manner" section.
@@ -5889,7 +5945,9 @@ The context is now within limits. Please retry your request with the recovered c
                 SecondaryScopes: params.SecondaryScopes,
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
-                    this.queueStepSave(stepEntity);
+                    // Re-apply post-INSERT: this callback can fire while the step's INSERT is still in flight,
+                    // and the INSERT's reload would otherwise revert TargetLogID back to null.
+                    this.queueStepSave(stepEntity, (s) => { s.TargetLogID = agentRunId; });
                 }
             });
             
@@ -6865,17 +6923,29 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
-            // Apply the completion state to the in-memory entity NOW (so the run's Steps array / UI see
-            // Completed immediately) via the shared single-source-of-truth helper, then fire-and-forget the
-            // UPDATE via queueStepSave — which chains after the INSERT and force-persists (IgnoreDirtyState).
-            // The agent flow never blocks on this UPDATE.
-            finalizeAgentRunStep(stepEntity, {
+            // Capture the completion timestamp NOW so the duration is accurate regardless of when the
+            // mutation is actually applied/persisted.
+            const finalizeOpts = {
                 success,
                 errorMessage,
-                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined
-            });
+                outputData: outputData ? CopyScalarsAndArrays(outputData, true) : undefined,
+                completedAt: new Date(),
+                // Capture any TargetLogID already stamped on the entity (e.g. a prompt-run / sub-agent-run id
+                // set before finalize) so the post-INSERT re-apply restores it too — otherwise the INSERT's
+                // reload could leave it null on a fast step.
+                targetLogID: stepEntity.TargetLogID ?? undefined
+            };
 
-            this.queueStepSave(stepEntity);
+            // Apply to the in-memory entity NOW so the run's Steps array / UI see the terminal state
+            // immediately. This in-memory copy can be reverted by the INSERT's post-save reload if the step
+            // finished while its INSERT was still in flight, which is why we ALSO re-apply it inside the
+            // post-INSERT continuation below (idempotent — same completedAt).
+            finalizeAgentRunStep(stepEntity, finalizeOpts);
+
+            // Fire-and-forget the UPDATE, but re-assert the finalize state AFTER the INSERT (and its reload)
+            // lands so the force-persisted UPDATE never writes stale pre-finalize values. The agent flow
+            // never blocks on this UPDATE.
+            this.queueStepSave(stepEntity, (s) => finalizeAgentRunStep(s, finalizeOpts));
         }
         catch (e) {
             LogError(`Failed to update agent run step record: ${(e as Error)?.message ?? e}`, undefined, e);
@@ -6890,8 +6960,8 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
-    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
-        this._stepSaveQueue.QueueUpdate(stepEntity);
+    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended, applyMutation?: (stepEntity: MJAIAgentRunStepEntityExtended) => void): void {
+        this._stepSaveQueue.QueueUpdate(stepEntity, applyMutation);
     }
 
     /**
@@ -7328,7 +7398,9 @@ The context is now within limits. Please retry your request with the recovered c
             
             promptParams.onPromptRunCreated = async (promptRunId: string) => {
                 stepEntity.TargetLogID = promptRunId;
-                this.queueStepSave(stepEntity);
+                // Re-apply post-INSERT: onPromptRunCreated can fire before the step's INSERT lands, and the
+                // INSERT's reload would otherwise revert TargetLogID back to null.
+                this.queueStepSave(stepEntity, (s) => { s.TargetLogID = promptRunId; });
             };
             
             // Execute the prompt
@@ -9415,8 +9487,11 @@ The context is now within limits. Please retry your request with the recovered c
                     
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
-                        stepEntity.TargetLogID = actionResult.LogEntry.ID;
-                        this.queueStepSave(stepEntity);
+                        const logId = actionResult.LogEntry.ID;
+                        stepEntity.TargetLogID = logId;
+                        // Re-apply post-INSERT: a fast action can finish before the step's INSERT lands, and
+                        // the INSERT's reload would otherwise revert TargetLogID back to null.
+                        this.queueStepSave(stepEntity, (s) => { s.TargetLogID = logId; });
                     }
                     
                     // Prepare output data with action result
@@ -10311,6 +10386,18 @@ The context is now within limits. Please retry your request with the recovered c
      * Strips "payload." prefix if present (for LLM convenience)
      */
     private getCollectionFromPayload(payload: any, path: string): any[] | null {
+        // Support a literal static collection: "static:[1,2,3,4,5]". This lets a ForEach iterate a
+        // fixed list/range without a prior step having to build the array in the payload first.
+        const trimmed = path.trim();
+        if (trimmed.toLowerCase().startsWith('static:')) {
+            try {
+                const parsed = JSON.parse(trimmed.substring(trimmed.indexOf(':') + 1).trim());
+                return Array.isArray(parsed) ? parsed : null;
+            } catch {
+                return null;
+            }
+        }
+
         // Remove "payload." prefix if present
         const cleanPath = path.toLowerCase().startsWith('payload.')
             ? path.substring(8)

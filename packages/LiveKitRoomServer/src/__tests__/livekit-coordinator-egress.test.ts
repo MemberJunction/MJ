@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test mocks return minimal cast fixtures for the SDK/engine seams */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { LiveKitAgentRoomCoordinator, LIVEKIT_BRIDGE_DRIVER_CLASS, type BridgeOps } from '../livekit-agent-room-coordinator';
 import { LiveKitEgressService, wsToHttpUrl, type EgressClientLike } from '../livekit-egress-service';
 import { LiveKitTokenService } from '../livekit-token-service';
@@ -9,17 +9,23 @@ const CONFIG = { ServerUrl: 'wss://test.livekit.cloud', ApiKey: 'devkey', ApiSec
 /** A bridge-ops mock that captures the StartBridgeSession params and returns a canned active session. */
 function makeBridgeOps(providerFound = true) {
   const startCalls: Record<string, unknown>[] = [];
+  const reconfigureCalls: Array<{ id: string }> = [];
+  let seq = 0;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ops = {
     Config: vi.fn(async () => undefined),
     ProviderByDriverClass: vi.fn(() => (providerFound ? ({ ID: 'p1', DriverClass: LIVEKIT_BRIDGE_DRIVER_CLASS } as any) : undefined)),
     StartBridgeSession: vi.fn(async (params: Record<string, unknown>) => {
       startCalls.push(params);
-      return { SessionBridgeID: 'bridge-1' } as any;
+      return { SessionBridgeID: `bridge-${++seq}` } as any;
     }),
     StopBridgeSession: vi.fn(async () => true),
+    ReconfigureSessionToMeeting: vi.fn((id: string) => {
+      reconfigureCalls.push({ id });
+      return true;
+    }),
   } satisfies BridgeOps;
-  return { ops, startCalls };
+  return { ops, startCalls, reconfigureCalls };
 }
 
 describe('LiveKitAgentRoomCoordinator', () => {
@@ -30,6 +36,11 @@ describe('LiveKitAgentRoomCoordinator', () => {
     coordinator.SetTokenService(new LiveKitTokenService(CONFIG));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     coordinator.SetSessionFactory(async () => ({}) as any); // stub IRealtimeSession
+  });
+
+  // Meeting/moderator mode is opt-in via MJ_REALTIME_MODERATOR_MODE=on; restore env after each test.
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('is a process-wide singleton exposing the LiveKit driver key', () => {
@@ -85,6 +96,50 @@ describe('LiveKitAgentRoomCoordinator', () => {
     const ok = await coordinator.StopAgentRoomSession('bridge-1');
     expect(ok).toBe(true);
     expect(ops.StopBridgeSession).toHaveBeenCalledWith('bridge-1', 'Explicit', undefined, undefined);
+  });
+
+  it('multi-agent room: the FIRST agent is solo 1:1, a SECOND agent joins in MEETING mode (auto-response off + addressed-only)', async () => {
+    vi.stubEnv('MJ_REALTIME_MODERATOR_MODE', 'on'); // meeting mode is gated behind the moderator opt-in
+    const { ops, startCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+    const factoryCtx: Record<string, unknown>[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    coordinator.SetSessionFactory(async (ctx: any) => { factoryCtx.push(ctx); return {} as any; });
+
+    const room = 'meeting-room-unique-1';
+    // First agent → solo: model auto-responds (no meeting flag), and it answers freely (AlwaysAddressedMatcher).
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'm1', RoomName: room, AgentName: 'Sage' });
+    expect(startCalls[0].DisableAutoResponse).toBeUndefined();
+    expect(factoryCtx[0].MeetingMode).toBeUndefined();
+    // The agent-session id must reach the realtime factory so the co-agent observability run can group by it.
+    expect(factoryCtx[0].AgentSessionID).toBe('m1');
+    expect((startCalls[0].TurnMatcher as object).constructor.name).toBe('AlwaysAddressedMatcher');
+
+    // Second agent into the SAME room → meeting mode: auto-response disabled + addressed-only matcher.
+    await coordinator.StartAgentRoomSession({
+      AgentSessionID: 'm2', RoomName: room, AgentName: 'Marketing', AgentAliases: ['Marketing Agent'],
+    });
+    expect(startCalls[1].DisableAutoResponse).toBe(true);
+    expect(factoryCtx[1].MeetingMode).toBe(true);
+    expect(factoryCtx[1].SelfNames).toEqual(['Marketing', 'Marketing Agent']);
+    expect((startCalls[1].TurnMatcher as object).constructor.name).toBe('RegexAddressedMatcher');
+  });
+
+  it('re-gates the agents already in the room when it becomes multi-agent', async () => {
+    vi.stubEnv('MJ_REALTIME_MODERATOR_MODE', 'on'); // meeting mode is gated behind the moderator opt-in
+    const { ops, reconfigureCalls } = makeBridgeOps(true);
+    coordinator.SetBridgeOps(ops);
+
+    const room = 'regate-room-1';
+    // First agent → solo: nobody to re-gate yet.
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'g1', RoomName: room, AgentName: 'Sage', AgentAliases: ['Sage AI'] });
+    expect(reconfigureCalls.length).toBe(0);
+
+    // Second agent joins → the FIRST agent (bridge-1) is retroactively re-gated to meeting mode.
+    await coordinator.StartAgentRoomSession({ AgentSessionID: 'g2', RoomName: room, AgentName: 'Marketing' });
+    expect(reconfigureCalls.map((c) => c.id)).toContain('bridge-1');
+    // The re-gate matcher carries the first agent's names (built into a RegexAddressedMatcher).
+    expect(ops.ReconfigureSessionToMeeting).toHaveBeenCalledWith('bridge-1', expect.anything());
   });
 });
 
