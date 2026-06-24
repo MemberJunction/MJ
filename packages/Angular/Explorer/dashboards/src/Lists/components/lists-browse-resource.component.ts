@@ -2241,10 +2241,15 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   }
 
   clearFilters() {
+    // Reset EVERY dimension applyFilters() narrows on — search, owner, entity,
+    // favorites, and tags — so the empty-state "Reset filters" CTA actually clears
+    // the no-results state (favorites/tags were previously left active).
     this.searchTerm = '';
     this.selectedEntity = 'all';
     this.selectedOwner = 'mine';
-    this.applyFilters();
+    this.showOnlyFavorites = false;
+    this.tagFilters = [];
+    void this.recomputeTagMembership(); // empty tagFilters → clears tagFilteredListIds + re-applies
     this.buildCategoryTree();
   }
 
