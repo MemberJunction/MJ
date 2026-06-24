@@ -195,13 +195,21 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/Home | 1 | 2 | ✅ | (prior commit) |
 | dashboards/AI-autotagging (stragglers) | 8 | 23 | ✅ | (this commit) |
 | dashboards/DevTools event-monitor | 1 | 3→1 | ✅ | (this commit) |
-| Explorer/core-entity-forms | ~22 | — | | |
+| Explorer/core-entity-forms (24 files) | 24 | 85 | ✅ (build-verified)¹ | (this commit) |
 | Generic/conversations | ~12 | — | | |
 | Generic/{dashboard-viewer,artifacts,entity-viewer,...} | misc | — | | |
 | Explorer/explorer-core | ~5 | — | | |
 
 ## Follow-ups
 
+- **¹ core-entity-forms screenshots**: migration is build-verified (package
+  compiles all 85 `<mj-empty-state>` instances, 15 tests pass, 0 residual inline
+  markup, 0 icon-less). Per the agreed "representative + build-verify" scope, live
+  screenshots were not captured — form empty-states sit behind collapsed
+  `mj-accordion-panel`s and record-dependent collections (an opened saved Query
+  didn't even render the params panel in the DOM), making state-injection
+  impractical. They render via the identical canonical component already captured
+  across 200+ dashboard states. Revisit with real fixture records if needed.
 - **`.error-container`** blocks (entity-permissions, settings) are a distinct
   class that maps onto the `error` variant — fold them in during their sections.
 - **`api-key-list`** reset-filters (parent-owned `Filter` @Input) — see deferral
