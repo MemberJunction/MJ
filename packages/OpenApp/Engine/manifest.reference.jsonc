@@ -65,15 +65,15 @@
     "engine": "skyway"                                     // OPTIONAL — "skyway" | "flyway", default "skyway"
   },
 
-  // ── Metadata (OPTIONAL — the METADATA-EXTENDING form) ───────────────────────
-  // mj-sync metadata. With processOnInstall=true the engine pushes it into the shared
-  // __mj schema (or wherever the records point) at install, and RETIRES it symmetrically
-  // on remove. This is how a schema-less connector seeds its Integration / IntegrationObject
-  // / IntegrationObjectField + Action rows. With processOnInstall=false (default), metadata
-  // is dev-time only (authored here, deployed by the publisher's own pipeline).
+  // ── Metadata (OPTIONAL — dev-time source-of-truth pointer) ──────────────────
+  // mj-sync metadata directory. DEV-TIME ONLY — the install engine never processes it.
+  // It points at the records that are the source of truth for the app's Skyway seed
+  // migrations: a publisher runs `mj sync push` over this directory to GENERATE the
+  // migrations/ SQL, and `mj app install` then runs those migrations. (e.g. a connector's
+  // Integration / IntegrationObject / IntegrationObjectField + Action rows are seeded by
+  // its generated migration, not by reading this directory at install.)
   "metadata": {
-    "directory": "metadata",                               // OPTIONAL — default "metadata"
-    "processOnInstall": false                              // OPTIONAL — default false
+    "directory": "metadata"                                // OPTIONAL — default "metadata"
   },
 
   // ── Packages (OPTIONAL — the PACKAGES form) ─────────────────────────────────

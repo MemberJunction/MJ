@@ -323,10 +323,9 @@ describe('Manifest Validation', () => {
             expect(ValidateManifestObject(m).Success).toBe(true);
         });
 
-        it('should accept a metadata-extending connector profile (metadata.processOnInstall, no schema/packages)', () => {
+        it('should accept a metadata block (dev-time directory pointer, no install-time processing)', () => {
             const m = minimalManifest();
-            delete m.packages;
-            m.metadata = { directory: 'metadata', processOnInstall: true };
+            m.metadata = { directory: 'metadata' };
             expect(ValidateManifestObject(m).Success).toBe(true);
         });
     });

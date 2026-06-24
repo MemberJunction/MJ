@@ -6,7 +6,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync, readdirSync, statSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
@@ -14,7 +14,7 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, DownloadDirectory, GetLatestVersion, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
@@ -39,32 +39,6 @@ import {
  * Runtime context provided by the CLI to the orchestrator.
  * Contains all the external dependencies needed for the install flow.
  */
-/**
- * Result of a host-provided metadata push/unregister operation.
- */
-export interface MetadataOperationResult {
-  Success: boolean;
-  ErrorMessage?: string;
-  Created?: number;
-  Updated?: number;
-  Deleted?: number;
-  Skipped?: number;
-  Errors?: number;
-}
-
-/**
- * Host-injected function that runs an `mj sync push` over a LOCAL metadata directory.
- * Provided by the host (the CLI) so the engine can seed a connector-profile app's
- * metadata at install WITHOUT the engine depending on `@memberjunction/metadata-sync`.
- * `deleteDbOnly` is forwarded for the remove path (delete records the app seeded).
- */
-export type MetadataPushFn = (params: {
-  dir: string;
-  verbose?: boolean;
-  include?: string[];
-  deleteDbOnly?: boolean;
-}) => Promise<MetadataOperationResult>;
-
 export interface OrchestratorContext {
   /** MJ context user for entity operations (Metadata / RunView) */
   ContextUser: UserInfo;
@@ -96,14 +70,6 @@ export interface OrchestratorContext {
   MJCoreSchema?: string;
   /** Extra user placeholders merged into the Skyway Placeholders map for migration SQL substitution. */
   MigrationPlaceholders?: Record<string, string>;
-  /**
-   * Host-injected metadata pusher. REQUIRED for connector-profile apps
-   * (`manifest.metadata.processOnInstall === true`) so the engine can seed/retire the
-   * app's metadata (Integration/IntegrationObject/IntegrationObjectField + Actions) at
-   * install/remove time. Left undefined for schema-backed apps, which don't process
-   * metadata at install. Injected by the CLI to keep the engine decoupled from metadata-sync.
-   */
-  MetadataPusher?: MetadataPushFn;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,15 +243,6 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
       await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Config', configResult.ErrorMessage ?? 'Config update failed', startTime);
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
-    }
-
-    // Step 12b: Connector-profile metadata push — seeds the app's Integration/IO/IOF
-    // + Action rows. No-op unless manifest.metadata.processOnInstall is set.
-    const metaResult = await HandleMetadataPush(manifest, context, subpath);
-    if (!metaResult.Success) {
-      await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
-      await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Config', metaResult.ErrorMessage ?? 'Metadata push failed', startTime);
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, metaResult.ErrorMessage ?? 'Metadata push failed');
     }
 
     // Step 13: Update angular.json prebundle excludes
@@ -551,15 +508,6 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 7b: Re-push connector-profile metadata (idempotent merge — adds new IO/IOF/Actions,
-    // updates changed ones). No-op unless manifest.metadata.processOnInstall is set.
-    const metaResult = await HandleMetadataPush(manifest, context, subpath);
-    if (!metaResult.Success) {
-      await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Config', metaResult.ErrorMessage ?? 'Metadata push failed', startTime, previousVersion);
-      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-      return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, metaResult.ErrorMessage ?? 'Metadata push failed');
-    }
-
     // Step 8: Update angular.json prebundle excludes (handles new scopes in upgraded manifest)
     HandleAngularPrebundleExcludes(manifest, context);
 
@@ -634,10 +582,9 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 /**
  * Executes the remove flow for an installed Open App, inverting whatever the install added.
  *
- * Symmetric teardown by form: a metadata-extending app's seeded `__mj` rows are retired via
- * {@link HandleMetadataRetire} (the inverse of {@link HandleMetadataPush}); a schema-backed
- * app's schema is dropped; package/config/bootstrap references are removed in every case.
- * The persisted `ManifestJSON` (the source of truth) decides which teardown steps apply.
+ * Symmetric teardown by form: a schema-backed app's schema is dropped; package/config/bootstrap
+ * references are removed in every case. The persisted `ManifestJSON` (the source of truth)
+ * decides which teardown steps apply.
  */
 export async function RemoveApp(options: RemoveOptions, context: OrchestratorContext): Promise<AppOperationResult> {
   const startTime = Date.now();
@@ -676,13 +623,6 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       Callbacks?.OnProgress?.('Hooks', 'Running preRemove hook...');
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
     }
-
-    // Step 2b: Retire install-seeded metadata (symmetric inverse of HandleMetadataPush).
-    // A metadata-extending app's rows live in the shared __mj schema, which the schema-scoped
-    // cleanup below cannot reach — so retire them natively via mj-sync deletion. No-op unless
-    // the manifest opted into install-time metadata. Runs regardless of any preRemove hook so
-    // the native teardown never depends on the author writing one (it merely complements it).
-    const retireResult = await HandleMetadataRetire(manifest, context, existingApp.Subpath ?? undefined);
 
     // Steps 3-6: Remove config, client bootstrap, angular.json excludes, and package refs
     // (parallel where they write to different files)
@@ -740,11 +680,9 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       }
     }
 
-    // If metadata retirement, entity-metadata removal, or schema drop failed, the app is NOT
-    // cleanly removed — report it as a failure (don't mark the app 'Removed') instead of
-    // silently claiming success.
+    // If entity-metadata removal or schema drop failed, the app is NOT cleanly removed —
+    // report it as a failure (don't mark the app 'Removed') instead of silently claiming success.
     const removalErrors = [
-      retireResult.Success ? undefined : retireResult.ErrorMessage,
       metadataResult.Success ? undefined : metadataResult.ErrorMessage,
       schemaDropError,
     ].filter((e): e is string => !!e);
@@ -987,174 +925,6 @@ async function InstallDependencies(
       return { Success: false, ErrorMessage: `Failed to install dependency: ${result.ErrorMessage}` };
     }
   }
-  return { Success: true };
-}
-
-/**
- * Connector-profile metadata stage: downloads the app's `metadata/` subtree and runs a
- * scoped `mj sync push` over it via the host-injected pusher. This seeds a schema-less
- * connector app's Integration/IntegrationObject/IntegrationObjectField + Action rows at
- * install time (and re-pushes them, idempotently, on upgrade). No-op unless the manifest
- * opts in with `metadata.processOnInstall`. The mj-sync push is transactional (full
- * rollback on error), so a failed push leaves no partial metadata behind.
- */
-async function HandleMetadataPush(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
-  if (!manifest.metadata?.processOnInstall) {
-    return { Success: true };
-  }
-  if (!context.MetadataPusher) {
-    return {
-      Success: false,
-      ErrorMessage: `App '${manifest.name}' requires install-time metadata processing (metadata.processOnInstall) but the host did not provide a MetadataPusher.`,
-    };
-  }
-
-  context.Callbacks?.OnProgress?.('Config', 'Downloading app metadata...');
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-meta-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
-
-  const dirName = manifest.metadata.directory ?? 'metadata';
-  const download = await DownloadDirectory(manifest.repository, manifest.version, dirName, tempDir, context.GitHubOptions, subpath);
-  if (!download.Success) {
-    return { Success: false, ErrorMessage: `Failed to download metadata: ${download.ErrorMessage}` };
-  }
-  if (!download.Files || download.Files.length === 0) {
-    context.Callbacks?.OnWarn?.('Config', `No metadata files found in '${dirName}' — nothing to push.`);
-    return { Success: true };
-  }
-
-  context.Callbacks?.OnProgress?.('Config', `Pushing ${download.Files.length} metadata file(s)...`);
-  const push = await context.MetadataPusher({ dir: tempDir, verbose: context.Callbacks != null });
-  if (!push.Success) {
-    return { Success: false, ErrorMessage: `Metadata push failed: ${push.ErrorMessage ?? 'unknown error'}` };
-  }
-
-  context.Callbacks?.OnSuccess?.(
-    'Config',
-    `Metadata pushed (${push.Created ?? 0} created, ${push.Updated ?? 0} updated).`,
-  );
-  return { Success: true };
-}
-
-/**
- * Recursively marks every mj-sync record node (any object carrying a `fields` key) for
- * deletion by setting `deleteRecord: { delete: true }`, descending through `relatedEntities`.
- * Mutates `node` in place.
- *
- * mj-sync's deletion path keys off `deleteRecord.delete === true`: marking the top-level
- * record trips the push quick-scan gate, and the nested marks ride the `relatedEntities`
- * flatten into the SAME FK-safe reverse-topo deletion audit (children before parents).
- * This is why the retire transform can mark in place — it does not need to re-home nested
- * records into their own top-level delete files.
- */
-function markRecordsForDeletion(node: unknown): void {
-  if (Array.isArray(node)) {
-    for (const element of node) {
-      markRecordsForDeletion(element);
-    }
-    return;
-  }
-  if (node !== null && typeof node === 'object') {
-    const record = node as Record<string, unknown>;
-    // An mj-sync record is any object carrying a `fields` map. Non-record objects
-    // (e.g. the `fields` map itself) are left alone.
-    if ('fields' in record) {
-      record.deleteRecord = { delete: true };
-      const related = record.relatedEntities;
-      if (related !== null && typeof related === 'object') {
-        for (const childList of Object.values(related as Record<string, unknown>)) {
-          markRecordsForDeletion(childList);
-        }
-      }
-    }
-  }
-}
-
-/**
- * Walks a downloaded metadata directory and rewrites every data file so its records carry
- * a `deleteRecord` marker. Skips entity-config files (`.mj-*.json`) and `.backups/` so the
- * push still resolves each directory's entity + file pattern. Returns the number of data
- * files marked.
- */
-function markMetadataDirForDeletion(dir: string): number {
-  let marked = 0;
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      if (entry === '.backups' || entry === 'node_modules') {
-        continue;
-      }
-      marked += markMetadataDirForDeletion(full);
-      continue;
-    }
-    if (!entry.endsWith('.json') || entry.startsWith('.mj-')) {
-      continue; // entity-config files (.mj-sync.json / .mj-folder.json) define the entity — leave them
-    }
-    try {
-      const data: unknown = JSON.parse(readFileSync(full, 'utf-8'));
-      markRecordsForDeletion(data);
-      writeFileSync(full, JSON.stringify(data, null, 2));
-      marked++;
-    } catch {
-      // Skip files that aren't parseable mj-sync records (nothing to retire there)
-    }
-  }
-  return marked;
-}
-
-/**
- * Symmetric inverse of {@link HandleMetadataPush} — the remove-time teardown for a
- * metadata-extending app. A connector-profile app seeds rows into the shared `__mj` schema
- * (Integration / IntegrationObject / IntegrationObjectField + Actions); the schema-scoped
- * cleanup in {@link RemoveApp} cannot reach them, so without this they would be orphaned.
- *
- * Mechanism (no new mj-sync mode, no tracking table — the manifest IS the source of truth):
- * 1. Download the app's `metadata/` at the INSTALLED version (the persisted `ManifestJSON`/
- *    `Version` pins exactly what was seeded).
- * 2. Rewrite every record with a `deleteRecord` marker (see {@link markRecordsForDeletion}).
- * 3. Run the SAME host-injected pusher with `deleteDbOnly`, so mj-sync's DeletionAuditor
- *    removes the rows in FK-safe reverse-topo order and sweeps DB-only dependents.
- *
- * No-op unless the manifest opted into install-time metadata (`metadata.processOnInstall`).
- */
-async function HandleMetadataRetire(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
-  if (!manifest.metadata?.processOnInstall) {
-    return { Success: true };
-  }
-  if (!context.MetadataPusher) {
-    return {
-      Success: false,
-      ErrorMessage: `App '${manifest.name}' seeded integration metadata at install (metadata.processOnInstall) but the host did not provide a MetadataPusher to retire it on remove.`,
-    };
-  }
-
-  context.Callbacks?.OnProgress?.('Metadata', 'Downloading app metadata to retire...');
-  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-retire-${Date.now()}`);
-  mkdirSync(tempDir, { recursive: true });
-
-  const dirName = manifest.metadata.directory ?? 'metadata';
-  const download = await DownloadDirectory(manifest.repository, manifest.version, dirName, tempDir, context.GitHubOptions, subpath);
-  if (!download.Success) {
-    return { Success: false, ErrorMessage: `Failed to download metadata for retirement: ${download.ErrorMessage}` };
-  }
-  if (!download.Files || download.Files.length === 0) {
-    context.Callbacks?.OnWarn?.('Metadata', `No metadata files found in '${dirName}' — nothing to retire.`);
-    return { Success: true };
-  }
-
-  const marked = markMetadataDirForDeletion(tempDir);
-  if (marked === 0) {
-    context.Callbacks?.OnWarn?.('Metadata', `No metadata records found to retire in '${dirName}'.`);
-    return { Success: true };
-  }
-
-  context.Callbacks?.OnProgress?.('Metadata', `Retiring seeded metadata from ${marked} file(s)...`);
-  const retire = await context.MetadataPusher({ dir: tempDir, deleteDbOnly: true, verbose: context.Callbacks != null });
-  if (!retire.Success) {
-    return { Success: false, ErrorMessage: `Metadata retirement failed: ${retire.ErrorMessage ?? 'unknown error'}` };
-  }
-
-  context.Callbacks?.OnSuccess?.('Metadata', `Metadata retired (${retire.Deleted ?? 0} record(s) deleted).`);
   return { Success: true };
 }
 

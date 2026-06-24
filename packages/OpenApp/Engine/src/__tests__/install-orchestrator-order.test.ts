@@ -22,7 +22,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../github/github-client.js', () => ({
     FetchManifestFromGitHub: vi.fn(),
     DownloadMigrations: vi.fn(),
-    DownloadDirectory: vi.fn(),
     GetLatestVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
     // The orchestrator derives an optional in-repo subpath from the Source URL;
@@ -76,7 +75,7 @@ vi.mock('@memberjunction/core', () => ({
 
 import { InstallApp } from '../install/install-orchestrator.js';
 import type { OrchestratorContext } from '../install/install-orchestrator.js';
-import { FetchManifestFromGitHub, DownloadDirectory, DownloadMigrations } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations } from '../github/github-client.js';
 import { CreateAppSchema, SchemaExists } from '../install/schema-manager.js';
 import { RunAppMigrations } from '../install/migration-runner.js';
 import { AddAppPackages, RunPackageInstall, BumpPrefixedDependencies } from '../install/package-manager.js';
@@ -258,71 +257,6 @@ describe('InstallApp dependency orchestration', () => {
         expect(installSequence).toEqual([]);
         expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
         expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
-    });
-});
-
-describe('InstallApp connector profile (metadata.processOnInstall, no schema)', () => {
-    /** A schema-less connector-profile manifest: seeds metadata at install, no migrations. */
-    function connectorManifestJSON(): string {
-        return JSON.stringify({
-            manifestVersion: 1,
-            name: 'connector-hubspot',
-            displayName: 'HubSpot Connector',
-            description: 'HubSpot connector test app description',
-            version: '1.0.0',
-            publisher: { name: 'Test' },
-            repository: 'https://github.com/MemberJunction/Integrations',
-            mjVersionRange: '>=5.0.0 <6.0.0',
-            metadata: { directory: 'metadata', processOnInstall: true },
-            packages: { server: [{ name: '@memberjunction/integration-connectors', role: 'bootstrap', startupExport: 'registerConnectors' }] },
-        });
-    }
-
-    const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
-
-    beforeEach(() => {
-        vi.clearAllMocks();
-        vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
-        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true });
-        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
-        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
-        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
-        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
-        vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
-        vi.mocked(ListInstalledApps).mockResolvedValue([]);
-        vi.mocked(RecordAppInstallation).mockResolvedValue('id-connector-hubspot');
-        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: connectorManifestJSON() });
-        vi.mocked(DownloadDirectory).mockResolvedValue({ Success: true, LocalPath: '/tmp/meta', Files: ['integration/.hubspot.integration.json'] });
-    });
-
-    it('skips schema/migrations and pushes the downloaded metadata via the injected pusher', async () => {
-        const pusher = vi.fn().mockResolvedValue({ Success: true, Created: 130, Updated: 0 });
-        const ctx = { ...context, MetadataPusher: pusher } as unknown as OrchestratorContext;
-
-        const result = await InstallApp({ Source: source }, ctx);
-
-        expect(result.Success).toBe(true);
-        // No schema block → schema creation never runs.
-        expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
-        // Manifest + metadata are fetched from the CRM/HubSpot subpath.
-        expect(vi.mocked(FetchManifestFromGitHub)).toHaveBeenCalledWith(source, undefined, expect.anything(), 'CRM/HubSpot');
-        expect(vi.mocked(DownloadDirectory)).toHaveBeenCalledWith(
-            'https://github.com/MemberJunction/Integrations',
-            '1.0.0',
-            'metadata',
-            expect.any(String),
-            expect.anything(),
-            'CRM/HubSpot',
-        );
-        expect(pusher).toHaveBeenCalledTimes(1);
-        expect(pusher).toHaveBeenCalledWith(expect.objectContaining({ dir: expect.any(String) }));
-    });
-
-    it('fails the install when no MetadataPusher is provided by the host', async () => {
-        const result = await InstallApp({ Source: source }, context);
-
-        expect(result.Success).toBe(false);
-        expect(result.ErrorMessage).toContain('MetadataPusher');
     });
 });
 

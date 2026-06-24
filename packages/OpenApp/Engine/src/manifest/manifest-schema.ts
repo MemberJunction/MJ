@@ -97,16 +97,13 @@ const migrationsSchema = z.object({
 // ── Metadata ──────────────────────────────────────────────
 
 const metadataSchema = z.object({
-    directory: z.string().optional().default('metadata'),
     /**
-     * When true, the install engine downloads this directory and runs a scoped
-     * `mj sync push` over it AT INSTALL TIME (and re-pushes on upgrade). This is
-     * what makes a schema-less "connector profile" app seed its metadata (e.g. an
-     * integration connector's Integration/IntegrationObject/IntegrationObjectField
-     * + Action rows) without any schema or migrations. Defaults to false, preserving
-     * the historical "metadata is dev-time only" behavior for schema-backed apps.
+     * Dev-time-only pointer to the directory whose metadata is the source of truth for the
+     * app's seed migrations. The install engine NEVER reads this at install — seeding happens
+     * exclusively through the app's Skyway `migrations/` (generated from this directory via
+     * `mj sync push` at build time). Kept purely as documentation of where the metadata lives.
      */
-    processOnInstall: z.boolean().optional().default(false),
+    directory: z.string().optional().default('metadata'),
 });
 
 // ── Code Visibility ───────────────────────────────────────
@@ -163,8 +160,8 @@ export const mjAppManifestSchema = z.object({
     // Migrations
     migrations: migrationsSchema.optional(),
 
-    // Metadata — dev-time only unless `metadata.processOnInstall` is true (connector profile),
-    // in which case the engine pushes it at install/upgrade time.
+    // Metadata — dev-time only. Points at the source-of-truth directory used to generate the
+    // app's seed migrations; the install engine never processes it directly.
     metadata: metadataSchema.optional(),
 
     // NPM Packages — optional, like every other capability block. An app that extends MJ
