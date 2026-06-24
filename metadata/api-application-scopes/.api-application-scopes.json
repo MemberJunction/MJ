@@ -729,5 +729,107 @@
       "lastModified": "2026-02-01T00:26:51.018Z",
       "checksum": "935d143a3c66df7b033adfdd66625b0c78abedb49dff21cf03a8f439f46a0a27"
     }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=query:create",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "12A62192-683C-4EEA-9F02-712FBBA79584"
+    },
+    "sync": {
+      "lastModified": "2026-06-18T04:20:56.820Z",
+      "checksum": "81d2beec61f3b18658fb5926fd764e9896c2dcfb52d2a45807713e6570bff934"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=query:update",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "E646362A-7DD0-4FA7-BB08-BD662F0C1C0D"
+    },
+    "sync": {
+      "lastModified": "2026-06-18T04:20:56.834Z",
+      "checksum": "3f0d79b8bb6a19fde444fc03e08a0ceedc68092d865c4e491e76089afdf64da0"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=query:delete",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "273797D9-C82C-49EE-A529-470BF5BDAEAE"
+    },
+    "sync": {
+      "lastModified": "2026-06-18T04:20:56.846Z",
+      "checksum": "8ab68108a7bf2c44488c264e97ce59244660e60d98baa36ecb7344c48b1098cf"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=query:test",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "EB11E406-5F72-4467-A564-CAE8B1C5B931"
+    },
+    "sync": {
+      "lastModified": "2026-06-18T04:20:56.862Z",
+      "checksum": "758f4f3ba2e3227b4cf63198748fa3bc30e1a8db134e9c1d14aad36da9c692c6"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=view:batch",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "F792F416-8B65-4CA2-9200-C64F2DAFC3F5"
+    },
+    "sync": {
+      "lastModified": "2026-06-18T04:20:56.874Z",
+      "checksum": "43f8a5fca7f074a5f80719231fae17f6ce6c22249acc7a20d21dd1a75be5533b"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: API Applications.Name=MJAPI",
+      "ScopeID": "@lookup:MJ: API Scopes.FullPath=search:execute",
+      "ResourcePattern": "*",
+      "PatternType": "Include",
+      "IsDeny": false,
+      "Priority": 0
+    },
+    "primaryKey": {
+      "ID": "4EF05083-069A-45B0-A96B-62CFCFD858FA"
+    },
+    "sync": {
+      "lastModified": "2026-06-18T04:20:56.889Z",
+      "checksum": "3ae0f7b2cc8ee2e7f3f2dedcd2865bebfac6930a5410000d506d4cfb919c8638"
+    }
   }
 ]

@@ -1268,12 +1268,11 @@ import {
     ComputerUseTestDriver,
 } from '@memberjunction/computer-use-engine';
 
-// @memberjunction/server (4 classes)
+// @memberjunction/server (3 classes)
 import {
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
-    SkipProxyAgent,
 } from '@memberjunction/server';
 
 /**
@@ -2190,7 +2189,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityPermissionEntityServer,
     MJTenantFilterMiddleware,
     RateLimitMiddleware,
-    SkipProxyAgent,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */

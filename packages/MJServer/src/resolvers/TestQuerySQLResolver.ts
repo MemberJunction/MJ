@@ -2,7 +2,6 @@ import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'ty
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { RunQuery, IRunQueryProvider, LogError, LogStatus, QueryExecutionSpec } from '@memberjunction/core';
 import { AppContext } from '../types.js';
-import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 
@@ -85,7 +84,7 @@ export class TestQuerySQLResult {
  * enabling external systems (e.g., Skip-Brain) to test query SQL before saving to the database.
  *
  * Security:
- * - Requires system user authentication (@RequireSystemUser)
+ * - Requires `query:test` scope for API key users (no-op for JWT auth)
  * - Uses read-only database connection (no mutation possible)
  * - Enforces MaxRows limit (default 100) to prevent unbounded queries
  *
@@ -93,7 +92,6 @@ export class TestQuerySQLResult {
  */
 @Resolver()
 export class TestQuerySQLResolver extends ResolverBase {
-    @RequireSystemUser()
     @Query(() => TestQuerySQLResult, {
         description: 'Test transient SQL with full composition + Nunjucks template processing without requiring a saved query'
     })
@@ -102,6 +100,7 @@ export class TestQuerySQLResolver extends ResolverBase {
         @Ctx() context: AppContext
     ): Promise<TestQuerySQLResult> {
         try {
+            await this.CheckAPIKeyScopeAuthorization('query:test', '*', context.userPayload);
             // Use read-only provider for security — no mutation possible
             const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
             if (!provider) {

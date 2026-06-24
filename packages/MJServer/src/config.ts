@@ -68,23 +68,6 @@ const zodBooleanWithTransforms = () => {
           })
 }
 
-const askSkipInfoSchema = z.object({
-  url: z.string().optional(), // Base URL for Skip API
-  apiKey: z.string().optional(),
-  orgID: z.string().optional(),
-  organizationInfo: z.string().optional(),
-  entitiesToSend: z
-    .object({
-      excludeSchemas: z.array(z.string()).optional(),
-      includeEntitiesFromExcludedSchemas: z.array(z.string()).optional(),
-    })
-    .optional(),
-  chatURL: z.string().optional(),
-  learningCycleRunUponStartup: zodBooleanWithTransforms(),
-  learningCycleEnabled: zodBooleanWithTransforms(),
-  learningCycleURL: z.string().optional(),
-  learningCycleIntervalInMinutes: z.coerce.number().optional(),
-});
 
 const sqlLoggingOptionsSchema = z.object({
   formatAsMigration: z.boolean().optional().default(false),
@@ -336,7 +319,6 @@ const configInfoSchema = z.object({
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
-  askSkip: askSkipInfoSchema.optional(),
   sqlLogging: sqlLoggingSchema.optional(),
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
@@ -387,7 +369,6 @@ export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;
-export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
 export type SqlLoggingOptions = z.infer<typeof sqlLoggingOptionsSchema>;
 export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
@@ -475,25 +456,6 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   // REST API defaults
   restApiOptions: {
     enabled: false,
-  },
-
-  // Ask Skip configuration (environment-driven)
-  askSkip: {
-    url: process.env.ASK_SKIP_URL,
-    chatURL: process.env.ASK_SKIP_CHAT_URL,
-    learningCycleURL: process.env.ASK_SKIP_LEARNING_URL,
-    learningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES
-      ? parseInt(process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES, 10)
-      : undefined,
-    learningCycleEnabled: process.env.ASK_SKIP_RUN_LEARNING_CYCLES === 'true',
-    learningCycleRunUponStartup: process.env.ASK_SKIP_RUN_LEARNING_CYCLES_UPON_STARTUP === 'true',
-    orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
-    apiKey: process.env.ASK_SKIP_API_KEY,
-    organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
-    entitiesToSend: {
-      excludeSchemas: [],
-      includeEntitiesFromExcludedSchemas: [],
-    },
   },
 
   // SQL logging defaults

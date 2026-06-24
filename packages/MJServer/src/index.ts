@@ -131,8 +131,6 @@ export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
 export * from './generic/RestoreContextInput.js';
 
-export * from './agents/skip-agent.js';
-export * from './agents/skip-sdk.js';
 
 export * from './resolvers/GeoResolver.js';
 export * from './resolvers/ColorResolver.js';
