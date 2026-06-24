@@ -11,19 +11,37 @@
 
 _Updated continuously. Newest status at the top of each phase section._
 
-**Where things stand:**
-- Read all four plan docs + CLAUDE.md; mapped the magic-link auth subsystem, ConversationsRuntime, and telephony bridges via parallel exploration.
-- **W0 DONE** (empirically, on live DB): D5 footgun confirmed — a guest with no constrained principal would expose all 17 active top-level agents as handoff targets.
-- **M0 DONE**: Slack media bridge is **NO-GO** (parked); thorough evidence chain recorded.
-- Next: W2 migration (`MJ: Widget Instances`) → CodeGen → W1 backend.
+**Where things stand (updated through W0/M0/W1/W2/T0):**
+- **W0 DONE** (empirical): D5 footgun confirmed — an unconstrained guest exposes all 17 active
+  top-level agents as handoff targets. Constrained principal is mandatory.
+- **M0 DONE**: Slack media bridge **NO-GO** (parked) with full evidence + re-eval triggers.
+- **W2 DONE (entity)**: `MJ: Widget Instances` migration + CodeGen applied & committed; metadata
+  seed (Widget Guest role + perms + example instance) authored & committed. Seed *push* + denied-
+  RunView check blocked by the DB outage (below).
+- **W1 DONE**: guest-session backend (`packages/MJServer/src/widget/`) — service + public router +
+  pure core, **551/56-skip/0-fail** MJServer tests (incl. 21 new). Live curl Auth0-gated.
+- **T0 DONE**: G.711 μ-law codec + PCM16 resampler in `ai-bridge-base`, 107 tests pass; P5 ruled
+  out as a telephony blocker.
+- **Next:** W3 (embeddable widget bundle) — the priority remaining piece; offline-buildable. Then
+  T1 telephony native-SDK scaffolding, M1 Teams scaffolding (all offline + unit-tested).
 
 **Review-first order (for tomorrow):**
 1. `plans/realtime/bridges-and-widget/spikes/W0-findings.md` — the D5 confirmation that shapes W1/W2 (constrained principal is mandatory, not just pinning).
 2. `plans/realtime/bridges-and-widget/spikes/M0-slack-media-findings.md` + the M0 gate added to `meeting-vendor-bindings-teams-slack.md` — Slack NO-GO with re-evaluation triggers.
 
 **Hard blockers encountered:**
-- **Auth0 / live MJAPI integration** — anticipated per mission; affects live acceptance curls (W1/W3) and credential-gated vendor integration tests (all of T1–T3, M1). Offline unit tests + ready-to-run integration tests are the mitigation. (Not yet hit; noted proactively.)
-- `deep-research` skill unusable in sandbox (PreToolUse hook errors under `/bin/sh`: `set: Illegal option -o pipefail`). Worked around by running research via a general-purpose agent.
+- **🔴 DB outage (NEW, mid-session):** `sql-claude` became unreachable (DNS unresolved) after the
+  W2 migration + CodeGen had been applied. Blocks: `mj sync push` (W2 seed verify), any further
+  migrations/CodeGen, and re-running the W0 live spike. Everything migration/CodeGen-dependent was
+  already done before the outage. All remaining planned work (W3/W4/T1+/M1) is offline code +
+  unit tests and proceeds unaffected. **If the DB is restored, run:** `mj sync push --dir=metadata
+  --include="roles,entity-permissions,widget-instances"` then verify the Widget Guest role denies a
+  RunView on an out-of-scope entity.
+- **Auth0 / live MJAPI integration** — anticipated per mission; affects live acceptance curls
+  (W1/W3) and credential-gated vendor integration tests (T1–T3, M1). Mitigation: offline unit tests
+  + ready-to-run integration tests; documented, never faked.
+- `deep-research` skill unusable in sandbox (PreToolUse hook errors under `/bin/sh`:
+  `set: Illegal option -o pipefail`). Worked around via a general-purpose agent.
 
 ---
 
@@ -42,13 +60,13 @@ _Updated continuously. Newest status at the top of each phase section._
 | Phase | Title | Status |
 |---|---|---|
 | W0 | Spike & guardrails | ✅ DONE |
-| W1 | Guest-session backend | TODO |
-| W2 | Widget-instance metadata | TODO |
+| W1 | Guest-session backend | ✅ DONE (live curl Auth0-gated) |
+| W2 | Widget-instance metadata | ✅ entity+CodeGen / ⚠ seed push DB-blocked |
 | W3 | Embeddable bundle (text MVP) | TODO |
 | W4 | Voice modality | TODO |
 | W5 | Magic-link upgrade + host identity | TODO |
 | W6 | Hardening & embed polish | TODO |
-| T0 | Media-plane spike | TODO |
+| T0 | Media-plane spike | ✅ DONE |
 | T1 | Twilio end-to-end | TODO |
 | T2 | Vonage | TODO |
 | T3 | RingCentral | TODO |
@@ -117,7 +135,30 @@ tamper rejection).
   signing configured. Documented, not faked.
 
 ### W2 — Widget-instance metadata
-_Status: TODO_
+**Status: DONE (code) / PARTIAL (seed push blocked by DB outage)**
+
+- **Migration** `migrations/v5/V202606242115__v5.43.x__Widget_Instances.sql` creates the
+  `WidgetInstance` table → entity **`MJ: Widget Instances`** (`MJWidgetInstanceEntity`).
+  Columns: Name, PublicKey (unique), ApplicationID/PinnedAgentID/GuestRoleID (FKs),
+  AllowedOrigins (JSON), Modality (Text/Voice/Both), AuthStrategy (D1), Status,
+  SessionTTLMinutes, RateLimitPerMinute, VoiceMaxSessionMinutes. Followed migrations/CLAUDE.md
+  (hardcoded no FK indexes, sp_addextendedproperty on every column, no __mj_ timestamps).
+- **Migration applied + CodeGen run** successfully (while DB was up): entity subclass, server
+  resolvers, Angular forms generated; MJCoreEntities builds clean. Committed.
+- **Decision (open-Q #3):** new entity, not magic-link reuse — durable per-deployment config vs.
+  ephemeral per-token invites. Documented in the migration header.
+- **Metadata seed** (committed, ready): Widget Guest restricted role + entity permissions
+  (read/create/update on `MJ: Conversations` + `MJ: Conversation Details` only, no delete) +
+  one example widget instance (Chat app / Sage / Widget Guest / localhost origins). Pull filters
+  widened to include Widget Guest.
+- ⛔ **`mj sync push` + the "denied RunView" acceptance check are BLOCKED**: `sql-claude` became
+  unreachable (DNS unresolved) after the migration+CodeGen step. Files are authored/valid and
+  ready to push when the DB returns.
+- **Caveat for the human (cross-guest isolation):** all anonymous guests share the seeded
+  Anonymous principal (same UserID), so a per-UserID RLS filter would NOT isolate one guest's
+  Conversation from another's. The Widget Guest role satisfies "cannot read arbitrary entities,"
+  but per-session conversation isolation (RLS keyed on `mj_sid`/conversation ownership) is a
+  genuine **W6 hardening** item — flagged, not silently assumed.
 
 ### W3 — Embeddable bundle (text MVP)
 _Status: TODO_
@@ -132,7 +173,20 @@ _Status: TODO_
 _Status: TODO_
 
 ### T0 — Media-plane spike
-_Status: TODO_
+**Status: DONE** ✅
+
+- Added the shared transcode primitive to `@memberjunction/ai-bridge-base`:
+  `src/audio/g711.ts` (ITU-T G.711 μ-law codec + ArrayBuffer wrappers matching the
+  `ITelephonyCallSdk` PCM16 seam) and `src/audio/resample.ts` (linear PCM16 resampler for
+  8k/16k/24k). Exported via the base `index.ts` (no cross-package re-export).
+- **47 new unit tests** (round-trip fidelity within G.711 bounds, ITU known vectors, rate
+  scaling, DC preservation) incl. the explicit T0 acceptance loopback (μ-law → PCM16 → μ-law).
+  A real bug was caught+fixed (CLIP must be 32635, not 0x7FFF, or the top μ-law segment overflows).
+- **Build:** `@memberjunction/ai-bridge-base` clean. **Tests:** 107 passed / 0 failed (7 files).
+- **Audio-format note** `spikes/T0-audio-format-note.md`: carrier μ-law/8k ↔ bridge-seam PCM16 ↔
+  model 16k/24k; transcode owned by the native SDK; **P5 (server-bridged media plane) confirmed
+  NOT a hard blocker** for telephony (native SDK owns the carrier socket; `wireTransportSeam` in
+  `ai-bridge-engine.ts` already wires the realtime session SendInput/OnOutput).
 
 ### T1 — Twilio end-to-end
 _Status: TODO_
