@@ -24,6 +24,8 @@ import { SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovi
 import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
+import { RemoteOperationGeneratorBase } from './Misc/remote_operations_codegen';
+import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { SQLServerCodeGenConnection } from './Database/providers/sqlserver/SQLServerCodeGenConnection';
 import { PostgreSQLCodeGenConnection } from './Database/providers/postgresql/PostgreSQLCodeGenConnection';
@@ -721,6 +723,38 @@ export class RunCodeGenBase {
           return false;
         } else if (isVerbose) succeedSpinner('Actions Code generated');
       } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
+
+      // Remote Operations — emit the typed BaseRemotableOperation subclass for each MJ: Remote Operations row.
+      // Two output targets, parallel to the entity-subclass split: `CoreRemoteOperations` (MJ core ops, shipped
+      // in @memberjunction/core-entities) and `RemoteOperations` (downstream/user ops, their GeneratedEntities).
+      // NOTE: ops have no SchemaName, so there is no automatic core/non-core PARTITION (the entity split keys on
+      // SchemaName === mjCoreSchema). Each configured target therefore receives the full op set; in practice a
+      // repo configures exactly one (this repo: CoreRemoteOperations only). A per-op core/non-core marker — the
+      // SchemaName-equivalent — is the open decision needed to let a single DB route ops to both targets.
+      const coreRemoteOpsDir = outputDir('CoreRemoteOperations', false);
+      const nonCoreRemoteOpsDir = outputDir('RemoteOperations', false);
+      if (coreRemoteOpsDir || nonCoreRemoteOpsDir) {
+        const remoteOpsResult = await new MJ.RunView().RunView<MJRemoteOperationEntity>(
+          { EntityName: 'MJ: Remote Operations', ResultType: 'entity_object' },
+          currentUser,
+        );
+        const remoteOps = remoteOpsResult.Results ?? [];
+        const remoteOpsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<RemoteOperationGeneratorBase>(RemoteOperationGeneratorBase)!;
+        for (const target of [
+          { dir: coreRemoteOpsDir, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
+          { dir: nonCoreRemoteOpsDir, label: 'Remote Operation', phase: 'generateRemoteOperations' },
+        ]) {
+          if (!target.dir) continue;
+          if (isVerbose) startSpinner(`Generating ${target.label} typed bases...`);
+          const ok = await reporter.phase(target.phase, () =>
+            remoteOpsGenerator.generateRemoteOperations(remoteOps, target.dir!),
+          );
+          if (!ok) {
+            failSpinner(`Error generating ${target.label} code`);
+            return false;
+          } else if (isVerbose) succeedSpinner(`${target.label} typed bases generated`);
+        }
+      } else if (isVerbose) warnSpinner('Remote Operations output directory NOT found in config file, skipping...');
 
       SQLLogging.finishSQLLogging();
       if (!isVerbose) succeedSpinner('TypeScript code generation completed');

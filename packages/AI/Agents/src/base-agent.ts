@@ -10386,6 +10386,18 @@ The context is now within limits. Please retry your request with the recovered c
      * Strips "payload." prefix if present (for LLM convenience)
      */
     private getCollectionFromPayload(payload: any, path: string): any[] | null {
+        // Support a literal static collection: "static:[1,2,3,4,5]". This lets a ForEach iterate a
+        // fixed list/range without a prior step having to build the array in the payload first.
+        const trimmed = path.trim();
+        if (trimmed.toLowerCase().startsWith('static:')) {
+            try {
+                const parsed = JSON.parse(trimmed.substring(trimmed.indexOf(':') + 1).trim());
+                return Array.isArray(parsed) ? parsed : null;
+            } catch {
+                return null;
+            }
+        }
+
         // Remove "payload." prefix if present
         const cleanPath = path.toLowerCase().startsWith('payload.')
             ? path.substring(8)
