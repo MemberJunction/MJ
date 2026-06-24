@@ -182,7 +182,8 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/Credentials | 6 | 9 | ✅ | `789b2359c3` |
 | dashboards/Actions | 5 | 7 | ✅ | (this commit) |
 | dashboards/Integration | 5 | 5 | ✅ | (this commit) |
-| dashboards/{VersionHistory,Testing,Communication} | 4 each | — | | |
+| dashboards/Communication | 4 | 7 | ✅ | (this commit) |
+| dashboards/{VersionHistory,Testing} | 4 each | — | | |
 | dashboards/{Scheduling,Permissions} | 3 each | — | | |
 | dashboards/{KnowledgeHub,DataExplorer} | 2 each | — | | |
 | dashboards/{SystemDiagnostics,QueryBrowser,MCP,Home} | 1 each | — | | |

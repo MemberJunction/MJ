@@ -57,6 +57,14 @@ in code; not screenshotted (nested sub-view)._
 _actions-list-view and categories-list-view no-results reuse the captured
 no-results pattern._
 
+## communication/
+| State | File |
+|-------|------|
+| Monitor — 3 compact panel empties (recent activity / providers / channels) | `monitor.png` |
+| Logs — no-results (in table, colspan) | `logs-no-results.png` |
+| Templates — no-results | `templates-no-results.png` |
+| Runs — no communication runs found | `runs-empty.png` |
+
 ## credentials/
 | State | File |
 |-------|------|
