@@ -150,10 +150,12 @@ without the harness. Delivered:
 - **Both config shapes** (single preset, node+dom `projects`) proven and documented — this resolved the
   "support both in one package?" question the original plan left open.
 
-> **Substitution to be aware of:** the original plan named the **LiveKit leaf components** (PR #2860) as the
-> headline pilot, plus a `LiveKitRoomComponent` injectable-controller refactor. #2860 is not merged into
-> `next`, so those components aren't in the branch; equivalent in-repo gating-heavy, `@Output`-driven leaf
-> components were used instead. **Follow-up below.**
+> **LiveKit pilot — now included (was deferred):** the original plan named the **LiveKit leaf components**
+> (PR #2860) as the headline pilot, plus a `LiveKitRoomComponent` injectable-controller refactor. #2860 is
+> now merged into `next`, so the components are present and the leaf pilot is **shipped** — DOM specs for
+> `control-bar`, `agent-state`, `connection-overlay`, `chat-panel`, `device-menu`, plus `participant-tile`
+> as the §7 **media-split** worked example. The equivalent in-repo leaf components added earlier remain.
+> **Remaining:** only the injectable-controller refactor on the room container (see below).
 
 ### Phase 2 — `packages/Angular/Generic/**` rollout (next)
 
@@ -175,13 +177,23 @@ without the harness. Delivered:
 - Add a coverage threshold for Angular packages in CI (start lenient, ratchet up).
 - Document the live-media e2e suite location/runner for the excluded WebRTC paths.
 
-### LiveKit follow-up (do when #2860 merges to `next`)
+### LiveKit pilot — shipped + remaining
 
-- Add DOM specs for the LiveKit leaf components (`control-bar`, `participant-tile` [media mocked],
-  `chat-panel`, `device-menu`, `agent-state`, `connection-overlay`).
-- Do the **injectable-controller refactor** on `LiveKitRoomComponent` and add a container-level DOM spec
-  driven by a fake controller. The harness + patterns shipped here apply directly; media paths stay
-  live-tested per §3.
+**Shipped** (`ng-livekit-room`, dual node+dom preset; 6 DOM spec files / 45 tests, existing 26 node specs preserved):
+- DOM specs for the leaf components: `control-bar`, `agent-state`, `connection-overlay`, `chat-panel`, `device-menu`.
+- `participant-tile` — the §3/§7 **media-split** worked example. The media-free surface (avatar/initials,
+  name + role badge, muted icon, screen-share chip, connection-quality, active-speaker ring, pin →
+  `TogglePin`) is DOM-tested with a participant whose `Raw` exposes no tracks, so `track.attach()` never
+  fires. `track.attach()`/`detach()` and the audio-meter `requestAnimationFrame` loop are left to live tests.
+
+**Deferred to Phase 2** (`Angular/Generic/**` rollout): the **injectable-controller refactor** on
+`LiveKitRoomComponent` (`new LiveKitRoomController()` → injected factory token) + a container-level DOM spec
+driven by a fake controller. This is the **only** item that requires a production-code change, so it is
+deliberately bundled with the Phase 2 component work rather than slipped into the harness PR. It is not a
+gap: the injected-fake-container pattern it would prove is already demonstrated without any production
+change — via the `providers` seam on service-injected containers (see the Phase 2 conversations specs:
+`export-modal`, `toast`, `tasks-dropdown`, …). The harness + patterns shipped here apply directly when it's
+picked up; media paths stay live-tested per §3.
 
 ## 7. Risks & mitigations
 
@@ -201,11 +213,12 @@ without the harness. Delivered:
 | 1 | `vitest.dom.shared.ts` + `vitest.dom.setup.ts` (root) + devDeps/overrides | ✅ shipped |
 | 2 | `@memberjunction/ng-test-utils` shared helpers (`renderComponentFixture`, `renderTemplate`) | ✅ shipped |
 | 3 | Coverage **reporting** wired into the DOM preset (gates remain Phase 4) | ✅ shipped |
-| 4 | Pilot packages converted with passing DOM specs | ✅ shipped (3 packages, ~11 components) |
+| 4 | Pilot packages converted with passing DOM specs | ✅ shipped (4 packages incl. `ng-livekit-room`, ~17 components) |
 | 5 | `guides/ANGULAR_TESTING_GUIDE.md` | ✅ shipped |
 | 6 | `scripts/scaffold-tests.mjs --dom` (incl. spaces-in-path fix) | ✅ shipped |
 | 7 | Both config shapes (single + node/dom `projects`) proven | ✅ shipped |
-| 8 | LiveKit leaf specs + `LiveKitRoomComponent` injectable refactor | ⏳ follow-up (gated on #2860) |
+| 8 | LiveKit leaf specs + `participant-tile` media-split DOM specs (dual preset) | ✅ shipped (45 tests) |
+| 8a | `LiveKitRoomComponent` injectable-controller refactor + container spec | ⏳ deferred to Phase 2 (only production-code change; pattern already proven via `providers` seam) |
 | 9 | `Angular/Generic/**` rollout | ⏳ Phase 2 |
 | 10 | `Angular/Explorer/**` rollout | ⏳ Phase 3 |
 | 11 | CI coverage gates + live-media e2e location | ⏳ Phase 4 |
@@ -264,7 +277,7 @@ Expect first-run cost per file: ~0.3–0.8s of Angular compile/setup, then specs
 - **Explorer (Phase 3):** `explorer-core`, `dashboards`, `core-entity-forms`, `shared`, … (mock providers +
   `NavigationService` fakes for heavier components).
 - **Phase 4:** coverage gates in CI (start lenient, ratchet up); document the live-media e2e suite location.
-- **LiveKit follow-up:** when #2860 merges, add its leaf specs + the `LiveKitRoomComponent` injectable refactor.
+- **LiveKit:** leaf specs + `participant-tile` media-split ✅ shipped; the `LiveKitRoomComponent` injectable-controller refactor + container spec is **deferred to Phase 2** (the only production-code change; the injected-fake-container pattern is already proven via the `providers` seam).
 
 ### Environment note
 
