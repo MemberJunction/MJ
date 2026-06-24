@@ -366,6 +366,7 @@ import { MJVersionLabelItemFormComponent } from "./Entities/MJVersionLabelItem/m
 import { MJVersionLabelRestoreFormComponent } from "./Entities/MJVersionLabelRestore/mjversionlabelrestore.form.component";
 import { MJVersionLabelFormComponent } from "./Entities/MJVersionLabel/mjversionlabel.form.component";
 import { MJViewTypeFormComponent } from "./Entities/MJViewType/mjviewtype.form.component";
+import { MJWidgetInstanceFormComponent } from "./Entities/MJWidgetInstance/mjwidgetinstance.form.component";
 import { MJWorkflowEngineFormComponent } from "./Entities/MJWorkflowEngine/mjworkflowengine.form.component";
 import { MJWorkflowRunFormComponent } from "./Entities/MJWorkflowRun/mjworkflowrun.form.component";
 import { MJWorkflowFormComponent } from "./Entities/MJWorkflow/mjworkflow.form.component";
@@ -999,6 +1000,7 @@ declarations: [
     MJVersionLabelRestoreFormComponent,
     MJVersionLabelFormComponent,
     MJViewTypeFormComponent,
+    MJWidgetInstanceFormComponent,
     MJWorkflowEngineFormComponent,
     MJWorkflowRunFormComponent,
     MJWorkflowFormComponent,
