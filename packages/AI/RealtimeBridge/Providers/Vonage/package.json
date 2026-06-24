@@ -22,6 +22,10 @@
     "@memberjunction/core-entities": "5.42.0",
     "@memberjunction/ai-bridge-base": "5.42.0"
   },
+  "//optionalDependencies": "@vonage/server-sdk is an OPTIONAL PEER SDK (CLAUDE rule 8, category 2): the package never statically imports it. Production wires RealVonageBindings over the real @vonage/server-sdk Voice API + a WebSocket media leg through the injected IVonageVoiceLike/IVonageMediaPump surfaces, so the package builds and unit-tests with no @vonage/server-sdk install and no network. Loaded only when the Vonage provider is configured at deployment.",
+  "optionalDependencies": {
+    "@vonage/server-sdk": "^3.19.0"
+  },
   "devDependencies": {
     "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
