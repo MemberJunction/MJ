@@ -179,6 +179,30 @@ _One `<mj-empty-state>` whose Variant/Icon/Title/Message are driven by getters
 (`EmptyVariant`/`EmptyIcon`/`EmptyTitle`/`EmptyMessage`) — collapsed a 3-branch
 `@if`/`@else` into one component. Dead `.em-empty*` CSS removed._
 
+## core-entity-forms/ (representative — 85 instances migrated across 24 forms)
+| State | File |
+|-------|------|
+| AI Agent Run — Timeline "No execution steps found" | `agent-run-timeline-empty.png` |
+| AI Agent Run — Analytics "No prompt executions found…" (+ secondary message) | `agent-run-analytics-empty.png` |
+
+_Representative captures (light+dark). The rest of the 24 forms render the same
+canonical component; their empties sit behind tab + accordion + record-state
+gating (params/fields/permissions panels are `@if (record.IsSaved)` and not in the
+DOM until the right tab+panel is opened), so they're build-verified (package
+compiles all 85, 15 tests pass)._
+
+## conversations/ (representative — 13 instances across 11 components)
+| State | File |
+|-------|------|
+| Chat — "No messages yet. Start a conversation!" | `message-list-empty.png` |
+| Collections — "No collections yet" + Create Collection | `collections-empty.png` |
+| Collections — no-results "No items found" | `collections-no-results.png` |
+
+_Representative captures (light+dark). Modal/panel empties (share/members/artifact
+modals, search-panel, mention dropdown, user-picker) render the same component;
+build-verified (616 tests pass). The 2 bespoke greeting/suggested-prompt slot
+components were intentionally excluded._
+
 ## version-history/
 | State | File |
 |-------|------|
