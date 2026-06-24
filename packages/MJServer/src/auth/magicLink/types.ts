@@ -58,6 +58,13 @@ export interface MagicLinkJWTClaims {
   mj_anon?: boolean;
   /** Opaque per-session id — correlates one anonymous session's activity across audit rows without a real user. */
   mj_sid?: string;
+  /**
+   * Public web widget instance id (additive — set only for widget guest sessions
+   * minted by WidgetSessionService). Binds the synthesized guest principal to one
+   * widget instance so its pinned agent / guest role can be locked down. Absent on
+   * ordinary magic-link sessions.
+   */
+  mj_widget_id?: string;
   /** Marks the session as magic-link so the Explorer can confine the UI. */
   mj_magic_link: true;
 }

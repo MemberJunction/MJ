@@ -330,9 +330,45 @@ const magicLinkSchema = z.object({
   explorerUrl: z.string().optional(),
 }).passthrough();
 
+/**
+ * Public web widget config (plans/realtime/bridges-and-widget/public-web-widget.md).
+ * The widget REUSES the magic-link RS256 key + `anonymous-embed` synthesis, so it
+ * shares the magic-link `audience`/issuer/JWKS by default — the same auth provider
+ * validates both. When `enabled`, the server ensures the magic-link key manager is
+ * initialized and the provider registered even if `magicLink.enabled` is false.
+ */
+const widgetSchema = z.object({
+  /** Master switch. When false, the /widget routes are not mounted. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /**
+   * Which signing mechanism the widget reuses. Only `magic-link` is supported today
+   * (shares MagicLinkKeyManager + the magic-link auth provider). Recorded so a future
+   * dedicated widget key is a config flip, not a code change.
+   */
+  signingReuse: z.enum(['magic-link']).optional().default('magic-link'),
+  /**
+   * Audience claim for minted guest JWTs. MUST equal the magic-link audience so the
+   * auto-registered `magic-link` auth provider validates widget tokens.
+   */
+  audience: z.string().optional().default('mj-magic-link'),
+  /** Email of the shared Anonymous principal used in guest claims (resolves the synthesized guest user). */
+  anonymousEmail: z.string().optional().default('anonymous@magic-link.local'),
+  /** Fallback session-token TTL (minutes) when a widget instance does not set its own. */
+  defaultSessionTtlMinutes: z.coerce.number().optional().default(15),
+  /** Fallback mint rate-limit (per IP per window) when a widget instance does not set its own. */
+  defaultRateLimitPerMinute: z.coerce.number().optional().default(30),
+  /** Rate-limit window (ms) for the public /widget/session endpoints. Default 60s. */
+  rateLimitWindowMs: z.coerce.number().optional().default(60_000),
+  /** Server-wide default hard ceiling (minutes) on a voice session when an instance omits one (W4). */
+  voiceDefaultMaxSessionMinutes: z.coerce.number().optional().default(10),
+  /** Email/name of the internal user whose context READS widget config at mint time (falls back to system/Owner). */
+  contextUserForLookup: z.string().optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
+  widget: widgetSchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -384,6 +420,7 @@ const configInfoSchema = z.object({
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
+export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;

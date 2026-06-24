@@ -80,7 +80,41 @@ _Updated continuously. Newest status at the top of each phase section._
   The guest text-turn end-to-end is exercised in W3 acceptance (gated on Auth0/MJAPI boot).
 
 ### W1 — Guest-session backend
-_Status: TODO_
+**Status: DONE** ✅ (offline build + unit tests; live curl acceptance is Auth0-gated — see below)
+
+Implemented `packages/MJServer/src/widget/`, mirroring the magic-link architecture
+(pure core + thin service + public router):
+- **`widgetCore.ts`** (pure, DB-free, unit-tested): `parseAllowedOrigins`, fail-closed
+  `isOriginAllowed`, `isModalityEnabled`, `evaluateWidgetMint`, and `buildWidgetGuestClaims`
+  (reuses magic-link `buildSessionClaims` in anonymous mode + adds the additive `mj_widget_id`).
+- **`WidgetSessionService.ts`**: `MintGuestSession` / `RefreshGuestSession` — resolves the widget
+  by `PublicKey` (RunView under a system/Owner lookup user), enforces status + origin allowlist,
+  resolves the guest role name, mints a short-lived RS256 guest JWT via `MagicLinkKeyManager`.
+  **Direct-mint** (no MagicLinkInvite row — resolves widget doc open-Q #1); forensics ride
+  `mj_sid` + best-effort structured audit logging.
+- **`WidgetRouter.ts`**: public `POST /widget/session` + `/session/refresh`, IP rate-limited,
+  enumeration-resistant status mapping (all client rejections → 403, only faults → 500).
+  `ensureWidgetSigning` idempotently initializes the magic-link key + registers the `magic-link`
+  auth provider so the widget validates tokens even if `magicLink.enabled` is false.
+- **Config**: added `widget` block to `config.ts` (+ `WidgetConfig` type); reuses magic-link
+  audience/issuer/JWKS by default. Mounted in `index.ts` before the auth middleware.
+- **Claims**: extended `MagicLinkJWTClaims` with additive optional `mj_widget_id`.
+
+Files touched: `widget/{widgetCore,WidgetSessionService,WidgetRouter,index}.ts`,
+`__tests__/widget.test.ts`, `config.ts`, `index.ts`, `auth/magicLink/types.ts`.
+
+**Build:** `@memberjunction/server` builds clean (`tsc && tsc-alias`).
+**Tests:** full MJServer suite **551 passed / 56 skipped / 0 failed** (incl. 21 new widget tests:
+origin allowlist, modality gating, mint eligibility, claims shape, RS256 sign+verify roundtrip,
+tamper rejection).
+
+**Acceptance status:**
+- ✅ Pure mint logic + claims + RS256 roundtrip verified by unit tests.
+- ⛔ **Live `curl POST /widget/session` → validated by auth middleware → constrained UserInfo**
+  is **BLOCKED on Auth0/MJAPI boot** (mission-noted gap; `AUTH0_*` unset). The code path is
+  complete and the magic-link anonymous synthesis it reuses is already production-tested; the
+  end-to-end curl is ready to run once MJAPI boots with `widget.enabled=true` + `magicLink`
+  signing configured. Documented, not faked.
 
 ### W2 — Widget-instance metadata
 _Status: TODO_
