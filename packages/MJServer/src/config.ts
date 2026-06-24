@@ -363,6 +363,14 @@ const widgetSchema = z.object({
   voiceDefaultMaxSessionMinutes: z.coerce.number().optional().default(10),
   /** Email/name of the internal user whose context READS widget config at mint time (falls back to system/Owner). */
   contextUserForLookup: z.string().optional(),
+  /**
+   * Host-identity public keys (PEM), keyed by widget PublicKey, for the `host-identity` auth
+   * strategy (D1). The host signs a short-lived RS256 assertion; the mint verifies it against
+   * the key here. INTERIM location — production should store the host key per widget instance
+   * (a HostPublicKey column on WidgetInstance, pending a migration). When a widget's strategy is
+   * HostIdentity and no key is configured here, host mints fail closed.
+   */
+  hostPublicKeys: z.record(z.string(), z.string()).optional().default({}),
 }).passthrough();
 
 const configInfoSchema = z.object({

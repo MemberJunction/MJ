@@ -79,7 +79,7 @@ export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { 
 
 /** Shared mint/refresh handler — parses the request, calls the service, maps the status. */
 async function handleMint(service: WidgetSessionService, req: Request, res: Response, refresh: boolean): Promise<void> {
-  const body = (req.body ?? {}) as { widgetKey?: string };
+  const body = (req.body ?? {}) as { widgetKey?: string; hostAssertion?: string };
   const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
   if (!widgetKey) {
     res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
@@ -90,6 +90,7 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
   const input = {
     widgetKey,
     origin,
+    hostAssertion: typeof body.hostAssertion === 'string' ? body.hostAssertion : undefined,
     audit: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined, origin },
   };
   const result = refresh ? await service.RefreshGuestSession(input) : await service.MintGuestSession(input);

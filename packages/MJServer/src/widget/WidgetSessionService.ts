@@ -22,6 +22,7 @@ import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import type { WidgetConfig } from '../config.js';
 import { buildWidgetGuestClaims, evaluateWidgetMint, type WidgetMintErrorCode } from './widgetCore.js';
+import { verifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
 
 const WIDGET_ENTITY = 'MJ: Widget Instances';
 
@@ -38,6 +39,12 @@ export interface MintGuestSessionInput {
   widgetKey: string;
   /** The request's Origin header — enforced against the instance allowlist. */
   origin?: string;
+  /**
+   * A host-signed RS256 identity assertion (D1 `host-identity` strategy). Required when the
+   * resolved widget's AuthStrategy is `HostIdentity`; ignored otherwise. Verified against the
+   * host's registered public key; its identity is carried as informational claims only.
+   */
+  hostAssertion?: string;
   audit?: WidgetMintAuditContext;
 }
 
@@ -101,7 +108,17 @@ export class WidgetSessionService {
         return this.audited({ success: false, errorCode: 'server_error', error: 'Guest role not resolvable.' }, input, widget);
       }
 
-      return this.audited(this.mintToken(widget, guestRoleName), input, widget);
+      // D1 host-identity strategy: a HostIdentity widget MUST present a valid host assertion.
+      let hostIdentity: HostAssertedIdentity | undefined;
+      if (widget.AuthStrategy === 'HostIdentity') {
+        const verified = this.verifyHost(widget, input.hostAssertion);
+        if (!verified) {
+          return this.audited({ success: false, errorCode: 'host_assertion_invalid', error: 'Host identity assertion invalid.' }, input, widget);
+        }
+        hostIdentity = verified;
+      }
+
+      return this.audited(this.mintToken(widget, guestRoleName, hostIdentity), input, widget);
     } catch (e) {
       LogError(e);
       return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
@@ -117,8 +134,23 @@ export class WidgetSessionService {
     return this.MintGuestSession(input);
   }
 
+  /**
+   * Verifies a host-identity assertion for a HostIdentity widget against the host's
+   * registered public key (config interim store, keyed by widget PublicKey). Fails closed
+   * when the key is absent or the assertion is missing/invalid.
+   */
+  private verifyHost(widget: MJWidgetInstanceEntity, assertion: string | undefined): HostAssertedIdentity | null {
+    const hostKey = this.config.hostPublicKeys?.[widget.PublicKey];
+    const result = verifyHostAssertion(assertion, hostKey, widget.PublicKey);
+    if (result.ok && result.identity) {
+      return result.identity;
+    }
+    LogError(`[Widget] Host assertion rejected for widget ${widget.ID}: ${result.errorCode ?? 'unknown'}`);
+    return null;
+  }
+
   /** Builds + signs the guest JWT for an eligible widget instance. */
-  private mintToken(widget: MJWidgetInstanceEntity, guestRoleName: string): MintGuestSessionResult {
+  private mintToken(widget: MJWidgetInstanceEntity, guestRoleName: string, hostIdentity?: HostAssertedIdentity): MintGuestSessionResult {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
     const claims = buildWidgetGuestClaims({
@@ -131,6 +163,7 @@ export class WidgetSessionService {
       guestRoleName,
       nowSeconds,
       ttlSeconds: ttlMinutes * 60,
+      hostIdentity,
     });
     const token = MagicLinkKeyManager.Instance.Sign(claims);
     return {

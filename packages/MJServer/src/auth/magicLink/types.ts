@@ -65,6 +65,13 @@ export interface MagicLinkJWTClaims {
    * ordinary magic-link sessions.
    */
   mj_widget_id?: string;
+  /**
+   * Host-asserted visitor email for a widget `host-identity` session (additive). The
+   * authoritative `email`/`sub` still resolve the constrained shared Anonymous principal;
+   * this carries WHO the host says the visitor is, for the agent to look up their account —
+   * without granting that account's permissions. Absent on anonymous/ordinary sessions.
+   */
+  mj_host_email?: string;
   /** Marks the session as magic-link so the Explorer can confine the UI. */
   mj_magic_link: true;
 }

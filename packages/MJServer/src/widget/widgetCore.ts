@@ -16,7 +16,13 @@ import { buildSessionClaims } from '../auth/magicLink/magicLinkCore.js';
 import type { MagicLinkJWTClaims } from '../auth/magicLink/types.js';
 
 /** Why a guest-session mint was rejected. Drives the HTTP status in the router. */
-export type WidgetMintErrorCode = 'not_found' | 'disabled' | 'origin_not_allowed' | 'modality_not_enabled' | 'server_error';
+export type WidgetMintErrorCode =
+    | 'not_found'
+    | 'disabled'
+    | 'origin_not_allowed'
+    | 'modality_not_enabled'
+    | 'host_assertion_invalid'
+    | 'server_error';
 
 /** The minimal widget-instance shape the pure validators need (a subset of the entity). */
 export interface WidgetInstanceEligibilityInput {
@@ -112,6 +118,12 @@ export function buildWidgetGuestClaims(args: {
   guestRoleName: string;
   nowSeconds: number;
   ttlSeconds: number;
+  /**
+   * Host-asserted identity for a `host-identity` session. Its email/name are carried as
+   * INFORMATIONAL claims only — the principal-resolving `email`/`sub` remain the shared
+   * Anonymous principal, so a host can never escalate a guest into a real account.
+   */
+  hostIdentity?: { email: string; firstName?: string; lastName?: string };
 }): MagicLinkJWTClaims {
   const claims = buildSessionClaims({
     issuer: args.issuer,
@@ -119,6 +131,8 @@ export function buildWidgetGuestClaims(args: {
     // No invite row for a direct-mint guest; the opaque session id stands in as the
     // subject discriminator (sub = `magic-link|<sessionId>`) and scope-entry id.
     inviteId: args.sessionId,
+    // ALWAYS the Anonymous principal email — never the host-provided one (that would let
+    // the auth middleware resolve to a real user and leak its permissions).
     email: args.anonymousEmail,
     applicationId: args.applicationId,
     roleName: args.guestRoleName,
@@ -129,5 +143,11 @@ export function buildWidgetGuestClaims(args: {
   });
   // Additive widget claim — lets the synthesized principal be bound to one widget.
   claims.mj_widget_id = args.widgetId;
+  if (args.hostIdentity) {
+    claims.given_name = args.hostIdentity.firstName ?? claims.given_name;
+    claims.family_name = args.hostIdentity.lastName ?? claims.family_name;
+    claims.name = [args.hostIdentity.firstName, args.hostIdentity.lastName].filter(Boolean).join(' ') || claims.name;
+    claims.mj_host_email = args.hostIdentity.email;
+  }
   return claims;
 }
