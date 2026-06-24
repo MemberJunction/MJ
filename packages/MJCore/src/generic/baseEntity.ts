@@ -2274,19 +2274,6 @@ export abstract class BaseEntity<T = unknown> {
             });
         }
 
-        // IS-A composition: propagate PK value to parent entity chain
-        // Parent needs NewRecord() called first, then share the same PK value
-        if (this._parentEntity) {
-            this._parentEntity.NewRecord();
-            // Propagate PK — child and parent must share the same UUID
-            for (const pk of this.EntityInfo.PrimaryKeys) {
-                const pkValue = this.Get(pk.Name);
-                if (pkValue != null) {
-                    this._parentEntity.Set(pk.Name, pkValue);
-                }
-            }
-        }
-
         this.RaiseEvent('new_record', null);
         return true;
     }
