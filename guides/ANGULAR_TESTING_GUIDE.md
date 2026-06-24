@@ -170,10 +170,17 @@ describe('MyWidgetComponent (DOM)', () => {
 });
 ```
 
-- Query rendered DOM via `fixture.nativeElement.querySelector(...)`.
-- Standalone components need no `configureTestingModule` — `TestBed.createComponent(Cmp)` just
-  works. For module-declared components, add `TestBed.configureTestingModule({ imports: [...] })`
-  before the first `createComponent` (the global zoneless provider merges in automatically).
+- **Prefer the shared `@memberjunction/ng-test-utils` helpers** over raw `TestBed` boilerplate:
+  `renderComponentFixture(Cmp, { inputs, providers, setup })` applies `@Input`s in the NG0100-safe
+  order (§5) and accepts stub `providers` for service-injected components; query the result with
+  `query(f, sel)` / `queryAll(f, sel)` / `text(f, sel)` / `typeInto(f, sel, value)`. Compound /
+  module-declared components use `renderTemplate(...)`. The `gen-dom-stub.mjs` generator scaffolds
+  specs using exactly these. The raw `TestBed` + `nativeElement.querySelector` form above still
+  works and is fine for one-offs.
+- Standalone components need no `configureTestingModule` — `TestBed.createComponent(Cmp)` (or
+  `renderComponentFixture`) just works. For module-declared components, use `renderTemplate` (or add
+  `TestBed.configureTestingModule({ imports: [...] })`) before the first `createComponent` — the
+  global zoneless provider merges in automatically.
 
 ---
 

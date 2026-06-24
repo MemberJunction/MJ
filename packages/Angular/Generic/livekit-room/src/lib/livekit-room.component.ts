@@ -13,6 +13,7 @@ import {
   ViewChild,
   SimpleChanges,
   inject,
+  InjectionToken,
 } from '@angular/core';
 import {
   LiveKitRoomController,
@@ -59,6 +60,19 @@ import {
   type LiveKitDeviceLists,
   type LiveKitDeviceSelection,
 } from './models';
+
+/**
+ * Factory token for the room's {@link LiveKitRoomController}. Each `LiveKitRoomComponent`
+ * resolves this factory and invokes it to obtain its **own** controller instance (the room is
+ * stateful per-instance, so this is a factory, not a shared singleton). The default factory
+ * returns `new LiveKitRoomController()` — production behavior is identical to the previous
+ * inline `new`. Tests override the token to inject a fake controller and drive the container's
+ * DOM, e.g. `{ provide: LIVEKIT_ROOM_CONTROLLER_FACTORY, useValue: () => fakeController }`.
+ */
+export const LIVEKIT_ROOM_CONTROLLER_FACTORY = new InjectionToken<() => LiveKitRoomController>('LIVEKIT_ROOM_CONTROLLER_FACTORY', {
+  providedIn: 'root',
+  factory: () => () => new LiveKitRoomController(),
+});
 
 /** Which side panel is open in the room, if any. */
 type LiveKitSidePanel = 'none' | 'chat' | 'participants';
@@ -113,7 +127,7 @@ export interface LiveKitLayoutOption {
 export class LiveKitRoomComponent implements OnInit, OnChanges, OnDestroy, AfterViewChecked {
   private readonly zone = inject(NgZone);
   private readonly cdr = inject(ChangeDetectorRef);
-  private readonly controller = new LiveKitRoomController();
+  private readonly controller: LiveKitRoomController = inject(LIVEKIT_ROOM_CONTROLLER_FACTORY)();
   private unsubscribers: Array<() => void> = [];
   private serverUrl: string | null = null;
   private token: string | null = null;

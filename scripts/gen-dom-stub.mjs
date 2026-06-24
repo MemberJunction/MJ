@@ -139,11 +139,15 @@ const todoBlock = uniqTodos.length ? uniqTodos.map((t) => `  // TODO: ${t}`).joi
 let out;
 if (standalone) {
   out = `import { describe, it, expect, vi } from 'vitest';
-import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, typeInto } from '@memberjunction/ng-test-utils';
 import { ${className} } from '${importPath}';
 
-/** DOM-level spec for <${selector}>. Generated starter — replace the TODOs with real assertions. */
+/**
+ * DOM-level spec for <${selector}>. Generated starter — replace the TODOs with real assertions.
+ * Query the rendered output with the @memberjunction/ng-test-utils DOM helpers (imported above):
+ *   query(f, sel) · queryAll(f, sel) · text(f, sel) · typeInto(f, sel, value)
+ * (drop any you don't end up using).
+ */
 describe('${className} (DOM)', () => {
 ${header}
 
@@ -157,7 +161,7 @@ ${todoBlock}
 `;
 } else {
   out = `import { describe, it, expect, vi } from 'vitest';
-import { renderTemplate } from '@memberjunction/ng-test-utils';
+import { renderTemplate, query, queryAll, text, typeInto } from '@memberjunction/ng-test-utils';
 import { ${className} } from '${importPath}';
 
 /**
@@ -166,6 +170,8 @@ import { ${className} } from '${importPath}';
  *     imports: [CommonModule],
  *     declarations: [${className}, ...any child components],
  *   });
+ * Query the result with the @memberjunction/ng-test-utils DOM helpers (imported above):
+ *   query(f, sel) · queryAll(f, sel) · text(f, sel) · typeInto(f, sel, value) (drop any unused).
  */
 describe('${className} (DOM)', () => {
 ${header}
