@@ -433,6 +433,24 @@ describe('BaseEntity NewRecord shares ONE primary key across an IS-A chain', () 
         expect(ownPK(leaf)).toBe(sharedId);
         expect(leaf.Get('ID')).toBe(sharedId);      // routed read from the leaf resolves to the root
     });
+
+    it('re-setting the shared PK after NewRecord stays in sync on the child OWN field', () => {
+        // Proves the adopt-loop ResetNeverSetFlag is load-bearing: the child PK is
+        // ReadOnly, so SetLocal only writes it while _NeverSet=true. Adopt consumes
+        // that one-time set; without the reset, a later Set('ID',x) updates the
+        // parent but the child's ReadOnly mirror is silently locked -> divergence.
+        const root = createEntity(new EntityInfo(makePkEntityData('e-isa-root2', 'IsaRoot2', null)));
+        const child = createEntity(new EntityInfo(makePkEntityData('e-isa-child2', 'IsaChild2', 'e-isa-root2')));
+        wireChild(child, root);
+        child.NewRecord();
+
+        const explicit = '11111111-2222-3333-4444-555555555555';
+        child.Set('ID', explicit); // routes to parent + mirrors to child OWN field
+
+        expect(root.Get('ID')).toBe(explicit);
+        expect(ownPK(child)).toBe(explicit); // OWN field must track the parent, not stay stale
+        expect(child.Get('ID')).toBe(explicit);
+    });
 });
 
 // ─── Shared Instance Chain Data Integrity ────────────────────────────────

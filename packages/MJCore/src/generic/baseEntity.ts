@@ -2222,13 +2222,13 @@ export abstract class BaseEntity<T = unknown> {
         // Primary-key assignment for a new record.
         //
         // Warning, get recurses up the tree adding O(N^2) complexity.
-        // If an entity tree exceeds 3 entities deep, we may want to 
-        // consider a more efficient approach. Hoewever, the efficient
+        // If an entity tree exceeds 3 entities deep, we may want to
+        // consider a more efficient approach. However, the efficient
         // option currently uses name reference to reach into the parent's
         // field and pull the key value, passing it down the chain.
-        // That approach is more fragile and less idiomatic to the 
+        // That approach is more fragile and less idiomatic to the
         // rest of the entities codebase. So we settle for some
-        // efficiency with SetLocal, but use get which gets the roots value
+        // efficiency with SetLocal, but use get which gets the root's value
         // when setting keys.
         if (this._parentEntity) {
             this._parentEntity.NewRecord();
@@ -2236,8 +2236,13 @@ export abstract class BaseEntity<T = unknown> {
                 const parentValue = this._parentEntity.Get(pk.Name);
                 if (parentValue != null) {
                     this.SetLocal(pk.Name, parentValue);
-                    // Treat the adopted key as explicitly set so deferred loads
-                    // after NewRecord remain valid (parity with generation below).
+                    // The shared PK is ReadOnly, so SetLocal above consumed its
+                    // one-time write (_NeverSet -> false). Restore _NeverSet so the
+                    // child's OWN mirror can be re-written if the shared key is set
+                    // again this lifecycle — e.g. an explicit PK in newValues below,
+                    // or a later Set('ID', ...). Without this, the routed Set would
+                    // update the parent while the child's ReadOnly mirror stays
+                    // locked at the adopted value, re-diverging the shared key.
                     this.GetFieldByName(pk.Name)?.ResetNeverSetFlag();
                 }
             }
