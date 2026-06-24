@@ -2,6 +2,14 @@
 
 A pluggable, metadata-driven integration framework for syncing data between external systems (CRMs, AMSes, file feeds) and MemberJunction entities.
 
+> **Vendor connectors now live in [`MemberJunction/Integrations`](https://github.com/MemberJunction/Integrations)** and install on demand as Open Apps — the core install no longer carries the full IntegrationObject/IntegrationObjectField catalog for every vendor.
+>
+> ```bash
+> mj app install https://github.com/MemberJunction/Integrations/CRM/HubSpot
+> ```
+>
+> Each connector is its **own** connector-profile Open App + npm package `@memberjunction/connector-<name>` (no schema, no migrations — just `metadata.processOnInstall`): installing one `npm install`s only that connector's package and pushes that connector's metadata (Integration + IO/IOF + Actions). Connectors are fully decoupled — installing HubSpot pulls no other connector. This package (`@memberjunction/integration-engine` et al.) retains the **framework** (engine, schema-builder, pk-classifier, actions, the Integration/IO/IOF tables, runtime discovery, credential types) — connectors are extensions on top of it, consumed as peer dependencies. Seeded IO/IOF are not required up front: `IntegrationConnectorCreationPipeline` also discovers them at credential-setup time.
+
 ## Architecture
 
 ```
