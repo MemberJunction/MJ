@@ -62,7 +62,14 @@
   // `<directory>-pg` instead, so ship both `migrations/` and `migrations-pg/`.
   "migrations": {
     "directory": "migrations",                             // OPTIONAL — default "migrations"
-    "engine": "skyway"                                     // OPTIONAL — "skyway" | "flyway", default "skyway"
+    "engine": "skyway",                                    // OPTIONAL — "skyway" | "flyway", default "skyway"
+    // OPTIONAL — one-shot .sql scripts run on `mj app remove` to retire rows this app's seed
+    // migrations wrote into the SHARED core schema (e.g. an integration connector's __mj
+    // Integration/IO/IOF/Action rows, which dropping the app's own schema can't reach). Inverse
+    // DELETEs generated from the same metadata as the seed migration. Platform-aware like
+    // `directory` (PostgreSQL reads `<teardownDirectory>-pg/`); `${mjSchema}` resolves to the core
+    // schema. Omit when dropping the app's own schema fully tears it down.
+    "teardownDirectory": "migrations-teardown"
   },
 
   // ── Metadata (OPTIONAL — dev-time source-of-truth pointer) ──────────────────

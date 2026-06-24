@@ -92,6 +92,16 @@ const dbSchemaSchema = z.object({
 const migrationsSchema = z.object({
     directory: z.string().optional().default('migrations'),
     engine: z.enum(['flyway', 'skyway']).optional().default('skyway'),
+    /**
+     * OPTIONAL teardown directory of one-shot `.sql` scripts run on `mj app remove` to retire the
+     * rows this app's seed migrations wrote into the SHARED core schema (which dropping the app's
+     * own schema cannot reach — e.g. an integration connector's Integration/IO/IOF/Action rows in
+     * __mj). The scripts are the inverse DELETEs, generated from the same metadata as the seed
+     * migration by the publisher's build. Platform-aware like `directory`: on PostgreSQL the engine
+     * reads `<teardownDirectory>-pg/`. `${mjSchema}` in a script resolves to the core schema.
+     * Omit for apps whose teardown is fully covered by dropping their own schema.
+     */
+    teardownDirectory: z.string().optional(),
 });
 
 // ── Metadata ──────────────────────────────────────────────

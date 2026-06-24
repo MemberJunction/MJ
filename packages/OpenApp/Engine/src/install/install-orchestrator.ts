@@ -6,7 +6,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
@@ -667,6 +667,17 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
     }
 
+    // Step 6b: Teardown — retire the rows this app's seed migrations wrote into the SHARED core
+    // schema (dropping the app's own schema below cannot reach them). Data removal, so gated on
+    // !KeepData like the schema drop. No-op unless the manifest declares migrations.teardownDirectory.
+    let teardownResult: InternalResult = { Success: true };
+    if (!options.KeepData) {
+      teardownResult = await HandleTeardown(manifest, context, existingApp.Subpath ?? undefined);
+      if (!teardownResult.Success) {
+        Callbacks?.OnError?.('Metadata', `Teardown failed: ${teardownResult.ErrorMessage}`);
+      }
+    }
+
     // Step 7: Drop schema (unless --keep-data)
     let schemaDropError: string | undefined;
     if (!options.KeepData && existingApp.SchemaName) {
@@ -680,9 +691,10 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       }
     }
 
-    // If entity-metadata removal or schema drop failed, the app is NOT cleanly removed —
+    // If teardown, entity-metadata removal, or schema drop failed, the app is NOT cleanly removed —
     // report it as a failure (don't mark the app 'Removed') instead of silently claiming success.
     const removalErrors = [
+      teardownResult.Success ? undefined : teardownResult.ErrorMessage,
       metadataResult.Success ? undefined : metadataResult.ErrorMessage,
       schemaDropError,
     ].filter((e): e is string => !!e);
@@ -996,6 +1008,58 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
+}
+
+/**
+ * Remove-time teardown: runs the app's `migrations.teardownDirectory` scripts to retire the rows its
+ * seed migrations wrote into the SHARED core schema (Integration/IO/IOF/Action rows in __mj). Dropping
+ * the app's OWN schema cannot reach those, so without this they would orphan on `mj app remove`.
+ *
+ * Symmetric with {@link HandleMigrations}: platform-aware directory (`<teardownDirectory>-pg/` on
+ * Postgres), subpath-aware download. Scripts are one-shot inverse DELETEs (generated from the same
+ * metadata as the seed migration by the publisher's build) executed in filename order via the live
+ * provider — NOT through Skyway (they are not versioned migrations). `${mjSchema}` resolves to the
+ * core schema. No-op when the manifest declares no teardownDirectory.
+ */
+async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
+  const teardownDir = manifest.migrations?.teardownDirectory;
+  if (!teardownDir) {
+    return { Success: true };
+  }
+
+  const platform = context.DatabaseProvider.Dialect.PlatformKey;
+  const dir = platform === 'postgresql' ? `${teardownDir}-pg` : teardownDir;
+  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
+  mkdirSync(tempDir, { recursive: true });
+
+  context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
+  const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
+  if (!download.Success) {
+    return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
+  }
+  // DownloadMigrations only writes .sql; sort by filename so a numbered teardown runs in order.
+  const files = (download.Files ?? []).filter((f) => f.endsWith('.sql')).sort();
+  if (files.length === 0) {
+    context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${dir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
+    return { Success: true };
+  }
+
+  const mjSchema = context.MJCoreSchema ?? '__mj';
+  context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
+  try {
+    for (const file of files) {
+      const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
+      if (sql.trim()) {
+        await context.DatabaseProvider.ExecuteSQL(sql);
+      }
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}': ${message}` };
+  }
+
+  context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
+  return { Success: true };
 }
 
 /**
