@@ -184,10 +184,15 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/Integration | 5 | 5 | ✅ | `d602f3721f` |
 | dashboards/Communication | 4 | 7 | ✅ | `28f78fa80b` |
 | dashboards/VersionHistory | 4 | 8 | ✅ | (this commit) |
-| dashboards/Testing | 6 | 17 | ✅ | (this commit) |
-| dashboards/{Scheduling,Permissions} | 3 each | — | | |
-| dashboards/{KnowledgeHub,DataExplorer} | 2 each | — | | |
-| dashboards/{SystemDiagnostics,QueryBrowser,MCP,Home} | 1 each | — | | |
+| dashboards/Testing | 6 | 17 | ✅ | `8549bc37ab` |
+| dashboards/Scheduling | 3 | 5 | ✅ | (this commit) |
+| dashboards/Permissions | 3 | 6 | ✅ | (this commit) |
+| dashboards/KnowledgeHub | 4 | 9 | ✅ | (this commit) |
+| dashboards/DataExplorer | 1 | 2 | ✅ | (this commit) |
+| dashboards/QueryBrowser | 1 | 3 | ✅ | (this commit) |
+| dashboards/MCP | 1 | 4 | ✅ | (this commit) |
+| dashboards/SystemDiagnostics | 1 | 8 | ✅ | (this commit) |
+| dashboards/Home | 1 | 2 | ✅ | (this commit) |
 | Explorer/core-entity-forms | ~22 | — | | |
 | Generic/conversations | ~12 | — | | |
 | Generic/{dashboard-viewer,artifacts,entity-viewer,...} | misc | — | | |

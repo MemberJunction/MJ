@@ -47,6 +47,86 @@ _Also migrated (reuse patterns): testing-review "No reviewed items", dashboard-t
 and 9 analytics empty-mini chart placeholders. The "Loading versions…" spinner
 stays as a loading indicator (not an empty state)._
 
+> **The 8 singleton-dashboard sections below have a `-dark.png` companion for
+> every file listed** (58 screenshots total). Centering/flex-parent fixes made
+> during capture: MCP `.data-grid > mj-empty-state { grid-column: 1/-1 }` and KH
+> config `.config-section--centered { max-width: none }` — both caught because the
+> empties were screenshotted, not assumed.
+
+## scheduling/
+| State | File |
+|-------|------|
+| Jobs — empty + Create Job | `jobs-empty.png` |
+| Jobs — no-results + Reset filters | `jobs-no-results.png` |
+| Dashboard — 3 panel empties (live exec · **success** "No active alerts" · upcoming) | `overview-panels.png` |
+| Activity — no-results + Reset filters | `activity-no-results.png` |
+
+## home/
+| State | File |
+|-------|------|
+| Pin onboarding — dashed card + projected [Add your first pin] + [Don't show again] + close-X | `pin-onboarding.png` |
+| Apps — No Applications Available + Configure Applications | `apps-empty.png` |
+
+_The pin onboarding keeps its dashed-card wrapper + close-X overlay; the
+icon/title/message/buttons are `<mj-empty-state>` with both CTAs projected into
+the `[actions]` slot._
+
+## permissions/
+| State | File |
+|-------|------|
+| User Access — no-selection prompt | `user-access-no-selection.png` |
+| User Access — no permissions for user | `user-access-no-permissions.png` |
+| Resource Access — no lookup yet | `resource-access-no-lookup.png` |
+| Resource Access — no grantees (no-results, echoes query) | `resource-access-no-grantees.png` |
+| Audit Log — no query yet | `audit-log-no-query.png` |
+| Audit Log — no-results + Reset filters | `audit-log-no-results.png` |
+
+## knowledge-hub/
+| State | File |
+|-------|------|
+| Config — No Embedding Models Found (centered via `--centered` modifier) | `config-no-embedding-models.png` |
+| Config — No Searchable Entities Found | `config-no-fts-entities.png` |
+| Config — Scheduling empty | `scheduling-empty.png` |
+| Analytics/Tags — No tag data + No co-occurrence data | `analytics-tags-empty.png` |
+| Analytics/Sources — No content sources configured | `analytics-sources-empty.png` |
+
+_Also migrated (reuse patterns, not separately shot): search-detail no-selection +
+compact related-items, analytics cost-tab empty._
+
+## data-explorer/
+| State | File |
+|-------|------|
+| Entity list — no-results (echoes filter text) | `no-results.png` |
+| No Entities Available | `no-entities.png` |
+
+## query-browser/
+| State | File |
+|-------|------|
+| Viewer — no-selection + New Query (fills panel) | `no-selection.png` |
+| Sidebar — no queries available (compact) | `sidebar-empty.png` |
+| Sidebar — search no-results | `search-no-results.png` |
+
+## mcp/
+| State | File |
+|-------|------|
+| Servers — empty + Add Your First Server | `servers-empty.png` |
+| Connections — empty + Add Your First Connection | `connections-empty.png` |
+| Tools — No tools discovered yet | `tools-empty.png` |
+| Logs — No recent execution logs | `logs-empty.png` |
+
+_**Fix:** grid empties (servers/connections) needed `grid-column: 1/-1` to span
+the grid instead of sitting in one 350px column._
+
+## system-diagnostics/
+| State | File |
+|-------|------|
+| Engine Registry — No engines registered yet | `engines-empty.png` |
+| Redundant Loading — **success** "No redundant entity loading detected" | `redundant-success.png` |
+| Local Cache — No cached data | `cache-empty.png` |
+
+_Also migrated (reuse patterns): optimization-insights success, performance
+telemetry/filter/events compact empties (nested perf sub-tabs)._
+
 ## version-history/
 | State | File |
 |-------|------|

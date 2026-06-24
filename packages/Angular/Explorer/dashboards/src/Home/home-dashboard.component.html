@@ -50,17 +50,18 @@
                 <i class="fa-solid fa-xmark"></i>
               </button>
             }
-            <i class="fa-solid fa-thumbtack"></i>
-            <h3>No pinned items yet</h3>
-            <p>Pin your favorite dashboards, views, queries, and reports for quick access.</p>
-            <button class="pin-action-btn primary" (click)="OpenAddPinPanel()">
-              <i class="fa-solid fa-plus"></i> Add your first pin
-            </button>
-            @if (!EditMode && !HidePinEmptyState) {
-              <button type="button" class="pin-empty-dismiss" (click)="DismissPinEmptyState()">
-                Don't show this again
+            <mj-empty-state Icon="fa-solid fa-thumbtack"
+              Title="No pinned items yet"
+              Message="Pin your favorite dashboards, views, queries, and reports for quick access.">
+              <button actions mjButton variant="primary" (click)="OpenAddPinPanel()">
+                <i class="fa-solid fa-plus"></i> Add your first pin
               </button>
-            }
+              @if (!EditMode && !HidePinEmptyState) {
+                <button actions mjButton variant="flat" (click)="DismissPinEmptyState()">
+                  Don't show this again
+                </button>
+              }
+            </mj-empty-state>
           </div>
         }
 
@@ -600,19 +601,12 @@
         </div>
         <!-- Empty State -->
         @if (apps.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fa-solid fa-folder-open"></i>
-            </div>
-            <h3>No Applications Available</h3>
-            <p>You don't have any applications configured yet.</p>
-            <button mjButton
-              variant="primary"
-              (click)="openConfigDialog()">
-              <i class="fa-solid fa-gear"></i>
-              Configure Applications
-            </button>
-          </div>
+          <mj-empty-state Icon="fa-solid fa-folder-open"
+            Title="No Applications Available"
+            Message="You don't have any applications configured yet."
+            ActionText="Configure Applications"
+            ActionIcon="fa-solid fa-gear"
+            (Action)="openConfigDialog()" />
         }
       </div>
     }

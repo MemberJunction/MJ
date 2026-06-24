@@ -293,16 +293,14 @@
 
             <!-- Full-Text Indexes -->
             @if (ActiveSection === 'fulltext') {
-                <div class="config-section">
+                <div class="config-section" [class.config-section--centered]="!IsLoadingFTSEntities && FTSEntities.length === 0">
 
                     @if (IsLoadingFTSEntities) {
                         <mj-loading text="Discovering searchable entities..." size="medium"></mj-loading>
                     } @else if (FTSEntities.length === 0) {
-                        <div class="config-empty-state">
-                            <i class="fa-solid fa-text-width config-empty-icon"></i>
-                            <h3 class="config-empty-title">No Searchable Entities Found</h3>
-                            <p class="config-empty-text">No entities with text fields were discovered. Ensure your database schema includes entities with varchar/nvarchar columns.</p>
-                        </div>
+                        <mj-empty-state Icon="fa-solid fa-text-width"
+                            Title="No Searchable Entities Found"
+                            Message="No entities with text fields were discovered. Ensure your database schema includes entities with varchar/nvarchar columns." />
                     } @else {
                         <div class="fts-entity-controls">
                             <div class="fts-summary">
@@ -344,7 +342,7 @@
 
             <!-- Embedding Models -->
             @if (ActiveSection === 'embedding') {
-                <div class="config-section">
+                <div class="config-section" [class.config-section--centered]="!HasEmbeddingModel">
 
                     @if (HasEmbeddingModel) {
                         <div class="config-group">
@@ -372,14 +370,9 @@
                             Manage embedding models in the AI Dashboard > Models tab.
                         </p>
                     } @else {
-                        <div class="config-empty-state">
-                            <i class="fa-solid fa-microchip config-empty-icon"></i>
-                            <h3 class="config-empty-title">No Embedding Models Found</h3>
-                            <p class="config-empty-text">
-                                Embedding models are required to convert text into vectors for semantic search and duplicate detection.
-                                Configure at least one embedding model (e.g., text-embedding-3-small) in the AI Dashboard > Models tab.
-                            </p>
-                        </div>
+                        <mj-empty-state Icon="fa-solid fa-microchip"
+                            Title="No Embedding Models Found"
+                            Message="Embedding models are required to convert text into vectors for semantic search and duplicate detection. Configure at least one embedding model (e.g., text-embedding-3-small) in the AI Dashboard > Models tab." />
                     }
                 </div>
             }

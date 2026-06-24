@@ -236,11 +236,9 @@ export interface SystemDiagnosticsUserPreferences {
         
                   <div class="section-panel-content">
                     @if (engines.length === 0) {
-                      <div class="empty-state">
-                        <i class="fa-solid fa-inbox"></i>
-                        <p>No engines registered yet</p>
-                        <span class="empty-hint">Engines register themselves when they are first configured</span>
-                      </div>
+                      <mj-empty-state Icon="fa-solid fa-inbox"
+                        Title="No engines registered yet"
+                        Message="Engines register themselves when they are first configured" />
                     } @else {
                       <div class="engine-grid">
                         @for (engine of engines; track engine.className) {
@@ -308,11 +306,9 @@ export interface SystemDiagnosticsUserPreferences {
                     </div>
         
                     @if (redundantLoads.length === 0) {
-                      <div class="empty-state success-state">
-                        <i class="fa-solid fa-check-circle"></i>
-                        <p>No redundant entity loading detected</p>
-                        <span class="empty-hint">Each entity is being loaded by only one engine</span>
-                      </div>
+                      <mj-empty-state Variant="success"
+                        Title="No redundant entity loading detected"
+                        Message="Each entity is being loaded by only one engine" />
                     } @else {
                       <div class="redundant-loads-table-wrapper">
                         <table class="redundant-loads-table">
@@ -730,10 +726,8 @@ export interface SystemDiagnosticsUserPreferences {
                               </div>
                             }
                           } @else {
-                            <div class="empty-state small">
-                              <i class="fa-solid fa-hourglass-start"></i>
-                              <p>No events recorded yet</p>
-                            </div>
+                            <mj-empty-state Size="compact" Icon="fa-solid fa-hourglass-start"
+                              Title="No events recorded yet" />
                           }
                         </div>
                       </div>
@@ -831,16 +825,13 @@ export interface SystemDiagnosticsUserPreferences {
                           </div>
                         </div>
                       } @else if (telemetryEnabled && telemetryPatterns.length === 0) {
-                        <div class="empty-state">
-                          <i class="fa-solid fa-hourglass-start"></i>
-                          <p>No telemetry data yet</p>
-                          <span class="empty-hint">Navigate around the app to generate performance data</span>
-                        </div>
+                        <mj-empty-state Icon="fa-solid fa-hourglass-start"
+                          Title="No telemetry data yet"
+                          Message="Navigate around the app to generate performance data" />
                       } @else if (searchQuery || categoryFilter !== 'all') {
-                        <div class="empty-state small">
-                          <i class="fa-solid fa-filter"></i>
-                          <p>No patterns match your filter</p>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="no-results"
+                          Icon="fa-solid fa-filter"
+                          Title="No patterns match your filter" />
                       }
                     }
         
@@ -921,11 +912,9 @@ export interface SystemDiagnosticsUserPreferences {
                           </div>
                         </div>
                       } @else {
-                        <div class="empty-state">
-                          <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success);"></i>
-                          <p>No optimization insights</p>
-                          <span class="empty-hint">Insights will appear when potential optimizations are detected</span>
-                        </div>
+                        <mj-empty-state Variant="success"
+                          Title="No optimization insights"
+                          Message="Insights will appear when potential optimizations are detected" />
                       }
                     }
                   </div>
@@ -1067,11 +1056,9 @@ export interface SystemDiagnosticsUserPreferences {
                           }
                         </div>
                       } @else if (cacheStats && cacheStats.totalEntries === 0) {
-                        <div class="empty-state">
-                          <i class="fa-solid fa-database"></i>
-                          <p>No cached data</p>
-                          <span class="empty-hint">Data will be cached as you use the application</span>
-                        </div>
+                        <mj-empty-state Icon="fa-solid fa-database"
+                          Title="No cached data"
+                          Message="Data will be cached as you use the application" />
                       }
                     }
                   </div>
@@ -1260,10 +1247,8 @@ export interface SystemDiagnosticsUserPreferences {
                 </h4>
         
                 @if (engineDetailPanel.configItems.length === 0) {
-                  <div class="empty-state small">
-                    <i class="fa-solid fa-inbox"></i>
-                    <p>No config items found</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                    Title="No config items found" />
                 } @else {
                   <div class="config-items-list">
                     @for (item of engineDetailPanel.configItems; track item.propertyName) {

@@ -395,10 +395,9 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-tags"></i>
-                                <p>No tag data available yet. Process content to generate tags.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-tags"
+                                Title="No tag data"
+                                Message="No tag data available yet. Process content to generate tags." />
                         }
                     </div>
 
@@ -537,10 +536,9 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-link"></i>
-                                <p>No co-occurrence data available yet. Process content and recompute to see which tags frequently appear together.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-link"
+                                Title="No co-occurrence data"
+                                Message="No co-occurrence data available yet. Process content and recompute to see which tags frequently appear together." />
                         }
                     </div>
                 </section>
@@ -591,10 +589,8 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-database"></i>
-                                <p>No content sources configured yet.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-database"
+                                Title="No content sources configured yet." />
                         }
                     </div>
 
@@ -1165,11 +1161,9 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-coins"></i>
-                                <p>No cost data available yet. Run the pipeline to generate cost and token usage metrics.</p>
-                                <p class="empty-state-hint">Cost data is aggregated from ContentProcessRunDetail records linked to AI Prompt Runs.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-coins"
+                                Title="No cost data"
+                                Message="No cost data available yet. Run the pipeline to generate cost and token usage metrics. Cost data is aggregated from ContentProcessRunDetail records linked to AI Prompt Runs." />
                         }
                     </div>
                 </section>
