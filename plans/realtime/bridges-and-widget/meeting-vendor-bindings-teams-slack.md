@@ -107,11 +107,27 @@ Host-scheduled hooks that must be wired (not vendor-specific): `CalendarWatcher.
 ## 2. Phased task breakdown
 
 ### Phase M0 — Slack media-access verification spike (GATE — do FIRST)
-- [ ] Investigate whether a supported huddle bot-media path exists (Slack Enterprise APIs, partner/Chime SDK access, or a verified workaround). Time-box to ~1–2 days.
-- [ ] **Decision gate:**
+- [x] Investigate whether a supported huddle bot-media path exists (Slack Enterprise APIs, partner/Chime SDK access, or a verified workaround). Time-box to ~1–2 days.
+- [x] **Decision gate:**
   - If a path exists → Slack proceeds to M3.
   - If not → **park Slack** formally: leave the driver as-is (it stays valid + unit-tested), set its provider row `Status='Disabled'`, and record the blocker here. Do not spend further effort until access changes.
-- [ ] **Acceptance:** a written go/no-go in this doc with the evidence. **Slack does NOT proceed to binding without a green here.**
+- [x] **Acceptance:** a written go/no-go in this doc with the evidence. **Slack does NOT proceed to binding without a green here.**
+
+> #### ⛔ M0 decision gate — Slack: **NO-GO** (decided 2026-06-24)
+>
+> Investigation confirms Slack exposes **no supported, documented path for a bot/app to join a
+> huddle and access real-time audio media**. Slack's `calls.add`/Calls API only registers
+> third-party call metadata for display in the Slack UI ("Slack doesn't make the call") and is
+> unrelated to huddles; the sole huddle API primitive is the signaling-only `user_huddle_changed`
+> event (presence/metadata, no media). Huddle media runs on a private Amazon Chime SDK backend that
+> Slack deliberately controls and does not expose to third parties — no Chime passthrough, no
+> Enterprise Grid media API, no partner program. Every commercial "Slack huddle recorder"
+> (Recall.ai, etc.) confirms this by relying on **system-audio/screen capture in a logged-in human
+> user's desktop session** — undocumented, requires a present user, cannot run headless as a bot.
+> This contrasts with **Teams** (documented app-hosted media bots via `Calls.AccessMedia.All`) and
+> **Twilio** (documented bidirectional Media Streams). **Slack is PARKED.** M3 stays closed; the
+> `SlackBridge` driver remains valid + unit-tested but its provider row should be `Status='Disabled'`.
+> Full evidence + re-evaluation triggers: [`spikes/M0-slack-media-findings.md`](./spikes/M0-slack-media-findings.md).
 
 ### Phase M1 — Teams native SDK (the meeting proving track)
 **(A) Native SDK** — implement `ITeamsMeetingSdk` over ACS application-hosted-media + Graph cloud-communications:
