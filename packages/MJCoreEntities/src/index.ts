@@ -1,5 +1,6 @@
 
 export * from './generated/entity_subclasses.js'
+export * from './generated/remote_operations.js'
 
 export * from "./custom/MJUserViewEntityExtended";
 export * from "./custom/ReadOnlyExternalBaseEntity";
@@ -27,6 +28,7 @@ export * from './engines/artifact-mime-resolver';
 export * from './engines/artifact-content-storage';
 export * from './engines/dashboards';
 export * from './engines/EncryptionEngineBase';
+export * from './engines/RemoteOperationEngineBase';
 export * from './engines/UserInfoEngine';
 export * from './engines/ApplicationSettingEngine';
 export * from './engines/UserViewEngine';

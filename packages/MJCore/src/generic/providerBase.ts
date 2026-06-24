@@ -1952,6 +1952,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
+                // Pagination cursor (keyset) — included so consecutive pages of a sweep are
+                // distinct fingerprints and not falsely flagged as a Duplicate RunView.
+                AfterKey: params.AfterKey?.ToConcatenatedString(),
                 CacheLocal: params.CacheLocal,
                 _fromEngine: params._fromEngine,
                 Exempt: params.Telemetry?.Exempt,
@@ -3049,6 +3052,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
+                // Pagination cursor (keyset) — see PreRunView note: distinguishes sweep pages.
+                AfterKey: params.AfterKey?.ToConcatenatedString(),
                 _fromEngine: params._fromEngine,
                 Exempt: params.Telemetry?.Exempt,
                 ExemptReason: params.Telemetry?.Reason

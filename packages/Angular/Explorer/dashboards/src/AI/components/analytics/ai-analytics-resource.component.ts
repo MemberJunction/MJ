@@ -167,6 +167,9 @@ interface NavItem {
                             [TimeRange]="CurrentTimeRange"
                         ></app-realtime-management>
                     }
+                    @case ('realtime-transcripts') {
+                        <app-analytics-realtime-transcripts></app-analytics-realtime-transcripts>
+                    }
                 }
             </div>
             </mj-page-body-interior>
@@ -341,6 +344,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
             // sub-day ranges are dropped.
             case 'realtime-overview':
             case 'realtime-sessions':
+            // Voice Transcripts is a self-contained browser (it loads all rooms; no shared filters apply).
+            case 'realtime-transcripts':
             // Realtime management owns its sub-tab rail + per-surface filters
             // internally; only the time-range chips come from the shared chrome
             // (it windows session history daily, so sub-day ranges are dropped).
@@ -570,6 +575,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
           Description: 'Every long-lived agent session — live calls, idle holds, and closed history' },
         { Label: 'Realtime Management', Icon: 'fa-solid fa-satellite-dish', Key: 'realtime-management',
           Description: 'Manage the realtime + bridge surface — live sessions, bridge providers, agent identities, channels, co-agents, history, and metrics' },
+        { Label: 'Voice Transcripts', Icon: 'fa-solid fa-comments', Key: 'realtime-transcripts',
+          Description: 'Browse recorded meeting-room transcripts — diarized, per-speaker, with each utterance attributed' },
     ];
 
     /**

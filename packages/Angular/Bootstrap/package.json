@@ -49,6 +49,7 @@
     "@memberjunction/ng-core-entity-forms": "5.42.0",
     "@memberjunction/ng-dashboard-viewer": "5.42.0",
     "@memberjunction/ng-dashboards": "5.42.0",
+    "@memberjunction/ng-entity-action-ux": "5.42.0",
     "@memberjunction/ng-entity-viewer": "5.42.0",
     "@memberjunction/ng-explorer-core": "5.42.0",
     "@memberjunction/ng-explorer-settings": "5.42.0",

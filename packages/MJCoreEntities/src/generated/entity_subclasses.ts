@@ -15550,6 +15550,11 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RuntimeUXDriverClass: z.string().nullable().describe(`
+        * * Field Name: RuntimeUXDriverClass
+        * * Display Name: Runtime UX Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
         * * Display Name: Entity Action Name
@@ -21606,7 +21611,7 @@ export const MJProcessRunSchema = z.object({
         * * Description: Pause/cancel handshake flag honored by the processor between batches`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration
+        * * Display Name: Configuration JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON snapshot of the effective configuration for this run`),
     ErrorMessage: z.string().nullable().describe(`
@@ -21630,6 +21635,12 @@ export const MJProcessRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DryRun: z.boolean().describe(`
+        * * Field Name: DryRun
+        * * Display Name: Is Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -23569,7 +23580,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Infer')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -23577,6 +23588,7 @@ export const MJRecordProcessSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * FieldRules
     *   * Infer
         * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
     ActionID: z.string().nullable().describe(`
@@ -23718,33 +23730,38 @@ export const MJRecordProcessSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category (Display)
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity (Display)
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().nullable().describe(`
         * * Field Name: Action
-        * * Display Name: Action (Display)
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent (Display)
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt (Display)
+        * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     ScopeView: z.string().nullable().describe(`
         * * Field Name: ScopeView
-        * * Display Name: Scope View (Display)
+        * * Display Name: Scope View Name
         * * SQL Data Type: nvarchar(100)`),
     ScopeList: z.string().nullable().describe(`
         * * Field Name: ScopeList
-        * * Display Name: Scope List (Display)
+        * * Display Name: Scope List Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -23839,7 +23856,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)`),
     InputTypeIsArray: z.boolean().describe(`
         * * Field Name: InputTypeIsArray
-        * * Display Name: Is Input Array
+        * * Display Name: Input Is Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the input type is emitted as an array (TInput[])`),
@@ -23855,7 +23872,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the output shape`),
     OutputTypeIsArray: z.boolean().describe(`
         * * Field Name: OutputTypeIsArray
-        * * Display Name: Is Output Array
+        * * Display Name: Output Is Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the output type is emitted as an array (TOutput[])`),
@@ -23893,12 +23910,12 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Implementation Code
+        * * Display Name: Code
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes`),
     CodeApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
         * * Field Name: CodeApprovalStatus
-        * * Display Name: Approval Status
+        * * Display Name: Code Approval Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
@@ -23909,13 +23926,13 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.`),
     CodeApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUserID
-        * * Display Name: Approved By User ID
+        * * Display Name: Code Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Foreign key to the user who approved the generated code`),
     CodeApprovedAt: z.date().nullable().describe(`
         * * Field Name: CodeApprovedAt
-        * * Display Name: Approved At
+        * * Display Name: Code Approved At
         * * SQL Data Type: datetimeoffset
         * * Description: When the generated code was approved`),
     ContractFingerprint: z.string().nullable().describe(`
@@ -23959,13 +23976,30 @@ export const MJRemoteOperationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CodeLocked: z.boolean().describe(`
+        * * Field Name: CodeLocked
+        * * Display Name: Code Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`),
+    CodeComments: z.string().nullable().describe(`
+        * * Field Name: CodeComments
+        * * Display Name: Code Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`),
+    Libraries: z.any().nullable().describe(`
+        * * Field Name: Libraries
+        * * Display Name: Libraries
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+        * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     CodeApprovedByUser: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUser
-        * * Display Name: Approved By User
+        * * Display Name: Code Approved By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -71400,6 +71434,19 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     }
 
     /**
+    * * Field Name: RuntimeUXDriverClass
+    * * Display Name: Runtime UX Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.
+    */
+    get RuntimeUXDriverClass(): string | null {
+        return this.Get('RuntimeUXDriverClass');
+    }
+    set RuntimeUXDriverClass(value: string | null) {
+        this.Set('RuntimeUXDriverClass', value);
+    }
+
+    /**
     * * Field Name: EntityAction
     * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
@@ -86785,7 +86832,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration
+    * * Display Name: Configuration JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON snapshot of the effective configuration for this run
     */
@@ -86841,6 +86888,20 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DryRun
+    * * Display Name: Is Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.
+    */
+    get DryRun(): boolean {
+        return this.Get('DryRun');
+    }
+    set DryRun(value: boolean) {
+        this.Set('DryRun', value);
     }
 
     /**
@@ -91787,13 +91848,14 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * FieldRules
     *   * Infer
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'Infer' {
+    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'Infer') {
+    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer') {
         this.Set('WorkType', value);
     }
 
@@ -92107,8 +92169,21 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     }
 
     /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
     * * Field Name: Category
-    * * Display Name: Category (Display)
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
     */
     get Category(): string | null {
@@ -92117,7 +92192,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity (Display)
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -92126,7 +92201,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Action
-    * * Display Name: Action (Display)
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string | null {
@@ -92135,7 +92210,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent (Display)
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -92144,7 +92219,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Prompt
-    * * Display Name: Prompt (Display)
+    * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string | null {
@@ -92153,7 +92228,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScopeView
-    * * Display Name: Scope View (Display)
+    * * Display Name: Scope View Name
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeView(): string | null {
@@ -92162,7 +92237,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScopeList
-    * * Display Name: Scope List (Display)
+    * * Display Name: Scope List Name
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeList(): string | null {
@@ -92295,6 +92370,20 @@ export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperatio
 
 
 /**
+ * One library that an AI-authored Remote Operation body imports. CodeGen turns the `LibrariesObject` array
+ * (the strongly-typed accessor bound to `MJ: Remote Operations.Libraries` via JSONType metadata) into one
+ * `import { ...ItemsUsed } from "Library"` per entry at the top of the generated `remote_operations.ts`.
+ * The always-available default libraries (RunView / Metadata / RunQuery from @memberjunction/core) are NOT
+ * listed here — they are emitted for every operation automatically.
+ */
+export interface MJRemoteOperationEntity_RemoteOperationLibrary {
+    /** The npm package to import from, e.g. "@memberjunction/ai-prompts". */
+    Library: string;
+    /** The exported items used from that package, e.g. ["AIPromptRunner"]. */
+    ItemsUsed: string[];
+}
+
+/**
  * MJ: Remote Operations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RemoteOperation
@@ -92418,7 +92507,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: InputTypeIsArray
-    * * Display Name: Is Input Array
+    * * Display Name: Input Is Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the input type is emitted as an array (TInput[])
@@ -92458,7 +92547,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: OutputTypeIsArray
-    * * Display Name: Is Output Array
+    * * Display Name: Output Is Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the output type is emitted as an array (TOutput[])
@@ -92536,7 +92625,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: Code
-    * * Display Name: Implementation Code
+    * * Display Name: Code
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes
     */
@@ -92549,7 +92638,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovalStatus
-    * * Display Name: Approval Status
+    * * Display Name: Code Approval Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
     * * Value List Type: List
@@ -92568,7 +92657,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUserID
-    * * Display Name: Approved By User ID
+    * * Display Name: Code Approved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Foreign key to the user who approved the generated code
@@ -92582,7 +92671,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedAt
-    * * Display Name: Approved At
+    * * Display Name: Code Approved At
     * * SQL Data Type: datetimeoffset
     * * Description: When the generated code was approved
     */
@@ -92685,6 +92774,68 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
     }
 
     /**
+    * * Field Name: CodeLocked
+    * * Display Name: Code Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.
+    */
+    get CodeLocked(): boolean {
+        return this.Get('CodeLocked');
+    }
+    set CodeLocked(value: boolean) {
+        this.Set('CodeLocked', value);
+    }
+
+    /**
+    * * Field Name: CodeComments
+    * * Display Name: Code Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.
+    */
+    get CodeComments(): string | null {
+        return this.Get('CodeComments');
+    }
+    set CodeComments(value: string | null) {
+        this.Set('CodeComments', value);
+    }
+
+    /**
+    * * Field Name: Libraries
+    * * Display Name: Libraries
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+    * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.
+    */
+    get Libraries(): string | null {
+        return this.Get('Libraries');
+    }
+    set Libraries(value: string | null) {
+        this.Set('Libraries', value);
+    }
+
+    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
+    private _LibrariesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
+        const raw = this.Libraries;
+        if (raw !== this._LibrariesObject_lastRaw) {
+            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
+            this._LibrariesObject_lastRaw = raw;
+        }
+        return this._LibrariesObject_cached!;
+    }
+    set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Libraries = raw;
+        this._LibrariesObject_cached = value;
+        this._LibrariesObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
@@ -92695,7 +92846,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUser
-    * * Display Name: Approved By User
+    * * Display Name: Code Approved By User
     * * SQL Data Type: nvarchar(100)
     */
     get CodeApprovedByUser(): string | null {
