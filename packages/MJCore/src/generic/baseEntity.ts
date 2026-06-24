@@ -2219,9 +2219,32 @@ export abstract class BaseEntity<T = unknown> {
         this._childEntity = null;
         this._childEntities = null;
         this._childEntityDiscoveryDone = false;
-        // Generate UUID for non-auto-increment GUID/UUID primary keys
-        // (SQL Server `uniqueidentifier` / PostgreSQL `uuid`)
-        if (this.EntityInfo.PrimaryKeys.length === 1) {
+        // Primary-key assignment for a new record.
+        //
+        // Warning, get recurses up the tree adding O(N^2) complexity.
+        // If an entity tree exceeds 3 entities deep, we may want to 
+        // consider a more efficient approach. Hoewever, the efficient
+        // option currently uses name reference to reach into the parent's
+        // field and pull the key value, passing it down the chain.
+        // That approach is more fragile and less idiomatic to the 
+        // rest of the entities codebase. So we settle for some
+        // efficiency with SetLocal, but use get which gets the roots value
+        // when setting keys.
+        if (this._parentEntity) {
+            this._parentEntity.NewRecord();
+            for (const pk of this.EntityInfo.PrimaryKeys) {
+                const parentValue = this._parentEntity.Get(pk.Name);
+                if (parentValue != null) {
+                    this.SetLocal(pk.Name, parentValue);
+                    // Treat the adopted key as explicitly set so deferred loads
+                    // after NewRecord remain valid (parity with generation below).
+                    this.GetFieldByName(pk.Name)?.ResetNeverSetFlag();
+                }
+            }
+        } else if (this.EntityInfo.PrimaryKeys.length === 1) {
+            // Root of an IS-A chain, or a standalone (non-IS-A) entity: generate
+            // a single GUID/UUID PK here (SQL Server `uniqueidentifier` /
+            // PostgreSQL `uuid`).
             const pk = this.EntityInfo.PrimaryKeys[0];
             if (!pk.AutoIncrement &&
                 pk.IsUniqueIdentifier &&
@@ -2237,6 +2260,9 @@ export abstract class BaseEntity<T = unknown> {
             }
         }
 
+        // Apply caller-supplied values LAST so an explicit PK (or any routed
+        // parent field) wins over the generated/adopted value instead of being
+        // clobbered by the parent's NewRecord().
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
