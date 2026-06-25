@@ -26,6 +26,18 @@ import {
 import { ReasoningFieldDelta } from './DuplicateReasoningTypes';
 
 /**
+ * The result of building a matched set's deltas: the differing-field deltas the reasoner
+ * consumes, plus a record-id → human label map (derived from the same loaded records) so the
+ * caller can give the source AND candidates real names instead of raw GUIDs in the prompt.
+ */
+export interface MatchedSetDelta {
+    /** Differing-field deltas (the reasoning payload). */
+    FieldDeltas: ReasoningFieldDelta[];
+    /** record-key string ({@link CompositeKey.Values}) → display label (name-field value, else key). */
+    Labels: Map<string, string>;
+}
+
+/**
  * Builds the differing-field deltas for a matched set by delegating to the shared
  * {@link RecordComparisonEngine} and projecting the result into {@link ReasoningFieldDelta}.
  */
@@ -46,24 +58,36 @@ export class MatchedSetDeltaBuilder {
      * @param entityInfo the entity being deduped (already resolved by the detector)
      * @param keys the source key first, then each candidate key (order preserved)
      * @param contextUser the run's context user
-     * @returns differing-field deltas, or [] when the comparison can't be loaded
+     * @returns the differing-field deltas plus a record-id → label map; empty on load failure
      */
     public async Build(
         entityInfo: EntityInfo,
         keys: CompositeKey[],
         contextUser?: UserInfo
-    ): Promise<ReasoningFieldDelta[]> {
+    ): Promise<MatchedSetDelta> {
         if (keys.length === 0) {
-            return [];
+            return { FieldDeltas: [], Labels: new Map() };
         }
         const engine = new RecordComparisonEngine();
         const result = await engine.CompareRecordsForEntity(entityInfo, keys, contextUser, {
             RunViewInstance: this.runView,
         });
         if (!result.Success) {
-            return [];
+            return { FieldDeltas: [], Labels: new Map() };
         }
-        return this.project(result);
+        return { FieldDeltas: this.project(result), Labels: this.buildLabels(result) };
+    }
+
+    /**
+     * Map each loaded record's key string to its display label (the engine resolves the
+     * name-field value, falling back to the key). Lets the reasoner address records by name.
+     */
+    protected buildLabels(result: RecordComparisonResult): Map<string, string> {
+        const labels = new Map<string, string>();
+        for (const record of result.Records) {
+            labels.set(record.Key.Values(), record.Label);
+        }
+        return labels;
     }
 
     /**

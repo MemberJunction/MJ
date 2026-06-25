@@ -19,7 +19,8 @@ import {
     DuplicateReasoningOutput,
     DuplicateReasoningContext,
     DuplicateReasoningRecommendation,
-    DuplicateReasoningFieldChoice
+    DuplicateReasoningFieldChoice,
+    DuplicateReasoningCandidateVerdict
 } from './DuplicateReasoningTypes';
 
 /** Class-factory key for the default single-shot prompt provider. */
@@ -63,21 +64,32 @@ export abstract class DuplicateReasoningProvider {
             sourceRecord: {
                 recordId: input.SourceRecord.RecordID,
                 label: input.SourceRecord.Label,
-                provenance: input.SourceRecord.Provenance,
-                dependentCount: input.SourceRecord.DependentCount
+                provenance: input.SourceRecord.Provenance
             },
+            candidateCount: input.Candidates.length,
             candidates: input.Candidates.map(c => ({
                 recordId: c.RecordID,
                 label: c.Label,
                 vectorScore: c.VectorScore,
-                provenance: c.Provenance,
-                dependentCount: c.DependentCount
+                provenance: c.Provenance
             })),
+            fieldDeltaCount: input.FieldDeltas.length,
             fieldDeltas: input.FieldDeltas.map(f => ({
                 fieldName: f.FieldName,
-                values: f.Values.map(v => ({ recordId: v.RecordID, value: v.Value }))
+                // Normalize empties at the data layer so the prompt can render `value` directly:
+                // null / '' / whitespace-only all become the '(empty)' sentinel. This keeps the
+                // template null-safe regardless of how it references the value (no literal "null").
+                values: f.Values.map(v => ({ recordId: v.RecordID, value: this.displayValue(v.Value) }))
             }))
         };
+    }
+
+    /** Render a field value for the prompt: the trimmed value, or '(empty)' for null/blank. */
+    protected displayValue(value: string | null): string {
+        if (value == null || value.trim().length === 0) {
+            return '(empty)';
+        }
+        return value;
     }
 
     /**
@@ -90,14 +102,68 @@ export abstract class DuplicateReasoningProvider {
         if (!obj) {
             return this.failedOutput('Reasoning output was not valid JSON');
         }
+        const candidateVerdicts = this.normalizeCandidateVerdicts(obj['candidateVerdicts']);
+        // Overall is derived from the per-candidate verdicts (the authoritative row-level result).
+        // Fall back to top-level fields only if the reasoner returned no per-candidate verdicts
+        // (older/degenerate output) so we never lose a verdict entirely.
+        const overall = candidateVerdicts.length > 0
+            ? this.deriveOverall(candidateVerdicts)
+            : {
+                Recommendation: this.normalizeRecommendation(obj['recommendation']),
+                Confidence: this.normalizeConfidence(obj['confidence'])
+            };
         return {
             Success: true,
-            Recommendation: this.normalizeRecommendation(obj['recommendation']),
-            Confidence: this.normalizeConfidence(obj['confidence']),
+            Recommendation: overall.Recommendation,
+            Confidence: overall.Confidence,
             Reasoning: typeof obj['reasoning'] === 'string' ? obj['reasoning'] : '',
             SurvivorRecordID: this.normalizeSurvivor(obj['survivorRecordId']),
-            FieldChoices: this.normalizeFieldChoices(obj['fieldChoices'])
+            FieldChoices: this.normalizeFieldChoices(obj['fieldChoices']),
+            CandidateVerdicts: candidateVerdicts
         };
+    }
+
+    /**
+     * Normalize the per-candidate verdicts array, dropping malformed entries. Each must carry a
+     * non-empty record id; recommendation/confidence are clamped, reasoning defaults to ''.
+     */
+    protected normalizeCandidateVerdicts(value: unknown): DuplicateReasoningCandidateVerdict[] {
+        if (!Array.isArray(value)) {
+            return [];
+        }
+        const out: DuplicateReasoningCandidateVerdict[] = [];
+        for (const entry of value) {
+            if (entry && typeof entry === 'object') {
+                const rec = entry as Record<string, unknown>;
+                const recordId = rec['recordId'];
+                if (typeof recordId === 'string' && recordId.trim().length > 0) {
+                    out.push({
+                        RecordID: recordId.trim(),
+                        Recommendation: this.normalizeRecommendation(rec['recommendation']),
+                        Confidence: this.normalizeConfidence(rec['confidence']),
+                        Reasoning: typeof rec['reasoning'] === 'string' ? rec['reasoning'] : ''
+                    });
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Derive the set-level verdict from the per-candidate verdicts: Merge if any candidate is a
+     * Merge, else Uncertain if any is Uncertain, else NotDuplicate. Overall confidence is the max
+     * confidence among the candidates matching the winning recommendation (null if none reported).
+     */
+    protected deriveOverall(verdicts: DuplicateReasoningCandidateVerdict[]): { Recommendation: DuplicateReasoningRecommendation; Confidence: number | null } {
+        const recommendation: DuplicateReasoningRecommendation =
+            verdicts.some(v => v.Recommendation === 'Merge') ? 'Merge'
+            : verdicts.some(v => v.Recommendation === 'Uncertain') ? 'Uncertain'
+            : 'NotDuplicate';
+        const confidences = verdicts
+            .filter(v => v.Recommendation === recommendation && v.Confidence != null)
+            .map(v => v.Confidence as number);
+        const confidence = confidences.length > 0 ? Math.max(...confidences) : null;
+        return { Recommendation: recommendation, Confidence: confidence };
     }
 
     /** Coerces a JSON string or object into a plain record, else null. */
@@ -124,11 +190,17 @@ export abstract class DuplicateReasoningProvider {
         return 'Uncertain';
     }
 
-    /** Clamps confidence into [0,1], defaulting to 0 when absent/invalid. */
-    protected normalizeConfidence(value: unknown): number {
+    /**
+     * Clamps confidence into [0,1], returning `null` when absent/invalid. `null` (not 0) so a
+     * missing confidence isn't mistaken for "confidently NOT a duplicate" downstream.
+     */
+    protected normalizeConfidence(value: unknown): number | null {
+        if (value == null || value === '') {
+            return null;
+        }
         const n = typeof value === 'number' ? value : Number(value);
         if (!Number.isFinite(n)) {
-            return 0;
+            return null;
         }
         return Math.min(1, Math.max(0, n));
     }
@@ -167,10 +239,11 @@ export abstract class DuplicateReasoningProvider {
             Success: false,
             ErrorMessage: message,
             Recommendation: 'Uncertain',
-            Confidence: 0,
+            Confidence: null,
             Reasoning: '',
             SurvivorRecordID: null,
-            FieldChoices: []
+            FieldChoices: [],
+            CandidateVerdicts: []
         };
     }
 }

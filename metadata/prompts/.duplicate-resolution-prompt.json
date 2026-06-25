@@ -7,6 +7,9 @@
     "TemplateText": "@file:templates/Duplicate Resolution.template.md",
     "OutputExample": "@file:output/Duplicate Resolution.example.json",
     "ResponseFormat": "JSON",
+    "OutputType": "object",
+    "ValidationBehavior": "Strict",
+    "MaxRetries": 2,
     "PromptRole": "System",
     "PromptPosition": "First",
     "Status": "Active",
@@ -35,7 +38,7 @@
     "ID": "E3D1A85A-9E15-4F9A-93F8-D8BAA8032C9D"
   },
   "sync": {
-    "lastModified": "2026-06-23T17:05:12.897Z",
-    "checksum": "c822b1889da526b843eae3a21db08c56a29b691c2035f6bb14cee2b1d2805396"
+    "lastModified": "2026-06-25T18:51:45.438Z",
+    "checksum": "e20bd457573af56a7d0e41011aa41481539fb7243b70ff86d983ca9e0dcc1de5"
   }
 }

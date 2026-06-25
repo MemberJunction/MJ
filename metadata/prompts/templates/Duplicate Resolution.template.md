@@ -25,41 +25,61 @@ single set (decide the set together, not pair-by-pair in isolation).
 
 **Source record (current default survivor):**
 - `{{ sourceRecord.recordId }}` — {{ sourceRecord.label }}
-  - Origin: {{ sourceRecord.provenance }} · Dependent records: {{ sourceRecord.dependentCount }}
+  - Origin: {{ sourceRecord.provenance }}
 
-**Candidate matches:**
+**Candidate matches ({{ candidateCount }}):**
 {% for c in candidates %}
 - `{{ c.recordId }}` — {{ c.label }}
-  - Vector similarity: **{{ c.vectorScore }}** · Origin: {{ c.provenance }} · Dependent records: {{ c.dependentCount }}
+  - Vector similarity: **{{ c.vectorScore }}** · Origin: {{ c.provenance }}
 {% endfor %}
 
 ## Field-level deltas
 
-Only the fields that differ across the set are listed (identical fields are
-omitted to keep you focused on what matters). For each field you see the value
-held by each record.
+Below are **only** the fields whose values differ across the set. A field that is
+**not listed** is either identical across every record OR empty for all of them —
+in both cases it is not a point of difference, so do not treat its absence as
+evidence and do not mention fields that are not listed. A value shown as
+`(empty)` means that record simply has no value for that field; an empty value is
+**not** a discriminating difference and must never, on its own, argue against a
+merge.
 
 {% for f in fieldDeltas %}
 ### {{ f.fieldName }}
-{% for v in f.values %}- `{{ v.recordId }}`: {{ v.value if v.value else "(empty)" }}
+{% for v in f.values %}- `{{ v.recordId }}`: {{ v.value }}
 {% endfor %}
+{% else %}
+_All compared fields are identical across these records._ When the records share
+every populated field and differ in none, that is a **strong duplicate signal** —
+lean toward Merge unless something else (provenance, a "test"/"sandbox" marker)
+argues otherwise.
 {% endfor %}
 
 ## How to decide
+
+**Judge each candidate independently against the source record.** A matched set
+often mixes a true duplicate with unrelated records that merely landed nearby in
+embedding space. Give **each** candidate its own verdict — a candidate that is
+not the same entity is `NotDuplicate` **even if another candidate in this set is
+a confident Merge**. Never give a candidate `Merge` just because the set contains
+one; your reasoning for a `NotDuplicate` candidate must not describe a *different*
+candidate as the reason.
 
 1. **Same entity?** Weigh the deltas. Formatting/casing/legal-suffix variants
    ("Acme Corp" vs "Acme Corporation LLC"), phone/address formatting, and
    abbreviations are *weak* differentiators. Different tax IDs, distinct
    leadership, genuinely different addresses/domains, or "test"/"sandbox"
-   markers are *strong* signals they are NOT the same entity.
+   markers are *strong* signals they are NOT the same entity. **A field that is
+   `(empty)` on one record carries no signal** — one record having more data
+   filled in than another is normal and is never, by itself, a reason to reject a
+   merge. Reason only over the fields and records actually shown above; never
+   invent or reference data that isn't present.
 2. **Confidence.** Output a 0–1 confidence that this is a true duplicate set.
    Move it above or below the vector score based on what the data tells you, and
    explain the move in your reasoning. If the data is genuinely ambiguous or
    sparse, prefer **Uncertain** over a forced Merge/NotDuplicate.
-3. **Survivor.** If merging, choose which record should survive. The current
-   default is the record with the most dependents (cheapest to retain), but that
-   is *not always correct* — prefer the record that is most complete and most
-   authoritative. State your survivor as one of the record IDs above.
+3. **Survivor.** If merging, choose which record should survive — prefer the
+   record that is most complete and most authoritative. State your survivor as
+   **exactly one of the record IDs listed above** (never a made-up id).
 4. **Field choices.** For each differing field, pick which record's value the
    surviving record should end up with. Prefer the **most recently verified /
    most complete** value (e.g. a fuller address that includes a suite, an
@@ -74,16 +94,28 @@ held by each record.
 
 ```json
 {
-  "recommendation": "Merge | NotDuplicate | Uncertain",
-  "confidence": 0.0,
-  "reasoning": "Concise, human-readable rationale a reviewer can trust. Explain any move away from the vector score, and call out the prime disagreement trigger if your verdict contradicts a high vector score.",
-  "survivorRecordId": "the record ID that should survive (null if NotDuplicate)",
+  "candidateVerdicts": [
+    {
+      "recordId": "a candidate record ID exactly as listed above",
+      "recommendation": "Merge | NotDuplicate | Uncertain",
+      "confidence": 0.0,
+      "reasoning": "Rationale specific to THIS candidate vs the source. Explain any move away from the vector score; if this verdict contradicts a high vector score, say why."
+    }
+  ],
+  "survivorRecordId": "the record ID that should survive the merge of the TRUE duplicates (null if no candidate is a duplicate)",
   "fieldChoices": [
     { "fieldName": "Phone", "sourceRecordId": "the record ID whose value to keep for this field" }
-  ]
+  ],
+  "reasoning": "One- or two-sentence summary of the overall set decision."
 }
 ```
 
+- `candidateVerdicts` must contain **exactly one entry per candidate listed above**,
+  each judged independently — do not omit a candidate, and do not give a candidate
+  `Merge` because of a *different* candidate.
+- `survivorRecordId` and `fieldChoices` describe the merge of the candidates you
+  marked `Merge` (plus the source). If no candidate is a duplicate, `survivorRecordId`
+  is null and `fieldChoices` is empty.
 - `fieldChoices` lists **only** fields whose kept value comes from a record other
   than the survivor; an empty array means "keep all of the survivor's values".
 - These choices are resolved to literal `{FieldName, Value}` entries and applied

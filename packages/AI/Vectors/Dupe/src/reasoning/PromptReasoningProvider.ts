@@ -88,6 +88,11 @@ export class PromptReasoningProvider extends DuplicateReasoningProvider {
         params.prompt = prompt;
         params.data = this.buildPromptData(input);
         params.contextUser = context.ContextUser;
+        // Cheap LLM-based JSON-repair pass before AIPromptRunner falls back to a full
+        // re-run (the prompt's Strict ValidationBehavior + MaxRetries). Small reasoning
+        // models occasionally emit malformed JSON; this recovers most of those without
+        // re-spending a whole generation.
+        params.attemptJSONRepair = true;
 
         const runner = new AIPromptRunner();
         const runResult = await runner.ExecutePrompt(params);

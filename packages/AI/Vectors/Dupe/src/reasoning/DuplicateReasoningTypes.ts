@@ -83,6 +83,23 @@ export interface DuplicateReasoningInput {
 export type DuplicateReasoningRecommendation = 'Merge' | 'NotDuplicate' | 'Uncertain';
 
 /**
+ * The reasoner's verdict for ONE candidate, judged independently against the source. A matched
+ * set can mix true duplicates and false positives (vector search returns the top-K neighbors),
+ * so each candidate gets its own recommendation/confidence/reasoning — the detector stamps the
+ * per-candidate verdict onto that candidate's match row, never a blanket set-level verdict.
+ */
+export interface DuplicateReasoningCandidateVerdict {
+    /** The candidate record id (must match one of the input candidates' RecordID). */
+    RecordID: string;
+    /** This candidate's verdict vs. the source record. */
+    Recommendation: DuplicateReasoningRecommendation;
+    /** This candidate's confidence (0–1), or null when the reasoner didn't return one. */
+    Confidence: number | null;
+    /** Short rationale specific to THIS candidate. */
+    Reasoning: string;
+}
+
+/**
  * One per-field survivor choice from the reasoner: keep this field's value from the
  * record identified by {@link SourceRecordID}. Resolved to a literal `{FieldName, Value}`
  * for `Metadata.MergeRecords` at merge time.
@@ -103,12 +120,26 @@ export interface DuplicateReasoningOutput {
     Success: boolean;
     /** Populated when {@link Success} is false. */
     ErrorMessage?: string;
-    /** The verdict for the set. */
+    /**
+     * The overall verdict for the set, **derived** from the per-candidate verdicts (Merge if any
+     * candidate is a Merge, else Uncertain if any is Uncertain, else NotDuplicate). Used for the
+     * group's dominant display and the auto-merge gate — NOT stamped on individual candidate rows.
+     */
     Recommendation: DuplicateReasoningRecommendation;
-    /** Reasoning-adjusted confidence (0–1), distinct from the vector score. */
-    Confidence: number;
-    /** Human-readable rationale a reviewer can trust. */
+    /**
+     * Overall confidence (0–1), derived from the per-candidate verdicts. `null` means no candidate
+     * returned a usable confidence — callers must distinguish this from a real `0` (which reads as
+     * "confidently NOT a duplicate") and render/store it as "unknown".
+     */
+    Confidence: number | null;
+    /** Overall human-readable summary of the set decision. */
     Reasoning: string;
+    /**
+     * Per-candidate verdicts — the authoritative, row-level result. Each entry is judged
+     * independently against the source so a false-positive candidate reads NotDuplicate even when
+     * another candidate in the same set is a confident Merge.
+     */
+    CandidateVerdicts: DuplicateReasoningCandidateVerdict[];
     /** The record id the reasoner proposes should survive (null when NotDuplicate). */
     SurvivorRecordID: string | null;
     /** Per-field survivor choices (only fields whose value comes from a non-survivor). */

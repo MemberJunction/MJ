@@ -65,7 +65,7 @@ describe('DuplicateReasoningProvider.parseRawOutput', () => {
         const out = p.parse('not json at all {');
         expect(out.Success).toBe(false);
         expect(out.Recommendation).toBe('Uncertain');
-        expect(out.Confidence).toBe(0);
+        expect(out.Confidence).toBeNull(); // absent confidence is null, not a misleading 0
     });
 
     it('returns a failed output for null/number input', () => {
@@ -78,11 +78,11 @@ describe('DuplicateReasoningProvider.parseRawOutput', () => {
         expect(out.Recommendation).toBe('Uncertain');
     });
 
-    it('clamps confidence into [0,1] and defaults invalid to 0', () => {
+    it('clamps a real confidence into [0,1] and returns null when absent/non-numeric', () => {
         expect(p.parse({ confidence: 5 }).Confidence).toBe(1);
-        expect(p.parse({ confidence: -3 }).Confidence).toBe(0);
-        expect(p.parse({ confidence: 'abc' }).Confidence).toBe(0);
-        expect(p.parse({}).Confidence).toBe(0);
+        expect(p.parse({ confidence: -3 }).Confidence).toBe(0);   // -3 is a real number → clamps to 0
+        expect(p.parse({ confidence: 'abc' }).Confidence).toBeNull(); // non-numeric → unknown, not 0
+        expect(p.parse({}).Confidence).toBeNull();                 // absent → unknown, not 0
         expect(p.parse({ confidence: '0.4' }).Confidence).toBe(0.4);
     });
 
@@ -107,6 +107,65 @@ describe('DuplicateReasoningProvider.parseRawOutput', () => {
 
     it('returns [] fieldChoices when not an array', () => {
         expect(p.parse({ fieldChoices: 'nope' }).FieldChoices).toEqual([]);
+    });
+});
+
+describe('DuplicateReasoningProvider.parseRawOutput — per-candidate verdicts', () => {
+    const p = new TestableProvider();
+
+    it('parses per-candidate verdicts and preserves each independent verdict', () => {
+        const out = p.parse({
+            candidateVerdicts: [
+                { recordId: 'ID|maria', recommendation: 'Merge', confidence: 0.95, reasoning: 'Same person' },
+                { recordId: 'ID|susan', recommendation: 'NotDuplicate', confidence: 0.9, reasoning: 'Different person' },
+            ],
+            survivorRecordId: 'ID|maria',
+            reasoning: 'One true dup, one false positive',
+        });
+        expect(out.CandidateVerdicts).toHaveLength(2);
+        const susan = out.CandidateVerdicts.find(v => v.RecordID === 'ID|susan')!;
+        expect(susan.Recommendation).toBe('NotDuplicate'); // not contaminated by the Merge candidate
+        expect(susan.Reasoning).toBe('Different person');
+    });
+
+    it('derives overall Merge when ANY candidate is a Merge (max merge confidence)', () => {
+        const out = p.parse({
+            candidateVerdicts: [
+                { recordId: 'ID|a', recommendation: 'Merge', confidence: 0.95, reasoning: '' },
+                { recordId: 'ID|b', recommendation: 'NotDuplicate', confidence: 0.99, reasoning: '' },
+            ],
+        });
+        expect(out.Recommendation).toBe('Merge');
+        expect(out.Confidence).toBe(0.95); // max among the winning (Merge) verdicts, not the 0.99 NotDuplicate
+    });
+
+    it('derives NotDuplicate only when every candidate is NotDuplicate', () => {
+        const out = p.parse({
+            candidateVerdicts: [
+                { recordId: 'ID|a', recommendation: 'NotDuplicate', confidence: 0.8, reasoning: '' },
+                { recordId: 'ID|b', recommendation: 'NotDuplicate', confidence: 0.7, reasoning: '' },
+            ],
+        });
+        expect(out.Recommendation).toBe('NotDuplicate');
+    });
+
+    it('drops verdict entries with no recordId', () => {
+        const out = p.parse({
+            candidateVerdicts: [
+                { recordId: 'ID|a', recommendation: 'Merge', confidence: 0.9, reasoning: '' },
+                { recommendation: 'Merge', confidence: 0.9, reasoning: 'no id' },
+                'garbage',
+            ],
+        });
+        expect(out.CandidateVerdicts).toHaveLength(1);
+        expect(out.CandidateVerdicts[0].RecordID).toBe('ID|a');
+    });
+
+    it('falls back to top-level recommendation when no per-candidate verdicts are returned', () => {
+        const out = p.parse({ recommendation: 'Uncertain', confidence: 0.5 });
+        expect(out.CandidateVerdicts).toEqual([]);
+        expect(out.Recommendation).toBe('Uncertain');
+        expect(out.Confidence).toBe(0.5);
     });
 });
 
