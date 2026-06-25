@@ -754,6 +754,24 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         } catch { return null; }
     }
 
+    /** Reads an OBJECT-valued key from an IntegrationObject's Configuration JSON as a string→string map
+     *  with lowercased keys (tolerant of absent/invalid). Used for the per-var parent maps that let a
+     *  MULTI-LEVEL template-var path resolve each variable to its own parent. */
+    private ReadObjectConfigStringMap(obj: MJIntegrationObjectEntity, key: string): Record<string, string> | null {
+        const raw = (obj as unknown as { Configuration?: string | null }).Configuration;
+        if (!raw || typeof raw !== 'string') return null;
+        try {
+            const cfg = JSON.parse(raw) as Record<string, unknown>;
+            const v = cfg[key];
+            if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+            const out: Record<string, string> = {};
+            for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+                if (typeof val === 'string' && val.trim().length > 0) out[k.toLowerCase()] = val.trim();
+            }
+            return Object.keys(out).length > 0 ? out : null;
+        } catch { return null; }
+    }
+
     private ResolveParentForVar(
         obj: MJIntegrationObjectEntity,
         fields: MJIntegrationObjectFieldEntity[],
@@ -762,6 +780,32 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     ): ResolvedTemplateVar | null {
         const tVarLower = templateVar.toLowerCase();
         const siblingObjects = IntegrationEngineBase.Instance.GetActiveIntegrationObjects(integrationID);
+
+        // Strategy A0 (PER-VAR MAP — for MULTI-LEVEL template-var paths): a path with MORE THAN ONE var
+        // (e.g. /events/{eventCode}/sessions/{sessionCode}/attendance) cannot express both parents via the
+        // single Configuration.parentObjectName — both vars would resolve to the SAME parent, tripping the
+        // PARENT_CYCLE guard → 0 rows. Configuration.parentObjectNames is a per-var map
+        // {"<var>":"<SiblingObjectName>"} (optionally Configuration.parentObjectIDFieldNames
+        // {"<var>":"<fkField>"} to override the FK field name per var) so each variable resolves to its OWN
+        // parent. Checked FIRST; absent → falls through to the single-valued Strategy A. Backward-compatible
+        // (existing single-parent connectors declare no parentObjectNames and are unaffected). By-name only —
+        // no guessing; an unmatched entry is a LOUD skip like Strategy A.
+        const perVarMap = this.ReadObjectConfigStringMap(obj, 'parentObjectNames');
+        if (perVarMap) {
+            const parentName = perVarMap[tVarLower];
+            if (parentName) {
+                const parent = siblingObjects.find(s => s.Name.toLowerCase() === parentName.toLowerCase());
+                if (parent) {
+                    const fkMap = this.ReadObjectConfigStringMap(obj, 'parentObjectIDFieldNames');
+                    const fkFieldName = (fkMap && fkMap[tVarLower]) || templateVar;
+                    return { templateVar, fkFieldName, parentObjectID: parent.ID };
+                }
+                console.warn(
+                    `[BaseRESTIntegrationConnector] "${obj.Name}": Configuration.parentObjectNames["${templateVar}"]="${parentName}" ` +
+                    `matches no sibling IntegrationObject — cannot resolve this var (will skip, not guess).`
+                );
+            }
+        }
 
         // Strategy A (PREFERRED — deterministic + deploy-safe): the object DECLARES its parent BY NAME in
         // Configuration.parentObjectName (the extractor emits this for second-layer / {param} objects). A
