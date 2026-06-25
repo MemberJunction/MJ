@@ -99,10 +99,10 @@
                   </div>
                 }
                 @if (appItem.scopes.length === 0) {
-                  <div class="empty-scopes">
-                    <i class="fa-solid fa-shield-xmark"></i>
-                    <span>No scope rules defined - all access denied by default</span>
-                  </div>
+                  <mj-empty-state class="empty-scopes" Size="compact" Variant="warning"
+                    Icon="fa-solid fa-shield-xmark"
+                    Title="No scope rules defined"
+                    Message="All access denied by default" />
                 }
               </div>
             </div>
@@ -328,10 +328,9 @@
               </div>
             }
             @if (ScopeCategories.length === 0) {
-              <div class="empty-scopes-message">
-                <i class="fa-solid fa-shield-xmark"></i>
-                <span>No scopes available</span>
-              </div>
+              <mj-empty-state class="empty-scopes-message" Size="compact"
+                Icon="fa-solid fa-shield-xmark"
+                Title="No scopes available" />
             }
           </div>
         </div>

@@ -122,10 +122,9 @@
         </div>
       }
       @if (TimeBuckets.length === 0) {
-        <div class="empty-chart">
-          <i class="fa-solid fa-chart-area"></i>
-          <span>No usage data available</span>
-        </div>
+        <mj-empty-state class="empty-chart" Size="compact"
+          Icon="fa-solid fa-chart-area"
+          Title="No usage data available" />
       }
     </div>
     <!-- Breakdown Grid -->

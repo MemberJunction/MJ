@@ -234,9 +234,8 @@
                             }
                           }
                           @if (!item.IsLoadingFields && item.FieldsLoaded && item.FieldChanges.length === 0) {
-                            <div class="diff-fields-empty">
-                              <span>No field-level changes available</span>
-                            </div>
+                            <mj-empty-state class="diff-fields-empty" Size="compact"
+                              Icon="" Title="No field-level changes available" />
                           }
                         </div>
                       }

@@ -127,10 +127,9 @@
           </div>
         </div>
       } @else {
-        <div class="empty-chart">
-          <i class="fa-solid fa-chart-area"></i>
-          <p>No execution trends available</p>
-        </div>
+        <mj-empty-state class="empty-chart" Size="compact"
+          Icon="fa-solid fa-chart-area"
+          Title="No execution trends available" />
       }
     </div>
   </div>

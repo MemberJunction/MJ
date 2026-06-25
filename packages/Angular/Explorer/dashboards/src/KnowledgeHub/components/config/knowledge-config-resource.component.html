@@ -432,9 +432,9 @@
                             @if (IsLoadingScopes) {
                                 <div class="scope-manager-loading">Loading&hellip;</div>
                             } @else if (SearchScopes.length === 0) {
-                                <div class="scope-manager-empty">
-                                    No scopes defined yet. Click <strong>New</strong> to create one.
-                                </div>
+                                <mj-empty-state class="scope-manager-empty" Size="compact"
+                                    Icon="" Title="No scopes defined yet"
+                                    Message="Click New to create one." />
                             } @else {
                                 @for (s of SearchScopes; track s.ID) {
                                     <button
@@ -599,9 +599,10 @@
                                     </mj-search-scope-child-grid>
                                 }
                             } @else {
-                                <div class="scope-manager-empty-detail">
-                                    Select a scope on the left, or click <strong>New</strong> to create one.
-                                </div>
+                                <mj-empty-state class="scope-manager-empty-detail"
+                                    Icon="fa-solid fa-hand-pointer"
+                                    Title="No scope selected"
+                                    Message="Select a scope on the left, or click New to create one." />
                             }
                         </section>
                     </div>
@@ -743,9 +744,10 @@
                         </div>
 
                         @if (FilteredPermissionsRows.length === 0) {
-                            <div class="search-permissions-empty">
-                                No permission rows match your filters.
-                            </div>
+                            <mj-empty-state class="search-permissions-empty" Size="compact"
+                                Variant="no-results"
+                                Title="No matching permissions"
+                                Message="No permission rows match your filters." />
                         } @else {
                             <table class="search-permissions-table">
                                 <thead>

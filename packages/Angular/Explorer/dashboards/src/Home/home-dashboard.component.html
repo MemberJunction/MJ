@@ -719,10 +719,9 @@
         }
         <!-- Empty sidebar state -->
         @if (!favoritesLoading && !recentsLoading && unreadNotifications.length === 0 && favorites.length === 0 && recentItems.length === 0) {
-          <div class="sidebar-empty">
-            <i class="fa-solid fa-inbox"></i>
-            <p>No quick access items</p>
-          </div>
+          <mj-empty-state class="sidebar-empty" Size="compact"
+            Icon="fa-solid fa-inbox"
+            Title="No quick access items" />
         }
       </div>
     </div>

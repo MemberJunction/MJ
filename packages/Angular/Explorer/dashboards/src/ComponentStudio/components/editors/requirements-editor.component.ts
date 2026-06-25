@@ -45,13 +45,13 @@ type EditorMode = 'preview' | 'edit';
               @if (EditableContent) {
                 <mj-markdown [data]="EditableContent" [enableCodeCopy]="true"></mj-markdown>
               } @else {
-                <div class="empty-preview">
-                  <i class="fa-solid fa-file-lines"></i>
-                  <p>No {{ Title | lowercase }} defined yet.</p>
-                  <button class="edit-link" (click)="SetViewMode('edit')">
-                    <i class="fa-solid fa-pencil"></i> Start writing
-                  </button>
-                </div>
+                <mj-empty-state class="empty-preview"
+                  Icon="fa-solid fa-file-lines"
+                  [Title]="'No ' + (Title || '').toLowerCase() + ' defined yet'"
+                  ActionText="Start writing"
+                  ActionIcon="fa-solid fa-pencil"
+                  ActionVariant="flat"
+                  (Action)="SetViewMode('edit')" />
               }
             </div>
           } @else {
