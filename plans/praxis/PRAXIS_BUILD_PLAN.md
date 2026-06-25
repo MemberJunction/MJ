@@ -53,6 +53,10 @@
 - `@2026-06-25` Added MJ-core sub-phase **S1B — Realtime Session Capture** (per-turn timing + diarization +
   audio recording) after verifying MJ does not persist audio or frame-level turn timing today. Wired S3/S4/S9/
   S15 + dependency graph + risk **R7**. S1B is on the critical path for audio/timing-dependent work.
+- `@2026-06-25` Added **§2.4 recording configuration model** (default OFF; runtime > agent-config > default;
+  consent-gated; Praxis enables via `Protocol.RecordSession`) and **§2.5 mermaid flows** (ATS-today,
+  Voice-today, ATS-new, Voice-new, sales-training, recording-resolution). Expanded **S1B.T6**; added
+  `Protocol.RecordSession`. Companion as-is/to-be doc added to the CDP repo.
 
 ### 0.6 Where this file lives
 - **Now:** `memberjunction/mj` → `plans/praxis/PRAXIS_BUILD_PLAN.md` (tracking home).
@@ -183,7 +187,11 @@ Core tables and their load-bearing columns:
   TopicGuide(jsonList), Autonomy, DefaultMode, PersonaID, DifficultyProfileID, RubricID, ModelPreference,
   ContextProviderRefs(json),` **intake:** `IntakeMode(None|ExternalForm|NativeForm), ExternalFormTypeID,
   ExternalFormID, ExternalFormSchema(json), NativeFormID, SubjectEntityName, SubjectEntityConfig(json),
-  ScoreIntakeSubmission(bit)`.
+  ScoreIntakeSubmission(bit),` **recording:** `RecordSession(Inherit|Off|Audio|AudioVideo)` — the app-level
+  knob that, at session start, supplies the **runtime recording param** to MJ's S1B capture (default for
+  Assessment mode = on/Audio; Practice = configurable).
+- **AssessmentSession** (recording resolution) — carries the **resolved** `RecordingEnabled`/`RecordingMedia`
+  in `ResolvedConfig` (from `Protocol.RecordSession` ⇒ runtime param ⇒ overrides the agent default). See §2.4.
 - **Persona** — `Name, CompanyID, BasedOnID, IsAbstract, Brief(frag), Agenda, KnowledgeScope(json),
   PreferredModel, PreferredVoice`. (Possible IsA subtypes — see S2.T9.)
 - **DifficultyProfile** — `Name, CompanyID, BasedOnID, IsAbstract, ControllerMode(Static|Adaptive),
@@ -214,6 +222,117 @@ snapshot → store `AIAgentSession.ID` on the session → on close: store audio 
 ### 2.3 Mode gate
 `Mode (Practice|Assessment)` gates hints/retries/visible-scoring/recording **and** disables adaptive
 difficulty in Assessment — enforced at the engine level, not by convention.
+
+### 2.4 Recording configuration model (MJ-core S1B + Praxis usage)
+Media recording (audio now, video later) is a **capability of the MJ realtime framework (S1B)**, OFF by
+default, with a 3-level resolution that the Praxis app drives:
+
+| Level | Where | Wins? |
+|---|---|---|
+| **Runtime param** | passed at session start (`PrepareClientSession({ recording: {...} })`) | **highest** |
+| **Agent-level config** | `AIAgent` / session `Config` JSON (`recording.enabled`, `recording.media`) | middle |
+| **Framework default** | none set ⇒ **OFF** | lowest |
+
+Effective capture = **`resolvedEnabled AND consentSatisfied`** (consent is a hard gate, §S16). **Praxis turns
+it on** via `Protocol.RecordSession` (Inherit/Off/Audio/AudioVideo): at session start the app resolves that
+into the **runtime param**, so an assessment Protocol records even if the underlying agent defaults to off,
+and a sensitive Practice scenario can force it off. The resolved `RecordingEnabled`/`RecordingMedia` is written
+into the immutable `ResolvedConfig` snapshot for audit. See diagram §2.5(F).
+
+### 2.5 Visual flows (as-is → to-be) — mermaid
+
+**(A) ATS interview TODAY (CDP, ElevenLabs-direct)**
+```mermaid
+flowchart LR
+  C["Candidate"] --> TF["TypeForm application<br/>(ExternalForm)"]
+  TF --> IMP["TypeFormImportAgent"]
+  IMP --> APP["Application + Applicant<br/>(AdditionalData, WorkStatus)"]
+  APP --> JI["JobInterview step<br/>(InterviewType.IsAIInterview)"]
+  JI --> EL["ElevenLabs AI interview<br/>(EL records audio + transcript)"]
+  EL --> BOX["Audio to Box storage"]
+  EL --> AI["ApplicationInterview<br/>(ElevenLabsConversationID, AudioFileURL)"]
+  BOX --> EVAL["InterviewEvaluationAgent<br/>(Gemini, multimodal)"]
+  AI --> EVAL
+  EVAL --> RES["Eval fields: AIEvaluationScore,<br/>Integrity*, AdjustedRecommendation"]
+```
+
+**(B) Voice Agents TODAY (CDP, ElevenLabs-direct)**
+```mermaid
+flowchart LR
+  U["User"] --> W["VoiceWidget<br/>(ElevenLabs ConvAI)"]
+  RAG["VoiceRAGSyncService to EL KB"] -. grounds .-> W
+  TOOLS["VoiceTool (client/server)"] -. invoked by .-> W
+  INV["VoiceInvite / VoiceDeployment<br/>(signed URL, branding)"] --> W
+  W --> ELA["ElevenLabs agent<br/>(EL records audio + transcript via webhook)"]
+  ELA --> VC["VoiceConversation<br/>(Transcript, AudioURL)"]
+  VC --> CE["ConversationEvaluationService<br/>(rubric, consistency check)"]
+  CE --> VR["VoiceConversation.AIEvaluationResult"]
+```
+
+**(C) ATS interview in the NEW world (Praxis on MJ realtime)**
+```mermaid
+flowchart LR
+  C["Candidate"] --> ML["Magic-link invite (MJ)"]
+  ML --> WID["Praxis widget<br/>(MJ realtime + Media channel)"]
+  TF["TypeForm intake -> IntakeSubmission"] --> CP["ContextProvider (FormProvider)"]
+  subgraph SESS["AssessmentSession — Protocol bound to ATS Application; Mode=Assessment; RecordSession=Audio"]
+    CR["ConfigResolver -> ResolvedConfig snapshot"] --> COA["MJ Realtime Co-Agent<br/>voices Interviewer Persona"]
+    CP --> COA
+    COA --> CAP["S1B Capture<br/>(turns: speaker + StartMs/EndMs;<br/>audio -> MJStorage)"]
+  end
+  WID --> SESS
+  CAP --> ED["EvalDriver<br/>(multimodal + integrity)"]
+  ED --> A["Assessment<br/>(Scores, Evidence, Narrative,<br/>Disposition, Integrity)"]
+  A --> RV["Results & Evidence Review (S9)<br/>recruiter, click-to-seek audio"]
+```
+
+**(D) Voice agent in the NEW world (Praxis)**
+```mermaid
+flowchart LR
+  U["User"] --> ML["Magic-link invite"]
+  ML --> WID["Praxis widget<br/>(MJ realtime, multi-channel + Media)"]
+  subgraph SESS["AssessmentSession — RecordSession per agent/runtime config"]
+    CR["ConfigResolver snapshot"] --> COA["Co-Agent voices Persona"]
+    SS["MJ Scoped Search (RAG)"] -. grounds .-> COA
+    ACT["Target-agent Actions (tools)"] -. invoked by .-> COA
+    COA --> CAP["S1B Capture<br/>(transcript + timing + audio)"]
+  end
+  WID --> SESS
+  CAP --> ED["EvalDriver (rubric + consistency)"]
+  ED --> A["Assessment"]
+```
+
+**(E) NEW use case — Sales training roleplay (Praxis)**
+```mermaid
+flowchart LR
+  REP["Sales rep"] --> WID["Praxis widget (multi-channel)"]
+  subgraph SESS["AssessmentSession — Mode=Practice; RecordSession=Audio"]
+    CR["ResolvedConfig: Prospect Persona<br/>+ DifficultyProfile"] --> COA["Co-Agent voices Prospect"]
+    RB["Remote Browser channel<br/>(live product demo / 'your turn')"] --- COA
+    MED["Media channel (collateral)"] --- COA
+    COA --> DC["DifficultyController<br/>(adaptive — practice only)"]
+    COA --> CAP["S1B Capture"]
+  end
+  WID --> SESS
+  CAP --> ED["EvalDriver<br/>(coaching narrative + scores)"]
+  ED --> A["Assessment + Disposition"]
+  A --> CD["ContinuityDigest -> next session"]
+```
+
+**(F) Recording on/off resolution (per session)**
+```mermaid
+flowchart TD
+  START["Session start"] --> RT{"Runtime param<br/>recording set?"}
+  RT -- yes --> USE["Use runtime value"]
+  RT -- no --> AG{"Agent-level config<br/>recording set?"}
+  AG -- yes --> USEAG["Use agent value"]
+  AG -- no --> DEF["Framework default = OFF"]
+  USE --> CONSENT{"Consent satisfied? (S16)"}
+  USEAG --> CONSENT
+  DEF --> CONSENT
+  CONSENT -- "enabled AND consent" --> REC["Capture media -> MJStorage<br/>(audio now, video later)"]
+  CONSENT -- "otherwise" --> NOREC["Transcript-only (no recording)"]
+```
 
 ---
 
@@ -316,8 +435,13 @@ time-aligned audio recording linked to the session.
   to it so an evidence player seeks correctly. <br>**Acceptance:** ☐ click-a-turn → audio seeks to the right moment within tolerance.
 - [ ] **S1B.T5 — Video forward-compat.** Model recording-ref + timing as **media-type-tagged** so video reuses
   the same record when realtime models support it; no video storage in v1. <br>**Acceptance:** ☐ schema/contract is media-agnostic.
-- [ ] **S1B.T6 — Consent / retention / capability gating** (ties to S16). Recording OFF by default; gated by
-  consent flag + per-jurisdiction; honored on both client-direct and bridge paths. <br>**Acceptance:** ☐ no capture without consent ☐ retention policy hook.
+- [ ] **S1B.T6 — Recording config resolution + consent/retention gating** (ties to S16). **Recording media
+  capture defaults OFF.** Resolution precedence per session: **runtime param > agent-level config > framework
+  default (OFF)** — i.e., an agent (`AIAgent`/session `Config`) may set `recording.enabled` (+ `recording.media`
+  = `audio` | `audio+video`), and a per-session **runtime parameter** at session start overrides it either way.
+  Effective capture = `resolvedEnabled AND consentSatisfied`; recording never runs without consent
+  (per-jurisdiction), honored on both client-direct and bridge paths; retention policy hook. The Praxis app
+  turns recording ON via its Protocol/Mode config (see §2.4). <br>**Acceptance:** ☐ runtime>agent>default precedence ☐ no capture without consent ☐ retention hook ☐ off by default.
 - [ ] **S1B.T7 — MJ guide + tests.** Document the capture model; unit tests for timing + persistence +
   alignment. <br>**Acceptance:** ☐ guide updated ☐ tests pass.
 **UX:** none (framework). **Tests:** Vitest + realtime smoke; alignment verified against a recorded sample.
