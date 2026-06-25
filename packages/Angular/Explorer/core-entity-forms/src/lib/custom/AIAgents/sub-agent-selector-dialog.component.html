@@ -70,8 +70,8 @@
           Icon="fa-solid fa-robot"
           Title="No agents found"
           [Message]="NoAgentsMessage"
-          [ActionText]="IsAgentListNarrowed ? 'Clear Search' : ''"
-          (Action)="clearSearch()"
+          [ActionText]="IsAgentListNarrowed ? 'Clear Filters' : ''"
+          (Action)="clearFilters()"
           Size="compact" />
       } @else {
         

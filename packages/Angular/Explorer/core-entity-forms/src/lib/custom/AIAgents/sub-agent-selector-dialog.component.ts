@@ -248,6 +248,17 @@ export class SubAgentSelectorDialogComponent extends BaseAngularComponent implem
     this.searchControl.reset();
   }
 
+  /**
+   * Backs the no-results empty-state "Clear Filters" CTA. Unlike clearSearch (the
+   * inline search-box X, which must only clear the search), this resets every
+   * dimension the list narrows on — search AND the agent-type filter — so the CTA
+   * actually returns results instead of appearing to do nothing.
+   */
+  clearFilters() {
+    this.searchControl.reset();
+    this.selectedTypeId$.next('all');
+  }
+
   getAgentIcon(agent: AgentDisplayItem): string {
     if (agent.IconClass) {
       return agent.IconClass;
