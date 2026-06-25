@@ -863,18 +863,32 @@ export class SQLServerDataProvider
     // Fallback: if the view isn't cached (cache load failed, or a custom/overridden sproc whose view we
     // didn't capture) OR any view column has no matching field (a column not tracked in metadata), fall
     // back to the metadata-derived non-virtual-then-virtual partition — never worse than prior behavior.
+    // That partition is only PROVABLY correct when the view lays base columns out before the joins (the
+    // canonical CodeGen shape). When the fallback is taken for an entity that has virtual (joined) fields
+    // — the only case where a base-column-after-a-join could mis-route by position — we WARN loudly
+    // (warnOnViewOrderFallback), because the metadata order can no longer be checked against the view and
+    // a silent fallback there would let the very bug this fix prevents persist undetected.
     let orderedFields: typeof entityInfo.Fields | undefined;
+    let fallbackReason: string | undefined;
     const viewKey = `${entityInfo.SchemaName}.${entityInfo.BaseView}`.toLowerCase();
     const viewOrder = this._viewColumnOrderCache.get(viewKey);
-    if (viewOrder && viewOrder.length === entityInfo.Fields.length) {
+    if (!viewOrder) {
+      fallbackReason = `base view not captured in the column-order cache (cache load failed at Config, or a custom/overridden sproc whose view was not read)`;
+    } else if (viewOrder.length !== entityInfo.Fields.length) {
+      fallbackReason = `base view exposes ${viewOrder.length} column(s) but the entity declares ${entityInfo.Fields.length} field(s) — cannot align 1:1 by position`;
+    } else {
       const fieldByName = new Map(entityInfo.Fields.map((f) => [f.Name.toLowerCase(), f]));
       const mapped = viewOrder.map((colName) => fieldByName.get(colName.toLowerCase()));
       if (mapped.every((f) => f !== undefined)) {
         orderedFields = mapped as typeof entityInfo.Fields; // every view column resolved 1:1 to a field
+      } else {
+        const unmatched = viewOrder.filter((colName) => !fieldByName.has(colName.toLowerCase()));
+        fallbackReason = `view column(s) without a matching EntityField: ${unmatched.join(', ')}`;
       }
     }
     if (!orderedFields) {
       this.warnIfBaseFieldSequencedAfterVirtual(entityInfo);
+      this.warnOnViewOrderFallback(entityInfo, fallbackReason);
       orderedFields = [...entityInfo.Fields.filter((f) => !f.IsVirtual), ...entityInfo.Fields.filter((f) => f.IsVirtual)];
     }
     let sRet: string = '',
@@ -919,6 +933,43 @@ export class SQLServerDataProvider
       `   save-capture (@ResultTable) re-orders base-before-virtual so saves remain CORRECT — but this\n` +
       `   is a metadata/CodeGen sequencing defect. Re-run CodeGen; if it persists, the field's Sequence\n` +
       `   must be renumbered below the virtual fields. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
+      `${bar}\n`
+    );
+  }
+
+  /** Entities already warned about a view-order fallback — so we warn once, not every save. */
+  private static _viewOrderFallbackWarnedEntities: Set<string> = new Set<string>();
+
+  /**
+   * RISK GUARD: `getAllEntityColumnsSQL` could not declare @ResultTable in the base view's ACTUAL column
+   * order (the view wasn't captured in `_viewColumnOrderCache`, its column count diverged from the
+   * entity's field count, or a view column had no matching EntityField) and fell back to the
+   * metadata-derived non-virtual-then-virtual partition. That partition is only provably correct when the
+   * view lays base columns out BEFORE the related joins (the canonical CodeGen shape). When the entity has
+   * VIRTUAL (joined) fields, a hand-maintained view that places a base column AFTER a join mis-routes
+   * values by position — the exact `nvarchar→bit` / `nvarchar→uniqueidentifier` save failure this fix
+   * exists to prevent — and the fallback cannot detect it from metadata alone. So surface the fallback
+   * loudly (once per entity) whenever virtuals are present, with the reason, so a deviating manually
+   * managed view can be confirmed/captured rather than silently shipping the bug. A base-only entity has
+   * no join to reorder around, so its fallback is safe and stays quiet.
+   */
+  private warnOnViewOrderFallback(entityInfo: EntityInfo, reason: string | undefined): void {
+    if (!entityInfo.Fields.some((f) => f.IsVirtual)) return; // no joins → metadata partition is safe; nothing to warn
+    if (SQLServerDataProvider._viewOrderFallbackWarnedEntities.has(entityInfo.Name)) return;
+    SQLServerDataProvider._viewOrderFallbackWarnedEntities.add(entityInfo.Name);
+    const bar = '='.repeat(100);
+    console.warn(
+      `\n${bar}\n` +
+      `⚠️  SAVE-CAPTURE VIEW-ORDER FALLBACK — ${entityInfo.Name}\n` +
+      `${bar}\n` +
+      `   Could not declare @ResultTable in the base view's actual column order; fell back to the\n` +
+      `   metadata-derived (non-virtual then virtual) order.\n` +
+      `   Reason: ${reason ?? 'unknown'}.\n` +
+      `   This entity has virtual/related (joined) field(s), so if the base view '${entityInfo.SchemaName}.${entityInfo.BaseView}'\n` +
+      `   places a base column AFTER a join, the positional save-capture will mis-route values into\n` +
+      `   wrong-typed slots (nvarchar→bit / nvarchar→uniqueidentifier conversion errors that fail the\n` +
+      `   save). Confirm that view is captured at Config and its column order matches the EntityField\n` +
+      `   metadata. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
       `${bar}\n`
     );
   }
