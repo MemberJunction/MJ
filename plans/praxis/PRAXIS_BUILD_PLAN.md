@@ -49,7 +49,10 @@
 ### 0.5 Progress Log
 - `@2026-06-25` Plan authored. All tasks `[ ]`.
 - `@2026-06-25` Phase 0 (spin-out to `bizapps-praxis`) added; plan committed to `memberjunction/mj` at
-  `plans/praxis/PRAXIS_BUILD_PLAN.md` and PR opened. Awaiting Phase-0 kickoff.
+  `plans/praxis/PRAXIS_BUILD_PLAN.md` and PR opened (#2941). Awaiting Phase-0 kickoff.
+- `@2026-06-25` Added MJ-core sub-phase **S1B — Realtime Session Capture** (per-turn timing + diarization +
+  audio recording) after verifying MJ does not persist audio or frame-level turn timing today. Wired S3/S4/S9/
+  S15 + dependency graph + risk **R7**. S1B is on the critical path for audio/timing-dependent work.
 
 ### 0.6 Where this file lives
 - **Now:** `memberjunction/mj` → `plans/praxis/PRAXIS_BUILD_PLAN.md` (tracking home).
@@ -85,13 +88,16 @@ realtime agent architecture and ships a **world-class** authoring experience and
 | Knowledge/RAG | **Reuse MJ** unified + scoped search + pre-execution RAG. No provider KB sync. |
 | Server-side tools | **Reuse MJ** — target async agent's Actions. No new tool abstraction. |
 | Invites / entry | **Reuse MJ Magic Links** scoped to an agent. |
-| Audio | **MJStorage** (`@memberjunction/storage`): `MJ: Files` + `MJ: File Entity Record Links`; transcripts in DB; session row holds only a `FileID` link. Never base64-in-DB. |
+| Audio | **MJStorage** (`@memberjunction/storage`): `MJ: Files` + `MJ: File Entity Record Links`; transcripts in DB; session row holds only a `FileID` link. Never base64-in-DB. **NOTE:** MJ realtime does NOT capture/persist audio or frame-level turn timing today (verified) — the capture itself is an MJ-core enhancement (**S1B**); Praxis *consumes* the recording + timing S1B produces. |
+| Session capture | MJ today: per-turn `ConversationDetail` rows with `Role` (User/AI) + coarse `__mj_CreatedAt` only. **Missing & required (S1B):** per-turn frame-level start/end timestamps + sequence; per-turn speaker identity (multi-party diarization); persisted audio recording (video forward-compat). Needed by integrity (S4), evidence player (S9), multimodal eval, and multi-party (S15). |
 | Media to users | **MC1 — Media channel** (the ONE net-new MJ-core build, stays in `memberjunction/mj`): show images/video/audio/PDF during a conversation. |
 | Eval | One app-side `EvalDriver` (multimodal, evidence, integrity) absorbing Voice's category-weights + consistency check. Integrity model is generic & platform-owned. |
 
 ### 1.4 What we BUILD vs. REUSE
-- **Build in MJ core (`memberjunction/mj`):** MC1 Media channel (server+client plugin pair) + multi-channel
-  shell support in `@memberjunction/ng-conversations`. (Sub-phase S1.)
+- **Build in MJ core (`memberjunction/mj`):** (1) the Media channel (server+client plugin pair) + multi-channel
+  shell support in `@memberjunction/ng-conversations` — **sub-phase S1**; and (2) realtime **session capture**
+  (per-turn speaker + frame-level start/end timestamps + persisted audio recording, video forward-compat) —
+  **sub-phase S1B**. These are the two net-new framework builds; everything else reuses existing MJ.
 - **Build in the `bizapps-praxis` OpenApp:** the config domain, the 4 drivers, runtime orchestration, eval,
   intake, domain binding, the authoring studio, the public widget, results review, analytics, config bundles.
 - **Reuse from MJ as-is:** realtime co-agent + `invoke-target-agent`, `BaseRealtimeModel` drivers, Actions,
@@ -284,6 +290,42 @@ captions/transcripts affordance for audio/video, focus management when a pane op
 
 ---
 
+### S1B — MJ-CORE: Realtime Session Capture (per-turn timing, diarization, audio/video recording)  · Track A (in `memberjunction/mj`) · CRITICAL · gated by S16 consent hooks
+**Goal:** Bring MJ's realtime capture to parity with what a turnkey voice-agent platform gives out of the box,
+for *our* needs: every session yields (a) a turn record with reliable **speaker designation + media-relative
+start/end timestamps + explicit sequence**, and (b) a **persisted audio recording** (video forward-compat)
+linked to the session via MJStorage, time-aligned so an evidence player can seek precisely.
+**Why net-new:** verified gap — MJ stores `ConversationDetail` rows with `Role`(User/AI) + DB-write-time
+`__mj_CreatedAt` only; `RealtimeTranscript` carries `{Role,Text,IsFinal}` with no timestamp; no audio/video is
+persisted; multi-party collapses all humans to `'User'`. **Depends:** — (foundational; start early in Track A).
+**Exit:** a realtime session produces seekable per-turn timestamps, per-turn speaker identity, and a stored,
+time-aligned audio recording linked to the session.
+
+- [ ] **S1B.T1 — Per-turn timing.** Extend the `RealtimeTranscript` contract with media-relative `StartMs`/
+  `EndMs` (filled by the client/server realtime driver from the model's frame timing — NOT DB write time);
+  persist to `ConversationDetail` (new `UtteranceStartMs`/`UtteranceEndMs`/`SequenceNumber`) or a dedicated
+  turn-timing table. <br>**Acceptance:** ☐ turns carry frame-aligned start/end ☐ explicit sequence ☐ values are media-relative, not wall-clock-write-time.
+- [ ] **S1B.T2 — Per-turn speaker identity.** Add `SpeakerLabel` (+ `UserID` when known) on the turn; wire
+  bridge diarization (`AIAgentSessionBridgeParticipant` roster + `BridgeMediaFrame.SpeakerLabel`) into
+  persistence so multi-party turns attribute the specific human/agent (no more all-humans-as-`'User'`). <br>**Acceptance:** ☐ each turn names its speaker ☐ multi-party humans distinguished.
+- [ ] **S1B.T3 — Audio capture → MJStorage.** Accumulate inbound+outbound media frames over the session,
+  encode (compressed codec — avoid raw PCM bloat), store via `FileStorageEngine` on close, link via `MJ:
+  Files` + a recording ref/`FileID` on the session. Provide an alternate path to **link a provider-side
+  recording URL** (Zoom/Teams/LiveKit) where native recording exists. <br>**Acceptance:** ☐ recording stored ☐ signed playback URL ☐ provider-URL link path supported.
+- [ ] **S1B.T4 — Time-alignment guarantee.** Define recording `t0`; ensure turn `StartMs/EndMs` are relative
+  to it so an evidence player seeks correctly. <br>**Acceptance:** ☐ click-a-turn → audio seeks to the right moment within tolerance.
+- [ ] **S1B.T5 — Video forward-compat.** Model recording-ref + timing as **media-type-tagged** so video reuses
+  the same record when realtime models support it; no video storage in v1. <br>**Acceptance:** ☐ schema/contract is media-agnostic.
+- [ ] **S1B.T6 — Consent / retention / capability gating** (ties to S16). Recording OFF by default; gated by
+  consent flag + per-jurisdiction; honored on both client-direct and bridge paths. <br>**Acceptance:** ☐ no capture without consent ☐ retention policy hook.
+- [ ] **S1B.T7 — MJ guide + tests.** Document the capture model; unit tests for timing + persistence +
+  alignment. <br>**Acceptance:** ☐ guide updated ☐ tests pass.
+**UX:** none (framework). **Tests:** Vitest + realtime smoke; alignment verified against a recorded sample.
+**Risks:** storage cost (~32 MB/hr at raw PCM — use a compressed codec); media-frame timestamp reliability
+varies by provider (OpenAI vs Gemini vs bridges) — validate per driver; consent/legal — gate hard (S16).
+
+---
+
 ### S2 — Config Domain + ConfigResolver  · Track B
 **Goal:** The four config entities with derivation, and a tested `ConfigResolver`.
 **Depends:** S0. **Exit:** entities CodeGen'd; resolver returns correct effective config for base/variant/instance
@@ -321,10 +363,12 @@ in DB; audio in MJStorage referenced by `FileID`.
   guide/persona brief/difficulty params/context). <br>**Acceptance:** ☐ deterministic from snapshot.
 - [ ] **S3.T4 — Realtime launch** — co-agent + `invoke-target-agent`, dynamic model from snapshot; store
   `AIAgentSession.ID` on the session. <br>**Acceptance:** ☐ live voice session ☐ model selection honored.
-- [ ] **S3.T5 — Capture wiring** — transcript persisted; live signal exposed (`OnTranscript`) for later S13. <br>**Acceptance:** ☐ transcript in DB.
-- [ ] **S3.T6 — Audio → MJStorage** — on close, `FileStorageEngine.UploadFile` → `MJ: Files` + `MJ: File
-  Entity Record Link` (EntityID=AssessmentSession, RecordID=session); store `AudioFileID`; playback via
-  `CreatePreAuthDownloadUrl`. <br>**Acceptance:** ☐ no blob in DB ☐ signed playback URL works.
+- [ ] **S3.T5 — Capture wiring** — consume MJ-core capture (**S1B**): per-turn transcript with speaker +
+  frame-level timestamps persisted; live signal exposed (`OnTranscript`) for later S13. **Depends on S1B.T1/T2.**
+  If S1B not yet landed, degrade to transcript-only (coarse timing) and backfill. <br>**Acceptance:** ☐ turns carry speaker+timing ☐ live signal available.
+- [ ] **S3.T6 — Audio → MJStorage** — link the recording produced by **S1B.T3** to the session (`MJ: Files` +
+  `MJ: File Entity Record Link`, EntityID=AssessmentSession; store `AudioFileID`); playback via
+  `CreatePreAuthDownloadUrl`. The app does **not** re-implement capture — it consumes S1B. **Depends on S1B.T3/T4.** <br>**Acceptance:** ☐ no blob in DB ☐ signed playback URL works ☐ timeline aligns to transcript.
 - [ ] **S3.T7 — Session lifecycle/status** state machine (Pending→Active→Completed→Evaluated/Failed) + janitor. <br>**Acceptance:** ☐ statuses transition correctly.
 - [ ] **S3.T8 — Tests** (mocked realtime) for start/snapshot/capture/close. <br>**Acceptance:** ☐ suite green.
 **UX:** none here (runtime). **Tests:** orchestration unit + manual realtime smoke. **Risks:** model-availability fallback — implement tolerant fallback per snapshot.
@@ -341,7 +385,8 @@ narrative/disposition + integrity; acoustic gating enforced + audited.
 - [ ] **S4.T2 — Migration: Assessment** (+ extended props; integrity & keyedOn JSON). <br>**Acceptance:** ☐ migrates ☐ CodeGen.
 - [ ] **S4.T3 — `EvalDriver.Evaluate`** — multimodal input (transcript + optional audioRef + tools + context +
   intake submission) → typed criterion scores by `AppliesTo`. <br>**Acceptance:** ☐ all criterion types scored ☐ intake scored when enabled.
-- [ ] **S4.T4 — Evidence extraction** — timestamped grounding segments (turn/audio). <br>**Acceptance:** ☐ segments map to transcript/audio.
+- [ ] **S4.T4 — Evidence extraction** — timestamped grounding segments (turn/audio), anchored to the
+  S1B per-turn timing + recording timeline. **Depends on S1B.T1/T4** for seekable accuracy. <br>**Acceptance:** ☐ segments map to transcript/audio with correct offsets.
 - [ ] **S4.T5 — Integrity sub-model (generic)** — verdict/confidence/evidence/summary; `AdjustedRecommendation`
   may only LOWER disposition, never raise a score. <br>**Acceptance:** ☐ adjustment never raises ☐ parity w/ DG-2.
 - [ ] **S4.T6 — Acoustic gating** — criterion may key on acoustic features only if `AcousticAllowed`; write
@@ -443,8 +488,9 @@ invite; voice + transcript + Media channel work; branding applied; mobile-tested
 ### S9 — Results & Evidence Review UX  · Track B · UX flagship
 **Goal:** A world-class review experience: scores, narrative, disposition, and **evidence playback synced to
 audio + transcript**, with integrity surfaced responsibly.
-**Depends:** S4 (Assessment), S3 (audio/transcript). **Exit:** a reviewer can read an Assessment, click any
-evidence segment to jump audio+transcript, see integrity with its caveats; meets §1.9.
+**Depends:** S4 (Assessment), S3 (audio/transcript), **S1B (per-turn timing + recording — required for
+click-to-seek)**. **Exit:** a reviewer can read an Assessment, click any evidence segment to jump
+audio+transcript, see integrity with its caveats; meets §1.9.
 
 - [ ] **S9.T1 — Assessment summary** — overall score, recommendation vs. adjusted, per-criterion breakdown with
   reasoning. <br>**Acceptance:** ☐ clear hierarchy ☐ adjusted-recommendation explained.
@@ -538,7 +584,8 @@ refused in Assessment.
 correct turn-taking.
 
 - [ ] **S15.T1 — Seat/Cast record layer** over AssessmentSession (occupant/role/persona/difficulty/precedence). <br>**Acceptance:** ☐ N seats modeled.
-- [ ] **S15.T2 — Bridge integration** — each agent seat = its own `AIAgentSession` joining a shared room. <br>**Acceptance:** ☐ ≥2 agents + 1 human in a room.
+- [ ] **S15.T2 — Bridge integration** — each agent seat = its own `AIAgentSession` joining a shared room;
+  per-turn speaker identity for multiple humans relies on **S1B.T2** diarization persistence. <br>**Acceptance:** ☐ ≥2 agents + 1 human in a room ☐ each human's turns correctly attributed.
 - [ ] **S15.T3 — Floor control** — consume MJ moderator; contribute role-aware hardening to MJ core **only if
   needed** (Track A). <br>**Acceptance:** ☐ no crosstalk in target cast sizes.
 - [ ] **S15.T4 — Human takeover** — coach drops into a seat mid-session. <br>**Acceptance:** ☐ takeover works.
@@ -583,11 +630,14 @@ P0(spin-out) ─> S0 ─┬─> S2 ─> S3 ─┬─> S4 ─┬─> S7(ATS) ─�
                     │            ├─> S5 ─┘     │              │                 │
                     │            └─> S6 ───────┘              │                 │
    (Track A, in MJ) S1(Media+shell) ───────────> S8(widget) ──┘
+                    S1B(session capture) ──> S3.T5/T6, S4.T4, S9, S15  (per-turn timing + speaker + audio)
                                                S8 ─> S9(review) feeds S7/S10/S11
 S16 (governance) spans S8..S17.   DG gates: DG-1→S1/S8 · DG-2/3→S4/S7 · DG-4→S4/S13 · DG-5→S5/S7
 ```
-**Critical path:** P0 → S0 → S2 → S3 → S4 → S7. **Parallelizable early:** S1 (MJ-core, can start during P0/S0),
-S6 (studio), S5 (intake).
+**Critical path:** P0 → S0 → S2 → S3 → S4 → S7, **with S1B (MJ-core capture) on the critical path for audio/
+timing-dependent work (S3.T6, S4 integrity+evidence, S9, S15).** **Parallelizable early:** S1 + **S1B**
+(MJ-core, start during P0/S0 — they're the long pole), S6 (studio), S5 (intake). **Fallback:** if S1B slips,
+S4/S7 can ship **transcript-only** eval first (no audio/integrity/seek), adding multimodal once S1B lands.
 
 ## 5. Risk Register (live — update as risks change)
 - [ ] **R0** New-repo creation permissions (`bizapps-praxis`) — confirm who can create it; escalate if blocked (P0).
@@ -596,7 +646,12 @@ S6 (studio), S5 (intake).
 - [ ] **R3** 3+ agent echo in multi-party (known MJ limitation) — keep casts small in S15; track MJ fix.
 - [ ] **R4** Eval parity drift vs. legacy ATS — S7.T4 harness with agreed tolerance.
 - [ ] **R5** Public MJ PR cadence for S1 — open early, keep additive.
-- [ ] **R6** Evidence-timestamp accuracy for S9 player — validate against S4.T4.
+- [ ] **R6** Evidence-timestamp accuracy for S9 player — validate against S4.T4 + S1B.T4 alignment.
+- [ ] **R7** **MJ realtime capture gap (verified):** no persisted audio, coarse DB-write timestamps, no
+  per-turn diarization. This is foundational for integrity (S4), evidence playback (S9), multimodal eval, and
+  multi-party (S15). **S1B is on the critical path** and must land before ATS can use multimodal/integrity
+  features (S7). Mitigation: start S1B early in Track A alongside S1; if it slips, ship transcript-only eval
+  first and add audio/integrity later. Per-provider frame-timestamp reliability is the key technical unknown.
 
 ## 6. Program Definition of Done
 - `bizapps-praxis` repo stood up; ATS + Voice running on Praxis (legacy EL-direct removed); ≥1 net-new vertical
