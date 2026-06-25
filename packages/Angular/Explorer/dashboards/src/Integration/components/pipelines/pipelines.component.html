@@ -279,7 +279,7 @@
                   <i class="fa-solid fa-spinner fa-spin"></i> Loading...
                 </div>
               } @else if (PreviewSourceRows.length === 0) {
-                <div class="ve-preview-empty">No source data available</div>
+                <mj-empty-state class="ve-preview-empty" Size="compact" Icon="fa-solid fa-table" Title="No source data available" />
               } @else {
                 <div class="ve-preview-table-wrap">
                   <table class="ve-preview-table">
@@ -318,7 +318,7 @@
                   <i class="fa-solid fa-spinner fa-spin"></i> Loading...
                 </div>
               } @else if (PreviewDestRows.length === 0) {
-                <div class="ve-preview-empty">No destination data available</div>
+                <mj-empty-state class="ve-preview-empty" Size="compact" Icon="fa-solid fa-table" Title="No destination data available" />
               } @else {
                 <div class="ve-preview-table-wrap">
                   <table class="ve-preview-table">
@@ -447,7 +447,7 @@
                             </div>
                           }
                           @if (FilteredEditorSourceFields.length === 0) {
-                            <div class="ve-field-empty">No source fields found</div>
+                            <mj-empty-state class="ve-field-empty" Size="compact" Icon="fa-solid fa-list" Title="No source fields found" />
                           }
                         </div>
 
@@ -500,7 +500,7 @@
                             </div>
                           }
                           @if (FilteredEditorDestFields.length === 0) {
-                            <div class="ve-field-empty">No destination fields found</div>
+                            <mj-empty-state class="ve-field-empty" Size="compact" Icon="fa-solid fa-list" Title="No destination fields found" />
                           }
                         </div>
                       </div>

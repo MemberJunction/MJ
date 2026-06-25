@@ -303,6 +303,8 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 12px;
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .ve-preview-loading i { margin-right: 6px; color: var(--mj-color-indigo-500); }
@@ -670,6 +672,8 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 13px;
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 /* ---------------------------------------------------------------------------
