@@ -641,8 +641,11 @@ const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
  * divergence and would otherwise warn 2–3 times for one config issue. The
  * set lives at module scope so it survives across both helpers' invocations
  * within the same process.
+ *
+ * Exported solely so tests can reset the dedup state between cases — production
+ * code never mutates this set directly.
  */
-const _warnedEnvPrecedencePairs = new Set<string>();
+export const _warnedEnvPrecedencePairs = new Set<string>();
 /**
  * Resolve a connection field from PG_*-prefixed env vars when `dbPlatform`
  * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
@@ -692,7 +695,7 @@ function _resolveConnEnv(pgName: string, ssName: string, fallback: string): stri
  * values always win. A `console.warn` records the precedence whenever a PG_*
  * env var and its DB_* counterpart are both set and differ.
  */
-function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<ConfigInfo>): void {
+export function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<ConfigInfo>): void {
   if (config.dbPlatform !== 'postgresql') return;
 
   const overrides: ReadonlyArray<{
@@ -731,6 +734,16 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   // the PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME / PG_PASSWORD env vars
   // take precedence over their DB_* / CODEGEN_DB_* counterparts so existing
   // PG-targeted .env files keep working without changes.
+  //
+  // KEEP IN SYNC: the same five PG_*/DB_*/CODEGEN_DB_* pairs are re-applied
+  // post-merge by `applyPlatformDependentEnvVars()` (below). When the user
+  // sets `dbPlatform: 'postgresql'` in `mj.config.cjs` (no env var),
+  // `_IS_PG_DEFAULT` is false here so the PG_* arg of `_resolveConnEnv` is
+  // ignored — `applyPlatformDependentEnvVars` runs after the user config
+  // is merged and re-applies the PG_* precedence. If you add a new
+  // PG_*/DB_* pair, update BOTH the `_resolveConnEnv(...)` call on the
+  // appropriate field below AND the `overrides` table in
+  // `applyPlatformDependentEnvVars`.
   dbPlatform: _DEFAULT_DB_PLATFORM,
   dbHost: _resolveConnEnv('PG_HOST', 'DB_HOST', 'localhost'),
   dbPort: parseInt(_resolveConnEnv('PG_PORT', 'DB_PORT', _IS_PG_DEFAULT ? '5432' : '1433'), 10),
