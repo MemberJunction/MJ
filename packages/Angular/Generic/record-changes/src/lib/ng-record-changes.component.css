@@ -146,49 +146,12 @@
 
 .rc-label-chip-items { white-space: nowrap; }
 
-/* ─── Empty State ──────────────────────────────────────────────── */
-.rc-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 32px;
-  text-align: center;
-  min-height: 400px;
-}
-
-.rc-empty-state-icon {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: var(--mj-bg-surface-sunken);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
-.rc-empty-state-icon i { font-size: 32px; color: var(--mj-text-disabled); }
-
-.rc-empty-state-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-secondary);
-  margin: 0 0 12px 0;
-}
-
-.rc-empty-state-description {
-  font-size: 14px;
-  color: var(--mj-text-muted);
-  line-height: 1.6;
-  max-width: 320px;
-  margin: 0 0 24px 0;
-}
-
+/* ─── Empty State (hint projected into <mj-empty-state> default slot) ─── */
 .rc-empty-state-hint {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  margin-top: var(--mj-space-4);
   padding: 8px 16px;
   background: var(--mj-bg-surface-sunken);
   border-radius: 20px;
@@ -333,42 +296,6 @@
 }
 
 .rc-clear-filters-link:hover { color: var(--mj-brand-primary-hover); }
-
-/* ─── No Results ───────────────────────────────────────────────── */
-.rc-no-results {
-  text-align: center;
-  padding: 48px 16px;
-  color: var(--mj-text-muted);
-}
-
-.rc-no-results i {
-  display: block;
-  font-size: 32px;
-  margin-bottom: 16px;
-  color: var(--mj-text-disabled);
-}
-
-.rc-no-results p { font-size: 14px; margin: 0 0 16px 0; }
-
-.rc-clear-filters-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 16px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  background: var(--mj-bg-surface);
-  color: var(--mj-text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.rc-clear-filters-btn:hover {
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-brand-primary);
-}
 
 /* ─── Timeline ─────────────────────────────────────────────────── */
 .rc-timeline {
