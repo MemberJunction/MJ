@@ -20,16 +20,16 @@
       {
         "fields": {
           "PromptID": "@parent:ID",
-          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
-          "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
           "Priority": 1
         },
         "primaryKey": {
           "ID": "53BF760D-E02A-4913-BF30-0384F5E3256D"
         },
         "sync": {
-          "lastModified": "2026-06-23T17:05:12.931Z",
-          "checksum": "ff404cea945d0ebb4e4d5b42db801ffc464d7f9e116dfa01c890abc2b27643ee"
+          "lastModified": "2026-06-25T20:30:34.040Z",
+          "checksum": "2510cca2e5bf39eb0543f3fc137eadbf630ab68bb7431de16723efaa5009f9f4"
         }
       }
     ]
