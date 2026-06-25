@@ -117,7 +117,7 @@ const TEARDOWN_SQL = "DELETE FROM [${mjSchema}].[Integration] WHERE ID = 'int-1'
 function ctxFor(platformKey: string, executeSQL = vi.fn(async () => [])): OrchestratorContext {
     return {
         ContextUser: {},
-        DatabaseProvider: { Dialect: { PlatformKey: platformKey }, ExecuteSQL: executeSQL },
+        DatabaseProvider: { Dialect: { PlatformKey: platformKey }, ExecuteSQL: executeSQL, BeginTransaction: vi.fn(async () => {}), CommitTransaction: vi.fn(async () => {}), RollbackTransaction: vi.fn(async () => {}) },
         DatabaseConfig: {},
         GitHubOptions: {},
         RepoRoot: '/tmp/test-repo',

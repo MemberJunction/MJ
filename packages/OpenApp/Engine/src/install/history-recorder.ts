@@ -111,13 +111,16 @@ function SetAppFields(
  * @param appId - The OpenApp record ID
  * @param updates - Fields to update
  */
-export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Record<string, unknown>, provider?: IMetadataProvider): Promise<void> {
+export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Partial<MJOpenAppEntity>, provider?: IMetadataProvider): Promise<void> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const entity = await md.GetEntityObject<MJOpenAppEntity>('MJ: Open Apps', contextUser);
   const loaded = await entity.InnerLoad(CompositeKey.FromID(appId));
   if (!loaded) {
     throw new Error(`Open App record not found: ${appId}`);
   }
+  // `updates` is a typed Partial<MJOpenAppEntity>, so call sites get compile-time field-name +
+  // value-type checking. The body applies it dynamically via Set() — the only way to write an
+  // arbitrary field subset onto a BaseEntity (you can't index typed accessors by a runtime key).
   for (const [field, value] of Object.entries(updates)) {
     entity.Set(field, value);
   }

@@ -1188,6 +1188,10 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 
   const mjSchema = context.MJCoreSchema ?? '__mj';
   context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
+  // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
+  // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
+  // files committed, some not) — which would orphan rows AND block a clean reinstall.
+  await context.DatabaseProvider.BeginTransaction();
   try {
     for (const file of files) {
       const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
@@ -1195,9 +1199,11 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
         await context.DatabaseProvider.ExecuteSQL(sql);
       }
     }
+    await context.DatabaseProvider.CommitTransaction();
   } catch (error: unknown) {
+    await context.DatabaseProvider.RollbackTransaction();
     const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}': ${message}` };
+    return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
   }
 
   context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
