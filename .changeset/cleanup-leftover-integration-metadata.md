@@ -1,5 +1,5 @@
 ---
-"@memberjunction/core": patch
+"@memberjunction/core": minor
 ---
 
 Remove leftover integration metadata folders that survived the connector-metadata removal (#2942). Connectors are now managed in the `MemberJunction/Integrations` repo, so MJ carries none of this:
