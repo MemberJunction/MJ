@@ -32,9 +32,8 @@
             <i class="fa-solid fa-spinner fa-spin"></i> Loading labels...
           </div>
         } @else if (RecordLabels.length === 0) {
-          <div class="rc-labels-empty">
-            No version labels for this record yet.
-          </div>
+          <mj-empty-state class="rc-labels-empty" Size="compact"
+            Icon="" Title="No version labels for this record yet." />
         } @else {
           <div class="rc-labels-list">
             @for (label of RecordLabels; track label.ID) {

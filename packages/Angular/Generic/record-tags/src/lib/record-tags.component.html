@@ -78,9 +78,8 @@
                         <mj-loading text="Finding related records..." size="small"></mj-loading>
                     </div>
                 } @else if (RelatedRecords.length === 0) {
-                    <div class="mj-related-empty">
-                        <p>No related records found via shared tags.</p>
-                    </div>
+                    <mj-empty-state class="mj-related-empty" Size="compact"
+                        Icon="" Title="No related records found via shared tags." />
                 } @else {
                     <div class="mj-related-list">
                         @for (related of RelatedRecords; track related.RecordID) {
