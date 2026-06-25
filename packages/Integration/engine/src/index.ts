@@ -42,6 +42,8 @@ export type {
   SearchResult,
   ListContext,
   ListResult,
+  SchemaPromotionResult,
+  PostSyncSchemaPromotionCallback,
 } from './types.js';
 
 // Error classification helpers
@@ -88,6 +90,7 @@ export { ConnectorFactory } from './ConnectorFactory.js';
 // Engines
 export { FieldMappingEngine } from './FieldMappingEngine.js';
 export { MatchEngine } from './MatchEngine.js';
+export { serializeKeyValue } from './KeySerialization.js';
 
 // Services
 export { WatermarkService } from './WatermarkService.js';
@@ -114,6 +117,11 @@ export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSch
 
 // ── Restored module exports dropped by the origin/next index.ts merge (union) ──
 export { computeContentHash, CONTENT_HASH_COLUMN } from './ContentHash.js';
+export { CUSTOM_OVERFLOW_COLUMN, computeUnmappedFields, hasUnmappedFields } from './CustomOverflow.js';
+export { planPromotions, inferColumnTypeFromSamples, buildOverflowStats, sanitizeColumnName } from './CustomColumnPromotion.js';
+export { discoverFromStream, pickPrimaryKeyFromStats } from './StreamingDiscovery.js';
+export type { StreamDiscoveryOptions, DiscoveredColumnStat, StreamDiscoveryResult, PkPickOptions, PkStatVerdict } from './StreamingDiscovery.js';
+export type { InferredColumnType, OverflowKeyStats, PromotionCandidate, PromotionPlanOptions } from './CustomColumnPromotion.js';
 export { partitionRecords, partitionRollupHash, diffPartitions, partitionKeyForIdentity } from './HashDiff.js';
 export type { PartitionDiff } from './HashDiff.js';
 export { mostRecentWinner, parseTimestamp } from './ConflictRecency.js';
@@ -128,3 +136,13 @@ export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrenc
 export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult } from './AdaptiveConcurrency.js';
 export type { FetchWarning } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
+export { decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
+export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
+
+// ── Auth helpers (shared OAuth2/token primitives for connectors) ──
+export { OAuth2TokenManager } from './auth-helpers/index.js';
+export type { OAuth2GrantType, OAuth2TokenRequest, OAuth2Token } from './auth-helpers/index.js';
+export { OAuth1aSigner, percentEncodeRFC3986 } from './auth-helpers/index.js';
+export type { OAuth1aSignRequest, OAuth1aSignatureMethod } from './auth-helpers/index.js';
+export { buildBasicAuthHeaderValue, buildBasicAuthHeader } from './auth-helpers/index.js';
+export type { BasicAuthRequest } from './auth-helpers/index.js';

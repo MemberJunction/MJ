@@ -54,6 +54,43 @@ function makeContext(
   };
 }
 
+/**
+ * Shrinks a channel's session-id wait (the {@link BaseRealtimeChannelClient.ResolveAgentSessionId}
+ * bounds) so the no-session / mint-race tests resolve fast instead of waiting the 8s default.
+ */
+function shrinkSessionWait(channel: RemoteBrowserChannel, timeoutMs = 80, intervalMs = 10): void {
+  const c = channel as unknown as { SessionIdWaitTimeoutMs: number; SessionIdWaitIntervalMs: number };
+  c.SessionIdWaitTimeoutMs = timeoutMs;
+  c.SessionIdWaitIntervalMs = intervalMs;
+}
+
+/**
+ * Builds a context whose `AgentSessionID` starts null and flips to `id` after `delayMs` — models the
+ * MINT RACE where the realtime model fires a tool the beat before `mintSession` binds the id. The
+ * getter (not a static field) is what {@link BaseRealtimeChannelClient.ResolveAgentSessionId} polls.
+ */
+function makeDelayedSessionContext(
+  log: CtxLog,
+  response: Record<string, JSONValue> | null,
+  id: string,
+  delayMs: number
+): RealtimeChannelContext {
+  let current: string | null = null;
+  setTimeout(() => { current = id; }, delayMs);
+  return {
+    AgentName: 'Sage',
+    SendContextNote: (text: string) => log.Notes.push(text),
+    RequestSave: () => undefined,
+    SetFocusMode: () => undefined,
+    SaveAsArtifact: async () => null,
+    get AgentSessionID() { return current; },
+    ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+      log.Calls.push({ Query: query, Variables: variables });
+      return response as T | null;
+    }
+  };
+}
+
 /** Parses a channel tool-result JSON string into a typed shape. */
 function parseResult(json: string): { success: boolean; currentUrl?: string; detail?: string; error?: string } {
   return JSON.parse(json) as { success: boolean; currentUrl?: string; detail?: string; error?: string };
@@ -206,11 +243,29 @@ describe('RemoteBrowserChannel — plugin contract + ApplyAgentTool round-trip',
 
   it('returns a failed result when no live session is available', async () => {
     channel.Initialize(makeContext(log, null, null));
+    shrinkSessionWait(channel); // null-forever session: don't wait the full 8s before failing
 
     const result = parseResult(await channel.ApplyAgentTool('browser_Back', '{}'));
     expect(result.success).toBe(false);
     expect(result.error).toContain('No live browser session');
     expect(log.Calls).toHaveLength(0);
+  });
+
+  it('WAITS for the session id (mint race) and then drives the action once it binds', async () => {
+    // Session id is null at invocation and flips live ~20ms later — the tool should wait, not fail.
+    channel.Initialize(makeDelayedSessionContext(
+      log,
+      { ExecuteRemoteBrowserAction: { Success: true, CurrentUrl: 'https://x', Detail: null } },
+      'session-late',
+      20
+    ));
+    shrinkSessionWait(channel, 500, 5);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_Back', '{}'));
+    expect(result.success).toBe(true);
+    expect(log.Calls).toHaveLength(1);
+    // The action carried the id that arrived AFTER the tool was invoked.
+    expect(log.Calls[0].Variables.agentSessionID).toBe('session-late');
   });
 
   it('maps a null server response to a failed result (best-effort transport)', async () => {
@@ -300,6 +355,7 @@ describe('RemoteBrowserChannel — visual interpreter (browser_DescribePage / br
 
   it('keeps the null-session guard for the interpreter tools (no server call)', async () => {
     channel.Initialize(makeContext(log, null, null));
+    shrinkSessionWait(channel); // null-forever session: fail fast instead of waiting the full 8s
 
     const result = parseResult(await channel.ApplyAgentTool('browser_DescribePage', '{}'));
     expect(result.success).toBe(false);
@@ -405,8 +461,11 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     log = { Notes: [], Calls: [] };
   });
 
-  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter. */
-  function makeSurface(): RemoteBrowserSurfaceComponent & { HumanInput: EventEmitter<RemoteBrowserHumanInputEvent> } {
+  /** Minimal surface double exposing the takeover wiring: Interactive flag + HumanInput emitter + FetchSelection. */
+  function makeSurface(): RemoteBrowserSurfaceComponent & {
+    HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+    FetchSelection: (() => Promise<string>) | null;
+  } {
     const surface = {
       Streaming: false,
       Interactive: false,
@@ -414,10 +473,15 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
       AudioMuted: false,
       HumanInput: new EventEmitter<RemoteBrowserHumanInputEvent>(),
       AudioMutedChange: new EventEmitter<boolean>(),
+      // BindSurface sets this to the channel's copy-out fetcher; captured so a test can call it.
+      FetchSelection: null as (() => Promise<string>) | null,
       RenderFrame() { /* unused here */ },
       SetCurrentUrl() { /* unused here */ }
     };
-    return surface as unknown as RemoteBrowserSurfaceComponent & { HumanInput: EventEmitter<RemoteBrowserHumanInputEvent> };
+    return surface as unknown as RemoteBrowserSurfaceComponent & {
+      HumanInput: EventEmitter<RemoteBrowserHumanInputEvent>;
+      FetchSelection: (() => Promise<string>) | null;
+    };
   }
 
   it('enables takeover by default on bind (Interactive = true)', () => {
@@ -506,6 +570,39 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     expect(relayed).toEqual(['pointer-down', 'pointer-up']);
   });
 
+  it('forwards a text (paste) HumanInput carrying the pasted text (paste-in)', () => {
+    channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    surface.HumanInput.emit({ kind: 'text', text: 'clipboard contents' });
+
+    const relayCall = log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'));
+    expect(relayCall?.Variables).toMatchObject({
+      agentSessionID: 'session-1', kind: 'text', text: 'clipboard contents', x: null, y: null, key: null
+    });
+  });
+
+  it('wires FetchSelection (copy-out) to the GetRemoteBrowserSelection query and returns its text', async () => {
+    channel.Initialize(makeContext(log, { GetRemoteBrowserSelection: { Text: 'remote selected text' } }));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    // BindSurface installs the copy-out fetcher; calling it should hit the selection query.
+    const text = await surface.FetchSelection?.();
+    expect(text).toBe('remote selected text');
+    const selCall = log.Calls.find(c => c.Query.includes('GetRemoteBrowserSelection'));
+    expect(selCall?.Variables).toMatchObject({ agentSessionID: 'session-1' });
+  });
+
+  it('FetchSelection returns "" on a null server response (best-effort copy-out)', async () => {
+    channel.Initialize(makeContext(log, null));
+    const surface = makeSurface();
+    channel.BindSurface(surface);
+
+    expect(await surface.FetchSelection?.()).toBe('');
+  });
+
   it('stops forwarding after UnbindSurface (subscription torn down)', () => {
     channel.Initialize(makeContext(log, { RelayRemoteBrowserHumanInput: true }));
     const surface = makeSurface();
@@ -515,6 +612,122 @@ describe('RemoteBrowserChannel — human takeover (relay surface input to the se
     surface.HumanInput.emit({ kind: 'pointer-move', x: 1, y: 2 });
 
     expect(log.Calls.find(c => c.Query.includes('RelayRemoteBrowserHumanInput'))).toBeUndefined();
+  });
+});
+
+describe('RemoteBrowserChannel — browser_AchieveGoal (async start + poll)', () => {
+  let channel: RemoteBrowserChannel;
+  let log: CtxLog;
+
+  beforeEach(() => {
+    channel = new RemoteBrowserChannel();
+    log = { Notes: [], Calls: [] };
+  });
+
+  /** Shrinks the goal poll cadence/deadline so tests don't wait the 2.5s/5min production bounds. */
+  function shrinkGoalPoll(c: RemoteBrowserChannel, intervalMs = 5, timeoutMs = 500): void {
+    const x = c as unknown as { GoalPollIntervalMs: number; GoalPollTimeoutMs: number };
+    x.GoalPollIntervalMs = intervalMs;
+    x.GoalPollTimeoutMs = timeoutMs;
+  }
+
+  /**
+   * Builds a context that answers the START mutation with a `Running` + GoalRunID, then answers each
+   * subsequent POLL query from `pollResults` in order (the last entry repeats if polled further).
+   * `startPayload`/poll entries are the inner payload objects (or null to simulate a dropped response).
+   */
+  function makeGoalContext(
+    startPayload: Record<string, JSONValue> | null,
+    pollResults: Array<Record<string, JSONValue> | null>
+  ): RealtimeChannelContext {
+    let pollIdx = 0;
+    return {
+      AgentName: 'Sage',
+      SendContextNote: (text: string) => log.Notes.push(text),
+      RequestSave: () => undefined,
+      SetFocusMode: () => undefined,
+      SaveAsArtifact: async () => null,
+      AgentSessionID: 'session-1',
+      ExecuteServerAction: async <T>(query: string, variables: Record<string, JSONValue>): Promise<T | null> => {
+        log.Calls.push({ Query: query, Variables: variables });
+        if (query.includes('ExecuteRemoteBrowserGoal')) {
+          return (startPayload ? { ExecuteRemoteBrowserGoal: startPayload } : null) as T | null;
+        }
+        if (query.includes('GetRemoteBrowserGoalResult')) {
+          const r = pollResults[Math.min(pollIdx, pollResults.length - 1)];
+          pollIdx++;
+          return (r ? { GetRemoteBrowserGoalResult: r } : null) as T | null;
+        }
+        return null;
+      }
+    };
+  }
+
+  it('starts the goal, polls past Running ticks, and returns the terminal success', async () => {
+    channel.Initialize(makeGoalContext(
+      { Success: true, GoalRunID: 'g1', Status: 'Running' },
+      [
+        { Status: 'Running', GoalRunID: 'g1' },
+        { Status: 'Running', GoalRunID: 'g1' },
+        { Success: true, GoalRunID: 'g1', Status: 'Completed', StepCount: 6, CurrentUrl: 'https://done', Detail: 'Goal done' }
+      ]
+    ));
+    shrinkGoalPoll(channel);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'open the dashboard' })));
+    expect(result.success).toBe(true);
+    expect(result.detail).toBe('Goal done');
+    // One start mutation + at least one poll that returned terminal.
+    expect(log.Calls.some(c => c.Query.includes('ExecuteRemoteBrowserGoal'))).toBe(true);
+    expect(log.Calls.filter(c => c.Query.includes('GetRemoteBrowserGoalResult')).length).toBeGreaterThanOrEqual(1);
+    // The start mutation carried the goal; polls carried the GoalRunID.
+    const startCall = log.Calls.find(c => c.Query.includes('ExecuteRemoteBrowserGoal'));
+    expect(startCall?.Variables).toMatchObject({ agentSessionID: 'session-1', goal: 'open the dashboard' });
+    const pollCall = log.Calls.find(c => c.Query.includes('GetRemoteBrowserGoalResult'));
+    expect(pollCall?.Variables).toMatchObject({ agentSessionID: 'session-1', goalRunID: 'g1' });
+  });
+
+  it('surfaces the terminal failure detail when the goal completes unsuccessfully', async () => {
+    channel.Initialize(makeGoalContext(
+      { Success: true, GoalRunID: 'g1', Status: 'Running' },
+      [{ Success: false, GoalRunID: 'g1', Status: 'Impossible', Detail: 'The page has no login form.' }]
+    ));
+    shrinkGoalPoll(channel);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'log in' })));
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('The page has no login form.');
+  });
+
+  it('fails fast when the goal could not be started (no response from the server)', async () => {
+    channel.Initialize(makeGoalContext(null, []));
+    shrinkGoalPoll(channel);
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'do a thing' })));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('could not be started');
+    // No poll attempted when the start failed.
+    expect(log.Calls.some(c => c.Query.includes('GetRemoteBrowserGoalResult'))).toBe(false);
+  });
+
+  it('reports "still running" when the goal never reaches a terminal status before the deadline', async () => {
+    channel.Initialize(makeGoalContext(
+      { Success: true, GoalRunID: 'g1', Status: 'Running' },
+      [{ Status: 'Running', GoalRunID: 'g1' }] // every poll stays Running
+    ));
+    shrinkGoalPoll(channel, 5, 30); // tiny deadline so the loop exits fast
+
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', JSON.stringify({ goal: 'browse forever' })));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('still be running');
+  });
+
+  it('requires a goal argument (no server call)', async () => {
+    channel.Initialize(makeGoalContext({ Success: true, GoalRunID: 'g1', Status: 'Running' }, []));
+    const result = parseResult(await channel.ApplyAgentTool('browser_AchieveGoal', '{}'));
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('goal');
+    expect(log.Calls).toHaveLength(0);
   });
 });
 

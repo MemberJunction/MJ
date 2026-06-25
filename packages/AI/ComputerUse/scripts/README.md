@@ -1,84 +1,81 @@
-# Computer Use Prompt Sync Script
+# Computer Use Prompt Build Scripts
 
 This directory contains build scripts for the ComputerUse package.
 
-## sync-prompts.mjs
+## generate-prompt-parts.mjs
 
-Automatically syncs prompt templates from MemberJunction metadata to the package source code.
+Generates the shared, single-source-of-truth prompt parts that both prompt
+layers consume.
 
-### Purpose
+### The two layers
 
-The ComputerUse package maintains default prompts for the controller and judge LLMs. These prompts are:
-1. **Defined as metadata** in `metadata/prompts/templates/computer-use/` (source of truth)
-2. **Copied to package source** in `packages/AI/ComputerUse/src/prompts/` (for MJ-independent distribution)
+The ComputerUse controller and judge prompts exist in two layers:
 
-This script ensures that changes to the metadata prompts are automatically reflected in the package code.
+1. **Layer 2 — metadata templates** (`metadata/prompts/templates/computer-use/`):
+   Nunjucks templates (`controller.template.md`, `judge.template.md`) consumed
+   by MJ's `AIPromptRunner`.
+2. **Layer 1 — standalone defaults** (`packages/AI/ComputerUse/src/prompts/`):
+   `default-controller.ts` / `default-judge.ts`, used by the MJ-independent
+   `ComputerUseEngine` / `LLMJudge` when no custom prompt is supplied.
 
-### How It Works
+### Single source of truth
 
-1. **Reads** the template files from metadata:
-   - `controller.template.md` → `default-controller.ts`
-   - `judge.template.md` → `default-judge.ts`
+The behavioral text that is **identical** between the two layers (the
+"## Available Actions" catalog, the controller "## Response Format" … "## Rules"
+block, and the judge "## Visual Context" … output contract) lives **once** as
+plain-markdown leaf partials under:
 
-2. **Converts** Nunjucks template syntax to simple placeholders:
-   - Removes `{% if %}` / `{% for %}` conditional blocks
-   - Replaces dynamic sections with `{{dynamicSections}}` placeholder
-   - Removes spaces from template variables: `{{ goal }}` → `{{goal}}`
-
-3. **Generates** TypeScript constant exports:
-   - Escapes backticks for template literals
-   - Adds proper JSDoc headers
-   - Exports as `DEFAULT_CONTROLLER_PROMPT` / `DEFAULT_JUDGE_PROMPT`
-
-### Template Syntax Differences
-
-**Metadata templates** (Nunjucks syntax for MJ's AIPromptRunner):
-```markdown
-{% if toolDefinitions and toolDefinitions.length > 0 %}
-## Available Tools
-{% for tool in toolDefinitions %}
-### {{ tool.Name }}
-{% endfor %}
-{% endif %}
+```
+metadata/prompts/templates/computer-use/_includes/
+├── controller-actions.md
+├── controller-response-format.md
+└── judge-core.md
 ```
 
-**Package templates** (simple placeholders for ComputerUseEngine):
-```markdown
-{{dynamicSections}}
-```
+- **Layer 2** pulls each partial in via the MetadataSync `{@include ./_includes/...}`
+  directive, which inlines the file content at `mj sync push` time (pure text
+  composition, no runtime dependency).
+- **Layer 1** consumes the same partials through this script, which reads them
+  and emits `src/prompts/prompt-parts.generated.ts` — each partial exported as a
+  `JSON.stringify`-escaped string const (`CONTROLLER_ACTIONS`,
+  `CONTROLLER_RESPONSE_FORMAT`, `JUDGE_CORE`). `default-controller.ts` /
+  `default-judge.ts` then compose those consts with their per-layer top section
+  (intro, goal, current state) and dynamic-section marker.
 
-The `{{dynamicSections}}` placeholder is filled programmatically at runtime by `ComputerUseEngine.buildDynamicSections()`, which generates the tools, credentials, feedback, and step history sections based on the current request context.
+Because both layers ultimately read the same partials, they cannot silently
+diverge. The drift-guard test (`src/__tests__/prompt-single-source.test.ts`)
+asserts this invariant.
 
-### When It Runs
+### When it runs
 
 The script runs automatically as a **prebuild** step:
 
 ```json
 {
   "scripts": {
-    "prebuild": "node scripts/sync-prompts.mjs",
+    "prebuild": "node scripts/generate-prompt-parts.mjs",
     "build": "tsc && tsc-alias -f"
   }
 }
 ```
 
-This ensures the prompts are always in sync before building.
-
-### Manual Execution
-
-You can also run the script manually:
+### Manual execution
 
 ```bash
 # From package directory
 npm run prebuild
 
 # Or directly
-node scripts/sync-prompts.mjs
+node scripts/generate-prompt-parts.mjs
 ```
 
-### Why This Architecture?
+### Editing prompt text
 
-- **Single Source of Truth**: Metadata files are the authoritative prompt definitions
-- **MJ Integration**: Layer 2 (MJComputerUseEngine) uses MJ prompt entities via AIPromptRunner
-- **Package Independence**: Layer 1 (ComputerUseEngine) includes default prompts for standalone use
-- **Automatic Sync**: Prebuild script ensures metadata changes propagate to package
+- To change shared text, edit the relevant `_includes/*.md` partial and re-run
+  `npm run prebuild`. Both layers update from the single source.
+- To change per-layer-only text (token spacing, the top intro/state section, or
+  the Nunjucks dynamic sections), edit the template (`controller.template.md` /
+  `judge.template.md`) for Layer 2 and the `default-*.ts` header const for
+  Layer 1.
+- **Never** hand-edit `src/prompts/prompt-parts.generated.ts` — it is
+  regenerated on every build.

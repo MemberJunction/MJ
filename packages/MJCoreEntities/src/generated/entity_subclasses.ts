@@ -2124,7 +2124,7 @@ export const MJAIAgentNoteSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     SourceConversationDetail: z.string().nullable().describe(`
         * * Field Name: SourceConversationDetail
-        * * Display Name: Source Conversation Detail
+        * * Display Name: Source Conversation Detail Name
         * * SQL Data Type: nvarchar(100)`),
     SourceAIAgentRun: z.string().nullable().describe(`
         * * Field Name: SourceAIAgentRun
@@ -15540,6 +15540,11 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RuntimeUXDriverClass: z.string().nullable().describe(`
+        * * Field Name: RuntimeUXDriverClass
+        * * Display Name: Runtime UX Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
         * * Display Name: Entity Action Name
@@ -18334,7 +18339,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Primary key`),
     IntegrationID: z.string().describe(`
         * * Field Name: IntegrationID
-        * * Display Name: Integration
+        * * Display Name: Integration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
         * * Description: Foreign key to the Integration that owns this object`),
@@ -18568,9 +18573,43 @@ export const MJIntegrationObjectSchema = z.object({
     *   * Declared
     *   * Discovered
         * * Description: Provenance of this IntegrationObject row: Declared (from static research/docs), Discovered (from runtime API introspection like Salesforce /describe), Custom (genuinely customer-created, e.g., HubSpot custom objects). Drives merge precedence in IntegrationSchemaSync.`),
+    SupportsCreate: z.boolean().describe(`
+        * * Field Name: SupportsCreate
+        * * Display Name: Supports Create
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports record creation in the external system (per-operation granularity beyond SupportsWrite). Drives whether the generic CreateRecord path is wired and whether the object is offered for write-back create.`),
+    SupportsUpdate: z.boolean().describe(`
+        * * Field Name: SupportsUpdate
+        * * Display Name: Supports Update
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports record updates in the external system (per-operation granularity beyond SupportsWrite).`),
+    SupportsDelete: z.boolean().describe(`
+        * * Field Name: SupportsDelete
+        * * Display Name: Supports Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object supports record deletion/tombstoning in the external system (per-operation granularity beyond SupportsWrite).`),
+    SyncStrategy: z.string().nullable().describe(`
+        * * Field Name: SyncStrategy
+        * * Display Name: Sync Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Declared incremental sync strategy for this object (e.g. WatermarkIncremental, ContentHash, FullSnapshot). Informs how the engine narrows subsequent syncs.`),
+    ContentHashApplicable: z.boolean().describe(`
+        * * Field Name: ContentHashApplicable
+        * * Display Name: Content Hash Applicable
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether per-record content hashing is meaningful for this object (false for append-only/event streams where every row is new). Controls whether the engine uses content-hash to skip unchanged-row writes.`),
+    StableOrderingKey: z.string().nullable().describe(`
+        * * Field Name: StableOrderingKey
+        * * Display Name: Stable Ordering Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -18747,6 +18786,11 @@ export const MJIntegrationSchema = z.object({
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Icon for the integration. Supports Font Awesome CSS classes, image URLs, or base64 data URIs.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Integration-level connector configuration JSON (e.g. out-of-scope object families, vendor-specific tuning). Free-form JSON the connector reads at runtime.`),
     CredentialType: z.string().nullable().describe(`
         * * Field Name: CredentialType
         * * Display Name: Credential Type Name
@@ -21108,6 +21152,300 @@ export const MJPermissionDomainSchema = z.object({
 export type MJPermissionDomainEntityType = z.infer<typeof MJPermissionDomainSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Process Run Details
+ */
+export const MJProcessRunDetailSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ProcessRunID: z.string().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: Foreign key to the parent Process Run`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity of the processed record. Stored (not inherited) because a single run may span entities for ad-hoc / engine-driven runs.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the processed record, stored as text to remain composite-key safe`),
+    Status: z.union([z.literal('Failed'), z.literal('Pending'), z.literal('Skipped'), z.literal('Succeeded')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Pending
+    *   * Skipped
+    *   * Succeeded
+        * * Description: Per-record status: Pending, Succeeded, Failed, or Skipped`),
+    StartedAt: z.date().nullable().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing of this record started`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When processing of this record completed`),
+    DurationMs: z.number().nullable().describe(`
+        * * Field Name: DurationMs
+        * * Display Name: Duration (ms)
+        * * SQL Data Type: int
+        * * Description: Processing duration for this record in milliseconds`),
+    AttemptCount: z.number().describe(`
+        * * Field Name: AttemptCount
+        * * Display Name: Attempt Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of processing attempts for this record (supports retry)`),
+    ResultPayload: z.string().nullable().describe(`
+        * * Field Name: ResultPayload
+        * * Display Name: Result Payload
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Structured output payload (JSON) produced for this record`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Per-record error message when Status=Failed`),
+    ActionExecutionLogID: z.string().nullable().describe(`
+        * * Field Name: ActionExecutionLogID
+        * * Display Name: Action Execution Log ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Action Execution Logs (vwActionExecutionLogs.ID)
+        * * Description: Foreign key to the Action Execution Log for deep tracing, when the work was an Action`),
+    AIAgentRunID: z.string().nullable().describe(`
+        * * Field Name: AIAgentRunID
+        * * Display Name: AI Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: Foreign key to the AI Agent Run for deep tracing, when the work was an Agent`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    ActionExecutionLog: z.string().nullable().describe(`
+        * * Field Name: ActionExecutionLog
+        * * Display Name: Action Execution Log
+        * * SQL Data Type: nvarchar(425)`),
+    AIAgentRun: z.string().nullable().describe(`
+        * * Field Name: AIAgentRun
+        * * Display Name: AI Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJProcessRunDetailEntityType = z.infer<typeof MJProcessRunDetailSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Process Runs
+ */
+export const MJProcessRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RecordProcessID: z.string().nullable().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: Foreign key to the Record Process that spawned this run; NULL for ad-hoc / engine-driven runs not tied to a saved definition`),
+    EntityID: z.string().nullable().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity processed by this run, when the run is entity-scoped`),
+    TriggeredBy: z.union([z.literal('Manual'), z.literal('OnChange'), z.literal('OnDemand'), z.literal('Schedule')]).describe(`
+        * * Field Name: TriggeredBy
+        * * Display Name: Triggered By
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manual
+    *   * OnChange
+    *   * OnDemand
+    *   * Schedule
+        * * Description: What triggered this run: OnChange, Schedule, OnDemand, or Manual`),
+    SourceType: z.union([z.literal('Array'), z.literal('Filter'), z.literal('Keyset'), z.literal('List'), z.literal('SingleRecord'), z.literal('View')]).describe(`
+        * * Field Name: SourceType
+        * * Display Name: Source Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Array
+    *   * Filter
+    *   * Keyset
+    *   * List
+    *   * SingleRecord
+    *   * View
+        * * Description: The kind of record-set source resolved for this run: View, List, Filter, Array, Keyset, or SingleRecord`),
+    SourceID: z.string().nullable().describe(`
+        * * Field Name: SourceID
+        * * Display Name: Source ID
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Polymorphic source identifier (e.g., ViewID or ListID) when applicable; no FK because it spans entities`),
+    SourceFilter: z.string().nullable().describe(`
+        * * Field Name: SourceFilter
+        * * Display Name: Source Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Resolved filter snapshot used to materialize the record set for this run`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: Foreign key to the Scheduled Job Run that launched this run, when scheduler-launched`),
+    Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Paused'), z.literal('Pending'), z.literal('Running')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
+    *   * Paused
+    *   * Pending
+    *   * Running
+        * * Description: Run status: Pending, Running, Paused, Completed, Failed, or Cancelled`),
+    StartTime: z.date().nullable().describe(`
+        * * Field Name: StartTime
+        * * Display Name: Start Time
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the run started`),
+    EndTime: z.date().nullable().describe(`
+        * * Field Name: EndTime
+        * * Display Name: End Time
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the run ended`),
+    TotalItemCount: z.number().nullable().describe(`
+        * * Field Name: TotalItemCount
+        * * Display Name: Total Item Count
+        * * SQL Data Type: int
+        * * Description: Estimated or known total number of records to process`),
+    ProcessedItems: z.number().describe(`
+        * * Field Name: ProcessedItems
+        * * Display Name: Processed Items
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records processed so far`),
+    SuccessCount: z.number().describe(`
+        * * Field Name: SuccessCount
+        * * Display Name: Success Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records processed successfully`),
+    ErrorCount: z.number().describe(`
+        * * Field Name: ErrorCount
+        * * Display Name: Error Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records that failed processing`),
+    SkippedCount: z.number().describe(`
+        * * Field Name: SkippedCount
+        * * Display Name: Skipped Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Count of records skipped (e.g., unchanged per watermark)`),
+    LastProcessedOffset: z.number().nullable().describe(`
+        * * Field Name: LastProcessedOffset
+        * * Display Name: Last Processed Offset
+        * * SQL Data Type: int
+        * * Description: Offset-based resume cursor (StartRow) for sources that paginate by offset`),
+    LastProcessedKey: z.string().nullable().describe(`
+        * * Field Name: LastProcessedKey
+        * * Display Name: Last Processed Key
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Keyset-based resume cursor (AfterKey) for sources that paginate by seek`),
+    BatchSize: z.number().nullable().describe(`
+        * * Field Name: BatchSize
+        * * Display Name: Batch Size
+        * * SQL Data Type: int
+        * * Description: Effective batch size for this run`),
+    CancellationRequested: z.boolean().describe(`
+        * * Field Name: CancellationRequested
+        * * Display Name: Cancellation Requested
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Pause/cancel handshake flag honored by the processor between batches`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the effective configuration for this run`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Run-level error message when Status=Failed`),
+    StartedByUserID: z.string().nullable().describe(`
+        * * Field Name: StartedByUserID
+        * * Display Name: Started By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the user who started the run`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    DryRun: z.boolean().describe(`
+        * * Field Name: DryRun
+        * * Display Name: Is Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`),
+    RecordProcess: z.string().nullable().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    ScheduledJobRun: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRun
+        * * Display Name: Scheduled Job Run Name
+        * * SQL Data Type: nvarchar(200)`),
+    StartedByUser: z.string().nullable().describe(`
+        * * Field Name: StartedByUser
+        * * Display Name: Started By User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJProcessRunEntityType = z.infer<typeof MJProcessRunSchema>;
+
+/**
  * zod schema definition for the entity MJ: Projects
  */
 export const MJProjectSchema = z.object({
@@ -22869,6 +23207,578 @@ export const MJRecordMergeLogSchema = z.object({
 });
 
 export type MJRecordMergeLogEntityType = z.infer<typeof MJRecordMergeLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Process Categories
+ */
+export const MJRecordProcessCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the category`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what belongs in this category`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+        * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type MJRecordProcessCategoryEntityType = z.infer<typeof MJRecordProcessCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Process Watermarks
+ */
+export const MJRecordProcessWatermarkSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: Foreign key to the Record Process this watermark belongs to`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the entity of the watermarked record`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key of the watermarked record, stored as text to remain composite-key safe`),
+    Hash: z.string().describe(`
+        * * Field Name: Hash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(128)
+        * * Description: Content hash of the record as of the last time it was processed by this Record Process`),
+    LastProcessedAt: z.date().describe(`
+        * * Field Name: LastProcessedAt
+        * * Display Name: Last Processed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When this record was last processed by this Record Process`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RecordProcess: z.string().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJRecordProcessWatermarkEntityType = z.infer<typeof MJRecordProcessWatermarkSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Record Processes
+ */
+export const MJRecordProcessSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name of the process definition (e.g., "Weekly Customer Health Summary")`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what this process does`),
+    CategoryID: z.string().nullable().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+        * * Description: Optional hierarchical category for organizing this process in the UI`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to the target entity whose records this process operates on`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Draft')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Draft
+        * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer')]).describe(`
+        * * Field Name: WorkType
+        * * Display Name: Work Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * FieldRules
+    *   * Infer
+        * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
+    ActionID: z.string().nullable().describe(`
+        * * Field Name: ActionID
+        * * Display Name: Action
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+        * * Description: Foreign key to the Action to run, when WorkType=Action`),
+    AgentID: z.string().nullable().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: Foreign key to the AI Agent to run, when WorkType=Agent`),
+    PromptID: z.string().nullable().describe(`
+        * * Field Name: PromptID
+        * * Display Name: Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.`),
+    ScopeType: z.union([z.literal('Filter'), z.literal('List'), z.literal('SingleRecord'), z.literal('View')]).describe(`
+        * * Field Name: ScopeType
+        * * Display Name: Scope Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Filter
+    *   * List
+    *   * SingleRecord
+    *   * View
+        * * Description: How the record set is scoped for the Schedule and On-Demand triggers: SingleRecord, View, List, or Filter. The On-Change trigger is always single-record and ignores this.`),
+    ScopeViewID: z.string().nullable().describe(`
+        * * Field Name: ScopeViewID
+        * * Display Name: Scope View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+        * * Description: Foreign key to the User View defining the scope, when ScopeType=View`),
+    ScopeListID: z.string().nullable().describe(`
+        * * Field Name: ScopeListID
+        * * Display Name: Scope List
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+        * * Description: Foreign key to the List defining the scope, when ScopeType=List`),
+    ScopeFilter: z.string().nullable().describe(`
+        * * Field Name: ScopeFilter
+        * * Display Name: Scope Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Ad-hoc WHERE clause used to resolve the record set, when ScopeType=Filter`),
+    OnChangeEnabled: z.boolean().describe(`
+        * * Field Name: OnChangeEnabled
+        * * Display Name: On-Change Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the process runs per-record on save via an owned Entity Action`),
+    OnChangeInvocationType: z.union([z.literal('AfterCreate'), z.literal('AfterDelete'), z.literal('AfterUpdate'), z.literal('Validate')]).nullable().describe(`
+        * * Field Name: OnChangeInvocationType
+        * * Display Name: On-Change Invocation Type
+        * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AfterCreate
+    *   * AfterDelete
+    *   * AfterUpdate
+    *   * Validate
+        * * Description: Which save event fires the on-change trigger: AfterCreate, AfterUpdate, AfterDelete, or Validate`),
+    OnChangeFilter: z.string().nullable().describe(`
+        * * Field Name: OnChangeFilter
+        * * Display Name: On-Change Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Gating expression evaluated against the changed record (with changed-fields context) that compiles into the owned Entity Action Filter; only when it passes does the on-change trigger fire`),
+    ScheduleEnabled: z.boolean().describe(`
+        * * Field Name: ScheduleEnabled
+        * * Display Name: Schedule Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the process runs on a cron schedule via an owned Scheduled Job`),
+    CronExpression: z.string().nullable().describe(`
+        * * Field Name: CronExpression
+        * * Display Name: Cron Expression
+        * * SQL Data Type: nvarchar(120)
+        * * Description: Cron expression for the schedule trigger, when ScheduleEnabled=1`),
+    Timezone: z.string().nullable().describe(`
+        * * Field Name: Timezone
+        * * Display Name: Timezone
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: UTC
+        * * Description: IANA timezone for evaluating the cron expression (default UTC)`),
+    OnDemandEnabled: z.boolean().describe(`
+        * * Field Name: OnDemandEnabled
+        * * Display Name: On-Demand Enabled
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the process can be run on demand (button / resolver)`),
+    InputMapping: z.string().nullable().describe(`
+        * * Field Name: InputMapping
+        * * Display Name: Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON mapping describing how a record maps to the work inputs (optionally including an EntityDocumentID for render-to-text)`),
+    OutputMapping: z.string().nullable().describe(`
+        * * Field Name: OutputMapping
+        * * Display Name: Output Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON mapping describing how the structured output payload writes back (to fields, a child record, or tags)`),
+    SkipUnchanged: z.boolean().describe(`
+        * * Field Name: SkipUnchanged
+        * * Display Name: Skip Unchanged
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, records whose watermark indicates no change since the last run are skipped`),
+    WatermarkStrategy: z.union([z.literal('Checksum'), z.literal('None'), z.literal('UpdatedAt')]).nullable().describe(`
+        * * Field Name: WatermarkStrategy
+        * * Display Name: Watermark Strategy
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Checksum
+    *   * None
+    *   * UpdatedAt
+        * * Description: How unchanged records are detected for SkipUnchanged: Checksum (per-record content hash, stored in RecordProcessWatermark), UpdatedAt (compares __mj_UpdatedAt, stores nothing), or None`),
+    BatchSize: z.number().nullable().describe(`
+        * * Field Name: BatchSize
+        * * Display Name: Batch Size
+        * * SQL Data Type: int
+        * * Default Value: 100
+        * * Description: Number of records processed per batch (default 100)`),
+    MaxConcurrency: z.number().nullable().describe(`
+        * * Field Name: MaxConcurrency
+        * * Display Name: Max Concurrency
+        * * SQL Data Type: int
+        * * Default Value: 1
+        * * Description: Maximum number of records processed concurrently within a batch (default 1)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(255)`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    Action: z.string().nullable().describe(`
+        * * Field Name: Action
+        * * Display Name: Action Name
+        * * SQL Data Type: nvarchar(425)`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    Prompt: z.string().nullable().describe(`
+        * * Field Name: Prompt
+        * * Display Name: Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+    ScopeView: z.string().nullable().describe(`
+        * * Field Name: ScopeView
+        * * Display Name: Scope View Name
+        * * SQL Data Type: nvarchar(100)`),
+    ScopeList: z.string().nullable().describe(`
+        * * Field Name: ScopeList
+        * * Display Name: Scope List Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRecordProcessEntityType = z.infer<typeof MJRecordProcessSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Remote Operation Categories
+ */
+export const MJRemoteOperationCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Display name of the category`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of what belongs in this category`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+        * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type MJRemoteOperationCategoryEntityType = z.infer<typeof MJRemoteOperationCategorySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Remote Operations
+ */
+export const MJRemoteOperationSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable name of the operation`),
+    OperationKey: z.string().describe(`
+        * * Field Name: OperationKey
+        * * Display Name: Operation Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Stable, unique registry key and wire token used to dispatch the operation (e.g., "RecordProcess.RunNow"). Namespaced by convention.`),
+    CategoryID: z.string().nullable().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+        * * Description: Optional hierarchical category for organizing this operation in the UI`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human description of the operation; also the seed for AI-generated implementation code when GenerationType=AI`),
+    InputTypeName: z.string().nullable().describe(`
+        * * Field Name: InputTypeName
+        * * Display Name: Input Type Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript type name for the operation input (emitted by CodeGen as the TInput interface)`),
+    InputTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: InputTypeDefinition
+        * * Display Name: Input Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)`),
+    InputTypeIsArray: z.boolean().describe(`
+        * * Field Name: InputTypeIsArray
+        * * Display Name: Input Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the input type is emitted as an array (TInput[])`),
+    OutputTypeName: z.string().nullable().describe(`
+        * * Field Name: OutputTypeName
+        * * Display Name: Output Type Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript type name for the operation output (emitted by CodeGen as the TOutput interface)`),
+    OutputTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: OutputTypeDefinition
+        * * Display Name: Output Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript interface/type source defining the output shape`),
+    OutputTypeIsArray: z.boolean().describe(`
+        * * Field Name: OutputTypeIsArray
+        * * Display Name: Output Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the output type is emitted as an array (TOutput[])`),
+    ExecutionMode: z.union([z.literal('LongRunning'), z.literal('Sync')]).describe(`
+        * * Field Name: ExecutionMode
+        * * Display Name: Execution Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Sync
+    * * Value List Type: List
+    * * Possible Values 
+    *   * LongRunning
+    *   * Sync
+        * * Description: Sync (request/response) or LongRunning (returns a handle; supports detached and attached consumption)`),
+    RequiredScope: z.string().nullable().describe(`
+        * * Field Name: RequiredScope
+        * * Display Name: Required Scope
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional API-key scope string (e.g., recordprocess:execute) enforced for API-key/MCP callers; NULL means no scope gate (interactive users are still bounded by their entity permissions)`),
+    RequiresSystemUser: z.boolean().describe(`
+        * * Field Name: RequiresSystemUser
+        * * Display Name: Requires System User
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, only the system user may invoke this operation`),
+    GenerationType: z.union([z.literal('AI'), z.literal('Default'), z.literal('Manual')]).describe(`
+        * * Field Name: GenerationType
+        * * Display Name: Generation Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI
+    *   * Default
+    *   * Manual
+        * * Description: How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)`),
+    Code: z.string().nullable().describe(`
+        * * Field Name: Code
+        * * Display Name: Code
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes`),
+    CodeApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: CodeApprovalStatus
+        * * Display Name: Code Approval Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+        * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.`),
+    CodeApprovedByUserID: z.string().nullable().describe(`
+        * * Field Name: CodeApprovedByUserID
+        * * Display Name: Code Approved By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Foreign key to the user who approved the generated code`),
+    CodeApprovedAt: z.date().nullable().describe(`
+        * * Field Name: CodeApprovedAt
+        * * Display Name: Code Approved At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the generated code was approved`),
+    ContractFingerprint: z.string().nullable().describe(`
+        * * Field Name: ContractFingerprint
+        * * Display Name: Contract Fingerprint
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Fingerprint of the input/output contract; carried in the wire envelope so the server can reject a stale client loudly instead of mis-deserializing`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+        * * Description: Lifecycle status: Active (routable), Disabled, or Pending. Only Active operations can be invoked.`),
+    CacheTTLSeconds: z.number().nullable().describe(`
+        * * Field Name: CacheTTLSeconds
+        * * Display Name: Cache TTL (Seconds)
+        * * SQL Data Type: int
+        * * Description: Optional result cache TTL in seconds (NULL = no caching)`),
+    TimeoutMS: z.number().nullable().describe(`
+        * * Field Name: TimeoutMS
+        * * Display Name: Timeout (MS)
+        * * SQL Data Type: int
+        * * Description: Optional execution timeout in milliseconds`),
+    MaxConcurrency: z.number().nullable().describe(`
+        * * Field Name: MaxConcurrency
+        * * Display Name: Max Concurrency
+        * * SQL Data Type: int
+        * * Description: Optional cap on concurrent executions of this operation`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    CodeLocked: z.boolean().describe(`
+        * * Field Name: CodeLocked
+        * * Display Name: Code Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`),
+    CodeComments: z.string().nullable().describe(`
+        * * Field Name: CodeComments
+        * * Display Name: Code Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`),
+    Libraries: z.any().nullable().describe(`
+        * * Field Name: Libraries
+        * * Display Name: Libraries
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+        * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(255)`),
+    CodeApprovedByUser: z.string().nullable().describe(`
+        * * Field Name: CodeApprovedByUser
+        * * Display Name: Code Approved By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRemoteOperationEntityType = z.infer<typeof MJRemoteOperationSchema>;
 
 /**
  * zod schema definition for the entity MJ: Report Categories
@@ -34853,7 +35763,7 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
 
     /**
     * * Field Name: SourceConversationDetail
-    * * Display Name: Source Conversation Detail
+    * * Display Name: Source Conversation Detail Name
     * * SQL Data Type: nvarchar(100)
     */
     get SourceConversationDetail(): string | null {
@@ -70273,6 +71183,19 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     }
 
     /**
+    * * Field Name: RuntimeUXDriverClass
+    * * Display Name: Runtime UX Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.
+    */
+    get RuntimeUXDriverClass(): string | null {
+        return this.Get('RuntimeUXDriverClass');
+    }
+    set RuntimeUXDriverClass(value: string | null) {
+        this.Set('RuntimeUXDriverClass', value);
+    }
+
+    /**
     * * Field Name: EntityAction
     * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
@@ -71448,6 +72371,41 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * MJ: Entity Documents - Delete method override to wrap in transaction since CascadeDeletes is true.
+    * Wrapping in a transaction ensures that all cascade delete operations are handled atomically.
+    * @public
+    * @method
+    * @override
+    * @memberof MJEntityDocumentEntity
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    */
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
+            // For database providers, use the transaction methods directly
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
+            
+            try {
+                await provider.BeginTransaction();
+                const result = await super.Delete(options);
+                
+                if (result) {
+                    await provider.CommitTransaction();
+                    return true;
+                } else {
+                    await provider.RollbackTransaction();
+                    return false;
+                }
+            } catch (error) {
+                await provider.RollbackTransaction();
+                throw error;
+            }
+        } else {
+            // For network providers, cascading deletes are handled server-side
+            return super.Delete(options);
+        }
     }
 
     /**
@@ -77338,7 +78296,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: IntegrationID
-    * * Display Name: Integration
+    * * Display Name: Integration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Integrations (vwIntegrations.ID)
     * * Description: Foreign key to the Integration that owns this object
@@ -77855,8 +78813,90 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     }
 
     /**
+    * * Field Name: SupportsCreate
+    * * Display Name: Supports Create
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports record creation in the external system (per-operation granularity beyond SupportsWrite). Drives whether the generic CreateRecord path is wired and whether the object is offered for write-back create.
+    */
+    get SupportsCreate(): boolean {
+        return this.Get('SupportsCreate');
+    }
+    set SupportsCreate(value: boolean) {
+        this.Set('SupportsCreate', value);
+    }
+
+    /**
+    * * Field Name: SupportsUpdate
+    * * Display Name: Supports Update
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports record updates in the external system (per-operation granularity beyond SupportsWrite).
+    */
+    get SupportsUpdate(): boolean {
+        return this.Get('SupportsUpdate');
+    }
+    set SupportsUpdate(value: boolean) {
+        this.Set('SupportsUpdate', value);
+    }
+
+    /**
+    * * Field Name: SupportsDelete
+    * * Display Name: Supports Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object supports record deletion/tombstoning in the external system (per-operation granularity beyond SupportsWrite).
+    */
+    get SupportsDelete(): boolean {
+        return this.Get('SupportsDelete');
+    }
+    set SupportsDelete(value: boolean) {
+        this.Set('SupportsDelete', value);
+    }
+
+    /**
+    * * Field Name: SyncStrategy
+    * * Display Name: Sync Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Declared incremental sync strategy for this object (e.g. WatermarkIncremental, ContentHash, FullSnapshot). Informs how the engine narrows subsequent syncs.
+    */
+    get SyncStrategy(): string | null {
+        return this.Get('SyncStrategy');
+    }
+    set SyncStrategy(value: string | null) {
+        this.Set('SyncStrategy', value);
+    }
+
+    /**
+    * * Field Name: ContentHashApplicable
+    * * Display Name: Content Hash Applicable
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether per-record content hashing is meaningful for this object (false for append-only/event streams where every row is new). Controls whether the engine uses content-hash to skip unchanged-row writes.
+    */
+    get ContentHashApplicable(): boolean {
+        return this.Get('ContentHashApplicable');
+    }
+    set ContentHashApplicable(value: boolean) {
+        this.Set('ContentHashApplicable', value);
+    }
+
+    /**
+    * * Field Name: StableOrderingKey
+    * * Display Name: Stable Ordering Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.
+    */
+    get StableOrderingKey(): string | null {
+        return this.Get('StableOrderingKey');
+    }
+    set StableOrderingKey(value: string | null) {
+        this.Set('StableOrderingKey', value);
+    }
+
+    /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -78321,6 +79361,19 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
     }
     set Icon(value: string | null) {
         this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Integration-level connector configuration JSON (e.g. out-of-scope object families, vendor-specific tuning). Free-form JSON the connector reads at runtime.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
     }
 
     /**
@@ -84467,6 +85520,699 @@ export class MJPermissionDomainEntity extends BaseEntity<MJPermissionDomainEntit
 
 
 /**
+ * MJ: Process Run Details - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ProcessRunDetail
+ * * Base View: vwProcessRunDetails
+ * * @description Per-record result within a Process Run: powers audit, resume (skip already-done records), and the run-viewer UX. One row per processed record. EXAMPLE: customer CUST-00417 -> Succeeded with ResultPayload {"satisfaction":"High","sentiment":0.82} and a link to its AI Agent Run; customer CUST-00418 -> Failed with ErrorMessage "Model timeout".
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Process Run Details')
+export class MJProcessRunDetailEntity extends BaseEntity<MJProcessRunDetailEntityType> {
+    /**
+    * Loads the MJ: Process Run Details record from the database
+    * @param ID: string - primary key value to load the MJ: Process Run Details record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJProcessRunDetailEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: Foreign key to the parent Process Run
+    */
+    get ProcessRunID(): string {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity of the processed record. Stored (not inherited) because a single run may span entities for ad-hoc / engine-driven runs.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the processed record, stored as text to remain composite-key safe
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * Pending
+    *   * Skipped
+    *   * Succeeded
+    * * Description: Per-record status: Pending, Succeeded, Failed, or Skipped
+    */
+    get Status(): 'Failed' | 'Pending' | 'Skipped' | 'Succeeded' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Failed' | 'Pending' | 'Skipped' | 'Succeeded') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing of this record started
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When processing of this record completed
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: DurationMs
+    * * Display Name: Duration (ms)
+    * * SQL Data Type: int
+    * * Description: Processing duration for this record in milliseconds
+    */
+    get DurationMs(): number | null {
+        return this.Get('DurationMs');
+    }
+    set DurationMs(value: number | null) {
+        this.Set('DurationMs', value);
+    }
+
+    /**
+    * * Field Name: AttemptCount
+    * * Display Name: Attempt Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of processing attempts for this record (supports retry)
+    */
+    get AttemptCount(): number {
+        return this.Get('AttemptCount');
+    }
+    set AttemptCount(value: number) {
+        this.Set('AttemptCount', value);
+    }
+
+    /**
+    * * Field Name: ResultPayload
+    * * Display Name: Result Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured output payload (JSON) produced for this record
+    */
+    get ResultPayload(): string | null {
+        return this.Get('ResultPayload');
+    }
+    set ResultPayload(value: string | null) {
+        this.Set('ResultPayload', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Per-record error message when Status=Failed
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: ActionExecutionLogID
+    * * Display Name: Action Execution Log ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Action Execution Logs (vwActionExecutionLogs.ID)
+    * * Description: Foreign key to the Action Execution Log for deep tracing, when the work was an Action
+    */
+    get ActionExecutionLogID(): string | null {
+        return this.Get('ActionExecutionLogID');
+    }
+    set ActionExecutionLogID(value: string | null) {
+        this.Set('ActionExecutionLogID', value);
+    }
+
+    /**
+    * * Field Name: AIAgentRunID
+    * * Display Name: AI Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Foreign key to the AI Agent Run for deep tracing, when the work was an Agent
+    */
+    get AIAgentRunID(): string | null {
+        return this.Get('AIAgentRunID');
+    }
+    set AIAgentRunID(value: string | null) {
+        this.Set('AIAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: ActionExecutionLog
+    * * Display Name: Action Execution Log
+    * * SQL Data Type: nvarchar(425)
+    */
+    get ActionExecutionLog(): string | null {
+        return this.Get('ActionExecutionLog');
+    }
+
+    /**
+    * * Field Name: AIAgentRun
+    * * Display Name: AI Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgentRun(): string | null {
+        return this.Get('AIAgentRun');
+    }
+}
+
+
+/**
+ * MJ: Process Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ProcessRun
+ * * Base View: vwProcessRuns
+ * * @description Source-agnostic header for one execution of any set-processing job. Deliberately generic: a Record Process run sets RecordProcessID, but legacy/engine-driven jobs (e.g., a geocoding sweep or vector sync) keep their own source tables and still record a run here with RecordProcessID = NULL, giving every batch a uniform audit + resume trail. EXAMPLE: the Saturday 2am run of "Weekly Customer Health Summary" over 1,284 active customers (RecordProcessID set, TriggeredBy=Schedule); or a nightly geocoding sweep (RecordProcessID NULL).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Process Runs')
+export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
+    /**
+    * Loads the MJ: Process Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Process Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJProcessRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: Foreign key to the Record Process that spawned this run; NULL for ad-hoc / engine-driven runs not tied to a saved definition
+    */
+    get RecordProcessID(): string | null {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string | null) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity processed by this run, when the run is entity-scoped
+    */
+    get EntityID(): string | null {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string | null) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: TriggeredBy
+    * * Display Name: Triggered By
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Manual
+    *   * OnChange
+    *   * OnDemand
+    *   * Schedule
+    * * Description: What triggered this run: OnChange, Schedule, OnDemand, or Manual
+    */
+    get TriggeredBy(): 'Manual' | 'OnChange' | 'OnDemand' | 'Schedule' {
+        return this.Get('TriggeredBy');
+    }
+    set TriggeredBy(value: 'Manual' | 'OnChange' | 'OnDemand' | 'Schedule') {
+        this.Set('TriggeredBy', value);
+    }
+
+    /**
+    * * Field Name: SourceType
+    * * Display Name: Source Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Array
+    *   * Filter
+    *   * Keyset
+    *   * List
+    *   * SingleRecord
+    *   * View
+    * * Description: The kind of record-set source resolved for this run: View, List, Filter, Array, Keyset, or SingleRecord
+    */
+    get SourceType(): 'Array' | 'Filter' | 'Keyset' | 'List' | 'SingleRecord' | 'View' {
+        return this.Get('SourceType');
+    }
+    set SourceType(value: 'Array' | 'Filter' | 'Keyset' | 'List' | 'SingleRecord' | 'View') {
+        this.Set('SourceType', value);
+    }
+
+    /**
+    * * Field Name: SourceID
+    * * Display Name: Source ID
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Polymorphic source identifier (e.g., ViewID or ListID) when applicable; no FK because it spans entities
+    */
+    get SourceID(): string | null {
+        return this.Get('SourceID');
+    }
+    set SourceID(value: string | null) {
+        this.Set('SourceID', value);
+    }
+
+    /**
+    * * Field Name: SourceFilter
+    * * Display Name: Source Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Resolved filter snapshot used to materialize the record set for this run
+    */
+    get SourceFilter(): string | null {
+        return this.Get('SourceFilter');
+    }
+    set SourceFilter(value: string | null) {
+        this.Set('SourceFilter', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: Foreign key to the Scheduled Job Run that launched this run, when scheduler-launched
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
+    *   * Paused
+    *   * Pending
+    *   * Running
+    * * Description: Run status: Pending, Running, Paused, Completed, Failed, or Cancelled
+    */
+    get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Pending' | 'Running' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Pending' | 'Running') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: StartTime
+    * * Display Name: Start Time
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the run started
+    */
+    get StartTime(): Date | null {
+        return this.Get('StartTime');
+    }
+    set StartTime(value: Date | null) {
+        this.Set('StartTime', value);
+    }
+
+    /**
+    * * Field Name: EndTime
+    * * Display Name: End Time
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the run ended
+    */
+    get EndTime(): Date | null {
+        return this.Get('EndTime');
+    }
+    set EndTime(value: Date | null) {
+        this.Set('EndTime', value);
+    }
+
+    /**
+    * * Field Name: TotalItemCount
+    * * Display Name: Total Item Count
+    * * SQL Data Type: int
+    * * Description: Estimated or known total number of records to process
+    */
+    get TotalItemCount(): number | null {
+        return this.Get('TotalItemCount');
+    }
+    set TotalItemCount(value: number | null) {
+        this.Set('TotalItemCount', value);
+    }
+
+    /**
+    * * Field Name: ProcessedItems
+    * * Display Name: Processed Items
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records processed so far
+    */
+    get ProcessedItems(): number {
+        return this.Get('ProcessedItems');
+    }
+    set ProcessedItems(value: number) {
+        this.Set('ProcessedItems', value);
+    }
+
+    /**
+    * * Field Name: SuccessCount
+    * * Display Name: Success Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records processed successfully
+    */
+    get SuccessCount(): number {
+        return this.Get('SuccessCount');
+    }
+    set SuccessCount(value: number) {
+        this.Set('SuccessCount', value);
+    }
+
+    /**
+    * * Field Name: ErrorCount
+    * * Display Name: Error Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records that failed processing
+    */
+    get ErrorCount(): number {
+        return this.Get('ErrorCount');
+    }
+    set ErrorCount(value: number) {
+        this.Set('ErrorCount', value);
+    }
+
+    /**
+    * * Field Name: SkippedCount
+    * * Display Name: Skipped Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of records skipped (e.g., unchanged per watermark)
+    */
+    get SkippedCount(): number {
+        return this.Get('SkippedCount');
+    }
+    set SkippedCount(value: number) {
+        this.Set('SkippedCount', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedOffset
+    * * Display Name: Last Processed Offset
+    * * SQL Data Type: int
+    * * Description: Offset-based resume cursor (StartRow) for sources that paginate by offset
+    */
+    get LastProcessedOffset(): number | null {
+        return this.Get('LastProcessedOffset');
+    }
+    set LastProcessedOffset(value: number | null) {
+        this.Set('LastProcessedOffset', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedKey
+    * * Display Name: Last Processed Key
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Keyset-based resume cursor (AfterKey) for sources that paginate by seek
+    */
+    get LastProcessedKey(): string | null {
+        return this.Get('LastProcessedKey');
+    }
+    set LastProcessedKey(value: string | null) {
+        this.Set('LastProcessedKey', value);
+    }
+
+    /**
+    * * Field Name: BatchSize
+    * * Display Name: Batch Size
+    * * SQL Data Type: int
+    * * Description: Effective batch size for this run
+    */
+    get BatchSize(): number | null {
+        return this.Get('BatchSize');
+    }
+    set BatchSize(value: number | null) {
+        this.Set('BatchSize', value);
+    }
+
+    /**
+    * * Field Name: CancellationRequested
+    * * Display Name: Cancellation Requested
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Pause/cancel handshake flag honored by the processor between batches
+    */
+    get CancellationRequested(): boolean {
+        return this.Get('CancellationRequested');
+    }
+    set CancellationRequested(value: boolean) {
+        this.Set('CancellationRequested', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the effective configuration for this run
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Run-level error message when Status=Failed
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: StartedByUserID
+    * * Display Name: Started By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the user who started the run
+    */
+    get StartedByUserID(): string | null {
+        return this.Get('StartedByUserID');
+    }
+    set StartedByUserID(value: string | null) {
+        this.Set('StartedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DryRun
+    * * Display Name: Is Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.
+    */
+    get DryRun(): boolean {
+        return this.Get('DryRun');
+    }
+    set DryRun(value: boolean) {
+        this.Set('DryRun', value);
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string | null {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: ScheduledJobRun
+    * * Display Name: Scheduled Job Run Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJobRun(): string | null {
+        return this.Get('ScheduledJobRun');
+    }
+
+    /**
+    * * Field Name: StartedByUser
+    * * Display Name: Started By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StartedByUser(): string | null {
+        return this.Get('StartedByUser');
+    }
+}
+
+
+/**
  * MJ: Projects - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Project
@@ -88949,6 +90695,1410 @@ export class MJRecordMergeLogEntity extends BaseEntity<MJRecordMergeLogEntityTyp
     */
     get ApprovedByUser(): string | null {
         return this.Get('ApprovedByUser');
+    }
+}
+
+
+/**
+ * MJ: Record Process Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordProcessCategory
+ * * Base View: vwRecordProcessCategories
+ * * @description Hierarchical folder for organizing Record Processes in the UI. Example: "Customer Lifecycle" with a child category "Retention".
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Process Categories')
+export class MJRecordProcessCategoryEntity extends BaseEntity<MJRecordProcessCategoryEntityType> {
+    /**
+    * Loads the MJ: Record Process Categories record from the database
+    * @param ID: string - primary key value to load the MJ: Record Process Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordProcessCategoryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the category
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what belongs in this category
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+    * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * MJ: Record Process Watermarks - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordProcessWatermark
+ * * Base View: vwRecordProcessWatermarks
+ * * @description Per-record change-detection watermark backing WatermarkStrategy=Checksum. Stores the last content hash a Record Process processed for a given record so unchanged records are skipped on the next run. Only used by Checksum mode; UpdatedAt mode compares __mj_UpdatedAt and stores nothing here.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Process Watermarks')
+export class MJRecordProcessWatermarkEntity extends BaseEntity<MJRecordProcessWatermarkEntityType> {
+    /**
+    * Loads the MJ: Record Process Watermarks record from the database
+    * @param ID: string - primary key value to load the MJ: Record Process Watermarks record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordProcessWatermarkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: Foreign key to the Record Process this watermark belongs to
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the entity of the watermarked record
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key of the watermarked record, stored as text to remain composite-key safe
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: Hash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(128)
+    * * Description: Content hash of the record as of the last time it was processed by this Record Process
+    */
+    get Hash(): string {
+        return this.Get('Hash');
+    }
+    set Hash(value: string) {
+        this.Set('Hash', value);
+    }
+
+    /**
+    * * Field Name: LastProcessedAt
+    * * Display Name: Last Processed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When this record was last processed by this Record Process
+    */
+    get LastProcessedAt(): Date {
+        return this.Get('LastProcessedAt');
+    }
+    set LastProcessedAt(value: Date) {
+        this.Set('LastProcessedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string {
+        return this.Get('RecordProcess');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+}
+
+
+/**
+ * MJ: Record Processes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordProcess
+ * * Base View: vwRecordProcesses
+ * * @description A declarative, reusable job definition that binds three axes of a business process: WORK (an Action or an Agent) x SCOPE (a single record, a User View, a List, or an ad-hoc Filter) x TRIGGER (on-change save hooks, a cron schedule, and/or on demand). One row is one configured process; each execution of it produces a Process Run with per-record Process Run Details. EXAMPLE: a "Weekly Customer Health Summary" row runs the "Customer Summarizer" agent over the "Active Customers" view every Saturday 2am, also whenever a customer's NPS/support fields change, and on demand; for each customer it infers {satisfaction, sentiment, personalityStyle, summary} and writes satisfaction/sentiment back onto the Customer plus a summary into a Customer Insights child row, skipping customers unchanged since the last run.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Processes')
+export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType> {
+    /**
+    * Loads the MJ: Record Processes record from the database
+    * @param ID: string - primary key value to load the MJ: Record Processes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordProcessEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of the process definition (e.g., "Weekly Customer Health Summary")
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what this process does
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Process Categories (vwRecordProcessCategories.ID)
+    * * Description: Optional hierarchical category for organizing this process in the UI
+    */
+    get CategoryID(): string | null {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to the target entity whose records this process operates on
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Draft
+    * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled
+    */
+    get Status(): 'Active' | 'Disabled' | 'Draft' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Draft') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: WorkType
+    * * Display Name: Work Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Agent
+    *   * FieldRules
+    *   * Infer
+    * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
+    */
+    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' {
+        return this.Get('WorkType');
+    }
+    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer') {
+        this.Set('WorkType', value);
+    }
+
+    /**
+    * * Field Name: ActionID
+    * * Display Name: Action
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Actions (vwActions.ID)
+    * * Description: Foreign key to the Action to run, when WorkType=Action
+    */
+    get ActionID(): string | null {
+        return this.Get('ActionID');
+    }
+    set ActionID(value: string | null) {
+        this.Set('ActionID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Foreign key to the AI Agent to run, when WorkType=Agent
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: PromptID
+    * * Display Name: Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: Foreign key to the AI Prompt to run for each record, when WorkType=Infer. The prompt's structured output is written back to the data model via OutputMapping.
+    */
+    get PromptID(): string | null {
+        return this.Get('PromptID');
+    }
+    set PromptID(value: string | null) {
+        this.Set('PromptID', value);
+    }
+
+    /**
+    * * Field Name: ScopeType
+    * * Display Name: Scope Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Filter
+    *   * List
+    *   * SingleRecord
+    *   * View
+    * * Description: How the record set is scoped for the Schedule and On-Demand triggers: SingleRecord, View, List, or Filter. The On-Change trigger is always single-record and ignores this.
+    */
+    get ScopeType(): 'Filter' | 'List' | 'SingleRecord' | 'View' {
+        return this.Get('ScopeType');
+    }
+    set ScopeType(value: 'Filter' | 'List' | 'SingleRecord' | 'View') {
+        this.Set('ScopeType', value);
+    }
+
+    /**
+    * * Field Name: ScopeViewID
+    * * Display Name: Scope View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+    * * Description: Foreign key to the User View defining the scope, when ScopeType=View
+    */
+    get ScopeViewID(): string | null {
+        return this.Get('ScopeViewID');
+    }
+    set ScopeViewID(value: string | null) {
+        this.Set('ScopeViewID', value);
+    }
+
+    /**
+    * * Field Name: ScopeListID
+    * * Display Name: Scope List
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+    * * Description: Foreign key to the List defining the scope, when ScopeType=List
+    */
+    get ScopeListID(): string | null {
+        return this.Get('ScopeListID');
+    }
+    set ScopeListID(value: string | null) {
+        this.Set('ScopeListID', value);
+    }
+
+    /**
+    * * Field Name: ScopeFilter
+    * * Display Name: Scope Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Ad-hoc WHERE clause used to resolve the record set, when ScopeType=Filter
+    */
+    get ScopeFilter(): string | null {
+        return this.Get('ScopeFilter');
+    }
+    set ScopeFilter(value: string | null) {
+        this.Set('ScopeFilter', value);
+    }
+
+    /**
+    * * Field Name: OnChangeEnabled
+    * * Display Name: On-Change Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the process runs per-record on save via an owned Entity Action
+    */
+    get OnChangeEnabled(): boolean {
+        return this.Get('OnChangeEnabled');
+    }
+    set OnChangeEnabled(value: boolean) {
+        this.Set('OnChangeEnabled', value);
+    }
+
+    /**
+    * * Field Name: OnChangeInvocationType
+    * * Display Name: On-Change Invocation Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AfterCreate
+    *   * AfterDelete
+    *   * AfterUpdate
+    *   * Validate
+    * * Description: Which save event fires the on-change trigger: AfterCreate, AfterUpdate, AfterDelete, or Validate
+    */
+    get OnChangeInvocationType(): 'AfterCreate' | 'AfterDelete' | 'AfterUpdate' | 'Validate' | null {
+        return this.Get('OnChangeInvocationType');
+    }
+    set OnChangeInvocationType(value: 'AfterCreate' | 'AfterDelete' | 'AfterUpdate' | 'Validate' | null) {
+        this.Set('OnChangeInvocationType', value);
+    }
+
+    /**
+    * * Field Name: OnChangeFilter
+    * * Display Name: On-Change Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Gating expression evaluated against the changed record (with changed-fields context) that compiles into the owned Entity Action Filter; only when it passes does the on-change trigger fire
+    */
+    get OnChangeFilter(): string | null {
+        return this.Get('OnChangeFilter');
+    }
+    set OnChangeFilter(value: string | null) {
+        this.Set('OnChangeFilter', value);
+    }
+
+    /**
+    * * Field Name: ScheduleEnabled
+    * * Display Name: Schedule Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the process runs on a cron schedule via an owned Scheduled Job
+    */
+    get ScheduleEnabled(): boolean {
+        return this.Get('ScheduleEnabled');
+    }
+    set ScheduleEnabled(value: boolean) {
+        this.Set('ScheduleEnabled', value);
+    }
+
+    /**
+    * * Field Name: CronExpression
+    * * Display Name: Cron Expression
+    * * SQL Data Type: nvarchar(120)
+    * * Description: Cron expression for the schedule trigger, when ScheduleEnabled=1
+    */
+    get CronExpression(): string | null {
+        return this.Get('CronExpression');
+    }
+    set CronExpression(value: string | null) {
+        this.Set('CronExpression', value);
+    }
+
+    /**
+    * * Field Name: Timezone
+    * * Display Name: Timezone
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: UTC
+    * * Description: IANA timezone for evaluating the cron expression (default UTC)
+    */
+    get Timezone(): string | null {
+        return this.Get('Timezone');
+    }
+    set Timezone(value: string | null) {
+        this.Set('Timezone', value);
+    }
+
+    /**
+    * * Field Name: OnDemandEnabled
+    * * Display Name: On-Demand Enabled
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the process can be run on demand (button / resolver)
+    */
+    get OnDemandEnabled(): boolean {
+        return this.Get('OnDemandEnabled');
+    }
+    set OnDemandEnabled(value: boolean) {
+        this.Set('OnDemandEnabled', value);
+    }
+
+    /**
+    * * Field Name: InputMapping
+    * * Display Name: Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON mapping describing how a record maps to the work inputs (optionally including an EntityDocumentID for render-to-text)
+    */
+    get InputMapping(): string | null {
+        return this.Get('InputMapping');
+    }
+    set InputMapping(value: string | null) {
+        this.Set('InputMapping', value);
+    }
+
+    /**
+    * * Field Name: OutputMapping
+    * * Display Name: Output Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON mapping describing how the structured output payload writes back (to fields, a child record, or tags)
+    */
+    get OutputMapping(): string | null {
+        return this.Get('OutputMapping');
+    }
+    set OutputMapping(value: string | null) {
+        this.Set('OutputMapping', value);
+    }
+
+    /**
+    * * Field Name: SkipUnchanged
+    * * Display Name: Skip Unchanged
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, records whose watermark indicates no change since the last run are skipped
+    */
+    get SkipUnchanged(): boolean {
+        return this.Get('SkipUnchanged');
+    }
+    set SkipUnchanged(value: boolean) {
+        this.Set('SkipUnchanged', value);
+    }
+
+    /**
+    * * Field Name: WatermarkStrategy
+    * * Display Name: Watermark Strategy
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Checksum
+    *   * None
+    *   * UpdatedAt
+    * * Description: How unchanged records are detected for SkipUnchanged: Checksum (per-record content hash, stored in RecordProcessWatermark), UpdatedAt (compares __mj_UpdatedAt, stores nothing), or None
+    */
+    get WatermarkStrategy(): 'Checksum' | 'None' | 'UpdatedAt' | null {
+        return this.Get('WatermarkStrategy');
+    }
+    set WatermarkStrategy(value: 'Checksum' | 'None' | 'UpdatedAt' | null) {
+        this.Set('WatermarkStrategy', value);
+    }
+
+    /**
+    * * Field Name: BatchSize
+    * * Display Name: Batch Size
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Number of records processed per batch (default 100)
+    */
+    get BatchSize(): number | null {
+        return this.Get('BatchSize');
+    }
+    set BatchSize(value: number | null) {
+        this.Set('BatchSize', value);
+    }
+
+    /**
+    * * Field Name: MaxConcurrency
+    * * Display Name: Max Concurrency
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Maximum number of records processed concurrently within a batch (default 1)
+    */
+    get MaxConcurrency(): number | null {
+        return this.Get('MaxConcurrency');
+    }
+    set MaxConcurrency(value: number | null) {
+        this.Set('MaxConcurrency', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Action
+    * * Display Name: Action Name
+    * * SQL Data Type: nvarchar(425)
+    */
+    get Action(): string | null {
+        return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Prompt
+    * * Display Name: Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Prompt(): string | null {
+        return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: ScopeView
+    * * Display Name: Scope View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScopeView(): string | null {
+        return this.Get('ScopeView');
+    }
+
+    /**
+    * * Field Name: ScopeList
+    * * Display Name: Scope List Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ScopeList(): string | null {
+        return this.Get('ScopeList');
+    }
+}
+
+
+/**
+ * MJ: Remote Operation Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RemoteOperationCategory
+ * * Base View: vwRemoteOperationCategories
+ * * @description Hierarchical folder for organizing Remote Operations in the UI. Example: "Record Processes" with a child category "Control" holding RunNow / Pause / Cancel.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Remote Operation Categories')
+export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperationCategoryEntityType> {
+    /**
+    * Loads the MJ: Remote Operation Categories record from the database
+    * @param ID: string - primary key value to load the MJ: Remote Operation Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRemoteOperationCategoryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the category
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of what belongs in this category
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+    * * Description: Self-referencing foreign key to the parent category, enabling a nested folder hierarchy (NULL for a top-level category)
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
+ * One library that an AI-authored Remote Operation body imports. CodeGen turns the `LibrariesObject` array
+ * (the strongly-typed accessor bound to `MJ: Remote Operations.Libraries` via JSONType metadata) into one
+ * `import { ...ItemsUsed } from "Library"` per entry at the top of the generated `remote_operations.ts`.
+ * The always-available default libraries (RunView / Metadata / RunQuery from @memberjunction/core) are NOT
+ * listed here — they are emitted for every operation automatically.
+ */
+export interface MJRemoteOperationEntity_RemoteOperationLibrary {
+    /** The npm package to import from, e.g. "@memberjunction/ai-prompts". */
+    Library: string;
+    /** The exported items used from that package, e.g. ["AIPromptRunner"]. */
+    ItemsUsed: string[];
+}
+
+/**
+ * MJ: Remote Operations - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RemoteOperation
+ * * Base View: vwRemoteOperations
+ * * @description Definition of a typed, provider-routed server operation invoked identically from the client (marshalled over GraphQL) and the server (dispatched in-process) - the typed peer of BaseEntity (CRUD) and RunView (set reads) for arbitrary capabilities. Input/output types are declared here and emitted by CodeGen into a typed base class; the body may be hand-written or AI-authored from Description. EXAMPLE: "RecordProcess.RunNow" (ExecutionMode=LongRunning) takes {recordProcessID} and returns {processRunID}, authorized by the recordprocess:execute scope plus the caller's entity permissions.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Remote Operations')
+export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityType> {
+    /**
+    * Loads the MJ: Remote Operations record from the database
+    * @param ID: string - primary key value to load the MJ: Remote Operations record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRemoteOperationEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable name of the operation
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: OperationKey
+    * * Display Name: Operation Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Stable, unique registry key and wire token used to dispatch the operation (e.g., "RecordProcess.RunNow"). Namespaced by convention.
+    */
+    get OperationKey(): string {
+        return this.Get('OperationKey');
+    }
+    set OperationKey(value: string) {
+        this.Set('OperationKey', value);
+    }
+
+    /**
+    * * Field Name: CategoryID
+    * * Display Name: Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Remote Operation Categories (vwRemoteOperationCategories.ID)
+    * * Description: Optional hierarchical category for organizing this operation in the UI
+    */
+    get CategoryID(): string | null {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human description of the operation; also the seed for AI-generated implementation code when GenerationType=AI
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: InputTypeName
+    * * Display Name: Input Type Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript type name for the operation input (emitted by CodeGen as the TInput interface)
+    */
+    get InputTypeName(): string | null {
+        return this.Get('InputTypeName');
+    }
+    set InputTypeName(value: string | null) {
+        this.Set('InputTypeName', value);
+    }
+
+    /**
+    * * Field Name: InputTypeDefinition
+    * * Display Name: Input Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)
+    */
+    get InputTypeDefinition(): string | null {
+        return this.Get('InputTypeDefinition');
+    }
+    set InputTypeDefinition(value: string | null) {
+        this.Set('InputTypeDefinition', value);
+    }
+
+    /**
+    * * Field Name: InputTypeIsArray
+    * * Display Name: Input Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the input type is emitted as an array (TInput[])
+    */
+    get InputTypeIsArray(): boolean {
+        return this.Get('InputTypeIsArray');
+    }
+    set InputTypeIsArray(value: boolean) {
+        this.Set('InputTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeName
+    * * Display Name: Output Type Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript type name for the operation output (emitted by CodeGen as the TOutput interface)
+    */
+    get OutputTypeName(): string | null {
+        return this.Get('OutputTypeName');
+    }
+    set OutputTypeName(value: string | null) {
+        this.Set('OutputTypeName', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeDefinition
+    * * Display Name: Output Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript interface/type source defining the output shape
+    */
+    get OutputTypeDefinition(): string | null {
+        return this.Get('OutputTypeDefinition');
+    }
+    set OutputTypeDefinition(value: string | null) {
+        this.Set('OutputTypeDefinition', value);
+    }
+
+    /**
+    * * Field Name: OutputTypeIsArray
+    * * Display Name: Output Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the output type is emitted as an array (TOutput[])
+    */
+    get OutputTypeIsArray(): boolean {
+        return this.Get('OutputTypeIsArray');
+    }
+    set OutputTypeIsArray(value: boolean) {
+        this.Set('OutputTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: ExecutionMode
+    * * Display Name: Execution Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Sync
+    * * Value List Type: List
+    * * Possible Values 
+    *   * LongRunning
+    *   * Sync
+    * * Description: Sync (request/response) or LongRunning (returns a handle; supports detached and attached consumption)
+    */
+    get ExecutionMode(): 'LongRunning' | 'Sync' {
+        return this.Get('ExecutionMode');
+    }
+    set ExecutionMode(value: 'LongRunning' | 'Sync') {
+        this.Set('ExecutionMode', value);
+    }
+
+    /**
+    * * Field Name: RequiredScope
+    * * Display Name: Required Scope
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional API-key scope string (e.g., recordprocess:execute) enforced for API-key/MCP callers; NULL means no scope gate (interactive users are still bounded by their entity permissions)
+    */
+    get RequiredScope(): string | null {
+        return this.Get('RequiredScope');
+    }
+    set RequiredScope(value: string | null) {
+        this.Set('RequiredScope', value);
+    }
+
+    /**
+    * * Field Name: RequiresSystemUser
+    * * Display Name: Requires System User
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, only the system user may invoke this operation
+    */
+    get RequiresSystemUser(): boolean {
+        return this.Get('RequiresSystemUser');
+    }
+    set RequiresSystemUser(value: boolean) {
+        this.Set('RequiresSystemUser', value);
+    }
+
+    /**
+    * * Field Name: GenerationType
+    * * Display Name: Generation Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI
+    *   * Default
+    *   * Manual
+    * * Description: How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)
+    */
+    get GenerationType(): 'AI' | 'Default' | 'Manual' {
+        return this.Get('GenerationType');
+    }
+    set GenerationType(value: 'AI' | 'Default' | 'Manual') {
+        this.Set('GenerationType', value);
+    }
+
+    /**
+    * * Field Name: Code
+    * * Display Name: Code
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes
+    */
+    get Code(): string | null {
+        return this.Get('Code');
+    }
+    set Code(value: string | null) {
+        this.Set('Code', value);
+    }
+
+    /**
+    * * Field Name: CodeApprovalStatus
+    * * Display Name: Code Approval Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Pending
+    *   * Rejected
+    * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.
+    */
+    get CodeApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
+        return this.Get('CodeApprovalStatus');
+    }
+    set CodeApprovalStatus(value: 'Approved' | 'Pending' | 'Rejected') {
+        this.Set('CodeApprovalStatus', value);
+    }
+
+    /**
+    * * Field Name: CodeApprovedByUserID
+    * * Display Name: Code Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Foreign key to the user who approved the generated code
+    */
+    get CodeApprovedByUserID(): string | null {
+        return this.Get('CodeApprovedByUserID');
+    }
+    set CodeApprovedByUserID(value: string | null) {
+        this.Set('CodeApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: CodeApprovedAt
+    * * Display Name: Code Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the generated code was approved
+    */
+    get CodeApprovedAt(): Date | null {
+        return this.Get('CodeApprovedAt');
+    }
+    set CodeApprovedAt(value: Date | null) {
+        this.Set('CodeApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: ContractFingerprint
+    * * Display Name: Contract Fingerprint
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Fingerprint of the input/output contract; carried in the wire envelope so the server can reject a stale client loudly instead of mis-deserializing
+    */
+    get ContractFingerprint(): string | null {
+        return this.Get('ContractFingerprint');
+    }
+    set ContractFingerprint(value: string | null) {
+        this.Set('ContractFingerprint', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+    * * Description: Lifecycle status: Active (routable), Disabled, or Pending. Only Active operations can be invoked.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CacheTTLSeconds
+    * * Display Name: Cache TTL (Seconds)
+    * * SQL Data Type: int
+    * * Description: Optional result cache TTL in seconds (NULL = no caching)
+    */
+    get CacheTTLSeconds(): number | null {
+        return this.Get('CacheTTLSeconds');
+    }
+    set CacheTTLSeconds(value: number | null) {
+        this.Set('CacheTTLSeconds', value);
+    }
+
+    /**
+    * * Field Name: TimeoutMS
+    * * Display Name: Timeout (MS)
+    * * SQL Data Type: int
+    * * Description: Optional execution timeout in milliseconds
+    */
+    get TimeoutMS(): number | null {
+        return this.Get('TimeoutMS');
+    }
+    set TimeoutMS(value: number | null) {
+        this.Set('TimeoutMS', value);
+    }
+
+    /**
+    * * Field Name: MaxConcurrency
+    * * Display Name: Max Concurrency
+    * * SQL Data Type: int
+    * * Description: Optional cap on concurrent executions of this operation
+    */
+    get MaxConcurrency(): number | null {
+        return this.Get('MaxConcurrency');
+    }
+    set MaxConcurrency(value: number | null) {
+        this.Set('MaxConcurrency', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: CodeLocked
+    * * Display Name: Code Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.
+    */
+    get CodeLocked(): boolean {
+        return this.Get('CodeLocked');
+    }
+    set CodeLocked(value: boolean) {
+        this.Set('CodeLocked', value);
+    }
+
+    /**
+    * * Field Name: CodeComments
+    * * Display Name: Code Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.
+    */
+    get CodeComments(): string | null {
+        return this.Get('CodeComments');
+    }
+    set CodeComments(value: string | null) {
+        this.Set('CodeComments', value);
+    }
+
+    /**
+    * * Field Name: Libraries
+    * * Display Name: Libraries
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+    * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.
+    */
+    get Libraries(): string | null {
+        return this.Get('Libraries');
+    }
+    set Libraries(value: string | null) {
+        this.Set('Libraries', value);
+    }
+
+    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
+    private _LibrariesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
+        const raw = this.Libraries;
+        if (raw !== this._LibrariesObject_lastRaw) {
+            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
+            this._LibrariesObject_lastRaw = raw;
+        }
+        return this._LibrariesObject_cached!;
+    }
+    set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Libraries = raw;
+        this._LibrariesObject_cached = value;
+        this._LibrariesObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+
+    /**
+    * * Field Name: CodeApprovedByUser
+    * * Display Name: Code Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CodeApprovedByUser(): string | null {
+        return this.Get('CodeApprovedByUser');
     }
 }
 

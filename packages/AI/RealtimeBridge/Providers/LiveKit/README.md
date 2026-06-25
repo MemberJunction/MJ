@@ -80,11 +80,20 @@ export interface ILiveKitRoomSdk {
 }
 ```
 
-**Production binding (TODO at deployment):** bind this to `livekit-server-sdk` (token minting / room
-admin) plus a room client (the Node WebRTC participant, e.g. `@livekit/rtc-node`). The adapter is thin
-and the driver/tests do not change. None of the SDK types leak into this package. Until a real factory is
-bound via `LiveKitBridge.SetSdkFactory(...)`, `Connect` throws an explicit "bind the real LiveKit SDK"
-error.
+**Native binding:** this package ships **`LiveKitNativeMeetingSdk`** (`livekit-native-sdk.ts`) — the
+two-way adapter over the LiveKit room client, activated with `bridge.SetSdkFactory(BindLiveKitNative())`
+(auto-bound by the engine as the registered default for `DriverClass = 'LiveKitBridge'`). It's the MJ-side
+adapter, unit-tested against a fake module; none of the SDK types leak into this package.
+
+**The real room client now ships too:** [`@memberjunction/ai-bridge-livekit-native`](../LiveKitNative)
+wraps `@livekit/rtc-node` behind this adapter's `NativeRoomModule` contract. The LiveKit coordinator points
+`NativeModuleSpecifier` at it by default (overridable via the `LIVEKIT_NATIVE_MODULE` env), so a deployment
+just needs to `npm install @livekit/rtc-node` on the agent host. Until a module is configured, `connect`
+throws an explicit "load the native LiveKit module" error.
+
+LiveKit is the recommended **internal proving ground** (pair with the `mj-livekit-room` Explorer tab or the
+LiveKit Agents Playground) — see
+[`plans/realtime/native-bridge-buildout-plan.md`](../../../../plans/realtime/native-bridge-buildout-plan.md) §6.
 
 ## Echo / self-audio
 

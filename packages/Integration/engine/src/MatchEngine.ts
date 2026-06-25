@@ -1,6 +1,7 @@
 import { IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
+import { serializeKeyValue } from './KeySerialization.js';
 
 /**
  * Resolves mapped records against existing MJ data to determine
@@ -176,8 +177,12 @@ export class MatchEngine {
             for (const pkField of pkFields) {
                 const value = record.MappedFields[pkField.Name];
                 if (value == null) continue;
-                const escaped = String(value).replace(/'/g, "''");
-                const clause = `[${pkField.Name}] = '${escaped}'`;
+                const escaped = serializeKeyValue(value).replace(/'/g, "''");
+                // ANSI double-quoted identifier — portable across SQL Server (QUOTED_IDENTIFIER ON,
+                // the driver default) and Postgres (exact-case; integration columns are lowercase).
+                // Plain identifiers break when a column name is a reserved word (e.g. a soft PK named
+                // `open`/`order`); brackets would fix SQL Server but break Postgres, so double-quote.
+                const clause = `"${pkField.Name}" = '${escaped}'`;
                 if (!filterClauses.includes(clause)) {
                     filterClauses.push(clause);
                 }
@@ -213,8 +218,11 @@ export class MatchEngine {
         for (const kf of keyFields) {
             const value = record.MappedFields[kf.DestinationFieldName];
             if (value == null) continue;
-            const escaped = String(value).replace(/'/g, "''");
-            clauses.push(`[${kf.DestinationFieldName}] = '${escaped}'`);
+            // serializeKeyValue mirrors the write-side coercion (objects → JSON, not "[object Object]")
+            // so an object-valued key filters against the value actually stored in the column.
+            const escaped = serializeKeyValue(value).replace(/'/g, "''");
+            // ANSI double-quoted identifier — reserved-word-safe + portable; see CompositePK note above.
+            clauses.push(`"${kf.DestinationFieldName}" = '${escaped}'`);
         }
         return clauses;
     }

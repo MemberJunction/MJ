@@ -172,6 +172,22 @@ The same tool-execution semantics run in two transport topologies. The shared pi
 | Delegation cancel | Explicit-only: the overlay's per-card ✕ → `CancelRealtimeSessionTool` mutation → the service's in-flight registry aborts the run. **Barge-in never aborts delegations** (deliberate host policy — the narration design expects the user to keep talking while work runs) | Barge-in aborts the in-flight delegated run via `RealtimeToolBroker.AbortInFlight` (no human ✕ exists on this topology) |
 | Usage telemetry | Browser accumulates `OnUsage` deltas → debounced (10 s) + teardown-flushed `RelayRealtimeUsage` mutation → accumulated onto the co-agent `AIPromptRun` | Runner checkpoints accumulated usage onto the long-lived `AIPromptRun` (debounced 5 s, crash-safe) |
 
+### 🚨 Single source of truth: ONE prep, the precedence cascade, the core↔host boundary
+
+Every realtime host — native chat, **LiveKit**, and future **Zoom/Teams/GoToMeeting/Webex** — must be the **same agent**: same identity, personality, model/voice, delegation, and session tracking. Only **media transport** and **host UX tools** vary. The full rationale + roadmap is in [`plans/realtime/realtime-core-host-convergence.md`](../plans/realtime/realtime-core-host-convergence.md).
+
+**There is exactly ONE producer of realtime session prep:** `RealtimeClientSessionService.PrepareRealtimeSessionParams` (`packages/AI/Agents/src/realtime/realtime-client-session-service.ts`). It resolves the model, builds the **target-identity** system prompt (via the single `BuildRealtimeAgentFraming` in `realtime-tool-broker.ts` — first-person AS the target, never the co-agent), the stable tool set (always incl. `invoke-target-agent`), voice, and memory. **Do NOT build session prep in a host.** The LiveKit bridge (`BaseAgent.StartBridgeRealtimeSession`) *consumes* it and differs only in opening server-side (`StartSession`) vs the browser mint (`CreateClientSession`); a bridge re-implementing prep is exactly the drift this convergence removed (guarded by `__tests__/realtime-convergence-drift.test.ts`).
+
+**Model + voice resolve through ONE precedence cascade** (`ResolveEffectiveRealtimeConfig`), identical on every host:
+
+```
+runtime override  >  target agent's TypeConfiguration  >  co-agent config  >  agent-type default
+```
+
+The **target** layer is what lets a voiced agent (Sage, Marketing Agent, …) carry its own persisted voice/model that the shared co-agent then speaks with. The runtime-override input funnels into one slot — the native picker builds `ConfigOverridesJson` client-side (`BuildRealtimeConfigOverridesJson`), the server-bridged hosts build the **identical** envelope via `BuildRealtimeOverridesJson` — so both ride the same highest-precedence cascade layer.
+
+**Core (one place, all hosts):** identity, model/voice precedence, base prompt + memory, `invoke-target-agent` delegation, session/run tracking. **Host (varies):** media transport (LiveKit audio → video) + host UX tools (whiteboard/browser/… — injected via `RealtimeSessionRunnerDeps.ExtraTools`/`ExecuteTool`, never baked into core).
+
 ### Client-direct flow (the shipped path)
 
 1. **Mint.** The browser (`VoiceSessionService.StartVoiceSession`) calls `StartRealtimeClientSession(targetAgentId, conversationId?, lastSessionId?, preferredModelId?, clientToolsJson?, coAgentId?)`. The resolver authorizes `CanRun` on the **target** agent, resolves the co-agent (chain in §1), creates the durable `AIAgentSession` via `SessionManager.CreateSession` (storing `targetAgentID` **server-side** in the session's `Config` column — accessed as `Config_` on the generated entity), then `RealtimeClientSessionService.PrepareClientSession` resolves the model, assembles the companion system prompt (framing + co-agent prompt + target identity + history + memory via `AgentMemoryContextBuilder` — the same context a loop agent injects), builds the stable tool set, and asks the driver to `CreateClientSession`. When a `lastSessionId` is supplied, the resolver also loads the **prior session chain's transcript** (`loadPriorTranscript` — ownership-checked, hidden/error rows skipped, capped at 30 newest turns / 8,000 chars / 5 chain legs, with a cycle guard) and frames it into the system prompt so the resumed model *remembers* the last leg. Strictly best-effort — any problem yields no hydration, never a failed start. On mint failure the just-created session is closed with `CloseReason = 'Error'` so nothing half-open leaks.
@@ -300,6 +316,62 @@ The pure implementation is `packages/AI/Agents/src/realtime/realtime-coagent-con
 Gate implementation: `RealtimeClientSessionResolver.assertRuntimeOverridesAuthorized()` → the pure `EvaluateRuntimeOverrideAuthorization()` decision (unit-tested matrix) + `AuthorizationEvaluator.UserCanExecuteWithAncestors` over the request provider's cached Authorizations. The authorization is seeded in `metadata/authorizations/.realtime.json`.
 
 **Write-side schema enforcement**: when an agent type publishes `ConfigSchema`, `MJAIAgentEntityServer.ValidateAsync` (in `MJCoreEntitiesServer`) validates `TypeConfiguration` against it with a dependency-free JSON-Schema-subset validator (`json-schema-lite.ts`: type / required / properties / enum / items / additionalProperties). Non-object configuration always fails; a malformed `ConfigSchema` only WARNS (a metadata bug on the type row must not brick agent saves).
+
+### Live session capabilities — `RealtimeSessionCapabilities` + `Reconfigure`
+
+A live `IRealtimeSession` exposes a small **capability surface** (the realtime-session analogue of the bridge's `IBridgeProviderFeatures` and of `BaseRealtimeModel.SupportsClientDirect`) so the container can ask "is it safe to call X?" instead of blind-invoking optional methods that no-op — or *can't* be supported — on some providers. Both members are **optional** on the interface (`@memberjunction/ai`, `baseRealtime.ts`), so a driver that hasn't declared them is treated **conservatively** (unsupported), and the 6 existing drivers compile unchanged:
+
+- **`Capabilities?: RealtimeSessionCapabilities`** — currently `{ CanReconfigureTurnMode }`: whether the session can change its turn-taking / auto-response mode on a **live** socket without reconnecting. Grow this object as providers gain runtime abilities.
+- **`Reconfigure?(params: RealtimeReconfigureParams): void`** — applies a live change (e.g. `{ DisableAutoResponse: true }`). **Gate on the capability before calling.** OpenAI implements it via a partial `session.update` and reports `CanReconfigureTurnMode: true`; Gemini Live's activity detection is fixed at connect, so it reports `false` and *omits* the method.
+
+Prime consumer: the bridge engine's first-agent re-gating (`AIBridgeEngine.ReconfigureSessionToMeeting` → meeting mode when a room becomes multi-agent — see the Bridges guide §9). As models gain mid-session reconfiguration, a driver flips one flag and the container starts using it with **zero container changes**.
+
+### Turn moderator (multi-agent turn-taking)
+
+When **two or more agents** share one realtime room (a LiveKit panel, a meeting), the hard question is *who speaks next*. The original answer was a per-agent regex name-match (`RegexAddressedMatcher`): each agent independently checked "was I addressed?" That routes direct address but nothing else — it can't bring a relevant-but-unaddressed agent in, can't let two agents have a productive back-and-forth, and can't tell a useful exchange from an unproductive ping-pong loop. The **turn moderator** replaces it with a room-level decision.
+
+Once per turn, a single fast LLM looks at the room roster + the recent diarized conversation and returns the **ordered agent(s) who should speak next** — zero, one, or several. It routes direct address *and* relevance (send a question to Sage **and** Skip when both matter), lets a *productive* agent↔agent discussion continue, and goes quiet on unproductive ping-pong or when nobody should speak (hand back to the human). The engine speaks the returned agents **serially via the floor** — never overlapping. The **audio plane is untouched**: every agent always hears the raw room audio; the moderator only decides *when* each agent is triggered to commit and speak. (It's called a *moderator*, not a judge, because it *brings agents in* as much as it restrains them — the informal nickname is "nanny mode," but that undersells the half that matters.)
+
+#### Prompt, not agent
+
+The moderator is `RealtimeTurnModerator` (`packages/AI/Agents/src/realtime/realtime-turn-moderator.ts`; exported as `RealtimeTurnModeratorDecision`, the `(ctx) => Promise<string[]>` function wired into the bridge engine). It is a stateless yes/who classification — no planning, tools, or sub-agents — so it runs as an **`AIPromptRun` via `AIPromptRunner`, not an agent run**. Each decision's `agentRunId` is tied to the **co-agent's `AIAgentRun`**, so the per-turn "who spoke and why" trail (including the moderator's structured `reason` per speaker and an optional `note`) is fully observable through standard prompt-run logs — and those logs are exactly the data for deciding when this mechanism can be relaxed as realtime models get smarter. The prompt returns structured `{ speakers: [{ agent, reason }], note }`; the plugin maps the returned names back to roster `AgentSessionID`s (in order, de-duplicated).
+
+#### Config cascade + the `turnTaking` shape
+
+Two parts of the effective-config cascade carry turn-taking, and they live at different layers:
+
+- **Room-wide moderator brain** — the `turnTaking.moderator` block on the **Realtime agent type's `DefaultConfiguration`** (`metadata/agent-types/schemas/realtime-type-default-config.json`). A room has exactly one moderator.
+- **Per-agent participation `mode`** — `turnTaking.mode` on the **target agent's `TypeConfiguration`**: `'proactive'` (default — may be brought in unaddressed when the moderator judges it relevant) or `'addressed-only'` (speaks only when directly addressed by name).
+
+Both ride the existing cascade (agent-type `DefaultConfiguration` ← co-agent `TypeConfiguration` ← **target agent** `TypeConfiguration` ← runtime override — see [§4 the effective-configuration merge](#the-effective-configuration-merge)). The shape (in `packages/AI/Agents/src/realtime/realtime-coagent-config.ts`):
+
+```jsonc
+{ "realtime": { "turnTaking": {
+    "mode": "proactive",                 // per TARGET agent (TypeConfiguration)
+    "moderator": {                       // room-wide (agent-type DefaultConfiguration)
+        "promptId": "<AI Prompt ID>",    // authored as @lookup:, stored as the resolved ID
+        "contextWindowTurns": 30,        // diarized turns the moderator sees; clamped ≤ 50
+        "maxCharsPerTurn": 240,          // per-turn clip (token savings + cacheable prefix)
+        "maxConsecutiveAgentOnlyTurns": null,  // null = no cap (trust the model's progress read)
+        "timeoutMs": 800,                // per-decision budget on the latency-critical path
+        "onError": "silent",             // 'silent' (no one speaks) | 'addressed-only' (cheap fallback)
+        "prestageOnAgentSpeech": true    // run the next decision during the prior agent's playback
+} } } }
+```
+
+`GetEffectiveModeratorConfig` / `GetEffectiveTurnMode` are the typed accessors; absent fields fall back to `REALTIME_MODERATOR_DEFAULTS`. `GetEffectiveModeratorConfig` returns `null` when no `promptId` is configured — which the engine reads as "no moderator, fall back to the matcher."
+
+#### Serialized multi-route + pre-staging
+
+The moderator can name several speakers; the engine queues them and drains the queue **one at a time through the room floor**, so a multi-agent route is heard as a clean sequence, never a pile-up. The moderator also runs on **agent turns**, not just human ones — that powers both agent↔agent continuation and **pre-staging**: when `prestageOnAgentSpeech` is on (the default), the next decision runs *during the prior agent's audio playback* (the model emits its full response text seconds before the user finishes hearing it), so the agent→agent hand-off pays ~zero added latency. A human **barge-in discards the pre-staged decision** (the user changed the topic). The optional `maxConsecutiveAgentOnlyTurns` is a hard backstop against runaway agent-only loops; left `null`, the room relies on the moderator's own progress assessment so a genuine discussion is never gated by a counter.
+
+#### The model — small, fast, swappable
+
+A small/fast LLM is the right call because this runs **every turn on the latency-critical path**. The seeded prompt (`"Realtime: Turn Moderator"`, `metadata/prompts/.realtime-prompts.json`) is bound to **GPT-OSS-120B on Cerebras**. The structured output, plus putting the static roster near the top of the prompt and the variable conversation at the bottom, maximizes prefill caching. The whole mechanism is metadata-driven: swap the model binding (e.g. to Gemma on Cerebras) or retune the windows entirely in metadata, **no code change** — and the `prestageOnAgentSpeech` design means a slower model still hides most of its latency.
+
+#### No-moderator fallback
+
+When no moderator is injected into the engine — or no `promptId` is configured — the engine **falls back to the per-agent `RegexAddressedMatcher` broadcast** (still present): the room's utterance is broadcast to every agent's `TurnPolicy` and each independently decides "was I addressed?" The plugin itself also degrades to a crude name-contains safety net only when no prompt is configured, so a room is never left mute by a metadata gap. The engine seam (`SetTurnModerator`, the lookback buffer, the serialized queue, barge-in invalidation) is documented in the [Bridges guide §9](REALTIME_BRIDGES_GUIDE.md#9-multi-party-livekit--multiple-agents).
 
 ---
 

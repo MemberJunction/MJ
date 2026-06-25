@@ -80,6 +80,26 @@ export type JSONObject = { [key: string]: JSONValue };
  *
  * @abstract
  */
+
+/**
+ * Emits a realtime-driver diagnostic line, but ONLY when verbose logging is enabled
+ * (`MJ_VERBOSE=true|1|yes`). These traces — turn boundaries, activity windows, response gating,
+ * barge-in — are invaluable when debugging a live session but far too chatty for normal operation,
+ * so they stay dark unless verbose mode is explicitly turned on. Shared here so every realtime driver
+ * and its session twin (OpenAI, Gemini, …) gate diagnostics through one consistent switch. The truthy
+ * set matches `@memberjunction/core`'s `IsVerboseLoggingEnabled` so a single `MJ_VERBOSE` flag governs
+ * verbose output across the whole stack.
+ *
+ * @param message The diagnostic message, already prefixed by the caller (e.g. `[GeminiRealtime][diag] …`).
+ */
+export function RealtimeDiagLog(message: string): void {
+    const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
+    if (v === 'true' || v === '1' || v === 'yes') {
+        // eslint-disable-next-line no-console
+        console.log(message);
+    }
+}
+
 export abstract class BaseRealtimeModel extends BaseModel {
     /**
      * Opens a stateful duplex session with the provider.
@@ -132,7 +152,55 @@ export abstract class BaseRealtimeModel extends BaseModel {
     public async CreateClientSession(_params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
     }
+
+    /**
+     * Whether this driver's sessions carry a **video** track in addition to audio — i.e. the model
+     * accepts video input (it can "see" the user's camera) and/or emits video output (a talking-head
+     * avatar / generated video), in sync with audio.
+     *
+     * Defaults to `false` (audio-only — today's realtime models). Video-capable drivers (a native
+     * multimodal realtime model, or an avatar provider) override this to `true`. The session's media
+     * plane is media-tagged ({@link IRealtimeSession.SendInput} takes a {@link RealtimeMediaKind};
+     * {@link IRealtimeSession.OnVideoOutput} delivers video-out), so a video session reuses the entire
+     * realtime contract — only the media frames gain a `video` kind. Resolution prefers a video-capable
+     * model when an agent requests video, and degrades to audio-only otherwise.
+     *
+     * @returns `true` if sessions can carry video; `false` (audio-only) otherwise.
+     */
+    public get SupportsVideo(): boolean {
+        return false;
+    }
+
+    /**
+     * The provider-native voice ids this model can speak with (e.g. OpenAI `alloy`/`echo`/`shimmer`). The
+     * model/driver is the authoritative owner of "what voices do I support", so each driver declares its
+     * own — used to populate the dev voice picker. Default empty (a driver that hasn't declared voices
+     * yields no picker options, falling back to the configured/default voice).
+     *
+     * NOTE: this is the near-term, driver-owned source of truth. Long term this should move to metadata so
+     * providers that let users add their OWN voices (e.g. ElevenLabs) can be enumerated dynamically.
+     *
+     * @returns The supported voice ids (id + human label), or `[]` when none are declared.
+     */
+    public get SupportedVoices(): RealtimeVoiceOption[] {
+        return [];
+    }
 }
+
+/** A selectable provider-native voice — `ID` is sent to the provider, `Name` is the human label. */
+export interface RealtimeVoiceOption {
+    /** The provider-native voice id (e.g. `echo`) — what gets written to the session config. */
+    ID: string;
+    /** The human-friendly label for the picker (e.g. `Echo`). */
+    Name: string;
+}
+
+/**
+ * The media plane a realtime frame belongs to. The realtime contract is otherwise media-agnostic — a
+ * `video` session reuses every method (tools, transcript, usage, turn-taking); only the media frames
+ * carry this tag so audio and video can be disambiguated on the same session.
+ */
+export type RealtimeMediaKind = 'audio' | 'video';
 
 /**
  * The server-minted configuration a browser needs to open a **client-direct** realtime session.
@@ -183,6 +251,26 @@ export interface ClientRealtimeSessionConfig {
 }
 
 /**
+ * Static capability flags of a live {@link IRealtimeSession}, for container introspection (the realtime-
+ * session analogue of `IBridgeProviderFeatures`). Grow this as providers gain runtime abilities — each new
+ * flag defaults to "unsupported" for any driver that hasn't declared it, so the container stays safe.
+ */
+export interface RealtimeSessionCapabilities {
+    /**
+     * Whether the session can change its turn-taking / auto-response mode on a **live** socket (no
+     * reconnect) via {@link IRealtimeSession.Reconfigure}. `true` for providers with a runtime-mutable
+     * session config (OpenAI `session.update`); `false` where it's fixed at connect (Gemini Live).
+     */
+    CanReconfigureTurnMode: boolean;
+}
+
+/** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */
+export interface RealtimeReconfigureParams {
+    /** Switch the model's blind auto-response OFF (meeting mode) or ON (1:1). */
+    DisableAutoResponse?: boolean;
+}
+
+/**
  * A long-lived, full-duplex session handle returned by {@link BaseRealtimeModel.StartSession}.
  *
  * All `On*` methods register a single handler invoked as the corresponding provider events
@@ -191,13 +279,33 @@ export interface ClientRealtimeSessionConfig {
  */
 export interface IRealtimeSession {
     /**
-     * Sends a client media frame to the model (audio now, video later).
+     * The PCM sample rate (Hz) this model **consumes** on {@link IRealtimeSession.SendInput} — its audio
+     * INPUT format. Optional; consumers default to 24000 (OpenAI Realtime). **Gemini Live = 16000.** A
+     * server-bridged host (LiveKit/Zoom/Teams) MUST resample inbound room audio to this rate or the model
+     * receives mis-rated audio it can't parse (the symptom: the agent never responds on the bridge while
+     * the same model works client-direct, where the browser negotiates the rate itself).
+     */
+    InputSampleRate?: number;
+
+    /**
+     * The PCM sample rate (Hz) this model **emits** on {@link IRealtimeSession.OnOutput} — its audio OUTPUT
+     * format. Optional; consumers default to 24000 (both OpenAI and Gemini Live emit 24 kHz today).
+     */
+    OutputSampleRate?: number;
+
+    /**
+     * Sends a client media frame to the model.
      *
-     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation.
+     * Fire-and-forget: frames are streamed straight to the provider with no JSON intermediation. The
+     * optional `kind` tags the media plane — `'audio'` (default, back-compatible: existing callers and
+     * audio-only drivers need not pass or read it) or `'video'` for a camera frame to a video-capable
+     * model (one that {@link BaseRealtimeModel.SupportsVideo}). Audio-only drivers ignore `'video'`
+     * frames.
      *
      * @param chunk A raw media frame as an `ArrayBuffer`.
+     * @param kind The media plane the frame belongs to. Defaults to `'audio'`.
      */
-    SendInput(chunk: ArrayBuffer): void;
+    SendInput(chunk: ArrayBuffer, kind?: RealtimeMediaKind): void;
 
     /**
      * Registers the set of tools the model may call, translating them into the provider's
@@ -226,11 +334,24 @@ export interface IRealtimeSession {
     RegisterTools(tools: RealtimeToolDefinition[]): Promise<void>;
 
     /**
-     * Registers a handler for model media output frames (the media plane).
+     * Registers a handler for model **audio** output frames (the audio media plane).
      *
-     * @param handler Invoked with each output media frame as an `ArrayBuffer`.
+     * @param handler Invoked with each output audio frame as an `ArrayBuffer`.
      */
     OnOutput(handler: (chunk: ArrayBuffer) => void): void;
+
+    /**
+     * Registers a handler for model **video** output frames — the talking-head avatar / generated
+     * video a video-capable model emits, in sync with {@link IRealtimeSession.OnOutput}'s audio.
+     *
+     * Optional: audio-only drivers (the default) don't implement it, and consumers must call it
+     * null-safely (`session.OnVideoOutput?.(...)`). A video-capable driver
+     * ({@link BaseRealtimeModel.SupportsVideo}) implements it; the consumer (bridge / client) maps these
+     * frames onto its `video-out` track exactly as it maps audio.
+     *
+     * @param handler Invoked with each output video frame as an `ArrayBuffer`.
+     */
+    OnVideoOutput?(handler: (chunk: ArrayBuffer) => void): void;
 
     /**
      * Registers a handler for transcript events (the text stream).
@@ -301,8 +422,34 @@ export interface IRealtimeSession {
      * mid-session omit the member, and callers must feature-detect before invoking.
      *
      * @param instructions Instructions for the single spoken update (tone, brevity, content).
+     * @returns `true` when a response was actually triggered, `false` when it was skipped (e.g. a response
+     *   is already in flight). A bridge that claimed the speaking floor for this turn uses this to release the
+     *   floor immediately on a skip — otherwise a skipped trigger would wedge the room until the safety timer.
+     *   `void`/`undefined` from legacy drivers is treated as "triggered" for backward compatibility.
      */
-    RequestSpokenUpdate?(instructions: string): void;
+    RequestSpokenUpdate?(instructions: string): boolean | void;
+
+    /**
+     * **Capability introspection.** A small, static description of what THIS live session can do, so the
+     * container can ask "is it safe to call X?" instead of invoking optional methods that silently no-op (or
+     * can't be supported) on some providers — the same role `IBridgeProviderFeatures` plays for bridges and
+     * {@link BaseRealtimeModel.SupportsClientDirect} plays for minting. Optional: a driver that hasn't
+     * declared its capabilities is treated **conservatively** (everything unsupported). As models gain
+     * abilities, drivers just flip a flag — no container changes.
+     */
+    Capabilities?: RealtimeSessionCapabilities;
+
+    /**
+     * **Optional capability** (gate on {@link RealtimeSessionCapabilities.CanReconfigureTurnMode}) —
+     * reconfigures a **live** session's turn-taking without reconnecting: e.g. switch a 1:1 agent to
+     * meeting mode (auto-response off) when its room becomes multi-agent. Providers whose runtime config is
+     * mutable mid-socket (OpenAI: `session.update`) implement this and report the capability `true`;
+     * providers whose turn config is fixed at connect (Gemini Live's activity detection) report `false` and
+     * omit the method. The container **must** check the capability before calling — never blind-invoke.
+     *
+     * @param params The reconfiguration to apply (e.g. `DisableAutoResponse`).
+     */
+    Reconfigure?(params: RealtimeReconfigureParams): void;
 
     /**
      * Registers a handler for provider-detected interruptions (barge-in).

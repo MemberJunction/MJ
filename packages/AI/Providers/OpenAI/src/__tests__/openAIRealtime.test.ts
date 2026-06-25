@@ -15,7 +15,9 @@ vi.mock('@memberjunction/ai', () => {
         }
     }
     class BaseRealtimeModel extends BaseModel {}
-    return { BaseModel, BaseRealtimeModel };
+    // RealtimeDiagLog is a verbose-gated console logger used by the realtime session; a no-op suffices.
+    const RealtimeDiagLog = () => { /* no-op in tests */ };
+    return { BaseModel, BaseRealtimeModel, RealtimeDiagLog };
 });
 
 // Mock the SDK WebSocket so importing the driver never touches the network. The driver's
@@ -127,6 +129,17 @@ class TestableOpenAIRealtime extends OpenAIRealtime {
     protected override createConnection(): IOpenAIRealtimeConnection {
         return this.Fake;
     }
+    /**
+     * Simulates the realtime handshake: `applyInitialConfig` now DEFERS its `session.update` until the
+     * server's `session.created` frame (so instructions can't race the socket open). The real connection
+     * emits that on connect; the fake doesn't, so the testable fires it right after start — modelling the
+     * real lifecycle and keeping the "config sent on start" assertions valid.
+     */
+    public override async StartSession(params: RealtimeSessionParams): Promise<IRealtimeSession> {
+        const session = await super.StartSession(params);
+        this.Fake.Fire({ type: 'session.created' } as RealtimeServerEvent);
+        return session;
+    }
 }
 
 /** Driver subclass that captures the mint request and returns a fake ephemeral secret (no network). */
@@ -191,6 +204,46 @@ describe('OpenAIRealtime', () => {
                 expect(update.session.instructions).toBe('be helpful');
             } else {
                 throw new Error('expected realtime session.update');
+            }
+        });
+
+        it('meeting mode: translates Config.disableAutoResponse to turn_detection.create_response=false (and never sends the raw flag)', async () => {
+            await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys', Config: { disableAutoResponse: true } });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                const session = update.session as Record<string, unknown>;
+                // The host-neutral flag must be consumed, NOT forwarded raw to the API.
+                expect(session.disableAutoResponse).toBeUndefined();
+                const turnDetection = (session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+                expect(turnDetection).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+            } else {
+                throw new Error('expected realtime session.update');
+            }
+        });
+
+        it('1:1 call: no turn_detection override when disableAutoResponse is absent (model auto-responds)', async () => {
+            await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+            const update = driver.Fake.Sent.find((e) => e.type === 'session.update');
+            if (update?.type === 'session.update' && update.session.type === 'realtime') {
+                const turnDetection = (update.session.audio as { input?: { turn_detection?: unknown } })?.input?.turn_detection;
+                expect(turnDetection).toBeUndefined();
+            } else {
+                throw new Error('expected realtime session.update');
+            }
+        });
+
+        it('capability: reports CanReconfigureTurnMode and Reconfigure pushes a live session.update disabling auto-response', async () => {
+            const session = await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' });
+            expect(session.Capabilities?.CanReconfigureTurnMode).toBe(true);
+
+            session.Reconfigure?.({ DisableAutoResponse: true });
+            const updates = driver.Fake.Sent.filter((e) => e.type === 'session.update');
+            const last = updates[updates.length - 1];
+            if (last?.type === 'session.update' && last.session.type === 'realtime') {
+                const td = (last.session.audio as { input?: { turn_detection?: Record<string, unknown> } })?.input?.turn_detection;
+                expect(td).toMatchObject({ type: 'server_vad', create_response: false, interrupt_response: true });
+            } else {
+                throw new Error('expected realtime session.update from Reconfigure');
             }
         });
 
@@ -334,6 +387,23 @@ describe('OpenAIRealtime', () => {
             expect(respond.type).toBe('response.create');
             if (respond.type === 'response.create') {
                 expect(respond.response?.instructions).toBe('Briefly say the report agent is drafting.');
+            }
+        });
+
+        it('RequestSpokenUpdate with BLANK instructions omits the per-response override (uses the session prompt — preserves the delegate directive)', async () => {
+            const session = (await driver.StartSession({ Model: 'gpt-realtime', SystemPrompt: 'sys' })) as OpenAIRealtimeSession;
+            // The meeting-mode bridge trigger passes '' = "respond now using your session prompt". Forwarding
+            // `response.instructions: ''` would override (wipe) the system prompt — incl. 'call invoke-target-agent'.
+            for (const blank of ['', '   ']) {
+                driver.Fake.Sent = [];
+                session.RequestSpokenUpdate(blank);
+                driver.Fake.Fire({ type: 'response.done', event_id: 'e', response: {} } as RealtimeServerEvent); // clear flag
+                expect(driver.Fake.Sent).toHaveLength(1);
+                const respond = driver.Fake.Sent[0];
+                expect(respond.type).toBe('response.create');
+                if (respond.type === 'response.create') {
+                    expect(respond.response).toBeUndefined(); // no per-response instruction override
+                }
             }
         });
 

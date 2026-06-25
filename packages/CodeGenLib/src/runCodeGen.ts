@@ -11,22 +11,26 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig } from './Config/config';
+import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
-import { RunCommandsBase } from './Misc/runCommand';
+import { RunCommandsBase, CommandExecutionResult } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
+import { RemoteOperationGeneratorBase } from './Misc/remote_operations_codegen';
+import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
+// Type-only import — erased at runtime, so it adds no load cost to the heavy index.
+import type { MJCLIResult } from '@memberjunction/cli-core';
 
 // Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
 import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
@@ -44,6 +48,28 @@ type DataSourceResult = ProviderDataSourceResult;
  * Main orchestrator class for the MemberJunction code generation process.
  */
 export class RunCodeGenBase {
+  /**
+   * BEFORE/AFTER external command failures captured during a pipeline run, so the
+   * structured result can fail (success=false, non-zero exit) AND report which
+   * command failed — instead of the legacy log-only path that exited 0 regardless.
+   */
+  protected commandFailures: Array<{ context: string; message: string }> = [];
+
+  /** Record any failed entries from a BEFORE/AFTER command batch, paired by index. */
+  protected recordCommandFailures(phase: string, cmds: CommandInfo[], results: CommandExecutionResult[]): void {
+    results.forEach((r, i) => {
+      if (!r.success) {
+        const cmd = cmds[i];
+        const cmdText = cmd ? [cmd.command, ...(cmd.args ?? [])].join(' ').trim() : `command #${i + 1}`;
+        const detail = (r.error || r.output || '').trim();
+        this.commandFailures.push({
+          context: `${phase} command`,
+          message: detail ? `\`${cmdText}\` failed: ${detail}` : `\`${cmdText}\` failed`,
+        });
+      }
+    });
+  }
+
   /**
    * Acquire the per-platform data source for a CodeGen run.
    *
@@ -88,6 +114,12 @@ export class RunCodeGenBase {
       if (workingDirectory) {
         initializeConfig(workingDirectory);
       }
+      // Drop the process-static soft-PK/FK cache so this run re-reads additionalSchemaInfo from disk.
+      // RSU rewrites that file (WriteAdditionalSchemaInfo) immediately before invoking this in-process
+      // runner, so without this a connector's first ApplyAll reads a PRE-write cached config → its tables
+      // are seen as PK-less → entities are skipped ("No primary key found") → 0 rows sync until an MJAPI
+      // restart. In-process path only; the CLI Run() keeps load-once. Deterministic — no mtime/TOCTOU.
+      ManageMetadataBase.invalidateSoftPKFKConfigCache();
       return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);
@@ -96,6 +128,20 @@ export class RunCodeGenBase {
   }
 
   public async Run(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
+    // Preserve the original process-exiting behavior for callers that expect it
+    // (e.g. SchemaEngine's generated runner). The structured variant below does
+    // the actual work and never exits, so the pluggable CLI can emit a result.
+    const result = await this.RunWithResult(skipDatabaseGeneration, skipFileGeneration);
+    process.exit(result.success ? 0 : 1);
+  }
+
+  /**
+   * Run CodeGen and return a structured {@link MJCLIResult} instead of calling
+   * `process.exit()`. Used by the pluggable `mj codegen` plugin so the runtime
+   * host can render the result per `--format` before the CLI exits.
+   */
+  public async RunWithResult(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false): Promise<MJCLIResult> {
+    const startMs = Date.now();
     try {
       const startTime = new Date();
       const platform = dbPlatform();
@@ -103,11 +149,42 @@ export class RunCodeGenBase {
 
       const dataSource = await this.setupDataSource();
       const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
-      process.exit(success ? 0 : 1);
+
+      let entityCount = 0;
+      try {
+        entityCount = new MJ.Metadata().Entities.length;
+      } catch {
+        // Metadata may be unavailable on a hard failure — leave count at 0.
+      }
+
+      // Prefer specific BEFORE/AFTER command failures when present; fall back to a
+      // generic message for any other (non-command) pipeline failure.
+      const errors = success
+        ? []
+        : this.commandFailures.length > 0
+          ? this.commandFailures
+          : [{ message: 'CodeGen pipeline reported a failure — see the log output above for detail.' }];
+
+      return {
+        success,
+        command: 'codegen',
+        durationSeconds: (Date.now() - startMs) / 1000,
+        data: {
+          entityCount,
+          skippedDb: skipDatabaseGeneration || getSettingValue('skip_database_generation', false),
+          skippedFiles: skipFileGeneration || getSettingValue('skip_file_generation', false),
+        },
+        errors,
+      };
     } catch (e) {
       failSpinner('CodeGen failed: ' + e);
       logError(e as string);
-      process.exit(1);
+      return {
+        success: false,
+        command: 'codegen',
+        durationSeconds: (Date.now() - startMs) / 1000,
+        errors: [{ message: e instanceof Error ? e.message : String(e) }],
+      };
     }
   }
 
@@ -123,6 +200,7 @@ export class RunCodeGenBase {
       reporter.mark('platform', dbPlatform());
       reporter.mark('skipDB', skipDatabaseGeneration || getSettingValue('skip_database_generation', false));
       let pipelineSuccess = true;
+      this.commandFailures = [];
 
      try {
       const md = await reporter.phase('loadMetadata', async () => {
@@ -152,7 +230,10 @@ export class RunCodeGenBase {
         if (beforeCommands && beforeCommands.length > 0) {
           updateSpinner('Executing BEFORE commands...');
           const results = await runCommandsObject.runCommands(beforeCommands);
-          if (results.some((r) => !r.success)) logError('ERROR running one or more BEFORE commands');
+          if (results.some((r) => !r.success)) {
+            logError('ERROR running one or more BEFORE commands');
+            this.recordCommandFailures('BEFORE', beforeCommands, results);
+          }
         }
 
         updateSpinner('Executing before-all SQL Scripts...');
@@ -344,7 +425,10 @@ export class RunCodeGenBase {
       if (afterCommands && afterCommands.length > 0) {
         startSpinner('Executing AFTER commands...');
         const results = await runCommandsObject.runCommands(afterCommands);
-        if (results.some((r) => !r.success)) failSpinner('ERROR running one or more AFTER commands');
+        if (results.some((r) => !r.success)) {
+          failSpinner('ERROR running one or more AFTER commands');
+          this.recordCommandFailures('AFTER', afterCommands, results);
+        }
         else succeedSpinner('AFTER commands completed');
       }
 
@@ -361,7 +445,9 @@ export class RunCodeGenBase {
       // verbose log + report.
       succeedSpinner(`MJ CodeGen complete — ${md.Entities.length} entities in ${totalSeconds.toFixed(2)}s`);
       logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
-      return true;
+      // A BEFORE/AFTER command failure fails the run (success=false, exit 1) so it
+      // isn't silently swallowed — details flow into the structured result below.
+      return this.commandFailures.length === 0;
      } catch (err) {
        pipelineSuccess = false;
        throw err;
@@ -552,6 +638,38 @@ export class RunCodeGenBase {
         } else if (isVerbose) succeedSpinner('Actions Code generated');
       } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
 
+      // Remote Operations — emit the typed BaseRemotableOperation subclass for each MJ: Remote Operations row.
+      // Two output targets, parallel to the entity-subclass split: `CoreRemoteOperations` (MJ core ops, shipped
+      // in @memberjunction/core-entities) and `RemoteOperations` (downstream/user ops, their GeneratedEntities).
+      // NOTE: ops have no SchemaName, so there is no automatic core/non-core PARTITION (the entity split keys on
+      // SchemaName === mjCoreSchema). Each configured target therefore receives the full op set; in practice a
+      // repo configures exactly one (this repo: CoreRemoteOperations only). A per-op core/non-core marker — the
+      // SchemaName-equivalent — is the open decision needed to let a single DB route ops to both targets.
+      const coreRemoteOpsDir = outputDir('CoreRemoteOperations', false);
+      const nonCoreRemoteOpsDir = outputDir('RemoteOperations', false);
+      if (coreRemoteOpsDir || nonCoreRemoteOpsDir) {
+        const remoteOpsResult = await new MJ.RunView().RunView<MJRemoteOperationEntity>(
+          { EntityName: 'MJ: Remote Operations', ResultType: 'entity_object' },
+          currentUser,
+        );
+        const remoteOps = remoteOpsResult.Results ?? [];
+        const remoteOpsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<RemoteOperationGeneratorBase>(RemoteOperationGeneratorBase)!;
+        for (const target of [
+          { dir: coreRemoteOpsDir, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
+          { dir: nonCoreRemoteOpsDir, label: 'Remote Operation', phase: 'generateRemoteOperations' },
+        ]) {
+          if (!target.dir) continue;
+          if (isVerbose) startSpinner(`Generating ${target.label} typed bases...`);
+          const ok = await reporter.phase(target.phase, () =>
+            remoteOpsGenerator.generateRemoteOperations(remoteOps, target.dir!),
+          );
+          if (!ok) {
+            failSpinner(`Error generating ${target.label} code`);
+            return false;
+          } else if (isVerbose) succeedSpinner(`${target.label} typed bases generated`);
+        }
+      } else if (isVerbose) warnSpinner('Remote Operations output directory NOT found in config file, skipping...');
+
       SQLLogging.finishSQLLogging();
       if (!isVerbose) succeedSpinner('TypeScript code generation completed');
       return true;
@@ -564,4 +682,18 @@ export class RunCodeGenBase {
 export async function runMemberJunctionCodeGeneration(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
   const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
   return await runObject.Run(skipDatabaseGeneration, skipFileGeneration);
+}
+
+/**
+ * Like {@link runMemberJunctionCodeGeneration}, but returns a structured
+ * {@link MJCLIResult} instead of calling `process.exit()`. The pluggable
+ * `mj codegen` plugin uses this so the runtime host can emit the result
+ * (e.g. `--format=json`) before the CLI exits.
+ */
+export async function runMemberJunctionCodeGenerationWithResult(
+  skipDatabaseGeneration: boolean = false,
+  skipFileGeneration: boolean = false,
+): Promise<MJCLIResult> {
+  const runObject = MJGlobal.Instance.ClassFactory.CreateInstance<RunCodeGenBase>(RunCodeGenBase)!;
+  return await runObject.RunWithResult(skipDatabaseGeneration, skipFileGeneration);
 }

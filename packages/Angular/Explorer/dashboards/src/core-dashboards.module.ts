@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import {
   MJButtonDirective,
+  MJClickableDirective,
   MJDatepickerComponent,
   MJWindowComponent,
   MJWindowTitlebarComponent,
@@ -58,6 +59,10 @@ import { GraphQLConsoleComponent } from './DevTools/graphql-console.component';
 // Admin Containers
 import { AdminDevToolsResourceComponent } from './Admin/admin-dev-tools-resource.component';
 import { AdminIdentityAccessComponent } from './Admin/admin-identity-access.component';
+import { BulkOperationsContainerComponent } from './BulkOperations/bulk-operations-container.component';
+import { BulkOperationsOperationsComponent } from './BulkOperations/bulk-operations-operations.component';
+import { BulkOperationsRunHistoryComponent } from './BulkOperations/bulk-operations-run-history.component';
+import { RecordProcessStudioComponent, RecordProcessHistoryComponent } from '@memberjunction/ng-record-process-studio';
 import { AdminDataSchemaComponent } from './Admin/admin-data-schema.component';
 import { AdminMonitoringComponent } from './Admin/admin-monitoring.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
@@ -89,6 +94,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
  */
 @NgModule({
   declarations: [
+    BulkOperationsContainerComponent,
+    BulkOperationsOperationsComponent,
+    BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
     ActionPinConfigDialogComponent,
@@ -133,6 +141,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     FormsModule,
     ReactiveFormsModule,
     MJButtonDirective,
+    MJClickableDirective,
     MJDatepickerComponent,
     MJWindowComponent,
     MJWindowTitlebarComponent,
@@ -155,6 +164,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJTabNavComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
+    RecordProcessStudioComponent,
+    RecordProcessHistoryComponent,
     CodeEditorModule,
     ExplorerSettingsModule,
     EntityRelationshipDiagramModule,
@@ -167,6 +178,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     SharedPipesModule
   ],
   exports: [
+    BulkOperationsContainerComponent,
+    BulkOperationsOperationsComponent,
+    BulkOperationsRunHistoryComponent,
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
     SystemDiagnosticsComponent,

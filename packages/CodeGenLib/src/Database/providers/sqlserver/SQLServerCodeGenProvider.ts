@@ -11,7 +11,7 @@ import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/
 import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { dbDatabase, mj_core_schema } from '../../../Config/config';
-import { MSSQLConnection, sqlConfig } from '../../../Config/db-connection';
+import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
 import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import {
     SQLServerDataProvider,
@@ -66,10 +66,15 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         const provider: SQLServerDataProvider = await setupSQLServerClient(config);
         const conn = new SQLServerCodeGenConnection(pool);
 
-        let connectionInfo = sqlConfig.server;
-        if (sqlConfig.port) connectionInfo += ':' + sqlConfig.port;
-        if (sqlConfig.options?.instanceName) connectionInfo += '\\' + sqlConfig.options.instanceName;
-        connectionInfo += '/' + sqlConfig.database;
+        // `getSqlConfig()` returns the config that was built lazily by
+        // MSSQLConnection() above. The non-null assertion is safe because the
+        // call to MSSQLConnection on the line above is what guarantees the
+        // accessor has a value to return.
+        const cfg = getSqlConfig()!;
+        let connectionInfo = cfg.server;
+        if (cfg.port) connectionInfo += ':' + cfg.port;
+        if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
+        connectionInfo += '/' + cfg.database;
 
         await UserCache.Instance.Refresh(pool);
         const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');

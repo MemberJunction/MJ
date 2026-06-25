@@ -81,8 +81,11 @@ export async function SchemaExists(
   schemaName: string,
   provider: DatabaseProviderBase
 ): Promise<boolean> {
+  // information_schema.schemata is ANSI-standard and present on both SQL Server
+  // and PostgreSQL, so schema existence needs no dialect branch (sys.schemas is
+  // SQL-Server-only and errors on PG).
   const results = await provider.ExecuteSQL<Record<string, unknown>>(
-    `SELECT 1 AS Exists_ FROM sys.schemas WHERE name = '${EscapeSqlString(schemaName)}'`
+    `SELECT 1 AS Exists_ FROM information_schema.schemata WHERE schema_name = '${EscapeSqlString(schemaName)}'`
   );
   return results.length > 0;
 }
@@ -113,7 +116,7 @@ export async function CreateAppSchema(
   }
 
   try {
-    await provider.ExecuteSQL(`CREATE SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    await provider.ExecuteSQL(`CREATE SCHEMA ${QuoteSchemaIdentifier(schemaName, provider)}`);
     return { Success: true };
   }
   catch (error: unknown) {
@@ -148,9 +151,14 @@ export async function DropAppSchema(
   }
 
   try {
-    // Drop all objects in the schema first (SQL Server doesn't support CASCADE on DROP SCHEMA)
-    await DropAllSchemaObjects(schemaName, provider);
-    await provider.ExecuteSQL(`DROP SCHEMA [${EscapeSqlIdentifier(schemaName)}]`);
+    if (provider.Dialect.PlatformKey === 'postgresql') {
+      // PostgreSQL supports CASCADE: drop the schema and everything it contains atomically.
+      await provider.ExecuteSQL(`DROP SCHEMA ${QuoteSchemaIdentifier(schemaName, provider)} CASCADE`);
+    } else {
+      // SQL Server has no CASCADE on DROP SCHEMA — the schema must be emptied first.
+      await DropAllSchemaObjects(schemaName, provider);
+      await provider.ExecuteSQL(`DROP SCHEMA ${QuoteSchemaIdentifier(schemaName, provider)}`);
+    }
     return { Success: true };
   }
   catch (error: unknown) {
@@ -164,7 +172,11 @@ export async function DropAppSchema(
 
 /**
  * Drops all objects within a schema before the schema itself can be dropped.
- * SQL Server requires schemas to be empty before they can be dropped.
+ * SQL-Server-only: SQL Server requires schemas to be empty before they can be
+ * dropped (it has no `DROP SCHEMA ... CASCADE`). PostgreSQL uses native CASCADE
+ * in {@link DropAppSchema} and never calls this. The generated T-SQL here
+ * (sys.* catalogs, QUOTENAME, sp_executesql) is therefore intentionally
+ * SQL-Server-specific.
  *
  * Uses QUOTENAME() for all dynamic identifiers in generated SQL to prevent
  * injection via object names. The schema name is passed as a parameterized
@@ -245,8 +257,13 @@ export function EscapeSqlString(value: string): string {
 }
 
 /**
- * Escapes a string for use as a SQL identifier (within square brackets).
+ * Quotes a schema name as a SQL identifier for the provider's dialect, escaping
+ * the dialect's own quote character. SQL Server -> `[name]` (`]` doubled);
+ * PostgreSQL -> `"name"` (`"` doubled).
  */
-function EscapeSqlIdentifier(value: string): string {
-  return value.replace(/\]/g, ']]');
+function QuoteSchemaIdentifier(value: string, provider: DatabaseProviderBase): string {
+  if (provider.Dialect.PlatformKey === 'postgresql') {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return `[${value.replace(/\]/g, ']]')}]`;
 }
