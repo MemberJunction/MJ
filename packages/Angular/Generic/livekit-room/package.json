@@ -37,6 +37,7 @@
   "dependencies": {
     "@memberjunction/livekit-room-core": "5.42.0",
     "@memberjunction/ng-whiteboard": "5.42.0",
+    "@memberjunction/ng-ui-components": "5.42.0",
     "livekit-client": "^2.7.4",
     "tslib": "^2.8.1"
   },
