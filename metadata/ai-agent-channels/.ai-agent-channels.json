@@ -32,5 +32,15 @@
       "lastModified": "2026-06-16T01:17:21.923Z",
       "checksum": "e3bf6cd56fa1f9a72abe94c69a30e4e365979e2168c7a2a2ac737d13bf47a421"
     }
+  },
+  {
+    "fields": {
+      "Name": "Media",
+      "Description": "Shared media display surface for realtime voice sessions: the agent shows the user visuals during the call (images, video, audio, PDFs, web pages) through Media.* client-executed tools. Each item opens in its own tab; the agent can switch between them and highlight regions to point at specifics. Session state of record persists on the session channel row.",
+      "ServerPluginClass": "MediaChannelServer",
+      "ClientPluginClass": "RealtimeMediaChannel",
+      "TransportType": "PubSub",
+      "IsActive": true
+    }
   }
 ]

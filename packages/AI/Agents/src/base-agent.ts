@@ -11,11 +11,12 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { FileStorageEngine } from '@memberjunction/storage';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
@@ -38,6 +39,7 @@ import {
 } from './realtime/realtime-coagent-config';
 import { RealtimeClientSessionService, PrepareClientSessionInput } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
+import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -1585,6 +1587,18 @@ export class BaseAgent {
      * @param config The loaded agent configuration (provides the system prompt, if any).
      * @returns The finalized {@link ExecuteAgentResult}.
      */
+    // ── Realtime per-session capture state (scoped to one executeRealtimeSession run) ──────────
+    /**
+     * In-flight realtime turn rows keyed by transcript role (`'user'`/`'assistant'`), driving the
+     * create-on-start / update-on-complete persistence lifecycle. Reset at the start of every
+     * realtime session so a prior run can never leak an in-flight id into the next.
+     */
+    private realtimeInFlightTurns: Map<string, string> = new Map();
+    /** Active audio recording controller for the current realtime session, or `null` when recording is off. */
+    private realtimeRecording: RealtimeRecordingController | null = null;
+    /** Storage account id the active recording stores to (RecordingStorageProviderID ?? AttachmentStorageProviderID). */
+    private realtimeRecordingAccountId: string | null = null;
+
     protected async executeRealtimeSession<R = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration
@@ -1604,7 +1618,12 @@ export class BaseAgent {
         // 2) Create the single long-lived AIPromptRun that usage is checkpointed onto.
         const promptRun = await this.createRealtimePromptRun(params, config, modelResolution);
 
-        // 3) Build the injected deps and run the session.
+        // 3) Resolve recording (OFF by default; runtime > agent > off; consent + storage gated) and reset
+        //    the per-session turn-lifecycle state, then build the injected deps and run the session.
+        this.realtimeInFlightTurns = new Map();
+        const recording = await this.resolveRealtimeRecording(params);
+        this.realtimeRecording = recording?.controller ?? null;
+        this.realtimeRecordingAccountId = recording?.storageAccountId ?? null;
         try {
             const deps = await this.buildRealtimeSessionDeps(params, config, modelResolution, promptRun);
             const runner = new RealtimeSessionRunner(deps);
@@ -1933,6 +1952,8 @@ export class BaseAgent {
             DelegateToTarget: (request) => this.delegateRealtimeToTarget(params, config, request),
             ExecuteTool: (call) => this.executeRealtimeTool(params, call),
             PersistTranscript: (transcript) => this.persistRealtimeTranscript(params, transcript),
+            Recording: this.realtimeRecording ?? undefined,
+            FinalizeRecording: () => this.finalizeRealtimeRecording(params),
             CheckpointUsage: (usage) => this.checkpointRealtimeUsage(promptRun, usage),
             // DB-driven spoken-progress wording (shared lookup with the client-direct path);
             // null → the runner's documented built-in first-person fallback.
@@ -2213,37 +2234,250 @@ export class BaseAgent {
     }
 
     /**
-     * Persists a single realtime transcript turn as a `ConversationDetail` stamped with the
-     * session id. User turns are written as `Role='User'`, assistant turns as `Role='AI'`. Only
-     * final transcripts are persisted (interim/partial updates are skipped to avoid churn).
+     * Persists a realtime transcript turn as a `ConversationDetail` with a **create-on-start /
+     * update-on-complete** lifecycle, so each turn carries both a start (`__mj_CreatedAt`) and an
+     * immutable end (`TurnEndedAt`):
+     * - **Interim** (`IsFinal=false`): on the FIRST delta for a role, CREATE the row with
+     *   `Status='In-Progress'` (so a live UI can show the turn streaming), stamping the recording-relative
+     *   `UtteranceStartMs` and the speaker `UserID` (user turns only). Subsequent interim deltas are no-ops.
+     * - **Final** (`IsFinal=true`): UPDATE that in-flight row with the full text, `Status='Complete'`,
+     *   `TurnEndedAt`, and `UtteranceEndMs`. If no interim was seen (some providers only emit final), the
+     *   row is created and finalized in one step.
      *
-     * @param params The execution parameters (provides conversation id + context user).
-     * @param transcript The transcript turn emitted by the model.
+     * Returns the new row's ID the first time a DISTINCT turn is created, and `null` when an existing
+     * in-flight row is merely updated — the runner uses that to count turns (not events). User turns are
+     * `Role='User'`, assistant turns `Role='AI'`. When recording is active, `MediaType='Audio'` and the
+     * media-relative utterance offsets are stamped from the recording clock.
+     *
+     * @param params The execution parameters (provides conversation id + context user + session id).
+     * @param transcript The transcript turn (interim delta or final) emitted by the model.
+     * @returns The created row id on first creation of a turn, else `null`.
      */
-    private async persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<void> {
-        if (!transcript.IsFinal || !transcript.Text?.trim()) {
-            return;
+    private async persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
+        if (!transcript.Text?.trim()) {
+            return null;
         }
-
         const conversationID = params.data?.conversationId as string | undefined;
         if (!conversationID) {
-            return; // Without a conversation we have nowhere to durably attach the turn.
+            return null; // Without a conversation we have nowhere to durably attach the turn.
         }
 
         const md = params.provider || this._activeProvider;
-        const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
-        detail.NewRecord();
-        detail.ConversationID = conversationID;
-        detail.Role = transcript.Role === 'user' ? 'User' : 'AI';
-        detail.Message = transcript.Text;
-        if (params.agentSessionID) {
-            detail.AgentSessionID = params.agentSessionID;
+        const roleKey = transcript.Role; // 'user' | 'assistant'
+        const mjRole: 'User' | 'AI' = transcript.Role === 'user' ? 'User' : 'AI';
+
+        // ── INTERIM: create the In-Progress row once per turn (first delta) ───────────────────────
+        if (!transcript.IsFinal) {
+            if (this.realtimeInFlightTurns.has(roleKey)) {
+                return null; // already created for this turn; ignore subsequent deltas
+            }
+            const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+            detail.NewRecord();
+            detail.ConversationID = conversationID;
+            detail.Role = mjRole;
+            detail.Message = transcript.Text;
+            detail.Status = 'In-Progress';
+            this.applyRealtimeTurnSpeakerAndMedia(detail, transcript, params, /*atStart*/ true);
+            if (params.agentSessionID) {
+                detail.AgentSessionID = params.agentSessionID;
+            }
+            if (!await detail.Save()) {
+                this.logError(`Failed to create in-progress realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
+                    agent: params.agent, category: 'RealtimeSession'
+                });
+                return null;
+            }
+            this.realtimeInFlightTurns.set(roleKey, detail.ID);
+            return detail.ID;
         }
 
+        // ── FINAL: update the in-flight row (or create+finalize when no interim was seen) ─────────
+        const inFlightId = this.realtimeInFlightTurns.get(roleKey);
+        this.realtimeInFlightTurns.delete(roleKey);
+        let detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', params.contextUser);
+        let created = false;
+        if (inFlightId && await detail.Load(inFlightId)) {
+            // updating the existing streaming row → not a new turn
+        } else {
+            detail.NewRecord();
+            detail.ConversationID = conversationID;
+            detail.Role = mjRole;
+            this.applyRealtimeTurnSpeakerAndMedia(detail, transcript, params, /*atStart*/ true);
+            if (params.agentSessionID) {
+                detail.AgentSessionID = params.agentSessionID;
+            }
+            created = true;
+        }
+        detail.Message = transcript.Text;
+        detail.Status = 'Complete';
+        detail.TurnEndedAt = new Date();
+        if (this.realtimeRecording) {
+            detail.UtteranceEndMs = this.realtimeRecording.NowOffsetMs();
+        }
         if (!await detail.Save()) {
-            this.logError(`Failed to persist realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
-                agent: params.agent,
-                category: 'RealtimeSession'
+            this.logError(`Failed to finalize realtime transcript turn: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
+                agent: params.agent, category: 'RealtimeSession'
+            });
+        }
+        return created ? detail.ID : null;
+    }
+
+    /**
+     * Stamps the speaker identity and recording-relative media fields on a freshly-created turn row.
+     * `UserID` is set only for **user** turns (an AI turn has no human speaker). When recording is
+     * active, `MediaType='Audio'` and `UtteranceStartMs` is captured from the recording clock.
+     *
+     * @param detail The new conversation-detail row.
+     * @param transcript The transcript turn.
+     * @param params The execution parameters.
+     * @param atStart Whether this is the turn's start (stamps `UtteranceStartMs`).
+     */
+    private applyRealtimeTurnSpeakerAndMedia(
+        detail: MJConversationDetailEntity, transcript: RealtimeTranscript, params: ExecuteAgentParams, atStart: boolean
+    ): void {
+        if (transcript.Role === 'user' && params.contextUser?.ID) {
+            detail.UserID = params.contextUser.ID;
+        }
+        if (this.realtimeRecording) {
+            detail.MediaType = 'Audio';
+            if (atStart) {
+                detail.UtteranceStartMs = this.realtimeRecording.NowOffsetMs();
+            }
+        }
+    }
+
+    /**
+     * Resolves whether to record this realtime session, OFF by default, with the precedence
+     * **runtime param > agent (`RecordingDefault`) > off**, hard-gated by consent and a resolvable
+     * storage provider. Returns the recording controller + the resolved storage account, or `null`
+     * to record nothing (fail-closed). Never throws — any resolution problem disables recording.
+     *
+     * Storage resolves to **`AIAgent.RecordingStorageProviderID` ?? `AIAgent.AttachmentStorageProviderID`**
+     * (recordings default to the attachments account), then to that provider's first account. With no
+     * provider configured, or consent not granted, recording is OFF.
+     *
+     * @param params The execution parameters (agent + runtime `data.recording`).
+     * @returns `{ controller, storageAccountId }` when recording is enabled, else `null`.
+     */
+    private async resolveRealtimeRecording(
+        params: ExecuteAgentParams
+    ): Promise<{ controller: RealtimeRecordingController; storageAccountId: string } | null> {
+        try {
+            const agent = params.agent as MJAIAgentEntityExtended;
+            const runtime = (params.data?.recording ?? null) as { media?: string; consent?: boolean } | null;
+
+            // Media: runtime > agent default > off.
+            const rawMedia = runtime?.media ?? agent.RecordingDefault ?? 'None';
+            const media: RealtimeRecordingMedia | 'None' =
+                rawMedia === 'Audio' || rawMedia === 'AudioVideo' ? rawMedia : 'None';
+            if (media === 'None') {
+                return null; // recording off
+            }
+
+            // Consent is a HARD gate — never record without explicit consent.
+            if (runtime?.consent !== true) {
+                this.logStatus('🔴 Realtime recording requested but consent was not granted — recording disabled.', false, params);
+                return null;
+            }
+
+            // Storage: recording provider, else attachment provider; then that provider's first account.
+            const providerId = agent.RecordingStorageProviderID || agent.AttachmentStorageProviderID;
+            if (!providerId) {
+                this.logStatus('🔴 Realtime recording on but no storage provider configured (RecordingStorageProviderID/AttachmentStorageProviderID) — recording disabled.', false, params);
+                return null;
+            }
+            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerId);
+            const account = accounts[0];
+            if (!account) {
+                this.logStatus(`🔴 Realtime recording on but no active storage account exists for provider '${providerId}' — recording disabled.`, false, params);
+                return null;
+            }
+
+            const controller = new RealtimeRecordingController({ Media: media });
+            return { controller, storageAccountId: account.ID };
+        } catch (error) {
+            this.logError(`Failed to resolve realtime recording (recording disabled): ${error instanceof Error ? error.message : String(error)}`, {
+                agent: params.agent, category: 'RealtimeSession'
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Finalizes the active recording after the session closes: encodes the captured audio to a WAV,
+     * stores it via MJStorage to the resolved account, links it to the `AIAgentSession` (via
+     * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` /
+     * `RecordingStartedAt` on the session. Never throws — a recording failure must not fail the
+     * session run. No-op when recording is off, nothing was captured, or there is no session id.
+     *
+     * @param params The execution parameters (provides the session id + context user + provider).
+     */
+    private async finalizeRealtimeRecording(params: ExecuteAgentParams): Promise<void> {
+        const controller = this.realtimeRecording;
+        if (!controller) {
+            return;
+        }
+        // One-shot: clear instance state up front so a re-entrant/duplicate Stop can't double-store.
+        this.realtimeRecording = null;
+        const storageAccountId = this.realtimeRecordingAccountId;
+        this.realtimeRecordingAccountId = null;
+
+        try {
+            controller.Stop();
+            const sessionID = params.agentSessionID;
+            const contextUser = params.contextUser;
+            if (!sessionID || !storageAccountId || !contextUser) {
+                return; // nowhere to attach / store (or no user context to store under)
+            }
+            const encoded = controller.EncodeWav();
+            if (!encoded) {
+                this.logStatus('🔇 Realtime session produced no audio to record.', true, params);
+                return;
+            }
+
+            const md = params.provider || this._activeProvider;
+            const fileName = `realtime-session-${sessionID}.wav`;
+            const uploaded = await FileStorageEngine.Instance.UploadFile({
+                content: encoded.Buffer,
+                fileName,
+                mimeType: 'audio/wav',
+                contextUser,
+                storageAccountId,
+                provider: md,
+                pathPrefix: `recordings/${new Date().toISOString().slice(0, 10)}/${sessionID}`
+            });
+
+            // Link the file to the session record so it's discoverable via MJ: File Entity Record Links.
+            const sessionEntityID = md.EntityByName('MJ: AI Agent Sessions')?.ID;
+            if (sessionEntityID) {
+                const link = await md.GetEntityObject<MJFileEntityRecordLinkEntity>('MJ: File Entity Record Links', params.contextUser);
+                link.NewRecord();
+                link.FileID = uploaded.FileID;
+                link.EntityID = sessionEntityID;
+                link.RecordID = sessionID;
+                if (!await link.Save()) {
+                    this.logError(`Failed to link recording file to session: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
+                        agent: params.agent, category: 'RealtimeSession'
+                    });
+                }
+            }
+
+            // Stamp the recording fields on the session (t0 + file + media kind).
+            const session = await md.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', params.contextUser);
+            if (await session.Load(sessionID)) {
+                session.RecordingFileID = uploaded.FileID;
+                session.RecordingMedia = controller.Media;
+                session.RecordingStartedAt = controller.StartedAt ?? new Date();
+                if (!await session.Save()) {
+                    this.logError(`Failed to stamp recording fields on session: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
+                        agent: params.agent, category: 'RealtimeSession'
+                    });
+                }
+            }
+            this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${uploaded.FileID}).`, true, params);
+        } catch (error) {
+            this.logError(`Failed to finalize realtime recording: ${error instanceof Error ? error.message : String(error)}`, {
+                agent: params.agent, category: 'RealtimeSession'
             });
         }
     }

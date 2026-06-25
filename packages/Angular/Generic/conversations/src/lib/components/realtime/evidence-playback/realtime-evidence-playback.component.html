@@ -1,0 +1,96 @@
+<div class="evp">
+  <!-- ---------- Audio transport ---------- -->
+  <div class="evp-player">
+    @if (AudioUrl) {
+      <audio
+        #audio
+        [src]="AudioUrl"
+        preload="metadata"
+        (loadedmetadata)="OnLoadedMetadata()"
+        (timeupdate)="OnTimeUpdate()"
+        (play)="OnPlay()"
+        (pause)="OnPause()"
+        (ended)="OnEnded()"
+      ></audio>
+
+      <button
+        type="button"
+        class="evp-play"
+        [attr.aria-label]="IsPlaying ? 'Pause recording' : 'Play recording'"
+        [title]="IsPlaying ? 'Pause' : 'Play'"
+        (click)="TogglePlay()"
+      >
+        <i class="fa-solid" [class.fa-pause]="IsPlaying" [class.fa-play]="!IsPlaying" aria-hidden="true"></i>
+      </button>
+
+      <div class="evp-transport">
+        <div
+          #track
+          class="evp-scrubber"
+          role="slider"
+          tabindex="0"
+          aria-label="Seek through the recording"
+          [attr.aria-valuemin]="0"
+          [attr.aria-valuemax]="100"
+          [attr.aria-valuenow]="(Progress * 100) | number: '1.0-0'"
+          [attr.aria-valuetext]="CurrentLabel + ' of ' + DurationLabel"
+          (click)="OnScrubberClick($event, track)"
+          (keydown)="OnScrubberKeydown($event)"
+        >
+          <div class="evp-waveform" aria-hidden="true">
+            @for (bar of WaveformBars; track $index) {
+              <span
+                class="evp-bar"
+                [class.evp-bar--played]="($index / WaveformBars.length) <= Progress"
+                [style.height.%]="bar * 100"
+              ></span>
+            }
+          </div>
+          <div class="evp-progress" [style.width.%]="Progress * 100" aria-hidden="true"></div>
+          <div class="evp-thumb" [style.left.%]="Progress * 100" aria-hidden="true"></div>
+        </div>
+        <div class="evp-time">
+          <span class="evp-time__current">{{ CurrentLabel }}</span>
+          <span class="evp-time__sep">/</span>
+          <span class="evp-time__total">{{ DurationLabel }}</span>
+        </div>
+      </div>
+    } @else {
+      <div class="evp-noaudio">
+        <i class="fa-solid fa-microphone-slash" aria-hidden="true"></i>
+        <span>No audio recording is available for this session.</span>
+      </div>
+    }
+  </div>
+
+  <!-- ---------- Transcript ---------- -->
+  <div class="evp-transcript" role="list" aria-label="Session transcript">
+    @if (Turns.length === 0) {
+      <div class="evp-transcript-empty">
+        <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+        <p>No transcript turns to show.</p>
+      </div>
+    } @else {
+      @for (turn of Turns; track TrackByTurn($index, turn)) {
+        <button
+          type="button"
+          class="evp-turn"
+          role="listitem"
+          tabindex="0"
+          [class.evp-turn--user]="IsUserTurn(turn)"
+          [class.evp-turn--agent]="!IsUserTurn(turn)"
+          [class.evp-turn--active]="IsTurnActive(turn)"
+          [attr.aria-label]="SpeakerLabel(turn) + ' at ' + TurnTimestamp(turn) + ': ' + turn.Message"
+          [attr.aria-current]="IsTurnActive(turn) ? 'true' : null"
+          (click)="SeekToTurn(turn)"
+        >
+          <div class="evp-turn__meta">
+            <span class="evp-turn__speaker">{{ SpeakerLabel(turn) }}</span>
+            <span class="evp-turn__time">{{ TurnTimestamp(turn) }}</span>
+          </div>
+          <p class="evp-turn__text">{{ turn.Message }}</p>
+        </button>
+      }
+    }
+  </div>
+</div>

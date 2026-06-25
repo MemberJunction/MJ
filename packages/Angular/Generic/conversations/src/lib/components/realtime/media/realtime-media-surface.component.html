@@ -1,0 +1,131 @@
+<div class="media-surface">
+  @if (Items.length === 0) {
+    <div class="media-empty">
+      <i class="fa-solid fa-images media-empty__icon" aria-hidden="true"></i>
+      <p class="media-empty__title">No media yet</p>
+      <p class="media-empty__hint">{{ AgentName }} will share visuals here during the conversation.</p>
+    </div>
+  } @else {
+    <!-- Tab bar: one tab per media item (the chosen "Tabs" layout — one pane, switch via tabs). -->
+    <div class="media-tabs" role="tablist" aria-label="Shared media">
+      @for (item of Items; track TrackById($index, item); let i = $index) {
+        <button
+          type="button"
+          class="media-tab"
+          role="tab"
+          [class.media-tab--active]="IsActive(item)"
+          [attr.aria-selected]="IsActive(item)"
+          [attr.tabindex]="IsActive(item) ? 0 : -1"
+          [title]="item.DisplayName"
+          (click)="SelectTab(item)"
+          (keydown)="OnTabKeydown($event, i)"
+        >
+          <i class="media-tab__icon" [ngClass]="IconFor(item.Type)" aria-hidden="true"></i>
+          <span class="media-tab__name">{{ item.DisplayName }}</span>
+          <span
+            class="media-tab__close"
+            role="button"
+            tabindex="0"
+            [attr.aria-label]="'Close ' + item.DisplayName"
+            (click)="CloseItem($event, item)"
+            (keydown.enter)="CloseItem($event, item)"
+            (keydown.space)="CloseItem($event, item)"
+          >
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </span>
+        </button>
+      }
+    </div>
+
+    @if (ActiveItem; as active) {
+      <!-- Pane toolbar: per-type controls (open / download / zoom). -->
+      <div class="media-toolbar">
+        <span class="media-toolbar__title" [title]="active.DisplayName">{{ active.DisplayName }}</span>
+        <span class="media-toolbar__spacer"></span>
+        @if (active.Type === 'image') {
+          <button
+            type="button"
+            class="media-iconbtn"
+            [attr.aria-label]="'Zoom image (currently ' + ImageZoom + 'x)'"
+            title="Zoom"
+            (click)="CycleZoom()"
+          >
+            <i class="fa-solid fa-magnifying-glass-plus" aria-hidden="true"></i>
+            <span class="media-iconbtn__badge">{{ ImageZoom }}×</span>
+          </button>
+        }
+        <button
+          type="button"
+          class="media-iconbtn"
+          aria-label="Download media"
+          title="Download"
+          (click)="Download(active)"
+        >
+          <i class="fa-solid fa-download" aria-hidden="true"></i>
+        </button>
+        <button
+          type="button"
+          class="media-iconbtn"
+          aria-label="Open media in a new tab"
+          title="Open in new tab"
+          (click)="OpenInNew(active)"
+        >
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <!-- The single media pane (swaps as tabs switch). The highlight overlay sits on top. -->
+      <div class="media-pane" #mediaPane>
+        <div class="media-stage" [class.media-stage--scroll]="active.Type === 'image' && ImageZoom > 1">
+          @switch (active.Type) {
+            @case ('image') {
+              <img
+                class="media-image"
+                [src]="active.Url"
+                [style.transform]="'scale(' + ImageZoom + ')'"
+                [alt]="active.DisplayName"
+              />
+            }
+            @case ('video') {
+              <video class="media-video" [src]="active.Url" controls preload="metadata"></video>
+            }
+            @case ('audio') {
+              <div class="media-audio-wrap">
+                <i class="fa-solid fa-music media-audio-wrap__icon" aria-hidden="true"></i>
+                <audio class="media-audio" [src]="active.Url" controls preload="metadata"></audio>
+              </div>
+            }
+            @case ('pdf') {
+              <iframe
+                class="media-frame"
+                [src]="SafeUrl(active.Url)"
+                [title]="active.DisplayName"
+              ></iframe>
+            }
+            @case ('web') {
+              <iframe
+                class="media-frame"
+                [src]="SafeUrl(active.Url)"
+                [title]="active.DisplayName"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                referrerpolicy="no-referrer"
+              ></iframe>
+            }
+          }
+
+          @if (HighlightStyle(active); as hs) {
+            <div class="media-highlight" [ngStyle]="hs" aria-hidden="true">
+              @if (active.Highlight?.Label) {
+                <span class="media-highlight__label">{{ active.Highlight?.Label }}</span>
+              }
+            </div>
+          }
+        </div>
+
+        @if (active.Caption) {
+          <p class="media-caption">{{ active.Caption }}</p>
+        }
+      </div>
+    }
+  }
+</div>

@@ -127,7 +127,9 @@ function buildHarness(overrides: Partial<RealtimeSessionRunnerDeps> = {}): Harne
     const executeToolSpy = vi.fn(async (call: RealtimeToolCall): Promise<ToolExecutionResult> => {
         return { CallID: call.CallID, Success: true, Output: 'tool-ok' };
     });
-    const persistSpy = vi.fn(async (_t: RealtimeTranscript): Promise<void> => undefined);
+    // Persist returns the new row id when a DISTINCT turn is created (interim, or final with no prior
+    // interim) and null when an in-flight row is merely updated — the runner counts only the former.
+    const persistSpy = vi.fn(async (_t: RealtimeTranscript): Promise<string | null> => 'detail-id');
     const checkpointSpy = vi.fn(async (_u: RealtimeUsage): Promise<void> => undefined);
 
     const deps: RealtimeSessionRunnerDeps = {
