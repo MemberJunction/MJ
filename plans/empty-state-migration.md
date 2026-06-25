@@ -51,6 +51,17 @@ Variant default icons: `empty`→inbox, `no-results`→magnifying-glass,
    full-area placeholder), re-add that on the `mj-empty-state` element in the
    consumer's CSS (e.g. `.canvas mj-empty-state { flex: 1; }`). Caught on
    ComponentStudio's dashboard canvas + editors + preview.
+6c. **Horizontal-centering corollary (apply PROACTIVELY)** — when you KEEP the
+   bespoke class as a helper (`<mj-empty-state class="x">`), the old `.x` was
+   almost always `text-align: center`, which centered *inline text* but does
+   NOTHING for the flex/block host → it lands in one **grid cell** or **left of a
+   pane**. In `.x`, add per parent type:
+   - grid parent (e.g. `rings-grid`) → `grid-column: 1 / -1; width: 100%;`
+   - flex/block parent, host should fill → `width: 100%;`
+   - class has a `max-width` cap (e.g. `fb-preview-empty`) → `width:100%;
+     margin-inline:auto;` so the capped host centers (not flush-left).
+   Verify by measuring `emptyCenter - cardCenter == 0`. Hit 3× in wave-2 (KH
+   `widget-empty`/`drill-down-empty`, FormBuilder `fb-*`, Integration `ve-*`).
 7. **Delete the displaced bespoke CSS** (`.empty-state*`, `.empty-icon`,
    `.no-selection`, `.btn-create-large`, `.btn-clear`, etc.). Keep only CSS that
    styles **projected** content (see onboarding below). Leave **shared**
