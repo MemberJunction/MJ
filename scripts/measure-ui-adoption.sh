@@ -102,19 +102,36 @@ fi
 
 # ─── Empty-state (canonical SHIPPED — tracked as adoption %) ───
 # Canonical = the <mj-empty-state> component. Bespoke = placeholder elements whose
-# class contains "empty" / no-data / no-results / no-records / no-selection, EXCLUDING:
-#   - the canonical component itself (lines containing mj-empty-state)
-#   - flex/layout helpers kept on migrated empties (empty-fill, empty-hint, empty-state-fill, empty-state-features)
-#   - table cell markers (empty-row, empty-cell) and dropdown popup rows (dropdown-empty) — SKIP by classification rules
-#   - BEM state modifiers (--empty) — styling flags, not placeholder elements
-#   - commented-out code
-# NOTE: still grep-based and approximate (a bespoke-named WRAPPER around a migrated
-# <mj-empty-state> can over-count by one line); see classification pass for exact targets.
+# class contains "empty" / no-data / no-results / no-records / no-selection.
+#
+# TWO-TIER COUNT (precision without re-introducing the under-count blind spot):
+#   1. RAW widened set — the broad class-token match MINUS the long-standing structural
+#      exclusions (the canonical component itself, flex/layout helper classes kept on
+#      migrated empties, table cell markers, dropdown popup rows, BEM `--empty` state
+#      flags, commented code). This is the anti-blind-spot baseline — reported as-is.
+#   2. GENUINE bespoke — tier 1 MINUS documented NON-PLACEHOLDER false-positives that the
+#      wave-2 classification pass proved are not area placeholders (see $empty_nonplaceholder_re).
+#      Adoption % is computed against this so it reflects genuine remaining work.
+# Both numbers (+ the excluded delta) are reported, so nothing is silently hidden.
+# Still grep-based + approximate (a bespoke-named WRAPPER around a migrated <mj-empty-state>
+# on a separate line can over-count by one); the classification pass remains the exact source.
 empty_canonical=$(count_matches '<mj-empty-state')
-empty_bespoke=$({ grep -rE $EXCLUDE 'class="[^"]*(empty|no-data|no-results|no-records|no-selection)[^"]*"' "$ANGULAR_DIR" 2>/dev/null || true; } \
-  | grep -vE 'mj-empty-state|empty-fill|empty-hint|empty-state-fill|empty-state-features|empty-row|empty-cell|dropdown-empty|--empty' \
-  | grep -vE '<!--|//[[:space:]]|/\*' \
-  | wc -l | tr -d ' ')
+_empty_bespoke_raw_lines() {
+  { grep -rE $EXCLUDE 'class="[^"]*(empty|no-data|no-results|no-records|no-selection)[^"]*"' "$ANGULAR_DIR" 2>/dev/null || true; } \
+    | grep -vE 'mj-empty-state|empty-fill|empty-hint|empty-state-fill|empty-state-features|empty-row|empty-cell|dropdown-empty|--empty' \
+    | grep -vE '<!--|//[[:space:]]|/\*'
+}
+# Documented NON-PLACEHOLDER false-positives (SKIP categories, proven by the wave-2 pass):
+#   child/sub-element helpers (empty-subtext/-text/-icon/-title/-message/-label/-close/-recent/-meta/-name/-subtitle)
+#   picker/dropdown popup "no options" rows (BEM __empty element, mj-dropdown-no-data, suggest-empty)
+#   excluded-by-design chat greeting slots (mj-chat-empty-state-default*, conversation-empty-state)
+#   table-cell markers (empty-val) · BEM state flags (is-empty) · inline analytics/config status text
+#   (search-analytics-empty, schedule-empty) · drag-drop hints (section-drop-empty) · hints projected
+#   INTO an already-migrated empty (empty-state-hint, rc-empty-state-hint) · sub-text (no-results-message)
+empty_nonplaceholder_re='empty-val|is-empty|empty-subtext|empty-subtitle|empty-text|empty-icon|empty-title|empty-message|empty-label|empty-close|empty-recent|empty-meta|empty-name|__empty|mj-dropdown-no-data|suggest-empty|chat-empty-state-default|conversation-empty-state|search-analytics-empty|schedule-empty|section-drop-empty|empty-state-hint|no-results-message|results-empty-message'
+empty_bespoke_raw=$(_empty_bespoke_raw_lines | grep -c . | tr -d ' ')
+empty_bespoke=$(_empty_bespoke_raw_lines | grep -vE "$empty_nonplaceholder_re" | grep -c . | tr -d ' ')
+empty_excluded=$((empty_bespoke_raw - empty_bespoke))
 empty_total=$((empty_canonical + empty_bespoke))
 if [ "$empty_total" -gt 0 ]; then
   empty_pct=$((empty_canonical * 100 / empty_total))
@@ -221,6 +238,15 @@ Components that already exist — tracking migration progress to 100%.
 | Numeric (\`<mj-numeric-input>\`) | $numeric_canonical | $numeric_bare | $numeric_total | **${numeric_pct}%** |
 | Datepicker (\`<mj-datepicker>\`) | $datepicker_canonical | $datepicker_bare | $datepicker_total | **${datepicker_pct}%** |
 | Empty-state (\`<mj-empty-state>\`) | $empty_canonical | $empty_bespoke | $empty_total | **${empty_pct}%** |
+
+> **Empty-state precision note**: \`Bespoke\` counts **genuine placeholder** elements only.
+> The widened class-token match found **$empty_bespoke_raw** bespoke-ish hits; **$empty_excluded**
+> are documented NON-placeholders (child helper sub-elements, picker/dropdown "no options"
+> rows, chat greeting slots, table-cell markers, BEM state flags, inline-status text, drag
+> hints, and hints projected into an already-migrated empty) excluded per the SKIP-classification
+> rules. The remaining **$empty_bespoke** are genuine bespoke empties still to migrate (many in
+> packages outside the wave-2 scope). The raw widened count is retained as the anti-blind-spot
+> baseline so narrowing can never silently hide a real bespoke empty.
 
 ## New components (bespoke pattern counts)
 
