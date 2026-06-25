@@ -196,11 +196,28 @@ For each migrated empty-state, confirm in **both light and dark mode**:
 | dashboards/AI-autotagging (stragglers) | 8 | 23 | ✅ | (this commit) |
 | dashboards/DevTools event-monitor | 1 | 3→1 | ✅ | (this commit) |
 | Explorer/core-entity-forms (24 files) | 24 | 85 | ✅ (build-verified)¹ | `3351196622` |
-| Generic/conversations (11 files) | 11 | 13 | ✅ (build-verified)¹ | (this commit) |
-| Generic/{dashboard-viewer,artifacts,entity-viewer,...} | misc | — | | |
-| Explorer/explorer-core | ~5 | — | | |
+| Generic/conversations (11 files) | 11 | 13 | ✅ (build-verified)¹ | `afbef20cb9` |
+| Explorer/explorer-core (+list-detail-grid) | 9 | ~17 | ✅ (build-verified)² | (this commit) |
+| Generic/artifacts + dashboard-viewer | 11 | ~25 | ✅ (build-verified)² | (this commit) |
+| Generic/entity-viewer + ERD/clustering/query-viewer/timeline/versions/deep-diff | 10 | ~19 | ✅ (build-verified)² | (this commit) |
+| Generic/Testing + ai-test-harness/agents/action-gallery/flow-editor | 8 | ~14 | ✅ (build-verified)² | (this commit) |
+| Generic/file-storage+filter-builder+list-management+record-*+resource-permissions+search+data-context | 12 | ~20 | ✅ (build-verified)² | (this commit) |
+
+**MIGRATION COMPLETE** — adoption ~381 instances. Remaining inline empties intentionally
+left: combobox/dropdown `mj-dropdown-no-data` (tiny in-popup rows), the 2 bespoke
+conversation greeting/suggested-prompt slot components, and truly one-line inline spans.
 
 ## Follow-ups
+
+- **² Final 24-package batch screenshots**: build-verified per explicit decision —
+  the full turbo build compiles all 92 new `<mj-empty-state>` instances (a template
+  error fails the build) and 104 test tasks pass. `file-storage` captured live
+  (file-browser: 3 empties, light+dark) as representative. The rest are embedded
+  Generic components that mount only inside specific nested workflows (no isolated
+  Storybook/fixture harness exists), so live 1:1 capture wasn't practical. 13
+  packages had `@memberjunction/ng-ui-components` added as a dependency (it has zero
+  ng- deps → no cycles); npm install run.
+
 
 - **¹ core-entity-forms screenshots**: migration is build-verified (package
   compiles all 85 `<mj-empty-state>` instances, 15 tests pass, 0 residual inline

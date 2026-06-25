@@ -203,6 +203,21 @@ modals, search-panel, mention dropdown, user-picker) render the same component;
 build-verified (616 tests pass). The 2 bespoke greeting/suggested-prompt slot
 components were intentionally excluded._
 
+## generic-packages/ (final 24-package batch — reachable surfaces)
+| State | File |
+|-------|------|
+| File Browser — "No storage accounts", "No folders", "This folder is empty" (file-storage) | `file-browser.png` |
+| Dashboards — "Welcome to Dashboards" onboarding + projected feature row + CTA (dashboard-viewer) | `dashboard-browser.png` |
+| Query viewer — "No results" (query-viewer) | `query-data-grid-empty.png` |
+
+_Live captures (light+dark) of the route-reachable surfaces. The remaining ~20
+Generic-package empties (entity-viewer, artifact/data viewers, dashboard parts,
+record-changes/tags, ERD/clustering/timeline overlays, share/list dialogs, agent
+create-panel, etc.) mount only inside specific nested workflows with no isolated
+harness, so they are **build-verified** — the full turbo build compiles all 92
+instances (a template error fails the build) and 104 test tasks pass. Verified via
+genuine route probing, not assumption._
+
 ## version-history/
 | State | File |
 |-------|------|
