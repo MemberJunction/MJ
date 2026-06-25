@@ -1,0 +1,611 @@
+# Praxis — Conversational Assessment Platform
+## Build Plan & Living Work Breakdown Structure (WBS)
+
+> **This document is the single source of truth for building Praxis.** It is written so an implementing
+> agent (or human) can execute the entire program from this file alone, with **zero dependence on prior
+> chat history**. It is also the **durable task state**: the building agent MUST update statuses and notes
+> here as it works, so progress survives session death and forms a permanent history.
+>
+> **Repository note:** This plan currently lives in the **MemberJunction (`memberjunction/mj`) repo** at
+> `plans/praxis/PRAXIS_BUILD_PLAN.md` as the tracking home. **Phase 0** spins the program out into a new
+> private repo **`bizapps-praxis`**, after which the in-`bizapps-praxis` copy becomes canonical. The one
+> piece of framework work that stays in `memberjunction/mj` is the **Media channel (S1)**.
+
+---
+
+## 0. HOW TO USE THIS DOCUMENT — READ FIRST
+
+### 0.1 This file is your task state, not your memory
+- **Do NOT keep the task list in your head or in ephemeral session memory.** This file is authoritative.
+- At the **start of every working session**: read §0.4 (Current Status Snapshot) and the Progress Log (§0.5),
+  find the first `[~]` or `[ ]` task in dependency order, and continue.
+- **Whenever you change the state of a task**, edit its checkbox and append a dated note. Then **commit this
+  file** (commit message: `docs(plan): <WBS id> <short status>`). Committing the plan is part of the task.
+- **Never delete a completed or descoped task** — mark it and keep it for history.
+
+### 0.2 Status legend (edit the checkbox in place)
+- `- [ ]` **Not started**
+- `- [~]` **In progress** — append `<!-- @YYYY-MM-DD started; note -->`
+- `- [x]` **Done** — append `<!-- @YYYY-MM-DD done; PR #/commit; note -->`
+- `- [!]` **Blocked** — append `<!-- @YYYY-MM-DD blocked: reason; needs X -->`
+- `- [-]` **Descoped / Won't do** — append `<!-- @YYYY-MM-DD descoped: reason -->`
+
+### 0.3 Update protocol (do this every time)
+1. Set the task to `[~]` and add a started note **before** writing code.
+2. On completion: set `[x]`, record the PR/commit, tick its **Acceptance** boxes.
+3. If blocked: set `[!]`, write what's blocking and what's needed; pick up the next unblocked task.
+4. Update **§0.4 Current Status Snapshot** (one-paragraph "where things stand").
+5. Add a one-line dated entry to **§0.5 Progress Log**.
+6. Commit this file.
+
+### 0.4 Current Status Snapshot
+> **Status: PLANNING COMPLETE — implementation not started.** Decisions locked (name = Praxis; `BasedOnID`
+> derivation for config override-layering; IsA reserved for additive subtypes; v1 = 1 agent + 1 human; Media
+> channel is the only net-new MJ-core build; audio → MJStorage; RAG/tools/magic-links reuse existing MJ).
+> Plan committed to `memberjunction/mj` (`plans/praxis/`) via PR. **Next action: Phase 0 — `P0.T1`** (create
+> the private `bizapps-praxis` repo and migrate this plan into it). Five decision gates (§1.7) are open but
+> only gate their specific sub-phases.
+
+### 0.5 Progress Log
+- `@2026-06-25` Plan authored. All tasks `[ ]`.
+- `@2026-06-25` Phase 0 (spin-out to `bizapps-praxis`) added; plan committed to `memberjunction/mj` at
+  `plans/praxis/PRAXIS_BUILD_PLAN.md` and PR opened. Awaiting Phase-0 kickoff.
+
+### 0.6 Where this file lives
+- **Now:** `memberjunction/mj` → `plans/praxis/PRAXIS_BUILD_PLAN.md` (tracking home).
+- **After Phase 0:** migrated to `bizapps-praxis` → `plans/PRAXIS_BUILD_PLAN.md`, which becomes canonical.
+  A short pointer/stub may remain in `memberjunction/mj` linking to the Media-channel work (S1) only.
+
+---
+
+## 1. PROGRAM CONTEXT (so no chat history is needed)
+
+### 1.1 Vision
+One MemberJunction **OpenApp** that replaces CDP's ATS interview engine, Voice Agents, and ConvoEvals with a
+single configurable pipeline — **Intake → Context Assembly → Conversation → Capture → Evaluation →
+Disposition** — where everything that differs between use cases is **metadata, not code**. It runs on MJ's
+realtime agent architecture and ships a **world-class** authoring experience and a brandable public widget.
+
+### 1.2 The reuse engines
+- **Composition** — the persona agent's prompt is assembled at session start from independent fragments via
+  MJ's `AIPromptRunner` child-prompt composition.
+- **Derivation** — config templates form a `base → variant → instance` chain resolved by a `ConfigResolver`
+  (see §1.6 for the `BasedOnID` vs IsA decision).
+
+### 1.3 Locked decisions (do not relitigate)
+| Topic | Decision |
+|---|---|
+| Name / schema | **Praxis** / schema `Praxis` (final). |
+| Repo | New private repo **`bizapps-praxis`** (created in Phase 0), built on OpenApp tech (bizapps-common skeleton), own DB schema `Praxis`. |
+| npm scope | **`@mj-biz-apps/praxis-*`** (matching bizapps-common's `@mj-biz-apps/*`). Shorthand `@praxis/*` is used in this doc; final names use the `@mj-biz-apps/praxis-` prefix. Confirm in Phase 0. |
+| Runtime | **MJ realtime, fully.** Co-agent voices a persona target-agent; realtime model selected dynamically per session. No ElevenLabs-direct path. |
+| v1 party model | **1 agent + 1 human.** Multi-party deferred to S15, consuming MJ's bridge/LiveKit layer (no app-side floor control). |
+| Migration approach | **Strangler**: re-host **ATS first** (integrity parity included), then Voice, then net-new verticals. |
+| Config inheritance | **`BasedOnID` derivation FK** for override-layering; **IsA** only for genuine additive subtypes (§1.6). |
+| Knowledge/RAG | **Reuse MJ** unified + scoped search + pre-execution RAG. No provider KB sync. |
+| Server-side tools | **Reuse MJ** — target async agent's Actions. No new tool abstraction. |
+| Invites / entry | **Reuse MJ Magic Links** scoped to an agent. |
+| Audio | **MJStorage** (`@memberjunction/storage`): `MJ: Files` + `MJ: File Entity Record Links`; transcripts in DB; session row holds only a `FileID` link. Never base64-in-DB. |
+| Media to users | **MC1 — Media channel** (the ONE net-new MJ-core build, stays in `memberjunction/mj`): show images/video/audio/PDF during a conversation. |
+| Eval | One app-side `EvalDriver` (multimodal, evidence, integrity) absorbing Voice's category-weights + consistency check. Integrity model is generic & platform-owned. |
+
+### 1.4 What we BUILD vs. REUSE
+- **Build in MJ core (`memberjunction/mj`):** MC1 Media channel (server+client plugin pair) + multi-channel
+  shell support in `@memberjunction/ng-conversations`. (Sub-phase S1.)
+- **Build in the `bizapps-praxis` OpenApp:** the config domain, the 4 drivers, runtime orchestration, eval,
+  intake, domain binding, the authoring studio, the public widget, results review, analytics, config bundles.
+- **Reuse from MJ as-is:** realtime co-agent + `invoke-target-agent`, `BaseRealtimeModel` drivers, Actions,
+  scoped-search RAG, Magic Links, MJStorage, Whiteboard & Remote Browser channels, bridges (for S15),
+  `AIAgentSession` capture/observability, design tokens, BaseEngine reactive caches, mj-sync.
+
+### 1.5 Drivers (app-side, `@praxis/server`, `@RegisterClass`, server-side, always passed `contextUser`+`provider`)
+1. **`ConfigResolver`** — `Resolve(entity)` walks `BasedOnID` (cycle-guarded) coalescing nullable scalars +
+   key-merging JSON lists; `ResolveSession(...)` returns the full `ResolvedConfig` snapshot.
+2. **`EvalDriver`** — `Evaluate(EvalInput) → EvalResult` (Scores / Evidence / Narrative / Disposition +
+   Integrity + `keyedOn` audit). Optional `EvaluateWithConsistencyCheck`. Intake submission is an eval input.
+3. **`DifficultyController`** — `NextParams(current, signal, policy)`; Static = passthrough; Adaptive moves
+   within floor/ceiling, **refused in Assessment mode** at the engine level.
+4. **`ContextProvider`** — `Provide(ctx) → StructuredContext`; impls: `FormProvider`, `SourceEntityProvider`,
+   `CRMProvider`, `EngagementDigestProvider`.
+
+### 1.6 Inheritance decision (resolved)
+- **`BasedOnID`** (nullable self-FK; NOT `ParentID`, NOT IsA) on each config entity:
+  - **Scalar fields** are nullable typed columns, `NULL = inherit`; resolved by COALESCE up the chain.
+  - **List / text-fragment fields** use keyed JSON with **add / override-by-key / suppress (tombstone)** merge.
+  - `IsAbstract` marks non-runnable templates.
+- **IsA** (`Entity.ParentID`, table-per-type, shared PK, additive columns, no field shadowing) is used **only**
+  where we want true additive subtypes — candidate: Persona subtypes (`SimulatedCustomerPersona`,
+  `PanelInterviewerPersona`) that *add* columns. IsA and `BasedOnID` compose. **S2.T9** decides whether v1
+  introduces IsA subtypes.
+
+### 1.7 Open decision gates (block only their sub-phase; capture answers here when resolved)
+- **DG-1 Media channel layout** (gates S1/S8): multi-resource as tabs, free split, or both; final media set.
+- **DG-2 Integrity parity fields** (gates S4/S7): exact ATS integrity columns that define "parity."
+- **DG-3 Acoustic-gating allowlist** (gates S4/S7): per-criterion policy for hiring rubrics (legal input).
+- **DG-4 DifficultyWeight normalization math** (gates S4/S13): how weight adjusts cross-scenario scores.
+- **DG-5 Subject identity** (gates S5/S7): confirm single polymorphic `SubjectEntityName + SubjectID` vs.
+  per-bundle typed FKs. (ATS `Applicant` is not bizapps `Person` today.)
+
+### 1.8 Cross-cutting standards (apply to EVERY task — non-negotiable)
+- **MJ conventions:** follow the repo `CLAUDE.md` + relevant `/guides`. No `any`. Strong-typed generated
+  entities only (no `.Get()/.Set()` substitutes). `RunViews` batching. `entity_object` only when mutating.
+  `BaseSingleton` for singletons. No cross-package re-exports. No dynamic `import()` (except sanctioned cases).
+  `contextUser` on all server-side data calls. Check `Save()/Delete()` booleans + `LatestResult.CompleteMessage`.
+- **Migrations:** highest `migrations/` version folder; `VYYYYMMDDHHMM__v<ver>__<desc>.sql`; hardcoded UUIDs;
+  no `__mj_*` timestamp cols; no FK indexes; `sp_addextendedproperty` on every business column; single
+  multi-`ADD` `ALTER`s; new tables in schema `Praxis` (never `__mj`). Manually-managed views: recreate the
+  view in the same migration with an explicit column list when adding columns (CDP view-ordering rule).
+- **CodeGen:** never hand-edit `generated/`; run CodeGen after every schema change; write TS against generated
+  types only **after** CodeGen runs.
+- **Reactive data:** prefer `BaseEngine` + `ObserveProperty` caches over reload loops; check `BaseEngineRegistry`
+  before bulk-loading an entity. Persist user prefs via `UserInfoEngine`, never `localStorage`.
+- **Metadata/seed data:** new lookup tables + all config bundles seed via **mj-sync** metadata files
+  (`metadata/bundles/...`), never SQL INSERTs. Document that a `mj sync push` is required.
+- **Testing:** **Vitest**; test files in `src/__tests__`; cover validation/error paths, not just happy path;
+  every new package ships `tsconfig` `strict:true` + an eslint `--max-warnings 0` script. Run a package's
+  tests after changing it; report pass/fail/skip.
+- **The UX Quality Bar (§1.9) is an acceptance criterion on every user-facing task.**
+
+### 1.9 UX QUALITY BAR — "world-class" is a gate, not a vibe
+Every user-facing surface MUST satisfy ALL of these before its task is `[x]`:
+1. **Design tokens only** — zero hardcoded colors; semantic `--mj-*` tokens; verified in **light AND dark**.
+2. **Page chrome** — Explorer surfaces use `<mj-page-layout>` + header/body trio (or `<mj-page-header-interior>`
+   for sub-pages); dashboards call `NotifyLoadComplete()`.
+3. **MJ UI components** — use `@memberjunction/ng-ui-components` + AG Grid + `angular-split` + `<mj-loading>`.
+   No Kendo/PrimeNG/Material. Dialog buttons: confirm LEFT, cancel RIGHT.
+4. **All states designed** — empty, loading (skeletons via `<mj-loading>`), error (actionable), success,
+   partial/streaming. No raw spinners, no dead-ends, no silent failures.
+5. **Accessibility — WCAG 2.2 AA:** full keyboard operability, visible focus rings (`--mj-border-focus`),
+   correct ARIA roles/labels, screen-reader-tested flows, focus management on dialog/panel open/close,
+   `prefers-reduced-motion` respected, contrast verified in both themes.
+6. **Responsive + mobile** — the public widget is mobile-first; the studio is usable down to tablet.
+7. **Micro-interactions & motion** — purposeful, fast (<200ms), reduced-motion aware; never blocking.
+8. **Copy & IA** — plain-language labels, helpful empty-state guidance, inline validation, no jargon leaks.
+9. **Performance** — batch loads (`RunViews`), reactive caches, virtualized long lists/grids; no per-row queries.
+10. **Consistency** — same component vocabulary and layout grammar across studio surfaces.
+
+---
+
+## 2. ARCHITECTURE REFERENCE (condensed, self-contained)
+
+### 2.1 Entity model (schema `Praxis`; CodeGen-managed bits omitted)
+**Derivation mixin** (on Protocol, Persona, Rubric, DifficultyProfile): `BasedOnID UNIQUEIDENTIFIER NULL`
+(self-FK), `IsAbstract BIT`, nullable typed scalar columns (`NULL`=inherit), keyed-JSON list columns.
+
+Core tables and their load-bearing columns:
+- **Protocol** — `Name, CompanyID, BasedOnID, IsAbstract, Personality(frag), Objectives(jsonList),
+  TopicGuide(jsonList), Autonomy, DefaultMode, PersonaID, DifficultyProfileID, RubricID, ModelPreference,
+  ContextProviderRefs(json),` **intake:** `IntakeMode(None|ExternalForm|NativeForm), ExternalFormTypeID,
+  ExternalFormID, ExternalFormSchema(json), NativeFormID, SubjectEntityName, SubjectEntityConfig(json),
+  ScoreIntakeSubmission(bit)`.
+- **Persona** — `Name, CompanyID, BasedOnID, IsAbstract, Brief(frag), Agenda, KnowledgeScope(json),
+  PreferredModel, PreferredVoice`. (Possible IsA subtypes — see S2.T9.)
+- **DifficultyProfile** — `Name, CompanyID, BasedOnID, IsAbstract, ControllerMode(Static|Adaptive),
+  DifficultyWeight, Resistance, ConcessionThreshold, DisclosureRate, Volatility, CurveballFrequency,
+  Patience, ControllerPolicy(json)`.
+- **Rubric** — `Name, CompanyID, BasedOnID, IsAbstract`.
+- **RubricVersion** — `RubricID, VersionNumber, Status(Draft|Published|Retired), PublishedAt`.
+- **Criterion** — `RubricVersionID, Key, Name, Description, CriterionType(binary|scalar|categorical|
+  disqualifying), Weight, MaxScore, EvidenceRequired, AcousticAllowed, AppliesTo(Conversation|IntakeSubmission|Both)`.
+- **Engagement** — `Name, CompanyID, SubjectEntityName, SubjectID, Status`.
+- **AssessmentSession** — `EngagementID, ProtocolID, CompanyID, Mode(Practice|Assessment), Status,
+  SubjectEntityName, SubjectID, ResolvedConfig(jsonSnapshot), RubricVersionID, AIAgentSessionID,
+  IntakeSubmissionID, AudioFileID(→MJ:Files link), StartedAt, CompletedAt, SequenceInEngagement`.
+- **IntakeSubmission** — `ProtocolID, SubjectEntityName, SubjectID, ExternalResponseID, MappedData(json),
+  AdditionalData(json), SubmittedAt`.
+- **Assessment** — `AssessmentSessionID, RubricVersionID, Status, OverallScore, Recommendation,
+  AdjustedRecommendation, Scores(json), Evidence(json), Narrative, Disposition, Integrity(json),
+  EvalKeyedOn(json), EvalMetadata(json)`.
+- **ContinuityDigest** — `EngagementID, AssessmentSessionID, RelationshipState, OpenThreads, Commitments, Sentiment`.
+- **Deferred (S15 multi-party):** `Seat`/`Cast` records over a session.
+
+### 2.2 Runtime wiring (per session)
+ResolveSession → snapshot `ResolvedConfig` + pin `RubricVersionID` → assemble persona target-agent prompt
+(`AIPromptRunner` child-prompts) → start MJ realtime via co-agent + `invoke-target-agent`, model chosen from
+snapshot → store `AIAgentSession.ID` on the session → on close: store audio to MJStorage, compile
+`ContinuityDigest` (if Engagement), enqueue `EvalDriver.Evaluate`.
+
+### 2.3 Mode gate
+`Mode (Practice|Assessment)` gates hints/retries/visible-scoring/recording **and** disables adaptive
+difficulty in Assessment — enforced at the engine level, not by convention.
+
+---
+
+## 3. WORK BREAKDOWN STRUCTURE — Program "Praxis v1"
+
+> One program. **Phase 0** (repo spin-out) then sub-phases **S0–S17**. Each: **Goal · Depends · Exit · Tasks ·
+> UX · Tests · Risks.** Tasks carry stable IDs (`P0.T<m>` / `S<n>.T<m>`), a status checkbox, detail, and
+> **Acceptance** checkboxes. Tracks **A (MJ-core, in `memberjunction/mj`)** and **B (OpenApp, in
+> `bizapps-praxis`)** run in parallel where dependencies allow (see §4 graph).
+
+---
+
+### Phase 0 — Spin-out to `bizapps-praxis`  · Track B
+**Goal:** Stand up the new private `bizapps-praxis` repo and migrate this program into it, so all OpenApp work
+(S0+) happens there. The plan presently lives in `memberjunction/mj` (`plans/praxis/`); after this phase the
+`bizapps-praxis` copy is canonical.
+**Depends:** — **Exit:** `bizapps-praxis` repo exists; this plan + design docs live in it; CI placeholder green;
+`memberjunction/mj` retains only the Media-channel (S1) work + a pointer stub.
+
+- [ ] **P0.T1 — Create private `bizapps-praxis` repo** (org `memberjunction`, private). Confirm npm scope
+  **`@mj-biz-apps/praxis-*`** and default branch model (`next` integration → `main` release, per bizapps-common). <br>**Acceptance:** ☐ repo created private ☐ scope confirmed ☐ `next`+`main` branches exist ☐ branch-protection set.
+- [ ] **P0.T2 — Seed repo from bizapps-common skeleton** (mj-app manifest, workspaces, turbo, CI scaffolding —
+  detailed scaffolding is S0). <br>**Acceptance:** ☐ skeleton committed to `next` ☐ feature branch `claude/assessment-platform-architecture-cd91cg` cut from `next` and tracking same-named remote.
+- [ ] **P0.T3 — Migrate this plan + design docs into `bizapps-praxis`** at `plans/PRAXIS_BUILD_PLAN.md`
+  (+ the high-level design + technical design companions). Update §0.6 and the repo note. <br>**Acceptance:** ☐ plan in `bizapps-praxis` ☐ §0.6 updated ☐ canonical-copy note set.
+- [ ] **P0.T4 — Leave a pointer stub in `memberjunction/mj`** — replace `plans/praxis/PRAXIS_BUILD_PLAN.md`
+  with a short stub linking to `bizapps-praxis` and scoping MJ's involvement to the Media channel (S1). <br>**Acceptance:** ☐ stub committed ☐ no duplicated living plan in two repos.
+- [ ] **P0.T5 — Access & secrets** — repo collaborators/teams, CI secrets (DB, AI keys) mirrored from the
+  bizapps-common pattern; `.env` strategy documented. <br>**Acceptance:** ☐ contributors can clone+build ☐ secrets documented (not committed).
+**UX:** none (infra). **Tests:** CI placeholder. **Risks:** org/permissions for a new private repo — confirm who owns repo creation; if `memberjunction` org access is unavailable to the building agent, escalate to a human (this is a likely `[!]` until granted).
+
+---
+
+### S0 — Foundations & Scaffolding  · Track B (inside `bizapps-praxis`)
+**Goal:** A buildable, CI-green OpenApp shell on schema `Praxis`.
+**Depends:** Phase 0. **Exit:** repo builds; CodeGen runs clean; empty MJAPI/MJExplorer boot.
+
+- [ ] **S0.T1 — Confirm npm scope & workspace layout** (repo created in Phase 0). Scope `@mj-biz-apps/praxis-*`. <br>**Acceptance:** ☐ scope + workspaces finalized.
+- [ ] **S0.T2 — Scaffold packages/apps.** `mj-app.json` (schema `Praxis`, `createIfNotExists`, mjVersionRange,
+  packages, migrations engine, metadata dir); `mj.config.cjs`; packages `Entities/Actions/Server/Angular`;
+  apps `MJAPI` (port 41xx) / `MJExplorer` (port 43xx); root `.env`. <br>**Acceptance:** ☐ `npm install` + `npm run build` green ☐ both apps boot ☐ ports documented.
+- [ ] **S0.T3 — Confirm plan location in-repo** (moved in P0.T3) and wire README pointer. <br>**Acceptance:** ☐ README links the plan.
+- [ ] **S0.T4 — CI: build + lint + Vitest gates.** GitHub Actions: build, `eslint --max-warnings 0`,
+  `vitest run`. Branching model (`next`→`main`) documented. <br>**Acceptance:** ☐ CI green on an empty PR ☐ zero-warning lint enforced.
+- [ ] **S0.T5 — CodeGen pipeline + manifests.** Wire CodeGen; supplemental class manifests
+  (`--exclude-packages @memberjunction`); `prestart`/`prebuild`. <br>**Acceptance:** ☐ `mj codegen` clean ☐ manifests generate.
+- [ ] **S0.T6 — Dev runbook.** README: start API/Explorer, run CodeGen, run migrations, push metadata, run
+  tests, run the Playwright CLI profile. <br>**Acceptance:** ☐ a fresh dev can boot end-to-end from the README.
+**UX:** none (infra). **Tests:** CI smoke. **Risks:** mjVersionRange drift vs. MJ realtime APIs — pin a known-good MJ version.
+
+---
+
+### S1 — MJ-CORE: Media Channel + Multi-Channel Shell  · Track A (in `memberjunction/mj`, parallel, long pole) · gated by DG-1
+**Goal:** A generic realtime **Media channel** (show images/video/audio/PDF during a conversation) and
+multi-channel shell support, shipped in **public MJ**, consumable by any agent.
+**Depends:** DG-1. **Exit:** an MJ realtime session can open the Media channel, the agent can show/clear media,
+state persists + restores on resume; shell hosts ≥2 channels with split/resize.
+
+- [ ] **S1.T1 — DG-1 resolution.** Decide multi-resource layout (tabs vs. free split vs. both) + media set
+  (image/video/audio/PDF/embed). Record answer in §1.7. <br>**Acceptance:** ☐ decision recorded.
+- [ ] **S1.T2 — `MediaChannelServer` (`BaseRealtimeChannelServer`).** Server tools `show-media`, `open-media`
+  (additive), `play-media`(seek/autoplay), `highlight`, `close-media`; resolves access + signed URLs
+  (MJStorage); `OnChannelStateSave`/restore. <br>**Acceptance:** ☐ tools registered ☐ state persists ☐ private files signed.
+- [ ] **S1.T3 — `MediaChannelClient` (`BaseRealtimeChannelClient`).** Multi-pane surface (per DG-1) rendering
+  image/video/audio/PDF/embed; `BindSurface/RegisterTools/RestoreState`. <br>**Acceptance:** ☐ renders all media types ☐ multi-resource ☐ restores on resume.
+- [ ] **S1.T4 — `MJ: AI Agent Channels` registration** for the Media channel + a generic `AIAgentResource`
+  concept (re-home of Voice's `VoiceResource`). <br>**Acceptance:** ☐ resolvable via ClassFactory ☐ seeded via metadata.
+- [ ] **S1.T5 — Multi-channel shell in `@memberjunction/ng-conversations`.** Host N channel surfaces with
+  `angular-split`; per-channel state; channel open/close orchestration. <br>**Acceptance:** ☐ ≥2 channels concurrently ☐ resize persists.
+- [ ] **S1.T6 — MJ guide + tests.** Add a Media-channel section to the realtime channel docs; unit tests for
+  server tools + state. <br>**Acceptance:** ☐ guide updated ☐ tests pass.
+**UX (apply §1.9):** media viewer states (loading/poster/error/unsupported), keyboard controls for media,
+captions/transcripts affordance for audio/video, focus management when a pane opens, reduced-motion. <br>**Tests:** Vitest for server tools/state; manual realtime smoke. **Risks:** PR review cadence in public MJ — open the PR early; keep the channel additive.
+
+---
+
+### S2 — Config Domain + ConfigResolver  · Track B
+**Goal:** The four config entities with derivation, and a tested `ConfigResolver`.
+**Depends:** S0. **Exit:** entities CodeGen'd; resolver returns correct effective config for base/variant/instance
+incl. tombstones; unit-tested.
+
+- [ ] **S2.T1 — Migration: Protocol/Persona/DifficultyProfile/Rubric/RubricVersion/Criterion** with the
+  derivation mixin + fields in §2.1; extended properties on every column. <br>**Acceptance:** ☐ migrates clean ☐ CodeGen generates entities.
+- [ ] **S2.T2 — Run CodeGen**, then implement against generated types only. <br>**Acceptance:** ☐ generated types exist.
+- [ ] **S2.T3 — `ConfigResolver.Resolve(entity)`** — walk `BasedOnID` (cycle guard, depth bound), COALESCE
+  scalars, key-merge JSON lists (add/override-by-key/suppress). <br>**Acceptance:** ☐ scalar inherit/override ☐ list merge ☐ tombstone suppress ☐ cycle-guarded.
+- [ ] **S2.T4 — `ConfigResolver.ResolveSession(...)`** → full `ResolvedConfig` (protocol⊕persona⊕difficulty⊕
+  rubric⊕model⊕contextProviders) with optional `resolutionTrace`. <br>**Acceptance:** ☐ complete snapshot shape ☐ trace optional.
+- [ ] **S2.T5 — Resolver caching** keyed by chain `(id, updatedAt)`; invalidation on save. <br>**Acceptance:** ☐ cache hit path ☐ invalidates on edit.
+- [ ] **S2.T6 — `PraxisConfigEngine` (`BaseEngine`)** caching config entities with `ObserveProperty` for the
+  studio UX. <br>**Acceptance:** ☐ reactive arrays ☐ lazy `Config()`.
+- [ ] **S2.T7 — Field-merge-policy registry** (per-field: scalar/replace, fragment/append|replace,
+  list/setMergeByKey). <br>**Acceptance:** ☐ declarative policy table ☐ resolver reads it.
+- [ ] **S2.T8 — Unit tests** for resolver (deep chains, tombstones, cycles, missing parents). <br>**Acceptance:** ☐ ≥90% branch coverage on resolver.
+- [ ] **S2.T9 — DECISION: IsA Persona subtypes?** Decide whether v1 introduces additive IsA subtypes
+  (`SimulatedCustomerPersona`, `PanelInterviewerPersona`). If yes, model via `Entity.ParentID` (shared PK,
+  additive cols) composing with `BasedOnID`. <br>**Acceptance:** ☐ decision recorded in §1.6 ☐ migration if yes.
+**UX:** none (engine). **Tests:** resolver suite. **Risks:** over-deep chains — enforce a max depth + log.
+
+---
+
+### S3 — Runtime & Capture  · Track B
+**Goal:** Start a real 1-agent-1-human session on MJ realtime from a Protocol, snapshot config, capture
+transcript + audio (MJStorage).
+**Depends:** S2; reuses MJ realtime. **Exit:** a trivial roleplay runs end-to-end; snapshot written; transcript
+in DB; audio in MJStorage referenced by `FileID`.
+
+- [ ] **S3.T1 — Migration: Engagement, AssessmentSession, IntakeSubmission** (+ extended properties). <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S3.T2 — Session start orchestration** — ResolveSession → write `ResolvedConfig` + pin `RubricVersionID`. <br>**Acceptance:** ☐ snapshot immutable post-start.
+- [ ] **S3.T3 — Persona prompt assembly** via `AIPromptRunner` child-prompts (personality/objectives/topic
+  guide/persona brief/difficulty params/context). <br>**Acceptance:** ☐ deterministic from snapshot.
+- [ ] **S3.T4 — Realtime launch** — co-agent + `invoke-target-agent`, dynamic model from snapshot; store
+  `AIAgentSession.ID` on the session. <br>**Acceptance:** ☐ live voice session ☐ model selection honored.
+- [ ] **S3.T5 — Capture wiring** — transcript persisted; live signal exposed (`OnTranscript`) for later S13. <br>**Acceptance:** ☐ transcript in DB.
+- [ ] **S3.T6 — Audio → MJStorage** — on close, `FileStorageEngine.UploadFile` → `MJ: Files` + `MJ: File
+  Entity Record Link` (EntityID=AssessmentSession, RecordID=session); store `AudioFileID`; playback via
+  `CreatePreAuthDownloadUrl`. <br>**Acceptance:** ☐ no blob in DB ☐ signed playback URL works.
+- [ ] **S3.T7 — Session lifecycle/status** state machine (Pending→Active→Completed→Evaluated/Failed) + janitor. <br>**Acceptance:** ☐ statuses transition correctly.
+- [ ] **S3.T8 — Tests** (mocked realtime) for start/snapshot/capture/close. <br>**Acceptance:** ☐ suite green.
+**UX:** none here (runtime). **Tests:** orchestration unit + manual realtime smoke. **Risks:** model-availability fallback — implement tolerant fallback per snapshot.
+
+---
+
+### S4 — Evaluation & Integrity  · Track B · gated by DG-2, DG-3, DG-4
+**Goal:** One `EvalDriver` producing 4 artifacts + integrity, with acoustic gating + consistency check.
+**Depends:** S3; rubric from S2. **Exit:** a completed session yields an `Assessment` with scores/evidence/
+narrative/disposition + integrity; acoustic gating enforced + audited.
+
+- [ ] **S4.T1 — DG-2/DG-3/DG-4 resolution.** Record integrity-parity fields, acoustic allowlist policy, and
+  difficulty-weight normalization math in §1.7. <br>**Acceptance:** ☐ three answers recorded.
+- [ ] **S4.T2 — Migration: Assessment** (+ extended props; integrity & keyedOn JSON). <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S4.T3 — `EvalDriver.Evaluate`** — multimodal input (transcript + optional audioRef + tools + context +
+  intake submission) → typed criterion scores by `AppliesTo`. <br>**Acceptance:** ☐ all criterion types scored ☐ intake scored when enabled.
+- [ ] **S4.T4 — Evidence extraction** — timestamped grounding segments (turn/audio). <br>**Acceptance:** ☐ segments map to transcript/audio.
+- [ ] **S4.T5 — Integrity sub-model (generic)** — verdict/confidence/evidence/summary; `AdjustedRecommendation`
+  may only LOWER disposition, never raise a score. <br>**Acceptance:** ☐ adjustment never raises ☐ parity w/ DG-2.
+- [ ] **S4.T6 — Acoustic gating** — criterion may key on acoustic features only if `AcousticAllowed`; write
+  `EvalKeyedOn` audit (`perCriterion`). <br>**Acceptance:** ☐ gating enforced ☐ audit recorded.
+- [ ] **S4.T7 — Consistency double-check** (`EvaluateWithConsistencyCheck`) — variance delta in metadata. <br>**Acceptance:** ☐ delta computed.
+- [ ] **S4.T8 — Eval enqueue on session close** + retry/idempotency (no double-eval). <br>**Acceptance:** ☐ once-only ☐ retried on failure with logging.
+- [ ] **S4.T9 — Tests** incl. integrity-never-raises, gating, partial-failure handling. <br>**Acceptance:** ☐ suite green.
+**UX:** none (engine; review UI is S9). **Tests:** eval suite. **Risks:** disparate-impact/legal — DG-3 must be signed off before any hiring bundle ships (hard gate on S7).
+
+---
+
+### S5 — Intake & Domain Binding  · Track B · gated by DG-5
+**Goal:** Optional intake (external/native form) and the polymorphic subject binding; ContextProviders.
+**Depends:** S3. **Exit:** a Protocol can declare intake + subject entity; a submission lands as
+`IntakeSubmission`; ContextProviders feed prompt assembly.
+
+- [ ] **S5.T1 — DG-5 resolution** — confirm single polymorphic `SubjectEntityName + SubjectID`. Record in §1.7. <br>**Acceptance:** ☐ decision recorded.
+- [ ] **S5.T2 — Intake config on Protocol** (modes None/ExternalForm/NativeForm) + `ExternalFormType` reuse. <br>**Acceptance:** ☐ all three modes representable.
+- [ ] **S5.T3 — External form ingestion** (TypeForm-style): fetch schema snapshot, map canonical fields, store
+  unmapped in `AdditionalData` → `IntakeSubmission`. <br>**Acceptance:** ☐ TypeForm response → submission row.
+- [ ] **S5.T4 — Native form path** — render an MJ Interactive Form before the conversation; submission → row. <br>**Acceptance:** ☐ native intake works.
+- [ ] **S5.T5 — ContextProviders** — `FormProvider` (reads submission), `SourceEntityProvider` (reads bound
+  entity), `CRMProvider`, `EngagementDigestProvider` (reads latest digest, never raw transcript). <br>**Acceptance:** ☐ each provider injects structured context.
+- [ ] **S5.T6 — Subject resolution service** — given `SubjectEntityName+SubjectID`, load + label safely
+  (guarded, `EntityByName`). <br>**Acceptance:** ☐ resolves across entity types ☐ fails safe.
+- [ ] **S5.T7 — Tests** for ingestion + providers. <br>**Acceptance:** ☐ suite green.
+**UX:** native-intake form follows §1.9; clear submit/confirmation states. **Risks:** external-form schema drift — cache snapshot + detect changes.
+
+---
+
+### S6 — Authoring Studio UX (world-class admin)  · Track B · UX flagship
+**Goal:** A best-in-class Explorer experience for authoring & managing Protocols, Personas, Rubrics,
+DifficultyProfiles — with the derivation chain made legible.
+**Depends:** S2 (engine). **Exit:** authors can create/derive/override all config entities with live preview;
+meets §1.9 in light+dark; a11y-passed.
+
+- [ ] **S6.T1 — Studio shell** — `<mj-page-layout>` dashboard (`BaseDashboard`, `NotifyLoadComplete`), left-nav
+  to the four config domains + Bundles; reactive via `PraxisConfigEngine`. <br>**Acceptance:** ☐ chrome correct ☐ no loading hang ☐ tokens.
+- [ ] **S6.T2 — Derivation-chain visualizer** — a clear base→variant→instance tree/graph showing, per field,
+  which layer supplied the effective value (uses `resolutionTrace`); "overridden here" vs "inherited" badges. <br>**Acceptance:** ☐ shows provenance per field ☐ keyboard navigable.
+- [ ] **S6.T3 — Protocol editor** — fragment editors (personality), keyed-list editors (objectives, topic
+  guide) with add/override/suppress affordances; intake & subject-binding config; model preference. <br>**Acceptance:** ☐ sparse override UX clear ☐ inline validation.
+- [ ] **S6.T4 — Persona editor** (+ subtype awareness if S2.T9 = yes) — brief/agenda/knowledge scope,
+  voice/model. <br>**Acceptance:** ☐ derivation-aware ☐ preview.
+- [ ] **S6.T5 — Rubric builder** — versioned; criterion rows with type/weight/evidence/acoustic/appliesTo;
+  weight-sum helper; publish/retire workflow. <br>**Acceptance:** ☐ versioning ☐ weight validation ☐ publish flow.
+- [ ] **S6.T6 — DifficultyProfile editor** — slider params (0–1) with human-readable explanations;
+  Static/Adaptive; controller policy (band/floor/ceiling). <br>**Acceptance:** ☐ sliders + live description ☐ adaptive policy editable.
+- [ ] **S6.T7 — Live resolved-config preview** — side panel showing the snapshot a session would get *now*. <br>**Acceptance:** ☐ updates as you edit ☐ matches resolver output.
+- [ ] **S6.T8 — "Try it" launcher** — start a Practice session from any Protocol to dogfood it. <br>**Acceptance:** ☐ one click to a live practice run.
+- [ ] **S6.T9 — Empty/loading/error states + onboarding** for each editor; first-run guidance. <br>**Acceptance:** ☐ all states present ☐ helpful copy.
+- [ ] **S6.T10 — A11y + dark-mode pass** (keyboard, SR, focus, contrast) on all studio surfaces. <br>**Acceptance:** ☐ WCAG 2.2 AA ☐ dark verified.
+**Tests:** component tests + Playwright CLI happy-path. **Risks:** scope creep — ship editors iteratively per entity.
+
+---
+
+### S7 — ATS Vertical (first bundle, parity gate)  · Track B · gated by DG-2/DG-3
+**Goal:** Re-host the ATS interview on Praxis at ≥ current parity, **including integrity**.
+**Depends:** S3,S4,S5,S6; DG-2,DG-3 signed off. **Exit:** an ATS interview runs live on Praxis end-to-end; eval
+(incl. integrity) ≥ current ATS behavior; subject bound to `Application`; intake via TypeForm.
+
+- [ ] **S7.T1 — ATS bundle metadata** (mj-sync `metadata/bundles/ats/`) — InterviewType→Protocol+Persona,
+  criteria→Rubric/Version/Criterion, difficulty profile, model pref. <br>**Acceptance:** ☐ `mj sync push` seeds bundle.
+- [ ] **S7.T2 — Subject binding to ATS** `Application` (`SubjectEntityName='Applications'`); intake via
+  `ExternalForm` (TypeForm `Job.ExternalFormID`/schema → submission). <br>**Acceptance:** ☐ session bound to an Application ☐ intake lands.
+- [ ] **S7.T3 — Integrity parity** — map ATS `IntegrityFlag/Verdict/Confidence/Evidence/AdjustedRecommendation`
+  onto the generic integrity model; verify against sample ATS evaluations. <br>**Acceptance:** ☐ parity on a labeled sample set.
+- [ ] **S7.T4 — Eval parity harness** — run N historical interviews through `EvalDriver`; diff scores/disposition
+  vs. legacy; document deltas. <br>**Acceptance:** ☐ deltas within agreed tolerance ☐ report saved.
+- [ ] **S7.T5 — Strangler wiring** — new ATS interviews route through Praxis AssessmentSession; legacy
+  `ApplicationInterview` referenced (no data migration). <br>**Acceptance:** ☐ new interviews on Praxis ☐ legacy untouched.
+- [ ] **S7.T6 — Recruiter-facing review** uses S9 results UI. <br>**Acceptance:** ☐ recruiter can review a Praxis interview.
+- [ ] **S7.T7 — Tests + pilot** on a non-prod job. <br>**Acceptance:** ☐ pilot interview completes + evaluates.
+**UX:** recruiter review = S9 quality bar. **Risks:** **DG-3 legal sign-off is a hard gate** — do not ship hiring eval without it.
+
+---
+
+### S8 — Public Widget + Multi-Channel Shell + Media UX  · Track B · UX flagship · needs S1
+**Goal:** A brandable, embeddable, mobile-first widget on MJ realtime with the multi-channel shell and the
+Media channel live.
+**Depends:** S3, S1 (Media channel + shell). **Exit:** an external page can embed the widget via a magic-link
+invite; voice + transcript + Media channel work; branding applied; mobile-tested.
+
+- [ ] **S8.T1 — Widget as Angular custom element** (CDN-shipped) from `@praxis/ng`, built on
+  `ng-conversations` + the multi-channel shell. <br>**Acceptance:** ☐ embeds as a web component.
+- [ ] **S8.T2 — Magic-link entry** — invite scoped to the agent (reuse MJ Magic Links); anonymous session →
+  auto-create `AIAgentSession`; resume support. <br>**Acceptance:** ☐ invite link starts a session ☐ resume works.
+- [ ] **S8.T3 — Voice orb + live transcript** surface (speaking states, barge-in, partial transcript). <br>**Acceptance:** ☐ duplex voice ☐ readable transcript ☐ states.
+- [ ] **S8.T4 — Media channel pane** wired (from S1) — agent shows images/video/audio/PDF; multi-resource per DG-1. <br>**Acceptance:** ☐ agent-driven media display ☐ user controls.
+- [ ] **S8.T5 — Branding** — per-deployment logo/colors/greeting/first-message via `--mj-*` token overrides. <br>**Acceptance:** ☐ themable ☐ no hardcoded colors.
+- [ ] **S8.T6 — Channel layout** — `angular-split` panes; layout state persists with session (anonymous-safe). <br>**Acceptance:** ☐ resize persists ☐ restores on resume.
+- [ ] **S8.T7 — Mobile-first + a11y** — touch targets, responsive panes, keyboard, SR, reduced-motion, captions. <br>**Acceptance:** ☐ usable on phone ☐ WCAG 2.2 AA.
+- [ ] **S8.T8 — Consent/recording notice** (pre-call) — see S16. <br>**Acceptance:** ☐ explicit consent captured.
+- [ ] **S8.T9 — Tests** — Playwright CLI flows (invite→converse→media→end). <br>**Acceptance:** ☐ flows pass.
+**Risks:** mobile realtime audio quirks — test on real devices.
+
+---
+
+### S9 — Results & Evidence Review UX  · Track B · UX flagship
+**Goal:** A world-class review experience: scores, narrative, disposition, and **evidence playback synced to
+audio + transcript**, with integrity surfaced responsibly.
+**Depends:** S4 (Assessment), S3 (audio/transcript). **Exit:** a reviewer can read an Assessment, click any
+evidence segment to jump audio+transcript, see integrity with its caveats; meets §1.9.
+
+- [ ] **S9.T1 — Assessment summary** — overall score, recommendation vs. adjusted, per-criterion breakdown with
+  reasoning. <br>**Acceptance:** ☐ clear hierarchy ☐ adjusted-recommendation explained.
+- [ ] **S9.T2 — Evidence-synced player** — transcript with timestamps; clicking evidence seeks the MJStorage
+  audio + scrolls transcript; waveform/scrubber. <br>**Acceptance:** ☐ click-to-seek ☐ transcript follows audio.
+- [ ] **S9.T3 — Criterion drill-down** — per-criterion evidence, type, weight, what it keyed on (`EvalKeyedOn`). <br>**Acceptance:** ☐ shows keyed-on modalities ☐ acoustic-gated criteria labeled.
+- [ ] **S9.T4 — Integrity panel** — verdict/confidence/evidence with **explicit "AI-prelim, human-review-required"
+  framing**; never auto-decides. <br>**Acceptance:** ☐ human-review framing ☐ evidence with alt-explanations.
+- [ ] **S9.T5 — Narrative & disposition** — coaching prose; recommended actions; export/share. <br>**Acceptance:** ☐ readable ☐ exportable.
+- [ ] **S9.T6 — Reviewer actions** — confirm/override disposition with audit (Record Changes). <br>**Acceptance:** ☐ human override recorded.
+- [ ] **S9.T7 — States + a11y + dark.** <br>**Acceptance:** ☐ all states ☐ WCAG 2.2 AA ☐ dark.
+**Risks:** evidence timestamps misaligned — validate against S4.T4 segment accuracy.
+
+---
+
+### S10 — Voice Vertical (second bundle)  · Track B
+**Goal:** Re-host Voice Agents on Praxis; retire the ElevenLabs-direct runtime + dissolved Voice entities.
+**Depends:** S7 patterns; S5 providers; S1 Media. **Exit:** Voice runs on Praxis; EL-direct path removed; RAG via
+MJ scoped search; tools via target-agent Actions; resources via Media channel.
+
+- [ ] **S10.T1 — Voice bundle metadata** (`metadata/bundles/voice/`) — personas/protocols/rubrics from Voice config. <br>**Acceptance:** ☐ bundle seeds.
+- [ ] **S10.T2 — RAG migration** — Voice `VoiceRAGSyncService` → MJ **Search Scopes** + pre-execution RAG /
+  `__Scoped_Search`. <br>**Acceptance:** ☐ agent grounded via MJ search, no EL KB.
+- [ ] **S10.T3 — Tools migration** — Voice tools → target-agent **Actions** (+ channel tools for UI). <br>**Acceptance:** ☐ parity on tool behaviors.
+- [ ] **S10.T4 — Resources migration** — `VoiceResource` → **Media channel** resources. <br>**Acceptance:** ☐ resources show via Media channel.
+- [ ] **S10.T5 — Invites/branding** — `VoiceInvite`/`VoiceDeployment` → Magic Links + widget branding. <br>**Acceptance:** ☐ invite + branding parity.
+- [ ] **S10.T6 — Decommission plan** — list dissolved Voice entities/services; remove EL-direct path behind a
+  flag; data retention plan. <br>**Acceptance:** ☐ EL-direct removed ☐ nothing references dissolved entities.
+- [ ] **S10.T7 — Tests + pilot.** <br>**Acceptance:** ☐ a Voice scenario runs on Praxis.
+**Risks:** behavioral parity on tools — diff against legacy transcripts.
+
+---
+
+### S11 — Net-New Verticals: Sales / Association / Pro-Services  · Track B
+**Goal:** Ship config bundles for the new categories (no engine changes — proves the thesis).
+**Depends:** S5, S6, S8, S9. **Exit:** at least one bundle per category runs; abstract-submission (intake-scored)
+demonstrated.
+
+- [ ] **S11.T1 — Sales roleplay base + variants** (objection-handling, discovery) + Remote Browser demo path. <br>**Acceptance:** ☐ a sales roleplay runs ☐ Remote Browser "your turn".
+- [ ] **S11.T2 — Association: volunteer screening + abstract/speaker pipeline** — written submission (intake) +
+  AI interview, **both scored** under one rubric version (`ScoreIntakeSubmission`, `AppliesTo=Both`). <br>**Acceptance:** ☐ written+conversation scored together.
+- [ ] **S11.T3 — Pro-services: market-research-at-scale + new-client onboarding** — interview-guide protocol;
+  theme-extraction "rubric". <br>**Acceptance:** ☐ a research interview runs + extracts themes.
+- [ ] **S11.T4 — Bundle authoring docs** — how to create a new vertical purely in metadata. <br>**Acceptance:** ☐ a new bundle authored from docs by someone else.
+**UX:** all per §1.9. **Risks:** rubric-as-theme-extraction may need a distinct criterion shape — validate in S11.T3.
+
+---
+
+### S12 — Engagement & Continuity  · Track B
+**Goal:** Multi-session continuity via structured `ContinuityDigest`.
+**Depends:** S3, S5. **Exit:** session N reads the prior digest (not raw transcript); world-state carries forward.
+
+- [ ] **S12.T1 — Migration: ContinuityDigest.** <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S12.T2 — Digest compiler** on session close (relationship state/open threads/commitments/sentiment). <br>**Acceptance:** ☐ digest written per session in an Engagement.
+- [ ] **S12.T3 — `EngagementDigestProvider`** injects latest digest into the next session. <br>**Acceptance:** ☐ N+1 grounded on digest only.
+- [ ] **S12.T4 — Engagement view UX** — timeline of sessions + digests + assessments. <br>**Acceptance:** ☐ §1.9 timeline.
+**Risks:** digest quality — evaluate on a multi-session sample.
+
+---
+
+### S13 — Adaptive Difficulty  · Track B · gated by DG-4
+**Goal:** Practice-only adaptive controller driven by a streaming signal.
+**Depends:** S3 (live signal), S4 (weight math DG-4). **Exit:** difficulty adapts within band in Practice;
+refused in Assessment.
+
+- [ ] **S13.T1 — `ISignalSource`** — v1 cheap turn heuristics over `OnTranscript`. <br>**Acceptance:** ☐ emits rolling signal.
+- [ ] **S13.T2 — `DifficultyController.NextParams`** — Static passthrough; Adaptive within floor/ceiling/band. <br>**Acceptance:** ☐ stays in band ☐ respects bounds.
+- [ ] **S13.T3 — Engine refusal** of Adaptive in Assessment mode. <br>**Acceptance:** ☐ assessment forces Static.
+- [ ] **S13.T4 — DifficultyWeight normalization** (DG-4 math) applied to assessment scoring. <br>**Acceptance:** ☐ cross-scenario comparability per DG-4.
+- [ ] **S13.T5 — Tests.** <br>**Acceptance:** ☐ suite green.
+**Risks:** oscillation — add smoothing per policy.
+
+---
+
+### S14 — Analytics & Insights UX  · Track B · UX flagship
+**Goal:** Program-level analytics: aggregate outcomes, item analysis, AI-vs-human calibration, persona-drift.
+**Depends:** S4, S7+. **Exit:** dashboards for cohorts/rubrics/personas; meets §1.9.
+
+- [ ] **S14.T1 — Aggregate dashboards** (by protocol/persona/cohort) — batch `RunViews`, client aggregation. <br>**Acceptance:** ☐ no per-row queries ☐ §1.9.
+- [ ] **S14.T2 — Item analysis** — per-criterion discrimination/difficulty across sessions. <br>**Acceptance:** ☐ flags weak criteria.
+- [ ] **S14.T3 — AI-vs-human calibration** — compare AI dispositions to human overrides (from S9.T6). <br>**Acceptance:** ☐ calibration view.
+- [ ] **S14.T4 — Persona-drift testing** — track eval drift after a model swap (agent red-teaming use case). <br>**Acceptance:** ☐ drift detectable.
+- [ ] **S14.T5 — A11y + dark + states.** <br>**Acceptance:** ☐ WCAG 2.2 AA ☐ dark.
+**Risks:** small-N noise — surface confidence/sample size.
+
+---
+
+### S15 — Multi-Party (via MJ bridges) — LATER  · Tracks A+B
+**Goal:** Buying-committee / panel / debate casts + human takeover, consuming MJ's bridge/LiveKit multi-party.
+**Depends:** stable v1 (S3–S11); MJ bridge multi-party. **Exit:** a multi-party session runs on MJ bridges with
+correct turn-taking.
+
+- [ ] **S15.T1 — Seat/Cast record layer** over AssessmentSession (occupant/role/persona/difficulty/precedence). <br>**Acceptance:** ☐ N seats modeled.
+- [ ] **S15.T2 — Bridge integration** — each agent seat = its own `AIAgentSession` joining a shared room. <br>**Acceptance:** ☐ ≥2 agents + 1 human in a room.
+- [ ] **S15.T3 — Floor control** — consume MJ moderator; contribute role-aware hardening to MJ core **only if
+  needed** (Track A). <br>**Acceptance:** ☐ no crosstalk in target cast sizes.
+- [ ] **S15.T4 — Human takeover** — coach drops into a seat mid-session. <br>**Acceptance:** ☐ takeover works.
+- [ ] **S15.T5 — Multi-party UX** in widget + review. <br>**Acceptance:** ☐ §1.9.
+**Risks:** 3+ agent echo (known MJ issue) — keep casts small or rely on `addressed-only`; track MJ's fix.
+
+---
+
+### S16 — Governance, Trust, Consent, PII  · Track B (cross-cutting)
+**Goal:** A defensible trust/consent/privacy envelope across all bundles.
+**Depends:** S8 (consent UI), S9 (human-review framing). **Exit:** consent captured, PII handled, retention
+defined, audit complete.
+
+- [ ] **S16.T1 — Consent & recording notice** (pre-session) with per-jurisdiction copy hooks. <br>**Acceptance:** ☐ consent logged.
+- [ ] **S16.T2 — PII handling** — classification of intake/transcript/audio; access scoping via entity perms +
+  Magic-Link scopes; redaction hooks. <br>**Acceptance:** ☐ access-scoped ☐ redaction path.
+- [ ] **S16.T3 — Retention & deletion** — audio (MJStorage) + transcript + assessment retention policy + deletion job. <br>**Acceptance:** ☐ policy enforced ☐ deletion works.
+- [ ] **S16.T4 — Fairness controls** — acoustic-gating audit (S4.T6) surfaced; human-in-loop on flags;
+  documentation. <br>**Acceptance:** ☐ audit visible ☐ no auto-decision on integrity.
+- [ ] **S16.T5 — Audit trail** — rely on MJ Record Changes; verify coverage on key entities. <br>**Acceptance:** ☐ changes tracked.
+**Risks:** regulatory variance — keep copy/policy data-driven.
+
+---
+
+### S17 — Hardening, Performance, Docs, Launch  · Track B
+**Goal:** Production-ready: performance, resilience, docs, runbooks, launch checklist.
+**Depends:** the verticals being launched. **Exit:** load-tested; docs complete; on-call runbook; launch gate met.
+
+- [ ] **S17.T1 — Performance pass** — `RunViews` batching, BaseEngine caches, grid virtualization, query review. <br>**Acceptance:** ☐ no N+1 ☐ targets met.
+- [ ] **S17.T2 — Resilience** — realtime reconnect, eval retry/idempotency, MJStorage failure handling. <br>**Acceptance:** ☐ graceful degradation.
+- [ ] **S17.T3 — Docs** — admin guide, bundle-authoring guide, embedding guide, API/driver reference. <br>**Acceptance:** ☐ docs published.
+- [ ] **S17.T4 — Observability/runbook** — dashboards (sessions, evals, errors), alerts, on-call runbook. <br>**Acceptance:** ☐ runbook exists.
+- [ ] **S17.T5 — Launch checklist & sign-offs** (incl. DG-3 legal for hiring). <br>**Acceptance:** ☐ all sign-offs.
+**Risks:** last-mile integ — keep a staging mirror.
+
+---
+
+## 4. Dependency Graph / Sequencing
+```
+P0(spin-out) ─> S0 ─┬─> S2 ─> S3 ─┬─> S4 ─┬─> S7(ATS) ──> S10(Voice) ──> S11(verticals) ──> S12 ──> S13 ──> S14 ──> S15 ──> S17
+                    │            │       │     ▲              ▲                 ▲
+                    │            ├─> S5 ─┘     │              │                 │
+                    │            └─> S6 ───────┘              │                 │
+   (Track A, in MJ) S1(Media+shell) ───────────> S8(widget) ──┘
+                                               S8 ─> S9(review) feeds S7/S10/S11
+S16 (governance) spans S8..S17.   DG gates: DG-1→S1/S8 · DG-2/3→S4/S7 · DG-4→S4/S13 · DG-5→S5/S7
+```
+**Critical path:** P0 → S0 → S2 → S3 → S4 → S7. **Parallelizable early:** S1 (MJ-core, can start during P0/S0),
+S6 (studio), S5 (intake).
+
+## 5. Risk Register (live — update as risks change)
+- [ ] **R0** New-repo creation permissions (`bizapps-praxis`) — confirm who can create it; escalate if blocked (P0).
+- [ ] **R1** MJ realtime API drift — pin mjVersionRange; integration-test on upgrades.
+- [ ] **R2** DG-3 legal sign-off blocks hiring eval — escalate before S7.
+- [ ] **R3** 3+ agent echo in multi-party (known MJ limitation) — keep casts small in S15; track MJ fix.
+- [ ] **R4** Eval parity drift vs. legacy ATS — S7.T4 harness with agreed tolerance.
+- [ ] **R5** Public MJ PR cadence for S1 — open early, keep additive.
+- [ ] **R6** Evidence-timestamp accuracy for S9 player — validate against S4.T4.
+
+## 6. Program Definition of Done
+- `bizapps-praxis` repo stood up; ATS + Voice running on Praxis (legacy EL-direct removed); ≥1 net-new vertical
+  per category live.
+- All user-facing surfaces pass the §1.9 UX Quality Bar in light + dark, WCAG 2.2 AA.
+- Media channel shipped in MJ core; RAG/tools/invites/audio all reuse existing MJ primitives.
+- Governance envelope (consent/PII/retention/fairness/audit) in place; DG-3 legal sign-off obtained.
+- This WBS fully reconciled (every task `[x]`/`[-]`), committed, with a complete Progress Log history.
+
+---
+*End of plan. Remember: update statuses + Progress Log + Current Status Snapshot and COMMIT this file as you
+work — it is the durable memory of this program.*
