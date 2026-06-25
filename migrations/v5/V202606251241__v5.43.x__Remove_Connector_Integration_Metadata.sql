@@ -51,3 +51,19 @@ DELETE FROM ${flyway:defaultSchema}.Integration
 WHERE Name NOT IN ('File Feed', 'Betty AI')
   AND ID NOT IN (SELECT IntegrationID FROM ${flyway:defaultSchema}.IntegrationObject WHERE IntegrationID IS NOT NULL)
   AND ID NOT IN (SELECT IntegrationID FROM ${flyway:defaultSchema}.CompanyIntegration WHERE IntegrationID IS NOT NULL);
+
+-- 6. Connector-specific credential types — now shipped by each connector in the Integrations repo
+--    (the 22 the repo ships). Explicit list (the safe scope: generic types like API Key / OAuth2
+--    grants / Azure SP are used by AIVendor/MCP/kept connectors and must NOT be touched). Guarded:
+--    delete only where unreferenced by any remaining Integration / AIVendor / MCPServer / Credential —
+--    so a guarded-connected connector that kept its Integration also keeps its credential type.
+DELETE FROM ${flyway:defaultSchema}.CredentialType
+WHERE Name IN (
+    'Aptify Authentication','Blackbaud SKY API','Constant Contact OAuth','GrowthZone OAuth2','MagnetMail API',
+    'MemberSuite API','Neon CRM API Key','NetForum Enterprise Token','NetSuite TBA','Nimble AMS OAuth',
+    'OpenWater API','Path LMS Reporting API','PheedLoop API','PropFuel API','QuickBooks Online OAuth',
+    'Rhythm OAuth2','Sage Intacct','Salesforce JWT Bearer','Wicket API','YourMembership API','iMIS OAuth','rasa.io API')
+  AND ID NOT IN (SELECT CredentialTypeID FROM ${flyway:defaultSchema}.Integration WHERE CredentialTypeID IS NOT NULL)
+  AND ID NOT IN (SELECT CredentialTypeID FROM ${flyway:defaultSchema}.AIVendor WHERE CredentialTypeID IS NOT NULL)
+  AND ID NOT IN (SELECT CredentialTypeID FROM ${flyway:defaultSchema}.MCPServer WHERE CredentialTypeID IS NOT NULL)
+  AND ID NOT IN (SELECT CredentialTypeID FROM ${flyway:defaultSchema}.Credential WHERE CredentialTypeID IS NOT NULL);
