@@ -34,8 +34,8 @@ describe('BuildSkywayConfig — baseline version (B19)', () => {
         expect(cfg.Migrations.BaselineOnMigrate).toBe(true);
     });
 
-    it("uses '0' on PostgreSQL too (dialect-independent baseline floor)", () => {
-        const cfg = BuildSkywayConfig('migrations', 'app_schema', dbConfig, '__mj', undefined, 'postgres');
+    it("uses the '1' baseline sentinel on PostgreSQL too (dialect-independent baseline floor)", () => {
+        const cfg = BuildSkywayConfig('migrations', 'app_schema', dbConfig, '__mj', undefined, 'postgresql');
         expect(cfg.Migrations.BaselineVersion).toBe('1');
         expect(cfg.Migrations.BaselineOnMigrate).toBe(true);
     });
