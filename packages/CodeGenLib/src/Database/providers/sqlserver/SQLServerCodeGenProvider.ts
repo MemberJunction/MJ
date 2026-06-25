@@ -5,13 +5,21 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { dbDatabase } from '../../../Config/config';
-import { MSSQLConnection } from '../../../Config/db-connection';
-import { logError, logWarning } from '../../../Misc/status_logging';
+import { dbDatabase, mj_core_schema } from '../../../Config/config';
+import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
+import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import {
+    SQLServerDataProvider,
+    SQLServerProviderConfigData,
+    UserCache,
+    setupSQLServerClient,
+} from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -38,6 +46,42 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
+    }
+
+    /**
+     * SQL Server implementation of {@link CodeGenDatabaseProvider.SetupDataSource}.
+     *
+     * Opens (or reuses) the module-cached mssql pool via `MSSQLConnection()`,
+     * wires up the SQL Server metadata provider, builds the dialect-aware
+     * connection, and resolves the audit user via `UserCache.Refresh()` —
+     * the canonical pattern that has lived in `runCodeGen.setupSQLServerDataSource()`
+     * since the multi-provider work started. It now sits behind the
+     * `CodeGenDatabaseProvider` factory so adding a third platform doesn't
+     * mean touching the orchestrator.
+     */
+    async SetupDataSource(): Promise<DataSourceResult> {
+        startSpinner('Initializing database connection...');
+        const pool = await MSSQLConnection();
+        const config = new SQLServerProviderConfigData(pool, mj_core_schema());
+        const provider: SQLServerDataProvider = await setupSQLServerClient(config);
+        const conn = new SQLServerCodeGenConnection(pool);
+
+        // `getSqlConfig()` returns the config that was built lazily by
+        // MSSQLConnection() above. The non-null assertion is safe because the
+        // call to MSSQLConnection on the line above is what guarantees the
+        // accessor has a value to return.
+        const cfg = getSqlConfig()!;
+        let connectionInfo = cfg.server;
+        if (cfg.port) connectionInfo += ':' + cfg.port;
+        if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
+        connectionInfo += '/' + cfg.database;
+
+        await UserCache.Instance.Refresh(pool);
+        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
+        const currentUser = userMatch ?? UserCache.Users[0];
+
+        succeedSpinner('SQL Server connection initialized: ' + connectionInfo);
+        return { provider, connection: conn, currentUser, connectionInfo };
     }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
