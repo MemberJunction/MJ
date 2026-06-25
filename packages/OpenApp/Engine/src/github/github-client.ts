@@ -23,6 +23,36 @@ export interface GitHubClientOptions {
 }
 
 /**
+ * Thrown when the GitHub API answers with 403 (rate limit / access denied) or 429. This is
+ * deliberately DISTINCT from an empty result: a swallowed 403 makes "we were rate-limited"
+ * look identical to "this repo has no releases/tags", which silently resolves the wrong
+ * version (or falls back to HEAD). Callers should surface this rather than treat it as empty.
+ */
+export class GitHubAccessError extends Error {
+    public readonly Status: number;
+    constructor(status: number, message: string) {
+        super(message);
+        this.name = 'GitHubAccessError';
+        this.Status = status;
+    }
+}
+
+/**
+ * Throws a GitHubAccessError on a 403/429 response (rate limit or access denied) so the
+ * condition is surfaced instead of being swallowed into an empty list (B36). Returns normally
+ * for every other status — the caller still decides what to do with a non-ok response.
+ */
+function ThrowIfRateLimitedOrForbidden(status: number, context: string): void {
+    if (status === 403 || status === 429) {
+        throw new GitHubAccessError(
+            status,
+            `GitHub API returned ${status} (rate limit or access denied) while ${context}. ` +
+            `This is NOT the same as "no versions found" — check your GitHub token and rate limit.`,
+        );
+    }
+}
+
+/**
  * Represents a GitHub release / tag.
  */
 export interface GitHubRelease {
@@ -184,6 +214,9 @@ export async function ListGitHubReleases(
             headers: BuildHeaders(ResolveToken(repoUrl, options))
         });
 
+        // Surface a rate-limit / forbidden response instead of returning [] (B36).
+        ThrowIfRateLimitedOrForbidden(response.status, `listing releases for ${parsed.Owner}/${parsed.Repo}`);
+
         if (!response.ok) {
             return [];
         }
@@ -195,14 +228,21 @@ export async function ListGitHubReleases(
             created_at: string;
         }>;
 
-        return releases.map(r => ({
-            TagName: r.tag_name,
-            PreRelease: r.prerelease,
-            Draft: r.draft,
-            CreatedAt: r.created_at
-        }));
+        return releases
+            .map(r => ({
+                TagName: r.tag_name,
+                PreRelease: r.prerelease,
+                Draft: r.draft,
+                CreatedAt: r.created_at
+            }))
+            // Actually sort newest-first as the docstring promises — GetLatestVersion's
+            // `.find(stable)` relies on order, and the GitHub API order isn't guaranteed.
+            // ISO-8601 timestamps sort correctly lexically (B38).
+            .sort((a, b) => b.CreatedAt.localeCompare(a.CreatedAt));
     }
-    catch {
+    catch (error) {
+        // A surfaced rate-limit/forbidden must propagate, not collapse to [].
+        if (error instanceof GitHubAccessError) throw error;
         return [];
     }
 }
@@ -337,6 +377,9 @@ export async function ListGitHubTags(
             headers: BuildHeaders(ResolveToken(repoUrl, options))
         });
 
+        // Surface a rate-limit / forbidden response instead of returning [] (B36).
+        ThrowIfRateLimitedOrForbidden(response.status, `listing tags for ${parsed.Owner}/${parsed.Repo}`);
+
         if (!response.ok) {
             return [];
         }
@@ -349,7 +392,8 @@ export async function ListGitHubTags(
             .filter(name => semverPattern.test(name))
             .sort((a, b) => compareSemver(b, a));
     }
-    catch {
+    catch (error) {
+        if (error instanceof GitHubAccessError) throw error;
         return [];
     }
 }
@@ -399,14 +443,68 @@ export async function ValidateGitHubTag(
 /**
  * Compares two semver version strings (with optional 'v' prefix).
  * Returns negative if a < b, positive if a > b, zero if equal.
+ *
+ * Handles prerelease tags per the semver spec (B37): a build with a prerelease ranks BELOW
+ * the same core version without one (1.0.0 > 1.0.0-rc.1), and prerelease identifiers are
+ * compared field-by-field (numeric numerically, alphanumeric lexically, numeric < alpha, a
+ * shorter prerelease ranks below a longer one with the same prefix). Core numbers are parsed
+ * NaN-safely — the old `'1.0.0-rc'.split('.').map(Number)` produced `[1,0,NaN]`, and `NaN`
+ * comparisons made the sort non-deterministic.
  */
-function compareSemver(a: string, b: string): number {
-    const parse = (v: string) => v.replace(/^v/, '').split('.').map(Number);
+export function compareSemver(a: string, b: string): number {
+    const parse = (v: string) => {
+        const [core, ...preParts] = v.replace(/^v/, '').split('-');
+        const nums = core.split('.').map(n => {
+            const x = Number(n);
+            return Number.isFinite(x) ? x : 0;
+        });
+        return {
+            major: nums[0] ?? 0,
+            minor: nums[1] ?? 0,
+            patch: nums[2] ?? 0,
+            prerelease: preParts.join('-'), // '' when there is no prerelease
+        };
+    };
     const pa = parse(a);
     const pb = parse(b);
-    for (let i = 0; i < 3; i++) {
-        const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
-        if (diff !== 0) return diff;
+    if (pa.major !== pb.major) return pa.major - pb.major;
+    if (pa.minor !== pb.minor) return pa.minor - pb.minor;
+    if (pa.patch !== pb.patch) return pa.patch - pb.patch;
+    // Equal core version. No prerelease outranks a prerelease (1.0.0 > 1.0.0-rc).
+    if (pa.prerelease === pb.prerelease) return 0;
+    if (pa.prerelease === '') return 1;
+    if (pb.prerelease === '') return -1;
+    return comparePrerelease(pa.prerelease, pb.prerelease);
+}
+
+/**
+ * Compares two dot-separated prerelease strings per the semver spec: identifiers are compared
+ * left-to-right; all-numeric identifiers compare numerically, others lexically; a numeric
+ * identifier ranks below a non-numeric one; and when one runs out of identifiers first (all
+ * prior equal) it ranks lower.
+ */
+function comparePrerelease(a: string, b: string): number {
+    const as = a.split('.');
+    const bs = b.split('.');
+    const len = Math.max(as.length, bs.length);
+    for (let i = 0; i < len; i++) {
+        const x = as[i];
+        const y = bs[i];
+        if (x === undefined) return -1;
+        if (y === undefined) return 1;
+        const xNum = /^\d+$/.test(x);
+        const yNum = /^\d+$/.test(y);
+        if (xNum && yNum) {
+            const d = Number(x) - Number(y);
+            if (d !== 0) return d;
+        } else if (xNum) {
+            return -1; // numeric < alphanumeric
+        } else if (yNum) {
+            return 1;
+        } else {
+            const d = x < y ? -1 : x > y ? 1 : 0;
+            if (d !== 0) return d;
+        }
     }
     return 0;
 }

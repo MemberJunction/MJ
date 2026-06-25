@@ -3,7 +3,7 @@
  * and GetLatestVersion fallback to tags.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ValidateGitHubTag, ListGitHubTags, GetLatestVersion, ParseGitHubUrl, FetchManifestFromGitHub } from '../github/github-client.js';
+import { ValidateGitHubTag, ListGitHubTags, ListGitHubReleases, GetLatestVersion, ParseGitHubUrl, FetchManifestFromGitHub, GitHubAccessError, compareSemver } from '../github/github-client.js';
 import type { GitHubClientOptions } from '../github/github-client.js';
 
 // Mock global fetch
@@ -263,5 +263,75 @@ describe('TokenMap resolution', () => {
         await FetchManifestFromGitHub('https://github.com/Acme/UnmatchedRepo', undefined, options);
         const headers = mockFetch.mock.calls[0][1].headers;
         expect(headers['Authorization']).toBeUndefined();
+    });
+});
+
+describe('rate-limit / forbidden handling (B36)', () => {
+    beforeEach(() => {
+        mockFetch.mockReset();
+    });
+
+    it('ListGitHubTags throws GitHubAccessError on 403 (not silently empty)', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 403 });
+        // Pre-fix this returned [] — indistinguishable from "no tags".
+        await expect(ListGitHubTags('https://github.com/Acme/App', {})).rejects.toBeInstanceOf(GitHubAccessError);
+    });
+
+    it('ListGitHubReleases throws GitHubAccessError on 429', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 429 });
+        await expect(ListGitHubReleases('https://github.com/Acme/App', {})).rejects.toBeInstanceOf(GitHubAccessError);
+    });
+
+    it('GetLatestVersion propagates a rate-limit instead of returning null (wrong "no version")', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 403 }); // releases call rate-limited
+        await expect(GetLatestVersion('https://github.com/Acme/App', {})).rejects.toBeInstanceOf(GitHubAccessError);
+    });
+
+    it('still returns [] for a genuine 404 (no releases endpoint / repo)', async () => {
+        mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+        await expect(ListGitHubTags('https://github.com/Acme/App', {})).resolves.toEqual([]);
+    });
+});
+
+describe('ListGitHubReleases ordering (B38)', () => {
+    beforeEach(() => {
+        mockFetch.mockReset();
+    });
+
+    it('sorts releases newest-first by CreatedAt even when the API returns them out of order', async () => {
+        mockFetch.mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            json: async () => [
+                { tag_name: 'v1.0.1', prerelease: false, draft: false, created_at: '2026-01-10T00:00:00Z' },
+                { tag_name: 'v1.0.3', prerelease: false, draft: false, created_at: '2026-03-10T00:00:00Z' },
+                { tag_name: 'v1.0.2', prerelease: false, draft: false, created_at: '2026-02-10T00:00:00Z' },
+            ],
+        });
+        const result = await ListGitHubReleases('https://github.com/Acme/App', {});
+        expect(result.map(r => r.TagName)).toEqual(['v1.0.3', 'v1.0.2', 'v1.0.1']);
+    });
+});
+
+describe('compareSemver — prerelease handling (B37)', () => {
+    it('ranks a stable version above the same-core prerelease (1.0.0 > 1.0.0-rc.1)', () => {
+        expect(compareSemver('1.0.0', '1.0.0-rc.1')).toBeGreaterThan(0);
+        expect(compareSemver('1.0.0-rc.1', '1.0.0')).toBeLessThan(0);
+    });
+
+    it('does not produce NaN for prerelease cores (the old map(Number) bug)', () => {
+        // Pre-fix: '1.0.0-rc'.split('.').map(Number) → [1,0,NaN] → NaN comparisons → unstable.
+        const r = compareSemver('1.0.0-rc.1', '1.0.0-rc.2');
+        expect(Number.isNaN(r)).toBe(false);
+        expect(r).toBeLessThan(0); // rc.1 < rc.2
+    });
+
+    it('compares numeric prerelease identifiers numerically (rc.2 < rc.10)', () => {
+        expect(compareSemver('1.0.0-rc.2', '1.0.0-rc.10')).toBeLessThan(0);
+    });
+
+    it('sorts a mixed list correctly via the comparator (stable last when ascending)', () => {
+        const sorted = ['1.0.0', '1.0.0-rc.10', '1.0.0-rc.2', '1.0.1'].sort(compareSemver);
+        expect(sorted).toEqual(['1.0.0-rc.2', '1.0.0-rc.10', '1.0.0', '1.0.1']);
     });
 });
