@@ -39,12 +39,14 @@
 6. Commit this file.
 
 ### 0.4 Current Status Snapshot
-> **Status: PLANNING COMPLETE — implementation not started.** Decisions locked (name = Praxis; `BasedOnID`
-> derivation for config override-layering; IsA reserved for additive subtypes; v1 = 1 agent + 1 human; Media
-> channel is the only net-new MJ-core build; audio → MJStorage; RAG/tools/magic-links reuse existing MJ).
-> Plan committed to `memberjunction/mj` (`plans/praxis/`) via PR. **Next action: Phase 0 — `P0.T1`** (create
-> the private `bizapps-praxis` repo and migrate this plan into it). Five decision gates (§1.7) are open but
-> only gate their specific sub-phases.
+> **Status: MJ-CORE TRACK A STARTING — Praxis app work deferred to `bizapps-praxis`.** Decisions locked (name =
+> Praxis; `BasedOnID` derivation; IsA reserved for additive subtypes; v1 = 1 agent + 1 human; audio → MJStorage;
+> RAG/tools/magic-links reuse existing MJ). Net-new MJ-core builds = **S1 (Media channel)** + **S1B (session
+> capture)**; S1B verified narrow (see §0.5): per-turn `ConversationDetail` rows + `__mj_CreatedAt` + `UserID`
+> already exist, so S1B = turn-lifecycle start/end + populate `UserID` + **audio→MJStorage (per-agent provider)**.
+> **Next action (this MJ branch): the S0B.T2 / S1B migration** — additive MJ-core schema (AIAgentSession recording
+> fields + ConversationDetail turn-end column; MediaType) for Amith to review + run + CodeGen, then build. Praxis
+> app (S0+) happens in `bizapps-praxis` (Phase 0). Decision gates §1.7 gate only their sub-phases.
 
 ### 0.5 Progress Log
 - `@2026-06-25` Plan authored. All tasks `[ ]`.
@@ -61,6 +63,18 @@
   (new **§2.6** inventory + new sub-phase **S0B**); per-feature "Migration:" tasks (S2.T1/S3.T1/S4.T2/S12.T1)
   reduced to verify+CodeGen. **Cutover = hard per-vertical** (§1.3, S7.T5, S10.T6). Existing-data port is a
   **secondary one-time SQL script** (new **S-PORT**; default subset, descoped if fresh-start). Graph + R8 added.
+- `@2026-06-25` **S1B re-scoped after code/ORM verification.** Read the realtime write path
+  (`persistRealtimeTranscript`, `packages/AI/Agents/src/base-agent.ts`) + the ORM source of truth
+  (`MJConversationDetailEntity` in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`). **Confirmed:**
+  MJ already writes one `ConversationDetail` per *final* realtime turn with a real per-turn `__mj_CreatedAt` (Z)
+  timestamp, and `ConversationDetail.UserID` (FK Users) already exists for speaker attribution. So the plan's
+  "MJ has nothing but coarse timestamps / collapses to User" framing was too strong. **S1B narrows to:** (1)
+  **turn lifecycle** — create the row at turn START (`Status='In-Progress'`), UPDATE on completion, so
+  `__mj_CreatedAt`=start and an **immutable turn-end column**=end (the timestamp marks turn *end* today — fine
+  for v1, refine later); (2) **populate the existing `UserID`** on the write path (dropped the redundant
+  `SpeakerUserID`); (3) **audio→MJStorage** is the one genuine net-new subsystem, and MUST depend on a
+  **configured MJ Storage provider specified per agent** (fail closed if unconfigured). `UtteranceStartMs/EndMs`/
+  `SequenceNumber`/`SpeakerLabel` deferred (Created/end + recording `t0` cover seek). §1.3/§2.6/S1B/§1.10 updated.
 
 ### 0.6 Where this file lives
 - **Now:** `memberjunction/mj` → `plans/praxis/PRAXIS_BUILD_PLAN.md` (tracking home).
@@ -96,8 +110,8 @@ realtime agent architecture and ships a **world-class** authoring experience and
 | Knowledge/RAG | **Reuse MJ** unified + scoped search + pre-execution RAG. No provider KB sync. |
 | Server-side tools | **Reuse MJ** — target async agent's Actions. No new tool abstraction. |
 | Invites / entry | **Reuse MJ Magic Links** scoped to an agent. |
-| Audio | **MJStorage** (`@memberjunction/storage`): `MJ: Files` + `MJ: File Entity Record Links`; transcripts in DB; session row holds only a `FileID` link. Never base64-in-DB. **NOTE:** MJ realtime does NOT capture/persist audio or frame-level turn timing today (verified) — the capture itself is an MJ-core enhancement (**S1B**); Praxis *consumes* the recording + timing S1B produces. |
-| Session capture | MJ today: per-turn `ConversationDetail` rows with `Role` (User/AI) + coarse `__mj_CreatedAt` only. **Missing & required (S1B):** per-turn frame-level start/end timestamps + sequence; per-turn speaker identity (multi-party diarization); persisted audio recording (video forward-compat). Needed by integrity (S4), evidence player (S9), multimodal eval, and multi-party (S15). |
+| Audio | **MJStorage** (`@memberjunction/storage`): `MJ: Files` + `MJ: File Entity Record Links`; transcripts in DB; session row holds only a `FileID` link. Never base64-in-DB. **Confirmed net-new (2026-06-25):** MJ does NOT persist session audio today (`OnOutput` frames are playback-only) — S1B adds it. **Recording REQUIRES a configured MJ Storage provider specified per agent** (resolved runtime > agent-config > off); enabled-but-unconfigured ⇒ capture fails closed (off) with a warning. Praxis *consumes* the recording + per-turn timing S1B produces. |
+| Session capture | **Verified (2026-06-25):** MJ already persists one `ConversationDetail` per *final* realtime turn (`persistRealtimeTranscript`) with a real per-turn `__mj_CreatedAt` (Z) timestamp, and `ConversationDetail.UserID` already exists for speaker attribution. **S1B is therefore narrow:** (1) **turn lifecycle** — create at turn START (`Status='In-Progress'`), UPDATE at completion, so `__mj_CreatedAt`=start and an immutable turn-end column=end (end-marker is fine for v1; refine later); (2) **populate the existing `UserID`** on the write path (no new speaker column); (3) **persist audio** (Audio row above). Needed by integrity (S4), evidence player (S9), multimodal eval, multi-party (S15). |
 | Media to users | **MC1 — Media channel** (the ONE net-new MJ-core build, stays in `memberjunction/mj`): show images/video/audio/PDF during a conversation. |
 | Eval | One app-side `EvalDriver` (multimodal, evidence, integrity) absorbing Voice's category-weights + consistency check. Integrity model is generic & platform-owned. |
 
@@ -177,6 +191,21 @@ Every user-facing surface MUST satisfy ALL of these before its task is `[x]`:
 8. **Copy & IA** — plain-language labels, helpful empty-state guidance, inline validation, no jargon leaks.
 9. **Performance** — batch loads (`RunViews`), reactive caches, virtualized long lists/grids; no per-row queries.
 10. **Consistency** — same component vocabulary and layout grammar across studio surfaces.
+
+### 1.10 Forward-notes for the `bizapps-praxis` repo (decide THERE, not in MJ-core)
+Reviewer concerns parked for the Praxis-repo sessions — **not** MJ-core framework work. The domain lives only in
+`bizapps-praxis`, which will depend on a **forthcoming pinned MJ framework release** shipping the S1 / S1B /
+S0B.T2(Track A) capabilities, so there is no cross-repo task-state drift.
+- **FN-1 (scope honesty):** treat **v1 = ATS-only**. Voice cutover (S10), net-new verticals (S11), multi-party
+  (S15), analytics (S14) are v2+. Keep them in the WBS but out of the v1 launch gate.
+- **FN-2 (eval parity is undefined):** before S7, define the numeric **parity tolerance** and **who labels** the
+  integrity sample set. "Agreed tolerance" must be a number fixed up front, not negotiated during cutover.
+- **FN-3 (ATS cutover safety):** prefer a **shadow/parallel run** (Praxis scores alongside legacy, compare) over
+  the hard flip for the *hiring* vertical specifically, given DG-3 legal / disparate-impact exposure. Hard
+  cutover stays fine for lower-risk verticals.
+- **FN-4 (DG gates are external deps):** DG-2/DG-3/DG-5 block S7, and DG-3 needs legal sign-off — track them as
+  owned blockers with dates, not inline "answer when resolved" notes.
+- **FN-5 (housekeeping):** fix the §5 risk-register ordering (R7 is out of sequence).
 
 ---
 
@@ -345,11 +374,23 @@ database up" = creating these new persistence mechanisms. **Porting existing CDP
 **one-time SQL script** (**S-PORT**), not a schema-building migration.
 
 **A. MJ-core schema (`memberjunction/mj`) — additive, framework-general**
-- `ConversationDetail` (existing) — ADD `UtteranceStartMs INT`, `UtteranceEndMs INT`, `SequenceNumber INT`,
-  `SpeakerLabel NVARCHAR(200)`, `SpeakerUserID UNIQUEIDENTIFIER NULL` (FK User), `MediaType NVARCHAR(20)`. (S1B)
-- `AIAgentSession` (existing) — ADD recording state: `RecordingMedia NVARCHAR(20)` (None|Audio|AudioVideo) +
-  `RecordingT0` (alignment origin). Audio artifact linked via existing `MJ: Files` + `MJ: File Entity Record
-  Links` (no new table). (S1B)
+- `ConversationDetail` (existing) — speaker identity reuses the **existing `UserID`** (populate on the realtime
+  write path; NO new column). ADD: `TurnEndedAt DATETIMEOFFSET NULL` (immutable turn-end; `__mj_CreatedAt` gives
+  turn-*start* via the create-on-start lifecycle, S1B.T1), `UtteranceStartMs INT NULL` / `UtteranceEndMs INT NULL`
+  (precise media-relative offsets from the recording `t0`, filled when the driver supplies frame timing; evidence
+  player prefers these, falls back to `__mj_CreatedAt − t0`), and `MediaType NVARCHAR(20)` (forward-compat).
+  `SequenceNumber` / `SpeakerLabel` still deferred (ordering via timestamps; label only if a non-`User` speaker
+  needs a display name). (S1B)
+- `AIAgentSession` (existing) — ADD recording state: `RecordingMedia NVARCHAR(20)` (None|Audio|AudioVideo),
+  `RecordingStartedAt DATETIMEOFFSET NULL` (the `t0` alignment origin so per-turn timestamps → audio seek
+  offsets), and `RecordingFileID UNIQUEIDENTIFIER NULL` (FK `MJ: Files`, the stored recording). Also linkable via
+  `MJ: File Entity Record Links` (no new table). (S1B)
+- **Recording config (agent level)** — explicit columns on `AIAgent`: `RecordingDefault NVARCHAR(20)`
+  (None|Audio|AudioVideo) + `RecordingStorageProviderID UNIQUEIDENTIFIER NULL` FK → `MJ: File Storage Providers`.
+  Resolution per session: media = **runtime > agent (`RecordingDefault`) > off**; storage =
+  **`RecordingStorageProviderID` ?? the agent's existing `AttachmentStorageProviderID`** (recordings default to
+  the attachments account, override only when they must live elsewhere). Capture runs ONLY when a storage provider
+  is resolvable AND consent is satisfied; else fails closed. (S1B.T3/T6)
 - `AIAgentResource` (NEW MJ entity) — generic media resource for the Media channel: `Type, URL/Content,
   DisplayName, ContextDescription, Priority, Preload`; + channel-registration rows in `MJ: AI Agent Channels`
   (metadata). Runtime channel state via existing `AIAgentSessionChannel.Config`. (S1)
@@ -475,23 +516,39 @@ captions/transcripts affordance for audio/video, focus management when a pane op
 for *our* needs: every session yields (a) a turn record with reliable **speaker designation + media-relative
 start/end timestamps + explicit sequence**, and (b) a **persisted audio recording** (video forward-compat)
 linked to the session via MJStorage, time-aligned so an evidence player can seek precisely.
-**Why net-new:** verified gap — MJ stores `ConversationDetail` rows with `Role`(User/AI) + DB-write-time
-`__mj_CreatedAt` only; `RealtimeTranscript` carries `{Role,Text,IsFinal}` with no timestamp; no audio/video is
-persisted; multi-party collapses all humans to `'User'`. **Depends:** — (foundational; start early in Track A).
-**Exit:** a realtime session produces seekable per-turn timestamps, per-turn speaker identity, and a stored,
-time-aligned audio recording linked to the session.
+**Why net-new (verified 2026-06-25):** MJ already persists one `ConversationDetail` per *final* realtime turn
+(`persistRealtimeTranscript`, `base-agent.ts`) carrying `__mj_CreatedAt` (a real per-turn Z timestamp ≈ turn
+*end/finalization*), and the schema already has `ConversationDetail.UserID` for speaker attribution. The genuine
+gaps are narrower than first framed: (a) the timestamp marks turn-*end*, not start (no start/end pair); (b) the
+write path doesn't populate `UserID`, so multi-party humans collapse to `'User'` today; (c) **no audio is
+persisted at all** (`OnOutput` frames are playback-only). `RealtimeTranscript` ({Role,Text,IsFinal}) carries no
+timing. **Depends:** — (foundational; start early in Track A). **Exit:** a realtime session produces per-turn
+start+end timestamps, per-turn speaker identity (via existing `UserID`), and a stored, time-aligned audio
+recording (in a per-agent-configured MJ Storage provider) linked to the session.
 
-- [ ] **S1B.T1 — Per-turn timing.** Extend the `RealtimeTranscript` contract with media-relative `StartMs`/
-  `EndMs` (filled by the client/server realtime driver from the model's frame timing — NOT DB write time);
-  persist to `ConversationDetail` (new `UtteranceStartMs`/`UtteranceEndMs`/`SequenceNumber`) or a dedicated
-  turn-timing table. <br>**Acceptance:** ☐ turns carry frame-aligned start/end ☐ explicit sequence ☐ values are media-relative, not wall-clock-write-time.
-- [ ] **S1B.T2 — Per-turn speaker identity.** Add `SpeakerLabel` (+ `UserID` when known) on the turn; wire
-  bridge diarization (`AIAgentSessionBridgeParticipant` roster + `BridgeMediaFrame.SpeakerLabel`) into
-  persistence so multi-party turns attribute the specific human/agent (no more all-humans-as-`'User'`). <br>**Acceptance:** ☐ each turn names its speaker ☐ multi-party humans distinguished.
-- [ ] **S1B.T3 — Audio capture → MJStorage.** Accumulate inbound+outbound media frames over the session,
-  encode (compressed codec — avoid raw PCM bloat), store via `FileStorageEngine` on close, link via `MJ:
-  Files` + a recording ref/`FileID` on the session. Provide an alternate path to **link a provider-side
-  recording URL** (Zoom/Teams/LiveKit) where native recording exists. <br>**Acceptance:** ☐ recording stored ☐ signed playback URL ☐ provider-URL link path supported.
+- [ ] **S1B.T1 — Per-turn start+end via row lifecycle.** Change `persistRealtimeTranscript` to **create** the
+  `ConversationDetail` row at turn START (first interim transcript; `Status='In-Progress'`) and **UPDATE** it on
+  completion (final accumulated text; `Status='Complete'`), so `__mj_CreatedAt`=turn start and an **immutable
+  turn-end column** (`TurnEndedAt`, written once on completion)=turn end. Do **NOT** rely on `__mj_UpdatedAt` for
+  the end (it's mutable by later edits — ratings, pins, reflections). Runtime tracks the in-flight row id per role
+  and accumulates delta text. Degrades gracefully when a provider emits no interim (create+complete near-
+  simultaneously, as today). Also persist `UtteranceStartMs`/`UtteranceEndMs` (media-relative offsets from `t0`)
+  when the driver supplies frame timing. **Add unit tests** for the lifecycle and the In-Progress-row regression
+  surface: start-creates / completion-updates, immutable `TurnEndedAt`, no-interim degradation, and that chat
+  surfaces reading `ConversationDetail` tolerate mid-turn `Status='In-Progress'` rows (`Status`/`HiddenToUser`
+  already model this). <br>**Acceptance:** ☐ row created at start, completed at end ☐ start=`__mj_CreatedAt`, end=`TurnEndedAt` ☐ Utterance ms offsets set when available ☐ no reliance on `__mj_UpdatedAt` ☐ no regression when interim transcripts absent ☐ **unit tests** for In-Progress turn rows + lifecycle.
+- [ ] **S1B.T2 — Per-turn speaker identity (reuse existing `UserID`).** `ConversationDetail.UserID` already
+  exists — populate it on the realtime write path from the known session user (1:1 case) and, for multi-party,
+  from the bridge participant roster (`AIAgentSessionBridgeParticipant` + `BridgeMediaFrame.SpeakerLabel`). **No
+  new `SpeakerUserID` column.** Add a free-text `SpeakerLabel` ONLY if a non-`User` participant needs a display
+  name not backed by a `User` row. <br>**Acceptance:** ☐ each turn's `UserID` set when known ☐ multi-party humans distinguished ☐ no redundant speaker column added.
+- [ ] **S1B.T3 — Audio capture → MJStorage (per-agent-configured provider, REQUIRED).** Accumulate inbound+
+  outbound media frames over the session, encode (compressed codec — avoid raw PCM bloat), and on close store via
+  `FileStorageEngine` into the **MJ Storage provider configured for the agent** (resolution: runtime param >
+  agent-level config > off). Link via `MJ: Files` + `MJ: File Entity Record Links` + `RecordingFileID` on the
+  session; stamp `RecordingStartedAt` (`t0`). **Hard requirement:** recording runs only when a provider is
+  configured AND consent is satisfied (S1B.T6); otherwise capture is off (warn, no crash). Provide an alternate
+  path to **link a provider-side recording URL** (Zoom/Teams/LiveKit) where native recording exists. <br>**Acceptance:** ☐ recording stored to the agent's configured provider ☐ fails closed if no provider/consent ☐ signed playback URL ☐ provider-URL link path supported.
 - [ ] **S1B.T4 — Time-alignment guarantee.** Define recording `t0`; ensure turn `StartMs/EndMs` are relative
   to it so an evidence player seeks correctly. <br>**Acceptance:** ☐ click-a-turn → audio seeks to the right moment within tolerance.
 - [ ] **S1B.T5 — Video forward-compat.** Model recording-ref + timing as **media-type-tagged** so video reuses

@@ -3752,6 +3752,26 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordingMedia: z.union([z.literal('Audio'), z.literal('AudioVideo'), z.literal('None')]).nullable().describe(`
+        * * Field Name: RecordingMedia
+        * * Display Name: Recording Media
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+        * * Description: The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.`),
+    RecordingStartedAt: z.date().nullable().describe(`
+        * * Field Name: RecordingStartedAt
+        * * Display Name: Recording Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -3764,6 +3784,10 @@ export const MJAIAgentSessionSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
+    RecordingFile: z.string().nullable().describe(`
+        * * Field Name: RecordingFile
+        * * Display Name: Recording File
+        * * SQL Data Type: nvarchar(500)`),
     RootLastSessionID: z.string().nullable().describe(`
         * * Field Name: RootLastSessionID
         * * Display Name: Root Last Session ID
@@ -4551,6 +4575,22 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`),
+    RecordingDefault: z.union([z.literal('Audio'), z.literal('AudioVideo'), z.literal('None')]).nullable().describe(`
+        * * Field Name: RecordingDefault
+        * * Display Name: Recording Default
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+        * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`),
+    RecordingStorageProviderID: z.string().nullable().describe(`
+        * * Field Name: RecordingStorageProviderID
+        * * Display Name: Recording Storage Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -4587,6 +4627,10 @@ if this limit is exceeded.`),
         * * Field Name: DefaultCoAgent
         * * Display Name: Default Co-Agent
         * * SQL Data Type: nvarchar(255)`),
+    RecordingStorageProvider: z.string().nullable().describe(`
+        * * Field Name: RecordingStorageProvider
+        * * Display Name: Recording Storage Provider
+        * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -12850,24 +12894,24 @@ export const MJConversationDetailSchema = z.object({
         * * Description: This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.`),
     SummaryOfEarlierConversation: z.string().nullable().describe(`
         * * Field Name: SummaryOfEarlierConversation
-        * * Display Name: Conversation Summary
+        * * Display Name: Summary of Earlier Conversation
         * * SQL Data Type: nvarchar(MAX)
         * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`),
     ArtifactID: z.string().nullable().describe(`
         * * Field Name: ArtifactID
-        * * Display Name: Artifact
+        * * Display Name: Artifact ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
         * * Description: Optional reference to a conversation artifact associated with this conversation detail`),
     ArtifactVersionID: z.string().nullable().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
         * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail`),
@@ -12878,19 +12922,19 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Pinned
+        * * Display Name: Is Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this message is pinned within the conversation for easy reference`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent Message
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent
+        * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun`),
@@ -12907,12 +12951,12 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
     SuggestedResponses: z.string().nullable().describe(`
         * * Field Name: SuggestedResponses
-        * * Display Name: Suggested Responses (Legacy)
+        * * Display Name: Suggested Responses
         * * SQL Data Type: nvarchar(MAX)
         * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run
+        * * Display Name: Test Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`),
@@ -12933,43 +12977,68 @@ export const MJConversationDetailSchema = z.object({
         * * Description: JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`),
     OriginalMessageChanged: z.boolean().describe(`
         * * Field Name: OriginalMessageChanged
-        * * Display Name: Message Modified
+        * * Display Name: Original Message Changed
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.`),
     AgentSessionID: z.string().nullable().describe(`
         * * Field Name: AgentSessionID
-        * * Display Name: Agent Session
+        * * Display Name: Agent Session ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
         * * Description: Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.`),
+    TurnEndedAt: z.date().nullable().describe(`
+        * * Field Name: TurnEndedAt
+        * * Display Name: Turn Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.`),
+    UtteranceStartMs: z.number().nullable().describe(`
+        * * Field Name: UtteranceStartMs
+        * * Display Name: Utterance Start (ms)
+        * * SQL Data Type: int
+        * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.`),
+    UtteranceEndMs: z.number().nullable().describe(`
+        * * Field Name: UtteranceEndMs
+        * * Display Name: Utterance End (ms)
+        * * SQL Data Type: int
+        * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.`),
+    MediaType: z.union([z.literal('Audio'), z.literal('Text'), z.literal('Video')]).nullable().describe(`
+        * * Field Name: MediaType
+        * * Display Name: Media Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Text
+    *   * Video
+        * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Reference
+        * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Reference
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact Reference
+        * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version Reference
+        * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Reference
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Reference
+        * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Reference
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -39942,6 +40011,50 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
 
     /**
+    * * Field Name: RecordingMedia
+    * * Display Name: Recording Media
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+    * * Description: The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.
+    */
+    get RecordingMedia(): 'Audio' | 'AudioVideo' | 'None' | null {
+        return this.Get('RecordingMedia');
+    }
+    set RecordingMedia(value: 'Audio' | 'AudioVideo' | 'None' | null) {
+        this.Set('RecordingMedia', value);
+    }
+
+    /**
+    * * Field Name: RecordingStartedAt
+    * * Display Name: Recording Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.
+    */
+    get RecordingStartedAt(): Date | null {
+        return this.Get('RecordingStartedAt');
+    }
+    set RecordingStartedAt(value: Date | null) {
+        this.Set('RecordingStartedAt', value);
+    }
+
+    /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -39966,6 +40079,15 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: RecordingFile
+    * * Display Name: Recording File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RecordingFile(): string | null {
+        return this.Get('RecordingFile');
     }
 
     /**
@@ -42077,6 +42199,38 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: RecordingDefault
+    * * Display Name: Recording Default
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+    * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.
+    */
+    get RecordingDefault(): 'Audio' | 'AudioVideo' | 'None' | null {
+        return this.Get('RecordingDefault');
+    }
+    set RecordingDefault(value: 'Audio' | 'AudioVideo' | 'None' | null) {
+        this.Set('RecordingDefault', value);
+    }
+
+    /**
+    * * Field Name: RecordingStorageProviderID
+    * * Display Name: Recording Storage Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.
+    */
+    get RecordingStorageProviderID(): string | null {
+        return this.Get('RecordingStorageProviderID');
+    }
+    set RecordingStorageProviderID(value: string | null) {
+        this.Set('RecordingStorageProviderID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -42155,6 +42309,15 @@ if this limit is exceeded.
     */
     get DefaultCoAgent(): string | null {
         return this.Get('DefaultCoAgent');
+    }
+
+    /**
+    * * Field Name: RecordingStorageProvider
+    * * Display Name: Recording Storage Provider
+    * * SQL Data Type: nvarchar(50)
+    */
+    get RecordingStorageProvider(): string | null {
+        return this.Get('RecordingStorageProvider');
     }
 
     /**
@@ -64317,7 +64480,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: SummaryOfEarlierConversation
-    * * Display Name: Conversation Summary
+    * * Display Name: Summary of Earlier Conversation
     * * SQL Data Type: nvarchar(MAX)
     * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.
     */
@@ -64330,7 +64493,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.
@@ -64344,7 +64507,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactID
-    * * Display Name: Artifact
+    * * Display Name: Artifact ID
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
@@ -64359,7 +64522,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version ID
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
@@ -64387,7 +64550,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Pinned
+    * * Display Name: Is Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this message is pinned within the conversation for easy reference
@@ -64401,7 +64564,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent Message
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.
@@ -64415,7 +64578,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent
+    * * Display Name: Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun
@@ -64448,7 +64611,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: SuggestedResponses
-    * * Display Name: Suggested Responses (Legacy)
+    * * Display Name: Suggested Responses
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
     * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.
@@ -64462,7 +64625,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run
+    * * Display Name: Test Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.
@@ -64515,7 +64678,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: OriginalMessageChanged
-    * * Display Name: Message Modified
+    * * Display Name: Original Message Changed
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.
@@ -64529,7 +64692,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: AgentSessionID
-    * * Display Name: Agent Session
+    * * Display Name: Agent Session ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
     * * Description: Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.
@@ -64542,8 +64705,65 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * * Field Name: TurnEndedAt
+    * * Display Name: Turn Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.
+    */
+    get TurnEndedAt(): Date | null {
+        return this.Get('TurnEndedAt');
+    }
+    set TurnEndedAt(value: Date | null) {
+        this.Set('TurnEndedAt', value);
+    }
+
+    /**
+    * * Field Name: UtteranceStartMs
+    * * Display Name: Utterance Start (ms)
+    * * SQL Data Type: int
+    * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.
+    */
+    get UtteranceStartMs(): number | null {
+        return this.Get('UtteranceStartMs');
+    }
+    set UtteranceStartMs(value: number | null) {
+        this.Set('UtteranceStartMs', value);
+    }
+
+    /**
+    * * Field Name: UtteranceEndMs
+    * * Display Name: Utterance End (ms)
+    * * SQL Data Type: int
+    * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.
+    */
+    get UtteranceEndMs(): number | null {
+        return this.Get('UtteranceEndMs');
+    }
+    set UtteranceEndMs(value: number | null) {
+        this.Set('UtteranceEndMs', value);
+    }
+
+    /**
+    * * Field Name: MediaType
+    * * Display Name: Media Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Text
+    *   * Video
+    * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).
+    */
+    get MediaType(): 'Audio' | 'Text' | 'Video' | null {
+        return this.Get('MediaType');
+    }
+    set MediaType(value: 'Audio' | 'Text' | 'Video' | null) {
+        this.Set('MediaType', value);
+    }
+
+    /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Reference
+    * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -64552,7 +64772,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: User
-    * * Display Name: User Reference
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -64561,7 +64781,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Artifact
-    * * Display Name: Artifact Reference
+    * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string | null {
@@ -64570,7 +64790,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version Reference
+    * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -64579,7 +64799,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Reference
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -64588,7 +64808,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Reference
+    * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -64597,7 +64817,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Reference
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
