@@ -576,7 +576,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private normalizeIconClass(iconClass: string): string {
     if (!iconClass) return 'fa-solid fa-table';
-    if (iconClass.includes('fa-') && !/\b(fa-solid|fa-regular|fa-light|fa-brands)\b/.test(iconClass)) {
+    if (iconClass.includes('fa-') && !/\b(fa-solid|fa-regular|fa-light|fa-thin|fa-duotone|fa-brands|fa-sharp)\b/.test(iconClass)) {
       return `fa-solid ${iconClass}`;
     }
     return iconClass;
