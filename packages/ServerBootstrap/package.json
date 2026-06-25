@@ -108,6 +108,7 @@
     "@memberjunction/esignature-pandadoc": "5.42.0",
     "@memberjunction/geo-core": "5.42.0",
     "@memberjunction/integration-actions": "5.42.0",
+    "@memberjunction/integration-connectors": "5.42.0",
     "@memberjunction/integration-engine": "5.42.0",
     "@memberjunction/messaging-adapters": "5.42.0",
     "@memberjunction/queue": "5.42.0",
