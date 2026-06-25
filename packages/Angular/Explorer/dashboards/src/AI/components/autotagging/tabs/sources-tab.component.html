@@ -27,11 +27,10 @@
     }
     <div class="at-page-body">
       @if (SourceCards.length === 0 && !IsLoading) {
-        <div class="at-sources-empty">
-          <i class="fa-solid fa-database"></i>
-          <h3>No content sources yet</h3>
-          <p>Use the guided setup to stand up your first source — pick an entity or URL, configure its document, taxonomy, and domain context in one flow.</p>
-          <div class="at-sources-empty-actions">
+        <mj-empty-state class="at-sources-empty" Icon="fa-solid fa-database"
+          Title="No content sources yet"
+          Message="Use the guided setup to stand up your first source — pick an entity or URL, configure its document, taxonomy, and domain context in one flow.">
+          <div class="at-sources-empty-actions" ngProjectAs="[actions]">
             <button mjButton variant="primary" size="sm" (click)="onAddSourceGuided()">
               <i class="fa-solid fa-wand-magic-sparkles"></i> Add Source (Guided)
             </button>
@@ -39,7 +38,7 @@
               <i class="fa-solid fa-plus"></i> Add manually
             </button>
           </div>
-        </div>
+        </mj-empty-state>
       }
 
       <div class="at-sources-grid">
