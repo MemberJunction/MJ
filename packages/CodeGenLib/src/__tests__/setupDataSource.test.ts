@@ -8,11 +8,16 @@
  * The pre-refactor `setupDataSource()` switched on `dbPlatform` inline; the
  * refactor pushes platform selection through the same factory pattern the
  * rest of CodeGen already uses (see `manage-metadata.ts`'s `get dbProvider()`).
- * These tests pin that behavior.
+ *
+ * These tests exercise the real `resolveCodeGenDatabaseProvider()` function
+ * that the orchestrator delegates to — not a transcribed copy of the dispatch
+ * logic. If the orchestrator function drifts (different error message, missing
+ * disambiguation against the abstract base, etc.) these tests fail, which is
+ * exactly what we want from regression coverage.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
-import { CodeGenDatabaseProvider, type DataSourceResult } from '../Database/codeGenDatabaseProvider';
+import { CodeGenDatabaseProvider, resolveCodeGenDatabaseProvider, type DataSourceResult } from '../Database/codeGenDatabaseProvider';
 import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 class TestProviderFake extends CodeGenDatabaseProvider {
@@ -49,66 +54,69 @@ class TestProviderFake extends CodeGenDatabaseProvider {
     /* eslint-disable @typescript-eslint/no-explicit-any */
 }
 
-describe('RunCodeGenBase.setupDataSource — factory dispatch', () => {
-    it('resolves a provider via ClassFactory for the configured platform', async () => {
-        // The unit under test is the dispatch logic itself, not the full
-        // orchestrator. We exercise it by reproducing the same factory call
-        // RunCodeGenBase.setupDataSource() makes and verifying that the
-        // resolved instance's SetupDataSource() is what gets called.
+describe('resolveCodeGenDatabaseProvider — factory dispatch', () => {
+    it('resolves and returns a registered provider for the requested platform', async () => {
         const fake = new TestProviderFake('sqlserver' as DatabasePlatform);
         const spy = vi
             .spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance')
             .mockReturnValue(fake as unknown as CodeGenDatabaseProvider);
 
         try {
-            const platform: DatabasePlatform = 'sqlserver' as DatabasePlatform;
-            const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-                CodeGenDatabaseProvider,
-                platform,
-            );
+            const provider = resolveCodeGenDatabaseProvider('sqlserver' as DatabasePlatform);
             expect(provider).toBe(fake);
-            expect(provider!.constructor).not.toBe(CodeGenDatabaseProvider);
+            // Verify the factory was actually consulted with the right key.
+            expect(spy).toHaveBeenCalledWith(CodeGenDatabaseProvider, 'sqlserver');
 
-            const result = await provider!.SetupDataSource();
+            // And the caller can use the returned provider end-to-end.
+            const result = await provider.SetupDataSource();
             expect(fake.SetupDataSourceCalled).toBe(true);
             expect(result.connectionInfo).toBe('sqlserver-fake://test');
-            expect(spy).toHaveBeenCalledWith(CodeGenDatabaseProvider, 'sqlserver');
         } finally {
             spy.mockRestore();
         }
     });
 
-    it('returns the abstract base when no provider is registered for the platform', () => {
+    it('throws a descriptive error when no provider is registered for the platform', () => {
         // CreateInstance signals a missed lookup by returning the base class
-        // itself rather than throwing. The orchestrator disambiguates by
-        // checking `constructor === CodeGenDatabaseProvider` and throws.
+        // itself rather than throwing. resolveCodeGenDatabaseProvider() must
+        // disambiguate and throw, with a message that names the platform and
+        // points the user at the @RegisterClass call they're missing.
         const fakeBase = Object.create(CodeGenDatabaseProvider.prototype);
         const spy = vi
             .spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance')
             .mockReturnValue(fakeBase as CodeGenDatabaseProvider);
 
         try {
-            const platform: DatabasePlatform = 'unknown-platform' as DatabasePlatform;
-            const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-                CodeGenDatabaseProvider,
-                platform,
-            );
-            expect(provider!.constructor).toBe(CodeGenDatabaseProvider);
+            expect(() => resolveCodeGenDatabaseProvider('unknown-platform' as DatabasePlatform))
+                .toThrow(/dbPlatform='unknown-platform' not found/);
+            expect(() => resolveCodeGenDatabaseProvider('unknown-platform' as DatabasePlatform))
+                .toThrow(/@RegisterClass\(CodeGenDatabaseProvider, 'unknown-platform'\)/);
         } finally {
             spy.mockRestore();
         }
     });
 
-    it('dispatches with the platform string verbatim — no normalization', () => {
+    it('throws when CreateInstance returns null (no registration at all)', () => {
         const spy = vi
             .spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance')
             .mockReturnValue(null as unknown as CodeGenDatabaseProvider);
 
         try {
-            MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-                CodeGenDatabaseProvider,
-                'postgresql' as DatabasePlatform,
-            );
+            expect(() => resolveCodeGenDatabaseProvider('postgresql' as DatabasePlatform))
+                .toThrow(/dbPlatform='postgresql' not found/);
+        } finally {
+            spy.mockRestore();
+        }
+    });
+
+    it('passes the platform string verbatim — no normalization', () => {
+        const fake = new TestProviderFake();
+        const spy = vi
+            .spyOn(MJGlobal.Instance.ClassFactory, 'CreateInstance')
+            .mockReturnValue(fake as unknown as CodeGenDatabaseProvider);
+
+        try {
+            resolveCodeGenDatabaseProvider('postgresql' as DatabasePlatform);
             expect(spy).toHaveBeenCalledWith(CodeGenDatabaseProvider, 'postgresql');
         } finally {
             spy.mockRestore();

@@ -1,4 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
@@ -1261,4 +1262,36 @@ export interface PhasedExecutionResult {
     phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
     /** Underlying error when `success` is false. */
     error?: Error;
+}
+
+/**
+ * Resolve the concrete {@link CodeGenDatabaseProvider} registered for a given
+ * platform via `MJGlobal.Instance.ClassFactory`. This is the single source of
+ * truth for platform dispatch — the orchestrator (`RunCodeGenBase.setupDataSource()`)
+ * delegates to this function rather than re-implementing the lookup. Tests
+ * import this function directly so they exercise the real dispatch logic
+ * instead of a transcribed copy.
+ *
+ * `ClassFactory.CreateInstance` returns the abstract base class itself on a
+ * missed registration lookup (it does not throw). We disambiguate by checking
+ * `constructor === CodeGenDatabaseProvider` and throw a descriptive error so
+ * the failure mode reads as "no provider registered" instead of a cryptic
+ * "is not a constructor" / "is not a function" downstream.
+ *
+ * @param platform The `dbPlatform` key — typically `'sqlserver'` or `'postgresql'`.
+ * @returns The resolved provider subclass instance.
+ * @throws Error if no provider is registered for the given platform.
+ */
+export function resolveCodeGenDatabaseProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+    const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+        CodeGenDatabaseProvider,
+        platform,
+    );
+    if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+        throw new Error(
+            `CodeGen database provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+            `provider class is registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`,
+        );
+    }
+    return provider;
 }
