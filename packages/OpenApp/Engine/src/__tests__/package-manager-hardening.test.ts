@@ -1,7 +1,7 @@
 /**
  * Hardening tests for the package manager:
- *  - B40: the custom registry URL is interpolated into an execSync command, so a malformed /
- *    hostile value must be rejected before it ever reaches the shell.
+ *  - B40: the custom registry URL is passed to the package manager (now via execFileSync argv,
+ *    no shell), so a malformed / hostile value must be rejected before the install runs.
  *  - B39: a malformed package.json yields a clear, path-qualified error (not an opaque
  *    "Unexpected token in JSON").
  */
@@ -14,16 +14,16 @@ vi.mock('node:fs', () => ({
     readdirSync: vi.fn(() => []),
 }));
 vi.mock('node:child_process', () => ({
-    execSync: vi.fn(() => ''),
+    execFileSync: vi.fn(() => ''),
 }));
 
 import { readFileSync, existsSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { RunPackageInstall, AddAppPackages, type PackageManagerOptions } from '../install/package-manager.js';
 
 const mockReadFileSync = vi.mocked(readFileSync);
 const mockExistsSync = vi.mocked(existsSync);
-const mockExecSync = vi.mocked(execSync);
+const mockExecFileSync = vi.mocked(execFileSync);
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -46,22 +46,26 @@ describe('RunPackageInstall — registry URL validation (B40)', () => {
             const result = RunPackageInstall('/fake/root', false, url);
             expect(result.Success).toBe(false);
             expect(result.ErrorMessage).toContain('Invalid custom registry URL');
-            expect(mockExecSync).not.toHaveBeenCalled();
+            expect(mockExecFileSync).not.toHaveBeenCalled();
         });
     }
 
-    it('allows a clean custom registry and passes it through as --registry', () => {
+    it('allows a clean custom registry and passes it as a literal --registry argv element', () => {
         const result = RunPackageInstall('/fake/root', false, 'https://registry.acme.com/');
         expect(result.Success).toBe(true);
-        expect(mockExecSync).toHaveBeenCalledTimes(1);
-        expect(mockExecSync.mock.calls[0][0]).toContain('--registry=https://registry.acme.com/');
+        expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+        // execFileSync(bin, argv, opts) — the registry flag is a single argv element, never a
+        // shell-parsed substring of a command string.
+        const argv = mockExecFileSync.mock.calls[0][1] as string[];
+        expect(argv).toContain('--registry=https://registry.acme.com/');
     });
 
     it('does not pass --registry for the default npm registry', () => {
         const result = RunPackageInstall('/fake/root', false, 'https://registry.npmjs.org/');
         expect(result.Success).toBe(true);
-        expect(mockExecSync).toHaveBeenCalledTimes(1);
-        expect(mockExecSync.mock.calls[0][0]).not.toContain('--registry');
+        expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+        const argv = mockExecFileSync.mock.calls[0][1] as string[];
+        expect(argv.some(a => a.startsWith('--registry'))).toBe(false);
     });
 });
 

@@ -32,7 +32,8 @@ import {
   ReplaceAppDependenciesAtomically,
   SetAppStatus,
   FindInstalledApp,
-  IsSchemaSharedByOtherApps,
+  CheckSchemaSharedByOtherApps,
+  type SchemaShareCheck,
   FindDependentApps,
   ListInstalledApps,
   UpdateAppRecord,
@@ -578,14 +579,21 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
     }
 
-    await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Upgrade', manifest, {
-      PreviousVersion: previousVersion,
-      Success: true,
-      DurationSeconds: GetDurationSeconds(startTime),
-      StartedAt: new Date(startTime),
-      EndedAt: new Date(),
-      Summary: `Upgraded from ${previousVersion} to ${manifest.version}`,
-    });
+    // Best-effort audit write — the upgrade is already complete (status Active); a failure to
+    // write the history entry must NOT throw into the outer catch and downgrade a successful
+    // upgrade to 'Error' (B31, parity with the Install path).
+    try {
+      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Upgrade', manifest, {
+        PreviousVersion: previousVersion,
+        Success: true,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: `Upgraded from ${previousVersion} to ${manifest.version}`,
+      });
+    } catch (histErr: unknown) {
+      Callbacks?.OnWarn?.('Record', `App upgraded, but the history audit entry could not be written: ${histErr instanceof Error ? histErr.message : String(histErr)}`);
+    }
 
     Callbacks?.OnSuccess?.('Upgrade', `Successfully upgraded ${options.AppName} to v${manifest.version}`);
 
@@ -673,10 +681,18 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // config / package.json / client bootstrap still intact, instead of leaving a
     // half-removed app whose files are stripped but whose schema/metadata remain (B20).
     // Skipped entirely when another app shares the schema (B14).
-    const schemaShared = existingApp.SchemaName
-      ? await IsSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
-      : false;
-    if (schemaShared) {
+    const shareCheck: SchemaShareCheck = existingApp.SchemaName
+      ? await CheckSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
+      : { Shared: false, CheckFailed: false };
+    const schemaShared = shareCheck.Shared;
+    // An INDETERMINATE share-check (the query failed) is not a license to skip-and-strip — that
+    // would leave a half-removed app (files gone, schema + metadata intact, status Removed). Treat
+    // it like a removal error and abort BEFORE touching the filesystem (joined into removalErrors
+    // below). B14/B20.
+    const shareCheckError = shareCheck.CheckFailed
+      ? `Could not determine whether schema '${existingApp.SchemaName}' is shared by other Open Apps (share-check query failed): ${shareCheck.ErrorMessage ?? 'unknown error'}`
+      : undefined;
+    if (schemaShared && !shareCheck.CheckFailed) {
       Callbacks?.OnWarn?.('Schema', `Schema '${existingApp.SchemaName}' is still used by another installed Open App — skipping metadata + schema removal to protect co-tenant data.`);
     }
 
@@ -712,6 +728,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // Abort BEFORE touching the filesystem if DB cleanup failed — the app stays installed
     // (status Error) with its files intact, so it can be retried/removed again cleanly.
     const removalErrors = [
+      shareCheckError,
       teardownResult.Success ? undefined : teardownResult.ErrorMessage,
       metadataResult.Success ? undefined : metadataResult.ErrorMessage,
       schemaDropError,
@@ -772,14 +789,21 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
     }
 
-    // Step 8: Update records
-    await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
-      Success: true,
-      DurationSeconds: GetDurationSeconds(startTime),
-      StartedAt: new Date(startTime),
-      EndedAt: new Date(),
-      Summary: options.KeepData ? 'Removed (data kept)' : 'Removed (data dropped)',
-    });
+    // Step 8: Update records.
+    // Best-effort audit write — DB cleanup + file removal already succeeded; a failure to write
+    // the history entry must NOT throw into the outer catch and downgrade a successful remove to
+    // 'Error' (B31, parity with the Install path).
+    try {
+      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
+        Success: true,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: options.KeepData ? 'Removed (data kept)' : 'Removed (data dropped)',
+      });
+    } catch (histErr: unknown) {
+      Callbacks?.OnWarn?.('Record', `App removed, but the history audit entry could not be written: ${histErr instanceof Error ? histErr.message : String(histErr)}`);
+    }
 
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Status: 'Removed',

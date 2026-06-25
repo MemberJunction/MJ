@@ -9,7 +9,7 @@
  * Version-agnostic: supports semver ranges, pnpm catalog:, and workspace:*.
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
 
@@ -180,10 +180,10 @@ export function hasPnpmCatalog(repoRoot: string): boolean {
 }
 
 /**
- * Validates a custom npm registry URL before it is interpolated into a shell command (B40).
- * Must be a well-formed http(s) URL and free of shell metacharacters / whitespace. This is
- * defense-in-depth — the value normally comes from a trusted manifest, but it ends up in an
- * `execSync` command string, so a malformed/hostile value must never reach the shell.
+ * Validates a custom npm registry URL before it is passed to the package manager (B40).
+ * Must be a well-formed http(s) URL and free of shell metacharacters / whitespace. The install
+ * itself now runs via `execFileSync` with an argv array (no shell), so this is defense-in-depth
+ * — it still rejects a malformed URL / wrong protocol before it reaches the package manager.
  */
 function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
   let parsed: URL;
@@ -224,8 +224,9 @@ export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryU
   // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
   const isCustomRegistry = registryUrl && !registryUrl.includes('registry.npmjs.org');
 
-  // Defense-in-depth: the registry URL is interpolated into the execSync command string, so
-  // validate it is a clean http(s) URL with no shell metacharacters before using it (B40).
+  // Defense-in-depth: validate the registry URL is a clean http(s) URL before using it. It is
+  // now passed as a literal argv element (no shell), but a malformed URL / wrong protocol is
+  // still worth rejecting up front (B40).
   if (isCustomRegistry) {
     const validation = ValidateRegistryUrl(registryUrl!);
     if (!validation.Valid) {
@@ -234,30 +235,30 @@ export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryU
   }
 
   try {
-    let cmd: string;
+    // Build the argv as an ARRAY and run via execFileSync (no shell). The registry URL — and
+    // every other argument — is passed as a single literal argv element, so a hostile value can
+    // never be interpreted by a shell. This removes shell interpolation as a class of risk on
+    // top of ValidateRegistryUrl (B40). On Windows the package-manager binaries are `.cmd`
+    // shims, which execFileSync only resolves when the name carries the extension.
+    const argv: string[] = ['install'];
     switch (pm) {
-      case 'pnpm': {
-        cmd = 'pnpm install';
-        if (isCustomRegistry) cmd += ` --registry=${registryUrl}`;
-        break;
-      }
+      case 'pnpm':
       case 'yarn': {
-        cmd = 'yarn install';
-        if (isCustomRegistry) cmd += ` --registry=${registryUrl}`;
+        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
         break;
       }
       default: {
-        let flags = verbose ? '' : '--loglevel=warn';
-        if (isCustomRegistry) flags += ` --registry=${registryUrl}`;
-        cmd = `npm install ${flags}`;
+        if (!verbose) argv.push('--loglevel=warn');
+        if (isCustomRegistry) argv.push(`--registry=${registryUrl}`);
         break;
       }
     }
+    const bin = process.platform === 'win32' ? `${pm}.cmd` : pm;
 
     // All package managers natively read .npmrc / .pnpmrc / .yarnrc.yml for
     // scoped registries, auth tokens, and other settings. We don't need to
     // parse these files — just ensure `cwd` is set correctly so they're found.
-    execSync(cmd, {
+    execFileSync(bin, argv, {
       cwd: repoRoot,
       encoding: 'utf-8',
       timeout: 300000,
