@@ -8,7 +8,7 @@
  *  - `getPgConfig()` returns `undefined` before `PGConnection()` and the
  *    live config after
  *  - `statement_timeout` GUC is wired on the pool's `connect` event when
- *    `codegenPool.pgStatementTimeoutMs` is set
+ *    `codegenPool.statementTimeoutMs` is set
  *  - `codegenPool` knobs (max, min, idleTimeoutMillis, connectionTimeoutMillis)
  *    flow into the underlying `PGConnectionManager.Initialize` config
  *  - `ClosePGConnection()` resets the module-level cache so the next
@@ -153,8 +153,8 @@ describe('PGConnection — lazy + cached pool', () => {
         expect(passed.ConnectionTimeoutMillis).toBeUndefined();
     });
 
-    it('wires a per-connection statement_timeout hook when pgStatementTimeoutMs is set', async () => {
-        configInfo.codegenPool = { pgStatementTimeoutMs: 90_000 };
+    it('wires a per-connection statement_timeout hook when statementTimeoutMs is set', async () => {
+        configInfo.codegenPool = { statementTimeoutMs: 90_000 };
 
         await PGConnection();
         // The connect listener should be registered exactly once.
@@ -169,8 +169,8 @@ describe('PGConnection — lazy + cached pool', () => {
         expect(queries).toEqual(['SET statement_timeout = 90000']);
     });
 
-    it('does NOT register a statement_timeout hook when pgStatementTimeoutMs is unset or zero', async () => {
-        configInfo.codegenPool = { pgStatementTimeoutMs: 0 };
+    it('does NOT register a statement_timeout hook when statementTimeoutMs is unset or zero', async () => {
+        configInfo.codegenPool = { statementTimeoutMs: 0 };
         await PGConnection();
         expect(fakePool.listeners.connect ?? []).toHaveLength(0);
     });

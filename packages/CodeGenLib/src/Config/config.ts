@@ -544,13 +544,18 @@ const configInfoSchema = z.object({
     .default(false)
     .transform((v) => (v ? 'Y' : 'N')),
   /**
-   * Optional SQL Server request timeout in milliseconds applied to the CodeGen
-   * connection pool. Defaults to 120000 (2 minutes). Set in `mj.config.cjs` or
-   * via the `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running
-   * CodeGen steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default.
+   * **Legacy** — SQL Server request timeout in milliseconds applied to the
+   * CodeGen connection pool. Set in `mj.config.cjs` or via the
+   * `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running CodeGen
+   * steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default of
+   * 120000 (2 minutes).
    *
-   * Applies only to SQL Server (`dbPlatform === 'sqlserver'`). For PostgreSQL,
-   * configure {@link codegenPool}.pgStatementTimeoutMs instead.
+   * Prefer the cross-platform {@link codegenPool}.statementTimeoutMs for new
+   * configs — it applies to both SQL Server (as `requestTimeout`) and
+   * PostgreSQL (as the per-connection `statement_timeout` GUC). When both are
+   * set on a SQL Server install, `codegenPool.statementTimeoutMs` wins;
+   * `dbRequestTimeout` remains as a backward-compatible fallback so existing
+   * configs keep working unchanged.
    */
   dbRequestTimeout: z.coerce.number().int().positive().optional(),
   /**
@@ -574,11 +579,17 @@ const configInfoSchema = z.object({
     /** New-connection acquisition timeout in ms. */
     connectionTimeoutMillis: z.coerce.number().int().positive().optional(),
     /**
-     * PostgreSQL-only: `statement_timeout` GUC applied per pooled connection,
-     * in milliseconds. Mirrors {@link dbRequestTimeout} for SQL Server.
-     * When unset, PostgreSQL applies no statement timeout (its default).
+     * Per-statement timeout in milliseconds, applied to both providers:
+     *
+     * - **SQL Server**: mapped to mssql's `requestTimeout` on the pool config.
+     *   Takes precedence over the legacy top-level {@link dbRequestTimeout} when both
+     *   are set; falls back to `dbRequestTimeout` (and ultimately mssql's 120000ms
+     *   default) when unset.
+     * - **PostgreSQL**: applied as the per-connection `statement_timeout` GUC via
+     *   `SET statement_timeout = <ms>` on every newly pooled connection. When unset,
+     *   PostgreSQL applies no statement timeout (its default).
      */
-    pgStatementTimeoutMs: z.coerce.number().int().positive().optional(),
+    statementTimeoutMs: z.coerce.number().int().positive().optional(),
   }).optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
@@ -604,9 +615,24 @@ const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
  * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
  * and then a baseline default. Keeps env-var precedence inside `configInfo`
  * (one resolution layer) rather than scattered through provider code.
+ *
+ * When both env vars are set on a PG-default config AND they differ, emits a
+ * one-line `console.warn` recording which one is winning. Continues using the
+ * `PG_*` value (precedence is intentional) — the warning just makes the
+ * override visible. Uses `console.warn` (not `LogWarning`) because this runs
+ * at module-load time, before the logging module is wired.
  */
 function _resolveConnEnv(pgName: string, ssName: string, fallback: string): string {
-  return (_IS_PG_DEFAULT ? process.env[pgName] : undefined) ?? process.env[ssName] ?? fallback;
+  const pgVal = _IS_PG_DEFAULT ? process.env[pgName] : undefined;
+  const ssVal = process.env[ssName];
+  if (_IS_PG_DEFAULT && pgVal !== undefined && ssVal !== undefined && pgVal !== ssVal) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[codegen-lib] ${pgName}=${pgVal} takes precedence over ${ssName}=${ssVal} on a PostgreSQL-default config. ` +
+        `Set only one to silence this warning, or set them to the same value.`,
+    );
+  }
+  return pgVal ?? ssVal ?? fallback;
 }
 
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {

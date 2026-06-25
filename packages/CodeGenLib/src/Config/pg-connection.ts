@@ -64,7 +64,7 @@ let _manager: PGConnectionManager | undefined;
  * Get-or-create the PostgreSQL connection pool for CodeGen operations.
  * Builds the config at first call so `initializeConfig()` has had a chance
  * to populate `configInfo`. Applies the optional `statement_timeout` GUC
- * (via {@link configInfo.codegenPool.pgStatementTimeoutMs}) on every
+ * (via {@link configInfo.codegenPool.statementTimeoutMs}) on every
  * checked-out client.
  *
  * @returns Promise resolving to the pg.Pool from the underlying manager.
@@ -80,8 +80,8 @@ export async function PGConnection(): Promise<pg.Pool> {
     // pool-wide knob equivalent to mssql's `requestTimeout`. We hook the
     // pool's `connect` event so every newly-checked-out client carries the
     // configured timeout. This matches the SQL Server side where
-    // dbRequestTimeout applies pool-wide via the mssql config.
-    const stmtTimeoutMs = configInfo.codegenPool?.pgStatementTimeoutMs;
+    // codegenPool.statementTimeoutMs applies pool-wide via the mssql config.
+    const stmtTimeoutMs = configInfo.codegenPool?.statementTimeoutMs;
     if (stmtTimeoutMs && stmtTimeoutMs > 0) {
       _manager.Pool.on('connect', (client) => {
         client.query(`SET statement_timeout = ${stmtTimeoutMs}`).catch(() => {

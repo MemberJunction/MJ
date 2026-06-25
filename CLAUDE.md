@@ -1372,7 +1372,7 @@ module.exports = {
     min: 2,                     // Min idle connections kept open
     idleTimeoutMillis: 30000,   // Close idle connections after this many ms
     connectionTimeoutMillis: 30000, // New-connection acquisition timeout
-    pgStatementTimeoutMs: 120000,   // PostgreSQL-only: statement_timeout GUC per checked-out connection
+    statementTimeoutMs: 120000,     // Per-statement timeout (ms). SQL Server: mssql requestTimeout. PostgreSQL: statement_timeout GUC.
   },
 };
 ```
@@ -1382,7 +1382,7 @@ All five knobs are **optional** — when omitted the underlying driver defaults 
 ### Behavior
 - **Lazy + module-cached pool**: both `MSSQLConnection()` (SQL Server) and `PGConnection()` (PostgreSQL) build their config and open the pool on first call, then cache the pool at the module level so repeated CodeGen operations within a single process reuse the same pool. The config is built **after** `initializeConfig()` runs, so config values from `mj.config.cjs` / `.env` are picked up correctly (the previous module-load-time destructure produced empty values when callers did `await import('@memberjunction/codegen-lib')` before `initializeConfig()`).
 - **Platform dispatch via factory**: `RunCodeGenBase.setupDataSource()` resolves the concrete `CodeGenDatabaseProvider` via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)` and calls its `SetupDataSource()` method. Adding a new platform is `@RegisterClass(CodeGenDatabaseProvider, 'newplatform')` on the new provider class — no orchestrator changes.
-- **`pgStatementTimeoutMs`** is the PostgreSQL equivalent of `dbRequestTimeout`. PG's `pg.Pool` has no pool-wide request-timeout knob, so we hook the pool's `connect` event and set `statement_timeout` GUC per checked-out client. `dbRequestTimeout` and `MJ_CODEGEN_REQUEST_TIMEOUT` continue to apply only to SQL Server's mssql pool.
+- **`statementTimeoutMs`** is the cross-platform per-statement timeout. On SQL Server it maps to the mssql pool's `requestTimeout` (and takes precedence over the legacy top-level `dbRequestTimeout` / `MJ_CODEGEN_REQUEST_TIMEOUT` when both are set). On PostgreSQL it is applied as the `statement_timeout` GUC on every newly checked-out client (PG's `pg.Pool` has no pool-wide request-timeout knob equivalent to mssql, so we hook the pool's `connect` event). When unset, each driver applies its own default (mssql: 120000ms; PG: no statement timeout).
 
 ### CodeGen Environment Variables
 
@@ -1397,6 +1397,8 @@ The CodeGen-time database connection params come from `configInfo.dbHost` / `dbP
 | `codeGenPassword`| `PG_PASSWORD`               | `CODEGEN_DB_PASSWORD`    | `''` |
 
 Env-var precedence is resolved **once**, in `DEFAULT_CODEGEN_CONFIG` inside `Config/config.ts`. CodeGen provider code reads `configInfo.*` directly — `process.env.PG_*` is not consulted at the connection layer. This keeps env resolution in one place and avoids the two-layer trap of "resolved at config time, then re-resolved at connection time."
+
+When both env vars in a row are set AND they differ (e.g. `PG_HOST=postgres.dev` AND `DB_HOST=localhost`), `Config/config.ts` emits a one-line `console.warn` at module load identifying which value wins and which is being ignored. The PG-prefixed value continues to take precedence (existing behavior), but the silent override is now visible. Set only one — or set both to the same value — to silence the warning.
 
 ## MJAPI Public URL Configuration
 
