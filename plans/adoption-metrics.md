@@ -20,16 +20,25 @@ Components that already exist — tracking migration progress to 100%.
 | Checkbox (`.mj-checkbox`) | 31 | 245 | 245 | **12%** |
 | Numeric (`<mj-numeric-input>`) | 26 | 103 | 129 | **20%** |
 | Datepicker (`<mj-datepicker>`) | 7 | 11 | 18 | **38%** |
-| Empty-state (`<mj-empty-state>`) | 505 | 75 | 580 | **87%** |
+| Empty-state (`<mj-empty-state>`) | 505 | 50 | 555 | **90%** |
 
-> **Empty-state precision note**: `Bespoke` counts **genuine placeholder** elements only.
-> The widened class-token match found **113** bespoke-ish hits; **38**
-> are documented NON-placeholders (child helper sub-elements, picker/dropdown "no options"
-> rows, chat greeting slots, table-cell markers, BEM state flags, inline-status text, drag
-> hints, and hints projected into an already-migrated empty) excluded per the SKIP-classification
-> rules. The remaining **75** are genuine bespoke empties still to migrate (many in
-> packages outside the wave-2 scope). The raw widened count is retained as the anti-blind-spot
-> baseline so narrowing can never silently hide a real bespoke empty.
+> **Empty-state precision note** — `Bespoke` counts **genuine, un-migrated placeholders** only,
+> via three transparent tiers (each retained so narrowing can never silently hide a real empty):
+> 1. **Raw widened** = **113** — broad class-token match minus the structural
+>    exclusions (canonical component, layout helpers, table markers, BEM `--empty`, comments).
+>    Kept as the anti-blind-spot baseline.
+> 2. **− 38 non-placeholders** (documented SKIP categories: child helper
+>    sub-elements, picker/dropdown "no options" rows, chat greeting slots, `empty-val` cell
+>    markers, `is-empty` state flags, inline-status text, drag hints, projected hints).
+> 3. **− 25 wrappers** — bespoke `<div>`s that sit within a few lines of an
+>    `<mj-empty-state>` in the same file, i.e. chrome WRAPPING an already-migrated empty
+>    (detected via multi-line context).
+>
+> Leaves **50** genuine bespoke empties (denominator above). A manual gallery pass
+> (`empty-state-screenshots/bespoke-empties-gallery.html`) further found that ~half of these are
+> tiny inline markers / chips / cell-states grep can't reliably separate from area placeholders —
+> so **~26** are truly worth migrating; the rest are visual noise. The script reports the
+> defensible automated floor; the gallery is the exact source.
 
 ## New components (bespoke pattern counts)
 

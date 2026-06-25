@@ -116,12 +116,13 @@ fi
 # Still grep-based + approximate (a bespoke-named WRAPPER around a migrated <mj-empty-state>
 # on a separate line can over-count by one); the classification pass remains the exact source.
 empty_canonical=$(count_matches '<mj-empty-state')
-_empty_bespoke_raw_lines() {
-  { grep -rE $EXCLUDE 'class="[^"]*(empty|no-data|no-results|no-records|no-selection)[^"]*"' "$ANGULAR_DIR" 2>/dev/null || true; } \
+# Raw widened bespoke lines WITH file:line (-n), minus the structural + comment exclusions.
+_empty_bespoke_lines_n() {
+  { grep -rEn $EXCLUDE 'class="[^"]*(empty|no-data|no-results|no-records|no-selection)[^"]*"' "$ANGULAR_DIR" 2>/dev/null || true; } \
     | grep -vE 'mj-empty-state|empty-fill|empty-hint|empty-state-fill|empty-state-features|empty-row|empty-cell|dropdown-empty|--empty' \
     | grep -vE '<!--|//[[:space:]]|/\*'
 }
-# Documented NON-PLACEHOLDER false-positives (SKIP categories, proven by the wave-2 pass):
+# Tier-2 — documented NON-PLACEHOLDER false-positives (SKIP categories, proven by the wave-2 pass):
 #   child/sub-element helpers (empty-subtext/-text/-icon/-title/-message/-label/-close/-recent/-meta/-name/-subtitle)
 #   picker/dropdown popup "no options" rows (BEM __empty element, mj-dropdown-no-data, suggest-empty)
 #   excluded-by-design chat greeting slots (mj-chat-empty-state-default*, conversation-empty-state)
@@ -129,9 +130,25 @@ _empty_bespoke_raw_lines() {
 #   (search-analytics-empty, schedule-empty) · drag-drop hints (section-drop-empty) · hints projected
 #   INTO an already-migrated empty (empty-state-hint, rc-empty-state-hint) · sub-text (no-results-message)
 empty_nonplaceholder_re='empty-val|is-empty|empty-subtext|empty-subtitle|empty-text|empty-icon|empty-title|empty-message|empty-label|empty-close|empty-recent|empty-meta|empty-name|__empty|mj-dropdown-no-data|suggest-empty|chat-empty-state-default|conversation-empty-state|search-analytics-empty|schedule-empty|section-drop-empty|empty-state-hint|no-results-message|results-empty-message'
-empty_bespoke_raw=$(_empty_bespoke_raw_lines | grep -c . | tr -d ' ')
-empty_bespoke=$(_empty_bespoke_raw_lines | grep -vE "$empty_nonplaceholder_re" | grep -c . | tr -d ' ')
-empty_excluded=$((empty_bespoke_raw - empty_bespoke))
+empty_bespoke_raw=$(_empty_bespoke_lines_n | grep -c . | tr -d ' ')
+_empty_candidates=$(_empty_bespoke_lines_n | grep -vE "$empty_nonplaceholder_re")
+empty_after_fp=$(printf '%s\n' "$_empty_candidates" | grep -c . | tr -d ' ')
+empty_nonplaceholder=$((empty_bespoke_raw - empty_after_fp))
+# Tier-3 — WRAPPER detection (multi-line context): a bespoke-class line that has a
+# <mj-empty-state> within a small window in the SAME file is a wrapper/sibling around an
+# ALREADY-MIGRATED empty (the grep counts the wrapper <div> on its own line). Exclude those.
+empty_wrappers=0; empty_bespoke=0
+while IFS=: read -r _f _l _rest; do
+  [ -z "$_f" ] && continue
+  _lo=$(( _l > 3 ? _l - 3 : 1 )); _hi=$(( _l + 6 ))
+  if sed -n "${_lo},${_hi}p" "$_f" 2>/dev/null | grep -q 'mj-empty-state'; then
+    empty_wrappers=$((empty_wrappers + 1))
+  else
+    empty_bespoke=$((empty_bespoke + 1))
+  fi
+done <<EOF
+$_empty_candidates
+EOF
 empty_total=$((empty_canonical + empty_bespoke))
 if [ "$empty_total" -gt 0 ]; then
   empty_pct=$((empty_canonical * 100 / empty_total))
@@ -239,14 +256,23 @@ Components that already exist — tracking migration progress to 100%.
 | Datepicker (\`<mj-datepicker>\`) | $datepicker_canonical | $datepicker_bare | $datepicker_total | **${datepicker_pct}%** |
 | Empty-state (\`<mj-empty-state>\`) | $empty_canonical | $empty_bespoke | $empty_total | **${empty_pct}%** |
 
-> **Empty-state precision note**: \`Bespoke\` counts **genuine placeholder** elements only.
-> The widened class-token match found **$empty_bespoke_raw** bespoke-ish hits; **$empty_excluded**
-> are documented NON-placeholders (child helper sub-elements, picker/dropdown "no options"
-> rows, chat greeting slots, table-cell markers, BEM state flags, inline-status text, drag
-> hints, and hints projected into an already-migrated empty) excluded per the SKIP-classification
-> rules. The remaining **$empty_bespoke** are genuine bespoke empties still to migrate (many in
-> packages outside the wave-2 scope). The raw widened count is retained as the anti-blind-spot
-> baseline so narrowing can never silently hide a real bespoke empty.
+> **Empty-state precision note** — \`Bespoke\` counts **genuine, un-migrated placeholders** only,
+> via three transparent tiers (each retained so narrowing can never silently hide a real empty):
+> 1. **Raw widened** = **$empty_bespoke_raw** — broad class-token match minus the structural
+>    exclusions (canonical component, layout helpers, table markers, BEM \`--empty\`, comments).
+>    Kept as the anti-blind-spot baseline.
+> 2. **− $empty_nonplaceholder non-placeholders** (documented SKIP categories: child helper
+>    sub-elements, picker/dropdown "no options" rows, chat greeting slots, \`empty-val\` cell
+>    markers, \`is-empty\` state flags, inline-status text, drag hints, projected hints).
+> 3. **− $empty_wrappers wrappers** — bespoke \`<div>\`s that sit within a few lines of an
+>    \`<mj-empty-state>\` in the same file, i.e. chrome WRAPPING an already-migrated empty
+>    (detected via multi-line context).
+>
+> Leaves **$empty_bespoke** genuine bespoke empties (denominator above). A manual gallery pass
+> (\`empty-state-screenshots/bespoke-empties-gallery.html\`) further found that ~half of these are
+> tiny inline markers / chips / cell-states grep can't reliably separate from area placeholders —
+> so **~26** are truly worth migrating; the rest are visual noise. The script reports the
+> defensible automated floor; the gallery is the exact source.
 
 ## New components (bespoke pattern counts)
 
