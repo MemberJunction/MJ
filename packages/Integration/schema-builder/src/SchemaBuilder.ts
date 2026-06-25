@@ -84,6 +84,10 @@ export class SchemaBuilder {
         // blocks __mj by default. Integration access control is handled in Step 1 above.
         const ddlGen = new GenericDDLGenerator();
         for (const config of newConfigs) {
+            // Dialect-aware row-size guard: SQL Server's hard ~8060-byte in-row limit makes very wide
+            // tables (600+ columns) impossible to INSERT into — cap to a fitting core subset + warn,
+            // rather than emit a doomed table. No-op on Postgres (TOAST). Mutates config.Columns.
+            output.Warnings.push(...this.CapColumnsForSqlServerRowSize(config, input.Platform));
             const tableDef = this.ConvertToTableDefinition(config, input.Platform);
             // IfNotExists: integration Create-Tables must be idempotent — a physical table
             // may already exist with no MJ entity yet (e.g. a prior run created the table but
@@ -289,6 +293,103 @@ export class SchemaBuilder {
             DefaultValue: col.DefaultValue ?? undefined,
             Description: col.Description,
         };
+    }
+
+    /**
+     * Minimum in-row byte footprint of a column on SQL Server.
+     * Variable-length (N)VARCHAR/VARBINARY (and the legacy LOB types) can be pushed to row-overflow
+     * storage, leaving only a 24-byte pointer in-row — so their FLOOR is 24, not their declared width.
+     * Fixed-length types always occupy their full size in-row. NCHAR/CHAR are fixed-length (no off-row).
+     * Used to decide whether a table can ever satisfy SQL Server's hard ~8060-byte in-row limit:
+     * if the sum of these floors exceeds 8060, no INSERT can succeed regardless of the actual data.
+     */
+    private EstimateInRowFloorBytes(rawSqlType: string): number {
+        const t = (rawSqlType ?? '').toUpperCase().trim();
+        // Off-row-capable variable-length + LOB types → 24-byte in-row pointer floor.
+        if (/^(N?VARCHAR|VARBINARY)\s*\(/.test(t)) return 24; // covers (N)VARCHAR(MAX) too
+        if (/^(TEXT|NTEXT|IMAGE|XML|SQL_VARIANT)\b/.test(t)) return 24;
+        // Fixed-length character types stay fully in-row.
+        const nchar = t.match(/^NCHAR\s*\(\s*(\d+)\s*\)/);
+        if (nchar) return parseInt(nchar[1], 10) * 2;
+        const chr = t.match(/^(?:CHAR|BINARY)\s*\(\s*(\d+)\s*\)/);
+        if (chr) return parseInt(chr[1], 10);
+        if (/^UNIQUEIDENTIFIER\b/.test(t)) return 16;
+        if (/^BIGINT\b/.test(t)) return 8;
+        if (/^SMALLINT\b/.test(t)) return 2;
+        if (/^TINYINT\b/.test(t)) return 1;
+        if (/^INT\b/.test(t)) return 4;
+        if (/^BIT\b/.test(t)) return 1;
+        if (/^(DECIMAL|NUMERIC|MONEY|SMALLMONEY)\b/.test(t)) return 17;
+        if (/^(FLOAT|REAL)\b/.test(t)) return 8;
+        if (/^DATETIMEOFFSET\b/.test(t)) return 10;
+        if (/^(DATETIME2|DATETIME|SMALLDATETIME)\b/.test(t)) return 8;
+        if (/^DATE\b/.test(t)) return 3;
+        if (/^TIME\b/.test(t)) return 5;
+        return 24; // unknown → treat as off-row variable-length pointer (conservative)
+    }
+
+    /**
+     * Dialect-aware row-size guard. SQL Server enforces a hard ~8060-byte in-row row size and pushes
+     * ONLY variable-length values to row-overflow (a 24-byte pointer stays in-row). A very wide table
+     * (hundreds of columns — e.g. a 600+ field CRM object) can exceed 8060 with the pointers alone, so
+     * NO row can ever be inserted: every INSERT fails with a cryptic "Cannot create a row of size N ..."
+     * error and the table is dead on arrival. Rather than emit such a doomed table, we cap the
+     * materialized columns to a declared-priority CORE SUBSET that fits — always keeping the primary-key
+     * columns — and return a structured warning naming the deferred fields. The deferred fields still
+     * sync to the source and land in __mj_integration_CustomOverflow (not lost), they are simply not
+     * persisted as typed columns on SQL Server. No-op on Postgres: TOAST stores oversized values
+     * out-of-line transparently and the practical column ceiling is 1600 (we only warn past that).
+     * Mutates config.Columns in place to the kept subset so all downstream steps (DDL, soft FK,
+     * metadata) operate on the columns that actually exist.
+     */
+    private CapColumnsForSqlServerRowSize(config: TargetTableConfig, platform: DatabasePlatform): string[] {
+        if (platform !== 'sqlserver') {
+            // Postgres: no 8060 limit; only flag the 1600-column hard cap (no graceful subset needed — rare).
+            if (config.Columns.length > 1500) {
+                return [`Table ${config.SchemaName}.${config.TableName} has ${config.Columns.length} columns, approaching PostgreSQL's 1600-column hard limit. Consider splitting the object.`];
+            }
+            return [];
+        }
+        const BUDGET = 8000; // safety margin under SQL Server's 8060-byte hard limit
+        const SYNC_RESERVE = 400; // generous in-row floor for ID + __mj timestamps + the __mj_integration_* sync columns
+        const totalCols = config.Columns.length;
+        const pkSet = new Set((config.PrimaryKeyFields ?? []).map(p => p.toLowerCase()));
+
+        let used = SYNC_RESERVE;
+        const keptNames = new Set<string>();
+        const deferred: string[] = [];
+
+        // Pass 1 — primary-key columns are identity; always kept, counted first.
+        for (const col of config.Columns) {
+            if (pkSet.has(col.TargetColumnName.toLowerCase())) {
+                keptNames.add(col.TargetColumnName);
+                used += this.EstimateInRowFloorBytes(col.TargetSqlType);
+            }
+        }
+        // Pass 2 — remaining columns in declared order until the budget is exhausted.
+        for (const col of config.Columns) {
+            if (pkSet.has(col.TargetColumnName.toLowerCase())) continue;
+            const w = this.EstimateInRowFloorBytes(col.TargetSqlType);
+            if (used + w <= BUDGET) {
+                keptNames.add(col.TargetColumnName);
+                used += w;
+            } else {
+                deferred.push(col.TargetColumnName);
+            }
+        }
+
+        if (deferred.length === 0) return [];
+
+        // Keep declared order for stable, reviewable DDL.
+        config.Columns = config.Columns.filter(c => keptNames.has(c.TargetColumnName));
+        const sample = deferred.slice(0, 20).join(', ');
+        const more = deferred.length > 20 ? `, … (+${deferred.length - 20} more)` : '';
+        return [
+            `Table ${config.SchemaName}.${config.TableName}: deferred ${deferred.length} of ${totalCols} columns to stay within SQL Server's 8060-byte row-size limit ` +
+            `(in-row row-overflow pointers alone would exceed it). Materialized a ${config.Columns.length}-column core subset; all primary-key columns retained. ` +
+            `Deferred fields still sync and are captured in __mj_integration_CustomOverflow, but are not persisted as typed columns on SQL Server (PostgreSQL has no such limit). ` +
+            `Deferred: ${sample}${more}.`,
+        ];
     }
 
     /** Integration-specific sync columns added to every integration table. */
