@@ -93,7 +93,7 @@
 }
 
 .suggestion-type-badge.entity {
-  background: #11998e;
+  background: var(--mj-status-success);
 }
 
 .suggestion-type-badge.query {
