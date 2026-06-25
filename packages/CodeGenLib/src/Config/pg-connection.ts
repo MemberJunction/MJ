@@ -4,7 +4,7 @@
  * PostgreSQL codegen path (see `PostgreSQLCodeGenProvider.SetupDataSource()`).
  *
  * **Scope** — this file is intentionally PostgreSQL-only; it imports
- * `@memberjunction/postgresql-data-provider`'s {@link PGConnectionManager}
+ * `@memberjunction/postgresql-dataprovider`'s {@link PGConnectionManager}
  * for the actual pool lifecycle. The SQL Server codegen path lives in
  * `db-connection.ts` and is independent.
  *
@@ -29,12 +29,33 @@ import { configInfo } from './config.js';
 /**
  * Build the {@link PGConnectionConfig} from the current `configInfo`. Called
  * lazily from {@link PGConnection} so values are read AFTER `initializeConfig()`
- * has run. {@link configInfo.codegenPool} supplies optional pool-size and
- * timeout knobs; when omitted, {@link PGConnectionManager}'s defaults apply
- * (the same defaults the runtime PG data provider has been using).
+ * has run. {@link configInfo.codegenPool} supplies optional pool-size, timeout,
+ * and SSL knobs; when omitted, the pre-multi-provider-refactor inline `pg.Pool`
+ * behavior is preserved — no SSL by default (matches the historical local-codegen
+ * default), no startup options, and `PGConnectionManager`'s own pool-size defaults
+ * (20 max, 2 min).
+ *
+ * `statementTimeoutMs` is carried via the libpq `-c statement_timeout=<ms>`
+ * startup option rather than a runtime `SET` on the pool's `connect` event.
+ * The startup option is honored by every backend including the verify-SELECT-1
+ * connection that `PGConnectionManager.Initialize()` opens — a runtime listener
+ * would attach AFTER that connection had already been created and released back
+ * into the pool, leaving the first pool client without the GUC.
  */
 function buildPgConfig(): PGConnectionConfig {
   const pool = configInfo.codegenPool;
+
+  // SSL: default to false (preserves the pre-refactor inline `pg.Pool` behavior
+  // where no `ssl` key was set → pg default OFF). Without this explicit `false`,
+  // `PGConnectionManager.Initialize()` would default SSL ON in `NODE_ENV=production`,
+  // breaking codegen against non-SSL/locally-bridged Postgres in production shells.
+  const ssl = pool?.ssl ?? false;
+
+  // statement_timeout via libpq startup option — applied server-side from
+  // connection #1, including the verify-SELECT-1 connection.
+  const stmtTimeoutMs = pool?.statementTimeoutMs;
+  const options = stmtTimeoutMs && stmtTimeoutMs > 0 ? `-c statement_timeout=${stmtTimeoutMs}` : undefined;
+
   return {
     Host: configInfo.dbHost,
     Port: configInfo.dbPort,
@@ -46,6 +67,8 @@ function buildPgConfig(): PGConnectionConfig {
     MinConnections: pool?.min,
     IdleTimeoutMillis: pool?.idleTimeoutMillis,
     ConnectionTimeoutMillis: pool?.connectionTimeoutMillis,
+    SSL: ssl,
+    Options: options,
   };
 }
 
@@ -63,9 +86,10 @@ let _manager: PGConnectionManager | undefined;
 /**
  * Get-or-create the PostgreSQL connection pool for CodeGen operations.
  * Builds the config at first call so `initializeConfig()` has had a chance
- * to populate `configInfo`. Applies the optional `statement_timeout` GUC
- * (via {@link configInfo.codegenPool.statementTimeoutMs}) on every
- * checked-out client.
+ * to populate `configInfo`. The optional `statement_timeout` GUC (via
+ * {@link configInfo.codegenPool.statementTimeoutMs}) is carried in the libpq
+ * startup options assembled by {@link buildPgConfig} — see its docstring for
+ * why the startup-option path is preferred over a runtime `connect` listener.
  *
  * @returns Promise resolving to the pg.Pool from the underlying manager.
  * @throws Error if connection fails.
@@ -75,22 +99,6 @@ export async function PGConnection(): Promise<pg.Pool> {
     _pgConfig = buildPgConfig();
     _manager = new PGConnectionManager();
     await _manager.Initialize(_pgConfig);
-
-    // statement_timeout is a per-session GUC in PostgreSQL — there is no
-    // pool-wide knob equivalent to mssql's `requestTimeout`. We hook the
-    // pool's `connect` event so every newly-checked-out client carries the
-    // configured timeout. This matches the SQL Server side where
-    // codegenPool.statementTimeoutMs applies pool-wide via the mssql config.
-    const stmtTimeoutMs = configInfo.codegenPool?.statementTimeoutMs;
-    if (stmtTimeoutMs && stmtTimeoutMs > 0) {
-      _manager.Pool.on('connect', (client) => {
-        client.query(`SET statement_timeout = ${stmtTimeoutMs}`).catch(() => {
-          // Swallow: failure to set a session GUC should not break a CodeGen
-          // run. PG will fall back to its server-wide default. We deliberately
-          // don't log here to avoid noise during the per-connection event.
-        });
-      });
-    }
   }
   return _manager.Pool;
 }
