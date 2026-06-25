@@ -158,6 +158,13 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'PostgresQL';
     }
 
+    /**
+     * PostgreSQL has no in-row row-size limit (TOAST stores oversized variable-length values
+     * out-of-line), so {@link MaxInRowSizeBytes} stays `null` (inherited). It does enforce a
+     * hard 1600-column-per-table cap.
+     */
+    override get MaxColumnCount(): number { return 1600; }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
