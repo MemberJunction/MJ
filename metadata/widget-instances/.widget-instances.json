@@ -13,6 +13,13 @@
       "SessionTTLMinutes": 15,
       "RateLimitPerMinute": 30,
       "VoiceMaxSessionMinutes": 10
+    },
+    "primaryKey": {
+      "ID": "5CA6FA5E-AE6F-4897-9F74-22063ADF3511"
+    },
+    "sync": {
+      "lastModified": "2026-06-25T00:50:39.822Z",
+      "checksum": "25fcef0468071580c06f55cb1b3ff7395117f8ece089c3f5b7ef873bf10d3c4f"
     }
   }
 ]

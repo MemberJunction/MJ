@@ -13,7 +13,7 @@ _Updated continuously. Newest status at the top of each phase section._
 
 **Where things stand (final — W0–W6, T0–T4, M0–M4 all triaged):**
 - **WIDGET (the priority) — text + voice complete offline.** W0 ✅ (D5 spike), W1 ✅ (guest-session
-  backend), W2 ✅ entity+CodeGen (seed push DB-blocked), W3 ✅ (embeddable shadow-DOM bundle),
+  backend), W2 ✅ (entity + seed pushed + live denied-RunView verified), W3 ✅ (embeddable shadow-DOM bundle),
   W4 ✅ (voice + abuse ceilings), W5 ⚠ (host-passed identity DONE; magic-link upgrade documented),
   W6 ⚠ (most controls built into W1–W5; remainder documented in `spikes/W6-hardening-notes.md`).
   New pkg `@memberjunction/web-widget`: builds, **27 tests**, self-contained esbuild bundle.
@@ -34,13 +34,11 @@ _Updated continuously. Newest status at the top of each phase section._
 5. `migrations/v5/V202606242115__*Widget_Instances.sql` + `metadata/{widget-instances,roles,entity-permissions}` (W2).
 
 **Hard blockers encountered:**
-- **🔴 DB outage (NEW, mid-session):** `sql-claude` became unreachable (DNS unresolved) after the
-  W2 migration + CodeGen had been applied. Blocks: `mj sync push` (W2 seed verify), any further
-  migrations/CodeGen, and re-running the W0 live spike. Everything migration/CodeGen-dependent was
-  already done before the outage. All remaining planned work (W3/W4/T1+/M1) is offline code +
-  unit tests and proceeds unaffected. **If the DB is restored, run:** `mj sync push --dir=metadata
-  --include="roles,entity-permissions,widget-instances"` then verify the Widget Guest role denies a
-  RunView on an out-of-scope entity.
+- **✅ RESOLVED — DB outage (was mid-session):** `sql-claude` went unreachable after W2
+  migration+CodeGen, blocking the W2 seed push + a few verifies. **DB restored 2026-06-25** → ran
+  `mj sync push` (4 created) and the live denied-RunView acceptance — **W2 is now fully DONE** (see
+  `spikes/W2-acceptance.md`). No other work was blocked (everything else was offline). _Historical
+  note kept for the trail._
 - **Auth0 / live MJAPI integration** — anticipated per mission; affects live acceptance curls
   (W1/W3) and credential-gated vendor integration tests (T1–T3, M1). Mitigation: offline unit tests
   + ready-to-run integration tests; documented, never faked.
@@ -74,7 +72,7 @@ _Updated continuously. Newest status at the top of each phase section._
 |---|---|---|
 | W0 | Spike & guardrails | ✅ DONE |
 | W1 | Guest-session backend | ✅ DONE (live curl Auth0-gated) |
-| W2 | Widget-instance metadata | ✅ entity+CodeGen / ⚠ seed push DB-blocked |
+| W2 | Widget-instance metadata | ✅ DONE (seed pushed + denied-RunView verified) |
 | W3 | Embeddable bundle (text MVP) | ✅ DONE (live e2e Auth0-gated) |
 | W4 | Voice modality | ✅ DONE (live voice Auth0/mic-gated) |
 | W5 | Magic-link upgrade + host identity | ⚠ host-identity DONE / upgrade documented |
@@ -164,9 +162,12 @@ tamper rejection).
   (read/create/update on `MJ: Conversations` + `MJ: Conversation Details` only, no delete) +
   one example widget instance (Chat app / Sage / Widget Guest / localhost origins). Pull filters
   widened to include Widget Guest.
-- ⛔ **`mj sync push` + the "denied RunView" acceptance check are BLOCKED**: `sql-claude` became
-  unreachable (DNS unresolved) after the migration+CodeGen step. Files are authored/valid and
-  ready to push when the DB returns.
+- ✅ **Seed pushed + acceptance verified (DB restored 2026-06-25):** `mj sync push` created the
+  Widget Guest role + 2 permissions + the example instance (4 created, 0 errors). Live spike
+  (`spikes/w2-guest-permission-spike.ts`) confirms the boundary: the synthesized Widget Guest
+  principal reads `MJ: Conversations` (allowed) but is **DENIED** `MJ: AI Models`
+  (*"does not have read permissions"*). The widget key resolves through metadata to
+  Chat/Sage/Widget Guest/Both/Active. Full acceptance writeup: `spikes/W2-acceptance.md`.
 - **Caveat for the human (cross-guest isolation):** all anonymous guests share the seeded
   Anonymous principal (same UserID), so a per-UserID RLS filter would NOT isolate one guest's
   Conversation from another's. The Widget Guest role satisfies "cannot read arbitrary entities,"
