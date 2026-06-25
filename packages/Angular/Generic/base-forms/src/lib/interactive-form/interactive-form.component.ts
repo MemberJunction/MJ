@@ -231,6 +231,13 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
                 'Either the user clicked Save without changing anything, or the ' +
                 'React draft did not propagate before save fired.'
             );
+            // Nothing to persist. Calling Save() + rebuildFormHostProps() below
+            // would re-render the React form; if a form emits BeforeSave on
+            // mount/render, that re-render re-fires this handler — an infinite
+            // re-mount loop that starves the form's async data load (it unmounts
+            // before setState commits). Treat a no-dirty-fields save as a no-op.
+            this.resolvePendingSave(true);
+            return;
         }
         for (const [fieldName, value] of dirtyEntries) {
             const field = this.record.Fields.find(f =>
