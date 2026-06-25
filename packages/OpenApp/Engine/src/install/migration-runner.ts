@@ -213,8 +213,10 @@ async function CreateSkywayProvider(platform: DatabasePlatform, dbConfig: Skyway
 
 /**
  * Builds the SkywayConfig for running app migrations.
+ *
+ * Exported for unit testing of the baseline semantics (B19).
  */
-function BuildSkywayConfig(
+export function BuildSkywayConfig(
     migrationsDir: string,
     schemaName: string,
     dbConfig: SkywayDatabaseConfig,
@@ -249,6 +251,23 @@ function BuildSkywayConfig(
         Migrations: {
             Locations: [absoluteDir],
             DefaultSchema: schemaName,
+            // BaselineVersion '1' is a skyway SENTINEL meaning "auto-select the
+            // highest B-prefixed baseline migration and RUN it" — it is NOT a
+            // Flyway-style numeric watermark/floor. Open apps ship their initial
+            // schema + entity-metadata seed as a B-baseline migration (e.g.
+            // bizapps-common's B...__Schema_and_Tables.sql), so on a fresh schema
+            // this sentinel is what actually creates everything.
+            //
+            // Do NOT change this to '0' (or any other number). Any non-'1' value is
+            // treated as an EXPLICIT baseline version that skyway exact-matches
+            // against the B files; since no app names a baseline "0", skyway then
+            // runs NO baseline at all, and the app's later V migrations fail against
+            // the un-seeded schema (e.g. "Expected exactly 1 row updated for
+            // [<App>: <Entity>] in [__mj].[Entity]; got 0. Aborting migration.").
+            //
+            // BaselineOnMigrate only fires when there's no history table, so a
+            // normal --keep-data reinstall (history intact) is unaffected either way.
+            // (See @memberjunction/skyway-core migration/resolver ResolveMigrations.)
             BaselineVersion: '1',
             BaselineOnMigrate: true,
         },
