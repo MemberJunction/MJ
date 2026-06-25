@@ -228,8 +228,22 @@ export class SessionJanitor extends BaseSingleton<SessionJanitor> implements ISh
             if (page.length === 0) {
                 break;
             }
+            // Batch-load every channel for this whole page of sessions in ONE query, then hand each
+            // session its own slice to CloseSession — avoids the N+1 channel read (one RunView per
+            // closing session) that tripped the sequential / multiple-same-entity telemetry.
+            const channelsBySession = await this.sessionManager.LoadActiveChannelsBySession(
+                page.map(s => s.ID),
+                systemUser,
+                provider,
+            );
             for (const session of page) {
-                const closed = await this.sessionManager.CloseSession(session.ID, systemUser, provider, closeReason);
+                const closed = await this.sessionManager.CloseSession(
+                    session.ID,
+                    systemUser,
+                    provider,
+                    closeReason,
+                    channelsBySession.get(session.ID.toLowerCase()) ?? [],
+                );
                 if (closed) {
                     closedCount++;
                 }

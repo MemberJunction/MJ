@@ -19,7 +19,23 @@ and it can't count cache reads).
 | `server-cache-tests.ts` | 26 tests against SQLServerDataProvider (`TrustLocalCacheCompletely = true`) |
 | `client-cache-tests.ts` | 12 tests against a running MJAPI via GraphQLDataProvider (`TrustLocalCacheCompletely = false`) |
 | `runquery-cache-tests.ts` | 9 tests for RunQuery result caching: TTL mode, smart CacheValidationSQL validation, fingerprinting, adversarial break attempts. **Creates and deletes its own Query fixtures** — see the file header |
+| `record-process-tests.ts` | **Deterministic** — drives `RecordSetProcessor` over an in-memory source: ProcessRun/Detail persistence (the tracker's fire-and-forget queue), mixed counts, throw-isolation, circuit breaker, batching, bounded concurrency (6 tests) |
+| `rls-isolation-tests.ts` | **Deterministic** — Row-Level Security multi-user isolation: `{{UserID}}` predicate substitution, two users get distinct predicates (cache fingerprint can't leak A→B), adaptive live RunView scoping check (3 tests) |
+| `record-process-facade-tests.ts` | **Deterministic** — the `RecordProcessExecutor` facade: a real `MJ: Record Processes` definition run via `Run()` + `RunByID()`, ScopeType→source mapping, ProcessRun linked back via `RecordProcessID` (2 tests) |
+| `api-keys-tests.ts` | **Deterministic** — API Keys engine vs. real seeded metadata: `Config()` loads real scopes/applications, end-to-end `Authorize()` with a real key (explicit allow + deny rules), self-cleaning (3 tests) |
+| `scheduled-jobs-tests.ts` | **Deterministic** — Scheduled Jobs engine lifecycle: `ExecuteScheduledJob` persists a terminal run, the distributed lease is acquired→released, stats increment, job is re-runnable, self-cleaning (2 tests) |
+| `prompt-runner-tests.ts` | **Live model tier (gated)** — runs real prompts through AIPromptRunner and verifies the persisted `MJ: AI Prompt Runs` rows (3 prompts) |
+| `agent-runner-tests.ts` | **Live model tier (gated)** — runs Sage, Query Builder, Demo Flow Agent, Demo Loop Agent (×3 prompts), Research Agent (×3 prompts) and deep-verifies run + steps + prompt runs + action logs + sub-agent runs (9 tests) |
+| `concurrent-tests.ts` | **Live model tier (gated)** — N concurrent prompt runs + concurrent agent runs each persist independently (no cross-run corruption — stresses the queue's per-entity keying) |
+| `run-all.ts` | Aggregator — runs every suite in sequence, one exit code (the gated suites skip unless `RUN_AGENT_TESTS=1`) |
 | `lib/harness.ts` | Env/config loading, minimal test runner, shape assertions, instrumented storage provider |
+| `lib/ai-bootstrap.ts` | Live provider stack + `AIEngine.Config` + the deep persisted-record verifiers for the AI suites |
+
+> **Running it.** From the repo root: `npm run test:integration` runs the whole aggregator (`run-all.ts`) — the deterministic tier executes, the live-model tier skips unless `RUN_AGENT_TESTS=1`. For the full gated run: `RUN_AGENT_TESTS=1 npm run test:integration`.
+>
+> **In CI.** The deterministic tier needs a real, seeded MJ database, so it runs in the **release-validation lane** (`.github/workflows/release-test.yml` → `integration-suite` job) against the regression Docker stack (SQL Server + migrations + CodeGen + metadata) via the `test-runner` container — not the mocked per-PR unit-test gate. When this coverage is lifted into the MJ Testing Framework as the "Integration Test" test type, it will run in the same regression lane via `mj-test`.
+
+> **Two tiers.** The cache/runquery suites are **deterministic, credential-free, and CI-ready today**. The agent/prompt suites are a **live model tier** — they make real LLM calls (cost tokens, need credentials), so they're gated behind `RUN_AGENT_TESTS=1` and skip by default. See **[Agent & Prompt suites](#agent--prompt-suites-live-model-tier)** below.
 
 ---
 
@@ -351,6 +367,49 @@ tables the query reads.
 
 ---
 
+## Agent & Prompt suites (live model tier)
+
+`prompt-runner-tests.ts` and `agent-runner-tests.ts` extend the harness to the AI execution stack —
+real `AIPromptRunner` / `AgentRunner` runs against the live database + real model providers, then
+**deep-verification of the persisted output**. They are the live end-to-end regression guard for the
+fire-and-forget `BaseEntitySaveQueue` (the "stuck at Running" race fix): every run/step/log must be
+finalized, never left at `Running` with a null completion timestamp.
+
+### What they verify
+
+| Suite | Runs | Asserts on the persisted records |
+|---|---|---|
+| `prompt-runner-tests.ts` | one prompt via `AIPromptRunner.ExecutePrompt` (then `WaitForPendingPromptRunSaves()`) | `MJ: AI Prompt Runs` — terminal `Status`, **`CompletedAt` set**, and on success a non-empty `Result` + recorded `ExecutionTimeMS`/tokens |
+| `agent-runner-tests.ts` | **Sage**, **Demo Loop Agent**, **Query Builder** via `AgentRunner.RunAgent` | `MJ: AI Agent Runs` (finalized, not stuck) · **every** `MJ: AI Agent Run Steps` (terminal + `CompletedAt`) · each Prompt step's `TargetLogID` → `MJ: AI Prompt Runs` · each Actions/Tool step → `MJ: Action Execution Logs` (`EndedAt` + `ResultCode`) · each Sub-Agent step → child `MJ: AI Agent Runs` (recursive) |
+
+`AwaitingFeedback` / `Paused` are recognized as **valid** suspended states (an agent legitimately asking
+for input) — only a run/step still at `Running` is the bug. Output is non-deterministic, so assertions
+are **structural** (it ran, it persisted correctly), not exact-output.
+
+### Running
+
+```bash
+# Whole suite — deterministic tier runs, live tier skips (default)
+npx tsx packages/MJServer/integration-test-scripts/run-all.ts
+
+# Live model tier (costs tokens, needs model credentials in the env/DB)
+RUN_AGENT_TESTS=1 npx tsx packages/MJServer/integration-test-scripts/run-all.ts
+# or individually:
+RUN_AGENT_TESTS=1 npx tsx packages/MJServer/integration-test-scripts/agent-runner-tests.ts
+```
+
+| Variable | Meaning |
+|---|---|
+| `RUN_AGENT_TESTS=1` | Opt into the live model tier (otherwise both AI suites skip with exit 0) |
+| `PROMPT_TEST_NAME` / `PROMPT_TEST_DATA` | Which prompt to run + its template data (default: first Active prompt, empty data) |
+| `SAGE_MESSAGE` / `DEMO_LOOP_MESSAGE` / `QUERY_BUILDER_MESSAGE` | Per-agent input message overrides |
+| `AGENT_SETTLE_MS` | Wait (default 3000ms) for the fire-and-forget step/prompt/log saves to land before reading them back |
+
+Verified live (2026-06-20): prompt 1/1; Sage / Demo Loop Agent / Query Builder 3/3 (Query Builder also
+exercises a sub-agent — its child run is recursively verified).
+
+---
+
 ## Roadmap: graduating into the Testing Framework as a first-class "Integration Test" type
 
 These scripts are deliberately framework-light — a proving ground. The destination is
@@ -379,6 +438,25 @@ existing reference implementation.
    the release build (e.g., the Docker regression stage) so every release gets this
    coverage at near-zero marginal cost. Tier: PR unit tests → headless integration
    tests (this layer) → browser/computer-use regression.
+
+### Concrete migration recipe — an `IntegrationTestDriver` TestType (studied 2026-06-20)
+
+The framework (`packages/TestingFramework/`) is the right long-term home and adding an out-of-package
+driver is cheap (the `ComputerUseTestDriver` in `packages/AI/MJComputerUse` proves out-of-package drivers
+work). To port the AI suites here into metadata-driven tests:
+
+1. **Driver** — `@RegisterClass(BaseTestDriver, 'IntegrationTestDriver') class IntegrationTestDriver extends BaseTestDriver`, implement `Execute(context)`: run the prompt/agent, run the deep verifiers from `lib/ai-bootstrap.ts` as the assertions, and return a `DriverExecutionResult` (`status`, `targetLogId` → the AI Agent Run, `actualOutput`, `durationMs`, `totalCost`). Export it + add a manifest entry (`npm run mj:manifest`).
+2. **TestType seed** — `metadata/test-types/.integration-test-type.json` with `DriverClass: "IntegrationTestDriver"`.
+3. **Test seeds** — `metadata/tests/...` referencing the type, with `Configuration`/`InputDefinition` carrying the agent/prompt + the expected structural checks. Run via `mj test suite ...`; results land in `MJ: Test Runs`.
+
+**Why we built standalone scripts first (and the gaps to close before migrating):** (a) the reference
+`AgentEvalDriver` currently **hard-disables its oracle assertions** (`skipOracles = true`) — it passes on
+agent *completion* only, so real assertions need finishing or a custom deterministic oracle; (b) there is
+**no prompt driver** yet; (c) there is **no CI lane with a database** — `.github/workflows/test.yml` runs
+Vitest only, no DB/LLM. Our scripts are fully deterministic on the cache/runquery tier and need none of
+that. **Path to the PR gate:** stand up a DB-enabled CI job that runs `run-all.ts` (deterministic tier as a
+blocking gate; the gated live-model tier as a nightly/opt-in lane to control cost + flakiness), then port to
+the driver once the oracle path is finished — gaining run history, suites, variable matrices, and the UI.
 
 ### The headless pattern, and where else to apply it
 

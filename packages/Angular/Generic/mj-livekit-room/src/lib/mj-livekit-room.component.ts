@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, inject } from '@angular/core';
+import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, ViewChild, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLLiveKitClient, RealtimeModelVoices, RealtimeVoiceOption } from '@memberjunction/graphql-dataprovider';
@@ -92,8 +92,10 @@ export interface AgentInRoom {
         [E2EEPassphrase]="E2EEPassphrase"
         [E2EEWorker]="E2EEWorker"
         [AgentAvatarUrl]="AgentAvatarUrl"
+        [CanEndForAll]="EnableEndForAll && !!resolvedRoomName"
         (Connected)="Connected.emit($event)"
         (Disconnected)="Disconnected.emit($event)"
+        (EndForAll)="EndMeeting()"
         (ParticipantJoined)="ParticipantJoined.emit($event)"
         (ParticipantLeft)="ParticipantLeft.emit($event)"
         (DataReceived)="DataReceived.emit($event)"
@@ -357,6 +359,12 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   @Input() public EnableAgentManagement = true;
   /** Show the "Invite" pill that copies a join link to this room. */
   @Input() public EnableInvite = true;
+  /**
+   * Offer "End meeting for everyone" in the control bar's Zoom-style leave menu. When on (default) and a
+   * room is resolved, ending tears down every agent in the room server-side (by name — so it works even
+   * when this client only *joined*). Set `false` for contexts where only the local user should ever leave.
+   */
+  @Input() public EnableEndForAll = true;
   /** Target agents the user can ADD in-room (id + name). The host (e.g. the Explorer resource) supplies these. */
   @Input() public AvailableAgents: { ID: string; Name: string }[] = [];
 
@@ -392,6 +400,11 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
   public addingAgent = false;
   /** Last add error, shown under the picker. */
   public addError: string | null = null;
+  /** True while an "End meeting" (stop all agents + leave) is in flight. */
+  public endingMeeting = false;
+
+  /** The inner Generic room — used to trigger the local disconnect when ending/leaving the meeting. */
+  @ViewChild(LiveKitRoomComponent) private roomComponent?: LiveKitRoomComponent;
 
   /** Available agents not already in the room (by target id) — the "Add" picker options. */
   public get availableToAdd(): { ID: string; Name: string }[] {
@@ -660,6 +673,35 @@ export class MJLiveKitRoomComponent extends BaseAngularComponent implements OnIn
     } catch {
       agent.Removing = false;
     } finally {
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * **End meeting** (the Zoom/Teams "End for all", reached from the control-bar leave menu): tears down EVERY
+   * agent in the room server-side — *by room name*, so it works even when this client only **joined** the room
+   * and never tracked the bridge ids locally — then disconnects the local user. Contrast with **Leave** (the
+   * other menu item → {@link LiveKitRoomComponent.Leave}), which only disconnects YOU and lets the meeting
+   * continue; the server then auto-leaves the agents once the last human is gone, so neither path strands
+   * billable agent sessions in an empty room.
+   */
+  public async EndMeeting(): Promise<void> {
+    if (this.endingMeeting) {
+      return;
+    }
+    this.endingMeeting = true;
+    this.cdr.markForCheck();
+    try {
+      if (this.resolvedRoomName) {
+        const client = new GraphQLLiveKitClient(this.ProviderToUse as unknown as GraphQLDataProvider);
+        await client.EndRoom(this.resolvedRoomName);
+      }
+      this.agentsInRoom = [];
+    } catch {
+      /* best-effort — fall through and still disconnect the local user */
+    } finally {
+      await this.roomComponent?.Leave();
+      this.endingMeeting = false;
       this.cdr.markForCheck();
     }
   }

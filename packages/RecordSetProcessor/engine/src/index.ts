@@ -14,6 +14,7 @@ export * from './processors/ActionRecordProcessor';
 export * from './processors/AgentRecordProcessor';
 export * from './processors/WriteBackProcessor';
 export * from './processors/InferProcessor';
+export * from './processors/FieldRulesProcessor';
 export * from './trackers/NoOpTracker';
 export * from './trackers/GenericProcessRunTracker';
 export * from './operations/RecordProcessGetRunStatusOperation';

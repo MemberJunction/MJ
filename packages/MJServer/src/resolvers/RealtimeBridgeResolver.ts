@@ -1,11 +1,11 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { randomUUID } from 'crypto';
-import { LogError, UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { LogError, LogStatusEx, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { LiveKitTokenService, LiveKitAgentRoomCoordinator, LiveKitEgressService } from '@memberjunction/livekit-room-server';
 import { AppContext } from '../types.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
-import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink } from '@memberjunction/ai-agents';
+import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeModelVoices, CreateBridgeRoomTranscriptSink, RealtimeTurnModeratorDecision } from '@memberjunction/ai-agents';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -36,8 +36,24 @@ AIBridgeEngine.Instance.SetSessionRunFinalizer(FinalizeBridgeCoAgentRuns);
  * "Meeting Room"/scope choices live HERE (the Meet composition layer), keeping the engine generic.
  */
 AIBridgeEngine.Instance.SetTranscriptSink(
-  CreateBridgeRoomTranscriptSink({ ConversationType: 'Meeting Room', ApplicationScope: 'Application' }),
+  CreateBridgeRoomTranscriptSink({ ConversationType: 'Meeting Room', ApplicationScope: 'Application', ApplicationName: 'Meet' }),
 );
+
+/**
+ * Binds the room **turn moderator** onto the bridge engine — **OPT-IN, off by default**. When
+ * `MJ_REALTIME_MODERATOR_MODE=on`, a multi-agent room routes each turn through a fast LLM prompt that decides
+ * who speaks (see `RealtimeTurnModerator` in `@memberjunction/ai-agents`). By default it's OFF: agents run in
+ * plain auto-response, hear everything, and self-moderate (no STT-driven router in the loop) — the
+ * coordinator likewise skips meeting mode when the flag is off, so the two stay consistent. We keep the
+ * moderator wired-but-toggleable for controlled scenarios (webinars, large rooms, weaker models).
+ */
+if (process.env.MJ_REALTIME_MODERATOR_MODE === 'on') {
+  AIBridgeEngine.Instance.SetTurnModerator(RealtimeTurnModeratorDecision);
+  console.log('[RealtimeBridge] turn MODERATOR mode is ON (MJ_REALTIME_MODERATOR_MODE=on) — multi-agent rooms use the LLM router.');
+} else {
+  // Default mode — only surface this at startup when verbose (MJ_VERBOSE) is on; it's the expected state and otherwise just noise.
+  LogStatusEx({ message: '[RealtimeBridge] turn moderator mode is OFF (default) — multi-agent rooms run free-for-all: all agents auto-respond + hear everything.', verboseOnly: true });
+}
 
 /**
  * GraphQL surface for the MJ-native LiveKit room: mints scoped client access tokens and starts an
@@ -315,6 +331,33 @@ export class RealtimeBridgeResolver extends ResolverBase {
       return await LiveKitAgentRoomCoordinator.Instance.StopAgentRoomSession(sessionBridgeID, 'Explicit', user, provider);
     } catch (error) {
       LogError(`StopLiveKitAgentRoomSession failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+  }
+
+  /**
+   * **Ends the meeting for everyone**: stops EVERY agent bot bridged into a room (by room name, via the
+   * coordinator's server-side roster). This is the "End meeting" half of the Zoom-style leave control —
+   * usable by any participant, including one who only *joined* the room and never tracked the bridge ids.
+   * Returns `true` when the teardown ran (even if the room held zero agents). Best-effort: any error → `false`.
+   *
+   * @param roomName The LiveKit room to end.
+   */
+  @Mutation(() => Boolean)
+  async EndLiveKitRoom(
+    @Arg('roomName', () => String) roomName: string,
+    @Ctx() context: AppContext = {} as AppContext,
+  ): Promise<boolean> {
+    try {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
+        return false;
+      }
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      await LiveKitAgentRoomCoordinator.Instance.StopAllAgentsInRoom(roomName, 'Explicit', user, provider);
+      return true;
+    } catch (error) {
+      LogError(`EndLiveKitRoom failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }

@@ -863,7 +863,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       onConnect: async (ctx) => {
         try {
           const token = String(ctx.connectionParams?.Authorization);
-          const userPayload = await getUserPayload(token, undefined, dataSources);
+          // Carry API keys from connectionParams so API-key / MCP / Node clients can authenticate the socket
+          // (validated the same way as the HTTP x-mj-api-key / x-mj-user-api-key headers).
+          const systemApiKey = ctx.connectionParams?.['x-mj-api-key'] ? String(ctx.connectionParams['x-mj-api-key']) : undefined;
+          const userApiKey = ctx.connectionParams?.['x-mj-user-api-key'] ? String(ctx.connectionParams['x-mj-user-api-key']) : undefined;
+          const userPayload = await getUserPayload(token, undefined, dataSources, undefined, systemApiKey, userApiKey);
 
           // Store validated payload on the connection for use in context()
           ctx.extra.userPayload = userPayload;
