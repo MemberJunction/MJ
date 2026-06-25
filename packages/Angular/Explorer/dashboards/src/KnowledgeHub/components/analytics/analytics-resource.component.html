@@ -145,7 +145,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No data available</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No data available" />
                             }
                         </div>
                     }
@@ -187,7 +187,7 @@
                                     </div>
                                 }
                                 @if (CoverageData.length === 0) {
-                                    <div class="widget-empty">No content types found</div>
+                                    <mj-empty-state class="widget-empty" Size="compact" Icon="fa-solid fa-shapes" Title="No content types found" />
                                 }
                             </div>
                         </div>
@@ -233,7 +233,7 @@
                                     </div>
                                 }
                                 @if (SourcePerfData.length === 0) {
-                                    <div class="widget-empty">No source data</div>
+                                    <mj-empty-state class="widget-empty" Size="compact" Icon="fa-solid fa-database" Title="No source data" />
                                 }
                             </div>
                             <div class="widget-footnote">Average tags per item</div>
@@ -331,7 +331,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No data available</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No data available" />
                             }
                         </div>
                     }
@@ -441,7 +441,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No items found for this tag</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-tag" Title="No items found for this tag" />
                             }
                         </div>
                     }
@@ -632,7 +632,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No run data for this source</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No run data for this source" />
                             }
                         </div>
                     }
@@ -767,7 +767,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No runs for this day</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-calendar-day" Title="No runs for this day" />
                             }
                         </div>
                     }
@@ -954,7 +954,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No items in this confidence range</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No items in this confidence range" />
                             }
                         </div>
                     }

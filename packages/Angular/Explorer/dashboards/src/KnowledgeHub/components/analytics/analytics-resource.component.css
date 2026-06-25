@@ -269,6 +269,10 @@
     color: var(--mj-text-muted);
     font-size: 12px;
     padding: 20px;
+    /* span the full grid/flex parent so the <mj-empty-state> host centers
+       (rings-grid is a 2-col grid; without this the empty sits in one cell) */
+    grid-column: 1 / -1;
+    width: 100%;
 }
 
 .widget-footnote {
@@ -729,6 +733,9 @@
     text-align: center;
     color: var(--mj-text-muted);
     font-size: 13px;
+    /* span full grid/flex parent so the <mj-empty-state> host centers */
+    grid-column: 1 / -1;
+    width: 100%;
 }
 
 /* ===== STACKED BAR CHART ===== */
