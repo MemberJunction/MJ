@@ -1,15 +1,18 @@
 ---
-"@memberjunction/codegen-lib": minor
+"@memberjunction/codegen-lib": patch
 ---
 
 refactor(codegen-lib): multi-provider `SetupDataSource` + PostgreSQL pool symmetry
 
-**Why minor (not patch):** this PR has no DB / migration / metadata changes, but it does add new
-public API to `@memberjunction/codegen-lib` — `CodeGenDatabaseProvider.SetupDataSource()` (new
-abstract method on the public base class), `Config/pg-connection.ts` (new file exporting `PGConnection`
-and `getPgConfig()`), and a new optional `codegenPool` config block. Net-additive public surface →
-minor under our semver convention. End-user behavior is unchanged when none of the new APIs / config
-keys are set.
+**Why patch (not minor):** under the convention recent `@memberjunction/codegen-lib` entries
+follow (see `5.42.0` — minor for `2f225e4` / `b7092ca`, both of which carried SQL migrations;
+patch for `ded7a20`, which restructured `db-connection.ts` and added `getSqlConfig()` with no
+migration), the semver bump is driven by whether the change ships a DB migration or schema
+modification. This PR has no migration, no metadata changes, and no DB schema changes — it is
+a pure code refactor + new optional `codegenPool` knobs + a new abstract `SetupDataSource()`
+on the provider base. End-user behavior is unchanged when the new optional APIs / config keys
+aren't touched, and no external code depends on the new exports yet — so `patch` is consistent
+with the recent precedent.
 
 - `RunCodeGenBase.setupDataSource()` now dispatches via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, dbPlatform)` instead of a hard-coded `if (platform === 'postgresql')` switch. Adding a new platform is a single `@RegisterClass` registration — no orchestrator change.
 - `CodeGenDatabaseProvider` gains an abstract `SetupDataSource()` method; `SQLServerCodeGenProvider` and `PostgreSQLCodeGenProvider` own their respective implementations. The shared `DataSourceResult` interface moved to the base class.
