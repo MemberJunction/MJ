@@ -40,8 +40,42 @@ Four layers; the first already exists.
 
 1. **Data layer (existing).** Entities, stored Queries, external entities (#2449), vectors/Knowledge Hub, DBAutoDoc metadata — all become **feed-ins**.
 2. **Feature layer (new + reuse).** Feature Pipelines (Knowledge Hub) that persist derived features, plus the **FeatureAssembly executor** that turns a record set + a frozen pipeline spec into a numeric feature matrix.
-3. **Model layer (new).** Training orchestration (TS) → **Python sidecar** (CPU) → serialized, versioned, immutable **Trained Model** artifact with full lineage.
+3. **Model layer (new).** Training orchestration (TS) → **Python sidecar** (CPU) → serialized, versioned, immutable **ML Model** artifact with full lineage.
 4. **Inference layer (new).** Score single record or batch via a new **ML inference work type** in Record Set Processing — on-demand and scheduled — with optional write-back; later, materialized prediction columns via #2770.
+
+```mermaid
+flowchart TB
+    subgraph DATA["1 · Data layer (existing)"]
+        E[Entities]
+        Q["MJ: Queries<br/>approved = ground truth"]
+        EXT["External entities · #2449"]
+        VEC[Vectors / Knowledge Hub]
+        DOC[DBAutoDoc descriptions]
+    end
+    subgraph FEAT["2 · Feature layer"]
+        FP["Feature Pipelines<br/>(Knowledge Hub)"]
+        FA["FeatureAssembly executor<br/>record set + frozen steps → matrix"]
+    end
+    subgraph MODEL["3 · Model layer"]
+        TRAIN[Training orchestration · TS]
+        SIDE["Python sidecar · CPU<br/>XGBoost · LightGBM · sklearn"]
+        MM["MJ: ML Models<br/>immutable · versioned"]
+    end
+    subgraph INFER["4 · Inference layer"]
+        RSP["Record Set Processing<br/>MLModelInferenceProcessor"]
+        MAT["Materialization · #2770<br/>prediction columns"]
+    end
+    DATA --> FEAT
+    FP -->|persist features| E
+    FEAT --> TRAIN
+    TRAIN <-->|train / predict| SIDE
+    TRAIN --> MM
+    MM --> RSP
+    MM --> MAT
+    RSP -->|optional write-back| E
+    MAT -->|physical columns| E
+    AGENT["Model Development Agent<br/>Remote Ops + Actions"] -.drives.-> FEAT & MODEL & INFER
+```
 
 Everything server-side capability is exposed as **Remote Operations** (Manual mode) + thin **Actions** so agents/Skip/Query Builder inherit it.
 
@@ -58,7 +92,7 @@ Everything server-side capability is exposed as **Remote Operations** (Manual mo
 | Typed server capability invoked by browser + agent | **Remote Operations** (`BaseRemotableOperation`, Manual mode, `LongRunning` progress) | TrainModel / ScoreRecordSet / RunFeaturePipeline / experiment control ops |
 | Plan-then-execute agent | **Agent Manager** pattern (Loop agent, strongly-typed `AgentSpec` payload, sub-agents refine spec, Architect validates, Builder executes deterministically) | the Model Development Agent |
 | Rich result artifact in chat | **Artifacts** (`MJ: Artifact Types` + `@RegisterClass(BaseArtifactViewerPluginComponent, …)` viewer plugins, `NavigationRequest` drill-through) | a new ML-experiment-results artifact type + viewer |
-| Reasoning inputs | approved **MJ: Queries**, **Agent Notes** memory, **DBAutoDoc** entity/field descriptions, existing approved Trained Models | wire as agent context |
+| Reasoning inputs | approved **MJ: Queries**, **Agent Notes** memory, **DBAutoDoc** entity/field descriptions, existing approved ML Models | wire as agent context |
 
 ### 2.2 Key sequencing insight
 
@@ -107,6 +141,20 @@ The sidecar **fits** preprocessing during `/train` and returns the fitted parame
 
 New core entities. Names follow MJ "MJ: " prefix convention. CodeGen generates timestamps, FK indexes, sprocs, views, entity classes. **Do not** write code against new fields until the migration + CodeGen have run (CLAUDE.md rule 2b).
 
+```mermaid
+erDiagram
+    ML_Algorithms ||--o{ ML_Algorithm_Use_Case_Rankings : ranked
+    ML_Algorithm_Use_Cases ||--o{ ML_Algorithm_Use_Case_Rankings : scored
+    ML_Algorithms ||--o{ Training_Pipelines : uses
+    Training_Pipelines ||--o{ Training_Runs : produces
+    Training_Runs ||--o| ML_Models : yields
+    Training_Pipelines ||--o{ ML_Models : versions
+    Experiment_Sessions ||--o{ Training_Runs : groups
+    ML_Models ||--o{ Model_Scoring_Bindings : scoredVia
+    Model_Scoring_Bindings }o--|| Record_Processes : runs
+```
+_(Entity names shown without the "MJ: " prefix for diagram clarity; `Record_Processes` is the existing Record Set Processing entity.)_
+
 ### 4.1 `MJ: ML Algorithms` (catalog)
 | Field | Purpose |
 |---|---|
@@ -119,6 +167,39 @@ New core entities. Names follow MJ "MJ: " prefix convention. CodeGen generates t
 | Status | `Active`/`Deprecated` |
 
 Seeded via metadata file `metadata/ml-algorithms/.ml-algorithms.json` (NOT SQL INSERTs — CLAUDE.md). Starting catalog: XGBoost, LightGBM, Logistic Regression, Random Forest, Linear/Ridge Regression, MLP. Reserve k-NN / Naive Bayes **[O]**.
+
+### 4.1.1 `MJ: ML Algorithm Use Cases` (guidance lookup)
+Curated, **decision-relevant** scenarios that genuinely differentiate algorithm suitability — NOT business labels (churn / renewal / attendee-return are all the same *binary classification* shape, so they don't differentiate). Seeded via metadata.
+| Field | Purpose |
+|---|---|
+| ID, Name, Description | e.g. "Binary classification (yes/no)", "Regression (predict a number)", "Interpretability required", "Minimal tuning (business-user)", "Large/wide dataset (speed)", "Embedding/LLM-feature-heavy", "Small dataset" |
+| ProblemTypeScope | `classification` \| `regression` \| `any` (filter) |
+| Guidance | longer agent-readable note on when this scenario applies |
+| DisplayOrder | UI ordering |
+
+### 4.1.2 `MJ: ML Algorithm Use Case Rankings` (algorithm × use-case join)
+**[D]** Codifies "which algorithm fits which scenario" so both the agent's Experiment Designer and a human in the UI get guided, evidence-based defaults instead of guessing. Seeded via metadata.
+| Field | Purpose |
+|---|---|
+| ID | PK |
+| MLAlgorithmID | FK → MJ: ML Algorithms |
+| MLAlgorithmUseCaseID | FK → MJ: ML Algorithm Use Cases |
+| SuitabilityScore | int 1–5 (5 = best) for ranking/sorting |
+| RecommendationLevel | `Primary` \| `Strong` \| `Viable` \| `Weak` \| `NotRecommended` |
+| Rationale | the **why** (agent + human readable), e.g. "Gives feature importances but not simple coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic/Ridge." |
+| | UNIQUE (MLAlgorithmID, MLAlgorithmUseCaseID) |
+
+Seed matrix (RecommendationLevel) — the rationale text per cell is the real payoff:
+
+| Use case ↓ / Algo → | XGBoost | LightGBM | Logistic Reg | Random Forest | Linear/Ridge | MLP |
+|---|---|---|---|---|---|---|
+| Binary classification (yes/no) | Primary | Strong | Viable | Strong | NotRec | Viable |
+| Regression (predict a number) | Primary | Strong | NotRec | Strong | Strong | Viable |
+| Interpretability required | Weak | Weak | **Primary** | Viable | **Primary** | NotRec |
+| Minimal tuning (business-user) | Viable | Viable | Strong | **Primary** | Strong | Weak |
+| Large/wide dataset (speed) | Strong | **Primary** | Strong | Viable | Strong | Viable |
+| Embedding/LLM-feature-heavy | Strong | Strong | Viable | Viable | Viable | **Primary** |
+| Small dataset | Viable | Viable | **Primary** | Strong | **Primary** | Weak |
 
 ### 4.2 `MJ: Training Pipelines` (declarative definition)
 | Field | Purpose |
@@ -135,8 +216,10 @@ Seeded via metadata file `metadata/ml-algorithms/.ml-algorithms.json` (NOT SQL I
 | LeakageGuard | JSON: deny-list of fields/sources, single-feature-dominance threshold (§6.4) |
 | ValidationStrategy | JSON: `train_test_split` (ratio) \| `kfold` (k) \| `holdout`; plus locked-holdout fraction |
 
-### 4.3 `MJ: Trained Models` (immutable, versioned)
+### 4.3 `MJ: ML Models` (immutable, versioned)
 **[D] Immutable + versioned.** Each successful run → a new row; never mutate.
+
+> **Distinct from `MJ: AI Models`.** `MJ: AI Models` is the catalog of off-the-shelf foundation models we *call* (LLMs, embeddings, image-gen), tied to vendors + driver classes + a vendor-API inference path. `MJ: ML Models` are predictive models we *train* from client data — produced by a training run, with a serialized artifact (MJStorage), fitted preprocessing, and the **sidecar** inference path. An ML Model may *reference* an AI Model in its `Lineage` (e.g. the embedding model used to build features) — a pointer, not membership. **[O]** Future option: expose an ML Model *as* an `MJ: AI Models` row of a "Predictive" type so the unified inference layer can route to it; out of scope for v1.
 | Field | Purpose |
 |---|---|
 | ID, PipelineID, Version | Identity + lineage |
@@ -176,10 +259,10 @@ Seeded via metadata file `metadata/ml-algorithms/.ml-algorithms.json` (NOT SQL I
 | AgentRunID | FK → MJ: AI Agent Runs (the Model Development Agent run that owns this session) |
 
 ### 4.6 `MJ: Model Scoring Bindings` (lineage for scoring/retraining)
-Binds a Trained Model to where it scores, so we can detect staleness and drive retraining (§10/§12 maintenance).
+Binds a ML Model to where it scores, so we can detect staleness and drive retraining (§10/§12 maintenance).
 | Field | Purpose |
 |---|---|
-| ID, TrainedModelID | which model |
+| ID, MLModelID | which model |
 | RecordProcessID | the Record Process that runs the scoring (the ML inference work) |
 | TargetEntityID / TargetColumn | where scores are written (when write-back/materialized) |
 | Mode | `OnDemand`/`Scheduled`/`Materialized` |
@@ -229,8 +312,22 @@ No image classifier/embedding pipeline exists today. **[D] Out of initial scope.
 
 Anything else creates train/serve skew.
 
+```mermaid
+flowchart LR
+    RS[Record set] --> FA{{FeatureAssembly executor}}
+    SPEC[Frozen FeatureSteps spec] --> FA
+    FA -->|context: TRAIN| FIT["fit + transform<br/>learns mean/std · vocab · bins"]
+    FA -->|context: SCORE<br/>materialize / on-demand| TR["transform only<br/>apply frozen params"]
+    FIT --> MX[Training matrix] --> ST[sidecar /train]
+    FIT -->|fitted params| FPP[(FittedPreprocessing)]
+    ST --> MODEL["MJ: ML Models<br/>weights + FittedPreprocessing + FeatureSchema"]
+    FPP --> MODEL
+    MODEL -->|frozen params travel with model| TR
+    TR --> SX[Scoring matrix] --> SP[sidecar /predict]
+```
+
 ### 6.2 Fit vs transform (anti-skew)
-**[D]** Stateful transforms (normalization mean/std, one-hot vocabulary, bin edges, imputation fill values) are **fit once on training data**; the fitted parameters are serialized into `TrainedModel.FittedPreprocessing` alongside the weights. At inference we **only apply** the frozen params, never re-fit. (sklearn fit/transform split, executed in the sidecar.) This is why `FeatureSchema` alone is insufficient — the fitted pipeline travels with the model.
+**[D]** Stateful transforms (normalization mean/std, one-hot vocabulary, bin edges, imputation fill values) are **fit once on training data**; the fitted parameters are serialized into `MLModel.FittedPreprocessing` alongside the weights. At inference we **only apply** the frozen params, never re-fit. (sklearn fit/transform split, executed in the sidecar.) This is why `FeatureSchema` alone is insufficient — the fitted pipeline travels with the model.
 
 ### 6.3 Point-in-time / "as-of" assembly
 **[D] First-class `AsOfStrategy` on the pipeline.** For forward prediction, features must be assembled **as they were at the decision point** (e.g. 90 days before the renewal window), not as they are today. `days_since_last_activity` computed at training time over post-decision data leaks the future. Modes: `none`, `column` (a decision-date column on the training unit), `offset` (N days before the label event). Time-relative feature logic means training "as-of-then" and scoring "as-of-now" stay consistent. This is the single biggest **new** correctness primitive — nothing in MJ provides it.
@@ -256,7 +353,7 @@ Regenerating an LLM summary at scoring time with a newer model is train/serve sk
 select features → choose algorithm → split → train → evaluate on held-out data → deterministically grade → refine → repeat. Supported manually (UI) and as an automated search (§9 agent).
 
 ### 8.2 Validation discipline
-**[D] Be opinionated; don't ship broken models.** Default single train/test split with overfitting detection; optional k-fold and holdout. **[D] A locked final holdout** the search never sees, scored exactly once on the promoted model → `TrainedModel.HoldoutMetrics` is the honest number (prevents leaderboard optimism / multiple-comparisons overfitting). Deterministic scoring (AUC/F1/accuracy/RMSE) drives the loop.
+**[D] Be opinionated; don't ship broken models.** Default single train/test split with overfitting detection; optional k-fold and holdout. **[D] A locked final holdout** the search never sees, scored exactly once on the promoted model → `MLModel.HoldoutMetrics` is the honest number (prevents leaderboard optimism / multiple-comparisons overfitting). Deterministic scoring (AUC/F1/accuracy/RMSE) drives the loop.
 
 ### 8.3 Experiment engine
 `ExperimentSession` groups runs. The engine: maintains a **leaderboard**, **parallelizes** experiments (bounded), **prunes** unpromising branches, focuses compute on promising directions, respects **budget**. Runs minutes→hours→days per budget.
@@ -279,13 +376,36 @@ Mirrors **Agent Manager**: collaborate with the user to build a strongly-typed p
 - **Type:** the **top-level orchestrator is a Loop agent** (`LoopAgentType`) so it stays **conversational**. Crucially, the orchestration of the three sub-agents is **enforced declaratively via metadata payload guards** — `PayloadDownstreamPaths` / `PayloadUpstreamPaths` / `PayloadSelfReadPaths` / `PayloadSelfWritePaths` on each sub-agent — rather than hardcoded control flow. Each sub-agent can only read/write its designated slice of the `ModelingPlanSpec`, which both constrains and sequences the work. A thin `validateSuccessNextStep` override remains only for **plan-validity** checks (spec completeness, leakage sign-off) before the approval gate — not for sequencing.
 - **Sub-agents (planning phase, LLM-heavy):**
   - **Goal Analyst** — refines the business goal into a precise target definition + problem type + success metric (writes `payload.Goal`, `payload.TargetDefinition`).
-  - **Data Scout** — studies source data using **approved MJ: Queries** (ground truth), **DBAutoDoc** descriptions, **Agent Notes** (prior learnings), and **existing approved Trained Models**; proposes candidate sources/features; flags leakage risks (writes `payload.CandidateSources`, `payload.CandidateFeatures`, `payload.LeakageNotes`).
+  - **Data Scout** — studies source data using **approved MJ: Queries** (ground truth), **DBAutoDoc** descriptions, **Agent Notes** (prior learnings), and **existing approved ML Models**; proposes candidate sources/features; flags leakage risks (writes `payload.CandidateSources`, `payload.CandidateFeatures`, `payload.LeakageNotes`).
   - **Experiment Designer** — proposes a ranked set of experiments (feature combos × algorithms × hyperparameters) **with rationale**, a validation strategy, and a **proposed budget** (writes `payload.ProposedExperiments`, `payload.ValidationStrategy`, `payload.ProposedBudget`).
 - **Plan approval gate:** the orchestrator emits the plan as an artifact + a `responseForm` / `Chat` step; the **user approves/edits** before execution. (Agent Manager's Requirements→Designer→Architect refinement pattern.)
 - **Execution phase (deterministic-heavy):** once approved, a **deterministic `ExperimentOrchestrator`** (plain TS, like Agent Manager's Builder) executes the plan: calls the Train/Score Remote Ops/Actions, records `Training Runs`, updates the leaderboard, prunes, enforces budget. **Internal LLM inference is used only for choices** ("given these results, what feature combo to try next") — the bulk is deterministic loop/compare/prune code.
-- **Reporting phase (LLM):** authors a summary → the **ML Experiment Results artifact** (§9.4) with clickable drill-through to the winning `Trained Models`.
+- **Reporting phase (LLM):** authors a summary → the **ML Experiment Results artifact** (§9.4) with clickable drill-through to the winning `ML Models`.
 - **Memory:** writes learnings as Agent Notes scoped **largely to itself** (Agent + User), e.g. "for churn on org X, gradient boosting + engagement features beat logistic regression" — these auto-inject into future runs and harden via the Memory Manager. Org-wide propagation is not an in-flight write; it only happens through the Memory Manager's hardening cycle.
 - **Semantic-layer contribution:** when the agent **authors a new MJ: Query** during data exploration, that Query is created with **`Status='Pending'`** (not Approved). It is *not* treated as ground truth until a human approves it — at which point it becomes part of the approved semantic layer for everyone. This keeps the agent productive (it can draft queries) without letting it silently expand the trusted ground-truth surface.
+
+```mermaid
+flowchart TB
+    U([User: business goal]) --> GA
+    subgraph PLAN["Plan phase · LLM-heavy · Loop orchestrator"]
+        GA[Goal Analyst] --> DS[Data Scout] --> ED[Experiment Designer]
+    end
+    GA -.writes slice.-> SPEC[("ModelingPlanSpec<br/>payload-path guarded")]
+    DS -.writes slice.-> SPEC
+    ED -.writes slice.-> SPEC
+    DS -->|reads| GT["Approved MJ: Queries · DBAutoDoc<br/>Agent Notes · existing ML Models"]
+    SPEC --> GATE{"User approves plan?"}
+    GATE -->|edits| PLAN
+    GATE -->|approved| EXEC
+    subgraph EXEC["Execution phase · deterministic"]
+        ORCH[ExperimentOrchestrator] --> RUNS["parallel train/score runs<br/>prune · budget-gate · leaderboard"]
+    end
+    RUNS --> LEAK{"Leakage / dominance?"}
+    LEAK -->|suspicious| SIGN["Warn in plain language<br/>block promotion → human sign-off"]
+    LEAK -->|clean| REPORT
+    SIGN -.->|signed off| REPORT
+    REPORT["Report phase · LLM<br/>ML Experiment Results artifact<br/>→ drill-through to ML Models"] --> U
+```
 
 ### 9.2 Strongly-typed payload — `ModelingPlanSpec`
 Analogous to Agent Manager's `AgentSpec`. Refined incrementally via `AgentPayloadChangeRequest` (`updateElements`/`replaceElements`), validated by the orchestrator's `validateSuccessNextStep` override before execution. Shape (TypeScript interface, lives in a new `@memberjunction/predictive-studio-core`):
@@ -318,7 +438,7 @@ export interface ModelingPlanSpec {
 **[D] The approved-query registry already exists: `MJ: Queries` with `Status='Approved'`.** The Data Scout reads feature data **only from `MJ: Queries` where `Status='Approved'`** (plus RunView over entities) — it never hand-writes raw SQL for feature extraction. When the agent needs a query that doesn't exist, it **drafts a new `MJ: Query` as `Status='Pending'`** (§9.1 semantic-layer rule); that draft is usable for the current exploration but is **not** ground truth until a human approves it, after which it enriches the shared semantic layer. (WBS PS-AGENT-4.)
 
 ### 9.4 ML Experiment Results artifact
-**[D] New artifact type** `application/vnd.mj.ml-experiment-results` (metadata-seeded in `metadata/artifact-types/`, `ParentID` → JSON, with `ExtractRules` for name/description/displayMarkdown). A new Angular viewer plugin `@RegisterClass(BaseArtifactViewerPluginComponent, 'MLExperimentResultsViewerPlugin')` renders: the goal, leaderboard, per-run metrics, feature importance, and **clickable drill-through to each Trained Model** via `NavigationRequest({ appName:'Predictive Studio', navItemName:'Models', queryParams:{ modelId } })`. Produced by the agent run (`CreateArtifacts:true`) and attached to the conversation.
+**[D] New artifact type** `application/vnd.mj.ml-experiment-results` (metadata-seeded in `metadata/artifact-types/`, `ParentID` → JSON, with `ExtractRules` for name/description/displayMarkdown). A new Angular viewer plugin `@RegisterClass(BaseArtifactViewerPluginComponent, 'MLExperimentResultsViewerPlugin')` renders: the goal, leaderboard, per-run metrics, feature importance, and **clickable drill-through to each ML Model** via `NavigationRequest({ appName:'Predictive Studio', navItemName:'Models', queryParams:{ modelId } })`. Produced by the agent run (`CreateArtifacts:true`) and attached to the conversation.
 
 ### 9.5 Invocation surfaces
 Embedded chat in the Predictive Studio dashboard (`<mj-conversation-chat-area [defaultAgentId]="copilotAgentId" [applicationId]="studioAppId" [showAgentPicker]="false">`) **and** any MJ chat surface (default-agent resolution / @mention). Progress streams via the agent progress callback + Remote Op `LongRunning` progress.
@@ -332,6 +452,20 @@ Embedded chat in the Predictive Studio dashboard (`<mj-conversation-chat-area [d
 
 > Doc fix: the existing "Infer" work type = *run an AI Prompt per record*; it is NOT ML inference. Update `guides/RECORD_SET_PROCESSING_GUIDE.md` to disambiguate, and name the new type clearly (e.g. "ML Model" / `MLModelInferenceProcessor`). (WBS PS-SCORE-1.)
 
+```mermaid
+flowchart TB
+    M["MJ: ML Models"] --> P[MLModelInferenceProcessor]
+    OD["On-demand<br/>RunNow + scope override<br/>records / view / list / single"] --> P
+    SCH["Scheduled<br/>cron trigger"] --> P
+    subgraph RSP["Record Set Processing"]
+        P --> OUT{"OutputMapping present?"}
+    end
+    OUT -->|no| EPH["Ephemeral scores<br/>sortable within result set"]
+    OUT -->|yes| WB["Write-back: score column / child rows<br/>sortable · filterable · reportable"]
+    M --> MATR["Materialization refresh · #2770"]
+    MATR --> COLS["Physical prediction columns on<br/>materialized VirtualEntity<br/>population-wide · indexed"]
+```
+
 ### 10.2 Materialized prediction columns (after #2770)
 **[D] Defer dynamic per-query computed columns; run inference inside the offline materialization pipeline** (#2770). At refresh: join/denormalize across however many entities, assemble features, batch-score, write predictions as **physical columns** on the materialized `VirtualEntity`. Skip/Query Builder/reports/views query them like any table — fast, indexed, population-wide. Depends on #2770 landing; `MJ: Model Scoring Bindings.MaterializedResultID` links the two.
 
@@ -342,7 +476,7 @@ Embedded chat in the Predictive Studio dashboard (`<mj-conversation-chat-area [d
 
 ## 11. Artifact format & storage
 - **[O]→[D-lean] Model artifact format:** start with **native algorithm format** (XGBoost/LightGBM JSON, sklearn via a portable serializer) wrapped in our own envelope `{ format, version, payload_b64, fitted_preprocessing, feature_schema }`. Evaluate **ONNX** as the portable cross-deployment format (SQL Server/Postgres parity) — adopt if export is clean for the catalog; keep it as *format*, not a second runtime.
-- **[D] Artifact storage:** `MJ: Trained Models` artifact is `ContentCategory='File'` → stored in **MJStorage** (`MJ: Files`), referenced by `ArtifactID`. Keeps large blobs out of the row. The sidecar fetches by reference or receives inline on `/predict` (warm cache keyed by model id + version).
+- **[D] Artifact storage:** `MJ: ML Models` artifact is `ContentCategory='File'` → stored in **MJStorage** (`MJ: Files`), referenced by `ArtifactID`. Keeps large blobs out of the row. The sidecar fetches by reference or receives inline on `/predict` (warm cache keyed by model id + version).
 
 ---
 
@@ -371,9 +505,9 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 
 ### SP0 — Foundations: data model, packages, ops scaffolding
 - **PS-FND-1 — Create packages.** _deps: none._ Scaffold `@memberjunction/predictive-studio-core` (types: `ModelingPlanSpec`, feature-step specs, sidecar contract types), `@memberjunction/predictive-studio` (engine/orchestration/processors/ops), `@memberjunction/predictive-studio-sidecar` (Python). **AC:** packages build, vitest scaffolded (`scripts/scaffold-tests.mjs`). 
-- **PS-FND-2 — Migration: core entities.** _deps: PS-FND-1._ One migration in `migrations/v5/` creating `MJ: ML Algorithms`, `Training Pipelines`, `Trained Models`, `Training Runs`, `Experiment Sessions`, `Model Scoring Bindings` (+ `sp_addextendedproperty` on every column; consolidated ALTER/CREATE; hardcoded UUIDs; no `__mj_*`/FK indexes). **AC:** migration runs clean on SQL Server; PG parity via pg-migrate skill.
+- **PS-FND-2 — Migration: core entities.** _deps: PS-FND-1._ One migration in `migrations/v5/` creating `MJ: ML Algorithms`, `ML Algorithm Use Cases`, `ML Algorithm Use Case Rankings`, `Training Pipelines`, `ML Models`, `Training Runs`, `Experiment Sessions`, `Model Scoring Bindings` (+ `sp_addextendedproperty` on every column; consolidated ALTER/CREATE; hardcoded UUIDs; no `__mj_*`/FK indexes; UNIQUE on the rankings join). **AC:** migration runs clean on SQL Server; PG parity via pg-migrate skill.
 - **PS-FND-3 — CodeGen.** _deps: PS-FND-2._ Run migration + CodeGen; generated entity subclasses + sprocs/views exist. **AC:** strongly-typed entity classes available; no `.Get()/.Set()` needed downstream.
-- **PS-FND-4 — Seed algorithm catalog.** _deps: PS-FND-3._ `metadata/ml-algorithms/.ml-algorithms.json` (+ `.mj-sync.json`) with 6 algorithms; `mj sync push`. **AC:** catalog rows present with hyperparameter schemas.
+- **PS-FND-4 — Seed algorithm catalog + guidance.** _deps: PS-FND-3._ Metadata-seed (each its own dir + `.mj-sync.json`, `@lookup:` refs, `mj sync push` — NO SQL inserts): `metadata/ml-algorithms/.ml-algorithms.json` (6 algorithms + hyperparameter schemas), `metadata/ml-algorithm-use-cases/.ml-algorithm-use-cases.json` (the 7 use cases), and `metadata/ml-algorithm-use-case-rankings/.ml-algorithm-use-case-rankings.json` (the 6×7 ranking matrix with per-cell `RecommendationLevel` + `Rationale`). **AC:** catalog + use cases + rankings present; an agent/UI query returns ranked, rationale-bearing recommendations per use case.
 - **PS-FND-5 — Remote Operation metadata rows.** _deps: PS-FND-3._ Seed `MJ: Remote Operations` rows (GenerationType=`Manual`, Status=`Active`, `ExecutionMode='LongRunning'` where applicable, `RequiredScope='predictive:execute'`, typed Input/Output defs) for: `PredictiveStudio.TrainModel`, `PredictiveStudio.ScoreRecordSet`, `PredictiveStudio.RunFeaturePipeline`, `PredictiveStudio.StartExperimentSession`, `PredictiveStudio.ControlExperimentSession`, `PredictiveStudio.PromoteModel`. **AC:** CodeGen emits typed bases in `remote_operations.ts`.
 
 ### SP1 — Python sidecar
@@ -389,7 +523,7 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 - **PS-FEAT-4 — Leakage guard.** _deps: PS-FEAT-1._ deny-list enforcement + single-feature-dominance flag wired into training. **AC:** dominance > threshold flags the run; denied fields never enter the matrix.
 
 ### SP3 — Training orchestration
-- **PS-TRAIN-1 — Training engine.** _deps: PS-FEAT-1, PS-SIDE-4._ `BaseEngine`-style orchestrator: load pipeline → assemble (fit) → call `/train` → store artifact in MJStorage → create `Trained Model` (+ `FittedPreprocessing`, `FeatureSchema`, metrics, importance, lineage) + `Training Run`. **AC:** end-to-end trains a retention model from a pipeline def.
+- **PS-TRAIN-1 — Training engine.** _deps: PS-FEAT-1, PS-SIDE-4._ `BaseEngine`-style orchestrator: load pipeline → assemble (fit) → call `/train` → store artifact in MJStorage → create `ML Model` (+ `FittedPreprocessing`, `FeatureSchema`, metrics, importance, lineage) + `Training Run`. **AC:** end-to-end trains a retention model from a pipeline def.
 - **PS-TRAIN-2 — Validation + locked holdout.** _deps: PS-TRAIN-1._ split/k-fold/holdout; locked-holdout scored once → `HoldoutMetrics`. **AC:** holdout never overlaps train; metrics recorded.
 - **PS-TRAIN-3 — `PredictiveStudio.TrainModel` Remote Op.** _deps: PS-TRAIN-1, PS-FND-5._ Manual-mode server subclass `@RegisterClass(BaseRemotableOperation,'PredictiveStudio.TrainModel')`; `LongRunning` progress via `context.emitProgress`. **AC:** invokable client + in-process; progress streams.
 - **PS-TRAIN-4 — Train action.** _deps: PS-TRAIN-3._ Thin Action wrapping the op for agent use. **AC:** agent can train via Action.
@@ -423,7 +557,7 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 - **PS-AGENT-1 — Agent metadata + payload type.** _deps: PS-FND-1._ `ModelingPlanSpec` in `predictive-studio-core`; Loop agent + sub-agents (Goal Analyst, Data Scout, Experiment Designer) seeded via metadata. **AC:** agent runs; payload validated.
 - **PS-AGENT-2 — Orchestrator (plan phase).** _deps: PS-AGENT-1._ top-level **Loop** agent (conversational); sub-agent sequencing/scoping enforced via metadata `PayloadDownstreamPaths`/`PayloadUpstreamPaths`/`PayloadSelfReadPaths`/`PayloadSelfWritePaths` (not hardcoded flow); sub-agents refine spec via `payloadChangeRequest`; thin `validateSuccessNextStep` for plan-validity (completeness + leakage sign-off) only; plan-approval gate (responseForm/Chat). **AC:** produces an approved `ModelingPlanSpec` with user in the loop; each sub-agent can only write its designated payload slice.
 - **PS-AGENT-3 — Execution phase (deterministic).** _deps: PS-AGENT-2, PS-EXP-2, PS-TRAIN-4, PS-SCORE-3._ on approval, drive `ExperimentOrchestrator` via Actions/Ops; bulk deterministic, minimal internal LLM. **AC:** end-to-end goal→plan→approve→experiments→best model.
-- **PS-AGENT-4 — Ground-truth + DBAutoDoc + memory inputs.** _deps: PS-AGENT-1._ Data Scout reads `MJ: Queries` `Status='Approved'` + DBAutoDoc descriptions + existing approved Trained Models; reads/writes Agent Notes (learnings, Agent+User scope); agent-drafted queries created as `Status='Pending'`. **AC:** scout cites real entities/fields from approved queries only; drafted queries land Pending; learnings persist + re-inject.
+- **PS-AGENT-4 — Ground-truth + DBAutoDoc + memory inputs.** _deps: PS-AGENT-1._ Data Scout reads `MJ: Queries` `Status='Approved'` + DBAutoDoc descriptions + existing approved ML Models; reads/writes Agent Notes (learnings, Agent+User scope); agent-drafted queries created as `Status='Pending'`. **AC:** scout cites real entities/fields from approved queries only; drafted queries land Pending; learnings persist + re-inject.
 - **PS-AGENT-7 — Promotion sign-off gate.** _deps: PS-AGENT-5, PS-UI-3._ leakage/dominance suspicion surfaces a business-friendly warning and **blocks** model promotion until a human signs off. **AC:** a dominance-flagged model cannot be promoted without explicit sign-off; warning is plain-language.
 - **PS-AGENT-5 — ML Experiment Results artifact + viewer.** _deps: PS-AGENT-3._ artifact type (metadata) + `MLExperimentResultsViewerPlugin` with leaderboard/metrics/importance + `NavigationRequest` drill-through to models. **AC:** agent emits the artifact; clicking a model opens its record.
 - **PS-AGENT-6 — Embedded chat + surfaces.** _deps: PS-UI-1, PS-AGENT-2._ `<mj-conversation-chat-area>` pinned to the Model Development Agent in the Studio; also reachable from any chat surface. **AC:** drive a full session from the embedded chat.
@@ -448,7 +582,7 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 5. Embeddings = pre-trained feature extractors, each dim a feature, persisted + version-pinned.
 6. LLM-derived features = upstream persisted Feature Pipelines, not inline recompute.
 7. **One FeatureAssembly executor, three contexts**; **fitted preprocessing serialized into the model** (anti-skew); **as-of/point-in-time** + **leakage guard** are first-class new primitives; **locked holdout** for honest metrics.
-8. Trained Models immutable + versioned + full lineage; instrument every run.
+8. **`MJ: ML Models`** (the entity for models we train — distinct from `MJ: AI Models`, the off-the-shelf catalog) immutable + versioned + full lineage; instrument every run. Algorithm choice is guided by **`MJ: ML Algorithm Use Cases`** + the **`MJ: ML Algorithm Use Case Rankings`** join (per-scenario `RecommendationLevel` + `Rationale`) so neither the agent nor a non-expert user has to guess.
 9. Scoring = new `MLModelInferenceProcessor` in Record Set Processing; on-demand + scheduled; **ephemeral by default, write-back when OutputMapping present**; **scoring ships before materialization**.
 10. Materialization-first for population-wide indexed columns — **after #2770**.
 11. All server capability via **Remote Operations (Manual mode)** + thin **Actions**.
