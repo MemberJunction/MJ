@@ -1,5 +1,28 @@
 # Empty-State Wave-2 Tail — Visual QA Backlog
 
+## 🏁 VERDICT (2026-06-25): effort landed — no wave-3 warranted
+
+A reachability-verification pass over the ~26 "genuine remaining bespoke" empties (the
+adoption script's tier-3 residual; see `adoption-metrics.md` + `bespoke-empties-gallery.html`)
+reached a clear conclusion under the gate **"only migrate if we can see it in context":**
+
+> **Every empty a user actually sees in context is ALREADY `<mj-empty-state>`.** The remaining
+> bespoke ones are buried sub-elements, deep-state placeholders, wrappers around migrated empties,
+> or markers/chips — precisely the things that don't surface in normal use (which is why they were
+> skipped and why they're hard to reach).
+
+Proven by walking the surfaces: Conversations chat → Collections shows "No collections yet" =
+already `<mj-empty-state>` (our leftover `empty-collection-hint` is a sub-element hint, not the
+visible empty); KH config / dashboards / chat all the same. Only `qa-empty` (a trivial inline
+"No recent records" ×3 in Data Explorer Quick Access) was naturally viewable, and it's marginal.
+
+**Decision: land here.** Reported adoption **90%**; the user-visible empty-state surface is
+effectively 100% canonical. The residual bespoke tail stays documented (gallery + this doc) as a
+known, low-value backlog — **revisit a specific one only if it's actually noticed in use**, not as
+a blanket sweep. The gate did its job: it correctly identified the leftover work as not worth it.
+
+---
+
 Inventory of every empty-state migrated in the wave-2 tail (commits `790c74c8e6`,
 `daa8f80e97`, `36f030c7cf`) plus the reset-CTA fixes, split by whether it was
 **visually verified** (live Playwright force-state screenshot, light+dark this
