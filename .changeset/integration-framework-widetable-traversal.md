@@ -1,7 +1,7 @@
 ---
-"@memberjunction/integration-schema-builder": minor
-"@memberjunction/integration-engine": minor
-"@memberjunction/server": minor
+"@memberjunction/integration-schema-builder": patch
+"@memberjunction/integration-engine": patch
+"@memberjunction/server": patch
 ---
 
 Integration framework hardening for wide-catalog and multi-level connectors (extracted from the 20-connector close-out; no connector-specific code).
