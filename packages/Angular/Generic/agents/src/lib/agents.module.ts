@@ -2,6 +2,8 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+
 import { AgentPermissionsPanelComponent } from './components/agent-permissions-panel.component';
 import { AgentPermissionsDialogComponent } from './components/agent-permissions-dialog.component';
 import { AgentPermissionsSlideoverComponent } from './components/agent-permissions-slideover.component';
@@ -43,7 +45,8 @@ import { CreateAgentSlideInComponent } from './components/create-agent-slidein.c
     imports: [
         CommonModule,
         FormsModule,
-        ReactiveFormsModule
+        ReactiveFormsModule,
+        MJEmptyStateComponent
     ],
     exports: [
         AgentPermissionsPanelComponent,

@@ -384,30 +384,6 @@
    Empty State
    ----------------------------------------------------------------------------- */
 
-.cap-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
-    background: var(--mj-bg-surface-card);
-    border: 1px dashed var(--mj-border-default);
-    border-radius: 8px;
-    color: var(--mj-text-disabled);
-    text-align: center;
-}
-
-.cap-empty-state i {
-    font-size: 24px;
-    margin-bottom: 8px;
-    opacity: 0.5;
-}
-
-.cap-empty-state p {
-    margin: 0;
-    font-size: 13px;
-}
-
 /* -----------------------------------------------------------------------------
    Selector Dropdown
    ----------------------------------------------------------------------------- */
@@ -510,25 +486,6 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.cap-selector-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 24px 16px;
-    color: var(--mj-text-disabled);
-}
-
-.cap-selector-empty i {
-    font-size: 20px;
-    margin-bottom: 8px;
-    opacity: 0.5;
-}
-
-.cap-selector-empty span {
-    font-size: 13px;
 }
 
 /* -----------------------------------------------------------------------------
