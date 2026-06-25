@@ -61,6 +61,23 @@ describe('false-positive guards: optional chaining + idiomatic patterns', () => 
       const v = rule.Test(ast(code), 'MemberForm');
       expect(msgs(v)).toBe('');
     });
+
+    it('does not flag non-optional or destructured NotifyEvent (exercises the ALLOWED_CALLBACK_METHODS entry)', () => {
+      // Unlike the optional-chained cases above, these two forms are visited by
+      // checkCallbackMethodUsage (non-optional member access) and
+      // checkCallbacksDestructuring — both consult ALLOWED_CALLBACK_METHODS.
+      // Without 'NotifyEvent' in that set, each would flag a critical violation,
+      // so this case actually locks in the allow-list addition.
+      const code = `
+        function MemberForm({ callbacks }) {
+          callbacks.NotifyEvent('BeforeSave', { dirtyFields: {}, cancel: false });
+          const { NotifyEvent } = callbacks;
+          return null;
+        }
+      `;
+      const v = rule.Test(ast(code), 'MemberForm');
+      expect(msgs(v)).toBe('');
+    });
   });
 
   describe('component-props-validation (form-role host props)', () => {

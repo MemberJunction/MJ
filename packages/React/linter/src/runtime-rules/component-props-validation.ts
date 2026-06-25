@@ -36,7 +36,7 @@ export class ComponentPropsValidationRule extends BaseLintRule {
     // InteractiveFormComponent host — these are part of the form contract, not undeclared
     // props. Mirror the host's form detection: componentRole OR type === 'form' (componentRole
     // isn't set until post-generation finalization, so type carries it during generation).
-    const role = (componentSpec as { componentRole?: string } | undefined)?.componentRole;
+    const role = componentSpec?.componentRole;
     const specType = typeof componentSpec?.type === 'string' ? componentSpec.type.toLowerCase() : '';
     if (role === 'form' || specType === 'form') {
       for (const hostProp of ['entityName', 'primaryKey', 'record', 'entityMetadata', 'mode', 'canEdit', 'canDelete', 'canCreate']) {

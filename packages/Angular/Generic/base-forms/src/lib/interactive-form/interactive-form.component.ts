@@ -222,20 +222,25 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
         }
 
         const dirtyEntries = Object.entries(args.dirtyFields ?? {});
-        if (dirtyEntries.length === 0) {
-            // No-op save — most likely cause is the React draft didn't reach
-            // the host before RequestSave fired. Surface it so the user sees
-            // why their edits didn't land, instead of silently "succeeding".
+        if (dirtyEntries.length === 0 && this.record.IsSaved) {
+            // No dirty fields on an already-persisted record — a genuine no-op.
+            // Most likely the user clicked Save without changing anything, or the
+            // React draft didn't reach the host before RequestSave fired. Surface
+            // it so the user sees why their edits didn't land.
             console.warn(
                 '[InteractiveFormComponent] BeforeSave fired with no dirtyFields. ' +
                 'Either the user clicked Save without changing anything, or the ' +
                 'React draft did not propagate before save fired.'
             );
-            // Nothing to persist. Calling Save() + rebuildFormHostProps() below
-            // would re-render the React form; if a form emits BeforeSave on
-            // mount/render, that re-render re-fires this handler — an infinite
-            // re-mount loop that starves the form's async data load (it unmounts
-            // before setState commits). Treat a no-dirty-fields save as a no-op.
+            // Skip Save() + rebuildFormHostProps(): re-rendering the React form
+            // would re-fire BeforeSave on a form that emits it on mount/render —
+            // an infinite re-mount loop that starves the form's async data load
+            // (it unmounts before setState commits). Treat it as a no-op.
+            //
+            // Guard on IsSaved so this only short-circuits existing records. A
+            // NEW record with no dirty fields must still fall through to Save()
+            // so the insert is attempted (and any validation failure surfaced)
+            // rather than masked as a reported success with no row inserted.
             this.resolvePendingSave(true);
             return;
         }
