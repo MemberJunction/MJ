@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int, Float } from "type-graphql";
-import { CompositeKey, DatabaseProviderBase, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
+import { CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
@@ -3451,9 +3451,29 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ApplyAllEntityMapCreated[]> {
         const results: ApplyAllEntityMapCreated[] = [];
 
+        // PERF (large-catalog ApplyAll, e.g. Salesforce 1695 objects): precompute O(1) lookups ONCE before
+        // the per-object loop. The per-object path previously did an O(N) `provider.Entities.find` + a
+        // BypassCache RunView for the existing entity map PER object → O(N²) scans + N DB round-trips, so a
+        // 1695-object connector burned its whole budget in ApplyAll and FullSync never started. One entity
+        // index + one batched entity-map query make both O(1) per object.
+        const entityByKey = new Map(
+            provider.Entities.map(e => [`${e.SchemaName.toLowerCase()}|${e.BaseTable.toLowerCase()}`, e] as const)
+        );
+        const existingMapByExternalName = new Map<string, MJCompanyIntegrationEntityMapEntity>();
+        const allMaps = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
+            EntityName: 'MJ: Company Integration Entity Maps',
+            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+            ResultType: 'entity_object',
+            BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
+        }, user);
+        if (allMaps.Success) {
+            for (const m of allMaps.Results) existingMapByExternalName.set((m.ExternalObjectName ?? '').toLowerCase(), m);
+        }
+
         for (const obj of objects) {
             const entityMapResult = await this.createSingleEntityMap(
-                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, provider, defaultSyncDirection
+                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, provider, defaultSyncDirection,
+                entityByKey, existingMapByExternalName
             );
             if (entityMapResult) {
                 results.push(entityMapResult);
@@ -3471,10 +3491,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         schemaName: string,
         user: UserInfo,
         md: IMetadataProvider,
-        defaultSyncDirection: string = 'Pull'
+        defaultSyncDirection: string = 'Pull',
+        entityByKey?: Map<string, EntityInfo>,
+        existingMapByExternalName?: Map<string, MJCompanyIntegrationEntityMapEntity>
     ): Promise<ApplyAllEntityMapCreated | null> {
-        // Find the entity by schema + table name
-        const entityInfo = md.Entities.find(
+        // Find the entity by schema + table name. PERF: O(1) precomputed index when provided
+        // (large-catalog ApplyAll); falls back to the O(N) scan when called without it.
+        const entityInfo = entityByKey?.get(`${schemaName.toLowerCase()}|${obj.TableName.toLowerCase()}`)
+          ?? md.Entities.find(
             e => e.SchemaName.toLowerCase() === schemaName.toLowerCase()
               && e.BaseTable.toLowerCase() === obj.TableName.toLowerCase()
         );
@@ -3488,19 +3512,27 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // multiplies the maps in lockstep (N applies → N duplicate maps per object), which
         // silently corrupts the record-map 1:1 completeness gate and makes the forward sync
         // process each object N times. Reuse the existing (connection, external object) map instead.
-        const escapedObjectName = obj.SourceObjectName.replace(/'/g, "''");
-        const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
-            EntityName: 'MJ: Company Integration Entity Maps',
-            ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
-            OrderBy: '__mj_CreatedAt ASC',
-            MaxRows: 1,
-            ResultType: 'entity_object',
-            BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
-        }, user);
+        // PERF: use the precomputed existing-map index when provided (one batched query for the whole
+        // ApplyAll instead of one BypassCache RunView per object); falls back to a per-object query.
+        let existing: MJCompanyIntegrationEntityMapEntity | undefined;
+        if (existingMapByExternalName) {
+            existing = existingMapByExternalName.get(obj.SourceObjectName.toLowerCase());
+        } else {
+            const escapedObjectName = obj.SourceObjectName.replace(/'/g, "''");
+            const existingMapResult = await new RunView().RunView<MJCompanyIntegrationEntityMapEntity>({
+                EntityName: 'MJ: Company Integration Entity Maps',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND ExternalObjectName='${escapedObjectName}'`,
+                OrderBy: '__mj_CreatedAt ASC',
+                MaxRows: 1,
+                ResultType: 'entity_object',
+                BypassCache: true, // idempotency must read COMMITTED state, not a possibly-stale filtered cache
+            }, user);
+            if (existingMapResult.Success && existingMapResult.Results.length > 0) existing = existingMapResult.Results[0];
+        }
 
         let em: MJCompanyIntegrationEntityMapEntity;
-        if (existingMapResult.Success && existingMapResult.Results.length > 0) {
-            em = existingMapResult.Results[0]; // reuse — keeps the map stable across re-applies
+        if (existing) {
+            em = existing; // reuse — keeps the map stable across re-applies
         } else {
             em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
             em.NewRecord();
@@ -3634,26 +3666,70 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * still surfaces every object/field; only materialization is capped. Per-table column count = the selected
      * field subset, or the object's full discovered field count when all fields are selected.
      */
-    private enforceSchemaLimits(
+    private async enforceSchemaLimits(
         objects: SchemaPreviewObjectInput[],
         filteredSchema: SourceSchemaInfo,
-    ): void {
-        const envInt = (name: string): number | null => {
-            const v = parseInt(process.env[name] ?? '', 10);
-            return Number.isFinite(v) && v > 0 ? v : null;
-        };
+        companyIntegration: MJCompanyIntegrationEntity,
+        user: UserInfo,
+        md: IMetadataProvider,
+    ): Promise<string[]> {
+        const warnings: string[] = [];
         const fullCountByName = new Map(filteredSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.Fields.length]));
-        // Delegate the cap decision to the engine's pure, unit-tested decideSchemaLimitViolations.
+        // Use the MAX of the input object's Fields and the filtered-schema count — the batch path can pass
+        // objects with empty Fields (the real columns come from filteredSchema, which is what buildSchema
+        // materializes). `?? ` would wrongly read an empty [] as 0 (0 is not nullish); Math.max is robust to
+        // either source being empty and reflects the count that will actually become columns.
+        const colCount = (o: SchemaPreviewObjectInput): number =>
+            Math.max(fullCountByName.get(o.SourceObjectName.toLowerCase()) ?? 0, o.Fields?.length ?? 0);
+
+        // ── Per-table COLUMN limit: DISABLE-the-offender, NOT reject-the-apply. The limit is clamped at
+        // startup to ≤ IntegrationEngine.MAX_COLUMNS_CEILING (SQL Server's 1024 minus framework column
+        // headroom). An object exceeding it is set Status='Disabled' (reversible — it re-enables on a later
+        // discovery if it has shrunk back under the limit) and dropped from THIS apply, so the materializable
+        // objects still sync instead of the whole apply failing CREATE TABLE. One CLI warning per disabled object.
+        const limit = IntegrationEngine.Instance.MaxColumnsPerTable;
+        const overLimit = objects.filter(o => colCount(o) > limit);
+        if (overLimit.length > 0) {
+            const ioIDByName = new Map(
+                IntegrationEngineBase.Instance.GetActiveIntegrationObjects(companyIntegration.IntegrationID)
+                    .map(io => [io.Name.toLowerCase(), io.ID] as [string, string])
+            );
+            for (const o of overLimit) {
+                warnings.push(`Disabled "${o.SourceObjectName}" (${colCount(o)} columns > limit ${limit}) — too wide to materialize as one table; reduce its columns or it stays disabled.`);
+                const ioID = ioIDByName.get(o.SourceObjectName.toLowerCase());
+                if (ioID) {
+                    const io = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', user);
+                    if (await io.Load(ioID)) {
+                        io.Status = 'Disabled';
+                        if (!await io.Save()) {
+                            LogError(`enforceSchemaLimits: failed to disable over-wide IO '${o.SourceObjectName}': ${io.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                        }
+                    }
+                }
+            }
+            // Drop the disabled objects from BOTH the shared objects array (used downstream by
+            // buildTargetConfigs + createEntityAndFieldMaps) and filteredSchema, in place.
+            const disabled = new Set(overLimit.map(o => o.SourceObjectName.toLowerCase()));
+            for (let i = objects.length - 1; i >= 0; i--) {
+                if (disabled.has(objects[i].SourceObjectName.toLowerCase())) objects.splice(i, 1);
+            }
+            filteredSchema.Objects = filteredSchema.Objects.filter(o => !disabled.has(o.ExternalName.toLowerCase()));
+        }
+
+        // MaxTables remains an operator/env REJECT guardrail (unchanged), evaluated on the surviving objects.
+        // Columns are handled above via disable, so the pure decision is asked about tables only here.
+        const maxTables = ((): number | null => {
+            const v = parseInt(process.env.MJ_INTEGRATION_MAX_TABLES ?? '', 10);
+            return Number.isFinite(v) && v > 0 ? v : null;
+        })();
         const violations = decideSchemaLimitViolations({
             TableCount: objects.length,
-            ColumnCountByTable: objects.map(o => ({
-                Name: o.SourceObjectName,
-                ColumnCount: o.Fields?.length ?? fullCountByName.get(o.SourceObjectName.toLowerCase()) ?? 0,
-            })),
-            MaxTables: envInt('MJ_INTEGRATION_MAX_TABLES'),
-            MaxColumnsPerTable: envInt('MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE'),
+            ColumnCountByTable: [],
+            MaxTables: maxTables,
+            MaxColumnsPerTable: null,
         });
         if (violations.length > 0) throw new Error(violations.join(' '));
+        return warnings;
     }
 
     private async buildSchemaForConnector(
@@ -3717,7 +3793,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // §B — reject an over-limit table/column SELECTION before ANY table is materialized. This is the
         // single shared gate for ApplyAll / ApplyAllBatch / ApplySchemaBatch (all route through here).
         // Caps are operator/env guardrails (MJ_INTEGRATION_MAX_TABLES / _MAX_COLUMNS_PER_TABLE).
-        this.enforceSchemaLimits(objects, filteredSchema);
+        const limitWarnings = await this.enforceSchemaLimits(objects, filteredSchema, companyIntegration, user, provider);
 
         const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform, connector);
 
@@ -3736,6 +3812,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
         const builder = new SchemaBuilder();
         const schemaOutput = builder.BuildSchema(input);
+        // Surface the auto-disabled over-wide objects (if any) in the apply's Warnings → CLI output.
+        if (limitWarnings.length > 0) schemaOutput.Warnings.unshift(...limitWarnings);
 
         if (schemaOutput.Errors.length > 0) {
             throw new Error(`Schema generation failed: ${schemaOutput.Errors.join('; ')}`);

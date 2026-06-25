@@ -310,6 +310,35 @@ export abstract class SQLDialect implements SQLParserDialect {
         return Number.MAX_SAFE_INTEGER;
     }
 
+    /**
+     * Maximum bytes that can be stored in-row for a single row, or `null` when the dialect has no
+     * in-row size limit. SQL Server enforces a hard ~8060-byte in-row limit; PostgreSQL has none
+     * (TOAST stores oversized variable-length values out-of-line). Consumed by schema materialization
+     * to avoid emitting a table whose minimum in-row footprint can never satisfy an INSERT.
+     * Default: `null` (no in-row size limit).
+     */
+    get MaxInRowSizeBytes(): number | null {
+        return null;
+    }
+
+    /**
+     * Hard maximum number of columns per table, or `null` when effectively unbounded for our purposes.
+     * SQL Server: 1024. PostgreSQL: 1600. Default: `null`.
+     */
+    get MaxColumnCount(): number | null {
+        return null;
+    }
+
+    /**
+     * Minimum in-row byte footprint of a column of the given raw SQL type. Off-row-capable
+     * variable-length / LOB types contribute only their in-row pointer; fixed-length types contribute
+     * their full size. Only meaningful for dialects that report a {@link MaxInRowSizeBytes}.
+     * Default: 24 (a conservative off-row-pointer floor).
+     */
+    EstimateInRowBytes(_rawSqlType: string): number {
+        return 24;
+    }
+
     /** SQL type names this dialect uses for date / time / timestamp columns. */
     abstract get DateTypeNames(): readonly string[];
 
