@@ -57,6 +57,10 @@
   consent-gated; Praxis enables via `Protocol.RecordSession`) and **§2.5 mermaid flows** (ATS-today,
   Voice-today, ATS-new, Voice-new, sales-training, recording-resolution). Expanded **S1B.T6**; added
   `Protocol.RecordSession`. Companion as-is/to-be doc added to the CDP repo.
+- `@2026-06-25` **Migration model decided:** schema designed/authored **unified & up front** for both repos
+  (new **§2.6** inventory + new sub-phase **S0B**); per-feature "Migration:" tasks (S2.T1/S3.T1/S4.T2/S12.T1)
+  reduced to verify+CodeGen. **Cutover = hard per-vertical** (§1.3, S7.T5, S10.T6). Existing-data port is a
+  **secondary one-time SQL script** (new **S-PORT**; default subset, descoped if fresh-start). Graph + R8 added.
 
 ### 0.6 Where this file lives
 - **Now:** `memberjunction/mj` → `plans/praxis/PRAXIS_BUILD_PLAN.md` (tracking home).
@@ -87,7 +91,7 @@ realtime agent architecture and ships a **world-class** authoring experience and
 | npm scope | **`@mj-biz-apps/praxis-*`** (matching bizapps-common's `@mj-biz-apps/*`). Shorthand `@praxis/*` is used in this doc; final names use the `@mj-biz-apps/praxis-` prefix. Confirm in Phase 0. |
 | Runtime | **MJ realtime, fully.** Co-agent voices a persona target-agent; realtime model selected dynamically per session. No ElevenLabs-direct path. |
 | v1 party model | **1 agent + 1 human.** Multi-party deferred to S15, consuming MJ's bridge/LiveKit layer (no app-side floor control). |
-| Migration approach | **Strangler**: re-host **ATS first** (integrity parity included), then Voice, then net-new verticals. |
+| Migration approach | **Strangler, hard per-vertical cutover**: re-host **ATS first** (integrity parity), then Voice, then net-new verticals; each vertical flips to Praxis at once after parity sign-off (rollback by flag). **Schema is designed & authored up front, unified** across both repos (§2.6, sub-phase **S0B**). **Porting existing CDP data is separate** — a later **one-time SQL script** (**S-PORT**), NOT part of building the schema and NOT an ongoing sync. |
 | Config inheritance | **`BasedOnID` derivation FK** for override-layering; **IsA** only for genuine additive subtypes (§1.6). |
 | Knowledge/RAG | **Reuse MJ** unified + scoped search + pre-execution RAG. No provider KB sync. |
 | Server-side tools | **Reuse MJ** — target async agent's Actions. No new tool abstraction. |
@@ -334,6 +338,37 @@ flowchart TD
   CONSENT -- "otherwise" --> NOREC["Transcript-only (no recording)"]
 ```
 
+### 2.6 Unified Data Model & Persistence Needs (full-plan scan — design up front)
+Consolidates **every persistence need across S0–S17**, gathered up front so schema is designed once (not
+discovered per sub-phase). **S0B** authors these as a unified migration set in both repos. "Building the
+database up" = creating these new persistence mechanisms. **Porting existing CDP data is separate** — a later,
+**one-time SQL script** (**S-PORT**), not a schema-building migration.
+
+**A. MJ-core schema (`memberjunction/mj`) — additive, framework-general**
+- `ConversationDetail` (existing) — ADD `UtteranceStartMs INT`, `UtteranceEndMs INT`, `SequenceNumber INT`,
+  `SpeakerLabel NVARCHAR(200)`, `SpeakerUserID UNIQUEIDENTIFIER NULL` (FK User), `MediaType NVARCHAR(20)`. (S1B)
+- `AIAgentSession` (existing) — ADD recording state: `RecordingMedia NVARCHAR(20)` (None|Audio|AudioVideo) +
+  `RecordingT0` (alignment origin). Audio artifact linked via existing `MJ: Files` + `MJ: File Entity Record
+  Links` (no new table). (S1B)
+- `AIAgentResource` (NEW MJ entity) — generic media resource for the Media channel: `Type, URL/Content,
+  DisplayName, ContextDescription, Priority, Preload`; + channel-registration rows in `MJ: AI Agent Channels`
+  (metadata). Runtime channel state via existing `AIAgentSessionChannel.Config`. (S1)
+- Code-only (no schema): `RealtimeTranscript` interface gains `StartMs`/`EndMs`.
+- Reuse (no schema): `MJ: Files`, `MJ: File Entity Record Links`, Magic Links, Search Scopes, `AIAgentAction`.
+
+**B. Praxis schema (schema `Praxis`, `bizapps-praxis`) — full entity set** (field detail in §2.1)
+- Config (derivation mixin `BasedOnID`+`IsAbstract`): **Protocol, Persona, DifficultyProfile, Rubric,
+  RubricVersion, Criterion** (+ optional IsA Persona subtypes — S2.T9).
+- Runtime/records: **Engagement, AssessmentSession, IntakeSubmission, Assessment, ContinuityDigest**.
+- Deferred (author when reached): **Seat/Cast** (multi-party, S15).
+- Value-lists (CHECK / `EntityFieldValue`, no tables): modes, statuses, criterion types, recording enums.
+- `ExternalFormType` — decide Praxis-local lookup vs. reference CDP's pattern (**S0B.T1**).
+- Metadata (not schema): config bundles + channel registrations via mj-sync.
+
+**C. Out of scope for "build the database up" (separate / later)**
+- One-time **data PORT** from CDP (ATS + Voice config + history) → **S-PORT**: one-time SQL per vertical, run at
+  hard cutover, then retired. Not a schema migration, not a sync.
+
 ---
 
 ## 3. WORK BREAKDOWN STRUCTURE — Program "Praxis v1"
@@ -382,6 +417,32 @@ flowchart TD
 - [ ] **S0.T6 — Dev runbook.** README: start API/Explorer, run CodeGen, run migrations, push metadata, run
   tests, run the Playwright CLI profile. <br>**Acceptance:** ☐ a fresh dev can boot end-to-end from the README.
 **UX:** none (infra). **Tests:** CI smoke. **Risks:** mjVersionRange drift vs. MJ realtime APIs — pin a known-good MJ version.
+
+---
+
+### S0B — Unified Data Model & Schema Authoring (up front)  · Tracks A + B
+**Goal:** Author the **complete persistence layer once, up front** (per §2.6) so every later sub-phase builds
+against generated types instead of discovering schema piecemeal. Spans MJ-core additive schema (Track A) and
+the full Praxis schema (Track B).
+**Depends:** Track A — none (start now); Track B — S0 (scaffold). **Exit:** all §2.6 tables/columns migrated +
+CodeGen'd in both repos; the per-feature "schema" tasks (S2.T1/S3.T1/S4.T2/S12.T1) reduce to verify + wire.
+
+- [ ] **S0B.T1 — Lock the §2.6 model.** Resolve open shapes: recording fields' home (`AIAgentSession` vs File
+  links), `AIAgentResource` vs reuse `MJ: Files`, `ExternalFormType` ownership (Praxis-local vs reference). <br>**Acceptance:** ☐ §2.6 finalized ☐ open shapes decided.
+- [ ] **S0B.T2 — MJ-core migrations (Track A, `memberjunction/mj`).** `ConversationDetail` capture columns +
+  `AIAgentSession` recording fields + `AIAgentResource` + channel registrations; extended properties; single
+  multi-`ADD` `ALTER`s; CodeGen. <br>**Acceptance:** ☐ migrates clean ☐ CodeGen ☐ conventions pass.
+- [ ] **S0B.T3 — Praxis config-entity migration (Track B).** Protocol/Persona/DifficultyProfile/Rubric/
+  RubricVersion/Criterion with the derivation mixin; extended properties; CodeGen. <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S0B.T4 — Praxis runtime/record migration (Track B).** Engagement/AssessmentSession/IntakeSubmission/
+  Assessment/ContinuityDigest; CodeGen. <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S0B.T5 — Decision-gated columns.** Author or stub-with-note the fields gated by **DG-2** (integrity
+  parity), **DG-4** (difficulty weight), and **S2.T9** (IsA subtypes); add a follow-up migration as each
+  resolves — do NOT block S0B on them. <br>**Acceptance:** ☐ gated fields tracked ☐ S0B not blocked.
+- [ ] **S0B.T6 — Convention + parity check.** Schema `Praxis` (never `__mj`); FK indexes left to CodeGen; no
+  `__mj_*` timestamp cols; manually-managed views recreated with explicit column lists if any. <br>**Acceptance:** ☐ migration-convention checklist passes.
+**UX:** none. **Tests:** migration applies clean on a fresh DB; CodeGen diff reviewed. **Risks:** decision gates
+— author the bulk now, follow-up migration for gated columns.
 
 ---
 
@@ -455,8 +516,9 @@ varies by provider (OpenAI vs Gemini vs bridges) — validate per driver; consen
 **Depends:** S0. **Exit:** entities CodeGen'd; resolver returns correct effective config for base/variant/instance
 incl. tombstones; unit-tested.
 
-- [ ] **S2.T1 — Migration: Protocol/Persona/DifficultyProfile/Rubric/RubricVersion/Criterion** with the
-  derivation mixin + fields in §2.1; extended properties on every column. <br>**Acceptance:** ☐ migrates clean ☐ CodeGen generates entities.
+- [ ] **S2.T1 — Config-entity schema** (Protocol/Persona/DifficultyProfile/Rubric/RubricVersion/Criterion).
+  **Schema authored up front in S0B.T3 per §2.6** — here: verify migrated + CodeGen + entity-subclass wiring
+  for the resolver. <br>**Acceptance:** ☐ generated types present ☐ matches §2.6.
 - [ ] **S2.T2 — Run CodeGen**, then implement against generated types only. <br>**Acceptance:** ☐ generated types exist.
 - [ ] **S2.T3 — `ConfigResolver.Resolve(entity)`** — walk `BasedOnID` (cycle guard, depth bound), COALESCE
   scalars, key-merge JSON lists (add/override-by-key/suppress). <br>**Acceptance:** ☐ scalar inherit/override ☐ list merge ☐ tombstone suppress ☐ cycle-guarded.
@@ -481,7 +543,8 @@ transcript + audio (MJStorage).
 **Depends:** S2; reuses MJ realtime. **Exit:** a trivial roleplay runs end-to-end; snapshot written; transcript
 in DB; audio in MJStorage referenced by `FileID`.
 
-- [ ] **S3.T1 — Migration: Engagement, AssessmentSession, IntakeSubmission** (+ extended properties). <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S3.T1 — Runtime/record schema** (Engagement, AssessmentSession, IntakeSubmission). **Authored up front
+  in S0B.T4 per §2.6** — here: verify + CodeGen. <br>**Acceptance:** ☐ generated types present ☐ matches §2.6.
 - [ ] **S3.T2 — Session start orchestration** — ResolveSession → write `ResolvedConfig` + pin `RubricVersionID`. <br>**Acceptance:** ☐ snapshot immutable post-start.
 - [ ] **S3.T3 — Persona prompt assembly** via `AIPromptRunner` child-prompts (personality/objectives/topic
   guide/persona brief/difficulty params/context). <br>**Acceptance:** ☐ deterministic from snapshot.
@@ -506,7 +569,8 @@ narrative/disposition + integrity; acoustic gating enforced + audited.
 
 - [ ] **S4.T1 — DG-2/DG-3/DG-4 resolution.** Record integrity-parity fields, acoustic allowlist policy, and
   difficulty-weight normalization math in §1.7. <br>**Acceptance:** ☐ three answers recorded.
-- [ ] **S4.T2 — Migration: Assessment** (+ extended props; integrity & keyedOn JSON). <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S4.T2 — Assessment schema** (integrity & keyedOn JSON). **Authored up front in S0B.T4 per §2.6**
+  (integrity-parity columns finalized once DG-2 resolves, via S0B.T5) — here: verify + CodeGen. <br>**Acceptance:** ☐ generated types present ☐ DG-2 fields included.
 - [ ] **S4.T3 — `EvalDriver.Evaluate`** — multimodal input (transcript + optional audioRef + tools + context +
   intake submission) → typed criterion scores by `AppliesTo`. <br>**Acceptance:** ☐ all criterion types scored ☐ intake scored when enabled.
 - [ ] **S4.T4 — Evidence extraction** — timestamped grounding segments (turn/audio), anchored to the
@@ -580,8 +644,8 @@ meets §1.9 in light+dark; a11y-passed.
   onto the generic integrity model; verify against sample ATS evaluations. <br>**Acceptance:** ☐ parity on a labeled sample set.
 - [ ] **S7.T4 — Eval parity harness** — run N historical interviews through `EvalDriver`; diff scores/disposition
   vs. legacy; document deltas. <br>**Acceptance:** ☐ deltas within agreed tolerance ☐ report saved.
-- [ ] **S7.T5 — Strangler wiring** — new ATS interviews route through Praxis AssessmentSession; legacy
-  `ApplicationInterview` referenced (no data migration). <br>**Acceptance:** ☐ new interviews on Praxis ☐ legacy untouched.
+- [ ] **S7.T5 — Hard cutover (ATS)** — after parity sign-off (S7.T4), flip ATS interviews to Praxis at once;
+  run the one-time **S-PORT** ATS data-port SQL at cutover; rollback by flag. <br>**Acceptance:** ☐ ATS live on Praxis ☐ S-PORT ATS script run ☐ rollback path verified.
 - [ ] **S7.T6 — Recruiter-facing review** uses S9 results UI. <br>**Acceptance:** ☐ recruiter can review a Praxis interview.
 - [ ] **S7.T7 — Tests + pilot** on a non-prod job. <br>**Acceptance:** ☐ pilot interview completes + evaluates.
 **UX:** recruiter review = S9 quality bar. **Risks:** **DG-3 legal sign-off is a hard gate** — do not ship hiring eval without it.
@@ -641,8 +705,9 @@ MJ scoped search; tools via target-agent Actions; resources via Media channel.
 - [ ] **S10.T3 — Tools migration** — Voice tools → target-agent **Actions** (+ channel tools for UI). <br>**Acceptance:** ☐ parity on tool behaviors.
 - [ ] **S10.T4 — Resources migration** — `VoiceResource` → **Media channel** resources. <br>**Acceptance:** ☐ resources show via Media channel.
 - [ ] **S10.T5 — Invites/branding** — `VoiceInvite`/`VoiceDeployment` → Magic Links + widget branding. <br>**Acceptance:** ☐ invite + branding parity.
-- [ ] **S10.T6 — Decommission plan** — list dissolved Voice entities/services; remove EL-direct path behind a
-  flag; data retention plan. <br>**Acceptance:** ☐ EL-direct removed ☐ nothing references dissolved entities.
+- [ ] **S10.T6 — Hard cutover + decommission (Voice)** — flip Voice to Praxis after parity; run the one-time
+  **S-PORT** Voice data-port SQL; remove EL-direct path behind a flag; list dissolved Voice entities/services;
+  retention plan. <br>**Acceptance:** ☐ Voice live on Praxis ☐ S-PORT Voice script run ☐ EL-direct removed.
 - [ ] **S10.T7 — Tests + pilot.** <br>**Acceptance:** ☐ a Voice scenario runs on Praxis.
 **Risks:** behavioral parity on tools — diff against legacy transcripts.
 
@@ -667,7 +732,7 @@ demonstrated.
 **Goal:** Multi-session continuity via structured `ContinuityDigest`.
 **Depends:** S3, S5. **Exit:** session N reads the prior digest (not raw transcript); world-state carries forward.
 
-- [ ] **S12.T1 — Migration: ContinuityDigest.** <br>**Acceptance:** ☐ migrates ☐ CodeGen.
+- [ ] **S12.T1 — ContinuityDigest schema.** **Authored up front in S0B.T4 per §2.6** — here: verify + CodeGen. <br>**Acceptance:** ☐ generated types present.
 - [ ] **S12.T2 — Digest compiler** on session close (relationship state/open threads/commitments/sentiment). <br>**Acceptance:** ☐ digest written per session in an Engagement.
 - [ ] **S12.T3 — `EngagementDigestProvider`** injects latest digest into the next session. <br>**Acceptance:** ☐ N+1 grounded on digest only.
 - [ ] **S12.T4 — Engagement view UX** — timeline of sessions + digests + assessments. <br>**Acceptance:** ☐ §1.9 timeline.
@@ -747,21 +812,42 @@ defined, audit complete.
 
 ---
 
+### S-PORT — One-Time Data Port from CDP (SECONDARY — one-time SQL, per vertical)  · Track B
+**Goal:** Port existing CDP **config + history** into Praxis at each vertical's **hard cutover**. This is a
+**one-time SQL script per vertical — NOT a schema-building migration and NOT an ongoing sync.** It runs once at
+cutover, then is retired. Scope follows the **History-scope** decision (default: analytics + continuity subset).
+**Depends:** S0B (target schema), S7.T4 / S10 parity. **Exit:** the vertical's required historical data exists
+in Praxis entities; cutover proceeds.
+
+- [ ] **S-PORT.T1 — ATS port script.** Map CDP `InterviewType`/`EvaluationCriterion`/`JobInterview` → Praxis
+  config (or rely on re-authored bundles); `ApplicationInterview` + `ApplicationEvaluation` + integrity →
+  `AssessmentSession` + `Assessment`; transcript → `ConversationDetail`; audio (Box) → reference or re-store via
+  MJStorage. Plain one-time SQL/script. <br>**Acceptance:** ☐ subset ported ☐ row counts reconciled ☐ script archived.
+- [ ] **S-PORT.T2 — Voice port script.** `VoiceConversation` + `AIEvaluationResult` → `AssessmentSession` +
+  `Assessment`; transcript → `ConversationDetail`; audio → MJStorage; config → bundles. Plain one-time SQL. <br>**Acceptance:** ☐ subset ported ☐ reconciled ☐ archived.
+- [ ] **S-PORT.T3 — Reconciliation + retire.** Verify counts/spot-checks vs CDP; document; retire the scripts
+  (no ongoing sync). <br>**Acceptance:** ☐ reconciliation report ☐ scripts retired.
+**Note:** if **History scope = fresh-start**, S-PORT is `[-]` descoped (legacy stays read-only in CDP). If
+**full port**, expand T1/T2 to all rows + raw audio. The port writes directly into the S0B schema via SQL —
+no special framework ingest capability is built (per decision). **Risks:** reconciliation gaps — row-count +
+spot-check gates; audio re-hosting cost if full port.
+
+---
+
 ## 4. Dependency Graph / Sequencing
 ```
-P0(spin-out) ─> S0 ─┬─> S2 ─> S3 ─┬─> S4 ─┬─> S7(ATS) ──> S10(Voice) ──> S11(verticals) ──> S12 ──> S13 ──> S14 ──> S15 ──> S17
-                    │            │       │     ▲              ▲                 ▲
-                    │            ├─> S5 ─┘     │              │                 │
-                    │            └─> S6 ───────┘              │                 │
-   (Track A, in MJ) S1(Media+shell) ───────────> S8(widget) ──┘
-                    S1B(session capture) ──> S3.T5/T6, S4.T4, S9, S15  (per-turn timing + speaker + audio)
-                                               S8 ─> S9(review) feeds S7/S10/S11
+P0(spin-out) ─> S0 ─> S0B(unified schema, up front) ─┬─> S2 ─> S3 ─┬─> S4 ─┬─> S7(ATS) ─> S10(Voice) ─> S11 ─> S12 ─> S13 ─> S14 ─> S15 ─> S17
+                                                     │            │       │   │(cutover)    │(cutover)
+                                                     ├─> S5 ──────┘       │  S-PORT·ATS    S-PORT·Voice  (one-time SQL; SECONDARY; descoped if fresh-start)
+                                                     └─> S6 ──────────────┘
+   (Track A, in MJ) S0B.T2(MJ-core schema) + S1(Media+shell) + S1B(session capture) ─> feed S3.T5/T6, S4.T4, S9, S15
+                                                                          S8(widget) ─> S9(review) feeds S7/S10/S11
 S16 (governance) spans S8..S17.   DG gates: DG-1→S1/S8 · DG-2/3→S4/S7 · DG-4→S4/S13 · DG-5→S5/S7
 ```
-**Critical path:** P0 → S0 → S2 → S3 → S4 → S7, **with S1B (MJ-core capture) on the critical path for audio/
-timing-dependent work (S3.T6, S4 integrity+evidence, S9, S15).** **Parallelizable early:** S1 + **S1B**
-(MJ-core, start during P0/S0 — they're the long pole), S6 (studio), S5 (intake). **Fallback:** if S1B slips,
-S4/S7 can ship **transcript-only** eval first (no audio/integrity/seek), adding multimodal once S1B lands.
+**Critical path:** P0 → S0 → **S0B** → S2 → S3 → S4 → S7, **with S1B (MJ-core capture) also on the critical
+path for audio/timing-dependent work (S3.T6, S4 integrity+evidence, S9, S15).** **Parallelizable early:**
+**S0B.T2** + S1 + S1B (MJ-core, start during P0/S0 — the long pole), S6 (studio), S5 (intake). **Fallbacks:**
+if S1B slips, S4/S7 ship **transcript-only** eval first; **S-PORT** is secondary and may be descoped (fresh-start).
 
 ## 5. Risk Register (live — update as risks change)
 - [ ] **R0** New-repo creation permissions (`bizapps-praxis`) — confirm who can create it; escalate if blocked (P0).
@@ -771,6 +857,9 @@ S4/S7 can ship **transcript-only** eval first (no audio/integrity/seek), adding 
 - [ ] **R4** Eval parity drift vs. legacy ATS — S7.T4 harness with agreed tolerance.
 - [ ] **R5** Public MJ PR cadence for S1 — open early, keep additive.
 - [ ] **R6** Evidence-timestamp accuracy for S9 player — validate against S4.T4 + S1B.T4 alignment.
+- [ ] **R8** **Hard per-vertical cutover** (chosen) has no gradual fallback — mitigated by the parity harness
+  (S7.T4), a rollback flag, and S0B's up-front schema (no mid-cutover schema surprises). S-PORT reconciliation
+  must pass before flip.
 - [ ] **R7** **MJ realtime capture gap (verified):** no persisted audio, coarse DB-write timestamps, no
   per-turn diarization. This is foundational for integrity (S4), evidence playback (S9), multimodal eval, and
   multi-party (S15). **S1B is on the critical path** and must land before ATS can use multimodal/integrity
