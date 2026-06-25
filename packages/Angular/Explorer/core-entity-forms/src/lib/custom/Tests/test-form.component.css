@@ -1922,7 +1922,7 @@
   background: var(--mj-bg-surface-elevated, var(--test-surface));
   border: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, var(--test-border));
   border-radius: 14px;
-  box-shadow: 0 12px 32px color-mix(in srgb, var(--mj-status-warning) 10%, rgba(15, 23, 42, 0.18));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--mj-status-warning) 10%, rgba(0, 0, 0, 0.18));
   backdrop-filter: blur(8px);
   /* Hidden / off-screen state by default. The .save-bar--visible class
      animates it up into view. Using `transition` (not `animation`)

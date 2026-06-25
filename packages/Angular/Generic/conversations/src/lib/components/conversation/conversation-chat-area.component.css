@@ -1160,9 +1160,9 @@
   flex-shrink: 0;
 }
 
-.artifact-picker-item i.fa-file-pdf { color: #e53e3e; }
-.artifact-picker-item i.fa-file-excel { color: #38a169; }
-.artifact-picker-item i.fa-file-word { color: #3182ce; }
+.artifact-picker-item i.fa-file-pdf { color: var(--mj-status-error); }
+.artifact-picker-item i.fa-file-excel { color: var(--mj-status-success); }
+.artifact-picker-item i.fa-file-word { color: var(--mj-brand-primary); }
 .artifact-picker-item i.fa-file { color: var(--mj-text-muted); }
 
 .artifact-picker-item-info {

@@ -609,7 +609,7 @@ mj-empty-state {
 .search-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .search-input::placeholder {
@@ -735,7 +735,7 @@ mj-empty-state {
 .form-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .form-input::placeholder {
@@ -1977,7 +1977,7 @@ mj-empty-state {
 .new-entity-dialog-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .new-entity-dialog-dot {

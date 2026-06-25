@@ -1123,7 +1123,7 @@
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
   border-radius: 10px;
-  box-shadow: 0 14px 40px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
   padding: 8px;
 }
 

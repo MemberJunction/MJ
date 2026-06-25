@@ -212,7 +212,7 @@
   color: var(--mj-text-inverse);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-status-success) 20%, transparent);
   animation: subtle-pulse 2s ease-in-out infinite;
 }
 
@@ -222,10 +222,10 @@
 
 @keyframes subtle-pulse {
   0%, 100% {
-    box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+    box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-status-success) 20%, transparent);
   }
   50% {
-    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
   }
 }
 

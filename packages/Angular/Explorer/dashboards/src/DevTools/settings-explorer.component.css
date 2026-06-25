@@ -185,7 +185,7 @@
     letter-spacing: 0.4px;
 }
 .se-type-pill--string  { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary); }
-.se-type-pill--number  { background: color-mix(in srgb, #7c3aed 14%, transparent); color: #5b21b6; }
+.se-type-pill--number  { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
 .se-type-pill--boolean { background: color-mix(in srgb, var(--mj-status-success) 14%, transparent); color: color-mix(in srgb, var(--mj-status-success) 70%, var(--mj-text-primary)); }
 .se-type-pill--json    { background: color-mix(in srgb, var(--mj-status-warning) 14%, transparent); color: color-mix(in srgb, var(--mj-status-warning) 70%, var(--mj-text-primary)); }
 .se-type-pill--empty   { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }

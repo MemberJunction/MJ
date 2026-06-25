@@ -183,7 +183,7 @@
 }
 
 .user-card.selected:hover .user-header {
-  background: rgba(0, 118, 182, 0.08);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
 }
 
 .user-header {
@@ -511,7 +511,7 @@
 .form-field .field-select:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 /* Accessibility override for user-specific elements */

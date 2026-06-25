@@ -271,7 +271,7 @@
 .em-row-type[data-type="LoginFailed"],
 .em-row-type[data-type="LogoutFailed"]                   { background: color-mix(in srgb, var(--mj-status-error) 14%, transparent); color: color-mix(in srgb, var(--mj-status-error) 70%, var(--mj-text-primary)); }
 .em-row-type[data-type="DisplaySimpleNotificationRequest"] { background: color-mix(in srgb, var(--mj-status-warning) 14%, transparent); color: color-mix(in srgb, var(--mj-status-warning) 70%, var(--mj-text-primary)); }
-.em-row-type[data-type="ManualResizeRequest"]            { background: color-mix(in srgb, #7c3aed 12%, transparent); color: #5b21b6; }
+.em-row-type[data-type="ManualResizeRequest"]            { background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: color-mix(in srgb, var(--mj-brand-primary) 70%, var(--mj-text-primary)); }
 
 .em-row-code {
     font-family: 'SF Mono', Menlo, Consolas, monospace;
