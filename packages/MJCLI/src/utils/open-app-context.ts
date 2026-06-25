@@ -157,7 +157,6 @@ export async function buildOrchestratorContext(
     VersionStrategy: config.openApps?.versionStrategy,
     // Zod infers object fields as optional; runtime schema validates they're present
     AdditionalTargets: config.openApps?.additionalTargets as Array<{ Path: string; Role: 'server' | 'client' }> | undefined,
-    ClientBootstrapSubpath: config.openApps?.clientBootstrapSubpath,
     MJCoreSchema: config.coreSchema ?? '__mj',
     MigrationPlaceholders: config.openApps?.migrationPlaceholders,
     Callbacks: {
@@ -199,7 +198,6 @@ interface OrchestratorContextShape {
   PackageManager?: 'npm' | 'pnpm' | 'yarn';
   VersionStrategy?: 'semver' | 'exact' | 'catalog' | 'workspace' | 'auto';
   AdditionalTargets?: Array<{ Path: string; Role: 'server' | 'client' }>;
-  ClientBootstrapSubpath?: string;
   MJCoreSchema?: string;
   MigrationPlaceholders?: Record<string, string>;
   Callbacks?: {
