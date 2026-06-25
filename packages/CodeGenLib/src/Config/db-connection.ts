@@ -39,7 +39,15 @@ function buildSqlConfig(): mssql.config {
     dbInstanceName,
     dbTrustServerCertificate,
     dbRequestTimeout,
+    codegenPool,
   } = configInfo;
+
+  // Resolve the request timeout from the cross-platform knob first, then fall
+  // back to the legacy SQL-Server-only `dbRequestTimeout`, then to mssql's
+  // 120000ms default. Keeps existing configs working while the unified
+  // `codegenPool.statementTimeoutMs` becomes the canonical knob for both
+  // providers.
+  const requestTimeout = codegenPool?.statementTimeoutMs ?? dbRequestTimeout ?? 120000;
 
   return {
     user: codeGenLogin,
@@ -49,12 +57,13 @@ function buildSqlConfig(): mssql.config {
     port: dbPort,
     options: {
       /**
-       * Request timeout for long-running CodeGen queries. Defaults to 120000ms
-       * (2 min); override via `dbRequestTimeout` in mj.config.cjs or the
-       * MJ_CODEGEN_REQUEST_TIMEOUT environment variable when steps like
+       * Request timeout for long-running CodeGen queries. Resolved from
+       * `codegenPool.statementTimeoutMs` (cross-platform, preferred) → the legacy
+       * `dbRequestTimeout` (SQL Server only) / `MJ_CODEGEN_REQUEST_TIMEOUT` env
+       * var → mssql's 120000ms (2 min) default. Bump when steps like
        * spUpdateExistingEntityFieldsFromSchema run beyond the default.
        */
-      requestTimeout: dbRequestTimeout ?? 120000,
+      requestTimeout,
       encrypt: true,
       instanceName: dbInstanceName && dbInstanceName.trim().length > 0 ? dbInstanceName : undefined,
       trustServerCertificate: dbTrustServerCertificate === 'Y',
