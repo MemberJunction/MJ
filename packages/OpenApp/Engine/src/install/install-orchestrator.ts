@@ -14,22 +14,25 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import semver from 'semver';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
-import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
+import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
-import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
-import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider, TransactionGroupBase } from '@memberjunction/core';
+import { NormalizeUUID } from '@memberjunction/global';
+import type { MJEntityEntity, MJEntityFieldEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
   RecordAppDependencies,
-  DeleteAppDependencies,
+  ReplaceAppDependenciesAtomically,
   SetAppStatus,
   FindInstalledApp,
+  IsSchemaSharedByOtherApps,
   FindDependentApps,
   ListInstalledApps,
   UpdateAppRecord,
@@ -64,8 +67,6 @@ export interface OrchestratorContext {
   VersionStrategy?: VersionStrategy;
   /** Additional workspace targets beyond the default server/client pair */
   AdditionalTargets?: WorkspaceTarget[];
-  /** File subpath within client workspace for bootstrap file (default: 'src/app/generated/open-app-bootstrap.generated.ts') */
-  ClientBootstrapSubpath?: string;
   /** MJ core schema name. Used to resolve `${mjSchema}` placeholder in app migrations. Defaults to '__mj'. */
   MJCoreSchema?: string;
   /** Extra user placeholders merged into the Skyway Placeholders map for migration SQL substitution. */
@@ -98,11 +99,11 @@ export interface OrchestratorContext {
  * 9.  Record installation with 'Installing' status
  * 10. Update package.json files
  * 11. Run npm install
- * 12. Update server config (dynamicPackages in mj.config.cjs)
+ * 12. Update server + client config (dynamicPackages.server/.client in mj.config.cjs;
+ *     client imports are materialized into MJExplorer's manifest at its next prebuild)
  * 13. Update angular.json prebundle excludes (prevents Vite singleton duplication)
- * 14. Update client imports (open-app-bootstrap.generated.ts)
- * 15. Execute hooks (postInstall)
- * 16. Finalize status to 'Active'
+ * 14. Execute hooks (postInstall)
+ * 15. Finalize status to 'Active'
  */
 export async function InstallApp(options: InstallOptions, context: OrchestratorContext): Promise<AppOperationResult> {
   const startTime = Date.now();
@@ -174,7 +175,10 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Check for prior installation (e.g. previously removed app)
     const existingApp = await FindInstalledApp(context.ContextUser, manifest.name);
-    const isReinstall = existingApp != null && existingApp.Status === 'Removed';
+    // Reinstallable = a previously 'Removed' app, OR a half-installed 'Error' app (a
+    // failed prior install left it Error; `mj app upgrade` won't recover it, so a
+    // reinstall must be allowed instead of dead-ending the user) — B17.
+    const isReinstall = existingApp != null && (existingApp.Status === 'Removed' || existingApp.Status === 'Error');
     if (existingApp && !isReinstall) {
       return BuildFailureResult(
         'Install',
@@ -196,7 +200,10 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       if (!schemaResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, schemaResult.ErrorMessage ?? 'Schema creation failed');
       }
-      schemaCreated = !isReinstall; // Track if we created a new schema (for rollback)
+      // Roll back only a schema WE actually created this run (not a reused/adopted one).
+      // Pre-fix this used `!isReinstall`, leaking a freshly-created schema when a removed
+      // app's schema had been dropped and was recreated on reinstall (B18).
+      schemaCreated = schemaResult.Created === true;
     }
 
     // Step 8: Run migrations
@@ -221,7 +228,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     Callbacks?.OnProgress?.('Config', 'Updating configuration files...');
 
     // Steps 10-11: Packages
-    const pkgResult = await HandlePackageInstallation(manifest, context, effectivePackageVersion, effectiveVersionStrategy);
+    const pkgResult = await HandlePackageInstallation(manifest, context, effectivePackageVersion, effectiveVersionStrategy, options.Verbose);
     let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
       if (pkgResult.PackageJsonUpdated) {
@@ -248,13 +255,19 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     // Step 13: Update angular.json prebundle excludes
     HandleAngularPrebundleExcludes(manifest, context);
 
-    // Step 14: Flip status to Active BEFORE regenerating the client bootstrap,
-    // so the regen reads the new status and emits enabled imports.
+    // Step 14: Finalize status. If `npm install` failed (deps unresolved), finalize as
+    // 'Disabled' rather than 'Active' — otherwise the app is advertised as healthy while
+    // its packages can't be imported. When Disabled, also flip the app's dynamicPackages
+    // entries to Enabled:false so `mj codegen manifest --open-app-client-bootstrap` emits
+    // commented-out client imports (a static import of an uninstalled package would break
+    // the MJExplorer build) and the server loader skips it until `mj app enable` (B15).
     Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
-    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
-
-    // Step 15: Update client imports (reads current app status from DB)
-    await HandleClientBootstrapRegeneration(context);
+    const finalStatus = npmInstallWarning ? 'Disabled' : 'Active';
+    await SetAppStatus(context.ContextUser, createdAppId!, finalStatus);
+    if (finalStatus !== 'Active') {
+      // Array-agnostic by AppName — sweeps both the server and client arrays.
+      ToggleServerDynamicPackages(context.RepoRoot, manifest.name, false);
+    }
 
     // Step 16: Execute hooks
     if (manifest.hooks?.postInstall) {
@@ -262,20 +275,37 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
     }
 
-    await RecordInstallHistoryEntry(context.ContextUser, createdAppId!, 'Install', manifest, {
-      Success: true,
-      DurationSeconds: GetDurationSeconds(startTime),
-      StartedAt: new Date(startTime),
-      EndedAt: new Date(),
-      Summary: 'Initial installation',
-    });
+    // The install is complete (status is already 'Active'). The history entry is an
+    // audit record — a failure to write it must NOT throw into the outer catch and
+    // downgrade a fully-successful install to 'Error' (B31). Best-effort only.
+    try {
+      await RecordInstallHistoryEntry(context.ContextUser, createdAppId!, 'Install', manifest, {
+        Success: true,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: 'Initial installation',
+      });
+    } catch (histErr: unknown) {
+      Callbacks?.OnWarn?.('Record', `App installed, but the history audit entry could not be written: ${histErr instanceof Error ? histErr.message : String(histErr)}`);
+    }
 
     Callbacks?.OnSuccess?.('Install', `Successfully installed ${manifest.name} v${manifest.version}`);
 
-    const baseSummary = 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.';
-    const summary = npmInstallWarning
-      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' to complete the setup.`
-      : baseSummary;
+    // The summary must reflect what's actually left to do, or 'Active' overstates readiness.
+    // A schema-bearing app ships only its tables + migrations; the entity *metadata*
+    // (MJ: Entities rows) and generated entity classes are materialized out-of-band by the
+    // host's CodeGen run. Until CodeGen runs, the app's entities aren't queryable — so the
+    // generic "restart + rebuild" guidance omits the one step that brings the app to life.
+    // Tell the operator to run CodeGen FIRST for schema apps (B16).
+    let summary: string;
+    if (npmInstallWarning) {
+      summary = `App installed but left DISABLED — npm install failed, so its packages are not resolved. package.json and config were updated; log in to npm ('npm login') or fix your .npmrc, run 'npm install', then 'mj app enable ${manifest.name}'.`;
+    } else if (manifest.schema) {
+      summary = `App installed. Its schema and tables exist, but entity metadata is generated by CodeGen — run 'mj codegen', then restart MJAPI and rebuild MJExplorer to activate.`;
+    } else {
+      summary = 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.';
+    }
 
     return {
       Success: true,
@@ -477,9 +507,21 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     if (manifest.migrations && manifest.schema) {
       const migrationResult = await HandleMigrations(manifest, context, subpath);
       if (!migrationResult.Success) {
-        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Migration', migrationResult.ErrorMessage ?? 'Migration failed', startTime, previousVersion);
+        // OpenApp migrations are forward-only — there is no automatic down/rollback, so the
+        // schema may be partially upgraded. Skyway records each applied migration in the app
+        // schema's history table, so the upgrade IS recoverable: fix the cause and re-run
+        // `mj app upgrade`, which resumes from the last successful migration (the app's Version
+        // is not advanced on failure, so the upgrade still validates). State this honestly
+        // instead of leaving a bare "Migration failed" that reads as unrecoverable (B21).
+        const detail = migrationResult.ErrorMessage ?? 'Migration failed';
+        const recoverable =
+          `${detail}\n\nThe schema may be partially upgraded (migrations are forward-only; there is no ` +
+          `automatic rollback). Skyway tracks applied migrations, so once the cause is fixed, re-run ` +
+          `'mj app upgrade ${options.AppName}' to resume from the last successful migration. If the schema ` +
+          `is left inconsistent, restore it from a backup taken before the upgrade.`;
+        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Migration', recoverable, startTime, previousVersion);
         await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Migration', startTime, recoverable);
       }
     }
 
@@ -487,7 +529,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     // When upgrading to an explicit version, pin packages exactly; otherwise use default strategy
     const effectiveUpgradeVersion = explicitUpgradeVersion ? targetVersion.replace(/^v/, '') : manifest.version;
     const effectiveUpgradeStrategy: VersionStrategy | undefined = explicitUpgradeVersion ? 'exact' : context.VersionStrategy;
-    const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy);
+    const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy, options.Verbose);
     let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
       if (pkgResult.PackageJsonUpdated) {
@@ -519,19 +561,21 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       Status: 'Active',
     });
 
-    // Step 10: Regenerate client imports
-    await HandleClientBootstrapRegeneration(context);
-
     // Step 11: Execute hooks
     if (manifest.hooks?.postUpgrade) {
       Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
       await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
     }
 
-    // Update dependency records to reflect new manifest
+    // Update dependency records to reflect new manifest. Delete + re-add atomically so a
+    // crash mid-rewrite can't leave the app with zero dependency rows (B23). The upgrade
+    // itself is already complete (status Active) at this point, so a failure to update the
+    // dependency-tracking rows is a warning, not an upgrade failure.
     if (manifest.dependencies) {
-      await DeleteAppDependencies(context.ContextUser, existingApp.ID);
-      await RecordAppDependencies(context.ContextUser, existingApp.ID, manifest.dependencies);
+      const depsReplaced = await ReplaceAppDependenciesAtomically(context.ContextUser, existingApp.ID, manifest.dependencies);
+      if (!depsReplaced) {
+        Callbacks?.OnWarn?.('Record', 'App upgraded, but its dependency records could not be updated atomically — re-run the upgrade to refresh them.');
+      }
     }
 
     await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Upgrade', manifest, {
@@ -624,20 +668,88 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       await ExecuteHook(manifest.hooks.preRemove, context.RepoRoot);
     }
 
-    // Steps 3-6: Remove config, client bootstrap, angular.json excludes, and package refs
-    // (parallel where they write to different files)
+    // Step 3: Database cleanup FIRST — metadata + schema (the hard-to-undo, failure-prone
+    // part). Doing it BEFORE any filesystem mutation means a DB failure aborts with the
+    // config / package.json / client bootstrap still intact, instead of leaving a
+    // half-removed app whose files are stripped but whose schema/metadata remain (B20).
+    // Skipped entirely when another app shares the schema (B14).
+    const schemaShared = existingApp.SchemaName
+      ? await IsSchemaSharedByOtherApps(context.ContextUser, existingApp.SchemaName, existingApp.ID)
+      : false;
+    if (schemaShared) {
+      Callbacks?.OnWarn?.('Schema', `Schema '${existingApp.SchemaName}' is still used by another installed Open App — skipping metadata + schema removal to protect co-tenant data.`);
+    }
+
+    let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
+    if (existingApp.SchemaName && !schemaShared) {
+      Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
+      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
+    }
+
+    // Teardown — retire the rows this app's seed migrations wrote into the SHARED core schema
+    // (Integration/IO/IOF/Action rows in __mj); dropping the app's own schema cannot reach them.
+    // Data removal, so gated on !KeepData. No-op unless the manifest declares migrations.teardownDirectory.
+    let teardownResult: InternalResult = { Success: true };
+    if (!options.KeepData) {
+      teardownResult = await HandleTeardown(manifest, context, existingApp.Subpath ?? undefined);
+      if (!teardownResult.Success) {
+        Callbacks?.OnError?.('Metadata', `Teardown failed: ${teardownResult.ErrorMessage}`);
+      }
+    }
+
+    let schemaDropError: string | undefined;
+    if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
+      Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
+      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+      });
+      if (!dropResult.Success) {
+        schemaDropError = dropResult.ErrorMessage;
+        Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
+      }
+    }
+
+    // Abort BEFORE touching the filesystem if DB cleanup failed — the app stays installed
+    // (status Error) with its files intact, so it can be retried/removed again cleanly.
+    const removalErrors = [
+      teardownResult.Success ? undefined : teardownResult.ErrorMessage,
+      metadataResult.Success ? undefined : metadataResult.ErrorMessage,
+      schemaDropError,
+    ].filter((e): e is string => !!e);
+    if (removalErrors.length > 0) {
+      const combined = removalErrors.join('; ');
+      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
+        Success: false,
+        DurationSeconds: GetDurationSeconds(startTime),
+        StartedAt: new Date(startTime),
+        EndedAt: new Date(),
+        Summary: `Remove failed: ${combined}`,
+      });
+      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+      return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
+    }
+
+    // Steps 4-7: Remove config, client bootstrap, angular.json excludes, and package refs
+    // (parallel where they write to different files) — only AFTER DB cleanup succeeded.
     Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
 
     // Collect other installed apps' manifests so we don't remove shared prebundle excludes
     const otherApps = (await ListInstalledApps(context.ContextUser))
       .filter(a => a.Name !== options.AppName && a.Status !== 'Removed');
-    const otherManifests = otherApps.map(a => JSON.parse(a.ManifestJSON) as MJAppManifest);
+    // Skip a corrupt OTHER-app manifest — it must not break THIS app's removal (B24).
+    const otherManifests = otherApps.flatMap(a => {
+      try {
+        return [JSON.parse(a.ManifestJSON) as MJAppManifest];
+      } catch {
+        Callbacks?.OnWarn?.('Config', `Ignoring app '${a.Name}' when computing shared excludes — its ManifestJSON could not be parsed.`);
+        return [];
+      }
+    });
 
     await Promise.all([
       Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
       Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name) : undefined),
       Promise.resolve(HandleAngularPrebundleExcludeRemoval(manifest, otherManifests, context)),
-      HandleClientBootstrapRegeneration(context),
       Promise.resolve(
         RemoveAppPackages({
           RepoRoot: context.RepoRoot,
@@ -658,57 +770,6 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     const installResult = RunPackageInstall(context.RepoRoot, options.Verbose, undefined, context.PackageManager);
     if (!installResult.Success) {
       Callbacks?.OnWarn?.('Packages', `Package install warning during removal: ${installResult.ErrorMessage}`);
-    }
-
-    // Step 6: Remove metadata (entity registrations, SchemaInfo, etc.)
-    let metadataResult: { Success: boolean; ErrorMessage?: string } = { Success: true };
-    if (existingApp.SchemaName) {
-      Callbacks?.OnProgress?.('Metadata', `Removing entity metadata for schema '${existingApp.SchemaName}'...`);
-      metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
-    }
-
-    // Step 6b: Teardown — retire the rows this app's seed migrations wrote into the SHARED core
-    // schema (dropping the app's own schema below cannot reach them). Data removal, so gated on
-    // !KeepData like the schema drop. No-op unless the manifest declares migrations.teardownDirectory.
-    let teardownResult: InternalResult = { Success: true };
-    if (!options.KeepData) {
-      teardownResult = await HandleTeardown(manifest, context, existingApp.Subpath ?? undefined);
-      if (!teardownResult.Success) {
-        Callbacks?.OnError?.('Metadata', `Teardown failed: ${teardownResult.ErrorMessage}`);
-      }
-    }
-
-    // Step 7: Drop schema (unless --keep-data)
-    let schemaDropError: string | undefined;
-    if (!options.KeepData && existingApp.SchemaName) {
-      Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
-        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
-      });
-      if (!dropResult.Success) {
-        schemaDropError = dropResult.ErrorMessage;
-        Callbacks?.OnError?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
-      }
-    }
-
-    // If teardown, entity-metadata removal, or schema drop failed, the app is NOT cleanly removed —
-    // report it as a failure (don't mark the app 'Removed') instead of silently claiming success.
-    const removalErrors = [
-      teardownResult.Success ? undefined : teardownResult.ErrorMessage,
-      metadataResult.Success ? undefined : metadataResult.ErrorMessage,
-      schemaDropError,
-    ].filter((e): e is string => !!e);
-    if (removalErrors.length > 0) {
-      const combined = removalErrors.join('; ');
-      await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
-        Success: false,
-        DurationSeconds: GetDurationSeconds(startTime),
-        StartedAt: new Date(startTime),
-        EndedAt: new Date(),
-        Summary: `Remove failed: ${combined}`,
-      });
-      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-      return BuildFailureResult('Remove', options.AppName, existingApp.Version, 'Schema', startTime, combined);
     }
 
     // Step 8: Update records
@@ -765,9 +826,13 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  ToggleServerDynamicPackages(context.RepoRoot, appName, false);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, false);
+  if (!toggle.Success) {
+    // Don't flip the DB status when the config edit failed — that desyncs the DB
+    // from mj.config.cjs and would report success on a half-applied disable (B25).
+    return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
+  }
   await SetAppStatus(context.ContextUser, app.ID, 'Disabled');
-  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -789,9 +854,11 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
     return BuildFailureResult('Install', appName, '', 'Config', startTime, `App '${appName}' is not installed`);
   }
 
-  ToggleServerDynamicPackages(context.RepoRoot, appName, true);
+  const toggle = ToggleServerDynamicPackages(context.RepoRoot, appName, true);
+  if (!toggle.Success) {
+    return BuildFailureResult('Install', appName, app.Version, 'Config', startTime, toggle.ErrorMessage ?? 'Failed to update dynamicPackages.server in mj.config.cjs');
+  }
   await SetAppStatus(context.ContextUser, app.ID, 'Active');
-  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -817,6 +884,8 @@ interface InternalResult {
   DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>;
   /** True when package.json was updated but npm install failed (e.g., auth issue) */
   PackageJsonUpdated?: boolean;
+  /** True when a NEW schema was actually created (vs an existing one reused) — for rollback (B18). */
+  Created?: boolean;
 }
 
 /**
@@ -916,17 +985,21 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
-    // NOTE (known limitation, tracked in #2713): we install from the dependency's
-    // repository with no Version, so it resolves to whatever its default-branch
-    // manifest reports — `dep.VersionRange` is NOT enforced for fresh installs.
-    // Declared ranges are only checked against ALREADY-installed deps (see
-    // ProcessEdge in dependency-graph-builder.ts). So a `>=1.0 <2.0` requirement
-    // can silently install 3.0 if that's the latest. Pre-existing behavior, not a
-    // regression; range-gated fresh installs are deferred follow-on work.
+    // Resolve the highest published version that satisfies the declared range, and pin the
+    // install to it. Previously the dependency installed with no Version → whatever the
+    // default-branch manifest reported, so a `>=1.0 <2.0` requirement could silently pull
+    // 3.0 (B26). A range with no satisfying version now fails loudly rather than installing
+    // the wrong major.
+    const resolved = await ResolveDependencyVersion(dep.Repository, dep.VersionRange, context.GitHubOptions);
+    if (resolved.ErrorMessage) {
+      return { Success: false, ErrorMessage: `Cannot install dependency '${dep.AppName}': ${resolved.ErrorMessage}` };
+    }
     const result = await InstallApp(
       {
         Source: dep.Repository,
         Subpath: dep.Subpath,
+        // Pinned to satisfy the declared range; undefined ⇒ no constraint ⇒ default-branch latest.
+        Version: resolved.Version,
         _skipDependencyResolution: true,
         AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
         Verbose: inherited.Verbose,
@@ -938,6 +1011,52 @@ async function InstallDependencies(
     }
   }
   return { Success: true };
+}
+
+/**
+ * Resolves the version a dependency should install at, given the declared range. Returns the
+ * highest published version (from the repo's releases + semver tags) that satisfies the range.
+ * Returns `{ Version: undefined }` when there is no real constraint (so the caller installs the
+ * default-branch latest), or `{ ErrorMessage }` when the range is invalid or unsatisfiable —
+ * failing loudly rather than silently installing the wrong major version (B26).
+ *
+ * Exported for unit testing of the range-resolution logic.
+ */
+export async function ResolveDependencyVersion(
+  repoUrl: string,
+  versionRange: string,
+  options: GitHubClientOptions,
+): Promise<{ Version?: string; ErrorMessage?: string }> {
+  const range = (versionRange ?? '').trim();
+  // No real constraint → let InstallApp resolve the default-branch latest (prior behavior).
+  if (range === '' || range === '*' || range.toLowerCase() === 'latest') {
+    return { Version: undefined };
+  }
+  // An exact version is a 1-element "range" — pin it directly.
+  if (semver.valid(range)) {
+    return { Version: range.replace(/^v/, '') };
+  }
+  if (!semver.validRange(range)) {
+    return { ErrorMessage: `version '${versionRange}' is not a valid semver version or range` };
+  }
+  // Gather candidate versions: non-draft releases + semver tags.
+  const [releases, tags] = await Promise.all([
+    ListGitHubReleases(repoUrl, options),
+    ListGitHubTags(repoUrl, options),
+  ]);
+  const candidates = [
+    ...releases.filter((r) => !r.Draft).map((r) => r.TagName.replace(/^v/, '')),
+    ...tags.map((t) => t.replace(/^v/, '')),
+  ].filter((v) => semver.valid(v) != null);
+  if (candidates.length === 0) {
+    return { ErrorMessage: `no published versions found at ${repoUrl} to satisfy '${versionRange}'` };
+  }
+  const best = semver.maxSatisfying(candidates, range);
+  if (!best) {
+    const latest = candidates.sort(semver.rcompare)[0];
+    return { ErrorMessage: `no published version at ${repoUrl} satisfies '${versionRange}' (latest available: ${latest})` };
+  }
+  return { Version: best };
 }
 
 /**
@@ -957,7 +1076,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
       // or createIfNotExists is set (the app expects to adopt an existing schema).
       // Reuse it and let Skyway apply only new migrations.
       context.Callbacks?.OnProgress?.('Schema', `Reusing existing schema '${manifest.schema.name}'`);
-      return { Success: true };
+      return { Success: true, Created: false };
     }
     return { Success: false, ErrorMessage: `Schema '${manifest.schema.name}' already exists` };
   }
@@ -965,7 +1084,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
     const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
-    return { Success: result.Success, ErrorMessage: result.ErrorMessage };
+    return { Success: result.Success, ErrorMessage: result.ErrorMessage, Created: result.Success };
   }
 
   return { Success: false, ErrorMessage: `Schema '${manifest.schema.name}' does not exist and createIfNotExists is false` };
@@ -983,13 +1102,12 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  // Platform-aware dialect directory: on Postgres pull `<directory>-pg/` (the bizapps `migrations-pg`
-  // sibling convention), else the SQL Server `<directory>/`. The directory holds the dialect's variant
-  // of the same migrations; Skyway then runs them with the matching provider (below).
+  // Live DB platform — selects the Skyway provider for RunAppMigrations below.
   const platform = context.DatabaseProvider.Dialect.PlatformKey;
-  const migrationsDir = platform === 'postgresql' ? `${manifest.migrations.directory}-pg` : manifest.migrations.directory;
 
-  const downloadResult = await DownloadMigrations(manifest.repository, manifest.version, migrationsDir, tempDir, context.GitHubOptions, subpath);
+  // Platform-aware download with PG fallback (uses `<directory>-pg/` on Postgres when present,
+  // else the declared directory) + subpath-aware for multi-app repos.
+  const downloadResult = await DownloadAppMigrations(manifest, context, tempDir, subpath);
 
   if (!downloadResult.Success) {
     return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
@@ -1063,6 +1181,38 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 }
 
 /**
+ * Downloads an app's migration files for the LIVE database platform.
+ *
+ * On PostgreSQL, prefer a sibling `<directory>-pg` folder (the `.pg.sql` set) —
+ * mirroring core `mj migrate`'s `migrations` → `migrations-pg` swap — and fall
+ * back to the declared directory when no PG variant exists (dialect-neutral or
+ * SQL-Server-only apps). On SQL Server, always use the declared directory.
+ * subpath-aware for multi-app repos.
+ */
+async function DownloadAppMigrations(
+  manifest: MJAppManifest,
+  context: OrchestratorContext,
+  tempDir: string,
+  subpath?: string,
+): Promise<MigrationDownloadResult> {
+  const baseDir = manifest.migrations!.directory;
+  const isPG = context.DatabaseProvider.Dialect.PlatformKey === 'postgresql';
+
+  if (isPG) {
+    const pgDir = `${baseDir.replace(/\/+$/, '')}-pg`;
+    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath);
+    // Use the PG-specific set only if it exists AND has files; otherwise fall
+    // back to the declared directory (a 404 yields Success:false, an empty dir
+    // yields Success:true with no files — both mean "no PG variant here").
+    if (pgResult.Success && (pgResult.Files?.length ?? 0) > 0) {
+      return pgResult;
+    }
+  }
+
+  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath);
+}
+
+/**
  * Adds app npm packages to the appropriate workspace package.json files and runs npm install.
  *
  * @param packageVersion - The version string to write (may differ from manifest.version when an explicit version is requested)
@@ -1073,6 +1223,7 @@ async function HandlePackageInstallation(
   context: OrchestratorContext,
   packageVersion?: string,
   versionStrategy?: VersionStrategy,
+  verbose?: boolean,
 ): Promise<InternalResult> {
   if (!manifest.packages) {
     return { Success: true };
@@ -1109,7 +1260,7 @@ async function HandlePackageInstallation(
   }
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
-  const installResult = RunPackageInstall(context.RepoRoot, undefined, manifest.packages.registry, context.PackageManager);
+  const installResult = RunPackageInstall(context.RepoRoot, verbose, manifest.packages.registry, context.PackageManager);
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
@@ -1125,6 +1276,16 @@ function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContex
   const dynamicResult = AddServerDynamicPackages(context.RepoRoot, manifest);
   if (!dynamicResult.Success) {
     return { Success: false, ErrorMessage: dynamicResult.ErrorMessage };
+  }
+
+  // Record the app's client packages in dynamicPackages.client. `mj codegen manifest
+  // --open-app-client-bootstrap` (run by MJExplorer's prebuild) turns each into a
+  // side-effect import in the class-registrations manifest MJExplorer already imports —
+  // so the client load path lives in distributed packages, not a bespoke MJExplorer file.
+  // Runs on both install and upgrade (both call HandleServerConfig); idempotent per entry.
+  const clientResult = AddClientDynamicPackages(context.RepoRoot, manifest);
+  if (!clientResult.Success) {
+    return { Success: false, ErrorMessage: clientResult.ErrorMessage };
   }
 
   // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
@@ -1182,74 +1343,6 @@ function HandleAngularPrebundleExcludeRemoval(
 }
 
 /**
- * Regenerates the client bootstrap file with imports ordered by dependency.
- * Apps that are depended on appear before the apps that depend on them.
- */
-async function HandleClientBootstrapRegeneration(context: OrchestratorContext): Promise<void> {
-  context.Callbacks?.OnProgress?.('Config', 'Regenerating client bootstrap...');
-
-  const apps = await ListInstalledApps(context.ContextUser);
-
-  // Build dependency graph for topological sort
-  const appDeps = new Map<string, string[]>();
-  for (const app of apps) {
-    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
-    const depNames = manifest.dependencies ? Object.keys(manifest.dependencies) : [];
-    appDeps.set(app.Name, depNames);
-  }
-
-  // Topological sort: apps with no deps first, then apps depending on them
-  const sortedNames = TopologicalSortApps(appDeps);
-
-  // Build entries in sorted order
-  const entries: ClientBootstrapEntry[] = [];
-  const appsByName = new Map(apps.map((a) => [a.Name, a]));
-  for (const name of sortedNames) {
-    const app = appsByName.get(name);
-    if (!app) continue;
-    const manifest: MJAppManifest = JSON.parse(app.ManifestJSON);
-    const clientPkgs = [...(manifest.packages?.client ?? []), ...(manifest.packages?.shared ?? [])];
-
-    for (const pkg of clientPkgs) {
-      entries.push({
-        AppName: app.Name,
-        Version: app.Version,
-        PackageName: pkg.name,
-        Enabled: app.Status === 'Active',
-      });
-    }
-  }
-
-  RegenerateClientBootstrap(context.RepoRoot, entries, context.ClientPackagePath, context.ClientBootstrapSubpath);
-}
-
-/**
- * Simple topological sort for installed apps by their dependency names.
- * Returns app names in dependency order (leaf-first).
- */
-function TopologicalSortApps(appDeps: Map<string, string[]>): string[] {
-  const visited = new Set<string>();
-  const result: string[] = [];
-
-  function Visit(name: string): void {
-    if (visited.has(name)) return;
-    visited.add(name);
-    const deps = appDeps.get(name) ?? [];
-    for (const dep of deps) {
-      if (appDeps.has(dep)) {
-        Visit(dep);
-      }
-    }
-    result.push(name);
-  }
-
-  for (const name of appDeps.keys()) {
-    Visit(name);
-  }
-  return result;
-}
-
-/**
  * Executes a shell hook command with a 2-minute timeout.
  */
 async function ExecuteHook(command: string, cwd: string): Promise<void> {
@@ -1260,23 +1353,32 @@ async function ExecuteHook(command: string, cwd: string): Promise<void> {
 /**
  * Removes all MJ entity metadata associated with an app's schema.
  * Deletes in FK-dependency order to avoid constraint violations.
+ *
+ * Exported for unit testing of the atomic-transaction semantics (PG3).
  */
-async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<{ Success: boolean; ErrorMessage?: string }> {
+export async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo, callbacks?: AppInstallCallbacks, provider?: IMetadataProvider): Promise<{ Success: boolean; ErrorMessage?: string }> {
   try {
     const rv = new RunView();
     const escaped = EscapeSqlString(schemaName);
+    // All metadata deletes are queued into ONE TransactionGroup and committed once. MJ
+    // metadata FKs are NO ACTION (not CASCADE), so dependents are queued in dependency order;
+    // the group commits them in that order inside a single DB transaction. On PostgreSQL each
+    // un-grouped delete would otherwise autocommit, so an FK violation partway (e.g. an
+    // un-handled dependent) left partially-committed orphan state with no rollback — now the
+    // whole cleanup is atomic and a failure rolls back cleanly (PG3).
+    const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+    const tg = await md.CreateTransactionGroup();
 
-    // Helper: delete by filter and throw on any failure so the outer catch reports it
-    // (MJ metadata FKs are NO ACTION, not CASCADE, so dependents must be removed in order).
-    const deleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
-      const r = await DeleteEntitiesByFilter(rv, contextUser, entityName, filter);
+    // Helper: queue all matching records of an entity for delete into the shared transaction.
+    const queueDeleteByFilterOrThrow = async (entityName: string, filter: string): Promise<void> => {
+      const r = await QueueDeleteEntitiesByFilter(rv, contextUser, entityName, filter, tg);
       if (!r.Success) {
-        throw new Error(r.ErrorMessage ?? `Failed to delete ${entityName} records`);
+        throw new Error(r.ErrorMessage ?? `Failed to queue delete of ${entityName} records`);
       }
     };
 
     // First, find all entity IDs in this schema so we can clean FK-dependent records.
-    const entityResult = await rv.RunView<BaseEntity>(
+    const entityResult = await rv.RunView<MJEntityEntity>(
       {
         EntityName: 'MJ: Entities',
         ExtraFilter: `SchemaName = '${escaped}'`,
@@ -1289,18 +1391,21 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
     }
 
     if (entityResult.Results.length === 0) {
-      // No entities found — just clean up SchemaInfo
-      await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+      // No entities found — just clean up SchemaInfo (still atomic via the group).
+      await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+      if (!(await tg.Submit())) {
+        throw new Error('Transaction failed: schema-info cleanup could not be committed');
+      }
       callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
       return { Success: true };
     }
 
-    const entityIds = entityResult.Results.map((e) => String(e.Get('ID')));
+    const entityIds = entityResult.Results.map((e) => e.ID);
     const idList = entityIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
 
     // Entity Field Values (FK on EntityFieldID) must go before the Entity Fields they
     // reference — collect this schema's field IDs first.
-    const fieldResult = await rv.RunView<BaseEntity>(
+    const fieldResult = await rv.RunView<MJEntityFieldEntity>(
       {
         EntityName: 'MJ: Entity Fields',
         ExtraFilter: `EntityID IN (${idList})`,
@@ -1311,29 +1416,47 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
     if (!fieldResult.Success) {
       throw new Error(`Failed to query entity fields for schema '${schemaName}': ${fieldResult.ErrorMessage}`);
     }
-    const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(String(f.Get('ID')))}'`).join(',');
+    const fieldIdList = fieldResult.Results.map((f) => `'${EscapeSqlString(f.ID)}'`).join(',');
 
-    // Delete FK-dependent records in dependency order.
+    // Capture the app's OWN Application row(s) NOW — before the ApplicationEntity links below
+    // are deleted — so they can be cleaned up post-commit (see DeleteAppOwnedApplications). An
+    // app's metadata-sync migration registers an Application (fixed UUID) grouping its entities;
+    // historically the link rows were removed but the Application itself was orphaned, so a
+    // reinstall's migration re-INSERTed the same fixed UUID and failed with a PK collision.
+    const ownedAppIds = await FindAppOwnedApplications(rv, contextUser, entityIds, idList);
+
+    // Queue FK-dependent deletes in dependency order (children before parents).
     if (fieldIdList.length > 0) {
-      await deleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
+      await queueDeleteByFilterOrThrow('MJ: Entity Field Values', `EntityFieldID IN (${fieldIdList})`);
     }
-    await deleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
-    await deleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
-    await deleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Permissions', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Application Entities', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Settings', `EntityID IN (${idList})`);
     // Entity Relationships reference EntityID on both sides
-    await deleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Relationships', `EntityID IN (${idList}) OR RelatedEntityID IN (${idList})`);
     // Entity Fields (FK on EntityID)
-    await deleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
+    await queueDeleteByFilterOrThrow('MJ: Entity Fields', `EntityID IN (${idList})`);
 
-    // Delete Entities themselves
+    // Queue the Entities themselves.
     for (const entity of entityResult.Results) {
-      if (!(await entity.Delete())) {
-        throw new Error(`Failed to delete entity '${String(entity.Get('Name'))}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-      }
+      entity.TransactionGroup = tg;
+      await entity.Delete();
     }
 
-    // Delete SchemaInfo last
-    await deleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+    // Queue SchemaInfo last.
+    await queueDeleteByFilterOrThrow('MJ: Schema Info', `SchemaName = '${escaped}'`);
+
+    // Commit everything atomically — all-or-nothing (PG3).
+    if (!(await tg.Submit())) {
+      throw new Error('Transaction failed: entity metadata cleanup could not be committed atomically');
+    }
+
+    // Best-effort: drop the app's now-entity-less Application row(s) so a reinstall's migration
+    // doesn't collide on the app's fixed Application PK. Done AFTER the atomic metadata commit —
+    // the ApplicationEntity links are gone, so a wholly-owned Application is childless — and it is
+    // best-effort because a user may have added other dependents (dashboards, role/user
+    // assignments); such a row is left intact and simply reused on reinstall.
+    await DeleteAppOwnedApplications(rv, ownedAppIds, contextUser, callbacks);
 
     callbacks?.OnSuccess?.('Metadata', `Entity metadata for schema '${schemaName}' removed`);
     return { Success: true };
@@ -1345,9 +1468,83 @@ async function RemoveAppEntityMetadata(schemaName: string, contextUser: UserInfo
 }
 
 /**
- * Helper: loads entities by filter and deletes them one by one.
+ * Finds the Application row(s) an Open App OWNS — i.e. an Application all of whose
+ * `ApplicationEntity` links point at the schema's entities (`entityIds`). An Application
+ * that also groups OTHER apps' entities is excluded (not wholly owned), so a shared
+ * Application is never selected for removal. Returns the owned Application IDs.
+ *
+ * `idList` is the pre-quoted, comma-joined SQL list of the schema's entity IDs (reused so we
+ * don't re-quote). Read-only — actual deletion is deferred to {@link DeleteAppOwnedApplications}.
  */
-async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string): Promise<{ Success: boolean; ErrorMessage?: string }> {
+async function FindAppOwnedApplications(rv: RunView, contextUser: UserInfo, entityIds: string[], idList: string): Promise<string[]> {
+  const ours = new Set(entityIds.map((id) => NormalizeUUID(id)));
+  // Candidate Applications: those linked to ANY of this schema's entities.
+  const linked = await rv.RunView<{ ApplicationID: string }>(
+    { EntityName: 'MJ: Application Entities', ExtraFilter: `EntityID IN (${idList})`, Fields: ['ApplicationID'], ResultType: 'simple' },
+    contextUser,
+  );
+  if (!linked.Success) {
+    return [];
+  }
+  const candidateIds = [...new Set(linked.Results.map((r) => r.ApplicationID))];
+  if (candidateIds.length === 0) {
+    return [];
+  }
+  // Re-read ALL links for the candidates: an Application is "owned" only if EVERY one of its
+  // links is to an entity we're removing (otherwise it groups another app's entities too).
+  const candList = candidateIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const allLinks = await rv.RunView<{ ApplicationID: string; EntityID: string }>(
+    { EntityName: 'MJ: Application Entities', ExtraFilter: `ApplicationID IN (${candList})`, Fields: ['ApplicationID', 'EntityID'], ResultType: 'simple' },
+    contextUser,
+  );
+  if (!allLinks.Success) {
+    return [];
+  }
+  const allOursByApp = new Map<string, boolean>();
+  for (const link of allLinks.Results) {
+    const wasAllOurs = allOursByApp.get(link.ApplicationID) ?? true;
+    allOursByApp.set(link.ApplicationID, wasAllOurs && ours.has(NormalizeUUID(link.EntityID)));
+  }
+  return [...allOursByApp.entries()].filter(([, allOurs]) => allOurs).map(([appId]) => appId);
+}
+
+/**
+ * Deletes the app-owned Application row(s) from {@link FindAppOwnedApplications}, BEST-EFFORT.
+ * Called after the metadata-removal transaction commits (so the rows are already link-less).
+ * `BaseEntity.Delete()` returns `false` on a logical failure — e.g. a remaining FK dependent
+ * (a user-created Dashboard, role/user assignment, conversation) — in which case the Application
+ * is left intact (a reinstall reuses it) and a warning is surfaced. A leftover Application is the
+ * prior behavior, so this can never regress or fail the remove.
+ */
+async function DeleteAppOwnedApplications(rv: RunView, applicationIds: string[], contextUser: UserInfo, callbacks?: AppInstallCallbacks): Promise<void> {
+  if (applicationIds.length === 0) {
+    return;
+  }
+  const idList = applicationIds.map((id) => `'${EscapeSqlString(id)}'`).join(',');
+  const appsResult = await rv.RunView<MJApplicationEntity>(
+    { EntityName: 'MJ: Applications', ExtraFilter: `ID IN (${idList})`, ResultType: 'entity_object' },
+    contextUser,
+  );
+  if (!appsResult.Success) {
+    return;
+  }
+  for (const app of appsResult.Results) {
+    try {
+      if (!(await app.Delete())) {
+        callbacks?.OnWarn?.('Metadata', `Left Application '${app.Name}' — it still has dependents; a reinstall will reuse it (${app.LatestResult?.CompleteMessage ?? 'has FK references'}).`);
+      }
+    } catch (error: unknown) {
+      callbacks?.OnWarn?.('Metadata', `Could not remove app-owned Application '${app.Name}': ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+
+/**
+ * Helper: loads entities by filter and queues them all for delete into the shared
+ * TransactionGroup (committed by the caller's Submit). Queuing — rather than committing each
+ * delete individually — is what makes the whole metadata cleanup atomic on PostgreSQL (PG3).
+ */
+async function QueueDeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entityName: string, filter: string, transactionGroup: TransactionGroupBase): Promise<{ Success: boolean; ErrorMessage?: string }> {
   const result = await rv.RunView<BaseEntity>(
     {
       EntityName: entityName,
@@ -1360,9 +1557,8 @@ async function DeleteEntitiesByFilter(rv: RunView, contextUser: UserInfo, entity
     return { Success: false, ErrorMessage: `Failed to query ${entityName}: ${result.ErrorMessage}` };
   }
   for (const record of result.Results) {
-    if (!(await record.Delete())) {
-      return { Success: false, ErrorMessage: `Failed to delete a ${entityName} record: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}` };
-    }
+    record.TransactionGroup = transactionGroup;
+    await record.Delete();
   }
   return { Success: true };
 }

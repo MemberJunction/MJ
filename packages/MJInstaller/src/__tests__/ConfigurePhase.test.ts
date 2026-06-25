@@ -75,6 +75,58 @@ describe('ConfigurePhase', () => {
     mockFs.ListFiles.mockResolvedValue([]);
   });
 
+  // ─── .gitignore secret protection ──────────────────────────────────
+
+  describe('.gitignore secret protection', () => {
+    it('creates a .gitignore ignoring .env when none exists', async () => {
+      // beforeEach default: FileExists → false (no .gitignore present)
+      const ctx = makeContext({ Yes: true });
+      const result = await phase.Run(ctx);
+
+      const gitignore = findWrittenContent('.gitignore');
+      expect(gitignore).toBeDefined();
+      expect(gitignore).toContain('.env');
+      expect(gitignore).toContain('.env.*');
+      expect(gitignore).toContain('!.env.example');
+      expect(result.FilesWritten.some((f) => f.endsWith('.gitignore'))).toBe(true);
+    });
+
+    it('appends only the missing env entries to an existing .gitignore (preserves user lines)', async () => {
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.gitignore'));
+      mockFs.ReadText.mockImplementation(async (p: string) =>
+        p.endsWith('.gitignore') ? 'node_modules/\n.env\n' : '',
+      );
+
+      const ctx = makeContext({ Yes: true });
+      await phase.Run(ctx);
+
+      const gitignore = findWrittenContent('.gitignore');
+      expect(gitignore).toBeDefined();
+      expect(gitignore).toContain('node_modules/'); // existing line preserved
+      expect(gitignore).toContain('.env.*'); // missing entries appended
+      expect(gitignore).toContain('!.env.example');
+      // .env already present → not duplicated as a standalone line
+      const envLines = gitignore!.split(/\r?\n/).filter((l) => l.trim() === '.env');
+      expect(envLines).toHaveLength(1);
+    });
+
+    it('does not rewrite a .gitignore that already covers env secrets', async () => {
+      const complete = '.env\n.env.*\n!.env.example\n';
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.gitignore'));
+      mockFs.ReadText.mockImplementation(async (p: string) =>
+        p.endsWith('.gitignore') ? complete : '',
+      );
+
+      const ctx = makeContext({ Yes: true });
+      await phase.Run(ctx);
+
+      const wroteGitignore = (mockFs.WriteText.mock.calls as [string, string][]).some(([p]) =>
+        p.endsWith('.gitignore'),
+      );
+      expect(wroteGitignore).toBe(false);
+    });
+  });
+
   // ─── yes mode with full config ─────────────────────────────────────
 
   describe('yes mode with full config', () => {

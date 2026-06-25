@@ -200,6 +200,17 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract QuoteColumnAlias(aliasName: string): string;
 
     /**
+     * Canonicalizes a SCHEMA name to the form the platform actually stores when
+     * the name appears UNQUOTED in DDL. PostgreSQL folds unquoted identifiers to
+     * lowercase, so `__mj_BizAppsCommon` physically becomes `__mj_bizappscommon`;
+     * SQL Server is case-insensitive and stores the name as-given. Routing every
+     * schema CREATE/DROP/USE through this keeps the engine's (quoted) operations
+     * aligned with what unquoted migration DDL produces — so a mixed-case schema
+     * name can't split into two physical schemas (one quoted-mixed, one folded-lowercase).
+     */
+    abstract CanonicalSchemaName(name: string): string;
+
+    /**
      * Quotes a value as a SQL string literal. Both SQL Server and PostgreSQL
      * use single quotes with `''` doubling to escape internal apostrophes —
      * this is concrete in the base class so callers don't reinvent the

@@ -180,6 +180,30 @@ export function hasPnpmCatalog(repoRoot: string): boolean {
 }
 
 /**
+ * Validates a custom npm registry URL before it is interpolated into a shell command (B40).
+ * Must be a well-formed http(s) URL and free of shell metacharacters / whitespace. This is
+ * defense-in-depth — the value normally comes from a trusted manifest, but it ends up in an
+ * `execSync` command string, so a malformed/hostile value must never reach the shell.
+ */
+function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return { Valid: false, Reason: `'${url}' is not a valid URL` };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { Valid: false, Reason: `registry URL must use http(s), got '${parsed.protocol}'` };
+  }
+  // URL parsing tolerates some shell-significant characters in the path/query; reject them
+  // explicitly since the value is interpolated into a command string.
+  if (/[;&|`$(){}<>\s'"\\]/.test(url)) {
+    return { Valid: false, Reason: 'registry URL contains illegal characters' };
+  }
+  return { Valid: true };
+}
+
+/**
  * Runs package install from the monorepo root using the appropriate package manager.
  *
  * Registry configuration is resolved in this order:
@@ -199,6 +223,15 @@ export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryU
   // (https://registry.npmjs.org) is already the default, and passing it explicitly
   // overrides scoped registry + auth token settings in .npmrc, breaking private packages.
   const isCustomRegistry = registryUrl && !registryUrl.includes('registry.npmjs.org');
+
+  // Defense-in-depth: the registry URL is interpolated into the execSync command string, so
+  // validate it is a clean http(s) URL with no shell metacharacters before using it (B40).
+  if (isCustomRegistry) {
+    const validation = ValidateRegistryUrl(registryUrl!);
+    if (!validation.Valid) {
+      return { Success: false, Added: [], Removed: [], ErrorMessage: `Invalid custom registry URL: ${validation.Reason}` };
+    }
+  }
 
   try {
     let cmd: string;
@@ -292,11 +325,31 @@ function resolveVersionString(options: PackageManagerOptions): string {
 }
 
 /**
+ * Reads and parses a package.json, turning an opaque ENOENT / SyntaxError into a clear,
+ * path-qualified error (B39). The raw `JSON.parse(readFileSync(...))` calls this replaced
+ * surfaced "Unexpected token in JSON" with no indication of which file was malformed.
+ */
+function ParsePackageJson<T>(pkgJsonPath: string): T {
+  let content: string;
+  try {
+    content = readFileSync(pkgJsonPath, 'utf-8');
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not read package.json at ${pkgJsonPath}: ${message}`);
+  }
+  try {
+    return JSON.parse(content) as T;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid JSON in ${pkgJsonPath}: ${message}`);
+  }
+}
+
+/**
  * Adds dependencies to a specific package.json file.
  */
 function AddDependenciesToPackageJson(pkgJsonPath: string, packages: ManifestPackageEntry[], versionStr: string): void {
-  const content = readFileSync(pkgJsonPath, 'utf-8');
-  const pkgJson: { dependencies?: Record<string, string> } = JSON.parse(content);
+  const pkgJson = ParsePackageJson<{ dependencies?: Record<string, string> }>(pkgJsonPath);
 
   if (!pkgJson.dependencies) {
     pkgJson.dependencies = {};
@@ -313,8 +366,7 @@ function AddDependenciesToPackageJson(pkgJsonPath: string, packages: ManifestPac
  * Removes dependencies from a specific package.json file.
  */
 function RemoveDependenciesFromPackageJson(pkgJsonPath: string, packages: ManifestPackageEntry[]): void {
-  const content = readFileSync(pkgJsonPath, 'utf-8');
-  const pkgJson: { dependencies?: Record<string, string> } = JSON.parse(content);
+  const pkgJson = ParsePackageJson<{ dependencies?: Record<string, string> }>(pkgJsonPath);
 
   if (!pkgJson.dependencies) {
     return;
@@ -345,11 +397,10 @@ export function BumpPrefixedDependencies(repoRoot: string, prefix: string, bareV
   let updatedCount = 0;
 
   for (const pkgJsonPath of packageJsonFiles) {
-    const content = readFileSync(pkgJsonPath, 'utf-8');
-    const pkgJson: {
+    const pkgJson = ParsePackageJson<{
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
-    } = JSON.parse(content);
+    }>(pkgJsonPath);
 
     let fileChanged = false;
 

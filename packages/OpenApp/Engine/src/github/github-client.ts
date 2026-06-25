@@ -140,6 +140,36 @@ function OctokitStatus(error: unknown): number | undefined {
 }
 
 /**
+ * Error thrown when GitHub returns 403/429 (rate limit or access denied). A 403/429 must NOT
+ * look identical to "this repo has no releases/tags", which silently resolves the wrong version
+ * (or falls back to HEAD). Callers should surface this rather than treat it as empty (B36).
+ */
+export class GitHubAccessError extends Error {
+    public readonly Status: number;
+    constructor(status: number, message: string) {
+        super(message);
+        this.name = 'GitHubAccessError';
+        this.Status = status;
+    }
+}
+
+/**
+ * Rethrows an Octokit error as a {@link GitHubAccessError} when it is a 403/429 (rate limit or
+ * access denied), so the condition is surfaced instead of being swallowed into an empty list (B36).
+ * A no-op for every other error — the caller still decides what to do (e.g. return []).
+ */
+function ThrowIfRateLimitedOrForbidden(error: unknown, context: string): void {
+    const status = OctokitStatus(error);
+    if (status === 403 || status === 429) {
+        throw new GitHubAccessError(
+            status,
+            `GitHub API returned ${status} (rate limit or access denied) while ${context}. ` +
+            `This is NOT the same as "no versions found" — check your GitHub token and rate limit.`,
+        );
+    }
+}
+
+/**
  * Reads the UTF-8 content of a single repo FILE via Octokit. Handles GitHub's
  * 1MB inline-content cap by falling back to the Git Blob API for larger files.
  * Throws on directories or a non-file response.
@@ -271,7 +301,10 @@ export async function ListGitHubReleases(
             CreatedAt: r.created_at
         }));
     }
-    catch {
+    catch (error: unknown) {
+        // Surface a 403/429 (rate limit / access denied) instead of swallowing it into an empty
+        // list, which would look identical to "no releases" and resolve the wrong version (B36).
+        ThrowIfRateLimitedOrForbidden(error, 'listing releases');
         return [];
     }
 }
@@ -397,7 +430,10 @@ export async function ListGitHubTags(
             .filter((v): v is string => v != null)
             .sort((a, b) => compareSemver(b, a));
     }
-    catch {
+    catch (error: unknown) {
+        // Surface a 403/429 (rate limit / access denied) instead of swallowing it into an empty
+        // list, which would look identical to "no tags" and resolve the wrong version (B36).
+        ThrowIfRateLimitedOrForbidden(error, 'listing tags');
         return [];
     }
 }
