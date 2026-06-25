@@ -39,9 +39,16 @@ _Updated continuously. Newest status at the top of each phase section._
   `mj sync push` (4 created) and the live denied-RunView acceptance — **W2 is now fully DONE** (see
   `spikes/W2-acceptance.md`). No other work was blocked (everything else was offline). _Historical
   note kept for the trail._
-- **Auth0 / live MJAPI integration** — anticipated per mission; affects live acceptance curls
-  (W1/W3) and credential-gated vendor integration tests (T1–T3, M1). Mitigation: offline unit tests
-  + ready-to-run integration tests; documented, never faked.
+- **✅ CORRECTED — "Auth0-gated" was wrong for the widget.** I earlier assumed the live widget
+  acceptance needed Auth0; it does not. The widget guest flow is self-contained (magic-link RS256
+  self-signed JWTs), so I **booted MJAPI and verified W1 end-to-end live** on 2026-06-25 — see
+  `spikes/W1-W3-live-e2e.md`. The real prerequisites were just the `widget.enabled` flag and fixing
+  the `MJ_Connect` read-only DB login password (drifted after the container restart;
+  `ALTER LOGIN … WITH PASSWORD` as `sa`). **Live results:** mint → 200 + RS256 JWT; bad origin → 403;
+  bad/missing key → 403/400; `CurrentUser` with the guest token → the constrained Anonymous principal
+  (`anonymous@magic-link.local`); no token → 401. Auth0 IS still genuinely needed only for **normal
+  interactive MJ login** and for the **vendor integration tests** (T1–T3/M1 dial real carriers) — not
+  for the widget. _(temp config edits reverted; DB login fix persists.)_
 - `deep-research` skill unusable in sandbox (PreToolUse hook errors under `/bin/sh`:
   `set: Illegal option -o pipefail`). Worked around via a general-purpose agent.
 
@@ -71,9 +78,9 @@ _Updated continuously. Newest status at the top of each phase section._
 | Phase | Title | Status |
 |---|---|---|
 | W0 | Spike & guardrails | ✅ DONE |
-| W1 | Guest-session backend | ✅ DONE (live curl Auth0-gated) |
+| W1 | Guest-session backend | ✅ DONE + LIVE-VERIFIED (mint→validate→constrained principal) |
 | W2 | Widget-instance metadata | ✅ DONE (seed pushed + denied-RunView verified) |
-| W3 | Embeddable bundle (text MVP) | ✅ DONE (live e2e Auth0-gated) |
+| W3 | Embeddable bundle (text MVP) | ✅ DONE (mint backbone live-verified; full browser turn pending) |
 | W4 | Voice modality | ✅ DONE (live voice Auth0/mic-gated) |
 | W5 | Magic-link upgrade + host identity | ⚠ host-identity DONE / upgrade documented |
 | W6 | Hardening & embed polish | ⚠ much built in W1–W5 / remainder documented |
@@ -109,7 +116,9 @@ _Updated continuously. Newest status at the top of each phase section._
   The guest text-turn end-to-end is exercised in W3 acceptance (gated on Auth0/MJAPI boot).
 
 ### W1 — Guest-session backend
-**Status: DONE** ✅ (offline build + unit tests; live curl acceptance is Auth0-gated — see below)
+**Status: DONE + LIVE-VERIFIED** ✅ (offline build + 21 unit tests AND live end-to-end against
+running MJAPI — mint → auth-middleware validate → constrained Anonymous principal; bad origin/key
+rejected. See `spikes/W1-W3-live-e2e.md`. The earlier "Auth0-gated" note was wrong — corrected.)
 
 Implemented `packages/MJServer/src/widget/`, mirroring the magic-link architecture
 (pure core + thin service + public router):
