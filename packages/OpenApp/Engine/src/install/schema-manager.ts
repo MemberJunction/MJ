@@ -157,6 +157,14 @@ export async function DropAppSchema(
       // split — a mixed-case schema that fragmented (folded-lowercase tables + quoted-mixed
       // Skyway history) before canonicalization existed. Every schema whose name matches
       // case-insensitively is CASCADE-dropped, so teardown is always complete.
+      //
+      // Blast radius (the one irreversible operation in remove): the sweep CASCADE-drops EVERY
+      // schema equal to `schemaName` under `lower()`, not just the exact-case one. That is bounded
+      // on purpose — `schemaName` is the removed app's own (app-controlled) schema, it has already
+      // passed ValidateSchemaName + the caller's reserved-name guard, and the value is escaped
+      // before interpolation. So the only schemas in range are case-variants of the app's own
+      // schema (the legacy-split fragments). It will NOT touch an unrelated app's schema unless two
+      // apps adopted names differing only by case — which canonicalization now prevents at install.
       const matches = await provider.ExecuteSQL<{ schema_name: string }>(
         `SELECT schema_name FROM information_schema.schemata WHERE lower(schema_name) = lower('${EscapeSqlString(schemaName)}')`
       );
