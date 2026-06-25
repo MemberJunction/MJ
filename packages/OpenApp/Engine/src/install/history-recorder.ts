@@ -327,29 +327,50 @@ export async function FindInstalledApp(contextUser: UserInfo, appName: string, p
 }
 
 /**
- * Returns true when another (non-removed) Open App shares the given schema.
+ * Outcome of the co-tenant schema-share check used by RemoveApp. Distinguishes a
+ * definitively-shared schema from an *indeterminate* one (the lookup itself failed) — the
+ * caller must treat these differently: skip the drop for the former, ABORT the whole remove
+ * for the latter.
+ */
+export interface SchemaShareCheck {
+  /** Another non-removed app uses this schema → skip metadata + schema drop to protect it. */
+  Shared: boolean;
+  /**
+   * The share-check QUERY itself failed (indeterminate). The caller MUST abort the remove
+   * before stripping any files — silently skipping the schema drop and falling through would
+   * leave a half-removed app (files gone, schema + metadata intact, status `Removed`). B14/B20.
+   */
+  CheckFailed: boolean;
+  /** Error detail, present only when `CheckFailed`. */
+  ErrorMessage?: string;
+}
+
+/**
+ * Checks whether another (non-removed) Open App shares the given schema.
  *
  * RemoveApp drops the schema and wipes schema-keyed entity metadata by SchemaName;
  * without this guard, removing one app that ADOPTED a schema another app created
  * (manifest `schema.createIfNotExists`) would destroy the co-tenant's data and
  * metadata — see B14. On PostgreSQL the blast radius is larger (DROP SCHEMA CASCADE).
  *
- * Fail-safe: if the lookup itself fails, returns true (assume shared, do NOT drop) —
- * the conservative choice never risks co-tenant data loss on an indeterminate query.
+ * Returns a {@link SchemaShareCheck}, not a bare boolean, so the caller can tell a genuinely
+ * shared schema (`Shared:true, CheckFailed:false` → skip the drop, proceed) apart from an
+ * indeterminate lookup (`CheckFailed:true` → abort the remove). On query failure it reports
+ * `Shared:true` (never risk dropping a possibly-shared schema) AND `CheckFailed:true`.
  *
  * @param contextUser - The context user for the query
  * @param schemaName - The schema being considered for removal
  * @param excludeAppId - The app being removed (excluded from the share check)
  * @param provider - Optional metadata provider
  */
-export async function IsSchemaSharedByOtherApps(
+export async function CheckSchemaSharedByOtherApps(
   contextUser: UserInfo,
   schemaName: string,
   excludeAppId: string,
   provider?: IMetadataProvider,
-): Promise<boolean> {
+): Promise<SchemaShareCheck> {
   if (!schemaName) {
-    return false;
+    return { Shared: false, CheckFailed: false };
   }
   const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
   const result = await rv.RunView<InstalledAppInfo>(
@@ -364,9 +385,12 @@ export async function IsSchemaSharedByOtherApps(
     contextUser,
   );
   if (!result.Success) {
-    return true; // fail safe — never risk dropping a possibly-shared schema
+    // Indeterminate. Shared:true is the safe direction (never drop a possibly-shared schema);
+    // CheckFailed signals the caller to ABORT before stripping files rather than fall through
+    // to a half-removed state.
+    return { Shared: true, CheckFailed: true, ErrorMessage: result.ErrorMessage };
   }
-  return result.Results.length > 0;
+  return { Shared: result.Results.length > 0, CheckFailed: false };
 }
 
 /**
