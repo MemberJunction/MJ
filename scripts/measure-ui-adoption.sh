@@ -100,13 +100,61 @@ else
   datepicker_pct=0
 fi
 
-# ─── Empty-state (bespoke patterns — canonical doesn't exist yet) ───
+# ─── Empty-state (canonical SHIPPED — tracked as adoption %) ───
+# Canonical = the <mj-empty-state> component. Bespoke = placeholder elements whose
+# class contains "empty" / no-data / no-results / no-records / no-selection, EXCLUDING:
+#   - the canonical component itself (lines containing mj-empty-state)
+#   - flex/layout helpers kept on migrated empties (empty-fill, empty-hint, empty-state-fill, empty-state-features)
+#   - table cell markers (empty-row, empty-cell) and dropdown popup rows (dropdown-empty) — SKIP by classification rules
+#   - BEM state modifiers (--empty) — styling flags, not placeholder elements
+#   - commented-out code
+# NOTE: still grep-based and approximate (a bespoke-named WRAPPER around a migrated
+# <mj-empty-state> can over-count by one line); see classification pass for exact targets.
 empty_canonical=$(count_matches '<mj-empty-state')
-empty_class=$(count_matches 'class="empty-state"')
-empty_nodata=$(count_matches 'class="no-data"')
-empty_noresults=$(count_matches 'class="no-results"')
-empty_bespoke=$((empty_class + empty_nodata + empty_noresults))
+empty_bespoke=$({ grep -rE $EXCLUDE 'class="[^"]*(empty|no-data|no-results|no-records|no-selection)[^"]*"' "$ANGULAR_DIR" 2>/dev/null || true; } \
+  | grep -vE 'mj-empty-state|empty-fill|empty-hint|empty-state-fill|empty-state-features|empty-row|empty-cell|dropdown-empty|--empty' \
+  | grep -vE '<!--|//[[:space:]]|/\*' \
+  | wc -l | tr -d ' ')
 empty_total=$((empty_canonical + empty_bespoke))
+if [ "$empty_total" -gt 0 ]; then
+  empty_pct=$((empty_canonical * 100 / empty_total))
+else
+  empty_pct=0
+fi
+
+# ════════════════════════════════════════════════════════════════════════════
+# ⚠️  MARKER BLIND-SPOT WARNING — READ BEFORE TRUSTING THE "bespoke" COUNTS BELOW
+# ════════════════════════════════════════════════════════════════════════════
+# The empty-state baseline ("213") UNDER-scoped the real work by ~3x: its marker
+# matched only three literal class names (empty-state / no-data / no-results) and
+# was blind to bespoke-named variants (drill-down-empty, rt-empty, dashboard-empty,
+# ve-preview-empty, ...). The honest universe was ~619, not ~218. The empty-state
+# block ABOVE shows the fix: a BROAD class-token match MINUS documented helpers /
+# cell-markers / state-modifiers.
+#
+# EVERY "new component" marker BELOW still has that same narrow blind spot. Before
+# you start migrating any of them, WIDEN its bespoke marker the same way first, or
+# you'll declare victory against an under-counted baseline. Likely-missed variants:
+#
+#   Detail-panel      detail-panel  →  ALSO side-panel, drawer, slide-in,
+#                                       record-panel, info-panel, *-detail-panel
+#   Status-indicator  status-badge/dot/pill  →  ALSO state-badge, status-chip,
+#                                       status-label, *-status, badge--success/-error spans
+#   Collapsible       section-header  →  ALSO accordion*, collapse*, expandable*,
+#                                       panel-header(+toggle), native <details>
+#   Badge/pill        badge/pill/notification-badge  →  ALSO chip, tag, label,
+#                                       count-badge, *-badge variants
+#   Stat-tile         stat-*/kpi-card/metric-card  →  ALSO metric-tile, kpi-tile,
+#                                       summary-card, stat-card, big-number, *-metric
+#   Form-section      class="form-section" (EXACT!)  →  ALSO form-group, field-group,
+#                                       fieldset, form-row, *-section
+#   Confirm-dialog    window.confirm/.confirm(  →  ALSO bespoke modal confirms,
+#                                       <mj-dialog> used as confirm, ConfirmService callers
+#
+# Process: run a BROAD classification grep first (count + eyeball the class names),
+# THEN tighten by excluding helpers/cell-markers/modifiers. Don't trust a narrow
+# marker's optimistic %. (Lesson from the empty-state wave-1 redo.)
+# ════════════════════════════════════════════════════════════════════════════
 
 # ─── Detail panels (bespoke — canonical doesn't exist yet) ───
 drawer_canonical=$(count_matches '<mj-detail-drawer')
@@ -172,6 +220,7 @@ Components that already exist — tracking migration progress to 100%.
 | Checkbox (\`.mj-checkbox\`) | $checkbox_canonical | $checkbox_total | $checkbox_total | **${checkbox_pct}%** |
 | Numeric (\`<mj-numeric-input>\`) | $numeric_canonical | $numeric_bare | $numeric_total | **${numeric_pct}%** |
 | Datepicker (\`<mj-datepicker>\`) | $datepicker_canonical | $datepicker_bare | $datepicker_total | **${datepicker_pct}%** |
+| Empty-state (\`<mj-empty-state>\`) | $empty_canonical | $empty_bespoke | $empty_total | **${empty_pct}%** |
 
 ## New components (bespoke pattern counts)
 
@@ -179,7 +228,6 @@ Components not yet built — tracking how many bespoke patterns need to be repla
 
 | Pattern | Canonical | Bespoke | Files/Instances |
 |---------|-----------|---------|-----------------|
-| Empty-state | $empty_canonical | $empty_bespoke | ${empty_bespoke} inline patterns |
 | Detail-panel | $drawer_canonical | $drawer_bespoke | ${drawer_bespoke} files with .detail-panel CSS |
 | Status-indicator | $status_canonical | $status_bespoke | ${status_bespoke} files (.status-badge + .status-dot + .status-pill) |
 | Collapsible-section | $collapsible_canonical | $collapsible_bespoke | ${collapsible_bespoke} files with .section-header CSS |
