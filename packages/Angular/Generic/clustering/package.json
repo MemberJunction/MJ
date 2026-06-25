@@ -41,6 +41,7 @@
     "@memberjunction/ng-base-types": "5.42.0",
     "@memberjunction/ng-entity-card": "5.42.0",
     "@memberjunction/ng-entity-viewer": "5.42.0",
+    "@memberjunction/ng-ui-components": "5.42.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1",
     "umap-js": "^1.4.0"
