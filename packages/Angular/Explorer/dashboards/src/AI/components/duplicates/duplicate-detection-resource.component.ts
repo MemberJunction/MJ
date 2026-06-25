@@ -410,11 +410,20 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 EntityName: 'MJ: Duplicate Run Details',
                 ExtraFilter: "MatchStatus = 'Complete'",
                 OrderBy: '__mj_CreatedAt DESC',
+                // Details and matches MUST load as a consistent set — buildGroups() joins them by
+                // DuplicateRunDetailID. With both entities' UserViewMaxRows = 1000, details truncate
+                // to the newest 1000 (by date) while matches truncate to the top 1000 (by probability);
+                // those two sets diverge once total rows exceed 1000, leaving the newest details with
+                // NO loaded matches → every group is dropped → empty board. Load the full set so the
+                // join is complete. (Scaling note: this loads all review rows; a future run-scoped /
+                // paginated board should replace the unbounded load for large production volumes.)
+                IgnoreMaxRows: true,
                 ResultType: 'entity_object'
             },
             {
                 EntityName: 'MJ: Duplicate Run Detail Matches',
                 OrderBy: 'MatchProbability DESC',
+                IgnoreMaxRows: true,
                 ResultType: 'entity_object'
             }
         ]);
@@ -963,7 +972,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const recordName = this.resolveRecordName(metadata, entityName, detail.RecordID);
 
             // Build top match summaries from match metadata
-            const topMatchSummaries = this.buildTopMatchSummaries(detailMatches, 3);
+            const topMatchSummaries = this.buildTopMatchSummaries(detailMatches, 3, entityName);
 
             this.AllGroups.push({
                 DetailId: detail.ID,
@@ -1456,8 +1465,13 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
     }
 
-    /** Get the list of cherry-picked field overrides (fields picked from non-survivor columns) */
-    public GetCherryPickedFields(): Array<{ FieldName: string; DisplayName: string; Value: string; SourceName: string }> {
+    /**
+     * Get the list of cherry-picked field overrides (fields picked from non-survivor columns).
+     * `Value` is the DISPLAY string (with an `(empty)` sentinel for null) for the confirm panel;
+     * `RawValue` is the actual value to write at merge time — never the sentinel, so the merge
+     * never corrupts a field with the literal text "(empty)".
+     */
+    public GetCherryPickedFields(): Array<{ FieldName: string; DisplayName: string; Value: string; RawValue: string | null; SourceName: string }> {
         return this.ComparisonFields
             .filter(f => f.SelectedColumnIndex !== this.SurvivorColumnIndex)
             .map(f => {
@@ -1468,6 +1482,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     FieldName: f.FieldName,
                     DisplayName: f.DisplayName,
                     Value: value ?? '(empty)',
+                    RawValue: value ?? null,
                     SourceName: this.GetColumnName(f.SelectedColumnIndex)
                 };
             });
@@ -1520,7 +1535,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             if (cherryPicked.length > 0) {
                 request.FieldMap = cherryPicked.map(f => ({
                     FieldName: f.FieldName,
-                    Value: f.Value
+                    Value: f.RawValue   // the real value, NOT the '(empty)' display sentinel
                 }));
             }
 
@@ -1801,7 +1816,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Build top N match summaries with parsed names and scores */
     private buildTopMatchSummaries(
         matches: MJDuplicateRunDetailMatchEntity[],
-        limit: number
+        limit: number,
+        entityName: string
     ): Array<{ Name: string; Score: number }> {
         return [...matches]
             .sort((a, b) => b.MatchProbability - a.MatchProbability)
@@ -1809,7 +1825,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             .map(m => {
                 const meta = this.parseRecordMetadata(m.RecordMetadata);
                 return {
-                    Name: this.resolveRecordName(meta, this.SelectedEntityFilter || 'Unknown', m.MatchRecordID ?? ''),
+                    // Resolve names against the group's actual entity, not the (possibly empty)
+                    // board-level SelectedEntityFilter — otherwise name resolution fails and every
+                    // summary falls back to a truncated GUID even when metadata had a real name.
+                    Name: this.resolveRecordName(meta, entityName, m.MatchRecordID ?? ''),
                     Score: m.MatchProbability,
                 };
             });
