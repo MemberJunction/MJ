@@ -191,6 +191,7 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 12px;
+  width: 100%;
 }
 
 .expanded-empty i {
@@ -425,6 +426,7 @@
   padding: 24px;
   text-align: center;
   color: var(--mj-text-disabled);
+  width: 100%;
 }
 
 .detail-empty i {

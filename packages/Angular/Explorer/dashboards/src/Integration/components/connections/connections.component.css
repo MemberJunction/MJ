@@ -2171,6 +2171,7 @@ mj-empty-state {
   padding: 64px 24px;
   text-align: center;
   color: var(--mj-text-disabled);
+  width: 100%;
 }
 
 .detail-empty i {
