@@ -39,14 +39,21 @@
 6. Commit this file.
 
 ### 0.4 Current Status Snapshot
-> **Status: MJ-CORE TRACK A STARTING — Praxis app work deferred to `bizapps-praxis`.** Decisions locked (name =
-> Praxis; `BasedOnID` derivation; IsA reserved for additive subtypes; v1 = 1 agent + 1 human; audio → MJStorage;
-> RAG/tools/magic-links reuse existing MJ). Net-new MJ-core builds = **S1 (Media channel)** + **S1B (session
-> capture)**; S1B verified narrow (see §0.5): per-turn `ConversationDetail` rows + `__mj_CreatedAt` + `UserID`
-> already exist, so S1B = turn-lifecycle start/end + populate `UserID` + **audio→MJStorage (per-agent provider)**.
-> **Next action (this MJ branch): the S0B.T2 / S1B migration** — additive MJ-core schema (AIAgentSession recording
-> fields + ConversationDetail turn-end column; MediaType) for Amith to review + run + CodeGen, then build. Praxis
-> app (S0+) happens in `bizapps-praxis` (Phase 0). Decision gates §1.7 gate only their sub-phases.
+> **Status: MJ-CORE TRACK A — S0B.T2 schema + S1B capture + S1 Media channel IMPLEMENTED & committed.** Decisions
+> locked (name = Praxis; `BasedOnID` derivation; IsA reserved for additive subtypes; v1 = 1 agent + 1 human; audio
+> → MJStorage; RAG/tools/magic-links reuse existing MJ). **Done this branch (commits b424b85→):** the additive
+> schema migration + CodeGen; **S1B** — `ConversationDetail` create-on-start/update-on-complete turn lifecycle
+> (`In-Progress`→`Complete`+`TurnEndedAt`, speaker `UserID`, media-relative `UtteranceStart/EndMs`); the zero-dep
+> `RealtimeRecordingController` (PCM16 mix→WAV, 20 tests); runner recording attach + finalize→MJStorage
+> (`RecordingStorageProviderID ?? AttachmentStorageProviderID`, consent-gated, fail-closed) stamping
+> `AIAgentSession.RecordingFileID/Media/StartedAt`; **S1** — `MediaChannelServer` + `RealtimeMediaChannel` client +
+> tabbed media surface + `RealtimeEvidencePlaybackComponent` (time-aligned transcript+audio, click-to-seek) + the
+> channel metadata row. All four touched packages build green; ai-agents realtime/recording = 78 tests pass,
+> ng-conversations 616 pass. **Scope note:** server-side audio capture targets the **server-bridged** topology
+> (where audio crosses the server session); **client-direct browser capture is a documented follow-up** (browser
+> records mic+remote audio and uploads — schema/storage/playback all already support it). UX mockup at
+> `plans/praxis/ux-mockup.html` (open in a browser). **Next:** live storage verification against Box + the guide;
+> then the bizapps-praxis app (Phase 0). Decision gates §1.7 gate only their sub-phases.
 
 ### 0.5 Progress Log
 - `@2026-06-25` Plan authored. All tasks `[ ]`.
@@ -63,6 +70,16 @@
   (new **§2.6** inventory + new sub-phase **S0B**); per-feature "Migration:" tasks (S2.T1/S3.T1/S4.T2/S12.T1)
   reduced to verify+CodeGen. **Cutover = hard per-vertical** (§1.3, S7.T5, S10.T6). Existing-data port is a
   **secondary one-time SQL script** (new **S-PORT**; default subset, descoped if fresh-start). Graph + R8 added.
+- `@2026-06-25` **S0B.T2 + S1B + S1 IMPLEMENTED (overnight build).** Migration ran + CodeGen'd (commit
+  `b424b85`). Then, server-side: `RealtimeRecordingController` (zero-dep PCM16→WAV mixer, 20 tests); the
+  `persistRealtimeTranscript` create-on-start/update-on-complete lifecycle with `UserID` + utterance offsets
+  (5 lifecycle tests); `RealtimeSessionRunner` recording attach (taps `OnOutput`, wraps `SendInput`) + finalize
+  on close; base-agent recording resolution (runtime>agent>off, consent-gated, fail-closed) + MJStorage upload +
+  `FileEntityRecordLink` + session stamping. Client side: `MediaChannelServer`, `RealtimeMediaChannel` + tabbed
+  media surface, `RealtimeEvidencePlaybackComponent`, channel metadata row. Commits `2321f4f`, lifecycle tests
+  follow-up. **Verified gap turned out narrower still:** the runner is the bridged path; audio only crosses the
+  server session when a bridge feeds it — so **client-direct browser capture is a follow-up** (S1B addendum).
+  Builds green across core-entities/ai-agents/ng-conversations/MJServer.
 - `@2026-06-25` **S1B re-scoped after code/ORM verification.** Read the realtime write path
   (`persistRealtimeTranscript`, `packages/AI/Agents/src/base-agent.ts`) + the ORM source of truth
   (`MJConversationDetailEntity` in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`). **Confirmed:**
