@@ -324,15 +324,6 @@
   flex-shrink: 0;
 }
 
-.app-actions .mj-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: var(--mj-radius-md);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
 
 .app-actions .mj-btn-ghost {
   background: transparent;
@@ -571,11 +562,6 @@
     gap: 0.5rem;
   }
 
-  .dialog-footer .mj-btn {
-    padding: 0.5rem 0.875rem;
-    font-size: 0.8125rem;
-    min-height: 38px;
-  }
 }
 
 /* Accessibility - Reduced Motion */

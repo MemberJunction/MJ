@@ -716,87 +716,10 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Button System
+   Buttons — the action buttons use the mjButton directive (variant/size inputs),
+   which owns their appearance app-wide. No component-scoped .mj-btn overrides
+   (they fork the standard styling). Layout-only tweaks live with their container.
    ----------------------------------------------------------------------------- */
-.mj-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  border: none;
-  border-radius: 9999px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  white-space: nowrap;
-  min-height: 44px;
-}
-
-.mj-btn:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
-}
-
-.mj-btn:focus-visible {
-  outline: 2px solid var(--mj-brand-primary);
-  outline-offset: 2px;
-}
-
-.mj-btn-primary {
-  background: var(--mj-brand-primary);
-  color: var(--mj-bg-surface);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-.mj-btn-primary:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
-}
-
-.mj-btn-primary:active:not(:disabled) {
-  background: var(--mj-brand-primary);
-  transform: scale(0.98);
-}
-
-.mj-btn-secondary {
-  background: var(--mj-bg-surface);
-  color: var(--mj-brand-primary);
-  border: 1px solid var(--mj-border-strong);
-}
-
-.mj-btn-secondary:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-bg-surface);
-  border-color: var(--mj-brand-primary);
-}
-
-.mj-btn-secondary:active:not(:disabled) {
-  background: var(--mj-brand-primary);
-  border-color: var(--mj-brand-primary);
-}
-
-.mj-btn-ghost {
-  background: transparent;
-  color: var(--mj-text-muted);
-  padding: 0.5rem;
-}
-
-.mj-btn-ghost:hover:not(:disabled) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-bg-surface);
-}
-
-.mj-btn-ghost:active:not(:disabled) {
-  background: var(--mj-brand-primary);
-}
-
-.mj-btn-sm {
-  padding: 0.5rem 0.875rem;
-  font-size: 0.8125rem;
-  min-height: 36px;
-}
 
 /* -----------------------------------------------------------------------------
    Accessibility: Focus Indicators
@@ -863,7 +786,7 @@ input:focus-visible {
     flex-direction: column;
   }
 
-  .action-buttons .mj-btn {
+  .action-buttons button {
     width: 100%;
     justify-content: center;
   }
