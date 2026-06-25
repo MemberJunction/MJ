@@ -541,10 +541,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     } else if (content.type === 'user' && users) {
       const user = users.find(u => UUIDsEqual(u.ID, content.id));
       if (user) name = user.Name;
+    } else if (content.type === 'entity') {
+      const entity = this.mentionAutocomplete.getAvailableEntities().find(e => UUIDsEqual(e.ID, content.id));
+      name = entity ? entity.DisplayNameOrName : name;
+      iconClass = this.normalizeIconClass(entity?.Icon || 'fa-solid fa-table');
+    } else if (content.type === 'query') {
+      const query = this.mentionAutocomplete.getAvailableQueries().find(q => UUIDsEqual(q.ID, content.id));
+      if (query) name = query.Name;
+      iconClass = this.normalizeIconClass(this.mentionAutocomplete.getQueriesEntityIcon());
     }
 
     const escapedName = this.escapeHtml(name);
-    const typeClass = content.type === 'agent' ? 'agent' : 'user';
+    const typeClass =
+      content.type === 'agent' || content.type === 'entity' || content.type === 'query' ? content.type : 'user';
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName
@@ -559,6 +568,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     } else {
       return `<span class="mention-badge ${typeClass}">${escapedName}${presetIndicator}</span>`;
     }
+  }
+
+  /**
+   * Normalize a Font Awesome icon class to include a style family (defaults to fa-solid)
+   * so stored values that omit one (e.g. 'fa-table') still render.
+   */
+  private normalizeIconClass(iconClass: string): string {
+    if (!iconClass) return 'fa-solid fa-table';
+    if (iconClass.includes('fa-') && !/\b(fa-solid|fa-regular|fa-light|fa-brands)\b/.test(iconClass)) {
+      return `fa-solid ${iconClass}`;
+    }
+    return iconClass;
   }
 
   private renderFormHTML(content: { title?: string; fields?: Array<{ name?: string; value: unknown; label?: string; type?: string; displayValue?: string }> }): string {
