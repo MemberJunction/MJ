@@ -670,6 +670,20 @@ Look for packages that depend on each other:
 - Check with ESLint: `npx eslint packages/path/to/file.ts`
 - Format with Prettier: `npx prettier --write packages/path/to/file.ts`
 
+## UI Consistency Checks (Local — Mirror of CI Gates)
+
+The two CI gates that run on PRs targeting `next` are also available as local npm scripts. Run them before pushing to catch violations early — these mirror the CI exactly, so a clean local run means a green CI:
+
+- `npm run check:ui` — both gates against changed CSS/SCSS vs `origin/next` (matches PR behavior)
+- `npm run check:ui-tokens` — just the hardcoded-color enforcement gate (hex, rgb/rgba, hsl/hsla — except shadow neutrals `rgba(0,0,0,X)` / `rgba(255,255,255,X)`)
+- `npm run check:ui-buttons` — just the `.mj-btn` override prevention gate
+- `npm run check:ui:all` — audit the *whole* `packages/Angular/` tree (used during cleanup work; reports pre-existing violations CI doesn't gate on)
+- `npm run check:ui:adoption` — re-run the measurement script (writes to `plans/adoption-metrics.md`)
+
+The local check requires your changes to be committed (it diffs against `origin/next`). Workflow: stage → commit → `npm run check:ui` → push.
+
+The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.github/scripts/check-mj-btn-override.sh`. Both also accept `--file <path>` for single-file checks.
+
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
 - Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
