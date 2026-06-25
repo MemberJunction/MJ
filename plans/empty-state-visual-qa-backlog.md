@@ -15,6 +15,21 @@ Legend: ✅ visually tested · 🔲 build-verified only · 🔎 reachability hin
 
 ---
 
+## 🖼️ Variant gallery — covers the shared rendering of ALL empties at once
+
+**`empty-state-gallery.html`** (+ `-light.png` / `-dark.png`) renders `<mj-empty-state>` in
+**every** Variant × Size × icon × CTA combination, built from the component's *real* template,
+styles, design tokens, and icon-resolution logic (1:1 copies from
+`empty-state.component.ts` + `_tokens.scss` + `button.scss`). Open the HTML and toggle
+`data-theme` on `<html>` for dark.
+
+Why this matters for the backlog below: **every** migrated empty — reachable or build-verified —
+is this same component with different inputs. The gallery visually validates the rendering all of
+them share (icon tones per variant, size scaling, no-icon suppression, all 4 CTA button variants,
+light/dark token adaptation). So the residual risk on the 🔲 items below is **only the per-instance
+bespoke-class CSS interaction** (centering/width in its specific host) — the component itself is
+now visually proven across the full matrix.
+
 ## ✅ Visually tested (light + dark) — `plans/empty-state-screenshots/wave2-dashtail/`
 
 | Instance | Component | Surface |
