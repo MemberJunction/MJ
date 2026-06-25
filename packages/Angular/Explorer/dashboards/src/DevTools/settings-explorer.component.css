@@ -258,6 +258,7 @@
 }
 
 .se-empty {
+    width: 100%;
     padding: 60px 40px;
     text-align: center;
     color: var(--mj-text-muted);
