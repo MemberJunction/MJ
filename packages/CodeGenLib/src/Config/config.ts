@@ -632,6 +632,17 @@ const configInfoSchema = z.object({
  */
 const _DEFAULT_DB_PLATFORM = resolveDbPlatformFromEnv() ?? 'sqlserver';
 const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
+
+/**
+ * Tracks which `<pgEnv>:<ssEnv>` precedence pairs have already emitted a
+ * `console.warn`. Both {@link _resolveConnEnv} (runs at module load) and
+ * {@link applyPlatformDependentEnvVars} (runs after the user config merge,
+ * plus again on every `initializeConfig()` call) can detect the same env-var
+ * divergence and would otherwise warn 2–3 times for one config issue. The
+ * set lives at module scope so it survives across both helpers' invocations
+ * within the same process.
+ */
+const _warnedEnvPrecedencePairs = new Set<string>();
 /**
  * Resolve a connection field from PG_*-prefixed env vars when `dbPlatform`
  * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
@@ -647,7 +658,15 @@ const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
 function _resolveConnEnv(pgName: string, ssName: string, fallback: string): string {
   const pgVal = _IS_PG_DEFAULT ? process.env[pgName] : undefined;
   const ssVal = process.env[ssName];
-  if (_IS_PG_DEFAULT && pgVal !== undefined && ssVal !== undefined && pgVal !== ssVal) {
+  const pairKey = `${pgName}:${ssName}`;
+  if (
+    _IS_PG_DEFAULT &&
+    pgVal !== undefined &&
+    ssVal !== undefined &&
+    pgVal !== ssVal &&
+    !_warnedEnvPrecedencePairs.has(pairKey)
+  ) {
+    _warnedEnvPrecedencePairs.add(pairKey);
     // eslint-disable-next-line no-console
     console.warn(
       `[codegen-lib] ${pgName}=${pgVal} takes precedence over ${ssName}=${ssVal} on a PostgreSQL-default config. ` +
@@ -694,7 +713,9 @@ function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<C
     if (pgVal === undefined) continue;
     if (userValue !== undefined) continue;
     const ssVal = process.env[ssEnv];
-    if (ssVal !== undefined && ssVal !== pgVal) {
+    const pairKey = `${pgEnv}:${ssEnv}`;
+    if (ssVal !== undefined && ssVal !== pgVal && !_warnedEnvPrecedencePairs.has(pairKey)) {
+      _warnedEnvPrecedencePairs.add(pairKey);
       // eslint-disable-next-line no-console
       console.warn(
         `[codegen-lib] ${pgEnv}=${pgVal} takes precedence over ${ssEnv}=${ssVal} on a PostgreSQL config. ` +
