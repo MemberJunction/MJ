@@ -15,6 +15,10 @@
     height: calc(100vh - 20px);
 }
 
+.list-detail-grid-empty {
+    flex: 1;
+}
+
 .list-detail-grid-column-header {
     background-color: var(--mj-bg-surface);
     font-size: var(--mj-text-xl);
