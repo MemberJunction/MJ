@@ -22,14 +22,26 @@ dropdown "no options" row, code comment, dead prototype, or excluded-by-design s
 - Metrics-honesty fix + rule 6c doc: `58fb5d7d30`, `81eec26b3a`
 NOTE during migration, 3 batch-aa "MIGRATE" flags were re-classified to SKIP on closer read: FormBuilder L637 (loading spinner), L628/L630 (dropdown picker rows). Re-adjudicate each candidate in context — the agent pass over-flagged a few.
 
-## ⏳ REMAINING — pick up here (everything below NOT yet done)
-Dashboards tail: Home (2), DataExplorer/navigation-panel (2), DatabaseDesigner/entity-review-panel (1),
-ComponentStudio (requirements-editor / form-builder-canvas / form-builder-tab, 3), APIKeys (api-applications + api-usage, 2),
-Actions/execution-monitoring (1), VersionHistory/diff-resource (1), KnowledgeHub/config (3) + visualize/record-drilldown (1) + tag-cloud (1),
-AI/analytics/realtime/realtime-transcripts (3), AI/vectors/vector-management-resource (1), explorer-core/single-dashboard (1).
-PLUS the entire **Generic packages** section below (archive-manager, base-forms, conversations/pinned-messages, entity-action-ux,
-flow-editor agent-properties/agent-step-list, livekit-room, record-changes, record-process-studio, record-tags,
-resource-permissions, scheduling, search, trees, versions, whiteboard).
+## ✅ DONE — wave-2 session 2 (2026-06-25): the entire remaining tail is migrated
+Three commits on `empty-state-component` finished everything that was "⏳ REMAINING":
+- **§1 dashboards tail + explorer-core** `790c74c8e6` — Home (sidebar), DataExplorer/navigation-panel,
+  DatabaseDesigner/entity-review-panel (+module wiring), ComponentStudio (requirements-editor /
+  form-builder-canvas / form-builder-tab), APIKeys (api-applications ×2 + api-usage),
+  Actions/execution-monitoring, VersionHistory/diff-resource, KnowledgeHub/config (3) + record-drilldown +
+  tag-cloud (no-results+CTA), AI/realtime-transcripts (3), Integration/run-history-panel, explorer-core/single-dashboard.
+  Force-state screenshots in `empty-state-screenshots/wave2-dashtail/`.
+- **§2 generic already-wired** `daa8f80e97` — conversations, flow-editor (agent-properties + agent-step-list),
+  record-changes (labels + restore-preview), record-tags, resource-permissions (×2), search/search-filter,
+  versions (label-create ×2 + record-micro-view). build-verified.
+- **§3 generic needing wiring/deps** `36f030c7cf` — archive-manager (7), base-forms/record-form-container,
+  entity-action-ux (field-rules-builder + record-process-runner success-variant), record-process-studio,
+  scheduling, trees, whiteboard, livekit-room (3). Added `@memberjunction/ng-ui-components` dep to the 4 lacking
+  it (archive-manager/livekit-room/trees/whiteboard); cycle-free (ui-components has zero MJ deps). build-verified.
+
+**Re-adjudicated to SKIP** (agent over-flags, confirmed in context): AI/vectors entity-picker (dropdown row),
+search-suggest ×2 (typeahead popup), KnowledgeHub/config search-analytics-empty ×3 (inline card `<p>`),
+record-changes rc-empty-state-hint (projected into an existing empty-state), ComponentStudio form-builder-canvas
+section-drop-empty (drag-drop hint). Branch still UNPUSHED.
 
 ## CONVENTIONS (read before starting)
 - `plans/empty-state-migration.md` — full rulebook incl. **rule 6c** (proactively center kept-bespoke-class hosts) + the flex/grid-parent gotcha.
