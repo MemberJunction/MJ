@@ -225,6 +225,42 @@ export class SQLServerDialect extends SQLDialect {
     get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._FixedWidthStringTypeNames; }
     /** SQL Server index keys are limited to 900 bytes → 450 NVARCHAR (2-byte) chars. */
     override get MaxKeyStringLength(): number { return 450; }
+
+    /** SQL Server enforces a hard ~8060-byte in-row row size; only variable-length values go off-row. */
+    override get MaxInRowSizeBytes(): number { return 8060; }
+
+    /** SQL Server's hard per-table column cap. */
+    override get MaxColumnCount(): number { return 1024; }
+
+    /**
+     * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
+     * (incl. `(N)VARCHAR(MAX)`) contribute only a 24-byte in-row pointer; fixed-length types
+     * contribute their full size. Unknown types are treated as off-row pointers (conservative).
+     */
+    override EstimateInRowBytes(rawSqlType: string): number {
+        const t = (rawSqlType ?? '').toUpperCase().trim();
+        // Off-row-capable variable-length + LOB types → 24-byte in-row pointer floor.
+        if (/^(N?VARCHAR|VARBINARY)\s*\(/.test(t)) return 24; // covers (N)VARCHAR(MAX) too
+        if (/^(TEXT|NTEXT|IMAGE|XML|SQL_VARIANT)\b/.test(t)) return 24;
+        // Fixed-length character/binary types stay fully in-row.
+        const nchar = t.match(/^NCHAR\s*\(\s*(\d+)\s*\)/);
+        if (nchar) return parseInt(nchar[1], 10) * 2;
+        const chr = t.match(/^(?:CHAR|BINARY)\s*\(\s*(\d+)\s*\)/);
+        if (chr) return parseInt(chr[1], 10);
+        if (/^UNIQUEIDENTIFIER\b/.test(t)) return 16;
+        if (/^BIGINT\b/.test(t)) return 8;
+        if (/^SMALLINT\b/.test(t)) return 2;
+        if (/^TINYINT\b/.test(t)) return 1;
+        if (/^INT\b/.test(t)) return 4;
+        if (/^BIT\b/.test(t)) return 1;
+        if (/^(DECIMAL|NUMERIC|MONEY|SMALLMONEY)\b/.test(t)) return 17;
+        if (/^(FLOAT|REAL)\b/.test(t)) return 8;
+        if (/^DATETIMEOFFSET\b/.test(t)) return 10;
+        if (/^(DATETIME2|DATETIME|SMALLDATETIME)\b/.test(t)) return 8;
+        if (/^DATE\b/.test(t)) return 3;
+        if (/^TIME\b/.test(t)) return 5;
+        return 24; // unknown → treat as off-row variable-length pointer (conservative)
+    }
     get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
     get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
     get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }
