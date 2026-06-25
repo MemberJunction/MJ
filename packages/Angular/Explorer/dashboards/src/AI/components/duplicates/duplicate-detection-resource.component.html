@@ -252,10 +252,8 @@
                         </div>
                     }
                     @if (PendingGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-check-circle"></i>
-                            <span>No pending items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check"
+                            Title="No pending items" />
                     }
                 </div>
             </div>
@@ -319,10 +317,8 @@
                         </div>
                     }
                     @if (ApprovedGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No approved items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-inbox"
+                            Title="No approved items" />
                     }
                 </div>
             </div>
@@ -386,10 +382,8 @@
                         </div>
                     }
                     @if (RejectedGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No rejected items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-inbox"
+                            Title="No rejected items" />
                     }
                 </div>
             </div>
