@@ -24,6 +24,7 @@ import {
     AIBridgeEngine,
     IHostInstanceIdentity,
     StartBridgeSessionParams,
+    TurnModeratorContext,
 } from '../ai-bridge-engine';
 import { LoopbackBridge, LOOPBACK_BRIDGE_DRIVER_CLASS } from '../loopback-bridge';
 
@@ -73,6 +74,16 @@ class MockRealtimeSession implements IRealtimeSession {
     }
     public RequestSpokenUpdate(instructions: string): void {
         this.SpokenUpdates.push(instructions);
+    }
+
+    /** Capability flag + capture for the live-reconfigure path (§6). */
+    public CanReconfigure = true;
+    public readonly ReconfigureCalls: Array<{ DisableAutoResponse?: boolean }> = [];
+    public get Capabilities(): { CanReconfigureTurnMode: boolean } {
+        return { CanReconfigureTurnMode: this.CanReconfigure };
+    }
+    public Reconfigure(params: { DisableAutoResponse?: boolean }): void {
+        this.ReconfigureCalls.push(params);
     }
 
     /** Drive an output frame (what the agent says) through the wired handler. */
@@ -414,6 +425,97 @@ describe('AIBridgeEngine — turn-taking integration (Passive)', () => {
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
+
+    it('floor control: a meeting agent stays silent while another agent holds the room floor, speaks once it is released', async () => {
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const active = await engine().StartBridgeSession(
+            baseParams(session, provider, {
+                TurnMode: 'Passive',
+                DisableAutoResponse: true,
+                TurnMatcher: { IsAddressed: () => true }, // always addressed → the gate is purely the floor
+            }),
+        );
+        const roomKey = active.RoomKey!;
+        const coord = engine().RoomCoordinator;
+
+        // Another agent in the SAME room takes the floor first.
+        coord.RegisterRoomParticipant(roomKey, 'other-agent');
+        expect(coord.TakeFloor(roomKey, 'other-agent').Granted).toBe(true);
+
+        // Our agent is addressed but the floor is held → it must stay silent.
+        session.EmitTranscript({ Role: 'user', Text: 'anyone?', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(0);
+
+        // The holder finishes → floor free → our agent speaks on the next addressed turn.
+        coord.ReleaseFloor(roomKey, 'other-agent');
+        session.EmitTranscript({ Role: 'user', Text: 'still there?', IsFinal: true });
+        expect(session.SpokenUpdates.length).toBe(1);
+        // It now holds the floor; its own final transcript releases it for the next speaker.
+        expect(coord.IsFloorHolder(roomKey, active.AgentSessionID)).toBe(true);
+        session.EmitTranscript({ Role: 'assistant', Text: 'here I am', IsFinal: true });
+        expect(coord.IsFloorHolder(roomKey, active.AgentSessionID)).toBe(false);
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Retroactive re-gating (capability-gated).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — ReconfigureSessionToMeeting', () => {
+    it('re-gates a CAPABLE session to meeting mode (idempotently); leaves an INCAPABLE one conversational', async () => {
+        const { provider } = makeProvider(() => makeBridgeRow());
+        const always = { IsAddressed: () => true };
+
+        // Capable provider (OpenAI-like) → re-gated: auto-response off + Reconfigure pushed once (idempotent).
+        const capable = new MockRealtimeSession(); // CanReconfigure defaults true
+        const a1 = await engine().StartBridgeSession(baseParams(capable, provider)); // starts 1:1
+        expect(a1.DisableAutoResponse).toBe(false);
+        expect(engine().ReconfigureSessionToMeeting(a1.SessionBridgeID, always)).toBe(true);
+        expect(a1.DisableAutoResponse).toBe(true);
+        expect(capable.ReconfigureCalls).toEqual([{ DisableAutoResponse: true }]);
+        // Idempotent — already meeting → true, no second reconfigure.
+        expect(engine().ReconfigureSessionToMeeting(a1.SessionBridgeID, always)).toBe(true);
+        expect(capable.ReconfigureCalls.length).toBe(1);
+        await engine().StopBridgeSession(a1.SessionBridgeID, 'Explicit');
+
+        // Incapable provider (Gemini-like) → left conversational, NO dead Reconfigure call.
+        const incapable = new MockRealtimeSession();
+        incapable.CanReconfigure = false;
+        const a2 = await engine().StartBridgeSession(baseParams(incapable, provider));
+        expect(engine().ReconfigureSessionToMeeting(a2.SessionBridgeID, always)).toBe(false);
+        expect(a2.DisableAutoResponse).toBe(false);
+        expect(incapable.ReconfigureCalls.length).toBe(0);
+        await engine().StopBridgeSession(a2.SessionBridgeID, 'Explicit');
+    });
+
+    it('returns false for an unknown bridge', () => {
+        expect(engine().ReconfigureSessionToMeeting('nope', { IsAddressed: () => true })).toBe(false);
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Stale-session sweep (same-process janitor).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — SweepStaleSessions', () => {
+    it('reaps idle / over-duration sessions but leaves fresh ones running', async () => {
+        const session = new MockRealtimeSession();
+        const bridgeRow = makeBridgeRow({ Status: 'Connected', AgentSessionID: 'sweep-1' });
+        const { provider } = makeProvider(() => bridgeRow);
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+
+        // Fresh session → not reaped.
+        expect(await engine().SweepStaleSessions(active.ConnectedAtMs + 1000)).toBe(0);
+        expect(bridgeRow.Status).toBe('Connected');
+
+        // Idle past the TTL (last activity long ago) → reaped via the normal stop → row Disconnected.
+        const future = active.LastActivityMs + 11 * 60 * 1000;
+        expect(await engine().SweepStaleSessions(future)).toBe(1);
+        expect(bridgeRow.Status).toBe('Disconnected');
+    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -453,6 +555,42 @@ describe('AIBridgeEngine — participant tracking', () => {
         expect(alice?.DisplayName).toBe('Alice');
         expect(alice?.Role).toBe('Host');
         expect(alice?.Save).toHaveBeenCalled();
+
+        await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+    });
+
+    it('persists IsAgent ONLY for this bridge’s own bot — other agents in the room are remote participants (one-bot-per-bridge invariant)', async () => {
+        const session = new MockRealtimeSession();
+        const bridgeRow = makeBridgeRow();
+        const participantRows: FakeEntity[] = [];
+        const { provider } = makeProvider((name) => {
+            if (name === 'MJ: AI Agent Session Bridge Participants') {
+                const p = makeParticipantRow();
+                participantRows.push(p);
+                return p;
+            }
+            return bridgeRow;
+        });
+
+        const active = await engine().StartBridgeSession(baseParams(session, provider));
+        const loopback = active.Bridge as LoopbackBridge;
+        await new Promise((r) => setTimeout(r, 0));
+
+        // A multi-agent room as THIS bridge sees it: its OWN bot, ANOTHER agent, and a human — both agents
+        // arrive IsAgent=true in the live roster, but only the bot may persist IsAgent=true.
+        loopback.EmitParticipants([
+            { ExternalId: active.BotParticipantID as string, DisplayName: 'Me', Role: 'Agent', IsAgent: true },
+            { ExternalId: 'agent-other', DisplayName: 'Other Bot', Role: 'Participant', IsAgent: true },
+            { ExternalId: 'human-1', DisplayName: 'Alice', Role: 'Host', IsAgent: false },
+        ]);
+        await new Promise((r) => setTimeout(r, 0));
+
+        const bot = participantRows.find((p) => p.ExternalParticipantID === active.BotParticipantID);
+        const other = participantRows.find((p) => p.ExternalParticipantID === 'agent-other');
+        const human = participantRows.find((p) => p.ExternalParticipantID === 'human-1');
+        expect(bot?.IsAgent).toBe(true); // its own bot
+        expect(other?.IsAgent).toBe(false); // another agent → not THIS bridge's bot
+        expect(human?.IsAgent).toBe(false);
 
         await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
     });
@@ -571,6 +709,28 @@ describe('AIBridgeEngine — unified room transcript', () => {
             engine().SetTranscriptSink(async () => undefined); // reset shared singleton state
         }
     });
+
+    it('diarizes a User line by attributing it to the last inbound audio speaker', async () => {
+        const sink = vi.fn(async () => undefined);
+        engine().SetTranscriptSink(sink);
+        const session = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        try {
+            const active = await engine().StartBridgeSession(
+                baseParams(session, provider, { Address: 'loopback://diar-room-unique', AgentSessionID: 'sess-S', AgentID: 'agent-S' }),
+            );
+            const loop = active.Bridge as LoopbackBridge;
+            // An inbound audio frame tagged with the speaking participant → remembered as the last speaker.
+            loop.EmitInbound({ Track: 'audio-in', Bytes: new Uint8Array([1, 2]).buffer, SpeakerLabel: 'human-42' });
+            session.EmitTranscript({ Role: 'user', Text: 'hi there', IsFinal: true });
+            await new Promise((r) => setTimeout(r, 0));
+            expect(sink.mock.calls[0][0]).toMatchObject({ IsAgentSpeech: false, Text: 'hi there', SpeakerParticipantID: 'human-42' });
+
+            await engine().StopBridgeSession(active.SessionBridgeID, 'Explicit');
+        } finally {
+            engine().SetTranscriptSink(async () => undefined);
+        }
+    });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -656,5 +816,150 @@ describe('AIBridgeEngine — composes AIBridgeEngineBase (single cache, delegati
         expect(configSpy).toHaveBeenNthCalledWith(2, true, expect.anything(), undefined);
 
         configSpy.mockRestore();
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// End-to-end smoke — composes the full multi-agent meeting flow in one sequence.
+// Guards against integration regressions the per-feature tests can't catch: that
+// scribe election + diarized transcript + capability-gated re-gate + floor control
+// + scribe handoff + run finalization all compose, in order, through one room.
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — end-to-end smoke (multi-agent meeting)', () => {
+    it('start → diarized transcript → 2nd agent → re-gate → floor contention → handoff → finalize', async () => {
+        const transcript: Array<Record<string, unknown>> = [];
+        const finalized: Array<string | undefined> = [];
+        engine().SetTranscriptSink(async (line: Record<string, unknown>) => { transcript.push(line); });
+        engine().SetSessionRunFinalizer(async (sessionId?: string) => { finalized.push(sessionId); });
+        // Per-agent name matchers (real meeting mode): each agent answers only when ITS name is addressed.
+        const matchA = { IsAddressed: (seg: { Text: string }) => /\bA\b/.test(seg.Text) };
+        const matchB = { IsAddressed: (seg: { Text: string }) => /\bB\b/.test(seg.Text) };
+        const addr = 'loopback://smoke-room-unique';
+        const sessionA = new MockRealtimeSession();
+        const sessionB = new MockRealtimeSession();
+        // Rows carry an AgentSessionID so the teardown finalizer (which loads a fresh row) has one to scope to.
+        const { provider } = makeProvider(() => makeBridgeRow({ AgentSessionID: 'smoke-sess' }));
+        try {
+            // 1) Agent A joins solo → it is the room scribe and starts as a normal 1:1 voice.
+            const a = await engine().StartBridgeSession(
+                baseParams(sessionA, provider, { Address: addr, AgentSessionID: 'A', AgentID: 'agA', TurnMatcher: matchA }),
+            );
+            expect(a.IsTranscriptScribe).toBe(true);
+            expect(a.DisableAutoResponse).toBe(false);
+
+            // 2) A human speaks (diarized media) then the model transcribes it; A answers (1:1 auto-response).
+            (a.Bridge as LoopbackBridge).EmitInbound({ Track: 'audio-in', Bytes: new Uint8Array([1]).buffer, SpeakerLabel: 'human-1' });
+            sessionA.EmitTranscript({ Role: 'user', Text: 'hello there', IsFinal: true });
+            sessionA.EmitTranscript({ Role: 'assistant', Text: 'hi, A here', IsFinal: true });
+            await new Promise((r) => setTimeout(r, 0));
+            // The scribe wrote BOTH a diarized human line and its own agent line.
+            expect(transcript).toContainEqual(expect.objectContaining({ Text: 'hello there', IsAgentSpeech: false, SpeakerParticipantID: 'human-1' }));
+            expect(transcript).toContainEqual(expect.objectContaining({ Text: 'hi, A here', IsAgentSpeech: true, AgentSessionID: 'A' }));
+            expect(sessionA.SpokenUpdates.length).toBe(0); // 1:1 → relied on auto-response, bridge didn't force
+
+            // 3) Agent B joins the SAME room in meeting mode → A is retroactively re-gated (it's capable).
+            //    B is "Gemini-like": it will NEVER transcribe in this test — only A produces transcripts.
+            const b = await engine().StartBridgeSession(
+                baseParams(sessionB, provider, { Address: addr, AgentSessionID: 'B', AgentID: 'agB', DisableAutoResponse: true, TurnMatcher: matchB }),
+            );
+            expect(engine().ReconfigureSessionToMeeting(a.SessionBridgeID, matchA)).toBe(true);
+            expect(a.DisableAutoResponse).toBe(true);
+            expect(sessionA.ReconfigureCalls).toEqual([{ DisableAutoResponse: true }]);
+
+            // 4) BROADCAST: A transcribes the human addressing A → only A speaks (B's name not present).
+            sessionA.EmitTranscript({ Role: 'user', Text: 'A please', IsFinal: true });
+            expect(sessionA.SpokenUpdates.length).toBe(1);
+            expect(sessionB.SpokenUpdates.length).toBe(0);
+
+            // 5) THE FIX: A transcribes the human addressing B. B never transcribed anything itself, yet the
+            //    broadcast routes A's transcript to B's matcher → B is triggered. Denied here only by the floor
+            //    (A still holds it), proving B WAS evaluated off a peer's transcript.
+            sessionA.EmitTranscript({ Role: 'user', Text: 'B please', IsFinal: true });
+            expect(sessionB.SpokenUpdates.length).toBe(0); // triggered, but floor held by A
+
+            // 6) A finishes → floor frees → A transcribes the human addressing B again → B finally speaks,
+            //    entirely off A's transcription (the Gemini-can't-transcribe case the broadcast fixes).
+            sessionA.EmitTranscript({ Role: 'assistant', Text: 'A done', IsFinal: true });
+            sessionA.EmitTranscript({ Role: 'user', Text: 'B once more', IsFinal: true });
+            expect(sessionB.SpokenUpdates.length).toBe(1);
+
+            // 5) Teardown: scribe role hands off to B when A leaves; both sessions finalize their run.
+            await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+            expect(b.IsTranscriptScribe).toBe(true);
+            await engine().StopBridgeSession(b.SessionBridgeID, 'Explicit');
+            expect(finalized.length).toBe(2);
+        } finally {
+            engine().SetTranscriptSink(async () => undefined);
+            engine().SetSessionRunFinalizer(async () => undefined);
+        }
+    });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Turn moderator — the injected LLM-router path (replaces per-agent matchers in a multi-agent room).
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe('AIBridgeEngine — turn moderator (LLM router)', () => {
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+
+    it('routes a user turn to the moderator-selected agents, spoken serially via the floor', async () => {
+        const seen: TurnModeratorContext[] = [];
+        // Route to BOTH agents in roster order on the first (user) decision, then nobody (end the discussion).
+        let calls = 0;
+        engine().SetTurnModerator(async (ctx) => {
+            seen.push(ctx);
+            return calls++ === 0 ? ctx.Roster.map((r) => r.AgentSessionID) : [];
+        });
+        const addr = 'loopback://moderator-room';
+        const sA = new MockRealtimeSession();
+        const sB = new MockRealtimeSession();
+        const noMatch = { IsAddressed: () => false }; // matchers unused on the moderator path
+        const { provider } = makeProvider(() => makeBridgeRow());
+        try {
+            const a = await engine().StartBridgeSession(baseParams(sA, provider, { Address: addr, AgentSessionID: 'sa', AgentID: 'agA', AgentNames: ['Sage'], AgentRole: 'analyst', ParticipationMode: 'proactive', DisableAutoResponse: true, TurnMatcher: noMatch }));
+            const b = await engine().StartBridgeSession(baseParams(sB, provider, { Address: addr, AgentSessionID: 'sb', AgentID: 'agB', AgentNames: ['Skip'], ParticipationMode: 'proactive', DisableAutoResponse: true, TurnMatcher: noMatch }));
+
+            // Human turn transcribed on A's bridge → ONE moderator decision routes it to both agents.
+            sA.EmitTranscript({ Role: 'user', Text: 'team, status?', IsFinal: true });
+            await tick(); await tick();
+
+            expect(seen.length).toBeGreaterThanOrEqual(1);
+            expect(seen[0].Roster.map((r) => r.Names[0]).sort()).toEqual(['Sage', 'Skip']); // saw the full roster
+            expect(seen[0].LatestTurn).toMatchObject({ Text: 'team, status?', IsAgent: false });
+            // A spoke first (took the floor); B is queued behind it (serialized — not overlapping).
+            expect(sA.SpokenUpdates.length).toBe(1);
+            expect(sB.SpokenUpdates.length).toBe(0);
+
+            // A finishes → floor frees → the queued B speaks.
+            sA.EmitTranscript({ Role: 'assistant', Text: 'Sage here, all good', IsFinal: true });
+            await tick(); await tick();
+            expect(sB.SpokenUpdates.length).toBe(1);
+
+            await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+            await engine().StopBridgeSession(b.SessionBridgeID, 'Explicit');
+        } finally {
+            engine().SetTurnModerator(undefined);
+        }
+    });
+
+    it('falls back to per-agent matchers when no moderator is set', async () => {
+        engine().SetTurnModerator(undefined);
+        const addr = 'loopback://no-moderator-room';
+        const sA = new MockRealtimeSession();
+        const sB = new MockRealtimeSession();
+        const { provider } = makeProvider(() => makeBridgeRow());
+        try {
+            const a = await engine().StartBridgeSession(baseParams(sA, provider, { Address: addr, AgentSessionID: 'ma', AgentNames: ['Sage'], DisableAutoResponse: true, TurnMatcher: { IsAddressed: (s) => /Sage/.test(s.Text) } }));
+            const b = await engine().StartBridgeSession(baseParams(sB, provider, { Address: addr, AgentSessionID: 'mb', AgentNames: ['Skip'], DisableAutoResponse: true, TurnMatcher: { IsAddressed: (s) => /Skip/.test(s.Text) } }));
+            sA.EmitTranscript({ Role: 'user', Text: 'Sage, hi', IsFinal: true });
+            await tick(); await tick();
+            expect(sA.SpokenUpdates.length).toBe(1); // matched its name
+            expect(sB.SpokenUpdates.length).toBe(0); // not addressed
+            await engine().StopBridgeSession(a.SessionBridgeID, 'Explicit');
+            await engine().StopBridgeSession(b.SessionBridgeID, 'Explicit');
+        } finally {
+            engine().SetTurnModerator(undefined);
+        }
     });
 });

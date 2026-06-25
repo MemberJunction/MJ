@@ -35,11 +35,16 @@ import { GridViewRendererComponent } from './lib/view-types/renderers/grid-view-
 import { TimelineViewRendererComponent } from './lib/view-types/renderers/timeline-view-renderer.component';
 import { MapViewRendererComponent } from './lib/view-types/renderers/map-view-renderer.component';
 import { LoadViewTypeDescriptors } from './lib/view-types';
+import { EntityActionUXHostComponent, LoadEntityActionUX } from '@memberjunction/ng-entity-action-ux';
 
 // Register the built-in view-type descriptors with the ClassFactory at module load.
 // This force-references each @RegisterClass-decorated descriptor so bundlers don't
 // tree-shake them out, making them discoverable by the ViewTypeEngine via DriverClass.
 LoadViewTypeDescriptors();
+
+// Force-reference the entity-action runtime-UX drivers (e.g. RecordProcessRunnerUX) so the ClassFactory
+// can resolve them when the grid mounts a driver named by an entity action's RuntimeUXDriverClass.
+LoadEntityActionUX();
 
 /**
  * EntityViewerModule - Provides components for viewing entity data

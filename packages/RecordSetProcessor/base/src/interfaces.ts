@@ -105,6 +105,8 @@ export interface ProcessRunMeta {
     TotalItemCount?: number | null;
     /** JSON-serializable snapshot of the effective configuration. */
     Configuration?: unknown;
+    /** True when this run is a dry-run (compute-only) preview — persisted on the run header so history can distinguish it from a real apply. */
+    DryRun?: boolean;
 }
 
 /**
@@ -178,6 +180,8 @@ export interface RecordSetProcessOptions {
     onAfterBatch?: (batch: RecordRef[], processed: number) => Promise<{ continue: boolean; reason?: string } | null>;
     /** JSON-serializable snapshot of configuration, persisted on the run header. */
     configuration?: unknown;
+    /** True when this is a dry-run (compute-only) pass — recorded on the run header so history can distinguish previews from real applies. */
+    dryRun?: boolean;
 }
 
 // Re-export the progress/summary value types most consumers need alongside the seams.

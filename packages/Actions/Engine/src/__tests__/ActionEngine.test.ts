@@ -78,7 +78,11 @@ const { mockClassFactory } = vi.hoisted(() => ({
         GetAllRegistrations: vi.fn().mockReturnValue([]),
     },
 }));
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real MJLruCache (used by the entity-action script cache) + KeyedSerialTaskQueue (backs the real
+    // BaseEntitySaveQueue that ActionEngine's action-log queue now uses) — pulled from the actual module.
+    MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
+    KeyedSerialTaskQueue: (await importOriginal<typeof import('@memberjunction/global')>()).KeyedSerialTaskQueue,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
@@ -658,8 +662,10 @@ describe('ActionEngineServer', () => {
             const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [] };
             await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, true);
 
-            // The save is now fire-and-forget (queued), so the failure is logged asynchronously.
-            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
+            // The save is fire-and-forget (queued); the failed INSERT surfaces in the queue's flush
+            // diagnostics (the queue logs via core's own LogError, not the package-level mock).
+            const flush = await (engine as unknown as { _logQueue: { Flush(): Promise<{ failures: number }> } })._logQueue.Flush();
+            expect(flush.failures).toBeGreaterThan(0);
         });
     });
 
@@ -697,8 +703,9 @@ describe('ActionEngineServer', () => {
 
             await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
 
-            // Save is queued fire-and-forget — the failure is logged asynchronously.
-            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
+            // Save is queued fire-and-forget; the failed UPDATE surfaces in the queue's flush diagnostics.
+            const flush = await (engine as unknown as { _logQueue: { Flush(): Promise<{ failures: number }> } })._logQueue.Flush();
+            expect(flush.failures).toBeGreaterThan(0);
         });
     });
 
@@ -779,7 +786,9 @@ describe('ActionEngineServer', () => {
             const entity = fakeLog([], [1]); // the INSERT fails
             mockMetaReturning(entity);
             await start({ Action: { ID: 'a1', Name: 'T' }, Params: [] });
-            await vi.waitFor(() => expect(LogError).toHaveBeenCalled());
+            // The failed INSERT is surfaced (not swallowed) as a failure in the queue's flush diagnostics.
+            const flush = await (engine as unknown as { _logQueue: { Flush(): Promise<{ failures: number }> } })._logQueue.Flush();
+            expect(flush.failures).toBeGreaterThan(0);
         });
     });
 
