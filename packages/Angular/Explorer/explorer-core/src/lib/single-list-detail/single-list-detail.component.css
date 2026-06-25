@@ -332,26 +332,6 @@
   padding: 40px;
 }
 
-.empty-results {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  color: var(--mj-text-disabled);
-}
-
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 12px;
-  color: var(--mj-border-strong);
-}
-
-.empty-results p {
-  margin: 0;
-  font-size: 14px;
-}
-
 .selection-controls {
   display: flex;
   align-items: center;
