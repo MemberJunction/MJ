@@ -1,6 +1,7 @@
-import { EntityPermissionType, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
+import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, LogError } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
+import { readRealtimeRecordingFile } from '@memberjunction/ai-agents';
 import {
   AppContext,
   Arg,
@@ -312,6 +313,25 @@ export class SearchAcrossAccountsPayload {
   failedAccounts: number;
 }
 
+/**
+ * Result of {@link FileResolver.GetFileContents} — the bytes of an `MJ: Files` record returned as
+ * base64, read server-side through authenticated MJStorage (never a public pre-signed link).
+ */
+@ObjectType()
+export class FileContentsResult {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  Base64?: string;
+
+  @Field(() => String, { nullable: true })
+  MimeType?: string;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+}
+
 @Resolver(MJFile_)
 export class FileResolver extends FileResolverBase {
   /**
@@ -429,6 +449,46 @@ export class FileResolver extends FileResolverBase {
     const url = await createDownloadUrl(providerEntity, file.ProviderKey ?? file.Name, userContext);
 
     return url;
+  }
+
+  /**
+   * Returns an `MJ: Files` record's bytes as base64, read server-side through authenticated MJStorage
+   * (`GetObject`) — NOT a public pre-signed link. Permission-gated: the file is first loaded under the
+   * calling user's context, so MJ row-level security determines access. Never throws to the client.
+   *
+   * @param fileId The `MJ: Files` id whose bytes to return.
+   * @returns `{ Success, Base64?, MimeType?, ErrorMessage? }`.
+   */
+  @Query(() => FileContentsResult)
+  async GetFileContents(@Arg('fileId', () => String) fileId: string, @Ctx() context: AppContext): Promise<FileContentsResult> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const contextUser = this.GetUserFromPayload(context.userPayload);
+
+      // Permission gate FIRST: load the file record under the USER's context. A failed load means the
+      // file does not exist OR the user lacks read access under MJ row-level security.
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+      const loaded = await fileEntity.Load(fileId);
+      if (!loaded) {
+        return { Success: false, ErrorMessage: 'You do not have access to this file or it does not exist.' };
+      }
+
+      // Read the bytes via authenticated MJStorage (server-side GetObject on the file's own account).
+      const result = await readRealtimeRecordingFile(fileId, contextUser, provider);
+      if (!result) {
+        return { Success: false, ErrorMessage: 'The file could not be read from storage.' };
+      }
+
+      return {
+        Success: true,
+        Base64: result.Bytes.toString('base64'),
+        MimeType: result.MimeType ?? fileEntity.ContentType ?? undefined,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`GetFileContents failed (file ${fileId}): ${message}`);
+      return { Success: false, ErrorMessage: message };
+    }
   }
 
   @Mutation(() => MJFile_)

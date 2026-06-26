@@ -95,12 +95,11 @@
                 <button mjButton variant="primary" size="sm" (click)="SelectSession(SelectedSession!)">Try again</button>
               </div>
             } @else {
-              <mj-realtime-evidence-playback
-                [Turns]="SelectedTurns"
-                [AudioUrl]="SelectedAudioUrl"
-                [RecordingStartedAt]="SelectedSession.RecordingStartedAt"
-                [AgentName]="SelectedSession.AgentName">
-              </mj-realtime-evidence-playback>
+              <mj-storage-media-player
+                [FileID]="SelectedSession.RecordingFileID"
+                [Transcript]="SelectedCues"
+                [Provider]="Provider">
+              </mj-storage-media-player>
             }
           </div>
         </as-split-area>

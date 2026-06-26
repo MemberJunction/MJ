@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { MJConversationDetailEntity, ResourceData } from '@memberjunction/core-entities';
-import { LoadRealtimeRecordingAudioUrl } from '@memberjunction/ng-conversations';
+import { MediaTranscriptCue } from '@memberjunction/ng-media-player';
 
 /**
  * A recorded realtime session, projected from `MJ: AI Agent Sessions` for the list pane.
@@ -33,13 +33,14 @@ interface RecordedSession {
  * REALTIME RECORDINGS — an Explorer resource dashboard for reviewing & replaying historical realtime
  * sessions that were recorded. The left pane lists every recorded session (agent · date · duration ·
  * conversation); selecting one loads its time-aligned transcript turns and resolves the recording's
- * signed audio URL, then hands both to {@link RealtimeEvidencePlaybackComponent} in the right pane for
- * synchronized audio + transcript playback.
+ * builds transcript cues, then hands the recording's `RecordingFileID` + cues to
+ * {@link MJStorageMediaPlayerComponent} in the right pane — the player resolves the authenticated
+ * audio itself for synchronized audio + transcript playback.
  *
  * Data sources:
  *  - List: `RunView('MJ: AI Agent Sessions', RecordingFileID IS NOT NULL)` — `simple` rows.
  *  - Turns: `RunView('MJ: Conversation Details', AgentSessionID = <id>)` — `entity_object` rows.
- *  - Audio: `MJFile(ID: RecordingFileID) { DownloadUrl }` GraphQL → signed URL.
+ *  - Audio: resolved by the storage media player from `RecordingFileID` (authenticated bytes → blob).
  */
 @RegisterClass(BaseResourceComponent, 'RealtimeRecordingsDashboard')
 @Component({
@@ -53,18 +54,18 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
   public Sessions: RecordedSession[] = [];
   /** The session currently selected for playback, or null. */
   public SelectedSession: RecordedSession | null = null;
-  /** Transcript turns for the selected session (passed to the playback component). */
+  /** Transcript turns for the selected session (used to build the cues). */
   public SelectedTurns: MJConversationDetailEntity[] = [];
-  /** The resolved signed audio URL for the selected session, or null. */
-  public SelectedAudioUrl: string | null = null;
+  /** Transcript cues for the selected session, built from its turns (passed to the media player). */
+  public SelectedCues: MediaTranscriptCue[] = [];
 
   /** True while the master list is loading. */
   public IsLoading = true;
-  /** True while a selected session's turns + audio URL are loading. */
+  /** True while a selected session's turns are loading. */
   public IsDetailLoading = false;
   /** Master-list load error, shown in the body when set. */
   public ErrorMessage: string | null = null;
-  /** Detail-pane (turns / audio) error, shown in the right pane when set. */
+  /** Detail-pane (turns) error, shown in the right pane when set. */
   public DetailErrorMessage: string | null = null;
 
   private readonly cdr = inject(ChangeDetectorRef);
@@ -84,9 +85,6 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
   }
 
   override ngOnDestroy(): void {
-    if (this.SelectedAudioUrl) {
-      URL.revokeObjectURL(this.SelectedAudioUrl);
-    }
     super.ngOnDestroy();
   }
 
@@ -121,32 +119,26 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     }
   }
 
-  /** Selects a session and loads its transcript + signed audio URL into the playback pane. */
+  /** Selects a session and loads its transcript into the playback pane (the player resolves audio). */
   public async SelectSession(session: RecordedSession): Promise<void> {
     if (this.SelectedSession?.ID === session.ID) {
       return;
     }
     this.SelectedSession = session;
     this.SelectedTurns = [];
-    if (this.SelectedAudioUrl) {
-      URL.revokeObjectURL(this.SelectedAudioUrl); // release the prior selection's blob
-    }
-    this.SelectedAudioUrl = null;
+    this.SelectedCues = [];
     this.DetailErrorMessage = null;
     this.IsDetailLoading = true;
     this.cdr.detectChanges();
 
     try {
-      const [turns, audioUrl] = await Promise.all([
-        this.loadTurns(session.ID),
-        LoadRealtimeRecordingAudioUrl(this.ProviderToUse, session.ID)
-      ]);
+      const turns = await this.loadTurns(session.ID);
       // Guard against a newer selection having superseded this load.
       if (this.SelectedSession?.ID !== session.ID) {
         return;
       }
       this.SelectedTurns = turns;
-      this.SelectedAudioUrl = audioUrl;
+      this.SelectedCues = this.buildCues(turns, session);
       this.maybeBackfillDuration(session, turns);
     } catch (err) {
       if (this.SelectedSession?.ID === session.ID) {
@@ -198,6 +190,42 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
       throw new Error(result.ErrorMessage || 'Failed to load transcript turns.');
     }
     return result.Results ?? [];
+  }
+
+  /**
+   * Builds time-aligned {@link MediaTranscriptCue}s from the loaded turns, for the media player's
+   * transcript panel. Skips turns with no text; derives each cue's start from `UtteranceStartMs`,
+   * falling back to (turn-created − recording-start) ms, else 0. Cues sort by start ascending.
+   */
+  private buildCues(turns: MJConversationDetailEntity[], session: RecordedSession): MediaTranscriptCue[] {
+    const startedAt = session.RecordingStartedAt;
+    const cues: MediaTranscriptCue[] = [];
+    turns.forEach((turn, index) => {
+      const text = turn.Message?.trim() ?? '';
+      if (text.length === 0) {
+        return;
+      }
+      cues.push({
+        Id: turn.ID || `turn-${index}`,
+        StartMs: this.cueStartMs(turn, startedAt),
+        EndMs: turn.UtteranceEndMs ?? undefined,
+        SpeakerLabel: turn.Role === 'User' ? 'You' : session.AgentName,
+        Text: text
+      });
+    });
+    cues.sort((a, b) => a.StartMs - b.StartMs);
+    return cues;
+  }
+
+  /** A turn's media-relative start (ms): precise offset when present, else derived from t0, else 0. */
+  private cueStartMs(turn: MJConversationDetailEntity, startedAt: Date | null): number {
+    if (turn.UtteranceStartMs != null) {
+      return turn.UtteranceStartMs;
+    }
+    if (startedAt && turn.__mj_CreatedAt) {
+      return Math.max(0, turn.__mj_CreatedAt.getTime() - startedAt.getTime());
+    }
+    return 0;
   }
 
   /** Projects a raw `simple` view row into the list model, deriving display fields. */

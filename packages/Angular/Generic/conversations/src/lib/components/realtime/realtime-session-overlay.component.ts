@@ -4,9 +4,8 @@ import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { LoadRealtimeRecordingAudioUrl } from '../../utils/realtime-recording-audio';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { RealtimeEvidencePlaybackComponent } from './evidence-playback/realtime-evidence-playback.component';
+import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
 import { VoiceConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
@@ -115,7 +114,7 @@ export interface RealtimeStartLiveRequest {
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
     RealtimeWhiteboardBoardComponent,
-    RealtimeEvidencePlaybackComponent
+    MJStorageMediaPlayerComponent
   ],
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
@@ -226,24 +225,21 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public ReviewWhiteboard: WhiteboardState | null = null;
 
   /**
-   * The reviewed session's resolved, signed recording audio URL — set when the reviewed session
-   * carries a `RecordingFileID` and the `MJFile` download URL resolves; null otherwise (no
-   * Recording tab). Bound into the review-mode evidence player.
+   * The `MJ: Files` id of the reviewed session's recording, or null when nothing was recorded.
+   * Bound into the storage media player, which resolves the authenticated audio itself.
    */
-  public ReviewAudioUrl: string | null = null;
+  public get ReviewRecordingFileID(): string | null {
+    return this._reviewData?.RecordingFileID ?? null;
+  }
+
+  /**
+   * The reviewed session's transcript cues (built from its turns) for the recording player's
+   * transcript panel. Empty outside review.
+   */
+  public ReviewCues: MediaTranscriptCue[] = [];
 
   /** True while the Recording tab is registered (a recording exists for the reviewed session). */
   private reviewRecordingTabRegistered = false;
-
-  /** The reviewed session's transcript turns for the recording player (empty outside review). */
-  public get ReviewTurns(): RealtimeSessionReviewTurn[] {
-    return this._reviewData?.Turns ?? [];
-  }
-
-  /** The reviewed session's recording alignment origin (t0) for the player's transcript sync. */
-  public get ReviewRecordingStartedAt(): Date | null {
-    return this._reviewData?.RecordingStartedAt ?? null;
-  }
 
   /** Shared session state — single source for the thread AND the activity rail. */
   public readonly State = new RealtimeSessionState();
@@ -400,9 +396,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.flushPendingChannelTabs();
     this.registerReviewBoardTab();
     this.registerReviewArtifactTabs();
-    // The recording URL resolution was already kicked off by enterReview() when ReviewData was
-    // set (it runs regardless of viewReady); here we only need to (re)register the tab now that
-    // the #recordingTpl ref exists.
+    // Cues were already built by enterReview() when ReviewData was set; here we only need to
+    // (re)register the recording tab now that the #recordingTpl ref exists. The storage media
+    // player resolves the authenticated audio itself from the RecordingFileID.
     this.registerReviewRecordingTab();
   }
 
@@ -1063,7 +1059,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.State.LoadHistoricalItems(BuildReviewThreadItems(review));
     this.ReviewWhiteboard = this.parseReviewWhiteboard(review);
     this.reviewArtifacts = review.Artifacts ?? [];
-    this.ReviewAudioUrl = null;
+    this.ReviewCues = this.buildReviewCues(review);
     if (this.viewReady) {
       // Let this CD pass create/refresh the surface panel before registering the tabs.
       // ngZone.run is REQUIRED: review often opens through the deep-link/query-param
@@ -1076,9 +1072,43 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
         this.registerReviewRecordingTab();
       }), 0);
     }
-    // Resolve the signed recording URL (when a recording exists) — async, tolerant.
-    void this.resolveReviewRecording(review);
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Builds time-aligned {@link MediaTranscriptCue}s from the reviewed session's turns, for the
+   * storage media player's transcript panel. Skips turns with no text; derives each cue's start from
+   * `UtteranceStartMs`, falling back to (turn-created − recording-start) ms, else 0. Sorts by start.
+   */
+  private buildReviewCues(review: RealtimeSessionReview): MediaTranscriptCue[] {
+    const startedAt = review.RecordingStartedAt;
+    const cues: MediaTranscriptCue[] = [];
+    (review.Turns ?? []).forEach((turn, index) => {
+      const text = (turn.Text ?? turn.Message ?? '').trim();
+      if (text.length === 0) {
+        return;
+      }
+      cues.push({
+        Id: turn.ID || `turn-${index}`,
+        StartMs: this.reviewCueStartMs(turn, startedAt),
+        EndMs: turn.UtteranceEndMs ?? undefined,
+        SpeakerLabel: turn.Role === 'User' ? 'You' : review.AgentName,
+        Text: text
+      });
+    });
+    cues.sort((a, b) => a.StartMs - b.StartMs);
+    return cues;
+  }
+
+  /** A review turn's media-relative start (ms): precise offset, else derived from t0, else 0. */
+  private reviewCueStartMs(turn: RealtimeSessionReviewTurn, startedAt: Date | null): number {
+    if (turn.UtteranceStartMs != null) {
+      return turn.UtteranceStartMs;
+    }
+    if (startedAt && turn.__mj_CreatedAt) {
+      return Math.max(0, turn.__mj_CreatedAt.getTime() - startedAt.getTime());
+    }
+    return 0;
   }
 
   /**
@@ -1091,10 +1121,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   private exitReview(): void {
     this.ReviewWhiteboard = null;
-    if (this.ReviewAudioUrl) {
-      URL.revokeObjectURL(this.ReviewAudioUrl); // release the blob we created from the authenticated bytes
-    }
-    this.ReviewAudioUrl = null;
+    this.ReviewCues = [];
     if (this.reviewRecordingTabRegistered) {
       this.surfaceTabs?.RemoveTab('Recording');
       this.pendingChannelTabs = this.pendingChannelTabs.filter(r => r.Key !== 'Recording');
@@ -1159,11 +1186,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * Registers the read-only review RECORDING tab (the time-aligned evidence player) — ONLY when the
-   * reviewed session carried a `RecordingFileID`. Idempotent (re-registering the same key updates it
-   * in place). The signed audio URL resolves asynchronously into {@link ReviewAudioUrl}; the player
-   * shows its "no audio" state until it arrives, while the click-to-seek transcript is usable
-   * immediately. NOT focused — the channel surface / Activity rail keeps the default focus.
+   * Registers the read-only review RECORDING tab (the time-aligned storage media player) — ONLY when
+   * the reviewed session carried a `RecordingFileID`. Idempotent (re-registering the same key updates
+   * it in place). The player resolves the authenticated audio itself from the `RecordingFileID` and
+   * shows its own no-access / loading states; the click-to-seek transcript is usable immediately.
+   * NOT focused — the channel surface / Activity rail keeps the default focus.
    */
   private registerReviewRecordingTab(): void {
     if (!this._reviewData?.RecordingFileID || !this.recordingTpl) {
@@ -1177,31 +1204,6 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     });
     this.reviewRecordingTabRegistered = true;
     this.cdr.markForCheck();
-  }
-
-  /**
-   * Resolves the reviewed session's signed recording download URL (when it has a `RecordingFileID`),
-   * mirroring the Realtime Recordings dashboard. TOLERANT: no recording / a failed resolution leaves
-   * {@link ReviewAudioUrl} null and the player simply shows its no-audio state. Guards against a stale
-   * resolution landing after the review changed.
-   */
-  private async resolveReviewRecording(review: RealtimeSessionReview): Promise<void> {
-    if (!review.RecordingFileID) {
-      return;
-    }
-    try {
-      // Read the bytes through authenticated MJStorage (ownership-gated) and play a local blob URL —
-      // never a public pre-signed link. Released in clearReviewRecording / on review change.
-      const url = await LoadRealtimeRecordingAudioUrl(this.ProviderToUse, review.SessionID);
-      if (this._reviewData !== review) {
-        if (url) { URL.revokeObjectURL(url); } // a newer review (or a close) superseded this load
-        return;
-      }
-      this.ReviewAudioUrl = url;
-      this.cdr.markForCheck();
-    } catch (error) {
-      console.warn('[RealtimeSessionReview] Recording URL resolution failed — the Recording tab shows no audio.', error);
-    }
   }
 
   /**

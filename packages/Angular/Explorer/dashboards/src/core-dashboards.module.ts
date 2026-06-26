@@ -80,7 +80,7 @@ import { APIUsagePanelComponent } from './APIKeys/api-usage-panel.component';
 import { ApplicationRolesResourceComponent } from './ApplicationRoles/application-roles-resource.component';
 // Realtime Recordings (recorded realtime sessions — replay audio + transcript)
 import { RealtimeRecordingsDashboardComponent } from './RealtimeRecordings/realtime-recordings-dashboard.component';
-import { RealtimeEvidencePlaybackComponent } from '@memberjunction/ng-conversations';
+import { MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
 import { AngularSplitModule } from 'angular-split';
 // Permissions (Phase 2a/b/c — unified permissions admin); three independent resources
 import { PermissionsUserAccessResourceComponent } from './Permissions/user-access-resource.component';
@@ -183,7 +183,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ResourcePermissionsModule,
     SharedPipesModule,
     AngularSplitModule,
-    RealtimeEvidencePlaybackComponent
+    MJStorageMediaPlayerComponent
   ],
   exports: [
     BulkOperationsContainerComponent,

@@ -1,0 +1,286 @@
+<div
+  class="mj-media-player"
+  [class.mj-media-player--bottom-transcript]="TranscriptPosition === 'bottom'"
+  [class.mj-media-player--has-transcript]="ShowTranscriptPanel"
+  tabindex="0"
+  role="group"
+  aria-label="Media player"
+>
+  @if (!HasTracks) {
+    <!-- Empty / no-track state -->
+    <div class="mj-media-empty" role="status">
+      <i class="fa-solid fa-circle-play mj-media-empty__icon" aria-hidden="true"></i>
+      <span class="mj-media-empty__text">No media to play.</span>
+    </div>
+  } @else {
+    <div class="mj-media-main">
+      <!-- Media stage -->
+      <div class="mj-media-stage">
+        @if (HasError) {
+          <div class="mj-media-error" role="alert">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            <span>This media could not be played.</span>
+          </div>
+        }
+
+        @if (IsAudioOnly) {
+          <!-- Single audio track: hidden <audio> + optional waveform -->
+          @for (track of AudioTracks; track TrackById($index, track); let first = $first) {
+            @if (first) {
+              <audio
+                #primaryMedia
+                class="mj-media-audio"
+                [src]="track.Url"
+                preload="metadata"
+                (loadedmetadata)="OnMediaLoadedMetadata($any($event.target))"
+                (timeupdate)="OnMediaTimeUpdate($any($event.target))"
+                (durationchange)="OnMediaDurationChange($any($event.target))"
+                (play)="OnMediaPlay($any($event.target))"
+                (pause)="OnMediaPause($any($event.target))"
+                (ended)="OnMediaEnded($any($event.target))"
+                (error)="OnMediaError()"
+              ></audio>
+            }
+          }
+          @if (ShowWaveform) {
+            <div class="mj-media-waveform" aria-hidden="true">
+              @for (h of WaveformBars(AudioTracks[0]); track $index; let i = $index) {
+                <span
+                  class="mj-media-waveform__bar"
+                  [class.mj-media-waveform__bar--played]="(i / 64) <= ScrubFraction"
+                  [style.height.%]="h"
+                ></span>
+              }
+            </div>
+          } @else {
+            <div class="mj-media-audio-art" aria-hidden="true">
+              <i class="fa-solid fa-music"></i>
+            </div>
+          }
+        } @else {
+          <!-- Video: single, or responsive grid for multiple -->
+          <div
+            class="mj-media-video-grid"
+            [class.mj-media-video-grid--multi]="IsMultiVideo"
+          >
+            @for (track of VideoTracks; track TrackById($index, track); let i = $index) {
+              <div class="mj-media-video-cell">
+                @if (track.Label) {
+                  <span class="mj-media-video-cell__label">{{ track.Label }}</span>
+                }
+                @if (i === 0) {
+                  <video
+                    #primaryMedia
+                    class="mj-media-video"
+                    [src]="track.Url"
+                    [poster]="track.PosterUrl || null"
+                    playsinline
+                    preload="metadata"
+                    (loadedmetadata)="OnMediaLoadedMetadata($any($event.target))"
+                    (timeupdate)="OnMediaTimeUpdate($any($event.target))"
+                    (durationchange)="OnMediaDurationChange($any($event.target))"
+                    (play)="OnMediaPlay($any($event.target))"
+                    (pause)="OnMediaPause($any($event.target))"
+                    (ended)="OnMediaEnded($any($event.target))"
+                    (error)="OnMediaError()"
+                  ></video>
+                } @else {
+                  <!-- Secondary videos follow the leader's timeline; no own controls -->
+                  <video
+                    class="mj-media-video"
+                    [src]="track.Url"
+                    [poster]="track.PosterUrl || null"
+                    playsinline
+                    preload="metadata"
+                    muted
+                  ></video>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Transport bar -->
+      <div class="mj-media-transport">
+        <!-- Scrubber -->
+        <div class="mj-media-scrubber-row">
+          <span class="mj-media-time">{{ FormatTime(CurrentTimeMs) }}</span>
+          <div
+            #scrubTrack
+            class="mj-media-scrubber"
+            role="slider"
+            tabindex="0"
+            aria-label="Seek"
+            [attr.aria-valuemin]="0"
+            [attr.aria-valuemax]="DurationMs"
+            [attr.aria-valuenow]="CurrentTimeMs"
+            [attr.aria-valuetext]="FormatTime(CurrentTimeMs) + ' of ' + FormatTime(DurationMs)"
+            (pointerdown)="OnScrubPointerDown($event, scrubTrack)"
+            (pointermove)="OnScrubPointerMove($event, scrubTrack)"
+            (pointerup)="OnScrubPointerUp($event)"
+            (pointercancel)="OnScrubPointerUp($event)"
+            (keydown)="OnScrubKeyDown($event)"
+          >
+            <div class="mj-media-scrubber__rail">
+              <div class="mj-media-scrubber__fill" [style.width.%]="ScrubPercent"></div>
+            </div>
+            <div class="mj-media-scrubber__handle" [style.left.%]="ScrubPercent"></div>
+          </div>
+          <span class="mj-media-time mj-media-time--total">{{ FormatTime(DurationMs) }}</span>
+        </div>
+
+        <!-- Controls -->
+        <div class="mj-media-controls">
+          <div class="mj-media-controls__left">
+            @if (ShowSkipControls) {
+              <button
+                type="button"
+                class="mj-media-btn"
+                [attr.aria-label]="'Skip back ' + SkipSeconds + ' seconds'"
+                title="Skip back {{ SkipSeconds }}s"
+                (click)="SkipBackward()"
+              >
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                <span class="mj-media-btn__skip-label">{{ SkipSeconds }}</span>
+              </button>
+            }
+
+            <button
+              type="button"
+              class="mj-media-btn mj-media-btn--primary"
+              [attr.aria-label]="IsPlaying ? 'Pause' : 'Play'"
+              [title]="IsPlaying ? 'Pause' : 'Play'"
+              (click)="TogglePlay()"
+            >
+              <i class="fa-solid" [class.fa-pause]="IsPlaying" [class.fa-play]="!IsPlaying" aria-hidden="true"></i>
+            </button>
+
+            @if (ShowSkipControls) {
+              <button
+                type="button"
+                class="mj-media-btn"
+                [attr.aria-label]="'Skip forward ' + SkipSeconds + ' seconds'"
+                title="Skip forward {{ SkipSeconds }}s"
+                (click)="SkipForward()"
+              >
+                <i class="fa-solid fa-rotate-right" aria-hidden="true"></i>
+                <span class="mj-media-btn__skip-label">{{ SkipSeconds }}</span>
+              </button>
+            }
+          </div>
+
+          <div class="mj-media-controls__right">
+            @if (ShowVolume) {
+              <div class="mj-media-volume">
+                <button
+                  type="button"
+                  class="mj-media-btn"
+                  [attr.aria-label]="Muted ? 'Unmute' : 'Mute'"
+                  [title]="Muted ? 'Unmute' : 'Mute'"
+                  (click)="ToggleMute()"
+                >
+                  <i
+                    class="fa-solid"
+                    [class.fa-volume-xmark]="Muted || Volume === 0"
+                    [class.fa-volume-low]="!Muted && Volume > 0 && Volume <= 0.5"
+                    [class.fa-volume-high]="!Muted && Volume > 0.5"
+                    aria-hidden="true"
+                  ></i>
+                </button>
+                <input
+                  type="range"
+                  class="mj-media-volume__slider"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  [value]="Muted ? 0 : Volume"
+                  aria-label="Volume"
+                  (input)="OnVolumeInput($event)"
+                />
+              </div>
+            }
+
+            @if (ShowSpeedControl) {
+              <div class="mj-media-rate">
+                <button
+                  type="button"
+                  class="mj-media-btn mj-media-rate__toggle"
+                  aria-haspopup="true"
+                  [attr.aria-expanded]="RateMenuOpen"
+                  aria-label="Playback speed"
+                  title="Playback speed"
+                  (click)="ToggleRateMenu()"
+                >
+                  {{ PlaybackRate }}&times;
+                </button>
+                @if (RateMenuOpen) {
+                  <ul class="mj-media-rate__menu" role="menu">
+                    @for (rate of PlaybackRates; track rate) {
+                      <li role="none">
+                        <button
+                          type="button"
+                          role="menuitemradio"
+                          [attr.aria-checked]="rate === PlaybackRate"
+                          class="mj-media-rate__item"
+                          [class.mj-media-rate__item--active]="rate === PlaybackRate"
+                          (click)="SetPlaybackRate(rate)"
+                        >
+                          {{ rate }}&times;
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+
+            @if (ShowFullscreen && VideoTracks.length > 0) {
+              <button
+                type="button"
+                class="mj-media-btn"
+                [attr.aria-label]="IsFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+                [title]="IsFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'"
+                (click)="ToggleFullscreen()"
+              >
+                <i
+                  class="fa-solid"
+                  [class.fa-compress]="IsFullscreen"
+                  [class.fa-expand]="!IsFullscreen"
+                  aria-hidden="true"
+                ></i>
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transcript panel -->
+    @if (ShowTranscriptPanel) {
+      <div class="mj-media-transcript" role="list" aria-label="Transcript">
+        @for (cue of Transcript; track CueTrackById($index, cue); let i = $index) {
+          <button
+            type="button"
+            role="listitem"
+            class="mj-media-cue"
+            [class.mj-media-cue--active]="i === ActiveCueIndex"
+            [attr.aria-current]="i === ActiveCueIndex ? 'true' : null"
+            (click)="OnCueClicked(i)"
+            (keydown)="OnCueKeyDown($event, i)"
+          >
+            <span class="mj-media-cue__time">{{ FormatTime(cue.StartMs) }}</span>
+            <span class="mj-media-cue__body">
+              @if (cue.SpeakerLabel) {
+                <span class="mj-media-cue__speaker" [style.color]="SpeakerColor(cue.SpeakerLabel)">
+                  {{ cue.SpeakerLabel }}
+                </span>
+              }
+              <span class="mj-media-cue__text">{{ cue.Text }}</span>
+            </span>
+          </button>
+        }
+      </div>
+    }
+  }
+</div>
