@@ -63,21 +63,8 @@
   padding: 8px 0;
 }
 
-/* Section header / chevron / body chrome is now provided by <mj-accordion-panel>.
-   Only the title-slot styles (icon + title) below remain bespoke. */
-.section-icon {
-  width: 20px;
-  font-size: 14px;
-  color: var(--mj-text-muted);
-  margin-right: 10px;
-}
-
-.section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--mj-text-secondary);
-}
-
+/* Section header / chevron / title / icon / body chrome is fully provided by
+   <mj-accordion-panel> (muted icons via [TitleIconMuted]). No bespoke chrome here. */
 .loading-icon {
   margin-right: 8px;
   font-size: 12px;

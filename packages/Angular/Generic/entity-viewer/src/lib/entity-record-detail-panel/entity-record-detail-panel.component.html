@@ -15,10 +15,10 @@
   <!-- Content -->
   <div class="panel-content">
     <!-- Details Section -->
-    <mj-accordion-panel [(Expanded)]="detailsSectionExpanded">
+    <mj-accordion-panel [(Expanded)]="detailsSectionExpanded" [TitleIconMuted]="true">
       <ng-template mjAccordionTitle>
-        <i class="fa-solid fa-info-circle section-icon"></i>
-        <span class="section-title">Details</span>
+        <i class="fa-solid fa-info-circle"></i>
+        <span>Details</span>
       </ng-template>
 
       @for (field of displayFields; track field.name) {
@@ -79,10 +79,10 @@
     </mj-accordion-panel>
 
     <!-- Relationships Section -->
-    <mj-accordion-panel [(Expanded)]="relationshipsSectionExpanded">
+    <mj-accordion-panel [(Expanded)]="relationshipsSectionExpanded" [TitleIconMuted]="true">
       <ng-template mjAccordionTitle>
-        <i class="fa-solid fa-project-diagram section-icon"></i>
-        <span class="section-title">Related Records</span>
+        <i class="fa-solid fa-project-diagram"></i>
+        <span>Related Records</span>
       </ng-template>
 
       @if (isLoadingRelationships) {
@@ -147,10 +147,10 @@
 
     <!-- Organic Key Matches Section -->
     @if (organicKeyMatches.length > 0 || isLoadingOrganicKeys) {
-    <mj-accordion-panel [(Expanded)]="organicKeysSectionExpanded">
+    <mj-accordion-panel [(Expanded)]="organicKeysSectionExpanded" [TitleIconMuted]="true">
       <ng-template mjAccordionTitle>
-        <i class="fa-solid fa-link section-icon"></i>
-        <span class="section-title">Organic Key Matches</span>
+        <i class="fa-solid fa-link"></i>
+        <span>Organic Key Matches</span>
       </ng-template>
 
       @if (isLoadingOrganicKeys) {

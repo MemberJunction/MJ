@@ -94,7 +94,7 @@
         <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('fields')" (ExpandedChange)="ToggleSection('fields')">
           <ng-template mjAccordionTitle>
             <span class="section-title">Fields</span>
-            <span class="section-count">({{ QueryInfo.QueryFields.length || 0 }})</span>
+            <span class="mj-accordion-badge mj-accordion-badge--muted">({{ QueryInfo.QueryFields.length || 0 }})</span>
           </ng-template>
               @if (QueryInfo.QueryFields.length) {
                 <div class="fields-list">
@@ -133,7 +133,7 @@
         <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('parameters')" (ExpandedChange)="ToggleSection('parameters')">
           <ng-template mjAccordionTitle>
             <span class="section-title">Parameters</span>
-            <span class="section-count">({{ QueryInfo.QueryParameters.length || 0 }})</span>
+            <span class="mj-accordion-badge mj-accordion-badge--muted">({{ QueryInfo.QueryParameters.length || 0 }})</span>
           </ng-template>
               @if (QueryInfo.QueryParameters.length) {
                 <div class="params-list">
@@ -200,7 +200,7 @@
           <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('dependents')" (ExpandedChange)="ToggleSection('dependents')">
             <ng-template mjAccordionTitle>
               <span class="section-title">Dependent Queries</span>
-              <span class="section-count">({{ QueryInfo.QueryDependents.length }})</span>
+              <span class="mj-accordion-badge mj-accordion-badge--muted">({{ QueryInfo.QueryDependents.length }})</span>
             </ng-template>
                 <div class="dependents-list">
                   @for (dep of QueryInfo.QueryDependents; track dep.ID) {

@@ -88,17 +88,10 @@
     transform: translateX(16px);
 }
 
-/* Parameters Section */
+/* Spacing between the Inputs panel and the action buttons below it (layout,
+   not accordion chrome). */
 .parameters-section {
-    display: block;
     margin-bottom: 20px;
-    width: 100%;
-}
-
-.param-count {
-    color: var(--mj-text-muted);
-    font-weight: 400;
-    font-size: 0.9em;
 }
 
 .no-params {

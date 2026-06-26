@@ -117,17 +117,6 @@
     margin-bottom: 8px;
 }
 
-.section-title {
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--mj-text-primary);
-}
-
-.section-count {
-    font-size: 12px;
-    color: var(--mj-text-muted);
-    font-weight: 400;
-}
 
 /* Technical Description Markdown */
 .technical-description-content {
