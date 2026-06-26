@@ -435,6 +435,12 @@ export class RealtimeSessionService {
   private recorder: RealtimeAudioRecorder | null = null;
   /** ISO timestamp of when recording started — sent to the server on session start. */
   private recordingStartedAtIso: string | null = null;
+  /** Interval that flushes ~15s crash-recovery shards to the server during a recording. */
+  private segmentTimer: ReturnType<typeof setInterval> | null = null;
+  /** 0-based index of the next recording shard to upload. */
+  private segmentIndex = 0;
+  /** How often crash-recovery shards are flushed during a recording. */
+  private static readonly SegmentFlushMs = 15000;
   /**
    * Recording-relative ms offset at which the IN-FLIGHT turn began (the last final transcript
    * boundary), or `null` before the first turn. Sent as `utteranceStartMs` on the next final
@@ -775,9 +781,58 @@ export class RealtimeSessionService {
       this.recorder = recorder.IsRecording ? recorder : null;
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
       console.info(`[RealtimeSession] 🎙️ recording start — IsRecording=${recorder.IsRecording}, mic tracks=${this.localStream.getAudioTracks().length}, remoteStream=${!!remoteStream}`);
+      if (this.recorder) {
+        this.startSegmentFlushing();
+      }
     } catch (error) {
       console.warn('[RealtimeSession] Failed to start call recording:', error);
       this.recorder = null;
+    }
+  }
+
+  /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
+  private startSegmentFlushing(): void {
+    this.segmentIndex = 0;
+    this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionService.SegmentFlushMs);
+  }
+
+  /** Stops the periodic crash-recovery shard flush. */
+  private stopSegmentFlushing(): void {
+    if (this.segmentTimer) {
+      clearInterval(this.segmentTimer);
+      this.segmentTimer = null;
+    }
+  }
+
+  /**
+   * Uploads the chunks captured since the last flush as one crash-recovery shard (durability only;
+   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call.
+   */
+  private async flushRecordingSegment(): Promise<void> {
+    const recorder = this.recorder;
+    const agentSessionId = this.agentSessionId;
+    if (!recorder || !agentSessionId) {
+      return;
+    }
+    const segment = recorder.SnapshotNewSegment();
+    if (!segment || segment.size === 0) {
+      return;
+    }
+    try {
+      const audioBase64 = await this.blobToBase64(segment);
+      if (!audioBase64) {
+        return;
+      }
+      const index = this.segmentIndex++;
+      const mutation = `
+        mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
+          UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
+        }
+      `;
+      await this.gql().ExecuteGQL(mutation, { agentSessionId, segmentIndex: index, audioBase64, mimeType: recorder.MimeType });
+      console.info(`[RealtimeSession] 🎙️ flushed recording shard #${index} (${segment.size} bytes)`);
+    } catch (error) {
+      console.warn('[RealtimeSession] Failed to flush recording shard:', error);
     }
   }
 
@@ -787,6 +842,7 @@ export class RealtimeSessionService {
    * No-op when nothing was recorded or there's no session id to attach the file to.
    */
   private async stopAndUploadRecording(agentSessionId: string | null): Promise<void> {
+    this.stopSegmentFlushing();
     const recorder = this.recorder;
     this.recorder = null;
     this.currentTurnStartMs = null;
@@ -2148,6 +2204,8 @@ export class RealtimeSessionService {
   private resetState(): void {
     this._captions$.next([]);
     this.SetMinimized(false);
+    this.stopSegmentFlushing();
+    this.segmentIndex = 0;
     this.recorder = null;
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;

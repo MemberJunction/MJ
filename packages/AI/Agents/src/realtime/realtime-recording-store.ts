@@ -67,6 +67,69 @@ function extensionForMime(mimeType: string): string {
     return 'wav';
 }
 
+/** The per-session folder all of a session's recording artifacts live in (shards + final file). */
+function recordingFolder(sessionID: string): string {
+    return `realtime-recordings/${sessionID}`;
+}
+
+/** Input to {@link writeRealtimeRecordingSegment}. */
+export interface WriteRecordingSegmentInput {
+    SessionID: string;
+    /** 0-based index of this ~15s shard within the session. */
+    SegmentIndex: number;
+    Audio: Buffer;
+    MimeType: string;
+    StorageAccountID: string;
+    ContextUser: UserInfo;
+}
+
+/**
+ * Writes ONE crash-recovery segment shard (`seg-NNNN.<ext>`) into the session's folder as a RAW
+ * storage object — no `MJ: Files` row, no session stamping. Shards are durability insurance during a
+ * live call (so a browser/tab death loses at most the last window); they are byte-slices of one
+ * continuous stream (only the first carries the container header), so they are NOT individually
+ * playable — recovery is "concatenate the folder's shards in order". They are deleted once the
+ * canonical consolidated file lands ({@link deleteRealtimeRecordingSegments}). Never throws.
+ *
+ * @returns `true` on success.
+ */
+export async function writeRealtimeRecordingSegment(input: WriteRecordingSegmentInput): Promise<boolean> {
+    const { SessionID, SegmentIndex, Audio, MimeType, StorageAccountID, ContextUser } = input;
+    try {
+        const driver = await FileStorageEngine.Instance.GetDriver(StorageAccountID, ContextUser);
+        const name = `seg-${String(SegmentIndex).padStart(4, '0')}.${extensionForMime(MimeType)}`;
+        return await driver.PutObject(`${recordingFolder(SessionID)}/${name}`, Audio, MimeType);
+    } catch (error) {
+        LogError(`writeRealtimeRecordingSegment failed (session ${SessionID}, seg ${SegmentIndex}): ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+    }
+}
+
+/**
+ * Deletes the `seg-*` shards in a session's folder, leaving the consolidated `recording.*` file. Called
+ * after {@link storeRealtimeRecording} writes the canonical file at end of call. Never throws.
+ *
+ * @returns The number of shards deleted.
+ */
+export async function deleteRealtimeRecordingSegments(sessionID: string, storageAccountID: string, contextUser: UserInfo): Promise<number> {
+    try {
+        const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
+        const folder = recordingFolder(sessionID);
+        const listed = await driver.ListObjects(folder);
+        let deleted = 0;
+        for (const obj of listed.objects ?? []) {
+            const base = (obj.name.split('/').pop() ?? obj.name);
+            if (base.startsWith('seg-') && await driver.DeleteObject(`${folder}/${base}`)) {
+                deleted++;
+            }
+        }
+        return deleted;
+    } catch (error) {
+        LogError(`deleteRealtimeRecordingSegments failed (session ${sessionID}): ${error instanceof Error ? error.message : String(error)}`);
+        return 0;
+    }
+}
+
 /**
  * Uploads a session recording to MJStorage, links it to the `AIAgentSession` (via
  * `MJ: File Entity Record Links`), and stamps `RecordingFileID` / `RecordingMedia` / `RecordingStartedAt`
@@ -79,15 +142,15 @@ function extensionForMime(mimeType: string): string {
 export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<string | null> {
     const { Audio, MimeType, Media, StartedAt, StorageAccountID, SessionID, ContextUser, Provider } = input;
     try {
+        // Canonical consolidated file in the session's own folder, alongside (then replacing) its shards.
         const uploaded = await FileStorageEngine.Instance.UploadFile({
             content: Audio,
-            fileName: `realtime-session-${SessionID}.${extensionForMime(MimeType)}`,
+            fileName: `recording.${extensionForMime(MimeType)}`,
             mimeType: MimeType,
             contextUser: ContextUser,
             storageAccountId: StorageAccountID,
             provider: Provider,
-            // Single-level folder: some providers (Box) can't create nested folders in one upload.
-            pathPrefix: 'realtime-recordings'
+            pathPrefix: recordingFolder(SessionID)
         });
 
         // Link the file to the session record so it's discoverable via MJ: File Entity Record Links.

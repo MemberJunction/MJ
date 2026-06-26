@@ -50,6 +50,8 @@ import {
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
+    writeRealtimeRecordingSegment,
+    deleteRealtimeRecordingSegments,
 } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
@@ -653,6 +655,11 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 Provider: provider,
             });
 
+            // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
+            if (fileID) {
+                await deleteRealtimeRecordingSegments(agentSessionId, accountID, contextUser);
+            }
+
             return {
                 Success: !!fileID,
                 FileID: fileID ?? undefined,
@@ -662,6 +669,57 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             const message = error instanceof Error ? error.message : String(error);
             LogError(`RealtimeClientSessionResolver.UploadRealtimeRecording failed for session ${agentSessionId}: ${message}`);
             return { Success: false, ErrorMessage: message };
+        }
+    }
+
+    /**
+     * Uploads ONE crash-recovery audio shard (~15s) for an IN-PROGRESS recording into the session's
+     * folder (`realtime-recordings/<sessionId>/seg-NNNN.<ext>`) as a raw storage object. Durability
+     * insurance during a live call so a browser/tab death loses at most the last window; the shards are
+     * deleted once the canonical consolidated file lands via {@link UploadRealtimeRecording}. Ownership-
+     * gated; consent was already established at session start. Best-effort — returns `false` (never
+     * throws) on any problem so a failed shard never disrupts the live call.
+     *
+     * @param agentSessionId The in-progress session (ownership-gated).
+     * @param segmentIndex 0-based shard index within the session.
+     * @param audioBase64 The base64-encoded shard bytes.
+     * @param mimeType The audio MIME type.
+     * @returns `true` when the shard was stored.
+     */
+    @Mutation(() => Boolean)
+    async UploadRealtimeRecordingSegment(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Arg('segmentIndex', () => Int) segmentIndex: number,
+        @Arg('audioBase64', () => String) audioBase64: string,
+        @Arg('mimeType', () => String) mimeType: string,
+        @Ctx() ctx: AppContext,
+    ): Promise<boolean> {
+        try {
+            const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
+            const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            if (!(await agent.Load(session.AgentID))) {
+                return false;
+            }
+            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
+            if (!accountID) {
+                return false;
+            }
+            const buffer = Buffer.from(audioBase64, 'base64');
+            if (buffer.length === 0) {
+                return false;
+            }
+            return await writeRealtimeRecordingSegment({
+                SessionID: agentSessionId,
+                SegmentIndex: segmentIndex,
+                Audio: buffer,
+                MimeType: mimeType,
+                StorageAccountID: accountID,
+                ContextUser: contextUser,
+            });
+        } catch (error) {
+            LogError(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment failed for session ${agentSessionId}: ${error instanceof Error ? error.message : String(error)}`);
+            return false;
         }
     }
 

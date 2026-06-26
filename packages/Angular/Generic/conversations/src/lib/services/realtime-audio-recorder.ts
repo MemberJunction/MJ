@@ -32,6 +32,9 @@ export class RealtimeAudioRecorder {
     private chunks: Blob[] = [];
     private recording = false;
 
+    /** How many chunks have already been emitted as crash-recovery shards (the segment cursor). */
+    private flushedChunkCount = 0;
+
     /** Wall-clock ms at recording start; anchors {@link NowOffsetMs}. 0 before {@link Start}. */
     private startedAtMs = 0;
 
@@ -83,6 +86,21 @@ export class RealtimeAudioRecorder {
             console.warn('[RealtimeAudioRecorder] Failed to start recording — disabling for this session:', error);
             this.cleanup();
         });
+    }
+
+    /**
+     * Returns a Blob of the chunks captured since the last call (a ~window of raw stream bytes),
+     * advancing the segment cursor. `null` when nothing new. Used to upload crash-recovery shards
+     * mid-call — these are byte-slices of the one continuous stream (only the first carries the
+     * container header, so they are NOT individually playable; recovery is concatenation in order).
+     */
+    public SnapshotNewSegment(): Blob | null {
+        if (!this.recording || this.flushedChunkCount >= this.chunks.length) {
+            return null;
+        }
+        const fresh = this.chunks.slice(this.flushedChunkCount);
+        this.flushedChunkCount = this.chunks.length;
+        return fresh.length > 0 ? new Blob(fresh, { type: this.mimeType }) : null;
     }
 
     /** Ms elapsed since recording started (>= 0); 0 when not recording. */
@@ -192,6 +210,7 @@ export class RealtimeAudioRecorder {
         this.recording = false;
         this.recorder = null;
         this.destination = null;
+        this.flushedChunkCount = 0;
         if (this.audioContext) {
             void this.audioContext.close().catch(() => { /* already closed */ });
             this.audioContext = null;
