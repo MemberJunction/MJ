@@ -57,6 +57,7 @@ export class MJAccordionTitleDirective {
   imports: [NgTemplateOutlet],
   template: `
     <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled"
+      [class.mj-accordion-panel--muted-icon]="TitleIconMuted"
       [attr.data-variant]="Variant !== 'default' ? Variant : null">
       <button class="mj-accordion-header" type="button"
         [id]="HeaderId"
@@ -95,6 +96,12 @@ export class MJAccordionPanelComponent {
    * All brand-token-driven, so dark-mode-safe and themeable.
    */
   @Input() Variant: 'default' | 'primary' | 'secondary' = 'default';
+  /**
+   * Render icons projected into the title slot in the muted color instead of the
+   * header's primary text color. Lets consumers get the common "quiet icon" look
+   * without writing CSS. Status/brand-colored icons can still be colored inline.
+   */
+  @Input() TitleIconMuted = false;
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
