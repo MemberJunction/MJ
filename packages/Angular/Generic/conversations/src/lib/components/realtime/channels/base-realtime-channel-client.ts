@@ -195,6 +195,17 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
   public abstract get TabIcon(): string;
 
   /**
+   * OPTIONAL accent color for the channel's tab (a CSS color string, e.g. an `hsl()` /
+   * token). When a plugin supplies one, the overlay paints the tab's dot + active underline
+   * with it; when omitted (the default `null`), the overlay derives a stable, deterministic
+   * color from the {@link ChannelName} so every channel still reads as a distinct, colored
+   * surface. A channel only overrides this to enforce a specific brand accent.
+   */
+  public get TabColor(): string | null {
+    return null;
+  }
+
+  /**
    * The channel's CLIENT-EXECUTED tool declarations, aggregated by the session service
    * into the `clientTools` set declared to the realtime model at session mint. The server
    * only DECLARES these — execution stays in the browser via {@link ApplyAgentTool}.

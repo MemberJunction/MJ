@@ -363,6 +363,20 @@ export class RealtimeSessionService {
     return this._activeChannels$.value;
   }
 
+  /**
+   * The `ChannelName`s the agent has used (acted on) at least once this session. The overlay
+   * uses this to register a channel's surface tab only after it has come into play. A fresh
+   * Set snapshot so callers can't mutate the service's tracking.
+   */
+  public get UsedChannelNames(): ReadonlySet<string> {
+    return new Set(this.usedChannelNames);
+  }
+
+  /** Whether the agent has used (acted on) the named channel at least once this session. */
+  public HasChannelBeenUsed(channelName: string): boolean {
+    return this.usedChannelNames.has(channelName);
+  }
+
   /** Synchronous access to the display name of the agent the active session fronts. */
   public get CurrentAgentName(): string {
     return this._agentName$.value;
@@ -537,6 +551,15 @@ export class RealtimeSessionService {
     StateJson: string;
     SessionID: string | null;
   }>();
+
+  /**
+   * `ChannelName`s the agent has ACTED ON at least once this session (the channel's first
+   * tool call routed to its local executor). The overlay reads this to decide which channel
+   * surface tabs to register: a channel earns its tab only once it's been used (the
+   * whiteboard is the sole exception — it tabs immediately, since a user may draw first).
+   * Reset at session start via {@link resetState}.
+   */
+  private usedChannelNames = new Set<string>();
 
   private _provider: IMetadataProvider | null = null;
 
@@ -1027,7 +1050,10 @@ export class RealtimeSessionService {
     plugin.Initialize(this.buildChannelContext(plugin));
     this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) => {
       // The agent is ACTING on this channel — surface-discovery signal for the overlay
-      // (first activity auto-reveals + focuses the channel tab) before the tool applies.
+      // (first activity registers + auto-reveals + focuses the channel tab) before the
+      // tool applies. Record the channel as USED so the overlay tabs it (channels other
+      // than the whiteboard are tab-less until they're first used).
+      this.usedChannelNames.add(plugin.ChannelName);
       this._channelActivity$.next(plugin);
       return plugin.ApplyAgentTool(toolName, argsJson);
     });
@@ -1220,6 +1246,7 @@ export class RealtimeSessionService {
     if (this._activeChannels$.value.length > 0) {
       this._activeChannels$.next([]);
     }
+    this.usedChannelNames.clear();
   }
 
   // ── Realtime client resolution + wiring ────────────────────────────────────
@@ -2288,6 +2315,7 @@ export class RealtimeSessionService {
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;
     this.turnAudioStartCaptured = false;
+    this.usedChannelNames.clear();
   }
 
   /** The GraphQL provider used for relay mutations. */

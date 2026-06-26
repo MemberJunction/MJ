@@ -23,6 +23,7 @@ import {
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeVoiceDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
+import { ShouldRegisterChannelTabUpFront, ShouldShowActivityTab } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 
@@ -201,8 +202,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   private pendingLiveContinuation = false;
 
-  /** The reviewed chain's history artifacts, registered as unfocused surface tabs. */
+  /**
+   * The reviewed chain's history artifacts, surfaced inside the Activity tab's "Session
+   * artifacts" group (no longer their own tabs). Bound into the surface panel via
+   * {@link ReviewArtifacts}. Empty for a live session.
+   */
   private reviewArtifacts: ParsedDelegationArtifact[] = [];
+
+  /** The reviewed chain's history artifacts for the surface panel's Activity tab. */
+  public get ReviewArtifacts(): ParsedDelegationArtifact[] {
+    return this.reviewArtifacts;
+  }
 
   /**
    * True while the surface panel carries the REVIEW-registered (template-based, read-only)
@@ -305,10 +315,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
     this.surfaceTabs = ref;
     if (ref) {
-      // A (re)created panel starts with a FRESH tab model: artifact tabs self-recover
-      // (the panel re-scans the session state) but CHANNEL tabs only registered when
-      // ActiveChannels$ emitted at session start — re-register the live set here so
-      // hiding the panel (pure-audio return, Details off) never loses the Whiteboard.
+      // A (re)created panel starts with a FRESH tab model. Re-register the live channel set
+      // here (gated to whiteboard + already-used channels) so hiding the panel (pure-audio
+      // return, Details off) never loses the Whiteboard or an already-used channel's tab.
+      // Artifacts live in the Activity rail now (driven by session state), so there's
+      // nothing artifact-specific to recover on the panel.
       this.registerChannelTabs([...this.voice.ActiveChannels]);
       this.flushPendingChannelTabs();
       const reveal = this.pendingRevealKey;
@@ -582,6 +593,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return !this.IsReviewing;
   }
 
+  /**
+   * Whether the surface panel's Activity tab should be shown: gated on ≥1 underlying agent
+   * run having occurred this session (the first delegated agent-run card the rail consumes),
+   * or review mode (a past session's activity is always relevant). Bound into the surface
+   * panel; re-evaluated on every merged-state change (delegation cards land on `State.Cards`).
+   */
+  public get ShowActivityTab(): boolean {
+    return ShouldShowActivityTab(this.State.Cards.length, this.IsReviewing);
+  }
+
   /** Reads the persisted disclosure milestones (tolerant; defaults to day one). */
   private loadDisclosurePref(): void {
     try {
@@ -644,9 +665,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     this.revealedChannelKeys.add(plugin.ChannelName);
     this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
+    // FIRST USE: a non-whiteboard channel was tab-less until now — register its tab
+    // SYNCHRONOUSLY (before the reveal/focus below) so the channel exists to be revealed.
+    // The whiteboard already has its tab from session start; re-registering is idempotent.
+    if (plugin.HasSurface()) {
+      this.registerPluginChannelTab(plugin);
+    }
     if (this.surfaceTabs) {
       // Stream handler (a tool call), not a change-detection pass — reveal synchronously
-      // so the board is the visible tab the instant the agent's first stroke lands.
+      // so the board is the visible tab the instant the agent's first stroke lands. The
+      // microtask-deferred RegisterChannelTab above is ordered before this RevealChannel,
+      // so the tab is in place when the focus lands.
       this.surfaceTabs.RevealChannel(plugin.ChannelName);
     } else {
       // Panel not rendered yet (the peek just created it) — reveal once it exists.
@@ -925,10 +954,14 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * Registers one surface tab per active channel plugin THAT HAS A SURFACE (key/title/icon from the
-   * plugin). Server-only channels ({@link BaseRealtimeChannelClient.HasSurface} === `false`) render no
-   * tab — their tools + perception are already wired by the session service; there is simply nothing
-   * to show in the surface panel.
+   * Registers a surface tab per active channel plugin THAT HAS A SURFACE — but ONLY for
+   * channels already in play: the WHITEBOARD tabs immediately (a user may be the first to
+   * draw), every OTHER channel stays tab-less until the agent first USES it (its first
+   * {@link onChannelActivity}). This keeps the strip decluttered to surfaces actually in
+   * play instead of pre-listing every registry-resolved channel.
+   *
+   * Server-only channels ({@link BaseRealtimeChannelClient.HasSurface} === `false`) render no
+   * tab — their tools + perception are wired by the session service regardless.
    */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
     this.cleanupStaleReviewBoardTab(channels);
@@ -936,14 +969,23 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
       }
-      this.RegisterChannelTab({
-        Key: plugin.ChannelName,
-        Title: plugin.TabTitle,
-        Icon: plugin.TabIcon,
-        Plugin: plugin
-      });
+      if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.voice.HasChannelBeenUsed(plugin.ChannelName))) {
+        continue; // not the whiteboard and not used yet — it earns its tab on first activity.
+      }
+      this.registerPluginChannelTab(plugin);
     }
     this.cdr.markForCheck();
+  }
+
+  /** Registers (or upgrades) one channel plugin's surface tab on the panel. */
+  private registerPluginChannelTab(plugin: BaseRealtimeChannelClient): void {
+    this.RegisterChannelTab({
+      Key: plugin.ChannelName,
+      Title: plugin.TabTitle,
+      Icon: plugin.TabIcon,
+      Color: plugin.TabColor,
+      Plugin: plugin
+    });
   }
 
   /**
@@ -1137,14 +1179,19 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.cdr.markForCheck();
   }
 
-  /** Registers the reviewed chain's history artifacts as UNFOCUSED artifact tabs (idempotent). */
+  /**
+   * Surfaces the reviewed chain's history artifacts inside the Activity tab. In the redesign
+   * there are no per-artifact tabs — the artifacts ride the {@link ReviewArtifacts} input into
+   * the rail's "Session artifacts" group, so this only needs to ensure the Activity tab is
+   * shown (it carries the carryover artifacts). Idempotent; no-op without any review artifacts.
+   */
   private registerReviewArtifactTabs(): void {
     if (!this.surfaceTabs || this.reviewArtifacts.length === 0) {
       return;
     }
-    for (const artifact of this.reviewArtifacts) {
-      this.surfaceTabs.RegisterArtifactTab(artifact, false);
-    }
+    // Show the Activity tab (where the carryover artifacts now live); RegisterArtifactTab
+    // flips the gate on without opening any tab of its own.
+    this.surfaceTabs.RegisterArtifactTab(this.reviewArtifacts[0], false);
     this.cdr.markForCheck();
   }
 
