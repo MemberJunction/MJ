@@ -21,12 +21,23 @@ import { RealtimeRecordingMedia } from './realtime-recording-capture';
  * @param agent The agent whose recording/attachment storage configuration drives the choice.
  * @returns The resolved storage account id, or `null`.
  */
-export function resolveRecordingStorageAccountID(agent: MJAIAgentEntity): string | null {
+export async function resolveRecordingStorageAccountID(
+    agent: MJAIAgentEntity, contextUser: UserInfo, provider?: IMetadataProvider
+): Promise<string | null> {
     const providerID = agent.RecordingStorageProviderID || agent.AttachmentStorageProviderID;
     if (!providerID) {
         return null;
     }
-    const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
+    // Ensure the storage engine has loaded its accounts before reading them. The engine may be
+    // unconfigured in this process, or configured BEFORE this storage account was provisioned (a stale
+    // cache). Try the loaded cache first; if the provider's account isn't found, force a one-time refresh
+    // so a newly-provisioned account is picked up WITHOUT requiring a server restart.
+    await FileStorageEngine.Instance.Config(false, contextUser, provider);
+    let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
+    if (accounts.length === 0) {
+        await FileStorageEngine.Instance.Config(true, contextUser, provider);
+        accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerID);
+    }
     return accounts[0]?.ID ?? null;
 }
 

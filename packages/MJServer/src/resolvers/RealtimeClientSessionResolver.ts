@@ -632,7 +632,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return { Success: false, ErrorMessage: `Co-agent ${session.AgentID} for the session could not be loaded.` };
             }
 
-            const accountID = resolveRecordingStorageAccountID(agent);
+            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
             if (!accountID) {
                 return { Success: false, ErrorMessage: 'No recording storage account is configured for this agent.' };
             }

@@ -2381,7 +2381,9 @@ export class BaseAgent {
             }
 
             // Storage: recording provider, else attachment provider; then that provider's first account.
-            const storageAccountId = resolveRecordingStorageAccountID(agent);
+            const storageAccountId = params.contextUser
+                ? await resolveRecordingStorageAccountID(agent, params.contextUser, params.provider || this._activeProvider)
+                : null;
             if (!storageAccountId) {
                 this.logStatus('🔴 Realtime recording on but no resolvable storage account (RecordingStorageProviderID/AttachmentStorageProviderID) — recording disabled.', false, params);
                 return null;
