@@ -42,6 +42,7 @@ export class ConstellationComponent {
   public ZoomIn(): void { this.pz?.ZoomIn(); }
   public ZoomOut(): void { this.pz?.ZoomOut(); }
   public FitReset(): void { this.pz?.Reset(); }
+  public ReapplyView(): void { this.pz?.Reapply(); }
   ngOnDestroy(): void { this.pz?.Detach(); }
 
   @Input() set Model(m: FlowModel | null) { this._model = m; this.built = false; this.clear(); }

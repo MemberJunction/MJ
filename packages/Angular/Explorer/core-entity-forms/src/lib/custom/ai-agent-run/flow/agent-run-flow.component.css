@@ -121,7 +121,9 @@
   overflow: hidden;
   display: flex;
 }
-.flow-detail > * { width: 100%; }
+/* size only the content child — NOT the absolutely-positioned resize handle,
+   which a universal `> *` selector would balloon to full width and trap clicks */
+.flow-detail > mj-ai-agent-run-step-detail { flex: 1 1 auto; min-width: 0; }
 
 .flow-overlay {
   position: absolute;

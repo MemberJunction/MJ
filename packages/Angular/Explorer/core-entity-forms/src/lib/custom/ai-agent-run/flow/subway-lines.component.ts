@@ -38,6 +38,7 @@ export class SubwayLinesComponent implements OnDestroy {
   public ZoomIn(): void { this.pz?.ZoomIn(); }
   public ZoomOut(): void { this.pz?.ZoomOut(); }
   public FitReset(): void { this.pz?.Reset(); }
+  public ReapplyView(): void { this.pz?.Reapply(); }
   ngOnDestroy(): void { this.pz?.Detach(); }
 
   private readonly VW = 1280;

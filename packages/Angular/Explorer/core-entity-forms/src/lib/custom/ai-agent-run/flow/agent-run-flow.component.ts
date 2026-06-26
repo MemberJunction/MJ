@@ -97,7 +97,7 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
   private p = 0;
   private lastTs = 0;
   private readonly PLAY_MS = 11000;
-  private logBuilt = false;
+  private logModelRef: FlowModel | null = null;
   private lastLeafId = -1;
   private viewReady = false;
 
@@ -107,7 +107,7 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.viewReady = true;
     const savedW = UserInfoEngine.Instance.GetSetting(this.PANEL_KEY);
-    if (savedW) { const n = +savedW; if (n >= 280 && n <= 760) this.panelWidth = n; }
+    if (savedW) { const n = +savedW; if (n >= 280) this.panelWidth = Math.min(n, this.maxPanelWidth()); }
     combineLatest([this.dataHelper.steps$, this.dataHelper.loading$])
       .pipe(takeUntil(this.destroy$))
       .subscribe(([steps, loading]) => {
@@ -134,7 +134,6 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
     this.hasData = model.leaves.length > 0;
     if (wasEmpty) this.p = 0;
     this.lastLeafId = -1;
-    this.logBuilt = false;
     this.cdr.markForCheck();
   }
 
@@ -164,9 +163,10 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
     if (!m.enabled) return;
     this.mode = m.key;
     this.applyRendererSelection(this.selectedNodeId === -1 ? null : this.selectedNodeId);
+    this.currentRenderer?.ReapplyView?.(); // ensure the now-visible renderer shows its OWN (per-type) zoom
   }
 
-  private get currentRenderer(): { Render(p: number, ts: number): void; ZoomIn?(): void; ZoomOut?(): void; FitReset?(): void } | undefined {
+  private get currentRenderer(): { Render(p: number, ts: number): void; ZoomIn?(): void; ZoomOut?(): void; FitReset?(): void; ReapplyView?(): void } | undefined {
     switch (this.mode) {
       case 'flame': return this.flame;
       case 'subway': return this.subway;
@@ -184,6 +184,9 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
 
   /* ---------------------------- panel resize ------------------------------- */
 
+  /** Cap the right panel at 75% of the viewport width. */
+  private maxPanelWidth(): number { return Math.max(360, window.innerWidth * 0.75); }
+
   public startResize(e: MouseEvent): void {
     e.preventDefault();
     this.resizing = true;
@@ -192,7 +195,7 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
     const move = (ev: MouseEvent) => {
       if (!this.resizing) return;
       const w = this.resizeStartW + (this.resizeStartX - ev.clientX); // drag left → wider
-      this.panelWidth = Math.max(280, Math.min(760, w));
+      this.panelWidth = Math.max(280, Math.min(this.maxPanelWidth(), w));
       this.cdr.markForCheck();
     };
     const up = () => {
@@ -274,6 +277,17 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
 
   private updateRail(_ts: number): void {
     const m = this.model!;
+
+    // (Re)populate the imperative rail content whenever the rail DOM is fresh
+    // (the @if remounted it with template defaults) or the model changed. Without
+    // this, a remount at run-completion leaves an empty log + a blank now-card.
+    if (this.loglistRef &&
+        (this.logModelRef !== m || (this.loglistRef.nativeElement.childElementCount === 0 && m.nodes.length > 1))) {
+      this.buildLogTree();
+      this.logModelRef = m;
+      this.lastLeafId = -1; // force the now-card to repopulate the fresh DOM
+    }
+
     const leaf = activeLeaf(m, this.p);
     const prog = this.p >= leaf.t1 ? 1 : Math.max(0, (this.p - leaf.t0) / (leaf.t1 - leaf.t0));
 
@@ -291,10 +305,7 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
     if (this.nowStatRef) {
       this.nowStatRef.nativeElement.textContent = this.p >= 1 ? 'done' : (this.p > leaf.t0 ? 'running' : 'starting');
     }
-    if (this.loglistRef) {
-      if (!this.logBuilt) { this.buildLogTree(); this.logBuilt = true; }
-      this.updateLogTree();
-    }
+    if (this.loglistRef) this.updateLogTree();
   }
 
   private refreshNowCard(leaf: FlowNode): void {

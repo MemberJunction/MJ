@@ -64,6 +64,8 @@ export class PanZoomController {
   public ZoomIn(): void { const vb = this.vb(); this.zoomAt(vb.w / 2, vb.h / 2, 1.25); }
   public ZoomOut(): void { const vb = this.vb(); this.zoomAt(vb.w / 2, vb.h / 2, 1 / 1.25); }
   public Reset(): void { this.view = { s: 1, tx: 0, ty: 0 }; this.apply(); this.persist(); }
+  /** Re-assert this controller's own view onto its group (defensive on mode switch). */
+  public Reapply(): void { this.apply(); }
 
   private vb(): { w: number; h: number } {
     const b = this.svg.viewBox?.baseVal;
