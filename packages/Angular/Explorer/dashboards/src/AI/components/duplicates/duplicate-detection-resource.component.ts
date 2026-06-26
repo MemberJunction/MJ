@@ -103,6 +103,10 @@ interface EntityDocumentOption {
     EntityName: string;
     PotentialMatchThreshold: number;
     AbsoluteMatchThreshold: number;
+    /** Master switch for the LLM reasoning layer (off = vector-only). */
+    EnableLLMReasoning: boolean;
+    /** Vector-score gate (0–1): the LLM only runs on matched sets at or above this. Null = any non-empty set. */
+    ReasoningThreshold: number | null;
 }
 
 @RegisterClass(BaseResourceComponent, 'DuplicateDetectionResource')
@@ -210,6 +214,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public RunAbsoluteThreshold = 0.95;
     public DetectionCurrentItem = '';
 
+    /**
+     * LLM reasoning gate — working copies synced from the selected entity document. Unlike the
+     * run-threshold sliders (per-run overrides), these are per-entity config the engine reads from
+     * the Entity Document, so editing them persists back to that record (see persistReasoningConfig).
+     */
+    public EnableLLMReasoning = false;
+    public ReasoningThreshold = 0.85;
+
     // Entity document picker
     public EntityDocuments: EntityDocumentOption[] = [];
     private _selectedEntityDocumentID = '';
@@ -221,6 +233,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (doc) {
             this.RunPotentialThreshold = doc.PotentialMatchThreshold;
             this.RunAbsoluteThreshold = doc.AbsoluteMatchThreshold;
+            this.EnableLLMReasoning = doc.EnableLLMReasoning;
+            this.ReasoningThreshold = doc.ReasoningThreshold ?? 0.85;
         }
     }
 
@@ -770,7 +784,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             Name: d.Name ?? 'Unnamed',
             EntityName: d.Entity ?? '',
             PotentialMatchThreshold: this.normalizeDupeThreshold(d.PotentialMatchThreshold, 0.70),
-            AbsoluteMatchThreshold: this.normalizeDupeThreshold(d.AbsoluteMatchThreshold, 0.95)
+            AbsoluteMatchThreshold: this.normalizeDupeThreshold(d.AbsoluteMatchThreshold, 0.95),
+            EnableLLMReasoning: d.EnableLLMReasoning ?? false,
+            ReasoningThreshold: d.ReasoningThreshold ?? null
         }));
 
         // Auto-select the first entity document if available
@@ -801,6 +817,59 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Handle absolute threshold slider change */
     public OnAbsoluteThresholdChanged(value: number): void {
         this.RunAbsoluteThreshold = value;
+    }
+
+    /** Toggle the LLM reasoning layer for the selected entity document and persist immediately. */
+    public async OnEnableReasoningChanged(enabled: boolean): Promise<void> {
+        this.EnableLLMReasoning = enabled;
+        await this.persistReasoningConfig();
+    }
+
+    /** Live-update the reasoning-threshold display as the slider moves (persisted on release). */
+    public OnReasoningThresholdChanged(value: number): void {
+        this.ReasoningThreshold = value;
+    }
+
+    /** Persist the reasoning threshold when the slider is released. */
+    public async OnReasoningThresholdCommitted(value: number): Promise<void> {
+        this.ReasoningThreshold = value;
+        await this.persistReasoningConfig();
+    }
+
+    /**
+     * Persist the LLM reasoning gate (EnableLLMReasoning + ReasoningThreshold) onto the selected
+     * Entity Document. The detection engine reads the gate from the Entity Document, so — unlike the
+     * run-threshold sliders — these are per-entity configuration, not per-run overrides.
+     */
+    private async persistReasoningConfig(): Promise<void> {
+        const docId = this.SelectedEntityDocumentID;
+        if (!docId) return;
+
+        const md = this.ProviderToUse;
+        const ed = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents', md.CurrentUser);
+        const loaded = await ed.Load(docId);
+        if (!loaded) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Could not load the entity document to save reasoning settings', 'error', 4000);
+            return;
+        }
+
+        ed.EnableLLMReasoning = this.EnableLLMReasoning;
+        ed.ReasoningThreshold = this.ReasoningThreshold;
+        const saved = await ed.Save();
+        if (!saved) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to save reasoning settings: ${ed.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 5000);
+            return;
+        }
+
+        // Keep the local picker option in sync so re-selecting the doc reflects the saved values.
+        const opt = this.EntityDocuments.find(d => UUIDsEqual(d.ID, docId));
+        if (opt) {
+            opt.EnableLLMReasoning = this.EnableLLMReasoning;
+            opt.ReasoningThreshold = this.ReasoningThreshold;
+        }
+        this.cdr.detectChanges();
     }
 
     private subscribeToPipelineProgress(pipelineRunID: string): void {

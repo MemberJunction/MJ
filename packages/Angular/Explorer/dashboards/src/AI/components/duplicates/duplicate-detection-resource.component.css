@@ -113,6 +113,16 @@ app-duplicate-detection-resource {
     font-size: 0.85rem;
 }
 
+/* LLM reasoning gate — sits alongside the vector sliders, separated by a subtle rule */
+.reasoning-group {
+    padding-left: 24px;
+    border-left: 1px solid var(--mj-border-subtle);
+}
+
+.reasoning-toggle-row {
+    justify-content: space-between;
+}
+
 .threshold-slider {
     width: 100%;
     height: 4px;

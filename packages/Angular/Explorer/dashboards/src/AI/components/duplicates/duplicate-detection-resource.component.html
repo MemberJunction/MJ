@@ -73,6 +73,29 @@
                     [disabled]="IsDetecting" />
                 <span class="threshold-hint">Score above which duplicates are auto-confirmed</span>
             </div>
+            <div class="threshold-slider-group reasoning-group">
+                <div class="threshold-label reasoning-toggle-row">
+                    <span><i class="fa-solid fa-brain"></i> LLM Reasoning</span>
+                    <mj-switch [(ngModel)]="EnableLLMReasoning"
+                        (ngModelChange)="OnEnableReasoningChanged($event)"
+                        [Disabled]="IsDetecting"></mj-switch>
+                </div>
+                @if (EnableLLMReasoning) {
+                    <label class="threshold-label">
+                        Run reasoning above
+                        <span class="threshold-value">{{ (ReasoningThreshold * 100).toFixed(0) }}%</span>
+                    </label>
+                    <input type="range" class="threshold-slider"
+                        [min]="30" [max]="99" [step]="1"
+                        [value]="ReasoningThreshold * 100"
+                        (input)="OnReasoningThresholdChanged($any($event.target).value / 100)"
+                        (change)="OnReasoningThresholdCommitted($any($event.target).value / 100)"
+                        [disabled]="IsDetecting" />
+                    <span class="threshold-hint">Only run the LLM on matches at or above this vector score — controls LLM cost</span>
+                } @else {
+                    <span class="threshold-hint">Vector-only. Enable to let an LLM judge borderline matches per entity.</span>
+                }
+            </div>
         </div>
     }
 
