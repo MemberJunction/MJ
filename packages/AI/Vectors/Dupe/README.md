@@ -4,7 +4,9 @@
 <!-- [![npm version](https://img.shields.io/npm/v/@memberjunction/ai-vector-dupe)](https://www.npmjs.com/package/@memberjunction/ai-vector-dupe) -->
 <!-- [![build](https://img.shields.io/github/actions/workflow/status/MemberJunction/MJ/ci.yml?branch=next)](https://github.com/MemberJunction/MJ/actions) -->
 
-**AI-powered duplicate record detection for MemberJunction entities** -- finds, scores, tracks, and optionally auto-merges duplicate records using vector similarity, hybrid search (RRF), and optional reranking.
+**AI-powered duplicate record detection for MemberJunction entities** -- finds, scores, tracks, and optionally auto-merges duplicate records using vector similarity, hybrid search (RRF), and optional reranking, with an optional **LLM reasoning layer** that judges borderline matches per-candidate before they ever reach a human.
+
+> **Two-stage by design.** Vector/hybrid search is the cheap, fast recall stage; the LLM reasoning layer is an *opt-in, threshold-gated* precision stage. Reasoning is **off by default** and, when enabled, only fires for matched sets whose top vector score clears a per-entity `ReasoningThreshold` -- so you pay for the LLM only on the matches that are actually ambiguous. See [LLM Reasoning Layer](#llm-reasoning-layer).
 
 ---
 
@@ -35,8 +37,10 @@
                     |    (hybrid if supported)|
                     | 5. Filter self-matches  |
                     | 6. Apply thresholds     |
-                    | 7. Persist match results|
-                    | 8. Auto-merge (optional)|
+                    | 7. LLM reasoning (opt-in,|
+                    |    threshold-gated)     |
+                    | 8. Persist match results|
+                    | 9. Auto-merge (optional)|
                     +-------------------------+
                                  |
               +------------------+------------------+
@@ -56,9 +60,13 @@
 | `@memberjunction/ai-vectordb` | Vector database abstraction (query, hybrid search) |
 | `@memberjunction/ai-vectors` | `VectorBase` base class with metadata and RunView helpers |
 | `@memberjunction/ai-vector-sync` | `EntityVectorSyncer` for record vectorization, template parsing |
+| `@memberjunction/ai-prompts` | Runs the reasoning prompt in `'Prompt'` mode (`PromptReasoningProvider`) |
+| `@memberjunction/record-comparison` | Computes the field-level deltas across a matched set that the reasoner judges |
 | `@memberjunction/core` | Core types: `PotentialDuplicateRequest`, `DuplicateDetectionOptions`, etc. |
-| `@memberjunction/core-entities` | Generated entity classes for Duplicate Runs, Lists, Entity Documents |
-| `@memberjunction/global` | `MJGlobal` class factory, `UUIDsEqual` |
+| `@memberjunction/core-entities` | Generated entity classes for Duplicate Runs, Lists, Entity Documents (incl. the `*Reasoning*` / `AutomationLevel` columns) |
+| `@memberjunction/global` | `MJGlobal` class factory (resolves the reasoning provider by mode), `UUIDsEqual` |
+
+> The `'Agent'`-mode provider (`AgentReasoningProvider`) is **not** a dependency of this package -- it lives in `@memberjunction/ai-agents` and registers against the reasoning seam at runtime. See [LLM Reasoning Layer](#llm-reasoning-layer).
 
 ---
 
@@ -222,6 +230,77 @@ See the [Duplicate Detection Guide](docs/DUPLICATE_DETECTION_GUIDE.md#reranking-
 
 ---
 
+## LLM Reasoning Layer
+
+Vector and hybrid search are good at *recall* (surfacing candidates) but not great at the final *is-this-actually-the-same-entity?* judgment -- two records can be semantically near without being duplicates (a parent company vs. its subsidiary), and two true duplicates can look lexically different (typos, abbreviations, stale addresses). The reasoning layer lets a (possibly small/cheap) LLM make that judgment **per candidate**, on top of the vector scores.
+
+It is **additive and off by default** -- when `EnableLLMReasoning` is false on the Entity Document, the pipeline behaves exactly as the vector-only path documented above.
+
+### Cost control: the reasoning gate
+
+The whole point is *not* to run an LLM on every record. Reasoning runs **once per source record's matched set**, and only when the gate is open. The gate (`DuplicateRecordDetector.IsReasoningGateOpen`) opens when:
+
+1. `EntityDocument.EnableLLMReasoning` is `true`, **and**
+2. the set has at least one candidate, **and**
+3. the set's **top** vector `MatchProbability` is `>= EntityDocument.ReasoningThreshold` (a `null` threshold means "reason over any non-empty set").
+
+So configuring `ReasoningThreshold = 0.85` means "only spend an LLM call when vector search is already fairly confident" -- you tune the recall/precision/cost tradeoff per entity.
+
+### Configuration (on the Entity Document)
+
+All reasoning configuration lives on the `MJ: Entity Documents` record, per entity:
+
+| Field | Type | Default | Purpose |
+|---|---|---|---|
+| `EnableLLMReasoning` | `boolean` | `false` | Master switch. Off = vector-only behavior, unchanged. |
+| `ReasoningMode` | `'Prompt' \| 'Agent'` | `'Prompt'` | Which provider runs (see below). |
+| `ReasoningThreshold` | `number \| null` | `null` | Vector-score gate (0–1). LLM runs only when the set's top score clears this. `null` = reason over any non-empty set. |
+| `ReasoningPromptID` | `string \| null` | -- | The AI Prompt to use in `'Prompt'` mode. Falls back to the seeded "Duplicate Resolution" prompt. |
+| `ReasoningAgentID` | `string \| null` | -- | The AI Agent to use in `'Agent'` mode. Falls back to the seeded "Duplicate Resolution Agent". |
+| `AutomationLevel` | `'ReviewAll' \| 'LLMGated' \| 'AutoMergeAboveAbsolute'` | `'ReviewAll'` | How far automation goes after reasoning (review everything / let the LLM gate review / auto-merge above the absolute threshold). |
+
+### The pluggable provider seam
+
+Reasoning is delegated through an abstract `DuplicateReasoningProvider`, resolved at runtime via the MJ class factory by `ReasoningMode`. Two providers ship; both emit the **identical** `DuplicateReasoningOutput`, so promoting an entity from `Prompt` to `Agent` is a config change, not a rewrite.
+
+| Provider | `@RegisterClass` key | Package | Path |
+|---|---|---|---|
+| `PromptReasoningProvider` | `PROMPT_REASONING_PROVIDER_KEY` (`'Prompt'`) | `@memberjunction/ai-vector-dupe` | Single-shot AI Prompt. Persists `AIPromptRunID`. |
+| `AgentReasoningProvider` | `AGENT_REASONING_PROVIDER_KEY` (`'Agent'`) | `@memberjunction/ai-agents` | Orchestrated agent run (unlocks memory-note injection + future context tools). Persists `AIAgentRunID`. |
+
+> The Agent provider lives in `@memberjunction/ai-agents`, **not** this package, because `ai-agents` depends on `ai-vector-dupe` -- importing `AgentRunner` here would create a build cycle. It registers against the seam under the `'Agent'` key, so the detector resolves it via the class factory with no static import back into the pipeline. Registration is handled by the class-registration manifest (no `Load*()` helper needed).
+
+To add a custom reasoning strategy, subclass `DuplicateReasoningProvider`, implement `Reason(input, context)`, and register it under a new mode key:
+
+```typescript
+import { RegisterClass } from '@memberjunction/global';
+import {
+    DuplicateReasoningProvider,
+    DuplicateReasoningInput,
+    DuplicateReasoningOutput,
+    DuplicateReasoningContext,
+} from '@memberjunction/ai-vector-dupe';
+
+@RegisterClass(DuplicateReasoningProvider, 'MyMode')
+export class MyReasoningProvider extends DuplicateReasoningProvider {
+    public async Reason(
+        input: DuplicateReasoningInput,
+        context: DuplicateReasoningContext,
+    ): Promise<DuplicateReasoningOutput> {
+        // ...inspect input.SourceRecord, input.Candidates, input.FieldDeltas...
+        // return a structured verdict with per-candidate CandidateVerdicts
+    }
+}
+```
+
+### Per-candidate verdicts
+
+A matched set is the top-K neighbors of one source record, so it routinely mixes true duplicates with false positives. The reasoner therefore returns a verdict **per candidate** (`DuplicateReasoningOutput.CandidateVerdicts`), each judged independently against the source -- a false-positive candidate reads `NotDuplicate` even when another candidate in the same set is a confident `Merge`. The detector stamps each candidate's own verdict onto its match row; the set-level `Recommendation`/`Confidence` are *derived* values used only for the group's dominant display and the auto-merge gate.
+
+The output also carries a proposed `SurvivorRecordID` and per-field survivor choices (`FieldChoices`) that feed `Metadata.MergeRecords` at merge time. A `null` `Confidence` means the model returned no usable confidence and must be rendered/stored as "unknown" -- never conflated with a real `0` (which reads as "confidently NOT a duplicate"). See `DuplicateReasoningTypes` for the full contract.
+
+---
+
 ## Progress Reporting
 
 The `OnProgress` callback fires at each phase of the pipeline:
@@ -309,11 +388,11 @@ The package reads from and writes to these MJ entities:
 
 | Entity | Purpose |
 |---|---|
-| `MJ: Entity Documents` | Configuration: template, AI model, vector DB, thresholds |
+| `MJ: Entity Documents` | Configuration: template, AI model, vector DB, thresholds, **and the reasoning config** (`EnableLLMReasoning`, `ReasoningMode`, `ReasoningThreshold`, `ReasoningPromptID`, `ReasoningAgentID`, `AutomationLevel`) |
 | `MJ: Lists` / `MJ: List Details` | Source records to check for duplicates |
 | `MJ: Duplicate Runs` | Tracks each detection run (status, timing) |
 | `MJ: Duplicate Run Details` | Per-record tracking within a run; includes `RecordMetadata` (vector DB metadata snapshot) |
-| `MJ: Duplicate Run Detail Matches` | Individual match results with probability scores; includes `RecordMetadata` for the matched record |
+| `MJ: Duplicate Run Detail Matches` | Individual match results with probability scores; includes `RecordMetadata` and, when reasoning ran, the per-candidate LLM verdict columns (recommendation, confidence, reasoning, and `AIPromptRunID`/`AIAgentRunID`) |
 
 ---
 
