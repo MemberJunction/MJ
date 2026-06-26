@@ -80,6 +80,15 @@
   follow-up. **Verified gap turned out narrower still:** the runner is the bridged path; audio only crosses the
   server session when a bridge feeds it — so **client-direct browser capture is a follow-up** (S1B addendum).
   Builds green across core-entities/ai-agents/ng-conversations/MJServer.
+- `@2026-06-25` **Storage provisioned + Box fixed + client-direct recording (Path B) built.** Provisioned a
+  Box account via the object model (`scripts/provision-box-storage.ts` — provider + encrypted credential via
+  CredentialEngine + account, all in the local DB, nothing in metadata/git); set the Realtime Co-Agent
+  `RecordingDefault=Audio`. **Fixed a real Box driver bug** (`CreateDirectory` parented subfolders to
+  account-root `'0'` not the configured root → all subfolder uploads failed); verified a real upload+read
+  round-trip. Extracted shared `storeRealtimeRecording` helper (both topologies). Built **Path B**: server
+  resolver gains per-turn timing args + `recordingStartedAt`/consent + `UploadRealtimeRecording` mutation;
+  browser gains `RealtimeAudioRecorder` (mic+remote WebRTC mix → MediaRecorder) + consent toggle + per-turn
+  timing + end-of-call upload. **NOTE:** browser capture (esp. remote WebRTC track) needs live-UI verification.
 - `@2026-06-25` **S1B re-scoped after code/ORM verification.** Read the realtime write path
   (`persistRealtimeTranscript`, `packages/AI/Agents/src/base-agent.ts`) + the ORM source of truth
   (`MJConversationDetailEntity` in `packages/MJCoreEntities/src/generated/entity_subclasses.ts`). **Confirmed:**
