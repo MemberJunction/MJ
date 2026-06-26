@@ -209,13 +209,11 @@
                                     Loading parameters...
                                 </div>
                             } @else if (actionParams.length === 0) {
-                                <div class="empty-state" style="padding: 30px; text-align: center;">
-                                    <i class="fa-solid fa-sliders" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
-                                    <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No parameters defined</p>
-                                    @if (EditMode && record.IsSaved) {
-                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: var(--mj-text-muted);">Add parameters to define inputs and outputs for this action</p>
-                                    }
-                                </div>
+                                <mj-empty-state
+                                    Size="compact"
+                                    Icon="fa-solid fa-sliders"
+                                    Title="No parameters defined"
+                                    [Message]="EditMode && record.IsSaved ? 'Add parameters to define inputs and outputs for this action' : ''" />
                             } @else {
                                 <!-- Input Parameters Grid -->
                                 <div class="params-section">
@@ -229,10 +227,10 @@
                                     </div>
                                     
                                     @if (getInputParams().length === 0) {
-                                        <div class="empty-state" style="padding: 30px; text-align: center;">
-                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
-                                            <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No input parameters defined</p>
-                                        </div>
+                                        <mj-empty-state
+                                            Size="compact"
+                                            Icon="fa-solid fa-inbox"
+                                            Title="No input parameters defined" />
                                     } @else {
                                         <div class="params-grid">
                                             @for (param of getInputParams(); track param.ID) {
@@ -289,10 +287,10 @@
                                     </div>
                                     
                                     @if (getOutputParams().length === 0) {
-                                        <div class="empty-state" style="padding: 20px; text-align: center;">
-                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
-                                            <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No output parameters defined</p>
-                                        </div>
+                                        <mj-empty-state
+                                            Size="compact"
+                                            Icon="fa-solid fa-inbox"
+                                            Title="No output parameters defined" />
                                     } @else {
                                         <div class="params-grid">
                                             @for (param of getOutputParams(); track param.ID) {
@@ -629,13 +627,11 @@
                                     Loading result codes...
                                 </div>
                             } @else if (resultCodes.length === 0) {
-                                <div class="empty-state" style="padding: 30px; text-align: center;">
-                                    <i class="fa-solid fa-flag-checkered" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
-                                    <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No result codes defined</p>
-                                    @if (EditMode && record.IsSaved) {
-                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: var(--mj-text-muted);">Add result codes to define possible outcomes</p>
-                                    }
-                                </div>
+                                <mj-empty-state
+                                    Size="compact"
+                                    Icon="fa-solid fa-flag-checkered"
+                                    Title="No result codes defined"
+                                    [Message]="EditMode && record.IsSaved ? 'Add result codes to define possible outcomes' : ''" />
                             } @else {
                                 <div class="result-codes-grid">
                                     @for (code of resultCodes; track code.ID) {
@@ -689,10 +685,10 @@
                                         Loading executions...
                                     </div>
                                 } @else if (recentExecutions.length === 0) {
-                                    <div class="empty-state" style="padding: 30px; text-align: center;">
-                                        <i class="fa-solid fa-chart-line" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
-                                        <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No executions yet</p>
-                                    </div>
+                                    <mj-empty-state
+                                        Size="compact"
+                                        Icon="fa-solid fa-chart-line"
+                                        Title="No executions yet" />
                                 } @else {
                                     <div class="execution-stats-row">
                                         <div class="stat-box">
@@ -786,9 +782,10 @@
                                             Loading libraries...
                                         </div>
                                     } @else if (actionLibraries.length === 0) {
-                                        <div class="empty-state mini">
-                                            <p>No libraries configured</p>
-                                        </div>
+                                        <mj-empty-state
+                                            Size="compact"
+                                            Icon="fa-solid fa-book"
+                                            Title="No libraries configured" />
                                     } @else {
                                         <div class="library-cards">
                                             @for (lib of libraries; track lib.ID; let i = $index) {

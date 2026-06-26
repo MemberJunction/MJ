@@ -26,6 +26,15 @@ export interface PGConnectionConfig {
     ConnectionTimeoutMillis?: number;
     /** MemberJunction schema name (default: __mj) */
     MJCoreSchemaName?: string;
+    /**
+     * libpq-style connection options applied at startup, passed verbatim as
+     * pg.PoolConfig.options. Common use: server-side GUCs that should take
+     * effect from the first query, e.g. `-c statement_timeout=30000`. Unlike
+     * a runtime `SET` on the pool's `connect` event, this is included in the
+     * PostgreSQL startup packet and is honored by every backend including the
+     * one created during the Initialize() verify-SELECT-1 step.
+     */
+    Options?: string;
 }
 
 /**
@@ -91,6 +100,9 @@ export class PGConnectionManager {
             min: config.MinConnections ?? 2,
             idleTimeoutMillis: config.IdleTimeoutMillis ?? 30000,
             connectionTimeoutMillis: config.ConnectionTimeoutMillis ?? 30000,
+            // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
+            // by every backend from connection #1, including the verify-SELECT-1 below.
+            ...(config.Options ? { options: config.Options } : {}),
         });
 
         // Verify connectivity

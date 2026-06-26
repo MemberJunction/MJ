@@ -128,6 +128,12 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   public addDialogSaving: boolean = false;
   public addableRecords: AddableRecord[] = [];
   public addRecordsSearchFilter: string = "";
+
+  /** Empty-state title shown when an add-records search returns no matches. */
+  public get AddRecordsNoMatchTitle(): string {
+    return `No records found matching "${this.addRecordsSearchFilter}"`;
+  }
+
   public existingListDetailIds: Set<string> = new Set();
   public addProgress: number = 0;
   public addTotal: number = 0;

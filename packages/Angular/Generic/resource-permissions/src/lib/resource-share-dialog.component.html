@@ -45,9 +45,11 @@
           </div>
         }
         @if (UserSearchFilter && FilteredAvailableUsers.length === 0) {
-          <div class="share-no-results">
-            No users found matching "{{ UserSearchFilter }}"
-          </div>
+          <mj-empty-state
+            Variant="no-results"
+            Icon="fa-solid fa-user-slash"
+            [Title]="NoUsersFoundMessage"
+            Size="compact" />
         }
       </div>
       <!-- People with Access -->
@@ -95,10 +97,10 @@
           </div>
         }
         @if (ActiveShares.length === 0) {
-          <div class="share-empty">
-            <i class="fa-solid fa-user-lock"></i>
-            <span>Not shared with anyone yet</span>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-user-lock"
+            Title="Not shared with anyone yet"
+            Size="compact" />
         }
         @if (RemovedShares.length > 0) {
           <div class="share-removed-section">

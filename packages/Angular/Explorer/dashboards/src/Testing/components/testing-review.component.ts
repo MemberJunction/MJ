@@ -125,11 +125,9 @@ interface ReviewFormState {
       @if (CurrentView === 'queue') {
         <div class="content-card">
           @if (PendingItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-circle-check"></i>
-              <h3>All caught up!</h3>
-              <p>No tests currently require human review.</p>
-            </div>
+            <mj-empty-state Variant="success"
+              Title="All caught up!"
+              Message="No tests currently require human review." />
           } @else {
             <div class="queue-list">
               @for (item of PendingItems; track item.testRunID) {
@@ -254,11 +252,9 @@ interface ReviewFormState {
           </div>
 
           @if (FilteredHistoryItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-folder-open"></i>
-              <h3>No reviewed items</h3>
-              <p>Reviewed tests will appear here once feedback is submitted.</p>
-            </div>
+            <mj-empty-state Icon="fa-solid fa-folder-open"
+              Title="No reviewed items"
+              Message="Reviewed tests will appear here once feedback is submitted." />
           } @else {
             <div class="history-list">
               @for (item of FilteredHistoryItems; track item.id) {
@@ -1021,31 +1017,6 @@ interface ReviewFormState {
 
     .history-comments.expanded p {
       white-space: normal;
-    }
-
-    /* Empty State */
-    .empty-state {
-      padding: 60px 20px;
-      text-align: center;
-    }
-
-    .empty-state i {
-      font-size: 52px;
-      margin-bottom: 16px;
-      color: var(--mj-status-success);
-    }
-
-    .empty-state h3 {
-      font-size: 18px;
-      color: var(--mj-text-primary);
-      margin: 0 0 8px 0;
-      font-weight: 600;
-    }
-
-    .empty-state p {
-      font-size: 14px;
-      color: var(--mj-text-disabled);
-      margin: 0;
     }
 
     /* Calibration Section */

@@ -688,6 +688,16 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     return null;
   }
 
+  /** Title shown in the "no records" empty state — varies with the active filter. */
+  get NoRecordsTitle(): string {
+    return this.DebouncedFilterText ? 'No matching records' : 'No records found';
+  }
+
+  /** True when the "no records" empty state is the result of an active filter. */
+  get IsNoRecordsFiltered(): boolean {
+    return !!this.DebouncedFilterText;
+  }
+
   /**
    * Gets EntityInfo from a ViewEntity with multiple fallback strategies.
    * Priority: 1) ViewEntityInfo property (set by Load)

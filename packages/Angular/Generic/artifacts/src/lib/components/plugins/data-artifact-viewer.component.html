@@ -158,10 +158,12 @@
           >
           </mj-query-data-grid>
         } @else if (HasError) {
-          <div class="error-state">
-            <i class="fas fa-exclamation-triangle"></i>
-            <p>{{ ErrorMessage }}</p>
-          </div>
+          <mj-empty-state
+            Variant="error"
+            Icon="fa-solid fa-triangle-exclamation"
+            Title="Couldn't load data"
+            [Message]="ErrorMessage"
+            Size="compact" />
         } @else {
           <mj-query-data-grid
             [ColumnConfigs]="GridColumnConfigs"
@@ -194,21 +196,23 @@
       </div>
     } @else {
       <!-- No data and no plan -->
-      <div class="empty-state">
-        <i class="fas fa-inbox"></i>
-        <p>No data to display</p>
-      </div>
+      <mj-empty-state
+        Icon="fa-solid fa-inbox"
+        Title="No data to display"
+        Size="compact" />
     }
   } @else if (HasError) {
-    <div class="error-state">
-      <i class="fas fa-exclamation-triangle"></i>
-      <p>{{ ErrorMessage }}</p>
-    </div>
+    <mj-empty-state
+      Variant="error"
+      Icon="fa-solid fa-triangle-exclamation"
+      Title="Couldn't load data"
+      [Message]="ErrorMessage"
+      Size="compact" />
   } @else {
-    <div class="empty-state">
-      <i class="fas fa-inbox"></i>
-      <p>No data to display</p>
-    </div>
+    <mj-empty-state
+      Icon="fa-solid fa-inbox"
+      Title="No data to display"
+      Size="compact" />
   }
 
   <!-- Save Query Panel (slide-in) -->

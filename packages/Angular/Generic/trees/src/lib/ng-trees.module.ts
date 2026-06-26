@@ -7,6 +7,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 // Components
 import { TreeComponent } from './tree/tree.component';
@@ -19,7 +20,8 @@ import { TreeDropdownComponent } from './tree-dropdown/tree-dropdown.component';
     ],
     imports: [
         CommonModule,
-        FormsModule
+        FormsModule,
+        MJEmptyStateComponent
     ],
     exports: [
         TreeComponent,

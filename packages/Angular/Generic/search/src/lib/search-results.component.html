@@ -3,10 +3,9 @@
         <mj-loading text="Searching..." size="medium"></mj-loading>
     </div>
 } @else if ((DisplayMode === 'flat' ? FlatResults.length : ResultGroups.length) === 0 && TotalCount === 0) {
-    <div class="results-empty">
-        <i class="fa-solid fa-search results-empty-icon"></i>
-        <p class="results-empty-text">No results to display</p>
-    </div>
+    <mj-empty-state
+        Variant="no-results"
+        Title="No results to display" />
 } @else {
     <!-- Results summary -->
     @if (ShowSummary) {

@@ -115,10 +115,8 @@
                 </div>
             }
             @if (FilteredChunks.length === 0) {
-                <div class="lz-empty">
-                    <i class="fa-solid fa-circle-info"></i>
-                    No chunks match the current filter.
-                </div>
+                <mj-empty-state class="lz-empty" Variant="no-results" Size="compact" Icon="fa-solid fa-circle-info"
+                    Title="No chunks match the current filter." />
             }
         </div>
     }

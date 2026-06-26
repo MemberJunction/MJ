@@ -593,10 +593,10 @@
                   </div>
                   <!-- Empty state -->
                   @if (getFilteredFieldsList().length === 0) {
-                    <div class="list-empty">
-                      <i class="fa-solid fa-search"></i>
-                      <span>No fields match your search</span>
-                    </div>
+                    <mj-empty-state
+                      Variant="no-results"
+                      Size="compact"
+                      Title="No fields match your search" />
                   }
                 </div>
               }
@@ -692,9 +692,7 @@
                         </div>
                       }
                       @if (groupedOutgoingRelationships.length === 0) {
-                        <div class="empty-state">
-                          <p>No outgoing relationships</p>
-                        </div>
+                        <mj-empty-state Size="compact" Icon="fa-solid fa-arrow-right-from-bracket" Title="No outgoing relationships" />
                       }
                     </div>
                   </div>
@@ -732,9 +730,7 @@
                         </div>
                       }
                       @if (groupedIncomingRelationships.length === 0) {
-                        <div class="empty-state">
-                          <p>No incoming relationships</p>
-                        </div>
+                        <mj-empty-state Size="compact" Icon="fa-solid fa-arrow-right-to-bracket" Title="No incoming relationships" />
                       }
                     </div>
                   </div>
@@ -750,11 +746,10 @@
           <section class="section organic-keys-section">
             <div class="section-content">
               @if (organicKeysOutgoing.length === 0 && organicKeysIncoming.length === 0) {
-                <div class="empty-state-card">
-                  <i class="fa-solid fa-fingerprint empty-state-icon"></i>
-                  <h3>No Organic Keys</h3>
-                  <p>This entity has no organic key relationships configured. Organic keys enable cross-system matching by shared business data like email addresses, phone numbers, or domain names — without requiring foreign key constraints.</p>
-                </div>
+                <mj-empty-state
+                  Icon="fa-solid fa-fingerprint"
+                  Title="No Organic Keys"
+                  Message="This entity has no organic key relationships configured. Organic keys enable cross-system matching by shared business data like email addresses, phone numbers, or domain names — without requiring foreign key constraints." />
               } @else {
                 <!-- Outgoing: Keys defined on THIS entity -->
                 @if (organicKeysOutgoing.length > 0) {
@@ -917,10 +912,7 @@
                   </tbody>
                 </table>
                 @if (entity.Permissions.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <p>No permissions configured</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-shield-halved" Title="No permissions configured" />
                 }
               </div>
               <div class="api-capabilities">
@@ -1255,9 +1247,7 @@
                   </div>
                 }
                 @if (entity.Settings.length === 0) {
-                  <div class="empty-state">
-                    <p>No custom settings configured</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-sliders" Title="No custom settings configured" />
                 }
               </div>
               <!-- Full Text Search -->
@@ -1296,9 +1286,7 @@
                   </div>
                 }
                 @if (!entity.FullTextSearchEnabled) {
-                  <div class="empty-state">
-                    <p>Full-text search is not enabled for this entity</p>
-                  </div>
+                  <mj-empty-state Variant="warning" Size="compact" Title="Full-text search is not enabled for this entity" />
                 }
               </div>
               <!-- Row Packaging -->
@@ -1541,16 +1529,18 @@
     </div>
   }
   @if (!isExplorerLoading && explorerError) {
-    <div class="explorer-error">
-      <i class="fa-solid fa-exclamation-triangle"></i>
-      <p>{{ explorerError }}</p>
-    </div>
+    <mj-empty-state
+      class="explorer-fill"
+      Variant="error"
+      Icon="fa-solid fa-triangle-exclamation"
+      Title="Failed to load entity"
+      [Message]="explorerError" />
   }
   @if (!isExplorerLoading && !explorerError && !entity) {
-    <div class="explorer-empty">
-      <i class="fa-solid fa-database"></i>
-      <p>Entity metadata not available</p>
-    </div>
+    <mj-empty-state
+      class="explorer-fill"
+      Icon="fa-solid fa-database"
+      Title="Entity metadata not available" />
   }
 }
 

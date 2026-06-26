@@ -7,7 +7,8 @@ import {
   MJButtonDirective,
   MJDialogComponent,
   MJDialogActionsComponent,
-  MJDropdownComponent
+  MJDropdownComponent,
+  MJEmptyStateComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction imports
@@ -55,6 +56,7 @@ import { ListSharingService } from './services/list-sharing.service';
     MJDialogComponent,
     MJDialogActionsComponent,
     MJDropdownComponent,
+    MJEmptyStateComponent,
     ContainerDirectivesModule,
     SharedGenericModule
   ],

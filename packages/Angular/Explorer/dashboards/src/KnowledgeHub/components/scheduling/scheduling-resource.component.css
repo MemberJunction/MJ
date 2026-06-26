@@ -420,28 +420,6 @@
     padding: 60px;
 }
 
-/* ── Empty state ──────────────────────────────────────────────── */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    color: var(--mj-text-muted);
-    text-align: center;
-}
-.empty-state i {
-    font-size: 40px;
-    margin-bottom: 12px;
-}
-.empty-state p {
-    font-size: 14px;
-    margin-bottom: 4px;
-}
-.empty-state span {
-    font-size: 12px;
-}
-
 /* Scheduling App Link */
 .scheduling-app-link {
     display: flex;
