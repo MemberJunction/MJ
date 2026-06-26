@@ -119,8 +119,9 @@ app-duplicate-detection-resource {
     border-left: 1px solid var(--mj-border-subtle);
 }
 
+/* Toggle sits right next to its label, not flung to the far edge of the column */
 .reasoning-toggle-row {
-    justify-content: space-between;
+    gap: 10px;
 }
 
 .threshold-slider {
