@@ -1,0 +1,140 @@
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Model & Process Section -->
+    <mj-collapsible-panel
+        SectionKey="modelProcess"
+        SectionName="Model & Process"
+        Icon="fa fa-microchip"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MLModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RecordProcessID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Mode"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Target Destination Section -->
+    <mj-collapsible-panel
+        SectionKey="targetDestination"
+        SectionName="Target Destination"
+        Icon="fa fa-bullseye"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TargetEntityID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TargetColumn"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MaterializedResultID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Scoring Metrics Section -->
+    <mj-collapsible-panel
+        SectionKey="scoringMetrics"
+        SectionName="Scoring Metrics"
+        Icon="fa fa-chart-bar"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="LastScoredAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="LastRowCount"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+</mj-record-form-container>
+        

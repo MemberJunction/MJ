@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- File Basics Section -->
+    <!-- Algorithm Profile Section -->
     <mj-collapsible-panel
-        SectionKey="fileBasics"
-        SectionName="File Basics"
-        Icon="fa fa-file"
+        SectionKey="algorithmProfile"
+        SectionName="Algorithm Profile"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -33,56 +33,28 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Classification & Status Section -->
-    <mj-collapsible-panel
-        SectionKey="classificationStatus"
-        SectionName="Classification & Status"
-        Icon="fa fa-tags"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="CategoryID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Status"
-            Type="textbox"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Storage Details Section -->
+    <!-- Execution & Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="storageDetails"
-        SectionName="Storage Details"
-        Icon="fa fa-cloud"
+        SectionKey="executionConfiguration"
+        SectionName="Execution & Configuration"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ProviderID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentType"
+            FieldName="ProblemTypes"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -90,8 +62,32 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ProviderKey"
+            FieldName="DriverClass"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="HyperparameterSchema"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultHyperparameters"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsFeatureImportance"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -130,125 +126,25 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- File Entity Record Links Section -->
+    <!-- ML Training Pipelines Section -->
     <mj-collapsible-panel
-        SectionKey="mJFileEntityRecordLinks"
-        SectionName="File Entity Record Links"
-        Icon="fa fa-link"
+        SectionKey="mJMLTrainingPipelines"
+        SectionName="ML Training Pipelines"
+        Icon="fa fa-route"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJFileEntityRecordLinks')"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingPipelines')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Entity Record Links','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ: File Entity Record Links')"
-                [AllowLoad]="IsSectionExpanded('mJFileEntityRecordLinks')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Pipelines','AlgorithmID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Pipelines')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingPipelines')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJFileEntityRecordLinks', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Prompt Run Medias Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIPromptRunMedias"
-        SectionName="AI Prompt Run Medias"
-        Icon="fa fa-image"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIPromptRunMedias')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Prompt Run Medias','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Prompt Run Medias')"
-                [AllowLoad]="IsSectionExpanded('mJAIPromptRunMedias')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIPromptRunMedias', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Conversation Detail Attachments Section -->
-    <mj-collapsible-panel
-        SectionKey="mJConversationDetailAttachments"
-        SectionName="Conversation Detail Attachments"
-        Icon="fa fa-paperclip"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJConversationDetailAttachments')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Attachments','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Attachments')"
-                [AllowLoad]="IsSectionExpanded('mJConversationDetailAttachments')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJConversationDetailAttachments', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- AI Agent Run Medias Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAIAgentRunMedias"
-        SectionName="AI Agent Run Medias"
-        Icon="fa fa-robot"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAIAgentRunMedias')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Run Medias','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Agent Run Medias')"
-                [AllowLoad]="IsSectionExpanded('mJAIAgentRunMedias')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRunMedias', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Artifact Versions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJArtifactVersions"
-        SectionName="Artifact Versions"
-        Icon="fa fa-history"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArtifactVersions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Versions','FileID')"
-                [NewRecordValues]="NewRecordValues('MJ: Artifact Versions')"
-                [AllowLoad]="IsSectionExpanded('mJArtifactVersions')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArtifactVersions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingPipelines', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -268,12 +164,62 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Models','ArtifactFileID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Models','AlgorithmID')"
                 [NewRecordValues]="NewRecordValues('MJ: ML Models')"
                 [AllowLoad]="IsSectionExpanded('mJMLModels')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLModels', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ML Algorithm Use Case Rankings Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLAlgorithmUseCaseRankings"
+        SectionName="ML Algorithm Use Case Rankings"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLAlgorithmUseCaseRankings')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Algorithm Use Case Rankings','MLAlgorithmID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Algorithm Use Case Rankings')"
+                [AllowLoad]="IsSectionExpanded('mJMLAlgorithmUseCaseRankings')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLAlgorithmUseCaseRankings', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ML Training Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLTrainingRuns"
+        SectionName="ML Training Runs"
+        Icon="fa fa-flask"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Runs','AlgorithmID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Runs')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
