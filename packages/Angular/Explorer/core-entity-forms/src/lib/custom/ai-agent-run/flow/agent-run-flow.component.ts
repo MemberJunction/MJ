@@ -46,12 +46,12 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
   @Input() agentLogoUrl: string | null = null;
 
   public modes: FlowMode[] = [
-    { key: 'flame', label: 'Flame Cascade', icon: 'fa-fire', enabled: true },
     { key: 'subway', label: 'Subway Lines', icon: 'fa-train-subway', enabled: true },
     { key: 'constellation', label: 'Constellation', icon: 'fa-star', enabled: true },
-    { key: 'flow', label: 'Flow', icon: 'fa-diagram-project', enabled: true }
+    { key: 'flow', label: 'Flow', icon: 'fa-diagram-project', enabled: true },
+    { key: 'flame', label: 'Flame Cascade', icon: 'fa-fire', enabled: true }
   ];
-  public mode = 'flame';
+  public mode = 'subway';
   public model: FlowModel | null = null;
   public playing = false;
   public speed = 1;
