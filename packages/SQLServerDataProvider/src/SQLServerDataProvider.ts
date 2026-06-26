@@ -312,6 +312,16 @@ export class SQLServerDataProvider
   private _recordDupeDetector: DuplicateRecordDetector;
   private _needsDatetimeOffsetAdjustment: boolean = false;
   private _datetimeOffsetTestComplete: boolean = false;
+  /**
+   * Per-entity base-view column order — the view's column NAMES in physical (`column_id`) order,
+   * keyed by `'<schema>.<baseview>'` lowercased. Populated once in {@link Config} (after metadata
+   * load) by a single `sys.columns` query over all views. {@link getAllEntityColumnsSQL} declares the
+   * save-capture `@ResultTable` in this order so it matches the view that the positional
+   * `INSERT INTO @ResultTable EXEC ...` is filled from — authoritative for ANY view layout
+   * (CodeGen-generated, computed-column-in-the-middle, or hand-maintained). A missing key (or a view
+   * column with no matching field) falls back to the metadata-derived non-virtual-then-virtual order.
+   */
+  private _viewColumnOrderCache: Map<string, string[]> = new Map();
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
@@ -406,13 +416,57 @@ export class SQLServerDataProvider
       // Initialize the instance queue processor
       this.initializeQueueProcessor();
 
-      return super.Config(configData, providerToUse); // now parent class can do it's config
+      const configured = await super.Config(configData, providerToUse); // now parent class can do it's config
+      // After metadata is loaded, capture each base view's REAL column order so the save-capture
+      // @ResultTable is declared to match it (see _viewColumnOrderCache + getAllEntityColumnsSQL).
+      if (configured) {
+        await this.loadViewColumnOrderCache();
+      }
+      return configured;
     } catch (e) {
       LogError(e);
       throw e;
     }
   }
-  
+
+  /**
+   * Loads every view's column order (name, in `column_id` order) from `sys.columns` in a single query
+   * and caches it by `'<schema>.<view>'`. Used by {@link getAllEntityColumnsSQL} to declare the
+   * save-capture `@ResultTable` in the view's actual physical order — the order SQL Server uses when it
+   * fills the table via the positional `INSERT INTO @ResultTable EXEC <sp>` (the sp ends in
+   * `SELECT * FROM <BaseView>`). Best-effort: any failure leaves the cache empty, and
+   * getAllEntityColumnsSQL falls back to the metadata-derived order. Runs once at {@link Config}.
+   */
+  private async loadViewColumnOrderCache(): Promise<void> {
+    try {
+      const viewOrderSQL = `SELECT s.name AS SchemaName, o.name AS ViewName, c.name AS ColumnName
+                   FROM sys.columns c
+                     INNER JOIN sys.objects o ON c.object_id = o.object_id
+                     INNER JOIN sys.schemas s ON o.schema_id = s.schema_id
+                   WHERE o.type = 'V'
+                   ORDER BY s.name, o.name, c.column_id`;
+      const rows: Array<{ SchemaName: string; ViewName: string; ColumnName: string }> = await this.ExecuteSQL(viewOrderSQL, null, {
+        ignoreLogging: true,
+        description: 'load view column order for save-capture @ResultTable alignment',
+      });
+      const cache = new Map<string, string[]>();
+      for (const r of rows ?? []) {
+        const key = `${r.SchemaName}.${r.ViewName}`.toLowerCase();
+        let cols = cache.get(key);
+        if (!cols) {
+          cols = [];
+          cache.set(key, cols);
+        }
+        cols.push(r.ColumnName);
+      }
+      this._viewColumnOrderCache = cache;
+      LogStatus(`SQLServerDataProvider: cached column order for ${cache.size} view(s) (save-capture @ResultTable alignment)`);
+    } catch (e) {
+      // best-effort: an empty cache makes getAllEntityColumnsSQL fall back to the metadata-derived order
+      LogStatus(`SQLServerDataProvider: view column-order prefetch failed; save-capture will use metadata order. ${e}`);
+    }
+  }
+
   /**
    * Initialize the SQL queue processor for this instance
    * This ensures all queries within a transaction execute sequentially
@@ -792,23 +846,51 @@ export class SQLServerDataProvider
 
   private getAllEntityColumnsSQL(entityInfo: EntityInfo): string {
     // This builds the column list for the @ResultTable/@ResultChangesTable that captures
-    // `SELECT * FROM <BaseView>` via a POSITIONAL `INSERT INTO @table EXEC ...`. The base view
-    // is generated as `SELECT [base].*, <related joins>` — i.e. non-virtual (base-table) columns
-    // first, then virtual/related fields appended last. The capture table MUST be declared in that
-    // same order, or values mis-route by position: a base column that CodeGen sequenced AFTER a
-    // virtual field (newly-added columns get an offset of maxSequence+100000) would otherwise land
-    // its value in the virtual field's column slot, producing truncation / type-conversion errors.
+    // `SELECT * FROM <BaseView>` via a POSITIONAL `INSERT INTO @table EXEC ...`. SQL Server maps the
+    // sproc's result set into the table strictly by ORDINAL position (column names are ignored), so the
+    // table MUST be declared in the VIEW's actual column order — otherwise values mis-route into
+    // wrong-typed slots, producing truncation / type-conversion errors that fail the save.
     //
-    // We therefore emit non-virtual fields first, then virtual fields, each preserving their existing
-    // relative order. This is a STABLE PARTITION: for any entity whose virtual fields already sort
-    // after all base fields (the overwhelming majority), the output is byte-for-byte identical to the
-    // prior sequence-ordered output (a no-op). It only changes — and corrects — entities where a
-    // virtual field was sequenced ahead of a base column.
-    this.warnIfBaseFieldSequencedAfterVirtual(entityInfo);
-    const orderedFields = [
-      ...entityInfo.Fields.filter((f) => !f.IsVirtual),
-      ...entityInfo.Fields.filter((f) => f.IsVirtual),
-    ];
+    // The authoritative source is the view itself. `_viewColumnOrderCache` holds each base view's real
+    // column order (read from sys.columns at Config). We emit columns in THAT order, typing each from
+    // its matching EntityField by name — correct for ANY view layout BY CONSTRUCTION: CodeGen-generated
+    // (`[base].*, joins`), a computed column in the middle, AND hand-maintained views that place a base
+    // column after the joins (which a metadata-only heuristic cannot get right). For a canonical view
+    // (base columns physically first, then joins) the view order equals the non-virtual-then-virtual
+    // partition and the types are identical, so the generated SQL is byte-for-byte the same as the
+    // metadata-ordered output — a no-op for the overwhelming majority.
+    //
+    // Fallback: if the view isn't cached (cache load failed, or a custom/overridden sproc whose view we
+    // didn't capture) OR any view column has no matching field (a column not tracked in metadata), fall
+    // back to the metadata-derived non-virtual-then-virtual partition — never worse than prior behavior.
+    // That partition is only PROVABLY correct when the view lays base columns out before the joins (the
+    // canonical CodeGen shape). When the fallback is taken for an entity that has virtual (joined) fields
+    // — the only case where a base-column-after-a-join could mis-route by position — we WARN loudly
+    // (warnOnViewOrderFallback), because the metadata order can no longer be checked against the view and
+    // a silent fallback there would let the very bug this fix prevents persist undetected.
+    let orderedFields: typeof entityInfo.Fields | undefined;
+    let fallbackReason: string | undefined;
+    const viewKey = `${entityInfo.SchemaName}.${entityInfo.BaseView}`.toLowerCase();
+    const viewOrder = this._viewColumnOrderCache.get(viewKey);
+    if (!viewOrder) {
+      fallbackReason = `base view not captured in the column-order cache (cache load failed at Config, or a custom/overridden sproc whose view was not read)`;
+    } else if (viewOrder.length !== entityInfo.Fields.length) {
+      fallbackReason = `base view exposes ${viewOrder.length} column(s) but the entity declares ${entityInfo.Fields.length} field(s) — cannot align 1:1 by position`;
+    } else {
+      const fieldByName = new Map(entityInfo.Fields.map((f) => [f.Name.toLowerCase(), f]));
+      const mapped = viewOrder.map((colName) => fieldByName.get(colName.toLowerCase()));
+      if (mapped.every((f) => f !== undefined)) {
+        orderedFields = mapped as typeof entityInfo.Fields; // every view column resolved 1:1 to a field
+      } else {
+        const unmatched = viewOrder.filter((colName) => !fieldByName.has(colName.toLowerCase()));
+        fallbackReason = `view column(s) without a matching EntityField: ${unmatched.join(', ')}`;
+      }
+    }
+    if (!orderedFields) {
+      this.warnIfBaseFieldSequencedAfterVirtual(entityInfo);
+      this.warnOnViewOrderFallback(entityInfo, fallbackReason);
+      orderedFields = [...entityInfo.Fields.filter((f) => !f.IsVirtual), ...entityInfo.Fields.filter((f) => f.IsVirtual)];
+    }
     let sRet: string = '',
       outputCount: number = 0;
     for (const f of orderedFields) {
@@ -851,6 +933,43 @@ export class SQLServerDataProvider
       `   save-capture (@ResultTable) re-orders base-before-virtual so saves remain CORRECT — but this\n` +
       `   is a metadata/CodeGen sequencing defect. Re-run CodeGen; if it persists, the field's Sequence\n` +
       `   must be renumbered below the virtual fields. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
+      `${bar}\n`
+    );
+  }
+
+  /** Entities already warned about a view-order fallback — so we warn once, not every save. */
+  private static _viewOrderFallbackWarnedEntities: Set<string> = new Set<string>();
+
+  /**
+   * RISK GUARD: `getAllEntityColumnsSQL` could not declare @ResultTable in the base view's ACTUAL column
+   * order (the view wasn't captured in `_viewColumnOrderCache`, its column count diverged from the
+   * entity's field count, or a view column had no matching EntityField) and fell back to the
+   * metadata-derived non-virtual-then-virtual partition. That partition is only provably correct when the
+   * view lays base columns out BEFORE the related joins (the canonical CodeGen shape). When the entity has
+   * VIRTUAL (joined) fields, a hand-maintained view that places a base column AFTER a join mis-routes
+   * values by position — the exact `nvarchar→bit` / `nvarchar→uniqueidentifier` save failure this fix
+   * exists to prevent — and the fallback cannot detect it from metadata alone. So surface the fallback
+   * loudly (once per entity) whenever virtuals are present, with the reason, so a deviating manually
+   * managed view can be confirmed/captured rather than silently shipping the bug. A base-only entity has
+   * no join to reorder around, so its fallback is safe and stays quiet.
+   */
+  private warnOnViewOrderFallback(entityInfo: EntityInfo, reason: string | undefined): void {
+    if (!entityInfo.Fields.some((f) => f.IsVirtual)) return; // no joins → metadata partition is safe; nothing to warn
+    if (SQLServerDataProvider._viewOrderFallbackWarnedEntities.has(entityInfo.Name)) return;
+    SQLServerDataProvider._viewOrderFallbackWarnedEntities.add(entityInfo.Name);
+    const bar = '='.repeat(100);
+    console.warn(
+      `\n${bar}\n` +
+      `⚠️  SAVE-CAPTURE VIEW-ORDER FALLBACK — ${entityInfo.Name}\n` +
+      `${bar}\n` +
+      `   Could not declare @ResultTable in the base view's actual column order; fell back to the\n` +
+      `   metadata-derived (non-virtual then virtual) order.\n` +
+      `   Reason: ${reason ?? 'unknown'}.\n` +
+      `   This entity has virtual/related (joined) field(s), so if the base view '${entityInfo.SchemaName}.${entityInfo.BaseView}'\n` +
+      `   places a base column AFTER a join, the positional save-capture will mis-route values into\n` +
+      `   wrong-typed slots (nvarchar→bit / nvarchar→uniqueidentifier conversion errors that fail the\n` +
+      `   save). Confirm that view is captured at Config and its column order matches the EntityField\n` +
+      `   metadata. (SQLServerDataProvider.getAllEntityColumnsSQL)\n` +
       `${bar}\n`
     );
   }

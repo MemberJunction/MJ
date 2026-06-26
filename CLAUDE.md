@@ -670,6 +670,20 @@ Look for packages that depend on each other:
 - Check with ESLint: `npx eslint packages/path/to/file.ts`
 - Format with Prettier: `npx prettier --write packages/path/to/file.ts`
 
+## UI Consistency Checks (Local — Mirror of CI Gates)
+
+The two CI gates that run on PRs targeting `next` are also available as local npm scripts. Run them before pushing to catch violations early — these mirror the CI exactly, so a clean local run means a green CI:
+
+- `npm run check:ui` — both gates against changed CSS/SCSS vs `origin/next` (matches PR behavior)
+- `npm run check:ui-tokens` — just the hardcoded-color enforcement gate (hex, rgb/rgba, hsl/hsla — except shadow neutrals `rgba(0,0,0,X)` / `rgba(255,255,255,X)`)
+- `npm run check:ui-buttons` — just the `.mj-btn` override prevention gate
+- `npm run check:ui:all` — audit the *whole* `packages/Angular/` tree (used during cleanup work; reports pre-existing violations CI doesn't gate on)
+- `npm run check:ui:adoption` — re-run the measurement script (writes to `plans/adoption-metrics.md`)
+
+The local check requires your changes to be committed (it diffs against `origin/next`). Workflow: stage → commit → `npm run check:ui` → push.
+
+The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.github/scripts/check-mj-btn-override.sh`. Both also accept `--file <path>` for single-file checks.
+
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
 - Always use MemberJunction generated `BaseEntity` sub-classes for all data work for strong typing
@@ -1345,6 +1359,61 @@ module.exports = {
 - **Production High Load**: max: 100, min: 10
 
 Monitor SQL Server wait types (RESOURCE_SEMAPHORE, THREADPOOL) to tune pool size. The pool is created once at server startup and reused throughout the application lifecycle.
+
+## CodeGen Database Connections (SQL Server + PostgreSQL)
+
+The `databaseSettings.connectionPool` block above governs the **runtime MJAPI** pool. CodeGen (`mj codegen`) is a separate process with its own short-lived pool, configured via `codegenPool` at the top level of `mj.config.cjs`:
+
+```javascript
+module.exports = {
+  // ... other top-level codegen-lib config (dbHost, codeGenLogin, etc.)
+  codegenPool: {
+    // PG-only today (mssql doesn't honor these from this block yet)
+    max: 20,                    // Max pool connections
+    min: 2,                     // Min idle connections kept open
+    idleTimeoutMillis: 30000,   // Close idle connections after this many ms
+    connectionTimeoutMillis: 30000, // New-connection acquisition timeout
+    ssl: false,                 // PG SSL (default false — matches the pre-refactor inline pool)
+
+    // Cross-platform (both providers honor it)
+    statementTimeoutMs: 120000, // Per-statement timeout (ms)
+  },
+};
+```
+
+**Per-provider applicability** — not all fields apply to both providers today:
+
+| Field | SQL Server | PostgreSQL |
+|---|---|---|
+| `statementTimeoutMs` | ✅ mssql `requestTimeout` | ✅ libpq `-c statement_timeout` |
+| `max` / `min` / `idleTimeoutMillis` / `connectionTimeoutMillis` | ❌ ignored | ✅ `pg.Pool` config |
+| `ssl` | ❌ ignored (SQL Server uses `dbTrustServerCertificate` + mssql's own SSL) | ✅ `pg.Pool` ssl |
+
+The PG-only pool-sizing knobs reflect the asymmetry between mssql and pg.Pool configurability today; they'll converge in a follow-up.
+
+All fields are **optional** — when omitted, each driver's own defaults apply (mssql: 10 max + `requestTimeout` 120000; `pg.Pool`: 20 max, 2 min, SSL off in codegen). This matches the historical CodeGen behavior, so adding the block is opt-in tuning, not a required change.
+
+### Behavior
+- **Lazy + module-cached pool**: both `MSSQLConnection()` (SQL Server) and `PGConnection()` (PostgreSQL) build their config and open the pool on first call, then cache the pool at the module level so repeated CodeGen operations within a single process reuse the same pool. The config is built **after** `initializeConfig()` runs, so config values from `mj.config.cjs` / `.env` are picked up correctly (the previous module-load-time destructure produced empty values when callers did `await import('@memberjunction/codegen-lib')` before `initializeConfig()`).
+- **Platform dispatch via factory**: `RunCodeGenBase.setupDataSource()` resolves the concrete `CodeGenDatabaseProvider` via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)` and calls its `SetupDataSource()` method. Adding a new platform is `@RegisterClass(CodeGenDatabaseProvider, 'newplatform')` on the new provider class — no orchestrator changes.
+- **`statementTimeoutMs`** is the cross-platform per-statement timeout. On SQL Server it maps to the mssql pool's `requestTimeout` (and takes precedence over the legacy top-level `dbRequestTimeout` / `MJ_CODEGEN_REQUEST_TIMEOUT` when both are set). On PostgreSQL it is carried via the libpq `-c statement_timeout=<ms>` startup option, so the server applies it from connection #1 — including the verify-SELECT-1 connection that `PGConnectionManager.Initialize()` opens. When unset, each driver applies its own default (mssql: 120000ms; PG: no statement timeout).
+- **`ssl` (PostgreSQL only)**: defaults to `false` to preserve the pre-multi-provider-refactor inline `pg.Pool` behavior (no SSL key passed → pg default OFF), so local/non-SSL codegen runs against PostgreSQL aren't broken by `PGConnectionManager`'s production-environment SSL auto-default. Set explicitly when the target Postgres requires SSL.
+
+### CodeGen Environment Variables
+
+The CodeGen-time database connection params come from `configInfo.dbHost` / `dbPort` / `dbDatabase` / `codeGenLogin` / `codeGenPassword`, which are resolved (in order) from `mj.config.cjs`, then env vars, then defaults. When `dbPlatform === 'postgresql'`, the PG-prefixed env vars take precedence over their SQL-Server-named siblings — so an existing PG-targeted `.env` keeps working without renaming:
+
+| Field            | PostgreSQL env (preferred)  | SQL Server / generic env | Fallback |
+|------------------|-----------------------------|--------------------------|----------|
+| `dbHost`         | `PG_HOST`                   | `DB_HOST`                | `localhost` |
+| `dbPort`         | `PG_PORT`                   | `DB_PORT`                | `5432` (PG) / `1433` (SQL Server) |
+| `dbDatabase`     | `PG_DATABASE`               | `DB_DATABASE`            | `''` |
+| `codeGenLogin`   | `PG_USERNAME`               | `CODEGEN_DB_USERNAME`    | `''` |
+| `codeGenPassword`| `PG_PASSWORD`               | `CODEGEN_DB_PASSWORD`    | `''` |
+
+Env-var precedence is resolved **once**, in `DEFAULT_CODEGEN_CONFIG` inside `Config/config.ts`. CodeGen provider code reads `configInfo.*` directly — `process.env.PG_*` is not consulted at the connection layer. This keeps env resolution in one place and avoids the two-layer trap of "resolved at config time, then re-resolved at connection time."
+
+When both env vars in a row are set AND they differ (e.g. `PG_HOST=postgres.dev` AND `DB_HOST=localhost`), `Config/config.ts` emits a one-line `console.warn` at module load identifying which value wins and which is being ignored. The PG-prefixed value continues to take precedence (existing behavior), but the silent override is now visible. Set only one — or set both to the same value — to silence the warning.
 
 ## MJAPI Public URL Configuration
 

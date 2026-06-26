@@ -1,4 +1,50 @@
 import { Command, Flags } from '@oclif/core';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { getOptionalConfig } from '../../config.js';
+
+/** A client dynamic-package entry as read from mj.config `dynamicPackages.client`. */
+export interface OpenAppClientEntry {
+    PackageName: string;
+    Enabled?: boolean;
+}
+
+const OPEN_APP_BOOTSTRAP_BEGIN = '// ===== BEGIN Open App client bootstrap (managed by `mj app` / `mj codegen manifest`) =====';
+const OPEN_APP_BOOTSTRAP_END = '// ===== END Open App client bootstrap =====';
+
+function escapeRegex(s: string): string {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Pure transform: given the current manifest file content and the set of Open App
+ * client packages, returns the content with the managed bootstrap block refreshed.
+ *
+ * - Strips any prior managed block first, so the result is idempotent (re-running with
+ *   the same entries is a no-op; changed entries fully replace the block).
+ * - Enabled entries become `import '<pkg>';`; disabled entries become a comment so a
+ *   re-enable restores the import without losing the record.
+ * - Zero entries => the block is removed entirely (no stale imports left behind).
+ *
+ * Exported for unit testing of the idempotency / disabled / cleared cases.
+ */
+export function applyOpenAppClientBootstrapBlock(content: string, clientEntries: OpenAppClientEntry[]): string {
+    const blockPattern = new RegExp(
+        `\\n*${escapeRegex(OPEN_APP_BOOTSTRAP_BEGIN)}[\\s\\S]*?${escapeRegex(OPEN_APP_BOOTSTRAP_END)}\\n*`,
+        'g'
+    );
+    let result = content.replace(blockPattern, '\n').replace(/\n+$/, '\n');
+
+    if (clientEntries.length > 0) {
+        const lines = clientEntries.map(e =>
+            e.Enabled === false
+                ? `// '${e.PackageName}' disabled by \`mj app disable\``
+                : `import '${e.PackageName}';`
+        );
+        result = `${result.replace(/\n+$/, '')}\n\n${OPEN_APP_BOOTSTRAP_BEGIN}\n${lines.join('\n')}\n${OPEN_APP_BOOTSTRAP_END}\n`;
+    }
+    return result;
+}
 
 export default class CodeGenManifest extends Command {
     static description = `Generate a class registration manifest to prevent tree-shaking.
@@ -91,6 +137,12 @@ generate a supplemental manifest covering only your own application classes.`;
                 'that is not reachable from any lazy chunk subpath export. Use in CI to catch tree-shaking issues before merge.',
             default: false,
         }),
+        'open-app-client-bootstrap': Flags.boolean({
+            description: 'After generating the manifest, append a managed block of side-effect imports — one per ' +
+                'Open App client package recorded in mj.config `dynamicPackages.client` — so installed apps\' client ' +
+                'classes register when the client bundle loads. Used by MJExplorer\'s prebuild; requires --output.',
+            default: false,
+        }),
     };
 
     async run(): Promise<void> {
@@ -137,6 +189,39 @@ generate a supplemental manifest covering only your own application classes.`;
                     this.log(`[class-manifest] Lazy config unchanged`);
                 }
             }
+        }
+
+        if (flags['open-app-client-bootstrap']) {
+            if (!flags.output) {
+                this.error('--open-app-client-bootstrap requires --output (the manifest file to append the client bootstrap block to).');
+            }
+            this.appendOpenAppClientBootstrap(flags.output, flags.quiet);
+        }
+    }
+
+    /**
+     * Appends (or refreshes) a managed block of side-effect imports to the generated
+     * manifest — one `import '<pkg>';` per enabled Open App client package recorded in
+     * mj.config `dynamicPackages.client` (disabled packages are emitted as comments).
+     *
+     * This is what keeps the Open App client-load mechanism inside distributed npm
+     * packages (this CLI + the manifest MJExplorer already imports) instead of a
+     * hand-written MJExplorer file — so MJExplorer stays paper-thin. The block is
+     * delimited and rebuilt on every run, so it stays in sync as apps are installed,
+     * removed, enabled, or disabled (each of which edits `dynamicPackages.client`).
+     */
+    private appendOpenAppClientBootstrap(outputPath: string, quiet: boolean): void {
+        const filePath = resolve(process.cwd(), outputPath);
+        if (!existsSync(filePath)) {
+            return; // manifest generation produced no file (e.g. --no-sync-deps fallback); nothing to append to
+        }
+
+        const clientEntries = (getOptionalConfig()?.dynamicPackages?.client ?? []) as OpenAppClientEntry[];
+        const content = applyOpenAppClientBootstrapBlock(readFileSync(filePath, 'utf-8'), clientEntries);
+
+        writeFileSync(filePath, content, 'utf-8');
+        if (!quiet) {
+            this.log(`[class-manifest] Open App client bootstrap: ${clientEntries.length} client ${clientEntries.length === 1 ? 'package' : 'packages'} wired`);
         }
     }
 }

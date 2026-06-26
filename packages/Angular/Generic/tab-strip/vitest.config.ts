@@ -1,11 +1,14 @@
 import { defineProject, mergeConfig } from 'vitest/config';
-import sharedConfig from '../../../../vitest.shared';
+import domSharedConfig from '../../../../vitest.dom.shared';
 
+// DOM-level Angular component tests: jsdom + analog (Angular compile) + zoneless.
+// Single preset — tab-strip has no class-level spec that vi.mock('@angular/core'),
+// so its existing node specs (exports/index) run fine under jsdom too.
 export default mergeConfig(
-  sharedConfig,
+  domSharedConfig,
   defineProject({
     test: {
-      environment: 'node',
+      name: '@memberjunction/ng-tabstrip',
     },
   })
 );

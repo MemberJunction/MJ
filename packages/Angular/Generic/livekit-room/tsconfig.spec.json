@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"]
+  },
+  // Explicit file list (NOT src/**/*.ts): Analog AOT-compiles only these components + specs,
+  // so the room container / livekit-client capture paths are never pulled into the DOM compile.
+  // participant-tile IS included but its spec exercises only the media-free surface (§7) — no
+  // track.attach(); the audio-meter is compiled (the tile imports it) but never mounted.
+  "include": [
+    "src/lib/components/livekit-control-bar.component.ts",
+    "src/lib/components/livekit-control-bar.component.dom.test.ts",
+    "src/lib/components/livekit-agent-state.component.ts",
+    "src/lib/components/livekit-agent-state.component.dom.test.ts",
+    "src/lib/components/livekit-connection-overlay.component.ts",
+    "src/lib/components/livekit-connection-overlay.component.dom.test.ts",
+    "src/lib/components/livekit-chat-panel.component.ts",
+    "src/lib/components/livekit-chat-panel.component.dom.test.ts",
+    "src/lib/components/livekit-device-menu.component.ts",
+    "src/lib/components/livekit-device-menu.component.dom.test.ts",
+    "src/lib/components/livekit-participant-tile.component.ts",
+    "src/lib/components/livekit-participant-tile.component.dom.test.ts",
+    "src/lib/components/livekit-audio-meter.component.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

@@ -37,7 +37,8 @@ export interface FetchedManifest {
  * retrieved or parsed.
  */
 export type ManifestFetcher = (
-    repoUrl: string
+    repoUrl: string,
+    subpath?: string
 ) => Promise<{ Success: boolean; Manifest?: FetchedManifest; ErrorMessage?: string }>;
 
 /**
@@ -76,6 +77,8 @@ interface GraphNode {
     InstalledVersion?: string;
     /** Version range required by the first parent that introduced this node */
     RequiredVersionRange: string;
+    /** In-repo subpath for a dependency that lives in a multi-app repo (undefined = repo root) */
+    Subpath?: string;
 }
 
 /** DFS coloring for cycle detection. */
@@ -86,11 +89,11 @@ const BLACK = 2;
 /**
  * Extracts version range and optional repository from a dependency value.
  */
-function ParseDependencyValue(value: DependencyValue): { versionRange: string; repository?: string } {
+function ParseDependencyValue(value: DependencyValue): { versionRange: string; repository?: string; subpath?: string } {
     if (typeof value === 'string') {
         return { versionRange: value };
     }
-    return { versionRange: value.version, repository: value.repository };
+    return { versionRange: value.version, repository: value.repository, subpath: value.subpath };
 }
 
 /**
@@ -132,6 +135,7 @@ export async function ResolveDependencyGraph(
                 AppName: node.AppName,
                 VersionRange: node.RequiredVersionRange,
                 Repository: node.Repository,
+                Subpath: node.Subpath,
                 AlreadyInstalled: node.AlreadyInstalled,
                 InstalledVersion: node.InstalledVersion,
             };
@@ -188,7 +192,7 @@ async function ProcessEdge(
     errors: string[],
     queue: Array<{ name: string; value: DependencyValue }>
 ): Promise<void> {
-    const { versionRange, repository } = ParseDependencyValue(depValue);
+    const { versionRange, repository, subpath } = ParseDependencyValue(depValue);
     const installed = installedApps[depName];
 
     // Validate every edge that requires an already-installed dependency, so a
@@ -228,6 +232,7 @@ async function ProcessEdge(
         AlreadyInstalled: installed !== undefined,
         InstalledVersion: installed?.Version,
         RequiredVersionRange: versionRange,
+        Subpath: subpath,
     };
     graph.set(depName, node);
 
@@ -238,7 +243,7 @@ async function ProcessEdge(
         return;
     }
 
-    const fetched = await fetchManifest(resolvedRepo);
+    const fetched = await fetchManifest(resolvedRepo, subpath);
     if (fetched.Success && fetched.Manifest) {
         node.Dependencies = fetched.Manifest.dependencies ?? {};
         for (const [name, value] of Object.entries(node.Dependencies)) {

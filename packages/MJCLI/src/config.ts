@@ -60,7 +60,10 @@ const schemaPlaceholderSchema = z.object({
 // Schema for dynamic package entries managed by `mj app install/remove`
 const dynamicPackageEntrySchema = z.object({
   PackageName: z.string(),
-  StartupExport: z.string(),
+  // Server entries carry a named startup export invoked after import. Client
+  // entries are pure side-effect imports (their @RegisterClass decorators fire on
+  // load), so StartupExport is optional and unset for the client array.
+  StartupExport: z.string().optional(),
   AppName: z.string(),
   Enabled: z.boolean().default(true),
 });
@@ -95,15 +98,17 @@ const openAppsConfigSchema = z.object({
     Path: z.string(),
     Role: z.enum(['server', 'client']),
   })).optional(),
-  /** File subpath within client workspace for bootstrap file */
-  clientBootstrapSubpath: z.string().optional(),
   /** Extra placeholders merged into migration SQL substitution (e.g. { mjSchema: '__mj' }) */
   migrationPlaceholders: z.record(z.string(), z.string()).optional(),
 }).optional();
 
-// Schema for dynamic packages section
+// Schema for dynamic packages section.
+// `server` is consumed by @memberjunction/server-bootstrap at MJAPI boot (B1).
+// `client` is consumed by `mj codegen manifest --open-app-client-bootstrap`, which
+// appends a side-effect import per entry to MJExplorer's class-registrations manifest.
 const dynamicPackagesSchema = z.object({
   server: z.array(dynamicPackageEntrySchema).optional(),
+  client: z.array(dynamicPackageEntrySchema).optional(),
 }).optional();
 
 // Schema for database-dependent config (required fields)

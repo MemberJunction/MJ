@@ -58,7 +58,8 @@ export {
     ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,
-    ParseGitHubUrl
+    ParseGitHubUrl,
+    GitHubAccessError
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
@@ -79,13 +80,11 @@ export type { PackageManagerOptions, PackageOperationResult, PackageManagerType,
 
 export {
     AddServerDynamicPackages,
+    AddClientDynamicPackages,
     RemoveServerDynamicPackages,
     ToggleServerDynamicPackages
 } from './install/config-manager.js';
 export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
-
-export { RegenerateClientBootstrap } from './install/client-bootstrap-gen.js';
-export type { ClientBootstrapEntry } from './install/client-bootstrap-gen.js';
 
 export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';
 export type { AngularConfigResult } from './install/angular-config-manager.js';

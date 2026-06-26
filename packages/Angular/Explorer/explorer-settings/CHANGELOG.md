@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/ng-explorer-settings
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-base-forms@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ng-tabstrip@5.43.0
+  - @memberjunction/ng-base-application@5.43.0
+  - @memberjunction/ng-entity-form-dialog@5.43.0
+  - @memberjunction/ng-entity-permissions@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-simple-record-list@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-code-editor@5.43.0
+  - @memberjunction/ng-join-grid@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/ng-user-avatar@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+
 ## 5.42.0
 
 ### Patch Changes

@@ -299,7 +299,7 @@ export default class MigrateConvert extends Command {
       }
 
       // A needs-hand migration is NEVER written as a discoverable .pg.sql — that
-      // would mark it converted forever and let Flyway apply an incomplete file.
+      // would mark it converted forever and let Skyway apply an incomplete file.
       // The .needs-hand artifact carries the transpiled DDL + gap comments for the
       // human (or LLM last-mile pass) to finish, then rename to .pg.sql.
       const isNeedsHand = result.status === 'needs-hand-authoring';

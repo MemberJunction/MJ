@@ -8,6 +8,7 @@
  */
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import type { UserInfo, TransactionGroupBase, BaseEntity, IMetadataProvider } from '@memberjunction/core';
+import type { MJOpenAppEntity, MJOpenAppInstallHistoryEntity, MJOpenAppDependencyEntity } from '@memberjunction/core-entities';
 import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
@@ -39,11 +40,12 @@ export async function RecordAppInstallation(
   transactionGroup?: TransactionGroupBase,
   initialStatus: AppStatus = 'Active',
   provider?: IMetadataProvider,
+  subpath?: string,
 ): Promise<string> {
   callbacks?.OnProgress?.('Record', 'Recording app installation...');
 
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-  const entity = await md.GetEntityObject('MJ: Open Apps', contextUser);
+  const entity = await md.GetEntityObject<MJOpenAppEntity>('MJ: Open Apps', contextUser);
 
   // Check for existing record (e.g. previously removed app being reinstalled)
   const existing = await FindInstalledApp(contextUser, manifest.name, provider);
@@ -54,7 +56,7 @@ export async function RecordAppInstallation(
     entity.NewRecord();
   }
 
-  SetAppFields(entity, manifest, contextUser, initialStatus);
+  SetAppFields(entity, manifest, contextUser, initialStatus, subpath);
 
   if (transactionGroup) {
     entity.TransactionGroup = transactionGroup;
@@ -62,11 +64,11 @@ export async function RecordAppInstallation(
 
   const saved = await entity.Save();
   if (!transactionGroup && !saved) {
-    throw new Error(`Failed to record app installation: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+    throw new Error(`Failed to record app installation: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
 
   callbacks?.OnSuccess?.('Record', `App '${manifest.name}' recorded as installed`);
-  return String(entity.Get('ID'));
+  return entity.ID;
 }
 
 /**
@@ -74,28 +76,32 @@ export async function RecordAppInstallation(
  * Shared between new installs and reinstalls.
  */
 function SetAppFields(
-  entity: { Set: (field: string, value: unknown) => void },
+  entity: MJOpenAppEntity,
   manifest: MJAppManifest,
   contextUser: UserInfo,
   status: AppStatus = 'Active',
+  subpath?: string,
 ): void {
-  entity.Set('Name', manifest.name);
-  entity.Set('DisplayName', manifest.displayName);
-  entity.Set('Description', manifest.description ?? null);
-  entity.Set('Version', manifest.version);
-  entity.Set('Publisher', manifest.publisher.name);
-  entity.Set('PublisherEmail', manifest.publisher.email ?? null);
-  entity.Set('PublisherURL', manifest.publisher.url ?? null);
-  entity.Set('RepositoryURL', manifest.repository);
-  entity.Set('SchemaName', manifest.schema?.name ?? null);
-  entity.Set('MJVersionRange', manifest.mjVersionRange);
-  entity.Set('License', manifest.license ?? null);
-  entity.Set('Icon', manifest.icon ?? null);
-  entity.Set('Color', manifest.color ?? null);
-  entity.Set('ManifestJSON', JSON.stringify(manifest));
-  entity.Set('ConfigurationSchemaJSON', manifest.configuration ? JSON.stringify(manifest.configuration) : null);
-  entity.Set('InstalledByUserID', contextUser.ID);
-  entity.Set('Status', status);
+  entity.Name = manifest.name;
+  entity.DisplayName = manifest.displayName;
+  entity.Description = manifest.description ?? null;
+  entity.Version = manifest.version;
+  entity.Publisher = manifest.publisher.name;
+  entity.PublisherEmail = manifest.publisher.email ?? null;
+  entity.PublisherURL = manifest.publisher.url ?? null;
+  entity.RepositoryURL = manifest.repository;
+  // Subpath persists which in-repo directory a multi-app repo installed from, so
+  // upgrade/remove re-fetch the right manifest. null = manifest at the repo root.
+  entity.Subpath = subpath ?? null;
+  entity.SchemaName = manifest.schema?.name ?? null;
+  entity.MJVersionRange = manifest.mjVersionRange;
+  entity.License = manifest.license ?? null;
+  entity.Icon = manifest.icon ?? null;
+  entity.Color = manifest.color ?? null;
+  entity.ManifestJSON = JSON.stringify(manifest);
+  entity.ConfigurationSchemaJSON = manifest.configuration ? JSON.stringify(manifest.configuration) : null;
+  entity.InstalledByUserID = contextUser.ID;
+  entity.Status = status;
 }
 
 /**
@@ -105,19 +111,22 @@ function SetAppFields(
  * @param appId - The OpenApp record ID
  * @param updates - Fields to update
  */
-export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Record<string, unknown>, provider?: IMetadataProvider): Promise<void> {
+export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Partial<MJOpenAppEntity>, provider?: IMetadataProvider): Promise<void> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-  const entity = await md.GetEntityObject('MJ: Open Apps', contextUser);
+  const entity = await md.GetEntityObject<MJOpenAppEntity>('MJ: Open Apps', contextUser);
   const loaded = await entity.InnerLoad(CompositeKey.FromID(appId));
   if (!loaded) {
     throw new Error(`Open App record not found: ${appId}`);
   }
+  // `updates` is a typed Partial<MJOpenAppEntity>, so call sites get compile-time field-name +
+  // value-type checking. The body applies it dynamically via Set() — the only way to write an
+  // arbitrary field subset onto a BaseEntity (you can't index typed accessors by a runtime key).
   for (const [field, value] of Object.entries(updates)) {
     entity.Set(field, value);
   }
   const saved = await entity.Save();
   if (!saved) {
-    throw new Error(`Failed to update Open App record ${appId}: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+    throw new Error(`Failed to update Open App record ${appId}: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
 }
 
@@ -156,21 +165,21 @@ export async function RecordInstallHistoryEntry(
   provider?: IMetadataProvider,
 ): Promise<string> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
-  const entity = await md.GetEntityObject('MJ: Open App Install Histories', contextUser);
+  const entity = await md.GetEntityObject<MJOpenAppInstallHistoryEntity>('MJ: Open App Install Histories', contextUser);
   entity.NewRecord();
-  entity.Set('OpenAppID', appId);
-  entity.Set('Version', manifest.version);
-  entity.Set('PreviousVersion', details.PreviousVersion ?? null);
-  entity.Set('Action', action);
-  entity.Set('ManifestJSON', JSON.stringify(manifest));
-  entity.Set('Summary', details.Summary ?? null);
-  entity.Set('ExecutedByUserID', contextUser.ID);
-  entity.Set('DurationSeconds', details.DurationSeconds ?? null);
-  entity.Set('StartedAt', details.StartedAt ?? null);
-  entity.Set('EndedAt', details.EndedAt ?? null);
-  entity.Set('Success', details.Success);
-  entity.Set('ErrorMessage', details.ErrorMessage ?? null);
-  entity.Set('ErrorPhase', details.ErrorPhase ?? null);
+  entity.OpenAppID = appId;
+  entity.Version = manifest.version;
+  entity.PreviousVersion = details.PreviousVersion ?? null;
+  entity.Action = action;
+  entity.ManifestJSON = JSON.stringify(manifest);
+  entity.Summary = details.Summary ?? null;
+  entity.ExecutedByUserID = contextUser.ID;
+  entity.DurationSeconds = details.DurationSeconds ?? null;
+  entity.StartedAt = details.StartedAt ?? null;
+  entity.EndedAt = details.EndedAt ?? null;
+  entity.Success = details.Success;
+  entity.ErrorMessage = details.ErrorMessage ?? null;
+  entity.ErrorPhase = details.ErrorPhase ?? null;
 
   if (transactionGroup) {
     entity.TransactionGroup = transactionGroup;
@@ -178,9 +187,9 @@ export async function RecordInstallHistoryEntry(
 
   const saved = await entity.Save();
   if (!transactionGroup && !saved) {
-    throw new Error(`Failed to record install history: ${entity.LatestResult?.Message ?? 'unknown error'}`);
+    throw new Error(`Failed to record install history: ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
   }
-  return String(entity.Get('ID'));
+  return entity.ID;
 }
 
 /**
@@ -215,14 +224,14 @@ export async function RecordAppDependencies(
     );
     const depApp = depResult.Success && depResult.Results.length > 0 ? depResult.Results[0] : null;
 
-    const entity = await md.GetEntityObject('MJ: Open App Dependencies', contextUser);
+    const entity = await md.GetEntityObject<MJOpenAppDependencyEntity>('MJ: Open App Dependencies', contextUser);
     entity.NewRecord();
-    entity.Set('OpenAppID', appId);
-    entity.Set('DependsOnAppName', depName);
-    entity.Set('DependsOnAppID', depApp?.ID ?? null);
-    entity.Set('VersionRange', versionRange);
-    entity.Set('InstalledVersion', depApp?.Version ?? null);
-    entity.Set('Status', depApp ? 'Satisfied' : 'Missing');
+    entity.OpenAppID = appId;
+    entity.DependsOnAppName = depName;
+    entity.DependsOnAppID = depApp?.ID ?? null;
+    entity.VersionRange = versionRange;
+    entity.InstalledVersion = depApp?.Version ?? null;
+    entity.Status = depApp ? 'Satisfied' : 'Missing';
 
     if (transactionGroup) {
       entity.TransactionGroup = transactionGroup;
@@ -230,7 +239,7 @@ export async function RecordAppDependencies(
 
     const saved = await entity.Save();
     if (!transactionGroup && !saved) {
-      throw new Error(`Failed to record dependency '${depName}': ${entity.LatestResult?.Message ?? 'unknown error'}`);
+      throw new Error(`Failed to record dependency '${depName}': ${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
   }
 }
@@ -238,8 +247,16 @@ export async function RecordAppDependencies(
 /**
  * Deletes all dependency records for an app.
  * Used during upgrade to replace stale dependency records with fresh ones.
+ *
+ * When a `transactionGroup` is supplied, the deletes are queued into it (committed by
+ * the caller's `Submit()`) rather than committed individually — so an upgrade can delete
+ * the old rows and insert the new ones in a single atomic unit (B23).
  */
-export async function DeleteAppDependencies(contextUser: UserInfo, appId: string): Promise<void> {
+export async function DeleteAppDependencies(
+  contextUser: UserInfo,
+  appId: string,
+  transactionGroup?: TransactionGroupBase,
+): Promise<void> {
   const rv = new RunView();
   const result = await rv.RunView<BaseEntity>(
     {
@@ -249,11 +266,47 @@ export async function DeleteAppDependencies(contextUser: UserInfo, appId: string
     },
     contextUser,
   );
-  if (result.Success) {
-    for (const record of result.Results) {
+  if (!result.Success) {
+    // A failed query must not be swallowed — it would leave stale dependency rows
+    // that the caller (upgrade) then re-inserts, accumulating duplicates (B30).
+    throw new Error(`Failed to load dependencies for app ${appId}: ${result.ErrorMessage ?? 'unknown error'}`);
+  }
+  for (const record of result.Results) {
+    if (transactionGroup) {
+      // Queue the delete into the caller's transaction — committed atomically on Submit().
+      record.TransactionGroup = transactionGroup;
       await record.Delete();
+      continue;
+    }
+    // BaseEntity.Delete() returns false on failure (it does not throw) — check it,
+    // or stale dependency rows survive silently and corrupt later FindDependentApps.
+    const deleted = await record.Delete();
+    if (!deleted) {
+      throw new Error(`Failed to delete a dependency for app ${appId}: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
   }
+}
+
+/**
+ * Atomically replaces an app's dependency rows: deletes the existing rows and inserts the
+ * new set inside a single TransactionGroup. Used by upgrade so a crash mid-rewrite can
+ * never leave the app with zero dependency rows (the prior code deleted then re-added in
+ * two un-grouped steps) — B23.
+ *
+ * @returns the TransactionGroup Submit result (true = both delete + insert committed).
+ */
+export async function ReplaceAppDependenciesAtomically(
+  contextUser: UserInfo,
+  appId: string,
+  dependencies: Record<string, string | { version?: string; repository?: string }>,
+  provider?: IMetadataProvider,
+): Promise<boolean> {
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+  const tg = await md.CreateTransactionGroup();
+  // Both queue into `tg`; nothing commits until Submit().
+  await DeleteAppDependencies(contextUser, appId, tg);
+  await RecordAppDependencies(contextUser, appId, dependencies, tg, provider);
+  return tg.Submit();
 }
 
 /**
@@ -279,6 +332,73 @@ export async function FindInstalledApp(contextUser: UserInfo, appName: string, p
   }
 
   return result.Results.length > 0 ? result.Results[0] : null;
+}
+
+/**
+ * Outcome of the co-tenant schema-share check used by RemoveApp. Distinguishes a
+ * definitively-shared schema from an *indeterminate* one (the lookup itself failed) — the
+ * caller must treat these differently: skip the drop for the former, ABORT the whole remove
+ * for the latter.
+ */
+export interface SchemaShareCheck {
+  /** Another non-removed app uses this schema → skip metadata + schema drop to protect it. */
+  Shared: boolean;
+  /**
+   * The share-check QUERY itself failed (indeterminate). The caller MUST abort the remove
+   * before stripping any files — silently skipping the schema drop and falling through would
+   * leave a half-removed app (files gone, schema + metadata intact, status `Removed`). B14/B20.
+   */
+  CheckFailed: boolean;
+  /** Error detail, present only when `CheckFailed`. */
+  ErrorMessage?: string;
+}
+
+/**
+ * Checks whether another (non-removed) Open App shares the given schema.
+ *
+ * RemoveApp drops the schema and wipes schema-keyed entity metadata by SchemaName;
+ * without this guard, removing one app that ADOPTED a schema another app created
+ * (manifest `schema.createIfNotExists`) would destroy the co-tenant's data and
+ * metadata — see B14. On PostgreSQL the blast radius is larger (DROP SCHEMA CASCADE).
+ *
+ * Returns a {@link SchemaShareCheck}, not a bare boolean, so the caller can tell a genuinely
+ * shared schema (`Shared:true, CheckFailed:false` → skip the drop, proceed) apart from an
+ * indeterminate lookup (`CheckFailed:true` → abort the remove). On query failure it reports
+ * `Shared:true` (never risk dropping a possibly-shared schema) AND `CheckFailed:true`.
+ *
+ * @param contextUser - The context user for the query
+ * @param schemaName - The schema being considered for removal
+ * @param excludeAppId - The app being removed (excluded from the share check)
+ * @param provider - Optional metadata provider
+ */
+export async function CheckSchemaSharedByOtherApps(
+  contextUser: UserInfo,
+  schemaName: string,
+  excludeAppId: string,
+  provider?: IMetadataProvider,
+): Promise<SchemaShareCheck> {
+  if (!schemaName) {
+    return { Shared: false, CheckFailed: false };
+  }
+  const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+  const result = await rv.RunView<InstalledAppInfo>(
+    {
+      EntityName: 'MJ: Open Apps',
+      ExtraFilter:
+        `SchemaName = '${EscapeSqlFilter(schemaName)}' ` +
+        `AND ID <> '${EscapeSqlFilter(excludeAppId)}' ` +
+        `AND Status NOT IN ('Removed', 'Removing')`,
+      ResultType: 'simple',
+    },
+    contextUser,
+  );
+  if (!result.Success) {
+    // Indeterminate. Shared:true is the safe direction (never drop a possibly-shared schema);
+    // CheckFailed signals the caller to ABORT before stripping files rather than fall through
+    // to a half-removed state.
+    return { Shared: true, CheckFailed: true, ErrorMessage: result.ErrorMessage };
+  }
+  return { Shared: result.Results.length > 0, CheckFailed: false };
 }
 
 /**
