@@ -2444,7 +2444,8 @@ export class BaseAgent {
                 contextUser,
                 storageAccountId,
                 provider: md,
-                pathPrefix: `recordings/${new Date().toISOString().slice(0, 10)}/${sessionID}`
+                // Single-level folder: some providers (e.g. Box) don't create nested folders in one upload.
+                pathPrefix: 'realtime-recordings'
             });
 
             // Link the file to the session record so it's discoverable via MJ: File Entity Record Links.
