@@ -70,6 +70,13 @@ export class RealtimeAudioRecorder {
             console.warn('[RealtimeAudioRecorder] MediaRecorder/Opus unavailable — recording disabled for this session.');
             return;
         }
+        // Mark recording + stamp t0 SYNCHRONOUSLY so a caller that checks IsRecording immediately after
+        // Start() (the session service does) sees `true`, even though the audio-graph setup
+        // (AudioContext.resume) completes asynchronously below. Without this the caller discards the
+        // recorder before it finishes starting and nothing is ever uploaded.
+        this.mimeType = mimeType;
+        this.startedAtMs = Date.now();
+        this.recording = true;
         // Fire-and-forget the async setup (it must `await audioContext.resume()`); any failure disables
         // the recorder rather than throwing into the session-start path.
         void this.startMixedRecording(micStream, remoteStream, mimeType).catch((error) => {
@@ -128,10 +135,8 @@ export class RealtimeAudioRecorder {
         this.audioContext = audioContext;
         this.destination = destination;
         this.recorder = recorder;
-        this.mimeType = mimeType;
         this.chunks = [];
-        this.startedAtMs = Date.now();
-        this.recording = true;
+        // (this.recording, this.startedAtMs, this.mimeType were set synchronously in Start())
         // Timeslice → periodic ondataavailable flushes, so an unexpected/early stop still yields audio.
         recorder.start(1000);
     }
