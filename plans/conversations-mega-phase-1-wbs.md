@@ -1,77 +1,200 @@
-# Conversations Mega Phase 1 — Work Breakdown Structure (WBS)
+# Conversations Mega Phase 1 — Master Plan & Work Breakdown Structure
 
 **Status:** Detailed build plan for review
-**Scope:** `@memberjunction/ng-conversations`, `@memberjunction/conversations-runtime`, `@memberjunction/ai-agents`, `MJCoreEntities`, `Scheduling`, migrations
+**Scope:** `@memberjunction/ng-conversations`, `@memberjunction/conversations-runtime`, a new `@memberjunction/ng-user-routines`, `@memberjunction/ai-agents`, `MJCoreEntities`, `Scheduling`, migrations
 **Companion docs:** `conversations-competitive-ux-study.md` (the why), `conversations-librechat-parity-proposal.md` (first pass)
-**Audience:** Future implementing agents. Each task is written to be executable step-by-step.
+**Audience:** Future implementing agents. Every task is written to be executed step-by-step.
 
 ---
 
 ## 0. How to use this document
 
-- **Mega Phase 1** is one release-sized effort composed of **sub-phases P1.1 … P1.8**. Group-chat *runtime code* is deferred to **Phase 2**; P1.8 lands only its metadata + UX mockups so Phase 2 is code-only.
-- Sub-phases are independently shippable PRs. Recommended order is by leverage + dependency (see §2).
-- Every task has: **Deliverable · Files/Entities · Steps · Acceptance criteria · Tests · Risk**.
-- Task IDs are stable (`P1.4.3`) — reference them in commits/PRs.
+- **Mega Phase 1** is one release-sized effort. It begins with a **Foundations gate (P1.0)** — UX mockups reviewed by the user **and** the complete DB design as **one mega migration** — before any feature code. Feature sub-phases **P1.1 … P1.8** then build on that locked schema.
+- **Group-chat runtime code is deferred to Phase 2.** P1.8 lands only its metadata (in the mega migration) + UX mockups so Phase 2 is code-only.
+- Every task: **Deliverable · Files/Entities · Steps · Acceptance · Tests · Risk**. Task IDs (`P1.4.4`) are stable — reference them in commits/PRs.
 
-### 0.1 Standing conventions (apply to EVERY task)
+### 0.1 Two hard gates before feature work
 
-- **Migrations:** highest `migrations/v*/` folder (currently `v5`). Naming `VYYYYMMDDHHMM__v5.x_[DESCRIPTION].sql`. Hardcoded UUIDs (never `NEWID()`), `${flyway:defaultSchema}`, consolidated `ALTER TABLE`, `sp_addextendedproperty` for every new column, NO `__mj_*` timestamps, NO FK indexes (CodeGen owns both). New entities use the **`MJ: ` name prefix**.
-- **CodeGen runs after every migration** before any TypeScript references new fields. Never use `.Get()/.Set()` for new columns — wait for generated types.
-- **Strong typing only** — no `any`. Generated `BaseEntity` subclasses everywhere.
-- **Runtime-first:** framework-agnostic logic (token rollup, cron eval wrappers, plan/skill models) lives in `@memberjunction/conversations-runtime` or the relevant engine; Angular only renders.
-- **UI:** additive & opt-in behind `@Input()` flags; expose chrome via the existing slot system; `--mj-chat-*`/semantic tokens only (`npm run check:ui`); `mjButton`/MJ UI components; modern `@if/@for`; `inject()`.
-- **Preferences** via `UserInfoEngine` (never `localStorage`).
-- **Reactivity** via `BaseEngine` + `ObserveProperty`.
-- **Tests:** Vitest for new runtime/engine logic; update affected package tests; report pass/fail.
-- **Server code** passes `contextUser` to all `GetEntityObject`/`RunView`.
+1. **UX Mockup Review (P1.0.1)** — clickable/wireframe mockups for *every* feature, reviewed and signed off by the user. **No feature UI is built until its mockup is approved.**
+2. **DB Design → One Mega Migration (P1.0.2)** — all new entities + altered columns across all sub-phases are designed together and shipped as a **single migration**, then CodeGen runs once. Feature code never invents schema ad hoc.
 
-### 0.2 Decision log (locked unless flagged ⚠️ NEEDS SIGN-OFF)
+### 0.2 Standing conventions (apply to EVERY task)
+
+- **Migrations:** highest `migrations/v*/` folder (currently `v5`). Naming `VYYYYMMDDHHMM__v5.x_[DESCRIPTION].sql`. Hardcoded UUIDs (never `NEWID()`), `${flyway:defaultSchema}`, consolidated `ALTER TABLE` per table, `sp_addextendedproperty` for every new column, NO `__mj_*` timestamps, NO FK indexes (CodeGen owns both). New entities use the **`MJ: ` name prefix**.
+- **CodeGen runs after the mega migration** before any TypeScript references new fields. Never `.Get()/.Set()` new columns — use generated types.
+- **Strong typing only** (no `any`); generated `BaseEntity` subclasses everywhere.
+- **Runtime-first:** framework-agnostic logic lives in `conversations-runtime` or the relevant engine; Angular only renders.
+- **UI:** additive & opt-in behind `@Input()` flags; expose chrome via the slot system; `--mj-chat-*`/semantic tokens only (`npm run check:ui`); MJ UI components + `mjButton`; modern `@if/@for`; `inject()`.
+- **Preferences** via `UserInfoEngine` (never `localStorage`). **Reactivity** via `BaseEngine` + `ObserveProperty`.
+- **Permissions** roll up into the **unified permissioning architecture** (`plans/unified-permissions-architecture.md`, `MJ: Resource Permissions` / Access Control Rules) — no bespoke per-feature permission tables unless unavoidable.
+- **Tests:** Vitest for new runtime/engine logic; update affected package tests; report pass/fail. **Server code** passes `contextUser` everywhere.
+
+### 0.3 Decision log
 
 | # | Decision | Status |
 |---|---|---|
 | D1 | Folders == `MJ: Projects` (confirmed in code). Project-scoped memory keys off `Conversation.ProjectID`. | Locked |
-| D2 | My Routines = single dispatcher job + dedicated `MJ: User Routines` entity (NOT per-routine scheduled jobs). | Locked |
-| D3 | Skill instructions are **appended** to agent system prompt; Skills do NOT use `AIAgentPrompt`. | Locked |
+| D2 | Routines = single dispatcher job + dedicated entity (NOT per-routine scheduled jobs). | Locked |
+| D3 | Skill instructions **appended** to agent system prompt; Skills do NOT use `AIAgentPrompt`. | Locked |
 | D4 | New `AIAgentRunStep` StepType values: `Skill`, `Plan`. | Locked |
-| D5 | Plan mode default **OFF**; gated by `AIAgent.SupportsPlanMode` + per-run runtime toggle. | Locked |
-| D6 | Project memory inheritance = **broad** (project notes + global). `projectId` fixed per conversation. | Locked |
+| D5 | Plan mode default **OFF**; per-agent `SupportsPlanMode` capability + **per-request** runtime toggle in the chat UX (the agent "pill" / composer). | Locked |
+| D6 | Project memory inheritance = **broad** (project notes + global); `projectId` fixed per conversation. | Locked |
 | D7 | Incognito = `Conversation.IsTemporary`; persisted-but-hidden; skip memory read+write. | Locked |
 | D8 | Group chat: Phase 1 = metadata + mockups; Phase 2 = runtime code. | Locked |
-| D9 | Routines surface = dedicated Routines app + conversation entry point. | ⚠️ confirm app-vs-section |
-| D10 | Skill authoring permission model: new role/permission vs. reuse existing admin gate. | ⚠️ NEEDS SIGN-OFF |
+| D9 | Routines: **dedicated app** + reusable **`ng-user-routines`** widget also embeddable as a section in ng-conversations. | Locked |
+| D10 | Skill **authoring + sharing** governed via unified permissions: users may create skills **for themselves by default**; **sharing requires elevated permission**. | Locked |
+| D11 | Public artifact share links use the **Magic Links** mechanism (`guides/MAGIC_LINK_GUIDE.md`), not bespoke no-auth links. | Locked |
+| D12 | **Concurrency:** today a conversation serializes to one in-flight agent turn. Group chat (and optionally plan mode) must allow **multiple agents working/planning concurrently even with a single human**. Designed in P1.0.3. | Locked |
+| D13 | Entity name for routines: **`MJ: User Routines`** vs **`MJ: User Chat Routines`** — see debate in P1.5. | ⚠️ confirm |
 
 ---
 
-## 1. Architectural anchors (what we build on — already exists)
+## 1. System map — where each feature lands
 
-| Capability | Anchor (file) |
+```mermaid
+flowchart TB
+  subgraph UI["Layer 3/4 — Angular widgets + apps"]
+    CHAT["ng-conversations<br/>(chat surface)"]
+    ROUTINESAPP["Routines app<br/>(dedicated)"]
+    ROUTINESW["ng-user-routines<br/>(reusable widget)"]
+    SKILLSUI["Skills authoring UI"]
+    ARTUI["artifacts viewer<br/>(edit/share/remix)"]
+  end
+  subgraph RT["Layer 2 — conversations-runtime (pure TS)"]
+    USAGE["usage rollup"]
+    QUOTE["quote/fork helpers"]
+    CONC["concurrency coordinator"]
+  end
+  subgraph ENG["Engines / AI"]
+    AGENT["ai-agents<br/>(loop, plan mode, skills, memory)"]
+    SKILLENG["Skills engine"]
+    MEM["memory injector/writer"]
+    SCHED["Scheduling engine<br/>+ UserRoutineDispatcherDriver"]
+  end
+  subgraph DATA["Layer 1 — entities + permissions"]
+    ENT["MJ entities (mega migration)"]
+    PERM["Unified permissions / Magic Links"]
+  end
+  ROUTINESAPP --> ROUTINESW
+  CHAT --> ROUTINESW
+  CHAT --> RT
+  CHAT --> AGENT
+  ARTUI --> PERM
+  ROUTINESW --> SCHED
+  SKILLSUI --> SKILLENG
+  AGENT --> SKILLENG
+  AGENT --> MEM
+  SCHED --> AGENT
+  ENG --> DATA
+  RT --> DATA
+```
+
+---
+
+## P1.0 — Foundations gate (UX mockups + mega migration + cross-cutting design)
+
+### P1.0.1 — UX Mockups (USER-REVIEWED GATE) 🚦
+
+**Deliverable:** Clickable or static-HTML/markdown mockups for **every** feature, in `plans/mockups/conversations-phase1/`, reviewed and approved by the user **before** the corresponding feature UI is built.
+
+| Mockup | Covers |
 |---|---|
-| Agent loop, system-prompt assembly, Chat/HITL step | `packages/AI/Agents/src/base-agent.ts`; agent-types `loop-agent-type.ts` |
-| Human-in-the-loop request/approval | `MJ: AI Agent Requests` (+ `AIAgentRequestType`); `createPersistentAIAgentRequest` |
-| Action/sub-agent bundling + governance | `AIAgentAction`, `AIAgentRelationship` junctions |
-| Memory scoping (Agent/User/Company + primary/secondary) | `packages/AI/Agents/src/agent-context-injector.ts`, `MemoryWriteManager.ts`, `memory-manager-agent.ts` |
-| Scheduling engine + agent driver | `packages/Scheduling/engine/src/ScheduledJobEngine.ts`, `drivers/AgentScheduledJobDriver.ts`, `CronExpressionHelper.ts` |
-| Artifact render + React runtime + plugin viewers | `packages/Angular/Generic/artifacts/...`, `@memberjunction/react-runtime`, `@memberjunction/interactive-components` |
-| Conversation/Projects/streaming | `packages/MJCoreEntities/src/engines/conversations.ts`; `packages/ConversationsRuntime/src/streaming/ConversationStreaming.ts` |
-| Resource permissions (sharing) | `MJ: Resource Permissions` + `ResourcePermissionEngine` |
-| Notifications (in-app) + comms (email) | `MJNotificationService`, `CommunicationEngine` |
+| `context-gauge.*` | Header gauge, tooltip breakdown, on/off |
+| `plan-mode.*` | Per-request plan toggle in the agent **pill**/composer; plan-approval card (approve/edit/reject) |
+| `skills.*` | Skill authoring form; agent `AcceptsSkills` control; in-run skill activation indicator |
+| `routines.*` | Routines app (list/create/edit/history); friendly cron builder; notification config; "turn this into a routine" entry in chat |
+| `memory.*` | Project-scoped memory panel; "Temporary chat" toggle |
+| `artifacts.*` | Inline edit; share (magic link) dialog; remix flow |
+| `polish.*` | Quote/multi-quote; shortcuts cheat-sheet; long-thread TOC; fork |
+| `group-chat.*` | Participant roster; invite flow; multi-user attribution; typing/presence; concurrent-agent indicators |
 
----
+**Acceptance:** User signs off each mockup. **Gate:** feature UI tasks below are blocked until their mockup is approved.
+**Risk:** Low (design only) — but this is the single most important early step for UX quality.
 
-## 2. Sub-phase sequencing & dependencies
+### P1.0.2 — DB Design → ONE Mega Migration
 
+**Deliverable:** A single migration in `migrations/v5/` creating all new entities and altering existing tables for the whole phase, followed by one CodeGen run. Reference data seeded via `metadata/` files (not SQL inserts).
+
+#### Master ERD (new = bold concept; altered columns noted)
+
+```mermaid
+erDiagram
+  Project ||--o{ Conversation : "ProjectID (folder)"
+  Conversation ||--o{ ConversationDetail : has
+  Conversation ||--o{ ConversationParticipant : "P1.8 (metadata only)"
+  User ||--o{ UserRoutine : owns
+  UserRoutine ||--o{ UserRoutineRecipient : "notifies"
+  UserRoutine ||--o{ UserRoutineRun : "history"
+  AIAgent ||--o{ AIAgentSkill : "Limited acceptance"
+  AISkill ||--o{ AIAgentSkill : "assigned to"
+  AISkill ||--o{ AISkillAction : bundles
+  AISkill ||--o{ AISkillSubAgent : bundles
+  Action ||--o{ AISkillAction : "in skill"
+  AIAgent ||--o{ AISkillSubAgent : "as sub-agent"
+  AIAgentNote }o--|| Project : "ProjectID (new)"
+  AIAgentExample }o--|| Project : "ProjectID (new)"
+  ResourcePermission ||--o{ AISkill : "author/share (unified perms)"
 ```
-P1.1 Context & Cost Gauge        (no deps)            ── quick win
-P1.2 UX polish bundle            (no deps)            ── quick win
-P1.3 Plan Mode                   (no deps)            ── core agent loop
-P1.4 Skills                      (no deps; pairs w/ P1.3 run-step work)
-P1.5 My Routines                 (no deps; uses Scheduling + Notifications)
-P1.6 Project-scoped Memory       (no deps; D1 confirmed)
-P1.7 Artifact edit + share/remix (no deps; builds on artifact stack)
-P1.8 Group-chat metadata+mockups (no deps; sets up Phase 2)
+
+#### New entities
+
+| Entity | Key fields |
+|---|---|
+| **`MJ: User Routines`** (name pending D13) | `ID`, `UserID` (owner), `EnvironmentID`, `Name`, `Description`, `Status` ('Active'/'Paused'/'Disabled'), `RoutineType` ('Scheduled'/'Monitoring'), `TargetType` ('Agent'/'Action'/'Prompt'), `TargetID`, `InitialMessage` NVARCHAR(MAX), `StartingPayload` NVARCHAR(MAX) JSON, `CronExpression`, `Timezone`, `NextRunAt`, `LastRunAt`, `LastRunStatus`, `LastResultHash`, `NotifyCondition` ('Always'/'OnSuccess'/'OnFailure'/'OnChange'), `NotifyViaInApp` BIT, `NotifyViaEmail` BIT |
+| **`MJ: User Routine Recipients`** | `ID`, `RoutineID`, `UserID?`, `Email?`, `Channel` ('InApp'/'Email') |
+| **`MJ: User Routine Runs`** | `ID`, `RoutineID`, `StartedAt`, `CompletedAt`, `Status`, `AgentRunID?`, `TokensUsed?`, `Cost?`, `ResultSummary` NVARCHAR(MAX), `ResultHash`, `NotificationSent` BIT, `ErrorMessage?` |
+| **`MJ: AI Skills`** | `ID`, `Name`, `Description`, `Instructions` NVARCHAR(MAX), `Status` ('Active'/'Pending'/'Deprecated'), `Category`, `CreatedByUserID` |
+| **`MJ: AI Skill Actions`** | `ID`, `SkillID`, `ActionID`, `MinExecutionsPerRun?`, `MaxExecutionsPerRun?` |
+| **`MJ: AI Skill Sub Agents`** | `ID`, `SkillID`, `SubAgentID` (→ AIAgent) |
+| **`MJ: AI Agent Skills`** | `ID`, `AgentID`, `SkillID`, `Status` ('Active'/'Pending'/'Revoked') — for `AcceptsSkills='Limited'` |
+| **`MJ: Conversation Participants`** (P1.8 — metadata only) | `ID`, `ConversationID`, `UserID`, `Role` ('Owner'/'Member'/'Guest'), `Status` ('Invited'/'Active'/'Removed'), `InvitedByUserID`, `InvitedAt`, `JoinedAt`, `NotificationPreference` |
+
+#### Altered tables (single consolidated `ALTER` each)
+
+| Table | Add |
+|---|---|
+| `AIAgent` | `SupportsPlanMode BIT NOT NULL DEFAULT 0`, `AcceptsSkills NVARCHAR(20) NOT NULL DEFAULT 'None'` |
+| `AIAgentRunStep` | extend `StepType` allowed values with `Plan` **and** `Skill` (one constraint edit) |
+| `AIAgentNote` | `ProjectID UNIQUEIDENTIFIER NULL` (FK→`MJ: Projects`) |
+| `AIAgentExample` | `ProjectID UNIQUEIDENTIFIER NULL` (FK→`MJ: Projects`) |
+| `Conversation` | `IsTemporary BIT NOT NULL DEFAULT 0`, `IsGroup BIT NOT NULL DEFAULT 0` |
+
+#### Permissions (unified, not bespoke)
+- **Skills** authoring/sharing → register a Skills resource type in the **unified permissioning** model (`MJ: Resource Permissions`). Default: a user can create skills scoped to self; **sharing** requires an elevated permission/role (D10). No new permission table unless the unified model can't express it.
+- **Artifacts public link** → Magic Links (D11), see P1.7.
+
+**Acceptance:** one migration file; CodeGen green; all entities generate with strong types; reference data via metadata.
+**Risk:** Med — large migration; follow consolidation + extended-property rules precisely.
+
+### P1.0.3 — Concurrency model design (parallel agent turns) — D12
+
+**Problem:** Today a conversation serializes — once a user sends a message, additional sends to other agents are blocked until the turn completes. Group chat and (optionally) plan mode need **multiple agents working/planning at once, even with a single human**.
+
+```mermaid
+flowchart LR
+  subgraph TODAY["Today — serialized"]
+    U1[User msg] --> A1[Agent turn] --> DONE1[done] --> U2[next msg allowed]
+  end
+  subgraph TARGET["Target — concurrent turns"]
+    UH[User msg @AgentA @AgentB] --> PA[Agent A turn]
+    UH --> PB[Agent B turn]
+    PA --> M[merge into thread]
+    PB --> M
+  end
 ```
-All sub-phases are parallelizable across developers. P1.3 and P1.4 both touch `AIAgentRunStep` StepType + the loop — coordinate the enum migration (do it once, see P1.3.1 / P1.4.1 shared note).
+
+**Deliverable:** A design (in this doc + a short ADR) for a **concurrency coordinator** in `conversations-runtime` that:
+- tracks N in-flight agent turns per conversation (keyed by agent run id),
+- allows the composer to dispatch to multiple agents without waiting,
+- renders concurrent in-flight indicators (multiple "AgentX is working/planning…" rows),
+- defines ordering/merge semantics for interleaved streamed responses,
+- defines limits (max concurrent turns) + cancellation.
+
+This unblocks **group chat** (P1.8/Phase 2) and is **opt-in for plan mode** (let multiple agents plan simultaneously). **Risk:** Med-High — touches streaming + UI assumptions; design now, implement the minimal slice plan mode needs in P1.3 and the full slice in Phase 2.
+
+### P1.0.4 — Shared notification + cron-picker primitives
+- Finish/standardize the **notification delivery path** (in-app rows + `CommunicationEngine` email) used by Routines (P1.5), reusable by group chat (P2) and memory alerts later.
+- Build a reusable **friendly cron-picker** component (daily/weekly/custom + timezone).
 
 ---
 
@@ -81,187 +204,245 @@ All sub-phases are parallelizable across developers. P1.3 and P1.4 both touch `A
 
 | Task | Detail |
 |---|---|
-| **P1.1.1** Runtime rollup | In `conversations-runtime`, add a pure function `computeConversationUsage(details, agentRuns)` → `{ inputTokens, outputTokens, cost, contextLimit?, pctUsed? }`. Source data from peripheral `agentRunsByDetailId` (already loaded). Context limit from the active agent's resolved model via `AIEngineBase`. **Acceptance:** unit-tested pure fn; returns partial (tokens+cost) when limit unknown. **Risk:** Low. |
-| **P1.1.2** Gauge component | `mj-conversation-context-gauge` (standalone). Renders compact bar + tooltip breakdown. `--mj-chat-*` tokens. **Acceptance:** renders in header; degrades to tokens+cost with no %. |
-| **P1.1.3** Wiring + pref | `@Input() ShowContextGauge=false` on chat-area; expose via `header` slot. Persist show/hide via `UserInfoEngine` key `mj.conversations.contextGauge.v1`. **Acceptance:** off by default; pref round-trips. |
-| **Tests** | Vitest for P1.1.1; component smoke test. |
+| **P1.1.1** Runtime rollup | Pure `computeConversationUsage(details, agentRuns)` in runtime → `{inputTokens, outputTokens, cost, contextLimit?, pctUsed?}` from peripheral `agentRunsByDetailId`; context limit from active agent's resolved model via `AIEngineBase`. Unit-tested; degrades to tokens+cost when limit unknown. |
+| **P1.1.2** Gauge component | `mj-conversation-context-gauge` (standalone), `--mj-chat-*` tokens, header slot. |
+| **P1.1.3** Wiring + pref | `@Input() ShowContextGauge=false`; persist via `UserInfoEngine` key `mj.conversations.contextGauge.v1`. |
+| **Tests** | Vitest rollup; component smoke. **Risk:** Low. |
 
 ---
 
-## P1.2 — UX polish bundle (quote, shortcuts, TOC, fork)
-
-**Goal:** Table-stakes ergonomics. Each is independently small.
+## P1.2 — UX polish (quote, shortcuts, TOC, fork)
 
 | Task | Detail |
 |---|---|
-| **P1.2.1** Quote / multi-quote | Selection directive on message-list; floating "Quote" button on text selection; inserts blockquote into `mj-mention-editor` with a back-ref to source `ConversationDetailID`. Multi-quote = composer accumulator (runtime state). **Acceptance:** select→quote→send carries quoted text + ref. |
-| **P1.2.2** Keyboard registry | `ConversationKeyboardService` (widget-scoped registry `{combo, description, handler, scope}`); `?` opens `mj-keyboard-shortcuts-overlay`. Host-focus-scoped so embeds don't hijack keys. v1 fixed bindings (new convo, focus composer, send, search, toggle sidebar, escape). **Risk:** Med — scope carefully. |
-| **P1.2.3** Long-thread TOC | Auto section list for threads > N messages; jump-to. Derive sections from agent turns / headings. **Acceptance:** appears only when long; jumps correctly. |
-| **P1.2.4** Conversation fork | "Branch from here" on a message → clone conversation + details up to that point into a new conversation (new `ProjectID` inherited). Runtime helper `forkConversation(detailId)`. **Acceptance:** original untouched; fork starts from chosen point. **Risk:** Med — clone semantics + artifact refs. |
-| **Tests** | Quote accumulator + fork-clone logic unit-tested in runtime. |
+| **P1.2.1** Quote / multi-quote | Selection directive → floating "Quote" → blockquote into composer w/ back-ref `ConversationDetailID`; multi-quote accumulator in runtime state. |
+| **P1.2.2** Keyboard registry | `ConversationKeyboardService` (host-focus-scoped); `?` → `mj-keyboard-shortcuts-overlay`; fixed v1 bindings. **Risk:** Med (scope carefully). |
+| **P1.2.3** Long-thread TOC | Auto section list for long threads; jump-to. |
+| **P1.2.4** Fork | "Branch from here" → `forkConversation(detailId)` clones up to that point into a new conversation (inherits `ProjectID`). **Risk:** Med (clone + artifact refs). |
+| **Tests** | quote accumulator + fork clone unit-tested. |
 
 ---
 
 ## P1.3 — Plan Mode
 
-**Goal:** Any Loop agent can return a plan for approval before executing, gated by capability + per-run toggle. Reuses `AIAgentRequest`.
+**Goal:** Any Loop agent can return a plan for approval before executing — gated by `SupportsPlanMode` (default off) + a **per-request toggle in the chat UX** (the agent pill / composer). Reuses `AIAgentRequest`. Optionally lets multiple agents plan concurrently (P1.0.3).
+
+```mermaid
+sequenceDiagram
+  actor U as User
+  participant C as Composer (plan toggle in pill)
+  participant L as Loop Agent
+  participant R as AIAgentRequest
+  U->>C: message @Agent (plan mode ON)
+  C->>L: run (planMode=true)
+  L-->>R: persist Plan request (plan + approve/edit/reject schema)
+  L-->>U: render plan card (Plan run step)
+  U->>R: approve / edit / reject
+  alt approved/edited
+    R->>L: resume with (edited) plan
+    L-->>U: execute + stream results
+  else rejected
+    L-->>U: abort cleanly
+  end
+```
 
 | Task | Detail |
 |---|---|
-| **P1.3.1** Schema | Migration: (a) add `SupportsPlanMode BIT NOT NULL DEFAULT 0` to `AIAgent`; (b) add `Plan` to `AIAgentRunStep.StepType` check-constraint/value list (⚠️ coordinate with P1.4.1 — extend the constraint ONCE to include both `Plan` and `Skill`). `sp_addextendedproperty` for new column. **Then CodeGen.** |
-| **P1.3.2** Loop prompt | In the core Loop agent system-prompt template, add a **conditional "Plan Mode" block** instructing the model to return a structured plan first. Injected ONLY when `SupportsPlanMode && runtime planMode active`. **Acceptance:** prompt unchanged for agents without the flag. |
-| **P1.3.3** Loop handling | In `LoopAgentType.DetermineNextStep`, recognize a `plan` response → return a `Plan` next-step. In `base-agent.ts`, `executePlanStep()`: persist an `AIAgentRequest` (RequestType=Plan-Approval) carrying the plan + `ResponseSchema` (approve/edit/reject), record an `AIAgentRunStep` (StepType=`Plan`), suspend. On approval/edit response, resume execution with the (possibly edited) plan in context. **Risk:** Med — reuse Chat suspend/resume plumbing. |
-| **P1.3.4** Runtime toggle | `ExecuteAgentParams.planMode?: boolean`. Thread from conversation runner. **Acceptance:** capable agent only plans-first when toggle on. |
-| **P1.3.5** UI | Plan-mode toggle in composer (shown only when active agent `SupportsPlanMode`); render the plan-approval request as an editable card (approve / edit / reject) reusing the response-form path. Wire `(beforeAgentTurn)` etc. as needed. **Acceptance:** user can approve/edit/reject; rejection aborts cleanly. |
-| **Tests** | Loop unit test: plan step suspends + resumes; approval injects edited plan. |
+| **P1.3.1** (schema in P1.0.2) | `AIAgent.SupportsPlanMode`; `Plan` run-step value. |
+| **P1.3.2** Loop prompt | Conditional "Plan Mode" block in core Loop system prompt; injected only when `SupportsPlanMode && runtime planMode`. No change for other agents. |
+| **P1.3.3** Loop handling | `LoopAgentType.DetermineNextStep` recognizes `plan` → `Plan` next-step; `executePlanStep()` persists `AIAgentRequest` (RequestType Plan-Approval, ResponseSchema approve/edit/reject), records `AIAgentRunStep` (Plan), suspends; resume injects (edited) plan. Reuse Chat suspend/resume plumbing. |
+| **P1.3.4** Runtime toggle | `ExecuteAgentParams.planMode?` threaded from conversation runner; **per-request** (set on the agent pill/composer per send), independent of agent default. |
+| **P1.3.5** UI | Plan toggle in the agent **pill**/composer (only when agent `SupportsPlanMode`); editable plan-approval card via the response-form path. |
+| **P1.3.6** (opt) Concurrent planning | Allow >1 agent to plan at once via P1.0.3 coordinator (minimal slice). |
+| **Tests** | plan step suspend+resume; approval injects edited plan. **Risk:** Med. |
 
 ---
 
 ## P1.4 — Skills (capability bundles)
 
-**Goal:** Reusable, governed bundles of (instructions + optional Actions + optional sub-agents) attachable to 1+ agents; appended to system prompt on activation; new run-step type.
+**Goal:** Reusable, governed bundles of (instructions + optional Actions + optional sub-agents), attachable to 1+ agents, **appended** to system prompt on activation; new `Skill` run-step; unified permissions for authoring/sharing.
 
-### Data model (P1.4.1 — one migration, then CodeGen)
-
-| Entity | Key fields |
-|---|---|
-| `MJ: AI Skills` | `ID`, `Name`, `Description`, `Instructions` (NVARCHAR(MAX) — appended to system prompt), `Status` ('Active'/'Pending'/'Deprecated'), `Category`, `CreatedByUserID`, `Scope` ('Global'/'User') |
-| `MJ: AI Skill Actions` | `ID`, `SkillID`→Skills, `ActionID`→Actions, `MinExecutionsPerRun?`, `MaxExecutionsPerRun?` |
-| `MJ: AI Skill Sub Agents` | `ID`, `SkillID`→Skills, `SubAgentID`→AIAgent |
-| `MJ: AI Agent Skills` | `ID`, `AgentID`→AIAgent, `SkillID`→Skills, `Status` ('Active'/'Pending'/'Revoked') — used when agent `AcceptsSkills='Limited'` |
-| `AIAgent` (alter) | add `AcceptsSkills NVARCHAR(20) NOT NULL DEFAULT 'None'` ('None'/'All'/'Limited') |
-| `AIAgentRunStep.StepType` | add value `Skill` (⚠️ same constraint edit as P1.3.1 — do `Plan`+`Skill` together) |
-
-All new columns get `sp_addextendedproperty`. Seed reference data (skill categories, if enum-ish) via metadata files, not SQL inserts.
-
-### Implementation
+```mermaid
+flowchart TB
+  subgraph SKILL["MJ: AI Skill"]
+    INSTR["Instructions (appended to system prompt)"]
+    ACTS["bundled Actions"]
+    SUBS["bundled Sub-Agents"]
+    GOV["Status + permissions"]
+  end
+  AGENT["AIAgent.AcceptsSkills = None | All | Limited"]
+  AGENT -- "Limited" --> J["MJ: AI Agent Skills (junction)"]
+  J --> SKILL
+  AGENT -- "All" --> SKILL
+  RUN["Agent run"] -->|"sees names+descriptions (progressive disclosure)"| CAT["skill catalog in prompt"]
+  RUN -->|"step: skill"| ACT["executeSkillStep()"]
+  ACT --> INSTR
+  ACT --> ACTS
+  ACT --> SUBS
+  ACT --> STEP["AIAgentRunStep (StepType=Skill)"]
+```
 
 | Task | Detail |
 |---|---|
-| **P1.4.2** Skills engine | New `BaseEngine` subclass caching Active skills + agent-skill map (reactive via `ObserveProperty`). Resolves "which skills are available to agent X" (All vs Limited-junction). |
-| **P1.4.3** Prompt exposure | In `gatherPromptTemplateData()`, inject **skill catalog** (name + description only — progressive disclosure) for skills the agent accepts. **Acceptance:** idle context cost ≈ names/descriptions only. |
-| **P1.4.4** Activation step | LLM returns `step: 'skill'` with `skillId`. In `base-agent.ts` `executeSkillStep()`: validate the agent accepts it; **append** the skill `Instructions` to the working system prompt for subsequent turns; add the skill's Actions + sub-agents to the available tool surface for the run; record `AIAgentRunStep` (StepType=`Skill`). NOT a nested agent run. **Risk:** Med — tool-surface mutation mid-run; ensure governance (min/max executions) honored. |
-| **P1.4.5** Governance | Enforce `AcceptsSkills`; `AIAgentSkill.Status` for Limited; `Skill.Status` (only Active activatable); author permission (D10). |
-| **P1.4.6** Authoring UI | Skills management surface (Explorer dashboard or core-entity-forms): create/edit skill (instructions + pick Actions + pick sub-agents), set status, assign to agents. + agent form: `AcceptsSkills` control + Limited-list picker. |
-| **P1.4.7** (stretch) `SKILL.md` import/export | Align skill shape to the open `SKILL.md` standard for portability (name/description/body). Export a skill as `SKILL.md`; import one. **Risk:** Low; defer if time-boxed. |
-| **Tests** | Engine resolution (All/Limited); activation appends instructions + enables tools; governance rejects non-accepted skills. |
+| **P1.4.1** (schema in P1.0.2) | Skills + 3 junctions; `AIAgent.AcceptsSkills`; `Skill` run-step; Skills resource type in unified permissions. |
+| **P1.4.2** Skills engine | `BaseEngine` subclass caching Active skills + agent-skill map (reactive); resolves available skills per agent (All vs Limited). |
+| **P1.4.3** Prompt exposure | Inject **catalog (name+description only)** for accepted skills in `gatherPromptTemplateData()` — progressive disclosure. |
+| **P1.4.4** Activation step | `step:'skill'` → `executeSkillStep()`: validate acceptance; **append** `Instructions` to working system prompt; add skill Actions+sub-agents to the run's tool surface; honor min/max executions; record `AIAgentRunStep` (Skill). Not a nested agent run. **Risk:** Med (mid-run tool-surface mutation). |
+| **P1.4.5** Governance | Enforce `AcceptsSkills` + junction `Status` + `Skill.Status`; **authoring/sharing via unified permissions** (self-create default; share = elevated). |
+| **P1.4.6** Authoring UI | Skill create/edit (instructions + pick Actions + pick sub-agents + status); agent form `AcceptsSkills` control + Limited picker; share dialog (permission-gated). |
+| **P1.4.7** (stretch) `SKILL.md` interop | Import/export to the open `SKILL.md` standard for portability. Defer if time-boxed. |
+| **Tests** | engine resolution; activation appends + enables tools; governance rejects non-accepted; permission gates sharing. |
 
 ---
 
-## P1.5 — My Routines (user-controlled scheduled prompts)
+## P1.5 — User Routines (user-controlled scheduled prompts)
 
-**Goal:** Users author prompts/agent-runs that run on a schedule they control, with per-routine notifications — via a single dispatcher job (D2).
+**Goal:** Users author prompts/agent-runs that run on a schedule they control, with per-routine notifications — via a **single dispatcher job** (D2). Dedicated **Routines app** + reusable **`ng-user-routines`** widget also embeddable in ng-conversations (D9).
 
-### Data model (P1.5.1 — one migration, then CodeGen)
+### Entity-name debate (D13)
+- **`MJ: User Routines`** — general; targets can be Agent/Action/Prompt and a dedicated app exists beyond chat. Future-proof. **(recommended)**
+- **`MJ: User Chat Routines`** — signals chat origin; narrower if routines later schedule non-chat work.
+- *Recommendation:* `MJ: User Routines` (entity) with user-facing label "Routines" (or "Chat Routines" inside ng-conversations). Confirm before P1.0.2 finalizes the migration.
 
-| Entity | Key fields |
-|---|---|
-| `MJ: User Routines` | `ID`, `UserID` (owner), `EnvironmentID`, `Name`, `Description`, `Status` ('Active'/'Paused'/'Disabled'), `RoutineType` ('Scheduled'/'Monitoring'), `TargetType` ('Agent'/'Action'/'Prompt'), `TargetID`, `InitialMessage` (NVARCHAR(MAX)), `StartingPayload` (NVARCHAR(MAX) JSON), `CronExpression`, `Timezone`, `NextRunAt`, `LastRunAt`, `LastRunStatus`, `LastResultHash` (for OnChange monitoring), `NotifyCondition` ('Always'/'OnSuccess'/'OnFailure'/'OnChange'), `NotifyViaInApp` BIT, `NotifyViaEmail` BIT |
-| `MJ: User Routine Recipients` | `ID`, `RoutineID`→User Routines, `UserID?`, `Email?`, `Channel` ('InApp'/'Email') — for "and/or others" |
-| `MJ: User Routine Runs` | `ID`, `RoutineID`, `StartedAt`, `CompletedAt`, `Status`, `AgentRunID?`, `TokensUsed?`, `Cost?`, `ResultSummary` (NVARCHAR(MAX)), `ResultHash`, `NotificationSent` BIT, `ErrorMessage?` |
+### Dispatcher flow
 
-Row-level access: users see only their own routines/runs (owner filter). All new columns `sp_addextendedproperty`.
-
-### Dispatcher (P1.5.2)
-
-- **One** admin `MJ: Scheduled Jobs` row "User Routine Dispatcher" (seeded via `metadata/scheduled-jobs/`), cron e.g. `0 */1 * * * *` (every minute), driver = new `UserRoutineDispatcherDriver` (in `packages/Scheduling/engine/src/drivers/`).
-- Driver logic each tick:
-  1. Load `Active` routines where `NextRunAt <= now` (or evaluate cron via `CronExpressionHelper.IsExpressionDue`).
-  2. For each due routine, **atomically claim** (optimistic: set `LastRunAt`/a running marker), then run target:
-     - `Agent` → `AgentRunner.RunAgent({ agent, conversationMessages:[{role:'user',content:InitialMessage}], payload:StartingPayload, contextUser: routine owner })`
-     - `Action` → ActionEngine; `Prompt` → AIPromptRunner.
-  3. Write a `User Routine Runs` row (status/tokens/cost/summary/hash).
-  4. Compute `NextRunAt` via `CronExpressionHelper.GetNextRunTime`.
-  5. Evaluate `NotifyCondition` (for `OnChange`, compare `ResultHash` vs `LastResultHash`) → if firing, dispatch notifications (in-app via notification entity; email via `CommunicationEngine`) to owner + `User Routine Recipients`.
-  6. Bounded concurrency; per-routine isolation (one failure doesn't break the sweep); heartbeat the dispatcher job for long sweeps. **Risk:** Med — long-running routines within lease; v1 bounds concurrency + heartbeats, note async-queue as a future option.
-
-### UX (P1.5.3 — confirm D9 app-vs-section)
-
-- **Routines app/dashboard** (`BaseDashboard`, follows dashboard guide + chrome): list (owner-filtered), create/edit (target picker, friendly cron builder — daily/weekly/custom, Timezone), Run-now, run history, notification config (condition + channels + recipients).
-- **Conversation entry point:** "Turn this into a routine" from a message/prompt in ng-conversations → prefilled create form (TargetType=Agent + InitialMessage from the message). This is the "promote-a-prompt-to-a-schedule" UX.
-- Friendly cron picker component (reusable).
+```mermaid
+flowchart TB
+  CRON["One admin Scheduled Job:<br/>'User Routine Dispatcher' (every ~1 min)"] --> DRV["UserRoutineDispatcherDriver"]
+  DRV --> Q{"Load Active routines<br/>NextRunAt <= now"}
+  Q -->|"for each (bounded concurrency)"| CLAIM["atomically claim routine"]
+  CLAIM --> RUN["run target via AgentRunner / ActionEngine / AIPromptRunner"]
+  RUN --> REC["write User Routine Run (status/tokens/cost/summary/hash)"]
+  REC --> NEXT["NextRunAt = CronExpressionHelper.GetNextRunTime"]
+  REC --> COND{"NotifyCondition met?<br/>(OnChange: hash != LastResultHash)"}
+  COND -->|yes| NOTIFY["dispatch: in-app + email<br/>to owner + Recipients"]
+  COND -->|no| SKIP["no notification"]
+```
 
 | Task | Detail |
 |---|---|
-| **P1.5.4** Notifications finish | Complete the delivery path the dispatcher needs: in-app notification rows + `CommunicationEngine` email. (Note: `Scheduling/NotificationManager` is a stub; our dispatcher owns delivery directly, or we finish the stub — pick one, document.) |
-| **Tests** | Cron due-evaluation; OnChange hash logic; dispatcher isolation (one routine throws, others run); notification firing per condition. |
+| **P1.5.1** (schema in P1.0.2) | `MJ: User Routines` + Recipients + Runs; row-level owner access. |
+| **P1.5.2** Dispatcher | Seed one admin job (`metadata/scheduled-jobs/`); new `UserRoutineDispatcherDriver` in `packages/Scheduling/engine/src/drivers/`. Logic per the flow above; bounded concurrency; per-routine isolation; heartbeat the dispatcher; OnChange via `ResultHash`. **Risk:** Med (long routines within lease — v1 bounds concurrency, note async-queue future). |
+| **P1.5.3** `ng-user-routines` widget | New reusable Angular package: list (owner-filtered), create/edit (target picker + friendly cron-picker from P1.0.4 + notification config: condition/channels/recipients), run-now, history. |
+| **P1.5.4** Routines app | Dedicated Explorer dashboard/app hosting `ng-user-routines` (follows dashboard guide + chrome + `NotifyLoadComplete`). |
+| **P1.5.5** Conversation entry | "Turn this into a routine" from a message/prompt in ng-conversations → prefilled create (TargetType=Agent + InitialMessage). Embeds the same `ng-user-routines` create surface. |
+| **P1.5.6** Notifications | Use the shared delivery path (P1.0.4): in-app rows + `CommunicationEngine` email per condition/recipients. |
+| **Tests** | cron due-eval; OnChange hash; dispatcher isolation (one throws, others run); notification firing per condition. |
 
 ---
 
 ## P1.6 — Project-scoped Memory + Incognito
 
-**Goal:** Memory scoped to a conversation's project (folder), plus a temporary/incognito mode. (D1/D6/D7.)
+**Goal:** Memory scoped to a conversation's project (folder), plus a temporary/incognito mode (D1/D6/D7). Folders==Projects, so it keys off `Conversation.ProjectID`.
 
-### Schema (P1.6.1 — one migration, then CodeGen)
-
-- Add `ProjectID UNIQUEIDENTIFIER NULL` FK→`MJ: Projects` to `AIAgentNote` and `AIAgentExample`.
-- Add `IsTemporary BIT NOT NULL DEFAULT 0` to `Conversation`.
-- `sp_addextendedproperty` for all three.
-
-### Implementation
+```mermaid
+flowchart LR
+  CONV["Conversation (ProjectID = folder)"] --> PARAMS["ExecuteAgentParams.projectId + temporary"]
+  PARAMS --> INJ["AgentContextInjector"]
+  INJ --> LATTICE{"scope match"}
+  LATTICE --> A["Agent/User/Company (existing 8-level)"]
+  LATTICE --> P["+ Project: ProjectID = X OR NULL (broad)"]
+  PARAMS --> TEMP{"temporary?"}
+  TEMP -->|yes| SKIP["skip read + skip write (memory-inert)"]
+  TEMP -->|no| NORMAL["inject + allow writes (stamped with ProjectID)"]
+```
 
 | Task | Detail |
 |---|---|
-| **P1.6.2** Scope lattice | Extend `agent-context-injector.ts`: add `projectId?` to `GetNotesParams`/`GetExamplesParams`; extend `filterNotesByScoping()` + `buildNotesScopingFilter()` to include Project as a **broad** dimension (`ProjectID = X OR ProjectID IS NULL`); add to `buildScopePreFilter` vector path. **Risk:** Med — lattice grows from 8 to ~12 conditions; keep SQL + in-memory paths in sync. |
-| **P1.6.3** Write scope | `MemoryWriteManager`: add `projectId` to `MemoryWriteContext`/`MemoryWriteScope`; `clampScope()` carries it; `persistNewNote()` stamps `ProjectID`. |
-| **P1.6.4** Thread projectId | `BaseAgent.initializeAgentRun()`: when the run originates from a conversation, resolve `Conversation.ProjectID` → `ExecuteAgentParams` → injector + writer. `memory-manager-agent.ts`: carry `ProjectID` onto consolidated notes; never merge across projects. |
-| **P1.6.5** Incognito | `ExecuteAgentParams.temporary?: boolean`. When set (or `Conversation.IsTemporary`), `InjectContextMemory()` skips read and the loop skips `MemoryWriteManager`. UI: "Temporary chat" toggle; temporary conversations hidden from the list by default. **Acceptance:** temporary run neither reads nor writes notes. |
-| **P1.6.6** (optional) Memory panel hook | If P1 also surfaces the user-visible memory panel (from the study Tier 2.1), scope its view by project filter. (Can be its own task or deferred.) |
-| **Tests** | Project note only injects in matching project + global; temporary run is memory-inert; consolidation respects project cohort. |
+| **P1.6.1** (schema in P1.0.2) | `ProjectID` on `AIAgentNote`/`AIAgentExample`; `Conversation.IsTemporary`. |
+| **P1.6.2** Scope lattice | `agent-context-injector.ts`: add `projectId?` to params; extend `filterNotesByScoping()` + `buildNotesScopingFilter()` + vector pre-filter with **broad** Project dimension. Keep SQL + in-memory paths in sync. **Risk:** Med. |
+| **P1.6.3** Write scope | `MemoryWriteManager`: `projectId` in context/scope; `clampScope()` carries it; `persistNewNote()` stamps `ProjectID`. |
+| **P1.6.4** Thread projectId | `BaseAgent.initializeAgentRun()` resolves `Conversation.ProjectID` → params → injector/writer; `memory-manager-agent.ts` carries `ProjectID` on consolidated notes; never merge across projects. |
+| **P1.6.5** Incognito | `ExecuteAgentParams.temporary?`; honor `Conversation.IsTemporary` — skip inject + skip writes; "Temporary chat" toggle; hidden from list. |
+| **P1.6.6** (opt) Memory panel | User-visible memory panel (study Tier 2.1) scoped by project filter. |
+| **Tests** | project note injects only in matching project + global; temporary run memory-inert; consolidation respects project cohort. |
 
 ---
 
-## P1.7 — Artifact edit + share/remix
+## P1.7 — Artifact edit + share (Magic Links) + remix
 
-**Goal:** Close the Canvas gap on our terms — direct edit for text/code artifacts + share/remix. (Builds on the existing artifact + React-runtime stack.)
+**Goal:** Close the Canvas gap on our terms — direct edit for text/code artifacts + **magic-link public sharing** + remix. Builds on the existing artifact + React-runtime stack.
 
 | Task | Detail |
 |---|---|
-| **P1.7.1** Editable viewer | For text/code/markdown artifact types, make the viewer editable (not read-only): user edits → saves a **new `MJ: Artifact Versions` row** (preserve immutable-version model). Agent remains a collaborator. **Risk:** Med — reconcile user-edit vs agent-regenerate version lineage. |
-| **P1.7.2** Share link | Extend artifact sharing to produce a link viewable per `MJ: Resource Permissions` (and/or a `Public` scope already on `MJ: Conversation Artifacts`). Decide guest-view policy. ⚠️ confirm whether truly public (no-auth) links are in scope. |
-| **P1.7.3** Remix | "Remix" → clone artifact (+ latest version) into a new artifact owned by the current user, opened in a new conversation. **Acceptance:** original untouched; remix is independently editable. |
-| **P1.7.4** (spike only) Artifacts-as-apps | Evaluate a component→agent `callAgent()` RPC so interactive components can invoke an agent. **Spike + writeup, no commit this phase.** |
-| **Tests** | Edit creates new version; remix clones without mutating source. |
+| **P1.7.1** Editable viewer | Text/code/markdown artifact types become editable; user edit → **new `MJ: Artifact Versions` row** (preserve immutable-version model); agent stays a collaborator. **Risk:** Med (user-edit vs agent-regenerate lineage). |
+| **P1.7.2** Magic-link share | Public artifact links via the **Magic Links** mechanism (`guides/MAGIC_LINK_GUIDE.md`): an app-scoped, passwordless, restricted-role session that grants read to the shared artifact. Reuse the magic-link issuance + restricted-role/entity-permission recipe; no bespoke no-auth path. **Risk:** Med (scope the restricted role to artifact-read only). |
+| **P1.7.3** Remix | "Remix" clones artifact + latest version into a new user-owned artifact opened in a new conversation; original untouched. |
+| **P1.7.4** (spike) Artifacts-as-apps | Evaluate a component→agent `callAgent()` RPC. Spike + writeup, no commit this phase. |
+| **Tests** | edit creates new version; magic-link grants read-only to intended artifact; remix clones without mutating source. |
 
 ---
 
 ## P1.8 — Group Chat: metadata + UX mockups (Phase 2 prep)
 
-**Goal:** Land everything a code-only Phase 2 needs: schema + designed flows. **No runtime behavior changes this phase.**
+**Goal:** Land everything a code-only Phase 2 needs. **No runtime behavior changes this phase.** Builds on the concurrency design (P1.0.3) since group chat is the primary driver of concurrent agent turns.
+
+```mermaid
+flowchart TB
+  C["Conversation (IsGroup=1)"] --> P["MJ: Conversation Participants"]
+  P --> R1["Owner"]
+  P --> R2["Member"]
+  P --> R3["Guest (invited)"]
+  D["ConversationDetail.UserID (already per-user attributable)"] --> ATTR["multi-user attribution (Phase 2 UI)"]
+  PRES["typing/presence + concurrent-agent indicators (Phase 2, via P1.0.3 coordinator)"]
+```
 
 | Task | Detail |
 |---|---|
-| **P1.8.1** Schema | Migration (then CodeGen): `MJ: Conversation Participants` (`ID`, `ConversationID`, `UserID`, `Role` 'Owner'/'Member'/'Guest', `Status` 'Invited'/'Active'/'Removed', `InvitedByUserID`, `InvitedAt`, `JoinedAt`, `NotificationPreference`); add `IsGroup BIT NOT NULL DEFAULT 0` to `Conversation`. `sp_addextendedproperty` throughout. **Acceptance:** entities generate; no behavior wired. |
-| **P1.8.2** Backfill semantics | Document migration semantics: existing single-owner conversations → owner is sole participant (lazy or backfill). No runtime enforcement yet. |
-| **P1.8.3** UX mockups | Clickable/wireframe mockups (markdown + optionally static HTML) for: participant roster, invite flow (invite/accept/remove), per-message multi-user attribution, typing/presence indicators, group notifications. |
-| **P1.8.4** Phase 2 spec | Write the Phase 2 code-only plan: participant engine, streaming/PubSub broadcast on `conversation:{id}` topic (message + typing + presence events), relax owner-only action checks → participant-with-permission, members modal wired to real entity, invites. (Reference the group-chat study's phased estimate ~3–4 weeks.) |
-| **Tests** | Entity generation smoke only (no runtime). |
+| **P1.8.1** (schema in P1.0.2) | `MJ: Conversation Participants`; `Conversation.IsGroup`. Generated, not wired. |
+| **P1.8.2** Backfill semantics | Document: existing single-owner conversations → owner is sole participant (lazy or backfill). No runtime enforcement yet. |
+| **P1.8.3** UX mockups | (part of P1.0.1) roster, invite/accept/remove, multi-user attribution, typing/presence, **concurrent-agent** indicators. |
+| **P1.8.4** Phase 2 spec | Code-only plan: participant engine; streaming/PubSub broadcast on `conversation:{id}` (message + typing + presence); the **concurrency coordinator** (P1.0.3) for parallel agent turns; relax owner-only checks → participant-with-permission; members modal wired; invites. (~3–4 weeks per the group-chat study.) |
+| **Tests** | entity generation smoke only. |
 
 ---
 
-## 3. Cross-sub-phase shared work (do once)
+## 2. Sequencing (one phase, all sub-phases)
 
-| Item | Where | Note |
-|---|---|---|
-| `AIAgentRunStep.StepType` constraint edit | P1.3.1 + P1.4.1 | Add `Plan` AND `Skill` in a single constraint change to avoid two migrations clobbering the same constraint. |
-| Friendly cron-picker component | P1.5 | Reusable; also useful if any other scheduling UI appears. |
-| Notification delivery path (in-app + email) | P1.5.4 | Shared by routines now; reusable by group-chat (P2) and memory alerts later. |
-| Conversation→agent param threading | P1.3.4 + P1.6.4 | Both add fields to `ExecuteAgentParams` and the conversation runner — coordinate the param object changes. |
+```mermaid
+flowchart LR
+  G0["P1.0 Foundations gate<br/>(mockups + mega migration + concurrency/perms design)"] --> G1
+  subgraph G1["Feature build (parallelizable)"]
+    direction TB
+    R["P1.5 Routines"]
+    PL["P1.3 Plan mode"]
+    M["P1.6 Project memory"]
+    S["P1.4 Skills"]
+    AR["P1.7 Artifacts"]
+    UX["P1.1 Gauge / P1.2 Polish"]
+    GC["P1.8 Group-chat metadata"]
+  end
+  G1 --> DONE["Phase 1 done → Phase 2: group-chat runtime"]
+```
+
+- **P1.0 is the gate** — nothing else starts until mockups are approved and the mega migration + CodeGen land.
+- Recommended leverage order within G1: **Routines + Plan mode** first (highest value, mostly existing infra), then **Project memory + Skills**, then **Artifacts + polish**; **group-chat metadata** any time (schema is in the mega migration).
+
+---
+
+## 3. Cross-sub-phase shared work (do once, in P1.0)
+
+| Item | Where |
+|---|---|
+| `AIAgentRunStep.StepType` extension (`Plan` + `Skill`) | P1.0.2 (single constraint edit) |
+| `ExecuteAgentParams` new fields (`planMode`, `projectId`, `temporary`) | P1.0.2 design / threaded in P1.3/P1.6 |
+| Concurrency coordinator (parallel agent turns) | P1.0.3 (design) → P1.3 minimal slice → P2 full |
+| Notification delivery path + cron-picker | P1.0.4 (shared by Routines now, group chat later) |
+| Unified-permissions resource types (Skills) + Magic-link share recipe (Artifacts) | P1.0.2 / P1.7 |
 
 ---
 
 ## 4. Definition of Done (Mega Phase 1)
 
+- **P1.0 gate passed:** all mockups approved; mega migration applied; CodeGen green; no `.Get()/.Set()` on new fields.
 - All sub-phase acceptance criteria met; Vitest green for touched packages; `npm run check:ui` clean.
-- Migrations applied + CodeGen run; no `.Get()/.Set()` on new fields.
-- Every new surface opt-in/off-by-default; no behavior change for existing agents/conversations (Plan mode off, Skills `None`, no routines, memory project-scope additive, temporary off).
-- Group-chat schema present + Phase 2 spec written; no group-chat runtime shipped.
-- Docs: update `CONVERSATIONS_UX_STACK_GUIDE.md` + relevant package READMEs for each shipped feature.
+- Every new surface opt-in/off-by-default; **no behavior change** for existing agents/conversations (Plan mode off, Skills `None`, no routines, memory project-scope additive, temporary off, IsGroup off).
+- Concurrency coordinator designed; minimal slice shipped where plan mode needs it; full slice specced for Phase 2.
+- Group-chat schema present + Phase 2 spec written; **no group-chat runtime shipped.**
+- Docs: update `CONVERSATIONS_UX_STACK_GUIDE.md` + package READMEs per shipped feature.
 
-## 5. Open items needing your sign-off
+## 5. Remaining sign-off items
 
-- **D9** — Routines as a dedicated top-level app vs. a section embedded in ng-conversations (recommend: app + conversation entry point).
-- **D10** — Skill authoring permission model (new role/permission vs. reuse an existing admin gate).
-- **P1.7.2** — Are truly public (no-auth) artifact share links in scope, or permission-gated only?
-- **Plan-mode default** — confirm default OFF (recommended) vs ON.
-- **Sequencing** — confirm leverage order (Routines & Plan mode first?) or reprioritize.
+- **D13** — `MJ: User Routines` (recommended) vs `MJ: User Chat Routines`.
+- **D10 detail** — exact elevated permission/role for skill **sharing** (and whether self-authoring is truly open by default).
+- **Concurrency scope** — confirm plan mode gets concurrent planning in Phase 1, or defer all concurrency to Phase 2 except the design.
