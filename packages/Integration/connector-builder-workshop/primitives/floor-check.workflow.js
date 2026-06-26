@@ -172,6 +172,7 @@ const RAW_FETCH_SCHEMA = {
         fkLookupQualifierJson: { type: 'string' }, // stdout of fk-lookup-qualifier.mjs over the metadata file — IOF FK @lookup-qualifier check ('' if it errors)
         bijectionJson: { type: 'string' }, // stdout of graders/bijection.mjs over the metadata file — capability<->per-operation-column bijection ('' if it errors)
         dagJson: { type: 'string' }, // stdout of graders/dag-completeness.mjs over the metadata file — dependency-DAG completeness over ALL objects ('' if it errors)
+        ioNameQualityJson: { type: 'string' }, // stdout of io-name-quality.mjs over the metadata file — IO-name catalog-quality check ('' if it errors)
     },
     additionalProperties: false,
 };
@@ -234,7 +235,8 @@ const fetched = await agent(
         `13. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/fk-lookup-qualifier.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as fkLookupQualifierJson (deterministic IOF FK @lookup-qualifier check — flags &IntegrationID=@parent:ID, which must be @parent:IntegrationID; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
         `14. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/bijection.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as bijectionJson (deterministic capability<->per-operation-column bijection — flags an IO whose SupportsCreate/Update/Delete/IncrementalSync is set while its required columns are blank; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
         `15. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/graders/dag-completeness.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as dagJson (deterministic dependency-DAG completeness over ALL objects — flags a dangling FK to a non-emitted object or a hard-@lookup cycle that would roll the push back; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
-        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson, bijectionJson, dagJson }.`,
+        `16. If \`test -f ${metadataFile}\` exits 0, run \`node packages/Integration/connector-builder-workshop/floor/io-name-quality.mjs ${metadataFile} --json\` -> return its stdout VERBATIM as ioNameQualityJson (deterministic IO-name catalog-quality check — flags IO names that are extraction artifacts: filenames, response/status schema titles, field-names, numbered dupes — which sync 0 rows forever; '' if it errors or the file is absent). Fixed script — run it exactly, do not edit its output.\n` +
+        `\nDo not interpret, summarize, or validate any content. Return { slotsContent, slotsReadable, matrixContent, matrixReadable, connectorFileExists, metadataContent, metadataReadable, provenanceContent, codeEvidenceContent, connectorContent, credTypesContent, credSchemasBundle, extractorScriptContent, planContent, enumerateCatalogJson, fkLookupQualifierJson, bijectionJson, dagJson, ioNameQualityJson }.`,
     { agentType: 'independent-reviewer', schema: RAW_FETCH_SCHEMA, phase: 'load-bijection', label: `floor-fetch:${runID}` }
 );
 
@@ -384,6 +386,25 @@ if (fetched && typeof fetched.dagJson === 'string' && fetched.dagJson.trim() !==
             failures.push({
                 rule: 'dag-incomplete',
                 detail: `${blk.length} blocking dependency-DAG violation(s) — the object graph is not whole/syncable over all objects (a dangling FK to a non-emitted object, or a hard-@lookup cycle that rolls the push back). Fix the FK target(s) or break the hard cycle (use soft ReferencedType). Offenders: ${sample}${blk.length > 20 ? ', ...' : ''}`,
+            });
+        }
+    } catch { /* malformed script output -> not gated here; the standalone `--all` run is the hard CI gate */ }
+}
+
+// ── IO-name catalog-quality gate (deterministic; agent ran io-name-quality.mjs over the FULL file). ──
+// Every IO NAME must be a real entity name, not an extraction artifact. Cvent shipped 84/179 IOs whose
+// names were filenames (`bulk-result.json`), response/status schema titles (`event-async-status`), field
+// names (`ExhibitorId`), or numbered dupes (`AgendaItem1`) — none resolve to a fetchable endpoint, so they
+// sync 0 rows forever, yet the build went green because nothing inspected the NAMES. This is the
+// catalog-quality complement to enumerate-catalog (count) and iof-field-conformance (columns).
+if (fetched && typeof fetched.ioNameQualityJson === 'string' && fetched.ioNameQualityJson.trim() !== '') {
+    try {
+        const nq = JSON.parse(fetched.ioNameQualityJson);
+        if (nq && Array.isArray(nq.violations) && nq.violations.length > 0) {
+            const sample = nq.violations.slice(0, 25).map(v => `${v.name}(${v.reason})`).join(', ');
+            failures.push({
+                rule: 'io-name-garbage',
+                detail: `${nq.garbage}/${nq.total} IO name(s) are extraction artifacts (filenames / response-or-status schema titles / field-names / numbered dupes) — they resolve to no endpoint and sync 0 rows forever (the Cvent broken-catalog defect). Rename to the real entity or remove the IO. Offenders: ${sample}${nq.violations.length > 25 ? ', …' : ''}`,
             });
         }
     } catch { /* malformed script output -> not gated here; the standalone `--all` run is the hard CI gate */ }
