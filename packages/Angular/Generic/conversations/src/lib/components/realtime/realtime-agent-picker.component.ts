@@ -16,6 +16,7 @@ import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { REALTIME_ADVANCED_SESSION_CONTROLS, UserHoldsAuthorization } from '../../services/user-authorization';
 import {
@@ -44,7 +45,12 @@ export interface RealtimeAgentPick {
     PreferredVoice: string | null;
     /** Explicit co-agent id (`MJ: AI Agents.ID`, Realtime type), or `null` for the server's resolution chain. */
     CoAgentId: string | null;
+    /** Whether the user consented to recording this call (mic + agent audio). */
+    RecordingConsent: boolean;
 }
+
+/** `MJ: User Settings` key for the per-user "record this call" consent toggle (string `'true'`/`'false'`). */
+const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
 
 /**
  * Compact anchored popover that lets the user choose WHICH agent a realtime
@@ -180,6 +186,23 @@ export interface RealtimeAgentPick {
                     </div>
                 }
             }
+            <div class="mj-voice-picker__record-row">
+                <span class="mj-voice-picker__record-label">
+                    <i class="fa-solid fa-microphone"></i>
+                    <span class="mj-voice-picker__record-copy">
+                        Record this call
+                        <small>Audio stored securely</small>
+                    </span>
+                </span>
+                <label class="mj-voice-picker__switch">
+                    <input
+                        type="checkbox"
+                        [checked]="RecordingConsent"
+                        (change)="OnRecordingConsentChange($any($event.target).checked)"
+                        aria-label="Record this call (audio stored securely)" />
+                    <span class="mj-voice-picker__switch-track"></span>
+                </label>
+            </div>
             <div class="mj-voice-picker__footer">
                 <button mjButton variant="primary" size="sm" [disabled]="!SelectedAgent" (click)="StartCall()">
                     <i class="fa-solid fa-phone"></i> Start
@@ -285,6 +308,41 @@ export interface RealtimeAgentPick {
             outline: none;
         }
         .mj-voice-picker__select:focus { border-color: var(--mj-border-focus); }
+        .mj-voice-picker__record-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            margin: 10px 12px 2px;
+            padding: 10px 0 2px;
+            border-top: 1px solid var(--mj-border-subtle);
+        }
+        .mj-voice-picker__record-label {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: var(--mj-text-secondary);
+        }
+        .mj-voice-picker__record-label > i { font-size: 12px; color: var(--mj-text-muted); }
+        .mj-voice-picker__record-copy { display: flex; flex-direction: column; line-height: 1.3; }
+        .mj-voice-picker__record-copy small { font-size: 10px; color: var(--mj-text-muted); }
+        .mj-voice-picker__switch { position: relative; flex-shrink: 0; display: inline-flex; cursor: pointer; }
+        .mj-voice-picker__switch input {
+            position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer;
+        }
+        .mj-voice-picker__switch-track {
+            position: relative; width: 34px; height: 18px; border-radius: 999px;
+            background: var(--mj-border-strong); transition: background 150ms ease;
+        }
+        .mj-voice-picker__switch-track::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--mj-bg-surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+            transition: transform 150ms ease;
+        }
+        .mj-voice-picker__switch input:checked + .mj-voice-picker__switch-track { background: var(--mj-brand-primary); }
+        .mj-voice-picker__switch input:checked + .mj-voice-picker__switch-track::after { transform: translateX(16px); }
+        .mj-voice-picker__switch input:focus-visible + .mj-voice-picker__switch-track {
+            outline: 2px solid var(--mj-border-focus); outline-offset: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .mj-voice-picker__switch-track, .mj-voice-picker__switch-track::after { transition: none; }
+        }
         .mj-voice-picker__footer {
             display: flex; align-items: center; gap: 8px;
             padding: 10px 12px;
@@ -344,6 +402,13 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
     public SelectedCoAgentId: string | null = null;
 
     /**
+     * Whether the user has opted to record this call (mic + agent audio). Loaded from the
+     * per-user persisted preference (`mj.realtimeVoice.recordingConsent.v1`) on init and
+     * persisted cross-device on change. Defaults to off.
+     */
+    public RecordingConsent = false;
+
+    /**
      * Whether the current user holds the `Realtime: Advanced Session Controls`
      * authorization. Gates the voice-model selector (and any future config-override
      * controls) — pure disclosure; the server enforces the authorization on the mint.
@@ -389,6 +454,27 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
             this.SelectedCoAgentId = this.DefaultCoAgentId;
             void this.reloadPairings();
         }
+        this.RecordingConsent = this.readPersistedRecordingConsent();
+    }
+
+    /** Reads the per-user recording-consent preference (defensive: any failure → off). */
+    private readPersistedRecordingConsent(): boolean {
+        try {
+            return UserInfoEngine.Instance.GetSetting(RECORDING_CONSENT_KEY) === 'true';
+        } catch {
+            return false;
+        }
+    }
+
+    /** Records + persists (cross-device, debounced) the user's recording-consent choice. */
+    public OnRecordingConsentChange(checked: boolean): void {
+        this.RecordingConsent = checked;
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(RECORDING_CONSENT_KEY, String(checked));
+        } catch (error) {
+            console.warn('[RealtimeAgentPicker] Failed to persist recording consent:', error);
+        }
+        this.cdr.markForCheck();
     }
 
     /**
@@ -598,7 +684,8 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
             Agent: agent,
             PreferredModelId: this.CanOverrideSessionConfig ? this.SelectedModelId : null,
             PreferredVoice: this.CanOverrideSessionConfig ? this.SelectedVoiceId : null,
-            CoAgentId: this.SelectedCoAgentId
+            CoAgentId: this.SelectedCoAgentId,
+            RecordingConsent: this.RecordingConsent
         };
     }
 

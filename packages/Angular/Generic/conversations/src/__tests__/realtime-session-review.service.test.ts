@@ -15,7 +15,8 @@ import {
   RealtimeSessionReview,
   RealtimeSessionReviewLeg,
   RealtimeSessionReviewRun,
-  RealtimeSessionReviewService
+  RealtimeSessionReviewService,
+  RealtimeSessionReviewTurn
 } from '../lib/services/realtime-session-review.service';
 import { RealtimeSessionState, RealtimeThreadItem } from '../lib/components/realtime/realtime-session-state';
 
@@ -52,6 +53,15 @@ function sessionRow(overrides: Record<string, string | null> = {}): object {
 
 function detailRow(role: 'AI' | 'Error' | 'User', message: string | null, at: string, hidden = false): object {
   return { ID: `D-${at}`, Role: role, Message: message, HiddenToUser: hidden, __mj_CreatedAt: at };
+}
+
+/**
+ * Builds a mapped {@link RealtimeSessionReviewTurn} for the thread/leg fixtures — fills the
+ * player-needed fields (ID/Message/__mj_CreatedAt mirror the thread fields) so the mapped-turn
+ * shape stays valid for both `BuildReviewThreadItems` AND the recording evidence player.
+ */
+function reviewTurn(role: 'User' | 'Assistant', text: string, at: Date | null): RealtimeSessionReviewTurn {
+  return { ID: `T-${text}`, Role: role, Text: text, Message: text, __mj_CreatedAt: at, At: at, UtteranceStartMs: null, UtteranceEndMs: null };
 }
 
 function runRow(id: string, overrides: Record<string, string | boolean | null> = {}): object {
@@ -541,6 +551,9 @@ function reviewFixture(overrides: Partial<RealtimeSessionReview> = {}): Realtime
     StartedAt: new Date('2026-06-10T10:00:00Z'),
     LastActiveAt: new Date('2026-06-10T10:30:00Z'),
     ClosedAt: new Date('2026-06-10T10:31:00Z'),
+    RecordingFileID: null,
+    RecordingStartedAt: null,
+    RecordingMedia: null,
     Turns: [],
     DelegatedRuns: [],
     ChannelStates: [],
@@ -582,8 +595,8 @@ describe('BuildReviewThreadItems', () => {
   it('interleaves turns and delegation cards chronologically (oldest first)', () => {
     const review = reviewFixture({
       Turns: [
-        { Role: 'User', Text: 'first', At: new Date('2026-06-10T10:01:00Z') },
-        { Role: 'Assistant', Text: 'third', At: new Date('2026-06-10T10:06:00Z') }
+        reviewTurn('User', 'first', new Date('2026-06-10T10:01:00Z')),
+        reviewTurn('Assistant', 'third', new Date('2026-06-10T10:06:00Z'))
       ],
       DelegatedRuns: [reviewRun('RUN-1', '2026-06-10T10:03:00Z')]
     });
@@ -596,8 +609,8 @@ describe('BuildReviewThreadItems', () => {
   it('keeps build order for entries without timestamps (stable sort to the front)', () => {
     const review = reviewFixture({
       Turns: [
-        { Role: 'User', Text: 'a', At: null },
-        { Role: 'Assistant', Text: 'b', At: null }
+        reviewTurn('User', 'a', null),
+        reviewTurn('Assistant', 'b', null)
       ],
       DelegatedRuns: [reviewRun('RUN-1', '2026-06-10T10:03:00Z')]
     });
@@ -621,7 +634,7 @@ describe('BuildReviewThreadItems', () => {
     const review = reviewFixture({
       Legs: [
         legFixture({
-          Turns: [{ Role: 'User', Text: 'hello', At: new Date('2026-06-10T10:01:00Z') }],
+          Turns: [reviewTurn('User', 'hello', new Date('2026-06-10T10:01:00Z'))],
           DelegatedRuns: [reviewRun('RUN-1', '2026-06-10T10:03:00Z')]
         })
       ]
@@ -636,13 +649,13 @@ describe('BuildReviewThreadItems', () => {
         legFixture({
           SessionID: 'SESSION-A',
           CloseReason: 'Janitor',
-          Turns: [{ Role: 'User', Text: 'leg one', At: new Date('2026-06-10T10:01:00Z') }]
+          Turns: [reviewTurn('User', 'leg one', new Date('2026-06-10T10:01:00Z'))]
         }),
         legFixture({
           SessionID: 'SESSION-B',
           StartedAt: new Date('2026-06-10T11:00:00Z'),
           CloseReason: 'Explicit',
-          Turns: [{ Role: 'Assistant', Text: 'leg two', At: new Date('2026-06-10T11:01:00Z') }]
+          Turns: [reviewTurn('Assistant', 'leg two', new Date('2026-06-10T11:01:00Z'))]
         })
       ]
     });
@@ -662,10 +675,10 @@ describe('BuildReviewThreadItems', () => {
     // Leg B starts BEFORE leg A's last item timestamp — the divider must still sit between legs.
     const review = reviewFixture({
       Legs: [
-        legFixture({ Turns: [{ Role: 'User', Text: 'a-late', At: new Date('2026-06-10T12:00:00Z') }] }),
+        legFixture({ Turns: [reviewTurn('User', 'a-late', new Date('2026-06-10T12:00:00Z'))] }),
         legFixture({
           StartedAt: new Date('2026-06-10T11:00:00Z'),
-          Turns: [{ Role: 'User', Text: 'b-early', At: new Date('2026-06-10T11:30:00Z') }]
+          Turns: [reviewTurn('User', 'b-early', new Date('2026-06-10T11:30:00Z'))]
         })
       ]
     });
@@ -682,7 +695,7 @@ describe('RealtimeSessionState.StartLiveContinuation', () => {
     state.LoadHistoricalItems(
       BuildReviewThreadItems(
         reviewFixture({
-          Turns: [{ Role: 'User', Text: 'historical', At: new Date('2026-06-10T10:01:00Z') }],
+          Turns: [reviewTurn('User', 'historical', new Date('2026-06-10T10:01:00Z'))],
           DelegatedRuns: [reviewRun('RUN-1', '2026-06-10T10:03:00Z')]
         })
       )
@@ -788,7 +801,7 @@ describe('RealtimeSessionState.LoadHistoricalItems', () => {
   function historicalItems(): RealtimeThreadItem[] {
     return BuildReviewThreadItems(
       reviewFixture({
-        Turns: [{ Role: 'User', Text: 'hello', At: new Date('2026-06-10T10:01:00Z') }],
+        Turns: [reviewTurn('User', 'hello', new Date('2026-06-10T10:01:00Z'))],
         DelegatedRuns: [
           reviewRun('RUN-1', '2026-06-10T10:03:00Z'),
           reviewRun('RUN-2', '2026-06-10T10:05:00Z')

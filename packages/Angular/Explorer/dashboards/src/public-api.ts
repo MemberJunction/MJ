@@ -164,6 +164,9 @@ export { HomeDashboardComponent } from './Home/home-dashboard.component';
 // Application Roles
 export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
 
+// Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
+export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
+
 // Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
 export {
     PermissionsUserAccessResourceComponent,

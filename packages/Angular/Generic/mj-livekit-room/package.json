@@ -38,6 +38,7 @@
     "@memberjunction/livekit-room-core": "5.43.0",
     "@memberjunction/ng-base-types": "5.43.0",
     "@memberjunction/ng-livekit-room": "5.43.0",
+    "@memberjunction/ng-media-player": "5.43.0",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

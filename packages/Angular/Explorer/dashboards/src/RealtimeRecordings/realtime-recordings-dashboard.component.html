@@ -1,0 +1,109 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Realtime Recordings"
+    Icon="fa-solid fa-circle-play"
+    Subtitle="Review and replay recorded realtime sessions — time-aligned audio + transcript.">
+    @if (!IsLoading && Sessions.length > 0) {
+      <div meta>
+        <mj-stat-badge [Count]="Sessions.length" Label="recorded sessions" />
+      </div>
+    }
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()" />
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (IsLoading) {
+      <div class="rr-state">
+        <mj-loading text="Loading recorded sessions..."></mj-loading>
+      </div>
+    } @else if (ErrorMessage) {
+      <div class="rr-state rr-state--error" role="alert">
+        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+        <p>{{ ErrorMessage }}</p>
+        <button mjButton variant="primary" size="sm" (click)="LoadData()">Try again</button>
+      </div>
+    } @else if (Sessions.length === 0) {
+      <div class="rr-state rr-state--empty">
+        <i class="fa-solid fa-microphone-slash" aria-hidden="true"></i>
+        <p class="rr-state-title">No recorded sessions yet.</p>
+        <p class="rr-state-hint">
+          When a realtime session is recorded, it will appear here for review and replay.
+        </p>
+      </div>
+    } @else {
+      <as-split direction="horizontal" unit="pixel" class="rr-split">
+        <as-split-area [size]="360" [minSize]="260" [maxSize]="560">
+          <ul class="rr-list" role="listbox" aria-label="Recorded sessions">
+            @for (session of Sessions; track TrackBySession($index, session)) {
+              <li
+                class="rr-list-item"
+                role="option"
+                tabindex="0"
+                [class.rr-list-item--active]="SelectedSession?.ID === session.ID"
+                [attr.aria-selected]="SelectedSession?.ID === session.ID"
+                (click)="SelectSession(session)"
+                (keydown)="OnRowKeydown($event, session)">
+                <div class="rr-list-item-icon" aria-hidden="true">
+                  <i [class]="session.RecordingMedia === 'AudioVideo' ? 'fa-solid fa-video' : 'fa-solid fa-waveform-lines'"></i>
+                </div>
+                <div class="rr-list-item-body">
+                  <div class="rr-list-item-title">{{ session.AgentName }}</div>
+                  <div class="rr-list-item-meta">
+                    <span class="rr-list-item-date">
+                      <i class="fa-regular fa-clock" aria-hidden="true"></i>
+                      {{ SessionDateLabel(session) }}
+                    </span>
+                    @if (session.DurationLabel) {
+                      <span class="rr-list-item-duration">
+                        <i class="fa-solid fa-stopwatch" aria-hidden="true"></i>
+                        {{ session.DurationLabel }}
+                      </span>
+                    }
+                  </div>
+                  @if (session.ConversationName) {
+                    <div class="rr-list-item-conversation" [title]="session.ConversationName">
+                      <i class="fa-regular fa-comments" aria-hidden="true"></i>
+                      {{ session.ConversationName }}
+                    </div>
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+        </as-split-area>
+
+        <as-split-area [size]="640" [minSize]="360">
+          <div class="rr-detail">
+            @if (!SelectedSession) {
+              <div class="rr-state rr-state--empty rr-detail-empty">
+                <i class="fa-solid fa-hand-pointer" aria-hidden="true"></i>
+                <p class="rr-state-title">Select a session to replay</p>
+                <p class="rr-state-hint">
+                  Pick a recording from the list to hear its audio alongside the synchronized transcript.
+                </p>
+              </div>
+            } @else if (IsDetailLoading) {
+              <div class="rr-state rr-detail-loading">
+                <mj-loading text="Loading recording..."></mj-loading>
+              </div>
+            } @else if (DetailErrorMessage) {
+              <div class="rr-state rr-state--error" role="alert">
+                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                <p>{{ DetailErrorMessage }}</p>
+                <button mjButton variant="primary" size="sm" (click)="SelectSession(SelectedSession!)">Try again</button>
+              </div>
+            } @else {
+              <mj-storage-media-player
+                [FileID]="SelectedSession.RecordingFileID"
+                [Transcript]="SelectedCues"
+                [Provider]="Provider">
+              </mj-storage-media-player>
+            }
+          </div>
+        </as-split-area>
+      </as-split>
+    }
+  </mj-page-body>
+</mj-page-layout>

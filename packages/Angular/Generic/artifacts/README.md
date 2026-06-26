@@ -136,7 +136,12 @@ export class MyCustomViewerComponent extends BaseArtifactViewerComponent {
 | `MarkdownArtifactViewerComponent` | Markdown | Rendered markdown content |
 | `HtmlArtifactViewerComponent` | HTML | Sandboxed HTML rendering |
 | `SvgArtifactViewerComponent` | SVG | SVG image rendering |
+| `AudioArtifactViewerComponent` | Audio | Audio playback via `mj-media-player` (transport, waveform scrubber, playback speed) |
+| `VideoArtifactViewerComponent` | Video | Video playback via `mj-media-player` (transport, fullscreen, playback speed) |
 | `ComponentArtifactViewerComponent` | Component | Dynamic React/Angular component rendering |
+
+> Audio and video artifacts (both the full viewer and the inline conversation **preview**) embed the
+> generic `mj-media-player` from [@memberjunction/ng-media-player](../media-player/README.md).
 
 ## Services
 
@@ -165,6 +170,7 @@ getIcon() {
 | `@memberjunction/interactive-component-types` | Interactive component interfaces |
 | `@memberjunction/ng-base-types` | Base Angular component types |
 | `@memberjunction/ng-code-editor` | Code editor for code artifacts |
+| `@memberjunction/ng-media-player` | Audio/video playback (`mj-media-player`) for audio & video artifacts |
 | `@memberjunction/ng-notifications` | Notification system |
 | `@memberjunction/ng-react` | React component bridge |
 | `@memberjunction/ng-shared-generic` | Shared generic components |

@@ -9,7 +9,6 @@ import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeli
 import { MJAIAgentRunFormComponent } from '../../generated/Entities/MJAIAgentRun/mjaiagentrun.form.component';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { AIAgentRunAnalyticsComponent } from './ai-agent-run-analytics.component';
-import { AIAgentRunVisualizationComponent } from './ai-agent-run-visualization.component';
 import { AIAgentRunCostService, AgentRunCostMetrics } from './ai-agent-run-cost.service';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
@@ -58,7 +57,6 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   
   @ViewChild(AIAgentRunTimelineComponent) timelineComponent?: AIAgentRunTimelineComponent;
   @ViewChild(AIAgentRunAnalyticsComponent) analyticsComponent?: AIAgentRunAnalyticsComponent;
-  @ViewChild(AIAgentRunVisualizationComponent) visualizationComponent?: AIAgentRunVisualizationComponent;
 
   // Field injections
   private navigationService = inject(NavigationService);
@@ -259,7 +257,7 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   changeTab(tab: string) {
     this.activeTab = tab;
     
-    // Lazy load visualization when the tab is first accessed
+    // Lazy load the Visualization (playable + static flow) view on first access
     if (tab === 'visualization' && !this.visualizationLoaded) {
       this.visualizationLoaded = true;
       this.cdr.markForCheck();
