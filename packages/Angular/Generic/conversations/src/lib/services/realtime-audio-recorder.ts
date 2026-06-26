@@ -70,12 +70,12 @@ export class RealtimeAudioRecorder {
             console.warn('[RealtimeAudioRecorder] MediaRecorder/Opus unavailable — recording disabled for this session.');
             return;
         }
-        try {
-            this.startMixedRecording(micStream, remoteStream, mimeType);
-        } catch (error) {
+        // Fire-and-forget the async setup (it must `await audioContext.resume()`); any failure disables
+        // the recorder rather than throwing into the session-start path.
+        void this.startMixedRecording(micStream, remoteStream, mimeType).catch((error) => {
             console.warn('[RealtimeAudioRecorder] Failed to start recording — disabling for this session:', error);
             this.cleanup();
-        }
+        });
     }
 
     /** Ms elapsed since recording started (>= 0); 0 when not recording. */
@@ -103,8 +103,15 @@ export class RealtimeAudioRecorder {
     }
 
     /** Wires up the Web Audio mix graph + MediaRecorder and starts capture. */
-    private startMixedRecording(micStream: MediaStream, remoteStream: MediaStream | null, mimeType: string): void {
+    private async startMixedRecording(micStream: MediaStream, remoteStream: MediaStream | null, mimeType: string): Promise<void> {
         const audioContext = new AudioContext();
+        // CRITICAL: browsers create an AudioContext in the `suspended` state under the autoplay policy.
+        // Without resuming it, the mix graph never processes audio and the MediaRecorder captures only
+        // silence (opus collapses that to a tiny ~5KB blob — the "no actual recording" symptom). Starting
+        // a voice call is a user gesture, so resume() succeeds here.
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
         const destination = audioContext.createMediaStreamDestination();
         this.connectStream(audioContext, destination, micStream);
         if (remoteStream) {
@@ -125,7 +132,8 @@ export class RealtimeAudioRecorder {
         this.chunks = [];
         this.startedAtMs = Date.now();
         this.recording = true;
-        recorder.start();
+        // Timeslice → periodic ondataavailable flushes, so an unexpected/early stop still yields audio.
+        recorder.start(1000);
     }
 
     /** Routes one stream's audio tracks into the shared mix destination (no-op when track-less). */
