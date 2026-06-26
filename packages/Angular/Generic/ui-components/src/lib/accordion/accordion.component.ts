@@ -1,6 +1,10 @@
 import { Component, Input, Output, EventEmitter, HostBinding, ContentChild, TemplateRef, Directive } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 
+/** Process-wide counter for generating unique, stable accordion element ids
+ *  (used to wire `aria-controls` / `aria-labelledby` between header and body). */
+let nextAccordionUid = 0;
+
 /**
  * Directive to mark a template as the accordion panel title.
  * Supports rich HTML content (icons, badges, dynamic text).
@@ -55,7 +59,9 @@ export class MJAccordionTitleDirective {
     <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled"
       [attr.data-variant]="Variant !== 'default' ? Variant : null">
       <button class="mj-accordion-header" type="button"
+        [id]="HeaderId"
         [attr.aria-expanded]="Expanded"
+        [attr.aria-controls]="BodyId"
         [disabled]="Disabled"
         (click)="Toggle()">
         <span class="mj-accordion-title">
@@ -69,7 +75,7 @@ export class MJAccordionTitleDirective {
       </button>
       <div class="mj-accordion-body-outer" [attr.inert]="Expanded ? null : ''">
         <div class="mj-accordion-body-clip">
-          <div class="mj-accordion-body" role="region">
+          <div class="mj-accordion-body" role="region" [id]="BodyId" [attr.aria-labelledby]="HeaderId">
             <ng-content></ng-content>
           </div>
         </div>
@@ -92,6 +98,14 @@ export class MJAccordionPanelComponent {
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
+
+  /** Stable per-instance ids that programmatically associate the header
+   *  `<button>` with its body region (`aria-controls` ↔ `aria-labelledby`),
+   *  completing the WAI-ARIA accordion pattern so screen readers announce the
+   *  region with the header's name. */
+  private readonly _uid = nextAccordionUid++;
+  readonly HeaderId = `mj-accordion-header-${this._uid}`;
+  readonly BodyId = `mj-accordion-body-${this._uid}`;
 
   Toggle(): void {
     if (this.Disabled) return;
