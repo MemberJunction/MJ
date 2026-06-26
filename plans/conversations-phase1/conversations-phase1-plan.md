@@ -1,27 +1,64 @@
-# Conversations Mega Phase 1 — Master Plan & Work Breakdown Structure (FINAL)
+# Conversations Phase 1 — Plan & Work Breakdown Structure
+
+> **This is the single source of truth for Phase 1.** It absorbs the earlier competitive
+> study and the first-pass LibreChat proposal (both removed); their key conclusions are
+> summarized in §0a below.
 
 **Status:** Finalized build plan for review
 **Scope:** `@memberjunction/ng-conversations`, `@memberjunction/conversations-runtime`, new `@memberjunction/ng-user-routines`, `@memberjunction/ai-agents`, `MJCoreEntities`, `Scheduling`, migrations
-**Companion docs:** `conversations-competitive-ux-study.md` (the why), `conversations-librechat-parity-proposal.md` (first pass)
+**Mockups:** `index.html` (browse) → `mockups/` (one file per area, three options each)
 **Audience:** Future implementing agents. Every task is executable step-by-step.
+
+---
+
+## 0a. Background & competitive context (why this work)
+
+This plan began as a comparison against one tool (LibreChat) and grew, after studying the
+broader field, into a roadmap for MemberJunction's conversations platform. We inventoried
+the self-hostable OSS field (Open WebUI, LibreChat, Lobe Chat, Big-AGI, AnythingLLM,
+Cherry Studio, Jan, Chatbox, Hugging Face Chat UI, Msty) and the three flagship clients
+(ChatGPT, Claude, Gemini), then scored MJ against the recurring "world-class" UX patterns.
+
+**Where MJ already leads (defend & amplify):**
+- **Agent-native, not model-native** — users talk to *agents* that resolve across many
+  providers via the MJ AI framework; provider breadth is an agent-layer concern.
+- **Grounding in real business data** — entity/record mentions and actions on governed
+  data; unique in the field.
+- **Realtime/voice depth** — voice co-agents, whiteboard + remote-browser channels,
+  session review, a turn-moderator that already handles multi-agent concurrency.
+- **Artifacts as first-class versioned/permissioned entities** with a live React runtime.
+- **Embeddable, framework-agnostic runtime** (React/Vue/Node consumable) + enterprise posture.
+
+**Where the field is ahead — the gaps this plan closes:**
+editable-plan-before-run, user-visible & project-scoped memory + incognito, user-controlled
+scheduled routines, live artifact edit/share/remix, in-chat skills, group chat, and a band
+of UX polish (context/cost gauge, quote, keyboard shortcuts, long-thread TOC, fork).
+
+**Deliberate non-goals (consistent with the layering):** no raw model picker, no multi-model
+"merge", no provider-breadth-in-chat. Code-interpreter / real-file creation is owned by the
+**CodeSmith** agent track, not this plan.
+
+The sub-phases below map each gap to MJ's existing architecture (artifacts/React runtime,
+scheduling engine, agent loop, memory scoping, conversation/realtime/proxy paths, unified
+permissions), grounded in direct study of those subsystems.
 
 ---
 
 ## 0. How to use this document
 
-- **Mega Phase 1** is one release-sized effort. It begins with a **Foundations gate (P1.0)** — UX mockups reviewed by the user **and** the complete DB design as **one mega migration** — before any feature code. Feature sub-phases **P1.1 … P1.9** then build on that locked schema.
+- **Phase 1** is one release-sized effort. It begins with a **Foundations gate (P1.0)** — UX mockups reviewed by the user **and** the complete DB design as **one consolidated migration** — before any feature code. Feature sub-phases **P1.1 … P1.9** then build on that locked schema.
 - **Group-chat runtime code and text-chat concurrency are deferred to Phase 2.** P1.8 lands only group-chat metadata + UX mockups; the concurrency coordinator is **design-only** in Phase 1.
 - Every task: **Deliverable · Files/Entities · Steps · Acceptance · Tests · Risk**. Task IDs (`P1.4.4`) are stable — reference them in commits/PRs.
 
 ### 0.1 Two hard gates before feature work
 
 1. **UX Mockup Review (P1.0.1)** — clickable/wireframe mockups for *every* feature, reviewed and signed off by the user. **No feature UI is built until its mockup is approved.**
-2. **DB Design → One Mega Migration (P1.0.2)** — all new entities + altered columns designed together, shipped as a **single migration**, then CodeGen runs once. Feature code never invents schema ad hoc.
+2. **DB Design → One Consolidated Migration (P1.0.2)** — all new entities + altered columns designed together, shipped as a **single migration**, then CodeGen runs once. Feature code never invents schema ad hoc.
 
 ### 0.2 Standing conventions (apply to EVERY task)
 
 - **Migrations:** highest `migrations/v*/` (currently `v5`). Naming `VYYYYMMDDHHMM__v5.x_[DESCRIPTION].sql`. Hardcoded UUIDs, `${flyway:defaultSchema}`, consolidated `ALTER TABLE` per table, `sp_addextendedproperty` per new column, NO `__mj_*` timestamps, NO FK indexes (CodeGen owns both). New entities use the **`MJ: ` prefix**.
-- **CodeGen runs after the mega migration** before any TS references new fields. Never `.Get()/.Set()` new columns.
+- **CodeGen runs after the consolidated migration** before any TS references new fields. Never `.Get()/.Set()` new columns.
 - **Strong typing only** (no `any`); generated `BaseEntity` subclasses everywhere.
 - **Runtime-first:** framework-agnostic logic in `conversations-runtime`/engines; Angular only renders.
 - **UI:** additive & opt-in behind `@Input()` flags; slot system; `--mj-chat-*`/semantic tokens only (`npm run check:ui`); MJ UI components + `mjButton`; modern `@if/@for`; `inject()`.
@@ -76,7 +113,7 @@ flowchart TB
     SCHED["Scheduling + UserRoutineDispatcherDriver"]
   end
   subgraph DATA["Layer 1 — entities + permissions"]
-    ENT["MJ entities (mega migration)"]
+    ENT["MJ entities (consolidated migration)"]
     PERM["Unified permissions / Magic Links"]
   end
   ROUTINESAPP --> ROUTINESW
@@ -106,13 +143,13 @@ Implementation guards: gate plan-mode prompt injection behind `!isSessionDrivenA
 
 ---
 
-## P1.0 — Foundations gate (mockups + mega migration + cross-cutting design)
+## P1.0 — Foundations gate (mockups + consolidated migration + cross-cutting design)
 
 ### P1.0.1 — UX Mockups (USER-REVIEWED GATE) 🚦
 
 **Deliverable:** mockups in `plans/conversations-phase1/mockups/` (browse via `plans/conversations-phase1/index.html`) for: context gauge; plan-mode pill toggle + plan-approval card; skills authoring + activation indicator; routines app (list/create/edit/history) + friendly cron builder + notification config + "turn into a routine" chat entry; project-scoped memory panel + temporary-chat toggle; artifact inline edit + magic-link share + remix; quote/shortcuts/TOC/fork; group-chat roster/invite/attribution/typing/concurrent-agent indicators; (P1.9) remote-proxy agent config. **Gate:** feature UI blocked until its mockup is approved. **Risk:** Low.
 
-### P1.0.2 — DB Design → ONE Mega Migration
+### P1.0.2 — DB Design → ONE Consolidated Migration
 
 ```mermaid
 erDiagram
@@ -343,7 +380,7 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-  G0["P1.0 gate<br/>(mockups + mega migration + concurrency/proxy/perms design)"] --> G1
+  G0["P1.0 gate<br/>(mockups + consolidated migration + concurrency/proxy/perms design)"] --> G1
   subgraph G1["Feature build (parallelizable)"]
     direction TB
     R[P1.5 Routines]
@@ -375,9 +412,9 @@ flowchart LR
 
 ---
 
-## 4. Definition of Done (Mega Phase 1)
+## 4. Definition of Done (Phase 1)
 
-- **P1.0 gate passed:** mockups approved; mega migration applied; CodeGen green; no `.Get()/.Set()` on new fields; Realtime/Proxy agents seeded `SupportsPlanMode=0`.
+- **P1.0 gate passed:** mockups approved; consolidated migration applied; CodeGen green; no `.Get()/.Set()` on new fields; Realtime/Proxy agents seeded `SupportsPlanMode=0`.
 - All sub-phase acceptance criteria met; Vitest green for touched packages; `npm run check:ui` clean.
 - **No behavior change** for existing conversations/agents: plan-mode per-request toggle OFF by default; Skills `None`; no routines; memory project-scope additive; temporary OFF; IsGroup OFF; realtime/proxy correctly excluded from plan-mode injection.
 - Concurrency coordinator designed (Phase 2); group-chat schema present + Phase 2 spec written; **no group-chat runtime shipped**.
