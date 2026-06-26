@@ -428,3 +428,25 @@ All major decisions are now **locked** (see Decision Log §0.3): plan-mode defau
 Residual implementation-time choices (not blocking the plan; settle during P1.0):
 - Exact names/placement of the **"Can Share Skills"** and **"Can Publish Artifacts Publicly"** privileges in the unified-permissions seed.
 - Whether the public-artifact magic link is per-share (one link) or regenerable, and its TTL.
+
+---
+
+## 6. Phase 2 (deferred) — scope at a glance
+
+Phase 2 is intentionally **not** detailed yet — it gets a full WBS once Phase 1 ships and
+we've learned from it. Phase 1 deliberately lays the groundwork (schema in the consolidated
+migration; designs in P1.0.3 / P1.8.4 / P1.9) so Phase 2 is **code-only**. The three
+deferred workstreams:
+
+| # | Workstream | What ships in Phase 2 | Groundwork already in Phase 1 |
+|---|---|---|---|
+| **P2.1** | **Group-chat runtime** | Participant engine; PubSub broadcast on a `conversation:{id}` topic (new messages + typing + presence); members modal wired to `MJ: Conversation Participants`; invite/accept/remove flow; relax owner-only action checks → participant-with-permission. | `MJ: Conversation Participants` + `Conversation.IsGroup` schema (P1.0.2); per-user message attribution already exists; UX mockups (P1.8.3). |
+| **P2.2** | **Parallel-agent concurrency** | The concurrency coordinator in `conversations-runtime`: N in-flight agent turns per conversation, non-blocking dispatch, multi-"working…" indicators, interleaved-stream ordering, limits + cancellation. Lifts today's single-in-flight serialization for group chat (and optionally concurrent planning). | Coordinator **design/ADR** (P1.0.3), informed by the realtime turn-moderator which already serializes a multi-agent speaking floor. |
+| **P2.3** | **Skip proxy migration** | Migrate **Skip** onto `BaseRemoteProxyAgent` as the reference implementation of the standardized proxy. | `BaseRemoteProxyAgent` + "Remote Proxy" agent type + context-bag contract (P1.9, design+base in Phase 1); Skip API is the template. |
+
+**Sequencing:** P2.1 and P2.2 are coupled (group chat is the primary driver of concurrency)
+and should ship together. P2.3 is independent and can land whenever capacity allows after
+the Phase 1 proxy design is in.
+
+Anything else that surfaces during Phase 1 (e.g., artifacts-as-apps from the P1.7.4 spike,
+or a deeper memory-panel build) is a candidate for Phase 2 and will be slotted here when scoped.

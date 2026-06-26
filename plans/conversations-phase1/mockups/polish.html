@@ -4,7 +4,195 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>UX Polish — Conversations Phase 1 Mockups</title>
-<link rel="stylesheet" href="../_shared.css">
+<style>
+/* ============================================================================
+   Shared mockup stylesheet — MemberJunction Conversations Phase 1
+   Static, self-contained design language for the UX mockups. Mirrors MJ's
+   semantic design tokens (--mj-*) so the mockups read like the real product.
+   These mockups are illustrative only; production code uses the real tokens
+   from packages/Angular/Generic/shared/src/lib/_tokens.scss.
+   ============================================================================ */
+
+:root {
+  /* Brand */
+  --mj-brand-primary: #0076b6;
+  --mj-brand-primary-hover: #00659c;
+  --mj-brand-primary-active: #264FAF;
+  /* Text */
+  --mj-text-primary: #1f2933;
+  --mj-text-secondary: #475569;
+  --mj-text-muted: #64748b;
+  --mj-text-disabled: #94a3b8;
+  --mj-text-inverse: #ffffff;
+  --mj-text-link: #0076b6;
+  /* Backgrounds */
+  --mj-bg-page: #f1f5f9;
+  --mj-bg-surface: #ffffff;
+  --mj-bg-surface-card: #f8fafc;
+  --mj-bg-surface-sunken: #f1f5f9;
+  --mj-bg-surface-elevated: #ffffff;
+  --mj-bg-surface-hover: #f1f5f9;
+  --mj-bg-surface-active: #e2e8f0;
+  --mj-bg-overlay: rgba(15, 23, 42, 0.45);
+  /* Borders */
+  --mj-border-subtle: #f1f5f9;
+  --mj-border-default: #e2e8f0;
+  --mj-border-strong: #cbd5e1;
+  --mj-border-focus: #0076b6;
+  /* Status */
+  --mj-status-success: #16a34a;
+  --mj-status-success-bg: #dcfce7;
+  --mj-status-warning: #ea580c;
+  --mj-status-warning-bg: #ffedd5;
+  --mj-status-error: #dc2626;
+  --mj-status-error-bg: #fee2e2;
+  --mj-status-info: #0891b2;
+  --mj-status-info-bg: #cffafe;
+  /* Chat tokens */
+  --mj-chat-bubble-user-bg: var(--mj-brand-primary);
+  --mj-chat-bubble-user-text: var(--mj-text-inverse);
+  --mj-chat-bubble-agent-bg: var(--mj-bg-surface-card);
+  --mj-chat-bubble-agent-text: var(--mj-text-primary);
+  --mj-chat-composer-bg: var(--mj-bg-surface);
+  --mj-chat-composer-border: var(--mj-border-default);
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.10);
+  --shadow-lg: 0 12px 40px rgba(15, 23, 42, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mj-text-primary: #e6edf3;
+    --mj-text-secondary: #aebfce;
+    --mj-text-muted: #8b9bab;
+    --mj-text-disabled: #5b6b7b;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #4cb3e3;
+    --mj-bg-page: #0d1117;
+    --mj-bg-surface: #161b22;
+    --mj-bg-surface-card: #1c232c;
+    --mj-bg-surface-sunken: #0d1117;
+    --mj-bg-surface-elevated: #21262d;
+    --mj-bg-surface-hover: #21262d;
+    --mj-bg-surface-active: #2d333b;
+    --mj-border-subtle: #21262d;
+    --mj-border-default: #30363d;
+    --mj-border-strong: #444c56;
+    --mj-chat-bubble-agent-bg: #21262d;
+    --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-page);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- Mockup page scaffolding --- */
+.mockup-header {
+  padding: 20px 28px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.mockup-header h1 { margin: 0 0 4px; font-size: 20px; }
+.mockup-header p { margin: 0; color: var(--mj-text-secondary); font-size: 14px; }
+.mockup-back { display: inline-block; margin-bottom: 10px; font-size: 13px; color: var(--mj-text-link); text-decoration: none; }
+.mockup-back:hover { text-decoration: underline; }
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+  gap: 20px;
+  padding: 24px 28px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+.variant {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+.variant-head { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); }
+.variant-head .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mj-brand-primary); }
+.variant-head h2 { margin: 4px 0 0; font-size: 16px; }
+.variant-body { padding: 18px; flex: 1; }
+.variant-notes { padding: 12px 18px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-default); font-size: 13px; color: var(--mj-text-secondary); }
+.variant-notes strong { color: var(--mj-text-primary); }
+.variant-notes .tradeoff { color: var(--mj-status-warning); }
+
+/* --- Reusable primitives --- */
+.btn {
+  font: inherit; font-size: 13px; font-weight: 600;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; cursor: pointer;
+  background: var(--mj-brand-primary); color: var(--mj-text-inverse);
+}
+.btn:hover { background: var(--mj-brand-primary-hover); }
+.btn.secondary { background: transparent; color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
+.btn.secondary:hover { background: var(--mj-bg-surface-hover); }
+.btn.ghost { background: transparent; color: var(--mj-text-secondary); }
+.btn.sm { padding: 5px 10px; font-size: 12px; }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--mj-bg-surface-active); color: var(--mj-text-secondary);
+}
+.pill.brand { background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); }
+.pill.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+.pill.warning { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+.pill.info { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+
+.card {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
+  border-radius: var(--radius-md); padding: 14px;
+}
+
+.input, .textarea, .select {
+  font: inherit; font-size: 13px; width: 100%;
+  padding: 8px 10px; border-radius: var(--radius-sm);
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface); color: var(--mj-text-primary);
+}
+.input:focus, .textarea:focus, .select:focus { outline: none; border-color: var(--mj-border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+.label { display: block; font-size: 12px; font-weight: 600; color: var(--mj-text-secondary); margin-bottom: 4px; }
+.field { margin-bottom: 14px; }
+
+/* --- Chat chrome primitives (for in-context mockups) --- */
+.chat { display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface); }
+.chat-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); }
+.chat-title { font-weight: 600; font-size: 15px; }
+.chat-body { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 78%; padding: 10px 14px; border-radius: var(--radius-md); font-size: 14px; }
+.msg.user { align-self: flex-end; background: var(--mj-chat-bubble-user-bg); color: var(--mj-chat-bubble-user-text); border-bottom-right-radius: 3px; }
+.msg.agent { align-self: flex-start; background: var(--mj-chat-bubble-agent-bg); color: var(--mj-chat-bubble-agent-text); border: 1px solid var(--mj-border-default); border-bottom-left-radius: 3px; }
+.msg .who { font-size: 11px; font-weight: 700; opacity: .75; margin-bottom: 3px; }
+.composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 16px; border-top: 1px solid var(--mj-chat-composer-border); background: var(--mj-chat-composer-bg); }
+.composer .textarea { resize: none; min-height: 42px; }
+
+.avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--mj-brand-primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex: none; }
+.muted { color: var(--mj-text-muted); }
+.small { font-size: 12px; }
+.divider { height: 1px; background: var(--mj-border-default); margin: 12px 0; border: 0; }
+.row { display: flex; align-items: center; gap: 8px; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
   /* ---- area-only styles (tokens only, no hardcoded colors) ---- */
