@@ -11,14 +11,31 @@ import { ParsedDelegationArtifact } from './delegation-result-parser';
  */
 export type RealtimeReviewCloseReason = 'Error' | 'Explicit' | 'Janitor' | 'Shutdown';
 
-/** One historical caption turn of a reviewed session (a persisted `MJ: Conversation Details` row). */
+/**
+ * One historical caption turn of a reviewed session (a persisted `MJ: Conversation Details` row).
+ *
+ * Carries BOTH the thread-rendering fields (`Role`/`Text`/`At`) AND the raw fields the time-aligned
+ * evidence player reads (`ID`, `Message`, `__mj_CreatedAt`, `UtteranceStartMs`, `UtteranceEndMs`) so
+ * a review's turns can be handed straight to {@link RealtimeEvidencePlaybackComponent} for the
+ * Recording tab — this shape structurally satisfies that player's `EvidencePlaybackTurn` input.
+ */
 export interface RealtimeSessionReviewTurn {
+  /** `MJ: Conversation Details.ID` — the player's `@for` track key. */
+  ID: string;
   /** Who spoke the turn. Persisted `AI` rows map to `Assistant`. */
   Role: 'User' | 'Assistant';
   /** The transcript text. */
   Text: string;
+  /** The raw transcript text (mirrors {@link Text}) — the player reads `Message`. */
+  Message: string | null;
+  /** When the turn was persisted (`__mj_CreatedAt`), or null when unknown. Aliases {@link At}. */
+  __mj_CreatedAt: Date | null;
   /** When the turn was persisted (`__mj_CreatedAt`), or null when unknown. */
   At: Date | null;
+  /** Precise media-relative start (ms from recording t0), or null when the driver supplied no timing. */
+  UtteranceStartMs: number | null;
+  /** Precise media-relative end (ms from recording t0), or null. */
+  UtteranceEndMs: number | null;
 }
 
 /**
@@ -136,6 +153,16 @@ export interface RealtimeSessionReview {
   StartedAt: Date | null;
   LastActiveAt: Date | null;
   ClosedAt: Date | null;
+  /**
+   * The `MJ: Files` id of the reviewed session's recorded audio, or null when nothing was recorded.
+   * When set, review mode resolves a signed download URL and shows a Recording tab with the
+   * time-aligned evidence player. From the PRIMARY (reviewed) leg only.
+   */
+  RecordingFileID: string | null;
+  /** Recording alignment origin (t0), used by the playback transcript sync. From the primary leg. */
+  RecordingStartedAt: Date | null;
+  /** What was captured (`Audio` / `AudioVideo`), or null. From the primary leg. */
+  RecordingMedia: string | null;
   /** Chronological caption turns (oldest first) — ALL legs of the chain, flattened. */
   Turns: RealtimeSessionReviewTurn[];
   /** Delegated run previews (oldest first, all legs), minus each leg's co-agent observability run. */
@@ -176,6 +203,9 @@ interface SessionRow {
   LastActiveAt: string | null;
   ClosedAt: string | null;
   CloseReason: RealtimeReviewCloseReason | null;
+  RecordingFileID: string | null;
+  RecordingStartedAt: string | null;
+  RecordingMedia: string | null;
   __mj_CreatedAt: string | null;
 }
 
@@ -184,6 +214,10 @@ interface DetailRow {
   Role: 'AI' | 'Error' | 'User';
   Message: string | null;
   HiddenToUser: boolean;
+  UserID: string | null;
+  Status: string | null;
+  UtteranceStartMs: number | null;
+  UtteranceEndMs: number | null;
   __mj_CreatedAt: string | null;
 }
 
@@ -235,8 +269,8 @@ interface SessionConfigJson {
   coAgentRunID?: string;
 }
 
-const SESSION_FIELDS = ['ID', 'AgentID', 'Agent', 'Status', 'ConversationID', 'Config', 'LastSessionID', 'LastActiveAt', 'ClosedAt', 'CloseReason', '__mj_CreatedAt'];
-const DETAIL_FIELDS = ['ID', 'Role', 'Message', 'HiddenToUser', '__mj_CreatedAt'];
+const SESSION_FIELDS = ['ID', 'AgentID', 'Agent', 'Status', 'ConversationID', 'Config', 'LastSessionID', 'LastActiveAt', 'ClosedAt', 'CloseReason', 'RecordingFileID', 'RecordingStartedAt', 'RecordingMedia', '__mj_CreatedAt'];
+const DETAIL_FIELDS = ['ID', 'Role', 'Message', 'HiddenToUser', 'UserID', 'Status', 'UtteranceStartMs', 'UtteranceEndMs', '__mj_CreatedAt'];
 const RUN_FIELDS = ['ID', 'AgentID', 'Agent', 'Status', 'Success', 'Message', 'ErrorMessage', 'FinalStep', 'StartedAt', 'CompletedAt'];
 const CHANNEL_FIELDS = ['ID', 'Channel', 'Config'];
 const JUNCTION_FIELDS = ['ID', 'ConversationDetailID', 'ArtifactVersionID'];
@@ -550,6 +584,9 @@ export class RealtimeSessionReviewService {
       StartedAt: this.toDate(session.__mj_CreatedAt),
       LastActiveAt: this.toDate(session.LastActiveAt),
       ClosedAt: this.toDate(session.ClosedAt),
+      RecordingFileID: session.RecordingFileID ?? null,
+      RecordingStartedAt: this.toDate(session.RecordingStartedAt),
+      RecordingMedia: session.RecordingMedia ?? null,
       Turns: legs.flatMap(l => l.Turns),
       DelegatedRuns: legs.flatMap(l => l.DelegatedRuns),
       // Multi-leg: newest leg with a SAVED state wins per channel — a final leg that
@@ -581,10 +618,16 @@ export class RealtimeSessionReviewService {
       if (row.HiddenToUser || text.length === 0 || (row.Role !== 'User' && row.Role !== 'AI')) {
         continue;
       }
+      const createdAt = this.toDate(row.__mj_CreatedAt);
       turns.push({
+        ID: row.ID,
         Role: row.Role === 'AI' ? 'Assistant' : 'User',
         Text: text,
-        At: this.toDate(row.__mj_CreatedAt)
+        Message: text,
+        __mj_CreatedAt: createdAt,
+        At: createdAt,
+        UtteranceStartMs: row.UtteranceStartMs ?? null,
+        UtteranceEndMs: row.UtteranceEndMs ?? null
       });
     }
     return turns;

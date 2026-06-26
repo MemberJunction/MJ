@@ -3,10 +3,13 @@ import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { LoadRealtimeRecordingAudioUrl } from '../../utils/realtime-recording-audio';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { RealtimeEvidencePlaybackComponent } from './evidence-playback/realtime-evidence-playback.component';
 import { VoiceConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
-import { BuildReviewThreadItems, RealtimeSessionReview } from '../../services/realtime-session-review.service';
+import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionThreadComponent } from './realtime-session-thread.component';
@@ -51,6 +54,7 @@ export interface RealtimeStartLiveRequest {
   /** The reviewed session's id — chained as the new session's `lastSessionId`. */
   LastSessionId: string;
 }
+
 
 /**
  * The "call mode" overlay for a live real-time voice session. Hosted by the
@@ -110,12 +114,13 @@ export interface RealtimeStartLiveRequest {
     RealtimeChannelStripComponent,
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
-    RealtimeWhiteboardBoardComponent
+    RealtimeWhiteboardBoardComponent,
+    RealtimeEvidencePlaybackComponent
   ],
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
 })
-export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy {
+export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
   private _agentName = 'Sage';
 
   /**
@@ -220,6 +225,26 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
    */
   public ReviewWhiteboard: WhiteboardState | null = null;
 
+  /**
+   * The reviewed session's resolved, signed recording audio URL — set when the reviewed session
+   * carries a `RecordingFileID` and the `MJFile` download URL resolves; null otherwise (no
+   * Recording tab). Bound into the review-mode evidence player.
+   */
+  public ReviewAudioUrl: string | null = null;
+
+  /** True while the Recording tab is registered (a recording exists for the reviewed session). */
+  private reviewRecordingTabRegistered = false;
+
+  /** The reviewed session's transcript turns for the recording player (empty outside review). */
+  public get ReviewTurns(): RealtimeSessionReviewTurn[] {
+    return this._reviewData?.Turns ?? [];
+  }
+
+  /** The reviewed session's recording alignment origin (t0) for the player's transcript sync. */
+  public get ReviewRecordingStartedAt(): Date | null {
+    return this._reviewData?.RecordingStartedAt ?? null;
+  }
+
   /** Shared session state — single source for the thread AND the activity rail. */
   public readonly State = new RealtimeSessionState();
 
@@ -323,6 +348,9 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** Template hosting the read-only review whiteboard (root-level, so always resolvable). */
   @ViewChild('reviewBoardTpl') private reviewBoardTpl?: TemplateRef<unknown>;
 
+  /** Template hosting the review-mode recording player (root-level, so always resolvable). */
+  @ViewChild('recordingTpl') private recordingTpl?: TemplateRef<unknown>;
+
   /** Channel registrations received before the surface panel rendered (flushed in ngAfterViewInit). */
   private pendingChannelTabs: RealtimeChannelTabRegistration[] = [];
 
@@ -347,6 +375,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   private subs: Subscription[] = [];
 
   constructor() {
+    super();
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
     this.loadCaptionsPref();
@@ -371,6 +400,10 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.flushPendingChannelTabs();
     this.registerReviewBoardTab();
     this.registerReviewArtifactTabs();
+    // The recording URL resolution was already kicked off by enterReview() when ReviewData was
+    // set (it runs regardless of viewReady); here we only need to (re)register the tab now that
+    // the #recordingTpl ref exists.
+    this.registerReviewRecordingTab();
   }
 
   // ── Surface-panel sizing (flex layout + pointer-drag handle; width persisted per-user) ──
@@ -1030,6 +1063,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.State.LoadHistoricalItems(BuildReviewThreadItems(review));
     this.ReviewWhiteboard = this.parseReviewWhiteboard(review);
     this.reviewArtifacts = review.Artifacts ?? [];
+    this.ReviewAudioUrl = null;
     if (this.viewReady) {
       // Let this CD pass create/refresh the surface panel before registering the tabs.
       // ngZone.run is REQUIRED: review often opens through the deep-link/query-param
@@ -1039,8 +1073,11 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       setTimeout(() => this.ngZone.run(() => {
         this.registerReviewBoardTab();
         this.registerReviewArtifactTabs();
+        this.registerReviewRecordingTab();
       }), 0);
     }
+    // Resolve the signed recording URL (when a recording exists) — async, tolerant.
+    void this.resolveReviewRecording(review);
     this.cdr.markForCheck();
   }
 
@@ -1054,6 +1091,15 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
    */
   private exitReview(): void {
     this.ReviewWhiteboard = null;
+    if (this.ReviewAudioUrl) {
+      URL.revokeObjectURL(this.ReviewAudioUrl); // release the blob we created from the authenticated bytes
+    }
+    this.ReviewAudioUrl = null;
+    if (this.reviewRecordingTabRegistered) {
+      this.surfaceTabs?.RemoveTab('Recording');
+      this.pendingChannelTabs = this.pendingChannelTabs.filter(r => r.Key !== 'Recording');
+      this.reviewRecordingTabRegistered = false;
+    }
     if (this.pendingLiveContinuation) {
       this.pendingLiveContinuation = false;
       this.State.StartLiveContinuation();
@@ -1110,6 +1156,52 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     });
     this.reviewWhiteboardTabRegistered = true;
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Registers the read-only review RECORDING tab (the time-aligned evidence player) — ONLY when the
+   * reviewed session carried a `RecordingFileID`. Idempotent (re-registering the same key updates it
+   * in place). The signed audio URL resolves asynchronously into {@link ReviewAudioUrl}; the player
+   * shows its "no audio" state until it arrives, while the click-to-seek transcript is usable
+   * immediately. NOT focused — the channel surface / Activity rail keeps the default focus.
+   */
+  private registerReviewRecordingTab(): void {
+    if (!this._reviewData?.RecordingFileID || !this.recordingTpl) {
+      return;
+    }
+    this.RegisterChannelTab({
+      Key: 'Recording',
+      Title: 'Recording',
+      Icon: 'fa-solid fa-circle-play',
+      Content: this.recordingTpl
+    });
+    this.reviewRecordingTabRegistered = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Resolves the reviewed session's signed recording download URL (when it has a `RecordingFileID`),
+   * mirroring the Realtime Recordings dashboard. TOLERANT: no recording / a failed resolution leaves
+   * {@link ReviewAudioUrl} null and the player simply shows its no-audio state. Guards against a stale
+   * resolution landing after the review changed.
+   */
+  private async resolveReviewRecording(review: RealtimeSessionReview): Promise<void> {
+    if (!review.RecordingFileID) {
+      return;
+    }
+    try {
+      // Read the bytes through authenticated MJStorage (ownership-gated) and play a local blob URL —
+      // never a public pre-signed link. Released in clearReviewRecording / on review change.
+      const url = await LoadRealtimeRecordingAudioUrl(this.ProviderToUse, review.SessionID);
+      if (this._reviewData !== review) {
+        if (url) { URL.revokeObjectURL(url); } // a newer review (or a close) superseded this load
+        return;
+      }
+      this.ReviewAudioUrl = url;
+      this.cdr.markForCheck();
+    } catch (error) {
+      console.warn('[RealtimeSessionReview] Recording URL resolution failed — the Recording tab shows no audio.', error);
+    }
   }
 
   /**

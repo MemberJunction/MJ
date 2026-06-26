@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { MJConversationDetailEntity, ResourceData } from '@memberjunction/core-entities';
-import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
+import { LoadRealtimeRecordingAudioUrl } from '@memberjunction/ng-conversations';
 
 /**
  * A recorded realtime session, projected from `MJ: AI Agent Sessions` for the list pane.
@@ -28,23 +28,6 @@ interface RecordedSession {
   DurationLabel: string | null;
 }
 
-/** Shape of the `MJFile(ID) { DownloadUrl }` GraphQL result. */
-interface FileDownloadResult {
-  MJFile?: { DownloadUrl?: string };
-}
-
-/**
- * Resolves a pre-authenticated, signed download URL for an `MJ: Files` record by its id.
- * The server's `DownloadUrl` field resolver (FileResolver) loads the file's storage provider
- * from the record and signs a URL from its `ProviderKey` — no account/path juggling needed.
- */
-const FILE_DOWNLOAD_URL_QUERY = gql`
-  query RealtimeRecordingDownloadUrl($FileID: String!) {
-    MJFile(ID: $FileID) {
-      DownloadUrl
-    }
-  }
-`;
 
 /**
  * REALTIME RECORDINGS — an Explorer resource dashboard for reviewing & replaying historical realtime
@@ -101,6 +84,9 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
   }
 
   override ngOnDestroy(): void {
+    if (this.SelectedAudioUrl) {
+      URL.revokeObjectURL(this.SelectedAudioUrl);
+    }
     super.ngOnDestroy();
   }
 
@@ -142,6 +128,9 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     }
     this.SelectedSession = session;
     this.SelectedTurns = [];
+    if (this.SelectedAudioUrl) {
+      URL.revokeObjectURL(this.SelectedAudioUrl); // release the prior selection's blob
+    }
     this.SelectedAudioUrl = null;
     this.DetailErrorMessage = null;
     this.IsDetailLoading = true;
@@ -150,7 +139,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     try {
       const [turns, audioUrl] = await Promise.all([
         this.loadTurns(session.ID),
-        this.resolveAudioUrl(session.RecordingFileID)
+        LoadRealtimeRecordingAudioUrl(this.ProviderToUse, session.ID)
       ]);
       // Guard against a newer selection having superseded this load.
       if (this.SelectedSession?.ID !== session.ID) {
@@ -209,13 +198,6 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
       throw new Error(result.ErrorMessage || 'Failed to load transcript turns.');
     }
     return result.Results ?? [];
-  }
-
-  /** Resolves the signed download URL for the recording's `MJ: Files` record. */
-  private async resolveAudioUrl(fileId: string): Promise<string | null> {
-    const provider = this.ProviderToUse as GraphQLDataProvider;
-    const result = await provider.ExecuteGQL(FILE_DOWNLOAD_URL_QUERY, { FileID: fileId }) as FileDownloadResult;
-    return result?.MJFile?.DownloadUrl ?? null;
   }
 
   /** Projects a raw `simple` view row into the list model, deriving display fields. */

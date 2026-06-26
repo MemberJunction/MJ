@@ -3,10 +3,38 @@ import {
   Output, ViewChild, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 
 /** Number of bars rendered in the synthetic waveform behind the scrubber. */
 const WAVEFORM_BARS = 64;
+
+/**
+ * The MINIMAL structural shape of a transcript turn this player needs — exactly the fields it reads
+ * for the click-to-seek transcript and the playhead-sync highlight. Deliberately NOT the full
+ * `MJConversationDetailEntity`: that keeps the player reusable by ANY caller that can supply these
+ * fields (the in-conversation session-review overlay passes its lighter `RealtimeSessionReviewTurn`;
+ * the Realtime Recordings dashboard passes full `MJConversationDetailEntity` rows — both satisfy this
+ * widened shape structurally).
+ *
+ * Field unions/nullability are intentionally WIDER than the generated entity so an
+ * `MJConversationDetailEntity[]` remains assignable here.
+ */
+export interface EvidencePlaybackTurn {
+  /** Stable identity for the `@for` track. */
+  ID: string;
+  /** Speaker. The player only distinguishes `'User'` (human) from everything else (the agent). */
+  Role: 'User' | 'AI' | 'Assistant' | 'Error' | string;
+  /** The transcript text shown on the turn. */
+  Message: string | null;
+  /** Persisted turn time — fallback offset origin when the turn has no `UtteranceStartMs`. */
+  __mj_CreatedAt: Date | null;
+  /**
+   * Precise media-relative start (ms from recording t0). `null`/absent when the driver supplied no
+   * timing — the player falls back to (`__mj_CreatedAt` − `RecordingStartedAt`).
+   */
+  UtteranceStartMs?: number | null;
+  /** Precise media-relative end (ms from recording t0). `null`/absent → derived from the next turn / duration. */
+  UtteranceEndMs?: number | null;
+}
 
 /**
  * TIME-ALIGNED EVIDENCE PLAYBACK (`mj-realtime-evidence-playback`) — replays a realtime session's
@@ -15,7 +43,7 @@ const WAVEFORM_BARS = 64;
  * list of clickable turns. Clicking a turn seeks the audio to that turn's start and plays; as the audio
  * plays, the turn whose `[UtteranceStartMs, UtteranceEndMs]` window contains the playhead is highlighted.
  *
- * Timestamps come from {@link MJConversationDetailEntity.UtteranceStartMs}; when a turn has none, the
+ * Timestamps come from {@link EvidencePlaybackTurn.UtteranceStartMs}; when a turn has none, the
  * component falls back to (`__mj_CreatedAt` − {@link RecordingStartedAt}). Generic + Router-free: all
  * state arrives via inputs, the only output is {@link TurnSeek}.
  */
@@ -30,14 +58,14 @@ const WAVEFORM_BARS = 64;
 export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   /** The session's transcript turns, in chronological order. */
   @Input()
-  set Turns(value: MJConversationDetailEntity[] | null) {
+  set Turns(value: EvidencePlaybackTurn[] | null) {
     this._turns = value ?? [];
     this.cdr.markForCheck();
   }
-  get Turns(): MJConversationDetailEntity[] {
+  get Turns(): EvidencePlaybackTurn[] {
     return this._turns;
   }
-  private _turns: MJConversationDetailEntity[] = [];
+  private _turns: EvidencePlaybackTurn[] = [];
 
   /** The recorded session audio URL, or `null` when no recording is available. */
   @Input()
@@ -63,7 +91,7 @@ export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   @Input() AgentName = 'Agent';
 
   /** Emitted when the user clicks a transcript turn (to seek the audio to it). */
-  @Output() TurnSeek = new EventEmitter<MJConversationDetailEntity>();
+  @Output() TurnSeek = new EventEmitter<EvidencePlaybackTurn>();
 
   /** Current playhead position in ms (driven by the audio element's `timeupdate`). */
   public CurrentMs = 0;
@@ -157,7 +185,7 @@ export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   }
 
   /** Clicking a transcript turn → seek the audio to it, play, and emit {@link TurnSeek}. */
-  public SeekToTurn(turn: MJConversationDetailEntity): void {
+  public SeekToTurn(turn: EvidencePlaybackTurn): void {
     const startMs = this.turnStartMs(turn);
     const el = this.audioEl;
     if (el && this.DurationMs > 0) {
@@ -170,7 +198,7 @@ export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   }
 
   /** True when the playhead falls within this turn's utterance window (drives the active highlight). */
-  public IsTurnActive(turn: MJConversationDetailEntity): boolean {
+  public IsTurnActive(turn: EvidencePlaybackTurn): boolean {
     if (!this.IsPlaying && this.CurrentMs === 0) {
       return false;
     }
@@ -180,17 +208,17 @@ export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   }
 
   /** Whether a turn is from the human user (vs. the agent) — drives the speaker color + label. */
-  public IsUserTurn(turn: MJConversationDetailEntity): boolean {
+  public IsUserTurn(turn: EvidencePlaybackTurn): boolean {
     return turn.Role === 'User';
   }
 
   /** The speaker label for a turn. */
-  public SpeakerLabel(turn: MJConversationDetailEntity): string {
+  public SpeakerLabel(turn: EvidencePlaybackTurn): string {
     return this.IsUserTurn(turn) ? 'You' : this.AgentName;
   }
 
   /** The mm:ss timestamp shown on a turn (its start offset within the recording). */
-  public TurnTimestamp(turn: MJConversationDetailEntity): string {
+  public TurnTimestamp(turn: EvidencePlaybackTurn): string {
     return this.formatMs(this.turnStartMs(turn));
   }
 
@@ -205,7 +233,7 @@ export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   }
 
   /** Stable `@for` track for the transcript. */
-  public TrackByTurn(_index: number, turn: MJConversationDetailEntity): string {
+  public TrackByTurn(_index: number, turn: EvidencePlaybackTurn): string {
     return turn.ID;
   }
 
@@ -252,10 +280,10 @@ export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   }
 
   /**
-   * A turn's start offset (ms) within the recording: prefer {@link MJConversationDetailEntity.UtteranceStartMs};
+   * A turn's start offset (ms) within the recording: prefer {@link EvidencePlaybackTurn.UtteranceStartMs};
    * fall back to (`__mj_CreatedAt` − {@link RecordingStartedAt}); 0 when neither is available.
    */
-  private turnStartMs(turn: MJConversationDetailEntity): number {
+  private turnStartMs(turn: EvidencePlaybackTurn): number {
     if (turn.UtteranceStartMs != null) {
       return Math.max(0, turn.UtteranceStartMs);
     }
@@ -266,10 +294,10 @@ export class RealtimeEvidencePlaybackComponent implements OnDestroy {
   }
 
   /**
-   * A turn's end offset (ms): prefer {@link MJConversationDetailEntity.UtteranceEndMs}; otherwise the
+   * A turn's end offset (ms): prefer {@link EvidencePlaybackTurn.UtteranceEndMs}; otherwise the
    * next turn's start; otherwise the recording duration (or start + a small window when duration is unknown).
    */
-  private turnEndMs(turn: MJConversationDetailEntity): number {
+  private turnEndMs(turn: EvidencePlaybackTurn): number {
     if (turn.UtteranceEndMs != null) {
       return Math.max(this.turnStartMs(turn), turn.UtteranceEndMs);
     }

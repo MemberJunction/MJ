@@ -193,3 +193,18 @@
     </div>
   }
 </ng-template>
+
+<!-- SESSION REVIEW recording pane body: the reviewed session's recorded audio synced to its
+     transcript, replayed via the shared evidence player (click-to-seek transcript + playhead
+     highlight). Registered as a template-based channel tab ONLY when the reviewed session carries
+     a RecordingFileID; the signed audio URL resolves asynchronously into ReviewAudioUrl. -->
+<ng-template #recordingTpl>
+  <div class="review-recording-host">
+    <mj-realtime-evidence-playback
+      [Turns]="ReviewTurns"
+      [AudioUrl]="ReviewAudioUrl"
+      [RecordingStartedAt]="ReviewRecordingStartedAt"
+      [AgentName]="AgentName">
+    </mj-realtime-evidence-playback>
+  </div>
+</ng-template>
