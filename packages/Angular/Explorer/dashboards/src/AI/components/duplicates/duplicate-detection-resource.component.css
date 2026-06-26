@@ -104,6 +104,9 @@ app-duplicate-detection-resource {
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--mj-text-secondary);
+    /* Uniform label-row height across all three columns so the sliders below line up,
+       even though the LLM column's row carries an mj-switch. */
+    min-height: 24px;
 }
 
 .threshold-value {
@@ -121,9 +124,15 @@ app-duplicate-detection-resource {
     border-left: 1px solid var(--mj-border-subtle);
 }
 
-/* Keep the switch compact so the label row matches the height of the vector columns' label rows */
 .reasoning-group mj-switch {
     margin-left: 2px;
+}
+
+/* The shared mj-switch reserves a 44px touch target, which would balloon the reasoning label row
+   and drop its slider below the vector sliders. In this dense threshold bar, shrink it to the
+   24px track height (selector kept specific enough to beat the switch component's own rule). */
+.threshold-controls .reasoning-group .mj-switch {
+    min-height: 24px;
 }
 
 .threshold-slider {
