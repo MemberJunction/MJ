@@ -5,6 +5,12 @@
 **Scope:** `@memberjunction/ng-conversations` + `@memberjunction/conversations-runtime`
 **Origin:** Feature study of [LibreChat v0.8.7](https://www.librechat.ai/changelog/v0.8.7) compared against MJ's conversations UX stack.
 
+> **Note:** This was the first-pass (LibreChat-only) proposal. It is extended by the
+> broader competitive study in
+> [`conversations-competitive-ux-study.md`](conversations-competitive-ux-study.md), which
+> compares MJ against the full OSS field **and** ChatGPT / Claude / Gemini, and folds the
+> items below into a tiered roadmap. Read that document for the current plan.
+
 ---
 
 ## 1. Background
