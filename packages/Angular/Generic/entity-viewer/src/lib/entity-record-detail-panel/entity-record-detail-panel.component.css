@@ -63,22 +63,8 @@
   padding: 8px 0;
 }
 
-.section {
-  margin-bottom: 8px;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  padding: 12px 20px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s ease;
-}
-.section-header:hover {
-  background: var(--mj-bg-surface-card);
-}
-
+/* Section header / chevron / body chrome is now provided by <mj-accordion-panel>.
+   Only the title-slot styles (icon + title) below remain bespoke. */
 .section-icon {
   width: 20px;
   font-size: 14px;
@@ -87,7 +73,6 @@
 }
 
 .section-title {
-  flex: 1;
   font-size: 13px;
   font-weight: 600;
   color: var(--mj-text-secondary);
@@ -97,16 +82,6 @@
   margin-right: 8px;
   font-size: 12px;
   color: var(--mj-text-disabled);
-}
-
-.expand-icon {
-  font-size: 10px;
-  color: var(--mj-text-disabled);
-  transition: transform 0.15s ease;
-}
-
-.section-content {
-  padding: 0 20px 12px 20px;
 }
 
 .empty-section {
