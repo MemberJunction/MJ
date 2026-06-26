@@ -31,15 +31,10 @@
     @if (QueryInfo) {
       <div class="panel-content">
         <!-- Overview Section -->
-        <div class="info-section" [class.expanded]="IsSectionExpanded('overview')">
-          <div class="section-header" (click)="ToggleSection('overview')">
-            <i class="fa-solid section-icon"
-              [class.fa-chevron-down]="IsSectionExpanded('overview')"
-            [class.fa-chevron-right]="!IsSectionExpanded('overview')"></i>
+        <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('overview')" (ExpandedChange)="ToggleSection('overview')">
+          <ng-template mjAccordionTitle>
             <span class="section-title">Overview</span>
-          </div>
-          @if (IsSectionExpanded('overview')) {
-            <div class="section-content">
+          </ng-template>
               <div class="info-row">
                 <span class="info-label">Name</span>
                 <span class="info-value">{{ QueryInfo.Name }}</span>
@@ -75,20 +70,15 @@
                   </span>
                 </div>
               }
-            </div>
-          }
-        </div>
+        </mj-accordion-panel>
         <!-- Technical Description Section -->
         @if (QueryInfo.TechnicalDescription) {
-          <div class="info-section" [class.expanded]="IsSectionExpanded('technical')">
-            <div class="section-header" (click)="ToggleSection('technical')">
-              <i class="fa-solid section-icon"
-                [class.fa-chevron-down]="IsSectionExpanded('technical')"
-                [class.fa-chevron-right]="!IsSectionExpanded('technical')"></i>
+          <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('technical')" (ExpandedChange)="ToggleSection('technical')">
+            <ng-template mjAccordionTitle>
               <span class="section-title">Technical Description</span>
-            </div>
+            </ng-template>
             @if (IsSectionExpanded('technical')) {
-              <div class="section-content technical-description-content">
+              <div class="technical-description-content">
                 <mj-markdown
                   [data]="QueryInfo.TechnicalDescription || ''"
                   [enableMermaid]="true"
@@ -98,19 +88,14 @@
                 </mj-markdown>
               </div>
             }
-          </div>
+          </mj-accordion-panel>
         }
         <!-- Fields Section -->
-        <div class="info-section" [class.expanded]="IsSectionExpanded('fields')">
-          <div class="section-header" (click)="ToggleSection('fields')">
-            <i class="fa-solid section-icon"
-              [class.fa-chevron-down]="IsSectionExpanded('fields')"
-            [class.fa-chevron-right]="!IsSectionExpanded('fields')"></i>
+        <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('fields')" (ExpandedChange)="ToggleSection('fields')">
+          <ng-template mjAccordionTitle>
             <span class="section-title">Fields</span>
             <span class="section-count">({{ QueryInfo.QueryFields.length || 0 }})</span>
-          </div>
-          @if (IsSectionExpanded('fields')) {
-            <div class="section-content">
+          </ng-template>
               @if (QueryInfo.QueryFields.length) {
                 <div class="fields-list">
                   @for (field of QueryInfo.QueryFields; track TrackByField($index, field)) {
@@ -143,20 +128,13 @@
                   Icon="fa-solid fa-table-columns"
                   Title="No fields defined" />
               }
-            </div>
-          }
-        </div>
+        </mj-accordion-panel>
         <!-- Parameters Section -->
-        <div class="info-section" [class.expanded]="IsSectionExpanded('parameters')">
-          <div class="section-header" (click)="ToggleSection('parameters')">
-            <i class="fa-solid section-icon"
-              [class.fa-chevron-down]="IsSectionExpanded('parameters')"
-            [class.fa-chevron-right]="!IsSectionExpanded('parameters')"></i>
+        <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('parameters')" (ExpandedChange)="ToggleSection('parameters')">
+          <ng-template mjAccordionTitle>
             <span class="section-title">Parameters</span>
             <span class="section-count">({{ QueryInfo.QueryParameters.length || 0 }})</span>
-          </div>
-          @if (IsSectionExpanded('parameters')) {
-            <div class="section-content">
+          </ng-template>
               @if (QueryInfo.QueryParameters.length) {
                 <div class="params-list">
                   @for (param of QueryInfo.QueryParameters; track TrackByParam($index, param)) {
@@ -193,19 +171,13 @@
                   Icon="fa-solid fa-sliders"
                   Title="No parameters required" />
               }
-            </div>
-          }
-        </div>
+        </mj-accordion-panel>
         <!-- SQL Section -->
-        <div class="info-section" [class.expanded]="IsSectionExpanded('sql')">
-          <div class="section-header" (click)="ToggleSection('sql')">
-            <i class="fa-solid section-icon"
-              [class.fa-chevron-down]="IsSectionExpanded('sql')"
-            [class.fa-chevron-right]="!IsSectionExpanded('sql')"></i>
+        <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('sql')" (ExpandedChange)="ToggleSection('sql')">
+          <ng-template mjAccordionTitle>
             <span class="section-title">SQL Query</span>
-          </div>
+          </ng-template>
           @if (IsSectionExpanded('sql')) {
-            <div class="section-content">
               @if (QueryInfo.SQL) {
                 <div class="sql-container">
                   <mj-code-editor
@@ -221,21 +193,15 @@
                   Icon="fa-solid fa-code"
                   Title="SQL not available" />
               }
-            </div>
           }
-        </div>
+        </mj-accordion-panel>
         <!-- Dependent Queries Section -->
         @if (QueryInfo.QueryDependents.length > 0) {
-          <div class="info-section" [class.expanded]="IsSectionExpanded('dependents')">
-            <div class="section-header" (click)="ToggleSection('dependents')">
-              <i class="fa-solid section-icon"
-                [class.fa-chevron-down]="IsSectionExpanded('dependents')"
-                [class.fa-chevron-right]="!IsSectionExpanded('dependents')"></i>
+          <mj-accordion-panel class="info-section" [Expanded]="IsSectionExpanded('dependents')" (ExpandedChange)="ToggleSection('dependents')">
+            <ng-template mjAccordionTitle>
               <span class="section-title">Dependent Queries</span>
               <span class="section-count">({{ QueryInfo.QueryDependents.length }})</span>
-            </div>
-            @if (IsSectionExpanded('dependents')) {
-              <div class="section-content">
+            </ng-template>
                 <div class="dependents-list">
                   @for (dep of QueryInfo.QueryDependents; track dep.ID) {
                     <div class="dependent-item" (click)="OnDependentQueryClick(dep)">
@@ -255,9 +221,7 @@
                   <i class="fa-solid fa-info-circle"></i>
                   These queries reference this query via composition
                 </div>
-              </div>
-            }
-          </div>
+          </mj-accordion-panel>
         }
       </div>
     }
