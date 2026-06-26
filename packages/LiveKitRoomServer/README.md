@@ -76,7 +76,13 @@ import { LiveKitEgressService } from '@memberjunction/livekit-room-server';
 
 const egress = new LiveKitEgressService();
 const rec = await egress.StartRoomRecording({ RoomName: 'support-42' });   // → { EgressID, Status }
-await egress.StopRecording(rec.EgressID);
+const done = await egress.StopRecording(rec.EgressID);
+// On stop/complete, RecordingInfo also surfaces the produced file:
+//   done.OutputLocation    – the file's path/key in the egress sink
+//   done.OutputSizeBytes   – byte count
+//   done.OutputDurationMs  – duration in ms (normalized from the SDK's nanoseconds)
+// These are what a caller copies into MJStorage and records on the Meeting-Room Conversation
+// (Conversation.RecordingFileID + EgressID). While recording is in progress they are undefined.
 ```
 
 Egress output storage (S3 / GCS / Azure / LiveKit Cloud) is configured on the LiveKit project.

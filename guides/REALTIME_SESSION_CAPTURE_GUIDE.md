@@ -125,3 +125,55 @@ as **tabs**. It reuses `MJ: Files` + the channel `Config` state — no new entit
 `MJ: AI Agent Channels` metadata row (`ServerPluginClass='MediaChannelServer'`,
 `ClientPluginClass='RealtimeMediaChannel'`); `LoadMediaChannelServer()` is called from MJServer's
 `agentSessions` static path to survive tree-shaking.
+
+### Showing an MJStorage file (not just a public URL)
+
+`Media_ShowMedia` accepts **either** a public `url` **or** an MJ `fileId` (one of the two is required;
+neither ⇒ the tool rejects). A `fileId` points at an `MJ: Files` row, so the agent can put a
+permission-gated, MJStorage-backed file on the surface without ever exposing a public URL. `MediaItem`
+carries the optional `FileID` alongside `Url`, and the pure `RouteForMediaItem` helper centralizes the
+render decision per item:
+
+| Item | Route | Rendered by |
+|---|---|---|
+| `audio` / `video` with a `FileID` | `storage-player` | `<mj-storage-media-player [FileID]>` — HTTP-range, permission-gated, full transport + waveform |
+| `audio` / `video` with only a `Url` | `url-player` | `<mj-media-player>` (replaces the old raw `<audio>`/`<video>`) |
+| `image` / `pdf` / `web` (either source) | `iframe-or-img` | a `CreateMediaAccessToken` streaming URL for a `FileID`, or the `Url` directly, with loading + no-access states |
+
+`FileID` wins over `Url` for audio/video (secure streaming is preferred). A file-backed item streams the
+same way recordings do — through `CreateMediaAccessToken` → the `GET /media/:fileId?token=` route — so it
+inherits the per-user permission check and HTTP-range streaming for free; there is **no** base64 download
+and the model never sees a raw URL for a `fileId` item.
+
+Because the storage player and the token mutation run server calls, the channel threads the **live
+session `Provider`** through `RealtimeChannelContext` into the surface (`BindSurface`), so playback and
+token-minting run under the session's authenticated provider — multi-provider safe. When the context's
+`Provider` is `null`, the surface falls back to the global default.
+
+## Meeting-Room recording (LiveKit egress → MJStorage)
+
+> **Status: foundation only.** The schema + egress output surfacing below are built and tested. The two
+> follow-ups — **registering** the egress MP4 as an `MJ: Files` row and stamping it onto the Conversation,
+> and **playing it back** in the Meet app — land **after CodeGen** generates the new `Conversation`
+> entity-class properties. Treat anything past "egress surfaces its output" as planned.
+
+The per-session recording above captures *one agent session's* audio. A LiveKit **meeting** is different:
+it maps 1:1 to a **Meeting-Room Conversation** (`ApplicationScope='Application'`, so it stays out of normal
+chat), and a single meeting can span **multiple** agent sessions. The room-level **composite** recording —
+one MP4 that LiveKit egress produces for the whole room — therefore belongs on the **room (the
+Conversation)**, not on any single `AIAgentSession` (which keeps its own per-agent `RecordingFileID`).
+
+- **Schema** (`migrations/v5/V202606261600__v5.43.x__Meeting_Room_Recording.sql`, additive + nullable):
+  `Conversation.RecordingFileID` (FK → `MJ: Files`, the composite egress MP4 once copied into MJStorage) and
+  `Conversation.EgressID` (the LiveKit egress session id — set when recording starts, used to stop the
+  egress and correlate its completion result back to the conversation).
+- **Egress service** (`LiveKitEgressService`, `packages/LiveKitRoomServer/src/livekit-egress-service.ts`):
+  `StartRoomRecording` starts a composite MP4 egress and returns its `EgressID`; on stop/complete,
+  `RecordingInfo` now surfaces the egress's **`OutputLocation`** (the file's path/key in the egress sink),
+  **`OutputSizeBytes`**, and **`OutputDurationMs`** (normalized from the SDK's nanosecond duration),
+  extracted from `EgressInfo.fileResults[0]`. These are exactly what a caller needs to **copy the MP4 into
+  MJStorage** and record it on the Conversation. While a recording is still in progress (no `fileResults`
+  yet), those three fields are `undefined`.
+- **Planned next**: a server path copies the egress MP4 into the configured MJStorage provider, creates the
+  `MJ: Files` row, and writes `Conversation.RecordingFileID` + `EgressID`; the Meet app then plays it back
+  via the same `mj-storage-media-player` streaming pipeline used for per-session recordings.
