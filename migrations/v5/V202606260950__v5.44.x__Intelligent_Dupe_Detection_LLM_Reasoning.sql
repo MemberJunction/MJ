@@ -1,5 +1,5 @@
 -- =============================================================================
--- v5.43.x — Intelligent Duplicate Detection: LLM reasoning layer (Phase 1)
+-- v5.44.x — Intelligent Duplicate Detection: LLM reasoning layer (Phase 1)
 --
 -- Adds the schema needed to layer LLM/agentic reasoning on top of the existing
 -- embedding/vector duplicate-detection pipeline. Two tables are extended; all
