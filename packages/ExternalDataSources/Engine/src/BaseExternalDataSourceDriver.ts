@@ -186,7 +186,11 @@ export abstract class BaseExternalDataSourceDriver<TConnection = unknown> {
       if (!this.isAuthError(e)) {
         throw e;
       }
-      await this.invalidateConnection(dataSource.ID);
+      // Evict the cached connection so the retry re-resolves the credential. A failure while
+      // closing a half-dead pool must not supplant the original auth error or skip the retry.
+      try {
+        await this.invalidateConnection(dataSource.ID);
+      } catch { /* best-effort eviction; proceed to the retry regardless */ }
       return await op();
     }
   }

@@ -11,6 +11,10 @@ name: External Data Sources integration
 # beforeAll, so every service container below is blank — no seed step needed and the
 # runs are deterministic. (Snowflake has no CI job: it needs a hosted account, and its
 # catalog doesn't expose FKs reliably — it's exercised locally with tester-supplied creds.)
+#
+# NOTE: the DB credentials in the service-container/env blocks below are intentionally
+# throwaway literals for ephemeral CI containers (nothing real to leak). Do NOT "promote"
+# them into GitHub Secrets — they are not secrets.
 
 on:
   workflow_dispatch: # manual trigger

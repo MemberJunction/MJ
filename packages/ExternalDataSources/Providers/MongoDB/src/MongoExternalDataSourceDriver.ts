@@ -136,7 +136,7 @@ export class MongoExternalDataSourceDriver extends BaseExternalDataSourceDriver<
         const options: FindOptions = {};
         if (params.fields?.length) options.projection = this.buildProjection(params.fields);
         if (params.orderBy) options.sort = this.parseSort(params.orderBy);
-        if (params.offset) options.skip = params.offset;
+        if (params.offset != null) options.skip = params.offset;
         if (params.maxRows != null) options.limit = params.maxRows;
 
         const rows = await coll.find(filter, options).toArray();

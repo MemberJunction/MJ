@@ -45,6 +45,9 @@ describe('SQLServerExternalDataSourceDriver — SQL building', () => {
     it('builds SELECT * with no clauses', () => {
       expect(d.sel('[s].[t]', { objectName: 't' })).toBe('SELECT * FROM [s].[t]');
     });
+    it('treats an explicitly empty fields array as SELECT *', () => {
+      expect(d.sel('[s].[t]', { objectName: 't', fields: [] })).toBe('SELECT * FROM [s].[t]');
+    });
     it('uses TOP for a row cap without an offset', () => {
       expect(d.sel('[s].[t]', { objectName: 't', maxRows: 10 })).toBe('SELECT TOP (10) * FROM [s].[t]');
     });

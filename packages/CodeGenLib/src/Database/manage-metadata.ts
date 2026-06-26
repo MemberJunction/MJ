@@ -1497,6 +1497,29 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Whether an introspected remote object has columns we can safely sync. When false (object
+    * missing or zero columns), {@link manageSingleExternalEntity} skips the field sync rather than
+    * treating it as "the entity now has no fields" (which would DELETE every EntityField). Pure/testable.
+    */
+   protected externalObjectIsSyncable(obj: { Columns?: unknown[] } | null | undefined): boolean {
+      return !!(obj && Array.isArray(obj.Columns) && obj.Columns.length > 0);
+   }
+
+   /**
+    * Builds the DELETE for EntityFields no longer present in the freshly-introspected remote object,
+    * or '' when nothing should be removed. Field-name matching is case-insensitive. Pure/testable
+    * (no DB access) — the data-loss-sensitive computation guarded by {@link externalObjectIsSyncable}.
+    */
+   protected buildExternalFieldRemoveSQL(schema: string, existingFields: Array<{ ID: string; Name: string }>, introspectedFieldNames: string[]): string {
+      const present = new Set(introspectedFieldNames.map(n => n.trim().toLowerCase()));
+      const removeIds = existingFields.filter(f => !present.has(f.Name.trim().toLowerCase())).map(f => f.ID);
+      if (removeIds.length === 0) {
+         return '';
+      }
+      return `DELETE FROM ${this.qs(schema, 'EntityField')} WHERE ID IN (${removeIds.map(id => `'${id}'`).join(',')})`;
+   }
+
+   /**
     * Introspects the remote schema for a single external entity and syncs its `EntityField` rows.
     * Mirrors {@link manageSingleVirtualEntity} but sources the field list from the driver's
     * `IntrospectSchema` (mapped to MJ types via {@link mapExternalNativeTypeToMJ}) instead of the
@@ -1515,17 +1538,21 @@ export class ManageMetadataBase {
             o.Name.trim().toLowerCase() === target ||
             `${o.Schema ?? ''}.${o.Name}`.trim().toLowerCase() === target);
          if (!obj) {
-            logError(`   External entity ${externalEntity.Name}: remote object '${externalEntity.ExternalObjectName ?? externalEntity.Name}' not found in introspected schema — skipping`);
-            return {success: false, updatedEntity: false, relationshipsUpdated: false};
+            logStatus(`   ⚠️  External entity ${externalEntity.Name}: remote object '${externalEntity.ExternalObjectName ?? externalEntity.Name}' not found in introspected schema — skipping this entity (left untouched); CodeGen run continues.`);
+            // Recoverable skip (misconfigured/unreachable object): leave the entity untouched and
+            // continue the run rather than failing the whole metadata pass for one external entity.
+            return {success: true, updatedEntity: false, relationshipsUpdated: false};
          }
          // Guard the degenerate "found but zero columns" case the same way as "not found": a
          // permission-limited / transient / partial introspection that returns an object shell with
          // no columns must NOT be treated as "the entity now has no fields" — that would make the
          // remove-list below every existing EntityField and DELETE them all (silent metadata loss).
          // Bail with a warning instead and leave the existing fields untouched.
-         if (!obj.Columns || obj.Columns.length === 0) {
-            logError(`   External entity ${externalEntity.Name}: remote object '${obj.Name}' introspected with zero columns — skipping field sync to avoid destroying existing field metadata`);
-            return {success: false, updatedEntity: false, relationshipsUpdated: false};
+         if (!this.externalObjectIsSyncable(obj)) {
+            logStatus(`   ⚠️  External entity ${externalEntity.Name}: remote object '${obj.Name}' introspected with zero columns — skipping field sync to avoid destroying existing field metadata; CodeGen run continues.`);
+            // Recoverable skip (permission-limited / transient / partial introspection): leave the
+            // existing fields untouched and continue, rather than failing the whole metadata pass.
+            return {success: true, updatedEntity: false, relationshipsUpdated: false};
          }
 
          // Map each introspected column into the veField shape that manageSingleVirtualEntityField consumes.
@@ -1538,11 +1565,8 @@ export class ManageMetadataBase {
          const entity = md.EntityByName(externalEntity.Name);
          if (entity) {
             // remove EntityFields no longer present in the remote object
-            const removeList = entity.Fields
-               .filter(f => !eeFields.find(ef => ef.FieldName.trim().toLowerCase() === f.Name.trim().toLowerCase()))
-               .map(f => f.ID);
-            if (removeList.length > 0) {
-               const sqlRemove = `DELETE FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID IN (${removeList.map(id => `'${id}'`).join(',')})`;
+            const sqlRemove = this.buildExternalFieldRemoveSQL(mj_core_schema(), entity.Fields, eeFields.map(ef => ef.FieldName));
+            if (sqlRemove) {
                await this.LogSQLAndExecute(pool, sqlRemove, `SQL text to remove fields from external entity ${externalEntity.Name}`);
                bUpdated = true;
             }

@@ -312,6 +312,13 @@ export const loadModule = () => {
       let sBaseClass: string;
       let subClassImportStatement: string;
       if (hasExplicitSubClass) {
+        if (entity.ExternalDataSourceID) {
+          // The custom subclass takes precedence over ReadOnlyExternalBaseEntity, so this external
+          // entity's read-only guarantee is preserved ONLY if that subclass itself extends
+          // ReadOnlyExternalBaseEntity. Warn so the author doesn't silently lose Save/Delete rejection
+          // (there's no write sproc, so an attempted mutation would otherwise fail confusingly downstream).
+          logStatus(`   ⚠️  External entity '${entity.Name}' has a custom subclass ('${explicitSubClass}') that overrides ReadOnlyExternalBaseEntity — Save/Delete will be rejected only if '${explicitSubClass}' extends ReadOnlyExternalBaseEntity.`);
+        }
         sBaseClass = explicitSubClass;
         subClassImportStatement = `import { ${explicitSubClass} } from '${explicitSubClassImport}';\n`;
       } else if (entity.ExternalDataSourceID) {

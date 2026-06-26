@@ -14,7 +14,7 @@ function makeFakeDriver(overrides: Partial<BaseExternalDataSourceDriver> = {}) {
 }
 
 function mockResolve(driver: BaseExternalDataSourceDriver) {
-  return vi.spyOn(ExternalDataSourceRouter.Instance, 'resolve').mockResolvedValue({
+  return vi.spyOn(ExternalDataSourceRouter.Instance, 'Resolve').mockResolvedValue({
     driver,
     dataSource: { ID: 'ds-1', Name: 'Demo' } as never,
     dataSourceType: { DriverClass: 'PostgresExternalDriver' } as never,
@@ -66,6 +66,17 @@ describe('ExternalDataSourceReadRouterImpl', () => {
 
       const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(viewParams.objectName).toBe('things_table');
+    });
+
+    it('fails clearly (no driver call) when offset-paginating a PK-less entity with no OrderBy', async () => {
+      const driver = makeFakeDriver();
+      mockResolve(driver);
+      // No Fields => no primary keys; offset paging with no OrderBy would be nondeterministic.
+      const entity = new EntityInfo({ Name: 'NoPK', ExternalDataSourceID: 'ds-1', BaseTable: 'nopk' });
+      const res = await impl.RunViewExternal(entity, { EntityName: 'NoPK', StartRow: 20, MaxRows: 10 });
+      expect(res.Success).toBe(false);
+      expect(res.ErrorMessage).toMatch(/no primary key/i);
+      expect(driver.RunView).not.toHaveBeenCalled();
     });
 
     it('caps an unbounded RunView: defaults maxRows to UserViewMaxRows, then to 1000', async () => {
@@ -175,7 +186,7 @@ describe('ExternalDataSourceReadRouterImpl', () => {
 
   describe('GetCacheTTLSeconds', () => {
     const mockResolveWithTTL = (ttl: unknown) =>
-      vi.spyOn(ExternalDataSourceRouter.Instance, 'resolve').mockResolvedValue({
+      vi.spyOn(ExternalDataSourceRouter.Instance, 'Resolve').mockResolvedValue({
         driver: makeFakeDriver(),
         dataSource: { ID: 'ds-1', Name: 'Demo', DefaultCacheTTLSeconds: ttl } as never,
         dataSourceType: { DriverClass: 'PostgresExternalDriver' } as never,
@@ -197,7 +208,7 @@ describe('ExternalDataSourceReadRouterImpl', () => {
     });
 
     it('falls back to the default 300 when the source cannot be resolved', async () => {
-      vi.spyOn(ExternalDataSourceRouter.Instance, 'resolve').mockRejectedValue(new Error('not found'));
+      vi.spyOn(ExternalDataSourceRouter.Instance, 'Resolve').mockRejectedValue(new Error('not found'));
       expect(await impl.GetCacheTTLSeconds('missing')).toBe(300);
     });
   });

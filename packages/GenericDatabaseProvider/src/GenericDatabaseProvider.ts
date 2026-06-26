@@ -1471,6 +1471,8 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
                 // normalization). Without this, an Encrypt-flagged external field surfaces as ciphertext.
                 if (externalResult.Success && externalResult.Results && externalResult.Results.length > 0) {
+                    // Generic-erasure boundary: PostProcessRows operates on Record<string,unknown>[]
+                    // but Results is typed T[]; the double-cast bridges that erasure (not a lazy `any`).
                     const rows = externalResult.Results as unknown as Record<string, unknown>[];
                     externalResult.Results = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
                 }
@@ -2456,6 +2458,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         // Apply the same forbidden-keyword screen the MJ-DB path runs on caller-supplied SQL
         // clauses before they're passed to the remote driver. The driver still parameterizes
         // values, but this blocks obvious injection of statement-terminating / DDL keywords.
+        // NOTE: this is a deliberately conservative cross-dialect pre-filter applied to EVERY
+        // external source, including MongoDB (whose real parser is MongoFilterTranslator) — a Mongo
+        // filter containing a SQL-ish token is screened here even though Mongo never builds SQL.
+        // Acceptable belt-and-suspenders; scope to SQL drivers if it ever proves noisy.
         const extraFilter = (params.ExtraFilter as string) || '';
         if (extraFilter && !this.ValidateUserProvidedSQLClause(extraFilter)) {
             throw new Error(`Invalid ExtraFilter clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);

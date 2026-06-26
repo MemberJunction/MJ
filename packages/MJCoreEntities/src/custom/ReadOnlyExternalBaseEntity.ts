@@ -37,7 +37,7 @@ export abstract class ReadOnlyExternalBaseEntity<T = unknown> extends BaseEntity
 
     /**
      * Records a failed-mutation result on the entity's result history (so
-     * `LatestResult.Message` carries the read-only explanation) and returns
+     * `LatestResult.CompleteMessage` carries the read-only explanation) and returns
      * false without contacting the remote system.
      */
     private rejectMutation(type: 'update' | 'delete', operation: 'save' | 'delete'): boolean {

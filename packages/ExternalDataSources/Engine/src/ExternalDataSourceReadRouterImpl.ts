@@ -17,8 +17,10 @@ import { ExternalRow, ExternalViewParams } from "./types";
 const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
 
 /**
- * Default upper bound on rows fetched from a remote source when a RunView supplies no MaxRows
- * and the entity has no UserViewMaxRows. Prevents an unbounded pull from a large external table.
+ * Default row limit applied ONLY when a RunView supplies no MaxRows and the entity has no
+ * UserViewMaxRows, so an unbounded RunView doesn't stream an entire remote table. This is a
+ * default for the absent case — NOT a hard cap: an explicit MaxRows is always honored as-is
+ * (matching the MJ-DB path). A true ceiling on explicit values would be a separate safeguard.
  */
 const DEFAULT_EXTERNAL_MAX_ROWS = 1000;
 
@@ -40,7 +42,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
   ): Promise<RunViewResult<T>> {
     const start = Date.now();
     try {
-      const { driver, dataSource } = await ExternalDataSourceRouter.Instance.resolve(
+      const { driver, dataSource } = await ExternalDataSourceRouter.Instance.Resolve(
         entity.ExternalDataSourceID,
         contextUser,
         provider,
@@ -52,18 +54,26 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
       // page boundaries are well-defined uniformly across every SQL dialect. PK names come from MJ
       // metadata (trusted), so they bypass the caller-clause keyword screen applied upstream.
       let orderBy = (params.OrderBy as string) || undefined;
-      if (!orderBy && offset != null && entity.PrimaryKeys.length > 0) {
-        orderBy = entity.PrimaryKeys.map((pk) => pk.Name).join(', ');
+      if (!orderBy && offset != null) {
+        if (entity.PrimaryKeys.length > 0) {
+          orderBy = entity.PrimaryKeys.map((pk) => pk.Name).join(', ');
+        } else {
+          // Offset paging with neither a caller OrderBy nor a primary key would yield
+          // nondeterministic pages (rows can repeat/vanish). Fail clearly instead of silently.
+          return this.failView<T>(
+            `External entity '${entity.Name}' has no primary key; offset pagination requires an explicit OrderBy for stable pages.`,
+            Date.now() - start,
+          );
+        }
       }
       const viewParams: ExternalViewParams = {
         objectName: entity.ExternalObjectName || entity.BaseTable || entity.Name,
         fields: params.Fields && params.Fields.length ? params.Fields : undefined,
         filter: (params.ExtraFilter as string) || undefined,
         orderBy,
-        // Bound the fetch: explicit MaxRows wins; else the entity's UserViewMaxRows; else a sane
-        // default cap so an unbounded RunView can't stream an entire remote table. This is the
-        // external-path analogue of the MJ-DB branch's UserViewMaxRows cap (which the external
-        // dispatch returns before reaching).
+        // Row limit: an explicit MaxRows is honored verbatim (no hard ceiling, same as MJ-DB);
+        // only when MaxRows is absent do we apply a default — the entity's UserViewMaxRows, else
+        // DEFAULT_EXTERNAL_MAX_ROWS — so an unbounded RunView doesn't stream a whole remote table.
         maxRows:
           params.MaxRows && params.MaxRows > 0
             ? params.MaxRows
@@ -101,7 +111,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
   ): Promise<RunQueryResult> {
     const start = Date.now();
     try {
-      const { driver, dataSource } = await ExternalDataSourceRouter.Instance.resolve(externalDataSourceID, contextUser, provider);
+      const { driver, dataSource } = await ExternalDataSourceRouter.Instance.Resolve(externalDataSourceID, contextUser, provider);
       // sql is already fully rendered by MJ's parameter templating, so no bind params are passed.
       const res = await driver.RunNativeQuery<ExternalRow>(dataSource, sql, undefined, contextUser);
       if (!res.success) {
@@ -128,7 +138,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
     provider?: IMetadataProvider,
   ): Promise<number> {
     try {
-      const { dataSource } = await ExternalDataSourceRouter.Instance.resolve(externalDataSourceID, contextUser, provider);
+      const { dataSource } = await ExternalDataSourceRouter.Instance.Resolve(externalDataSourceID, contextUser, provider);
       const ttl = dataSource.DefaultCacheTTLSeconds;
       // A configured 0 means "do not cache this source"; null/undefined falls back to the default.
       return typeof ttl === 'number' ? ttl : DEFAULT_EXTERNAL_CACHE_TTL_SECONDS;
@@ -145,7 +155,7 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<ExternalSchemaDescriptor> {
-    const { driver, dataSource } = await ExternalDataSourceRouter.Instance.resolve(externalDataSourceID, contextUser, provider);
+    const { driver, dataSource } = await ExternalDataSourceRouter.Instance.Resolve(externalDataSourceID, contextUser, provider);
     return driver.IntrospectSchema(dataSource, schemaName, contextUser);
   }
 

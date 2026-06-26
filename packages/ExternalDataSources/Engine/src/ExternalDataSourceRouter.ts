@@ -39,7 +39,7 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
    * request when running under a non-default provider (multi-provider/tenant
    * scenarios); falls back to the global default provider otherwise.
    */
-  public async resolve(
+  public async Resolve(
     dataSourceId: string,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
@@ -84,7 +84,7 @@ export class ExternalDataSourceRouter extends BaseSingleton<ExternalDataSourceRo
   }
 
   /** Evict a cached driver (or all of them) — e.g. after editing a data source's config. */
-  public clearCache(dataSourceId?: string): void {
+  public ClearCache(dataSourceId?: string): void {
     if (dataSourceId) {
       this.driverCache.delete(dataSourceId);
     } else {
