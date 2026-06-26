@@ -47,8 +47,12 @@ import { MJAIAgentRunFormComponentExtended } from "./ai-agent-run/ai-agent-run.c
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
-import { AIAgentRunVisualizationComponent } from "./ai-agent-run/ai-agent-run-visualization.component";
 import { AIAgentRunStepDetailComponent } from "./ai-agent-run/ai-agent-run-step-detail.component";
+import { AIAgentRunFlowComponent } from "./ai-agent-run/flow/agent-run-flow.component";
+import { FlameCascadeComponent } from "./ai-agent-run/flow/flame-cascade.component";
+import { SubwayLinesComponent } from "./ai-agent-run/flow/subway-lines.component";
+import { ConstellationComponent } from "./ai-agent-run/flow/constellation.component";
+import { FlowchartComponent } from "./ai-agent-run/flow/flowchart.component";
 import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
@@ -112,8 +116,12 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
-        AIAgentRunVisualizationComponent,
         AIAgentRunStepDetailComponent,
+        AIAgentRunFlowComponent,
+        FlameCascadeComponent,
+        SubwayLinesComponent,
+        ConstellationComponent,
+        FlowchartComponent,
         MJQueryFormComponentExtended,
         QueryRunDialogComponent,
         FlowAgentFormSectionComponent,
