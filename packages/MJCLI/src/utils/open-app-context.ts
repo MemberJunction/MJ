@@ -2,80 +2,67 @@
  * Shared context builder for MJ Open App CLI commands.
  *
  * Constructs the OrchestratorContext needed by the engine's install/upgrade/remove
- * functions, using the MJ entity framework (Metadata, RunView, BaseEntity) backed
- * by the SQL Server data provider.
+ * functions, using the MJ entity framework (Metadata, RunView, BaseEntity). The
+ * backing data provider is db-generic and is bootstrapped by MetadataSync's shared
+ * provider lifecycle (`initializeProvider`), which selects SQL Server (default) or
+ * PostgreSQL from the configured platform — so `mj app …` and `mj sync` share ONE
+ * provider-init implementation, and the engine's platform-aware install/migration
+ * paths receive a provider whose `Dialect.PlatformKey` matches the real database.
  */
-import sql from 'mssql';
 import ora from 'ora-classic';
 import { createRequire } from 'node:module';
-import type { UserInfo } from '@memberjunction/core';
-import { setupSQLServerClient, SQLServerProviderConfigData, SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
 import { getValidatedConfig } from '../config.js';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Provider initialization (lazy singleton)
-// ─────────────────────────────────────────────────────────────────────────────
+type ResolvedConfig = ReturnType<typeof getValidatedConfig>;
 
-let _pool: sql.ConnectionPool | null = null;
-let _provider: SQLServerDataProvider | null = null;
-let _initPromise: Promise<SQLServerDataProvider> | null = null;
+// ─────────────────────────────────────────────────────────────────────────────
+// Provider initialization — delegated to MetadataSync's shared, db-generic
+// provider lifecycle (lazy singleton; SQL Server or PostgreSQL). It builds +
+// registers the provider and, on both platforms, populates UserCache (PG via its
+// vwUsers/vwUserRoles bootstrap) — so getSystemUserInfo() reads UserCache uniformly.
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Initializes the MJ SQL Server provider if not already done.
- * Creates a connection pool, configures the provider, and populates UserCache.
+ * Initializes (or returns the already-initialized) MJ data provider for the
+ * configured platform, by adapting MJCLI's config to the `MJConfig` shape that
+ * MetadataSync's shared `initializeProvider` consumes.
  */
-async function ensureProviderInitialized(): Promise<{ pool: sql.ConnectionPool; provider: SQLServerDataProvider }> {
-  if (_provider && _pool?.connected) {
-    return { pool: _pool, provider: _provider };
-  }
-
-  if (_initPromise) {
-    const provider = await _initPromise;
-    return { pool: _pool!, provider };
-  }
-
-  _initPromise = (async () => {
-    const config = getValidatedConfig();
-
-    const poolConfig: sql.config = {
-      server: config.dbHost,
-      port: config.dbPort,
-      database: config.dbDatabase,
-      user: config.codeGenLogin,
-      password: config.codeGenPassword,
-      options: {
-        encrypt: config.dbHost.includes('.database.windows.net'),
-        trustServerCertificate: config.dbTrustServerCertificate ?? true,
-        enableArithAbort: true,
-      },
-    };
-
-    _pool = new sql.ConnectionPool(poolConfig);
-    await _pool.connect();
-
-    const providerConfig = new SQLServerProviderConfigData(
-      _pool,
-      config.coreSchema ?? '__mj',
-    );
-
-    _provider = await setupSQLServerClient(providerConfig);
-    return _provider;
-  })();
-
-  const provider = await _initPromise;
-  return { pool: _pool!, provider };
+async function ensureProviderInitialized(): Promise<DatabaseProviderBase> {
+  return initializeProvider(toMJConfig(getValidatedConfig()));
 }
 
 /**
- * Closes the shared connection pool. Call on CLI exit for cleanup.
+ * Adapts MJCLI's `ResolvedConfig` to MetadataSync's `MJConfig`. The two carry the
+ * same connection facts under different names (codeGenLogin/coreSchema vs
+ * dbUsername/mjCoreSchema). `dbTrustServerCertificate` and `dbEncrypt` are passed as
+ * the Y/N strings MetadataSync reads; encrypt preserves the prior behavior of
+ * auto-detecting Azure SQL only (DB_ENCRYPT is not honored for local SQL Server,
+ * where encrypt-on without a trusted cert would break the connection).
+ */
+function toMJConfig(config: ResolvedConfig) {
+  return {
+    dbPlatform: config.dbPlatform,
+    dbHost: config.dbHost,
+    dbPort: config.dbPort,
+    dbDatabase: config.dbDatabase,
+    dbUsername: config.codeGenLogin,
+    dbPassword: config.codeGenPassword,
+    dbEncrypt: config.dbHost.includes('.database.windows.net') ? 'Y' : 'N',
+    dbTrustServerCertificate: config.dbTrustServerCertificate ? 'Y' : 'N',
+    mjCoreSchema: config.coreSchema ?? '__mj',
+  };
+}
+
+/**
+ * Closes the shared connection(s). Call on CLI exit for cleanup. Delegates to
+ * MetadataSync's `cleanupProvider`, which tears down whichever pool (mssql or pg)
+ * was opened and resets the shared provider singleton.
  */
 export async function closeConnectionPool(): Promise<void> {
-  if (_pool?.connected) {
-    await _pool.close();
-    _pool = null;
-  }
-  _provider = null;
-  _initPromise = null;
+  await cleanupProvider();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +74,8 @@ export async function closeConnectionPool(): Promise<void> {
  * Falls back to Owner user, then first active user if no system user exists.
  */
 function getSystemUserInfo(): UserInfo {
+  // UserCache is populated by initializeProvider on BOTH platforms (PG via its
+  // vwUsers/vwUserRoles bootstrap), so the same lookup works regardless of backend.
   const sysUser = UserCache.Instance.GetSystemUser();
   if (sysUser) {
     return sysUser;
@@ -128,7 +117,7 @@ export async function buildOrchestratorContext(
   verbose?: boolean,
 ): Promise<OrchestratorContextShape> {
   const config = getValidatedConfig();
-  const { provider } = await ensureProviderInitialized();
+  const provider = await ensureProviderInitialized();
   const contextUser = getSystemUserInfo();
   const spinner = verbose ? ora() : undefined;
 
@@ -175,7 +164,7 @@ export async function buildOrchestratorContext(
  */
 interface OrchestratorContextShape {
   ContextUser: UserInfo;
-  DatabaseProvider: SQLServerDataProvider;
+  DatabaseProvider: DatabaseProviderBase;
   DatabaseConfig: {
     Host: string;
     Port: number;
