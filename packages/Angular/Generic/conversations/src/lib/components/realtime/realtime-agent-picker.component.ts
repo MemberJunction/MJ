@@ -186,17 +186,23 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
                     </div>
                 }
             }
-            <label class="mj-voice-picker__record">
-                <input
-                    type="checkbox"
-                    class="mj-voice-picker__record-checkbox"
-                    [checked]="RecordingConsent"
-                    (change)="OnRecordingConsentChange($any($event.target).checked)" />
-                <span class="mj-voice-picker__record-text">
-                    <i class="fa-solid fa-circle-dot"></i>
-                    Record this call (audio stored securely)
+            <div class="mj-voice-picker__record-row">
+                <span class="mj-voice-picker__record-label">
+                    <i class="fa-solid fa-microphone"></i>
+                    <span class="mj-voice-picker__record-copy">
+                        Record this call
+                        <small>Audio stored securely</small>
+                    </span>
                 </span>
-            </label>
+                <label class="mj-voice-picker__switch">
+                    <input
+                        type="checkbox"
+                        [checked]="RecordingConsent"
+                        (change)="OnRecordingConsentChange($any($event.target).checked)"
+                        aria-label="Record this call (audio stored securely)" />
+                    <span class="mj-voice-picker__switch-track"></span>
+                </label>
+            </div>
             <div class="mj-voice-picker__footer">
                 <button mjButton variant="primary" size="sm" [disabled]="!SelectedAgent" (click)="StartCall()">
                     <i class="fa-solid fa-phone"></i> Start
@@ -302,32 +308,41 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             outline: none;
         }
         .mj-voice-picker__select:focus { border-color: var(--mj-border-focus); }
-        .mj-voice-picker__record {
-            display: flex; align-items: flex-start; gap: 8px;
-            margin: 8px 12px 0;
-            padding: 8px 10px;
-            background: var(--mj-bg-surface-sunken);
-            border: 1px solid var(--mj-border-subtle);
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            color: var(--mj-text-secondary);
+        .mj-voice-picker__record-row {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            margin: 10px 12px 2px;
+            padding: 10px 0 2px;
+            border-top: 1px solid var(--mj-border-subtle);
         }
-        .mj-voice-picker__record-checkbox {
-            flex-shrink: 0;
-            margin: 1px 0 0;
-            accent-color: var(--mj-brand-primary);
-            cursor: pointer;
+        .mj-voice-picker__record-label {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 12px; color: var(--mj-text-secondary);
         }
-        .mj-voice-picker__record-checkbox:focus-visible {
-            outline: 2px solid var(--mj-border-focus);
-            outline-offset: 2px;
+        .mj-voice-picker__record-label > i { font-size: 12px; color: var(--mj-text-muted); }
+        .mj-voice-picker__record-copy { display: flex; flex-direction: column; line-height: 1.3; }
+        .mj-voice-picker__record-copy small { font-size: 10px; color: var(--mj-text-muted); }
+        .mj-voice-picker__switch { position: relative; flex-shrink: 0; display: inline-flex; cursor: pointer; }
+        .mj-voice-picker__switch input {
+            position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer;
         }
-        .mj-voice-picker__record-text {
-            display: inline-flex; align-items: center; gap: 6px;
-            line-height: 1.4;
+        .mj-voice-picker__switch-track {
+            position: relative; width: 34px; height: 18px; border-radius: 999px;
+            background: var(--mj-border-strong); transition: background 150ms ease;
         }
-        .mj-voice-picker__record-text i { font-size: 11px; color: var(--mj-status-error); }
+        .mj-voice-picker__switch-track::after {
+            content: ''; position: absolute; top: 2px; left: 2px;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: var(--mj-bg-surface); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+            transition: transform 150ms ease;
+        }
+        .mj-voice-picker__switch input:checked + .mj-voice-picker__switch-track { background: var(--mj-brand-primary); }
+        .mj-voice-picker__switch input:checked + .mj-voice-picker__switch-track::after { transform: translateX(16px); }
+        .mj-voice-picker__switch input:focus-visible + .mj-voice-picker__switch-track {
+            outline: 2px solid var(--mj-border-focus); outline-offset: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .mj-voice-picker__switch-track, .mj-voice-picker__switch-track::after { transition: none; }
+        }
         .mj-voice-picker__footer {
             display: flex; align-items: center; gap: 8px;
             padding: 10px 12px;
