@@ -1368,21 +1368,36 @@ The `databaseSettings.connectionPool` block above governs the **runtime MJAPI** 
 module.exports = {
   // ... other top-level codegen-lib config (dbHost, codeGenLogin, etc.)
   codegenPool: {
-    max: 10,                    // Max pool connections
+    // PG-only today (mssql doesn't honor these from this block yet)
+    max: 20,                    // Max pool connections
     min: 2,                     // Min idle connections kept open
     idleTimeoutMillis: 30000,   // Close idle connections after this many ms
     connectionTimeoutMillis: 30000, // New-connection acquisition timeout
-    statementTimeoutMs: 120000,     // Per-statement timeout (ms). SQL Server: mssql requestTimeout. PostgreSQL: statement_timeout GUC.
+    ssl: false,                 // PG SSL (default false — matches the pre-refactor inline pool)
+
+    // Cross-platform (both providers honor it)
+    statementTimeoutMs: 120000, // Per-statement timeout (ms)
   },
 };
 ```
 
-All five knobs are **optional** — when omitted the underlying driver defaults apply (`mssql`: max 10; `pg`'s `PGConnectionManager`: max 20, min 2). This matches the historical CodeGen behavior, so adding the block is opt-in tuning, not a required change.
+**Per-provider applicability** — not all fields apply to both providers today:
+
+| Field | SQL Server | PostgreSQL |
+|---|---|---|
+| `statementTimeoutMs` | ✅ mssql `requestTimeout` | ✅ libpq `-c statement_timeout` |
+| `max` / `min` / `idleTimeoutMillis` / `connectionTimeoutMillis` | ❌ ignored | ✅ `pg.Pool` config |
+| `ssl` | ❌ ignored (SQL Server uses `dbTrustServerCertificate` + mssql's own SSL) | ✅ `pg.Pool` ssl |
+
+The PG-only pool-sizing knobs reflect the asymmetry between mssql and pg.Pool configurability today; they'll converge in a follow-up.
+
+All fields are **optional** — when omitted, each driver's own defaults apply (mssql: 10 max + `requestTimeout` 120000; `pg.Pool`: 20 max, 2 min, SSL off in codegen). This matches the historical CodeGen behavior, so adding the block is opt-in tuning, not a required change.
 
 ### Behavior
 - **Lazy + module-cached pool**: both `MSSQLConnection()` (SQL Server) and `PGConnection()` (PostgreSQL) build their config and open the pool on first call, then cache the pool at the module level so repeated CodeGen operations within a single process reuse the same pool. The config is built **after** `initializeConfig()` runs, so config values from `mj.config.cjs` / `.env` are picked up correctly (the previous module-load-time destructure produced empty values when callers did `await import('@memberjunction/codegen-lib')` before `initializeConfig()`).
 - **Platform dispatch via factory**: `RunCodeGenBase.setupDataSource()` resolves the concrete `CodeGenDatabaseProvider` via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)` and calls its `SetupDataSource()` method. Adding a new platform is `@RegisterClass(CodeGenDatabaseProvider, 'newplatform')` on the new provider class — no orchestrator changes.
-- **`statementTimeoutMs`** is the cross-platform per-statement timeout. On SQL Server it maps to the mssql pool's `requestTimeout` (and takes precedence over the legacy top-level `dbRequestTimeout` / `MJ_CODEGEN_REQUEST_TIMEOUT` when both are set). On PostgreSQL it is applied as the `statement_timeout` GUC on every newly checked-out client (PG's `pg.Pool` has no pool-wide request-timeout knob equivalent to mssql, so we hook the pool's `connect` event). When unset, each driver applies its own default (mssql: 120000ms; PG: no statement timeout).
+- **`statementTimeoutMs`** is the cross-platform per-statement timeout. On SQL Server it maps to the mssql pool's `requestTimeout` (and takes precedence over the legacy top-level `dbRequestTimeout` / `MJ_CODEGEN_REQUEST_TIMEOUT` when both are set). On PostgreSQL it is carried via the libpq `-c statement_timeout=<ms>` startup option, so the server applies it from connection #1 — including the verify-SELECT-1 connection that `PGConnectionManager.Initialize()` opens. When unset, each driver applies its own default (mssql: 120000ms; PG: no statement timeout).
+- **`ssl` (PostgreSQL only)**: defaults to `false` to preserve the pre-multi-provider-refactor inline `pg.Pool` behavior (no SSL key passed → pg default OFF), so local/non-SSL codegen runs against PostgreSQL aren't broken by `PGConnectionManager`'s production-environment SSL auto-default. Set explicitly when the target Postgres requires SSL.
 
 ### CodeGen Environment Variables
 

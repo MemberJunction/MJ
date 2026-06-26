@@ -24,7 +24,7 @@ import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
 import { RemoteOperationGeneratorBase } from './Misc/remote_operations_codegen';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
-import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult } from './Database/codeGenDatabaseProvider';
+import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, resolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -85,18 +85,7 @@ export class RunCodeGenBase {
    * lookup, so we disambiguate by constructor identity.
    */
   public async setupDataSource(): Promise<DataSourceResult> {
-    const platform = dbPlatform();
-    const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-      CodeGenDatabaseProvider,
-      platform,
-    );
-    if (!provider || provider.constructor === CodeGenDatabaseProvider) {
-      throw new Error(
-        `CodeGen database provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
-        `provider class is registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`,
-      );
-    }
-    return provider.SetupDataSource();
+    return resolveCodeGenDatabaseProvider(dbPlatform()).SetupDataSource();
   }
 
   /**

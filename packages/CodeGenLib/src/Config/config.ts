@@ -559,37 +559,59 @@ const configInfoSchema = z.object({
    */
   dbRequestTimeout: z.coerce.number().int().positive().optional(),
   /**
-   * Optional CodeGen-time database connection pool configuration. Applies
-   * to both `MSSQLConnection()` (SQL Server) and `PGConnection()` (PostgreSQL).
-   * When omitted, the underlying driver defaults are used (mssql: 10 max;
-   * pg.Pool: 10 max via `PGConnectionManager`'s defaults), which is what
-   * CodeGen has historically used.
+   * Optional CodeGen-time database connection pool configuration.
+   *
+   * **Per-provider applicability** — not all fields apply to both providers
+   * today:
+   *
+   * | Field | SQL Server | PostgreSQL |
+   * |---|---|---|
+   * | `statementTimeoutMs` | ✅ mssql `requestTimeout` | ✅ libpq `-c statement_timeout` |
+   * | `max` / `min` / `idleTimeoutMillis` / `connectionTimeoutMillis` | ❌ ignored | ✅ `pg.Pool` config |
+   * | `ssl` | ❌ ignored (SQL Server uses `dbTrustServerCertificate` + mssql's own SSL) | ✅ `pg.Pool` ssl |
+   *
+   * The PG-only pool-sizing knobs reflect the asymmetry between mssql and pg.Pool
+   * configurability today; they'll converge in a follow-up. When omitted, each
+   * driver's own defaults apply (mssql: 10 max; `PGConnectionManager`: 20 max, 2 min).
    *
    * For runtime (MJAPI) pool settings, see
    * `@memberjunction/server`'s `databaseSettings.connectionPool` — that is
    * a separate, long-lived service pool and is independent of CodeGen.
    */
   codegenPool: z.object({
-    /** Max pool connections. mssql / pg.Pool defaults to 10 when unset. */
+    /** **PostgreSQL only** today. Max pool connections; `pg.Pool` default 20 when unset. */
     max: z.coerce.number().int().positive().optional(),
-    /** Min idle connections kept open. pg.Pool default 0; mssql package has no min. */
+    /** **PostgreSQL only** today. Min idle connections kept open; `pg.Pool` default 2. */
     min: z.coerce.number().int().nonnegative().optional(),
-    /** Idle timeout in ms before a pooled connection is closed. */
+    /** **PostgreSQL only** today. Idle timeout in ms before a pooled connection is closed. */
     idleTimeoutMillis: z.coerce.number().int().positive().optional(),
-    /** New-connection acquisition timeout in ms. */
+    /** **PostgreSQL only** today. New-connection acquisition timeout in ms. */
     connectionTimeoutMillis: z.coerce.number().int().positive().optional(),
     /**
-     * Per-statement timeout in milliseconds, applied to both providers:
+     * Per-statement timeout in milliseconds, applied to **both providers**:
      *
      * - **SQL Server**: mapped to mssql's `requestTimeout` on the pool config.
      *   Takes precedence over the legacy top-level {@link dbRequestTimeout} when both
      *   are set; falls back to `dbRequestTimeout` (and ultimately mssql's 120000ms
      *   default) when unset.
-     * - **PostgreSQL**: applied as the per-connection `statement_timeout` GUC via
-     *   `SET statement_timeout = <ms>` on every newly pooled connection. When unset,
+     * - **PostgreSQL**: applied via the libpq startup option `-c statement_timeout=<ms>`
+     *   (carried in pg's connection startup packet), so every backend — including the
+     *   verify-SELECT-1 connection — honors it from the very first query. When unset,
      *   PostgreSQL applies no statement timeout (its default).
      */
     statementTimeoutMs: z.coerce.number().int().positive().optional(),
+    /**
+     * **PostgreSQL only**. SSL configuration for the codegen pool. Defaults to `false`
+     * (matches the pre-multi-provider-refactor inline `pg.Pool` behavior that ran
+     * codegen plaintext locally). Set to `true` for managed PostgreSQL with default
+     * trust (e.g. AWS Aurora `rds.force_ssl=1`); pass an object for full control
+     * (e.g. `{ rejectUnauthorized: true, ca: <CA bundle> }`).
+     *
+     * Note: the runtime MJAPI pool (`databaseSettings.connectionPool`) has its own
+     * SSL handling that defaults ON in `NODE_ENV=production` — this field only
+     * governs the short-lived codegen pool.
+     */
+    ssl: z.union([z.boolean(), z.record(z.string(), z.unknown())]).optional(),
   }).optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
@@ -610,6 +632,20 @@ const configInfoSchema = z.object({
  */
 const _DEFAULT_DB_PLATFORM = resolveDbPlatformFromEnv() ?? 'sqlserver';
 const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
+
+/**
+ * Tracks which `<pgEnv>:<ssEnv>` precedence pairs have already emitted a
+ * `console.warn`. Both {@link _resolveConnEnv} (runs at module load) and
+ * {@link applyPlatformDependentEnvVars} (runs after the user config merge,
+ * plus again on every `initializeConfig()` call) can detect the same env-var
+ * divergence and would otherwise warn 2–3 times for one config issue. The
+ * set lives at module scope so it survives across both helpers' invocations
+ * within the same process.
+ *
+ * Exported solely so tests can reset the dedup state between cases — production
+ * code never mutates this set directly.
+ */
+export const _warnedEnvPrecedencePairs = new Set<string>();
 /**
  * Resolve a connection field from PG_*-prefixed env vars when `dbPlatform`
  * defaults to PostgreSQL, falling back to the SQL-Server-style env var name
@@ -625,7 +661,15 @@ const _IS_PG_DEFAULT = _DEFAULT_DB_PLATFORM === 'postgresql';
 function _resolveConnEnv(pgName: string, ssName: string, fallback: string): string {
   const pgVal = _IS_PG_DEFAULT ? process.env[pgName] : undefined;
   const ssVal = process.env[ssName];
-  if (_IS_PG_DEFAULT && pgVal !== undefined && ssVal !== undefined && pgVal !== ssVal) {
+  const pairKey = `${pgName}:${ssName}`;
+  if (
+    _IS_PG_DEFAULT &&
+    pgVal !== undefined &&
+    ssVal !== undefined &&
+    pgVal !== ssVal &&
+    !_warnedEnvPrecedencePairs.has(pairKey)
+  ) {
+    _warnedEnvPrecedencePairs.add(pairKey);
     // eslint-disable-next-line no-console
     console.warn(
       `[codegen-lib] ${pgName}=${pgVal} takes precedence over ${ssName}=${ssVal} on a PostgreSQL-default config. ` +
@@ -635,11 +679,71 @@ function _resolveConnEnv(pgName: string, ssName: string, fallback: string): stri
   return pgVal ?? ssVal ?? fallback;
 }
 
+/**
+ * Apply PG_*-prefixed env-var precedence *after* the user's `mj.config.cjs` has
+ * been merged into the config. Closes a gap left by {@link _resolveConnEnv}:
+ * that helper is locked to `_IS_PG_DEFAULT` (env-only), so a user who sets
+ * `dbPlatform: 'postgresql'` in `mj.config.cjs` (no `DB_PLATFORM` env var) but
+ * supplies the host via `PG_HOST` would have `PG_HOST` silently ignored and
+ * connect to `localhost`. The pre-refactor code used
+ * `process.env.PG_HOST ?? configInfo.dbHost` unconditionally inside
+ * `setupPostgreSQLDataSource()`, so PG_* always won — this helper restores that
+ * behavior at the config layer.
+ *
+ * Mutates `config` in place. PG_* env vars only override fields the user did NOT
+ * explicitly set in `mj.config.cjs` (passed via `userConfig`); explicit user
+ * values always win. A `console.warn` records the precedence whenever a PG_*
+ * env var and its DB_* counterpart are both set and differ.
+ */
+export function applyPlatformDependentEnvVars(config: ConfigInfo, userConfig: Partial<ConfigInfo>): void {
+  if (config.dbPlatform !== 'postgresql') return;
+
+  const overrides: ReadonlyArray<{
+    readonly pgEnv: string;
+    readonly ssEnv: string;
+    readonly userValue: unknown;
+    readonly apply: (value: string) => void;
+  }> = [
+    { pgEnv: 'PG_HOST',     ssEnv: 'DB_HOST',                userValue: userConfig.dbHost,          apply: (v) => { config.dbHost = v; } },
+    { pgEnv: 'PG_PORT',     ssEnv: 'DB_PORT',                userValue: userConfig.dbPort,          apply: (v) => { const parsed = parseInt(v, 10); if (!isNaN(parsed)) config.dbPort = parsed; } },
+    { pgEnv: 'PG_DATABASE', ssEnv: 'DB_DATABASE',            userValue: userConfig.dbDatabase,      apply: (v) => { config.dbDatabase = v; } },
+    { pgEnv: 'PG_USERNAME', ssEnv: 'CODEGEN_DB_USERNAME',    userValue: userConfig.codeGenLogin,    apply: (v) => { config.codeGenLogin = v; } },
+    { pgEnv: 'PG_PASSWORD', ssEnv: 'CODEGEN_DB_PASSWORD',    userValue: userConfig.codeGenPassword, apply: (v) => { config.codeGenPassword = v; } },
+  ];
+
+  for (const { pgEnv, ssEnv, userValue, apply } of overrides) {
+    const pgVal = process.env[pgEnv];
+    if (pgVal === undefined) continue;
+    if (userValue !== undefined) continue;
+    const ssVal = process.env[ssEnv];
+    const pairKey = `${pgEnv}:${ssEnv}`;
+    if (ssVal !== undefined && ssVal !== pgVal && !_warnedEnvPrecedencePairs.has(pairKey)) {
+      _warnedEnvPrecedencePairs.add(pairKey);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[codegen-lib] ${pgEnv}=${pgVal} takes precedence over ${ssEnv}=${ssVal} on a PostgreSQL config. ` +
+          `Set only one to silence this warning, or set them to the same value.`,
+      );
+    }
+    apply(pgVal);
+  }
+}
+
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   // Database connection settings (from environment variables). For PostgreSQL,
   // the PG_HOST / PG_PORT / PG_DATABASE / PG_USERNAME / PG_PASSWORD env vars
   // take precedence over their DB_* / CODEGEN_DB_* counterparts so existing
   // PG-targeted .env files keep working without changes.
+  //
+  // KEEP IN SYNC: the same five PG_*/DB_*/CODEGEN_DB_* pairs are re-applied
+  // post-merge by `applyPlatformDependentEnvVars()` (below). When the user
+  // sets `dbPlatform: 'postgresql'` in `mj.config.cjs` (no env var),
+  // `_IS_PG_DEFAULT` is false here so the PG_* arg of `_resolveConnEnv` is
+  // ignored — `applyPlatformDependentEnvVars` runs after the user config
+  // is merged and re-applies the PG_* precedence. If you add a new
+  // PG_*/DB_* pair, update BOTH the `_resolveConnEnv(...)` call on the
+  // appropriate field below AND the `overrides` table in
+  // `applyPlatformDependentEnvVars`.
   dbPlatform: _DEFAULT_DB_PLATFORM,
   dbHost: _resolveConnEnv('PG_HOST', 'DB_HOST', 'localhost'),
   dbPort: parseInt(_resolveConnEnv('PG_PORT', 'DB_PORT', _IS_PG_DEFAULT ? '5432' : '1433'), 10),
@@ -816,6 +920,14 @@ const configParsing = configInfoSchema.safeParse(mergedConfig);
 //   LogError('Error parsing config file', null, JSON.stringify(configParsing.error.issues, null, 2));
 // }
 
+// Re-apply PG_* env precedence now that the user's `mj.config.cjs` has been
+// merged in — handles the case where `dbPlatform: 'postgresql'` was set in the
+// config file (not via env), which `_resolveConnEnv()` could not have known
+// about at the moment it built DEFAULT_CODEGEN_CONFIG.
+if (configParsing.data) {
+  applyPlatformDependentEnvVars(configParsing.data, configSearchResult?.config ?? {});
+}
+
 /**
  * Parsed configuration object with fallback to empty object if parsing fails
  */
@@ -854,6 +966,12 @@ export function initializeConfig(cwd: string): ConfigInfo {
   if (config === undefined) {
     throw new Error('No configuration found');
   }
+
+  // Re-apply PG_* env precedence now that the user's `mj.config.cjs` has been
+  // merged in — handles the case where `dbPlatform: 'postgresql'` was set in
+  // the config file (not via env), which `_resolveConnEnv()` could not have
+  // known about at the moment it built DEFAULT_CODEGEN_CONFIG.
+  applyPlatformDependentEnvVars(config, userConfigResult?.config ?? {});
 
   // Update the module-level configInfo so that helpers like
   // resolveEntityPackageName() and getExternalEntitySchemas() see the
