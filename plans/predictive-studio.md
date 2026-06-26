@@ -77,7 +77,7 @@ flowchart TB
     AGENT["Model Development Agent<br/>Remote Ops + Actions"] -.drives.-> FEAT & MODEL & INFER
 ```
 
-Everything server-side capability is exposed as **Remote Operations** (Manual mode) + thin **Actions** so agents/Skip/Query Builder inherit it.
+**Every** server-side capability — train, score, run-feature-pipeline, session start/control, AND the experiment-wave execution — is exposed as a **Remote Operation** (Manual mode) + a thin **Action** so agents/Skip/Query Builder inherit it. See `guides/REMOTE_OPERATIONS_GUIDE.md`; the experiment loop's wave execution composes onto Record Set Processing per `guides/RECORD_SET_PROCESSING_GUIDE.md`.
 
 ### 2.1 What composes onto existing substrates (grounded findings)
 
@@ -89,7 +89,8 @@ Everything server-side capability is exposed as **Remote Operations** (Manual mo
 | Embedding features | `EntityVectorSyncer`, `BaseEmbeddings` (local transformers.js `all-MiniLM-L6-v2` 384-dim + cloud), pgvector/Qdrant/Pinecone/SQL Server | featurization step that pulls persisted vectors |
 | External/virtual entities as feature sources | **#2449 External Data Sources (DONE)** — external DBs are first-class read-only entities via normal `RunView`/`RunQuery`/`Load` | nothing — works through RunView |
 | Materialized scored columns (population-wide, indexed) | **#2770 Query/Entity Materialization (DESIGN DOC ONLY)** — materialized output = read-only `VirtualEntity`, refreshed via `ScheduledJobEngine` | run inference at refresh; write prediction columns (sequenced after #2770 lands) |
-| Typed server capability invoked by browser + agent | **Remote Operations** (`BaseRemotableOperation`, Manual mode, `LongRunning` progress) | TrainModel / ScoreRecordSet / RunFeaturePipeline / experiment control ops |
+| Budgeted, bounded, resumable execution of the experiment loop (each wave of iterations) | **Record Set Processing** (`packages/RecordSetProcessor`): bounded concurrency, token-bucket rate-limit, circuit breaker, budget gate, pause/cancel handshake, resume, per-record isolation, progress, audit (`MJ: Process Runs`) | the **adaptive layer above RSP** — generate a wave → RSP-process it → evaluate/prune/update leaderboard → generate the next wave |
+| Typed server capability invoked by browser + agent | **Remote Operations** (`BaseRemotableOperation`, Manual mode, `LongRunning` progress) | TrainModel / ScoreRecordSet / RunFeaturePipeline / session start + control / experiment-wave execution ops |
 | Plan-then-execute agent | **Agent Manager** pattern (Loop agent, strongly-typed `AgentSpec` payload, sub-agents refine spec, Architect validates, Builder executes deterministically) | the Model Development Agent |
 | Rich result artifact in chat | **Artifacts** (`MJ: Artifact Types` + `@RegisterClass(BaseArtifactViewerPluginComponent, …)` viewer plugins, `NavigationRequest` drill-through) | a new ML-experiment-results artifact type + viewer |
 | Reasoning inputs | approved **MJ: Queries**, **Agent Notes** memory, **DBAutoDoc** entity/field descriptions, existing approved ML Models | wire as agent context |
@@ -145,15 +146,17 @@ New core entities. Names follow MJ "MJ: " prefix convention. CodeGen generates t
 erDiagram
     ML_Algorithms ||--o{ ML_Algorithm_Use_Case_Rankings : ranked
     ML_Algorithm_Use_Cases ||--o{ ML_Algorithm_Use_Case_Rankings : scored
-    ML_Algorithms ||--o{ Training_Pipelines : uses
-    Training_Pipelines ||--o{ Training_Runs : produces
-    Training_Runs ||--o| ML_Models : yields
-    Training_Pipelines ||--o{ ML_Models : versions
-    Experiment_Sessions ||--o{ Training_Runs : groups
-    ML_Models ||--o{ Model_Scoring_Bindings : scoredVia
-    Model_Scoring_Bindings }o--|| Record_Processes : runs
+    ML_Algorithms ||--o{ ML_Training_Pipelines : uses
+    ML_Training_Pipelines ||--o{ ML_Training_Runs : produces
+    ML_Training_Runs ||--o| ML_Models : yields
+    ML_Training_Pipelines ||--o{ ML_Models : versions
+    Experiments ||--o{ Experiment_Sessions : executions
+    Experiment_Sessions ||--o{ Experiment_Session_Iterations : attempts
+    Experiment_Session_Iterations ||--o| ML_Training_Runs : mlLeaf
+    ML_Models ||--o{ ML_Model_Scoring_Bindings : scoredVia
+    ML_Model_Scoring_Bindings }o--|| Record_Processes : runs
 ```
-_(Entity names shown without the "MJ: " prefix for diagram clarity; `Record_Processes` is the existing Record Set Processing entity.)_
+_(Entity names shown without the "MJ: " prefix for diagram clarity; `Record_Processes` is the existing Record Set Processing entity. `Experiments`, `Experiment_Sessions`, and `Experiment_Session_Iterations` are GENERIC, ML-agnostic, reusable experimentation primitives — Predictive Studio is the first consumer; `ML_Training_Runs` is the ML leaf that hangs off an iteration.)_
 
 ### 4.1 `MJ: ML Algorithms` (catalog)
 | Field | Purpose |
@@ -201,7 +204,7 @@ Seed matrix (RecommendationLevel) — the rationale text per cell is the real pa
 | Embedding/LLM-feature-heavy | Strong | Strong | Viable | Viable | Viable | **Primary** |
 | Small dataset | Viable | Viable | **Primary** | Strong | **Primary** | Weak |
 
-### 4.2 `MJ: Training Pipelines` (declarative definition)
+### 4.2 `MJ: ML Training Pipelines` (declarative definition)
 | Field | Purpose |
 |---|---|
 | ID, Name, Description, Version, Status | Identity/lifecycle (`Draft`/`Published`/`Archived`) |
@@ -222,7 +225,7 @@ Seed matrix (RecommendationLevel) — the rationale text per cell is the real pa
 > **Distinct from `MJ: AI Models`.** `MJ: AI Models` is the catalog of off-the-shelf foundation models we *call* (LLMs, embeddings, image-gen), tied to vendors + driver classes + a vendor-API inference path. `MJ: ML Models` are predictive models we *train* from client data — produced by a training run, with a serialized artifact (MJStorage), fitted preprocessing, and the **sidecar** inference path. An ML Model may *reference* an AI Model in its `Lineage` (e.g. the embedding model used to build features) — a pointer, not membership. **[O]** Future option: expose an ML Model *as* an `MJ: AI Models` row of a "Predictive" type so the unified inference layer can route to it; out of scope for v1.
 | Field | Purpose |
 |---|---|
-| ID, PipelineID, Version | Identity + lineage |
+| ID, PipelineID, Version | Identity + lineage (`PipelineID` → ML Training Pipelines) |
 | AlgorithmID | algorithm used |
 | ArtifactID / Artifact | serialized model — **File** content category, stored in MJStorage (`MJ: Files`); see §11 |
 | FittedPreprocessing | serialized fitted transform params (means/stds/vocabularies/bin edges) — **the anti-skew payload** |
@@ -235,38 +238,67 @@ Seed matrix (RecommendationLevel) — the rationale text per cell is the real pa
 | TrainedAt, TrainingDurationSec, TrainingRowCount | provenance |
 | Status | `Draft`/`Validated`/`Published`/`Archived` |
 
-### 4.4 `MJ: Training Runs` (experiment record)
-**[D] Instrument every run.** Substrate the agent loop reasons over.
+### 4.4 `MJ: ML Training Runs` (ML leaf of an iteration / standalone train)
+**[D] Instrument every run.** The ML-specific detail of a training attempt — the leaf that hangs off a generic `Experiment Session Iteration` (§4.5.3) when part of an agent-driven search, OR stands alone (`ExperimentSessionIterationID` NULL) for a one-off manual train. The generic search-level accounting (leaderboard `Score`, rationale, the driving agent run) lives on the **parent iteration**; this row keeps the ML execution detail.
 | Field | Purpose |
 |---|---|
-| ID, PipelineID, ResultingModelID | identity + produced model (nullable — a run may be pruned/failed and produce no model) |
-| ExperimentSessionID | groups runs in one agent-driven search (§8) |
+| ID, PipelineID, ResultingModelID | identity + produced model (`PipelineID` → ML Training Pipelines; `ResultingModelID` nullable — a run may be pruned/failed and produce no model) |
+| ExperimentSessionIterationID | FK → MJ: Experiment Session Iterations — **nullable**; NULL for standalone/manual training outside a session (§8) |
 | FeaturesUsed, AlgorithmID, Hyperparameters | configuration |
-| ValidationResults | all metrics, per-fold |
-| Status, StartedAt, CompletedAt | accounting |
+| ValidationResults | the full metric blob, per-fold (the parent iteration's `Score` is the single normalized leaderboard number) |
+| Status, StartedAt, CompletedAt | accounting (`Pending`/`Running`/`Completed`/`Failed`/`Pruned`) |
 | ComputeCost, TokensUsed | budget enforcement (§8.4) |
-| Notes | why this run was tried (agent rationale) |
+| Notes | observations about this run |
 
-### 4.5 `MJ: Experiment Sessions`
+### 4.5 Generic experimentation primitives (`Experiment` → `ExperimentSession` → `ExperimentSessionIteration`)
+**[D]** `Experiment`, `ExperimentSession`, and `ExperimentSessionIteration` are deliberately **GENERIC, ML-agnostic, reusable** primitives: a budgeted, plan-then-execute-then-refine agentic search that groups N iterations with a leaderboard, a human approval gate, and an owning agent run. Predictive Studio is the **first consumer** (the ML leaf is `ML Training Runs`, §4.4), but the same three tables are intended to back prompt-optimization, agent-config search, and eval sweeps — each with its own leaf run table FK'ing into `ExperimentSessionIteration`. Hierarchy: **Experiment → ExperimentSession → ExperimentSessionIteration → (ML Training Run leaf)**.
+
+#### 4.5.1 `MJ: Experiments` (durable, reusable experiment definition)
+The durable "what we are trying to optimize," independent of any single execution. Re-running over time (e.g. monthly retrain) creates **new sessions under the same Experiment**, enabling comparison over time.
 | Field | Purpose |
 |---|---|
-| ID, Name, PipelineID | identity |
-| Goal | natural-language objective + target metric (e.g. "maximize holdout AUC for renewal") |
-| Budget | JSON: max compute-cost / max runs / max wallclock |
-| Status | `Planning`/`AwaitingApproval`/`Running`/`Paused`/`Completed`/`Cancelled` |
-| PlanSpec | the approved `ModelingPlanSpec` (§9.2) JSON |
-| Leaderboard | JSON snapshot of best runs (also derivable from Training Runs) |
-| AgentRunID | FK → MJ: AI Agent Runs (the Model Development Agent run that owns this session) |
+| ID, Name, Description | identity |
+| ExperimentType | open NVARCHAR discriminator naming the consumer — **no CHECK** so new consumers add types without a migration (e.g. `MLModelSearch`, `PromptOptimization`, `AgentConfigSearch`) |
+| Goal | natural-language objective (e.g. "maximize holdout AUC for renewal") |
+| TargetMetric | the metric optimized (`AUC`/`F1`/`RMSE`…) — the normalized number iterations are scored/ranked by |
+| PlanSpecTemplate | optional JSON reusable plan template seeding new sessions' `PlanSpec` (consumer-specific shape; opaque to the substrate) |
+| Status | `Active`/`Archived` |
 
-### 4.6 `MJ: Model Scoring Bindings` (lineage for scoring/retraining)
-Binds a ML Model to where it scores, so we can detect staleness and drive retraining (§10/§12 maintenance).
+#### 4.5.2 `MJ: Experiment Sessions` (one execution of an Experiment)
+| Field | Purpose |
+|---|---|
+| ID, ExperimentID, Name | identity (`ExperimentID` → MJ: Experiments) |
+| Goal | optional per-session objective override (defaults to the parent Experiment's `Goal`) |
+| Budget | JSON: max compute-cost / max iterations / max wallclock |
+| Status | `Planning`/`AwaitingApproval`/`Running`/`Paused`/`Completed`/`Cancelled` |
+| PlanSpec | the approved plan the orchestrator executes — for Predictive Studio this is the `ModelingPlanSpec` (§9.2) JSON; opaque to the generic substrate |
+| Leaderboard | JSON snapshot of best iterations (also derivable from `Experiment Session Iteration` scores) |
+| AgentRunID | FK → MJ: AI Agent Runs (the run that owns/drives this session) |
+
+> **Note:** the old `PipelineID` column is **dropped** — the session is generic and no longer carries an ML FK (the pipeline is derivable from the runs).
+
+#### 4.5.3 `MJ: Experiment Session Iterations` (one attempt within a session)
+The polymorphic anchor and the leaderboard unit — the cross-cutting "attempt" accounting every experiment type shares.
+| Field | Purpose |
+|---|---|
+| ID, ExperimentSessionID | identity (`ExperimentSessionID` → MJ: Experiment Sessions) |
+| Sequence | int order within the session |
+| Label | optional human-readable label (e.g. "XGBoost + engagement features") |
+| Status | `Pending`/`Running`/`Completed`/`Failed`/`Pruned` |
+| Score | DECIMAL — the **normalized leaderboard metric** (the Experiment's `TargetMetric`) |
+| ComputeCost, TokensUsed | budget enforcement (§8.4) |
+| Rationale | why this iteration was tried (agent reasoning) + observations |
+| AIAgentRunID | FK → MJ: AI Agent Runs — **nullable**; the agent run that executed this iteration (NULL when executed by deterministic code) |
+
+### 4.6 `MJ: ML Model Scoring Bindings` (lineage for scoring/retraining)
+Binds an ML Model to where it scores, so we can detect staleness and drive retraining (§10/§12 maintenance).
 | Field | Purpose |
 |---|---|
 | ID, MLModelID | which model |
 | RecordProcessID | the Record Process that runs the scoring (the ML inference work) |
 | TargetEntityID / TargetColumn | where scores are written (when write-back/materialized) |
 | Mode | `OnDemand`/`Scheduled`/`Materialized` |
-| MaterializedResultID | FK → MJ: Materialized Results (#2770), when materialized |
+| MaterializedResultID | **soft** reference to MJ: Materialized Results (#2770), when materialized (not a FK until that table exists) |
 | LastScoredAt, LastRowCount | monitoring |
 
 ---
@@ -355,11 +387,17 @@ select features → choose algorithm → split → train → evaluate on held-ou
 ### 8.2 Validation discipline
 **[D] Be opinionated; don't ship broken models.** Default single train/test split with overfitting detection; optional k-fold and holdout. **[D] A locked final holdout** the search never sees, scored exactly once on the promoted model → `MLModel.HoldoutMetrics` is the honest number (prevents leaderboard optimism / multiple-comparisons overfitting). Deterministic scoring (AUC/F1/accuracy/RMSE) drives the loop.
 
-### 8.3 Experiment engine
-`ExperimentSession` groups runs. The engine: maintains a **leaderboard**, **parallelizes** experiments (bounded), **prunes** unpromising branches, focuses compute on promising directions, respects **budget**. Runs minutes→hours→days per budget.
+### 8.3 Experiment engine — generic primitive + RSP-wave execution
+A generic **`Experiment`** definition spawns an **`ExperimentSession`** per execution; each session groups **`ExperimentSessionIteration`** attempts (the leaderboard unit), and each iteration's ML detail is its `ML Training Run` leaf (§4.4/§4.5). The engine maintains a **leaderboard** (ranked by iteration `Score`), **prunes** unpromising branches, focuses compute on promising directions, and respects **budget**. Runs minutes→hours→days per budget.
+
+**[D] The execution loop runs iterations in WAVES through Record Set Processing.** Rather than hand-rolling concurrency/budget/pause, the orchestrator composes onto **Record Set Processing (RSP)**, which already provides bounded concurrency, token-bucket rate-limiting, circuit breaker, budget gate, pause/cancel handshake, resume, per-record isolation, progress, and audit (`MJ: Process Runs`). The **adaptive** part sits ABOVE RSP:
+
+> `generate wave → RSP-process the wave → evaluate / prune / update leaderboard → generate next wave`
+
+An `ExperimentSession` may spawn **one-or-many Process Runs** (one per wave); the two are kept distinct (no hard FK in v1). Because scoring already composes onto RSP (`MLModelInferenceProcessor`, §10), the experiment loop composing onto RSP too makes the feature coherent — one batching/budget/audit substrate everywhere.
 
 ### 8.4 Budgets
-**[D] Bounded autonomy.** Explicit budget (max compute-cost / max runs / max wallclock). `TrainingRun.ComputeCost` + `ExperimentSession.Budget` make it enforceable/auditable. The engine checks budget between runs and pauses cleanly.
+**[D] Bounded autonomy.** Explicit budget (max compute-cost / max iterations / max wallclock). `ExperimentSessionIteration.ComputeCost`/`TokensUsed` + `ExperimentSession.Budget` make it enforceable/auditable; RSP's budget gate enforces it within each wave, and the orchestrator checks the session budget between waves and pauses cleanly.
 
 ### 8.5 DBAutoDoc as the agent's map
 DBAutoDoc's entity/field descriptions give the data-scout phase a high-quality machine-readable map of the data terrain to reason about what's predictive.
@@ -379,7 +417,7 @@ Mirrors **Agent Manager**: collaborate with the user to build a strongly-typed p
   - **Data Scout** — studies source data using **approved MJ: Queries** (ground truth), **DBAutoDoc** descriptions, **Agent Notes** (prior learnings), and **existing approved ML Models**; proposes candidate sources/features; flags leakage risks (writes `payload.CandidateSources`, `payload.CandidateFeatures`, `payload.LeakageNotes`).
   - **Experiment Designer** — proposes a ranked set of experiments (feature combos × algorithms × hyperparameters) **with rationale**, a validation strategy, and a **proposed budget** (writes `payload.ProposedExperiments`, `payload.ValidationStrategy`, `payload.ProposedBudget`).
 - **Plan approval gate:** the orchestrator emits the plan as an artifact + a `responseForm` / `Chat` step; the **user approves/edits** before execution. (Agent Manager's Requirements→Designer→Architect refinement pattern.)
-- **Execution phase (deterministic-heavy):** once approved, a **deterministic `ExperimentOrchestrator`** (plain TS, like Agent Manager's Builder) executes the plan: calls the Train/Score Remote Ops/Actions, records `Training Runs`, updates the leaderboard, prunes, enforces budget. **Internal LLM inference is used only for choices** ("given these results, what feature combo to try next") — the bulk is deterministic loop/compare/prune code.
+- **Execution phase (deterministic-heavy):** once approved, a **deterministic `ExperimentOrchestrator`** (plain TS, like Agent Manager's Builder) executes the plan as **waves through Record Set Processing** (§8.3): calls the Train/Score Remote Ops/Actions per iteration, records each attempt as an `Experiment Session Iteration` (+ its `ML Training Run` leaf), updates the leaderboard from iteration `Score`s, prunes, and lets RSP enforce concurrency/budget within each wave. **Internal LLM inference is used only for choices** ("given these results, what feature combo to try next" → the next wave) — the bulk is deterministic loop/compare/prune code.
 - **Reporting phase (LLM):** authors a summary → the **ML Experiment Results artifact** (§9.4) with clickable drill-through to the winning `ML Models`.
 - **Memory:** writes learnings as Agent Notes scoped **largely to itself** (Agent + User), e.g. "for churn on org X, gradient boosting + engagement features beat logistic regression" — these auto-inject into future runs and harden via the Memory Manager. Org-wide propagation is not an in-flight write; it only happens through the Memory Manager's hardening cycle.
 - **Semantic-layer contribution:** when the agent **authors a new MJ: Query** during data exploration, that Query is created with **`Status='Pending'`** (not Approved). It is *not* treated as ground truth until a human approves it — at which point it becomes part of the approved semantic layer for everyone. This keeps the agent productive (it can draft queries) without letting it silently expand the trusted ground-truth surface.
@@ -398,7 +436,7 @@ flowchart TB
     GATE -->|edits| PLAN
     GATE -->|approved| EXEC
     subgraph EXEC["Execution phase · deterministic"]
-        ORCH[ExperimentOrchestrator] --> RUNS["parallel train/score runs<br/>prune · budget-gate · leaderboard"]
+        ORCH[ExperimentOrchestrator] --> RUNS["waves through Record Set Processing<br/>iterations: train/score · prune · budget-gate · leaderboard"]
     end
     RUNS --> LEAK{"Leakage / dominance?"}
     LEAK -->|suspicious| SIGN["Warn in plain language<br/>block promotion → human sign-off"]
@@ -430,7 +468,7 @@ export interface ModelingPlanSpec {
   ValidationStrategy: { Strategy: 'train_test_split'|'kfold'|'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
   ProposedBudget: { MaxComputeCost?: number; MaxRuns?: number; MaxWallclockMinutes?: number };
   Approved?: boolean;                 // user gate
-  Leaderboard?: Array<{ TrainingRunID: string; Metric: number; ModelID?: string }>;  // execution-phase
+  Leaderboard?: Array<{ IterationID: string; Metric: number; ModelID?: string }>;  // execution-phase (one entry per Experiment Session Iteration)
 }
 ```
 
@@ -467,7 +505,7 @@ flowchart TB
 ```
 
 ### 10.2 Materialized prediction columns (after #2770)
-**[D] Defer dynamic per-query computed columns; run inference inside the offline materialization pipeline** (#2770). At refresh: join/denormalize across however many entities, assemble features, batch-score, write predictions as **physical columns** on the materialized `VirtualEntity`. Skip/Query Builder/reports/views query them like any table — fast, indexed, population-wide. Depends on #2770 landing; `MJ: Model Scoring Bindings.MaterializedResultID` links the two.
+**[D] Defer dynamic per-query computed columns; run inference inside the offline materialization pipeline** (#2770). At refresh: join/denormalize across however many entities, assemble features, batch-score, write predictions as **physical columns** on the materialized `VirtualEntity`. Skip/Query Builder/reports/views query them like any table — fast, indexed, population-wide. Depends on #2770 landing; `MJ: ML Model Scoring Bindings.MaterializedResultID` links the two.
 
 ### 10.3 Single + batch
 **[D]** Both supported (the sidecar doesn't care); single-record serves interactive agent needs, batch serves bulk/materialization.
@@ -481,7 +519,7 @@ flowchart TB
 ---
 
 ## 12. Maintenance (co-equal pillar)
-**[D] Maintenance is a named pillar, not an afterthought.** Via `MJ: Model Scoring Bindings`: staleness detection, scheduled re-scoring (tie to the materialization cadence), and **retraining triggers** (cadence / data-volume / drift). The Model Development Agent can schedule retraining ("retrain weekly on new data"), compare a retrained model's holdout metrics against the incumbent, and propose promotion. Drift surface **[O]**: how much per-prediction explanation to expose.
+**[D] Maintenance is a named pillar, not an afterthought.** Via `MJ: ML Model Scoring Bindings`: staleness detection, scheduled re-scoring (tie to the materialization cadence), and **retraining triggers** (cadence / data-volume / drift). The Model Development Agent can schedule retraining ("retrain weekly on new data"), compare a retrained model's holdout metrics against the incumbent, and propose promotion. Drift surface **[O]**: how much per-prediction explanation to expose.
 
 ---
 
@@ -505,7 +543,7 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 
 ### SP0 — Foundations: data model, packages, ops scaffolding
 - **PS-FND-1 — Create packages.** _deps: none._ Scaffold `@memberjunction/predictive-studio-core` (types: `ModelingPlanSpec`, feature-step specs, sidecar contract types), `@memberjunction/predictive-studio` (engine/orchestration/processors/ops), `@memberjunction/predictive-studio-sidecar` (Python). **AC:** packages build, vitest scaffolded (`scripts/scaffold-tests.mjs`). 
-- **PS-FND-2 — Migration: core entities.** _deps: PS-FND-1._ One migration in `migrations/v5/` creating `MJ: ML Algorithms`, `ML Algorithm Use Cases`, `ML Algorithm Use Case Rankings`, `Training Pipelines`, `ML Models`, `Training Runs`, `Experiment Sessions`, `Model Scoring Bindings` (+ `sp_addextendedproperty` on every column; consolidated ALTER/CREATE; hardcoded UUIDs; no `__mj_*`/FK indexes; UNIQUE on the rankings join). **AC:** migration runs clean on SQL Server; PG parity via pg-migrate skill.
+- **PS-FND-2 — Migration: core entities.** _deps: PS-FND-1._ One migration in `migrations/v5/` creating all **10** tables: `MJ: ML Algorithms`, `ML Algorithm Use Cases`, `ML Algorithm Use Case Rankings`, `ML Training Pipelines`, `ML Models`, the three GENERIC primitives `Experiments` / `Experiment Sessions` / `Experiment Session Iterations`, `ML Training Runs` (FK → `Experiment Session Iterations`, nullable), and `ML Model Scoring Bindings` (+ `sp_addextendedproperty` on every column; consolidated ALTER/CREATE; hardcoded UUIDs; no `__mj_*`/FK indexes; UNIQUE on the rankings join; open NVARCHAR `ExperimentType` with no CHECK; `MaterializedResultID` left as a soft reference, not a FK). **AC:** migration runs clean on SQL Server; PG parity via pg-migrate skill.
 - **PS-FND-3 — CodeGen.** _deps: PS-FND-2._ Run migration + CodeGen; generated entity subclasses + sprocs/views exist. **AC:** strongly-typed entity classes available; no `.Get()/.Set()` needed downstream.
 - **PS-FND-4 — Seed algorithm catalog + guidance.** _deps: PS-FND-3._ Metadata-seed (each its own dir + `.mj-sync.json`, `@lookup:` refs, `mj sync push` — NO SQL inserts): `metadata/ml-algorithms/.ml-algorithms.json` (6 algorithms + hyperparameter schemas), `metadata/ml-algorithm-use-cases/.ml-algorithm-use-cases.json` (the 7 use cases), and `metadata/ml-algorithm-use-case-rankings/.ml-algorithm-use-case-rankings.json` (the 6×7 ranking matrix with per-cell `RecommendationLevel` + `Rationale`). **AC:** catalog + use cases + rankings present; an agent/UI query returns ranked, rationale-bearing recommendations per use case.
 - **PS-FND-5 — Remote Operation metadata rows.** _deps: PS-FND-3._ Seed `MJ: Remote Operations` rows (GenerationType=`Manual`, Status=`Active`, `ExecutionMode='LongRunning'` where applicable, `RequiredScope='predictive:execute'`, typed Input/Output defs) for: `PredictiveStudio.TrainModel`, `PredictiveStudio.ScoreRecordSet`, `PredictiveStudio.RunFeaturePipeline`, `PredictiveStudio.StartExperimentSession`, `PredictiveStudio.ControlExperimentSession`, `PredictiveStudio.PromoteModel`. **AC:** CodeGen emits typed bases in `remote_operations.ts`.
@@ -523,7 +561,7 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 - **PS-FEAT-4 — Leakage guard.** _deps: PS-FEAT-1._ deny-list enforcement + single-feature-dominance flag wired into training. **AC:** dominance > threshold flags the run; denied fields never enter the matrix.
 
 ### SP3 — Training orchestration
-- **PS-TRAIN-1 — Training engine.** _deps: PS-FEAT-1, PS-SIDE-4._ `BaseEngine`-style orchestrator: load pipeline → assemble (fit) → call `/train` → store artifact in MJStorage → create `ML Model` (+ `FittedPreprocessing`, `FeatureSchema`, metrics, importance, lineage) + `Training Run`. **AC:** end-to-end trains a retention model from a pipeline def.
+- **PS-TRAIN-1 — Training engine.** _deps: PS-FEAT-1, PS-SIDE-4._ `BaseEngine`-style orchestrator: load pipeline → assemble (fit) → call `/train` → store artifact in MJStorage → create `ML Model` (+ `FittedPreprocessing`, `FeatureSchema`, metrics, importance, lineage) + `ML Training Run`. **AC:** end-to-end trains a retention model from a pipeline def.
 - **PS-TRAIN-2 — Validation + locked holdout.** _deps: PS-TRAIN-1._ split/k-fold/holdout; locked-holdout scored once → `HoldoutMetrics`. **AC:** holdout never overlaps train; metrics recorded.
 - **PS-TRAIN-3 — `PredictiveStudio.TrainModel` Remote Op.** _deps: PS-TRAIN-1, PS-FND-5._ Manual-mode server subclass `@RegisterClass(BaseRemotableOperation,'PredictiveStudio.TrainModel')`; `LongRunning` progress via `context.emitProgress`. **AC:** invokable client + in-process; progress streams.
 - **PS-TRAIN-4 — Train action.** _deps: PS-TRAIN-3._ Thin Action wrapping the op for agent use. **AC:** agent can train via Action.
@@ -532,10 +570,10 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 - **PS-SCORE-1 — `MLModelInferenceProcessor` work type.** _deps: PS-TRAIN-1, PS-FEAT-1._ New Record Set Processing processor: record → transform (frozen) → `/predict` → result; register in `RecordProcessExecutor.buildProcessor()`. Update guide to disambiguate from "Infer". **AC:** scores a view via Record Set Processing; per-record audit rows written.
 - **PS-SCORE-2 — Write-back wiring.** _deps: PS-SCORE-1._ `WriteBackProcessor` `OutputMapping` for score→column / child record; ephemeral when absent. **AC:** scores land as a sortable/filterable column when mapping present; ephemeral otherwise.
 - **PS-SCORE-3 — `PredictiveStudio.ScoreRecordSet` Remote Op + action.** _deps: PS-SCORE-1, PS-FND-5._ On-demand scoring with scope override (records/view/list/filter/single); `LongRunning` progress. **AC:** Skip/agent can score a result set; single + batch.
-- **PS-SCORE-4 — Scheduled scoring + binding.** _deps: PS-SCORE-1._ `Schedule` trigger; create `Model Scoring Binding`. **AC:** a model re-scores a view on a cron; binding records lineage.
+- **PS-SCORE-4 — Scheduled scoring + binding.** _deps: PS-SCORE-1._ `Schedule` trigger; create `ML Model Scoring Binding`. **AC:** a model re-scores a view on a cron; binding records lineage.
 
 ### SP5 — Materialization integration (after #2770)
-- **PS-MAT-1 — Inference in materialization refresh.** _deps: #2770 landed, PS-SCORE-1._ Hook ML batch-scoring into the materialization refresh; write prediction columns on the materialized `VirtualEntity`; set `Model Scoring Binding.MaterializedResultID`. **AC:** materialized table exposes a prediction column queryable by RunView/Skip. _If #2770 not merged, this SP is parked; SP4 covers scoring._
+- **PS-MAT-1 — Inference in materialization refresh.** _deps: #2770 landed, PS-SCORE-1._ Hook ML batch-scoring into the materialization refresh; write prediction columns on the materialized `VirtualEntity`; set `ML Model Scoring Binding.MaterializedResultID`. **AC:** materialized table exposes a prediction column queryable by RunView/Skip. _If #2770 not merged, this SP is parked; SP4 covers scoring._
 
 ### SP6 — Feature Pipelines (Knowledge Hub)
 - **PS-PIPE-1 — `MJ: Feature Pipelines` entity + migration + CodeGen.** _deps: PS-FND-3._ Registry pointing at a Record Process config; lineage fields. **AC:** entity exists; discoverable.
@@ -549,9 +587,9 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 - **PS-UI-4 — Experiment monitor.** _deps: PS-UI-1, SP8._ live leaderboard, budget burn, pause/cancel. **AC:** observe + control a running session.
 
 ### SP8 — Experiment engine
-- **PS-EXP-1 — ExperimentSession + leaderboard.** _deps: PS-TRAIN-1._ session lifecycle, run grouping, leaderboard derivation. **AC:** runs grouped; leaderboard ranks by holdout metric.
-- **PS-EXP-2 — Deterministic ExperimentOrchestrator.** _deps: PS-EXP-1._ executes a `ModelingPlanSpec.ProposedExperiments` list: parallel (bounded), prune, budget-gate; optional internal LLM "what next" hook. **AC:** runs a plan to completion within budget; prunes; records rationale.
-- **PS-EXP-3 — `StartExperimentSession`/`ControlExperimentSession` ops + actions.** _deps: PS-EXP-2, PS-FND-5._ start/pause/cancel/resume; `LongRunning` progress. **AC:** invokable by agent + UI.
+- **PS-EXP-1 — Generic Experiment/Session/Iteration + leaderboard.** _deps: PS-TRAIN-1._ Wire the generic `Experiment → ExperimentSession → ExperimentSessionIteration` primitives (ML-agnostic; PS is first consumer): session lifecycle, iteration grouping, leaderboard derivation from iteration `Score`; each iteration's ML detail is its `ML Training Run` leaf. **AC:** iterations grouped under a session under an Experiment; leaderboard ranks by normalized iteration `Score` (holdout metric).
+- **PS-EXP-2 — Deterministic ExperimentOrchestrator (RSP waves).** _deps: PS-EXP-1._ executes a `ModelingPlanSpec.ProposedExperiments` list as **waves through Record Set Processing** — `generate wave → RSP-process → evaluate/prune/update leaderboard → next wave`; RSP supplies bounded concurrency / budget gate / pause-resume / audit; the adaptive prune + "what next" hook (optional internal LLM) sits above RSP; a session may spawn one Process Run per wave. **AC:** runs a plan to completion within budget via RSP waves; prunes; records iteration rationale; one+ Process Runs per session.
+- **PS-EXP-3 — Session-control via Remote Operations.** _deps: PS-EXP-2, PS-FND-5._ `PredictiveStudio.StartExperimentSession` / `ControlExperimentSession` (start/pause/cancel/resume) **and** the experiment-wave execution exposed as Remote Operations (Manual mode) + thin Actions; `LongRunning` progress. **AC:** session start/control + wave execution invokable by agent + UI as Remote Operations.
 
 ### SP9 — Model Development Agent (capstone)
 - **PS-AGENT-1 — Agent metadata + payload type.** _deps: PS-FND-1._ `ModelingPlanSpec` in `predictive-studio-core`; Loop agent + sub-agents (Goal Analyst, Data Scout, Experiment Designer) seeded via metadata. **AC:** agent runs; payload validated.
@@ -563,7 +601,7 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 - **PS-AGENT-6 — Embedded chat + surfaces.** _deps: PS-UI-1, PS-AGENT-2._ `<mj-conversation-chat-area>` pinned to the Model Development Agent in the Studio; also reachable from any chat surface. **AC:** drive a full session from the embedded chat.
 
 ### SP10 — Maintenance
-- **PS-MAINT-1 — Staleness + retraining triggers.** _deps: PS-SCORE-4, PS-TRAIN-1._ cadence/data-volume/drift triggers via `Model Scoring Bindings`; the Model Development Agent can schedule retrain + compare-to-incumbent + propose promotion. **AC:** a binding triggers a retrain; holdout compared.
+- **PS-MAINT-1 — Staleness + retraining triggers.** _deps: PS-SCORE-4, PS-TRAIN-1._ cadence/data-volume/drift triggers via `ML Model Scoring Bindings`; the Model Development Agent can schedule retrain + compare-to-incumbent + propose promotion. **AC:** a binding triggers a retrain; holdout compared.
 
 ### SP11 — Multimodal (optional/additive)
 - **PS-MM-1 — Vision-LLM-as-feature.** _deps: PS-PIPE-2._ a Feature Pipeline variant that runs a vision prompt over an image → label/embedding feature. **AC:** an image-derived categorical feature trains into a model. _(True image-classifier-as-primary is a separate later track — multimodal embeddings.)_
@@ -582,12 +620,14 @@ Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive 
 5. Embeddings = pre-trained feature extractors, each dim a feature, persisted + version-pinned.
 6. LLM-derived features = upstream persisted Feature Pipelines, not inline recompute.
 7. **One FeatureAssembly executor, three contexts**; **fitted preprocessing serialized into the model** (anti-skew); **as-of/point-in-time** + **leakage guard** are first-class new primitives; **locked holdout** for honest metrics.
-8. **`MJ: ML Models`** (the entity for models we train — distinct from `MJ: AI Models`, the off-the-shelf catalog) immutable + versioned + full lineage; instrument every run. Algorithm choice is guided by **`MJ: ML Algorithm Use Cases`** + the **`MJ: ML Algorithm Use Case Rankings`** join (per-scenario `RecommendationLevel` + `Rationale`) so neither the agent nor a non-expert user has to guess.
+8. **`MJ: ML Models`** (the entity for models we train — distinct from `MJ: AI Models`, the off-the-shelf catalog) immutable + versioned + full lineage; instrument every run via `MJ: ML Training Runs` (FK'd to its `Experiment Session Iteration`, or standalone). Algorithm choice is guided by **`MJ: ML Algorithm Use Cases`** + the **`MJ: ML Algorithm Use Case Rankings`** join (per-scenario `RecommendationLevel` + `Rationale`) so neither the agent nor a non-expert user has to guess. ML tables carry the `ML` prefix: `ML Training Pipelines`, `ML Training Runs`, `ML Model Scoring Bindings`.
 9. Scoring = new `MLModelInferenceProcessor` in Record Set Processing; on-demand + scheduled; **ephemeral by default, write-back when OutputMapping present**; **scoring ships before materialization**.
 10. Materialization-first for population-wide indexed columns — **after #2770**.
-11. All server capability via **Remote Operations (Manual mode)** + thin **Actions**.
+11. **All server capability via Remote Operations (Manual mode) + thin Actions** — train, score, run-feature-pipeline, session start/control, AND experiment-wave execution. (See `guides/REMOTE_OPERATIONS_GUIDE.md`.)
 12. **Model Development Agent** (Loop, conversational; sub-agents constrained via metadata payload-path guards) mirrors **Agent Manager**: collaborate→typed plan→approve→**deterministic execution**→LLM report; ground truth = `MJ: Queries` `Status='Approved'` + DBAutoDoc + Agent Notes + approved models; agent-drafted queries land `Status='Pending'` for human approval into the semantic layer; suspected leakage → loud business-friendly warning + human sign-off before promotion; budgets + leaderboard; rich drill-through artifact.
 13. Maintenance is a co-equal pillar.
+14. **Experiment/ExperimentSession/ExperimentSessionIteration are GENERIC, ML-agnostic, reusable agentic-experimentation primitives** — a budgeted, plan-then-execute-then-refine search (definition → execution → attempt/leaderboard unit), NOT ML-coupled. Predictive Studio is the first consumer (the `ML Training Run` is the leaf hanging off an iteration); prompt-optimization / agent-config search / eval sweeps reuse the same three tables. The old single ML-coupled `ExperimentSession` (with its `PipelineID`) is replaced by this three-tier model.
+15. **The experiment execution loop composes onto Record Set Processing**, running its iterations in **waves** (`generate wave → RSP-process → evaluate/prune/update leaderboard → next wave`); RSP supplies bounded concurrency, budget gate, pause/resume, audit (`MJ: Process Runs`), and the adaptive layer sits above it. A session may spawn one Process Run per wave (no hard FK in v1). (See `guides/RECORD_SET_PROCESSING_GUIDE.md`.)
 
 ## 16. Open questions
 - **[O]** Model serialization: native vs ONNX (portability across SQL Server/Postgres).
