@@ -48,10 +48,9 @@
       </div>
     }
     @if (items.length === 0) {
-      <div class="empty-state">
-        <i class="fas fa-stream fa-3x"></i>
-        <p>No execution steps found</p>
-      </div>
+      <mj-empty-state
+        Icon="fa-solid fa-stream"
+        Title="No execution steps found" />
     }
   </div>
 } @else {
@@ -62,10 +61,9 @@
 }
 
 @if (error) {
-  <div class="error-state">
-    <i class="fas fa-exclamation-triangle fa-2x"></i>
-    <p>{{ error }}</p>
-  </div>
+  <mj-empty-state
+    Variant="error"
+    [Message]="error" />
 }
 
 <!-- Recursive template for rendering nested children (ParentID relationships) -->

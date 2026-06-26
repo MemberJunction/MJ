@@ -324,10 +324,7 @@ interface ProgressUpdate {
                     </div>
                   }
                   @empty {
-                    <div class="no-items">
-                      <i class="fa-solid fa-inbox"></i>
-                      <p>No tests found</p>
-                    </div>
+                    <mj-empty-state Icon="fa-solid fa-inbox" Title="No tests found" Size="compact" />
                   }
                 </div>
               </div>
@@ -372,10 +369,7 @@ interface ProgressUpdate {
                     </div>
                   }
                   @empty {
-                    <div class="no-items">
-                      <i class="fa-solid fa-inbox"></i>
-                      <p>No test suites found</p>
-                    </div>
+                    <mj-empty-state Icon="fa-solid fa-inbox" Title="No test suites found" Size="compact" />
                   }
                 </div>
               </div>
@@ -987,26 +981,8 @@ interface ProgressUpdate {
       font-size: 20px;
     }
 
-    .no-items {
+    .items-list mj-empty-state {
       flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--mj-text-disabled);
-      padding: 40px;
-      text-align: center;
-    }
-
-    .no-items i {
-      font-size: 48px;
-      margin-bottom: 12px;
-      opacity: 0.3;
-    }
-
-    .no-items p {
-      margin: 0;
-      font-size: 14px;
     }
 
     .options-panel {

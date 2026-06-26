@@ -21046,6 +21046,11 @@ export const MJOpenAppSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Subpath: z.string().nullable().describe(`
+        * * Field Name: Subpath
+        * * Display Name: Subpath
+        * * SQL Data Type: nvarchar(500)
+        * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`),
     InstalledByUser: z.string().describe(`
         * * Field Name: InstalledByUser
         * * Display Name: Installed By User
@@ -85281,6 +85286,19 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Subpath
+    * * Display Name: Subpath
+    * * SQL Data Type: nvarchar(500)
+    * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.
+    */
+    get Subpath(): string | null {
+        return this.Get('Subpath');
+    }
+    set Subpath(value: string | null) {
+        this.Set('Subpath', value);
     }
 
     /**

@@ -564,6 +564,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.cdr.markForCheck();
     }
 
+    /** No-results message for the query list (echoes the search term). */
+    public get NoQueryResultsMessage(): string {
+        return `No queries match "${this.searchText}".`;
+    }
+
     /** True when the current user has permission to create new queries. */
     public get CanCreateQuery(): boolean {
         const entity = this.metadata.EntityByName('MJ: Queries');

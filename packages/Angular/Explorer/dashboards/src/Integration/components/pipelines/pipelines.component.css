@@ -160,8 +160,7 @@
   min-height: 0;
 }
 
-.content-loading,
-.content-empty {
+.content-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -173,9 +172,9 @@
 
 .content-loading i { font-size: 28px; color: var(--mj-color-indigo-500); }
 .content-loading span { font-size: 14px; }
-.content-empty .empty-icon { font-size: 48px; color: var(--mj-color-neutral-300); }
-.content-empty h3 { margin: 0; font-size: 18px; font-weight: 600; color: var(--mj-text-muted); }
-.content-empty p { margin: 0; font-size: 13px; color: var(--mj-text-disabled); }
+
+/* The empty placeholder fills the content area so it centers. */
+mj-empty-state { height: 100%; }
 
 /* ---------------------------------------------------------------------------
    Cards list
@@ -211,7 +210,7 @@
 
 .pipeline-card.expanded {
   border-color: var(--mj-color-indigo-100);
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.08);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
 }
 
 /* Card header */
@@ -744,6 +743,8 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 12px;
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .ve-preview-loading i { margin-right: 6px; color: var(--mj-color-indigo-500); }
@@ -1111,6 +1112,8 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 13px;
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 /* ---------------------------------------------------------------------------
@@ -1140,7 +1143,7 @@
 .ve-conn-line.conn-custom { stroke: var(--ve-color-custom, #a855f7); stroke-dasharray: 2 3; }
 
 .ve-conn-line:hover { stroke-width: 3.5; }
-.ve-conn-line.selected { stroke-width: 3.5; filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.4)); }
+.ve-conn-line.selected { stroke-width: 3.5; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent)); }
 
 /* Connection badge at midpoint */
 .ve-badge-fo { overflow: visible; }
@@ -1169,7 +1172,7 @@
 .ve-conn-badge.badge-custom { background: color-mix(in srgb, var(--ve-color-custom, #a855f7) 10%, var(--mj-bg-surface)); color: var(--ve-color-custom, #a855f7); border: 2px solid var(--ve-color-custom, #a855f7); }
 
 .ve-conn-badge:hover { transform: scale(1.2); }
-.ve-conn-badge.selected { transform: scale(1.25); box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3); }
+.ve-conn-badge.selected { transform: scale(1.25); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
 
 /* ---------------------------------------------------------------------------
    Transform Panel (right side)

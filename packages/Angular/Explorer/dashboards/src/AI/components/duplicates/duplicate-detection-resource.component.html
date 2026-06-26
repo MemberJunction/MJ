@@ -175,11 +175,9 @@
             <mj-loading text="Loading duplicate detection results..."></mj-loading>
         </div>
     } @else if (TotalGroupCount === 0) {
-        <div class="empty-state">
-            <i class="fa-solid fa-clone empty-icon"></i>
-            <p class="empty-text">No duplicate detection results found.</p>
-            <p class="empty-subtext">Select an entity document and click "Run Detection" to start.</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-clone"
+            Title="No duplicate detection results found."
+            Message="Select an entity document and click &quot;Run Detection&quot; to start." />
     } @else {
         <!-- Kanban Board -->
         <div class="kanban-board">
@@ -254,10 +252,8 @@
                         </div>
                     }
                     @if (PendingGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-check-circle"></i>
-                            <span>No pending items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check"
+                            Title="No pending items" />
                     }
                 </div>
             </div>
@@ -321,10 +317,8 @@
                         </div>
                     }
                     @if (ApprovedGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No approved items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-inbox"
+                            Title="No approved items" />
                     }
                 </div>
             </div>
@@ -388,10 +382,8 @@
                         </div>
                     }
                     @if (RejectedGroups.length === 0) {
-                        <div class="column-empty">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No rejected items</span>
-                        </div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-inbox"
+                            Title="No rejected items" />
                     }
                 </div>
             </div>

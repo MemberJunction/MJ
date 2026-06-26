@@ -57,6 +57,11 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   public recentSearches: string[] = [];
   public selectedIndex: number = -1;
 
+  /** Message for the "no results" empty state, echoing the search term. */
+  public get NoResultsMessage(): string {
+    return `No results found for "${this.searchQuery}"`;
+  }
+
   private destroy$ = new Subject<void>();
 
   constructor(private searchService: SearchService) {}

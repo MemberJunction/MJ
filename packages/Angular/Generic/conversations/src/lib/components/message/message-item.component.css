@@ -113,6 +113,20 @@
   box-shadow: var(--mj-shadow-md);
 }
 
+:host ::ng-deep .mention-badge.entity {
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  box-shadow: var(--mj-shadow-md);
+}
+
+:host ::ng-deep .mention-badge.query {
+  background: var(--mj-status-warning);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
+  box-shadow: var(--mj-shadow-md);
+}
+
 :host ::ng-deep .mention-badge i {
   font-size: 12px;
   opacity: 0.95;

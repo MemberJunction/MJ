@@ -219,23 +219,6 @@
   gap: 4px;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 20px;
-  color: var(--mj-text-muted);
-}
-.empty-state i {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-}
-
 .btn-primary {
   background: var(--mj-brand-primary) !important;
   color: var(--mj-text-inverse) !important;

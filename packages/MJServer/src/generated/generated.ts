@@ -60865,6 +60865,10 @@ export class MJOpenApp_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`}) 
+    @MaxLength(500)
+    Subpath?: string;
+        
     @Field() 
     @MaxLength(100)
     InstalledByUser: string;
@@ -60939,6 +60943,9 @@ export class CreateMJOpenAppInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Subpath: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -61002,6 +61009,9 @@ export class UpdateMJOpenAppInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Subpath?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
