@@ -75,6 +75,7 @@
     "@memberjunction/ai-provider-bundle": "5.43.0",
     "@memberjunction/ai-recommendations-rex": "5.43.0",
     "@memberjunction/ai-reranker": "5.43.0",
+    "@memberjunction/ai-vector-dupe": "5.43.0",
     "@memberjunction/ai-vectors-memory": "5.43.0",
     "@memberjunction/ai-vectors-pgvector": "5.43.0",
     "@memberjunction/ai-vectors-pinecone": "5.43.0",

@@ -1,6 +1,6 @@
-import { Resolver, Query, Arg, Ctx, ObjectType, InputType, Field, ID } from 'type-graphql';
+import { Resolver, Query, Arg, Ctx, ObjectType, InputType, Field } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, UserInfo, IMetadataProvider, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 import {
@@ -109,7 +109,8 @@ export class GetRecordComparisonResolver extends ResolverBase {
             }
 
             // Pure read — use this user's read-only connection + security context.
-            const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            // DatabaseProviderBase implements IMetadataProvider, so no cast is needed.
+            const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
 
             const engineInput = this.buildEngineInput(input);
             const engine = new RecordComparisonEngine();

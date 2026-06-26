@@ -86,7 +86,12 @@ vi.mock('@memberjunction/core', () => {
             ProbabilityScore = 0;
             LoadFromConcatenatedString = vi.fn();
             ToString = vi.fn().mockReturnValue('match-key');
-            KeyValuePairs: unknown[] = [];
+            KeyValuePairs: { FieldName: string; Value: string }[] = [];
+            // Mirror the real CompositeKey.Values() — concatenated key values — so the
+            // parse-time self-match filter (isSameRecord) can be exercised faithfully.
+            Values(): string {
+                return this.KeyValuePairs.map(kv => String(kv.Value)).join('||');
+            }
         },
         RecordMergeRequest: class {
             EntityName = '';
@@ -312,6 +317,45 @@ describe('DuplicateRecordDetector', () => {
             const queryResponse = { success: true, message: 'ok', data: null };
             const result = detector.ParseVectorMatches(queryResponse);
             expect(result.Duplicates).toEqual([]);
+        });
+
+        // Every record is its own nearest neighbor (cosine ~1.0), so the source record itself
+        // comes back as the top vector match. It must be dropped at parse time — a record can
+        // never be its own duplicate. The in-process SVS provider returns BARE primary-key values
+        // as metadata.RecordID, which is the shape that previously slipped past the Equals-based
+        // filter (empty/length-mismatched candidate key → Equals returns false → self-match kept).
+        it('should drop the source record itself (bare-PK self-match) at parse time', () => {
+            const sourceKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'rec-1' }],
+                Values: () => 'rec-1',
+                ToString: () => 'ID|rec-1',
+            };
+            const queryResponse = {
+                success: true, message: 'ok',
+                data: {
+                    matches: [
+                        { id: 'm1', score: 1.0, metadata: { RecordID: 'rec-1', Entity: 'Contacts', TemplateID: 't-1' } }, // self
+                        { id: 'm2', score: 0.85, metadata: { RecordID: 'rec-2', Entity: 'Contacts', TemplateID: 't-1' } },
+                    ],
+                },
+            };
+            const result = (detector as never)['ParseVectorMatches'](queryResponse, sourceKey);
+            expect(result.Duplicates).toHaveLength(1);
+            expect(result.Duplicates[0].KeyValuePairs[0].Value).toBe('rec-2');
+        });
+
+        it('should drop the self-match even when the source RecordID differs only in UUID casing', () => {
+            const sourceKey = {
+                KeyValuePairs: [{ FieldName: 'ID', Value: 'ABC-123' }],
+                Values: () => 'ABC-123',
+                ToString: () => 'ID|ABC-123',
+            };
+            const queryResponse = {
+                success: true, message: 'ok',
+                data: { matches: [{ id: 'm1', score: 1.0, metadata: { RecordID: 'abc-123', Entity: 'Contacts', TemplateID: 't-1' } }] },
+            };
+            const result = (detector as never)['ParseVectorMatches'](queryResponse, sourceKey);
+            expect(result.Duplicates).toHaveLength(0);
         });
     });
 

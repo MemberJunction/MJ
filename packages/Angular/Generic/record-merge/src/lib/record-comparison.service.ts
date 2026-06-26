@@ -2,7 +2,7 @@
  * @fileoverview Thin Angular wrapper over the server-side record-comparison capability.
  *
  * The field-delta computation runs server-side via
- * `@memberjunction/core-entities-server`'s `RecordComparisonEngine`, reached through
+ * `@memberjunction/record-comparison`'s `RecordComparisonEngine`, reached through
  * the typed {@link GraphQLRecordComparisonClient} transport. This service does nothing
  * but resolve the GraphQL provider (multi-provider aware) and delegate — it never
  * inlines `gql`, never touches the engine, and holds no state.

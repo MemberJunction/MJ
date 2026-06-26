@@ -1310,11 +1310,16 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      * The classic disagreement is a strong vector match the LLM flags as NotDuplicate,
      * or a weak vector pair the LLM nonetheless wants to Merge. Returns false when
      * reasoning never ran (recommendation null) so existing groups never light up.
+     *
+     * The "strong vs. weak" boundary is the live potential-match threshold the user
+     * tuned for this run ({@link RunPotentialThreshold}) — not a hardcoded constant — so
+     * the disagreement marker tracks the same threshold driving candidate selection.
      */
     private computeDisagreement(recommendation: LLMRecommendation | null, vectorScore: number): boolean {
         if (recommendation == null) return false;
-        if (recommendation === 'NotDuplicate' && vectorScore >= 0.7) return true;
-        if (recommendation === 'Merge' && vectorScore < 0.7) return true;
+        const boundary = this.RunPotentialThreshold;
+        if (recommendation === 'NotDuplicate' && vectorScore >= boundary) return true;
+        if (recommendation === 'Merge' && vectorScore < boundary) return true;
         return false;
     }
 

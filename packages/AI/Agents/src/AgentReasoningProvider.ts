@@ -107,12 +107,3 @@ export class AgentReasoningProvider extends DuplicateReasoningProvider {
         return output;
     }
 }
-
-/**
- * Tree-shaking prevention: import and call this from a bootstrap path to guarantee the
- * `@RegisterClass(DuplicateReasoningProvider, 'Agent')` decorator above is evaluated and the
- * provider is registered with the ClassFactory.
- */
-export function LoadAgentReasoningProvider(): void {
-    // no-op; the import side effect registers the class
-}
