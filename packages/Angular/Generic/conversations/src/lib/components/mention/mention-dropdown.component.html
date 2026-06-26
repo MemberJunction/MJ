@@ -78,10 +78,11 @@
     }
     <!-- Empty State -->
     @if (suggestions.length === 0) {
-      <div class="mention-empty-state">
-        <i class="fa-solid fa-robot"></i>
-        <p>No matches found</p>
-      </div>
+      <mj-empty-state
+        Variant="no-results"
+        Size="compact"
+        Icon="fa-solid fa-robot"
+        Title="No matches found" />
     }
   </div>
 }

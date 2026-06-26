@@ -219,27 +219,14 @@
     }
     <!-- Empty state -->
     @if (FilteredLabels.length === 0 && !IsLoading) {
-      <div class="empty-state">
-        <i class="fa-solid fa-tags empty-icon"></i>
-        <h3>No labels found</h3>
-        @if (SearchText || ScopeFilter || StatusFilter) {
-          <p>
-            Try adjusting your filters or search criteria.
-          </p>
-        }
-        @if (!SearchText && !ScopeFilter && !StatusFilter) {
-          <p>
-            No version labels have been created yet.
-          </p>
-        }
-        @if (!SearchText && !ScopeFilter && !StatusFilter) {
-          <button class="btn-primary empty-cta"
-            (click)="OpenCreateDialog()">
-            <i class="fa-solid fa-plus"></i>
-            <span>Create Your First Label</span>
-          </button>
-        }
-      </div>
+      <mj-empty-state
+        [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+        Icon="fa-solid fa-tags"
+        Title="No labels found"
+        [Message]="IsListNarrowed ? 'Try adjusting your filters or search criteria.' : 'No version labels have been created yet.'"
+        [ActionText]="IsListNarrowed ? 'Reset filters' : 'Create Your First Label'"
+        [ActionIcon]="IsListNarrowed ? 'fa-solid fa-rotate-left' : 'fa-solid fa-plus'"
+        (Action)="onEmptyStateAction()" />
     }
   }
 

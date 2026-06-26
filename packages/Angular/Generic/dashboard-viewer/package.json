@@ -37,6 +37,7 @@
     "golden-layout": "^2.6.0"
   },
   "dependencies": {
+    "@memberjunction/ng-ui-components": "5.43.0",
     "@memberjunction/core": "5.43.0",
     "@memberjunction/core-entities": "5.43.0",
     "@memberjunction/global": "5.43.0",

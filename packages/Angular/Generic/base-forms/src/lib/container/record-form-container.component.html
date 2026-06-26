@@ -95,16 +95,14 @@
 
         <!-- Empty state when no sections match search -->
         @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
-          <div class="mj-forms-empty-search-state">
-            <div class="mj-forms-empty-search-icon">
-              <i class="fa-solid fa-magnifying-glass"></i>
-            </div>
-            <h3 class="mj-forms-empty-search-title">No sections found</h3>
-            <p class="mj-forms-empty-search-message">
-              No sections match "<strong>{{ EffectiveSearchFilter }}</strong>".
-              <br>Try a different search term or <a href="#" (click)="OnFilterChange(''); $event.preventDefault()" class="mj-forms-empty-search-link">clear the search</a>.
-            </p>
-          </div>
+          <mj-empty-state class="mj-forms-empty-search-state"
+            Variant="no-results"
+            Title="No sections found"
+            [Message]="'No sections match &quot;' + EffectiveSearchFilter + '&quot;. Try a different search term.'"
+            ActionText="Clear search"
+            ActionIcon="fa-solid fa-rotate-left"
+            ActionVariant="flat"
+            (Action)="OnFilterChange('')" />
         }
       </div>
 

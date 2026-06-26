@@ -25,19 +25,23 @@ import { Subject } from 'rxjs';
         
           <!-- Error state -->
           @if (ErrorMessage && !IsLoading) {
-            <div class="error-state">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>{{ ErrorMessage }}</span>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Variant="error"
+              Icon="fa-solid fa-triangle-exclamation"
+              Title="Couldn't load artifact"
+              [Message]="ErrorMessage"
+              Size="compact" />
           }
-        
+
           <!-- No artifact configured -->
           @if (!IsLoading && !ErrorMessage && !hasArtifact) {
-            <div class="empty-state">
-              <i class="fa-solid fa-palette"></i>
-              <h4>No Artifact Selected</h4>
-              <p>Click the configure button to select an artifact for this part.</p>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Icon="fa-solid fa-palette"
+              Title="No Artifact Selected"
+              Message="Click the configure button to select an artifact for this part."
+              Size="compact" />
           }
         
           <!-- Artifact Viewer Panel -->
@@ -80,9 +84,7 @@ import { Subject } from 'rxjs';
             background: var(--mj-bg-surface);
         }
 
-        .loading-state,
-        .error-state,
-        .empty-state {
+        .loading-state {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -93,25 +95,8 @@ import { Subject } from 'rxjs';
             padding: 24px;
         }
 
-        .error-state i,
-        .empty-state i {
-            font-size: 48px;
-            color: var(--mj-text-muted);
-            margin-bottom: 16px;
-        }
-
-        .error-state i {
-            color: var(--mj-status-error);
-        }
-
-        .empty-state h4 {
-            margin: 0 0 8px 0;
-            color: var(--mj-text-primary);
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 13px;
+        .part-placeholder {
+            height: 100%;
         }
 
         mj-artifact-viewer-panel {

@@ -206,27 +206,14 @@
     padding: 8px 0;
 }
 
-/* Loading & Empty States */
-.loading-state,
-.empty-state {
+/* Loading State */
+.loading-state {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 40px 20px;
     text-align: center;
-}
-
-.empty-icon {
-    font-size: 36px;
-    color: var(--mj-border-strong);
-    margin-bottom: 12px;
-}
-
-.empty-state p {
-    margin: 0;
-    color: var(--mj-text-secondary);
-    font-size: 14px;
 }
 
 /* Category Tree */
@@ -446,33 +433,9 @@
     flex-direction: column;
 }
 
-/* No Selection State */
+/* No Selection State — fills the viewer panel (host centers its own content) */
 .no-selection {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 40px;
-}
-
-.no-selection-icon {
-    font-size: 64px;
-    color: var(--mj-border-strong);
-    margin-bottom: 20px;
-}
-
-.no-selection-message {
-    font-size: 18px;
-    color: var(--mj-text-secondary);
-    margin: 0 0 8px 0;
-}
-
-.no-selection-hint {
-    font-size: 14px;
-    color: var(--mj-text-disabled);
-    margin: 0;
 }
 
 /* Query Viewer Header */
@@ -593,27 +556,6 @@ mj-query-viewer {
 .query-viewer-header .icon-btn:hover {
     background: var(--mj-bg-surface-sunken);
     color: var(--mj-text-primary);
-}
-
-/* ─── No-selection create button ─────────────────────────────────────── */
-.no-selection-create-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 16px;
-    padding: 8px 20px;
-    background: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
-    border: none;
-    border-radius: 6px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-
-.no-selection-create-btn:hover {
-    background: var(--mj-brand-primary-hover);
 }
 
 /* ─── Drawer Backdrop ─────────────────────────────────────────────────── */

@@ -63,10 +63,9 @@ export interface VennRegionClickEvent {
     
       <!-- Empty state -->
       @if (!data || data.sets.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-diagram-project"></i>
-          <p>Add lists to visualize their overlaps</p>
-        </div>
+        <mj-empty-state class="venn-empty-overlay" Size="compact"
+          Icon="fa-solid fa-diagram-project"
+          Title="Add lists to visualize their overlaps" />
       }
     </div>
     `,
@@ -164,24 +163,11 @@ export interface VennRegionClickEvent {
       color: var(--mj-text-muted);
     }
 
-    .empty-state {
+    .venn-empty-overlay {
       position: absolute;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      text-align: center;
-      color: var(--mj-text-muted);
-    }
-
-    .empty-state i {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .empty-state p {
-      font-size: 14px;
-      margin: 0;
     }
 
     /* SVG styles */

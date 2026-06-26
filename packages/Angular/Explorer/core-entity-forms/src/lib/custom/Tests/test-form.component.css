@@ -927,74 +927,6 @@
 }
 
 /* ===========================
-   Empty States
-   =========================== */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 24px;
-  text-align: center;
-  background: var(--test-surface);
-  border-radius: var(--test-radius-lg);
-}
-
-.empty-icon {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--test-bg);
-  border-radius: 50%;
-  margin-bottom: 20px;
-}
-
-.empty-icon i {
-  font-size: 36px;
-  color: var(--test-text-muted);
-}
-
-.empty-state h4 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--test-text);
-}
-
-.empty-state p {
-  margin: 0 0 20px 0;
-  font-size: 14px;
-  color: var(--test-text-secondary);
-  max-width: 300px;
-}
-
-/* Legacy no-data for backwards compatibility */
-.no-data {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: var(--test-text-muted);
-  text-align: center;
-  background: var(--test-surface);
-  border-radius: var(--test-radius-lg);
-}
-
-.no-data i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.3;
-}
-
-.no-data p {
-  margin: 0;
-  font-size: 14px;
-}
-
-/* ===========================
    Keyboard Shortcuts Popup
    =========================== */
 /* Keyboard shortcuts toggle button */
@@ -1239,18 +1171,6 @@
     gap: 4px;
   }
 
-  .empty-state {
-    padding: 40px 20px;
-  }
-
-  .empty-icon {
-    width: 64px;
-    height: 64px;
-  }
-
-  .empty-icon i {
-    font-size: 28px;
-  }
 }
 
 /* ===========================
@@ -1731,8 +1651,7 @@
 
   .info-section,
   .json-section,
-  .config-section,
-  .empty-state {
+  .config-section {
     break-inside: avoid;
     box-shadow: none;
     border: 1px solid var(--mj-border-default);
@@ -2003,7 +1922,7 @@
   background: var(--mj-bg-surface-elevated, var(--test-surface));
   border: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, var(--test-border));
   border-radius: 14px;
-  box-shadow: 0 12px 32px color-mix(in srgb, var(--mj-status-warning) 10%, rgba(15, 23, 42, 0.18));
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--mj-status-warning) 10%, rgba(0, 0, 0, 0.18));
   backdrop-filter: blur(8px);
   /* Hidden / off-screen state by default. The .save-bar--visible class
      animates it up into view. Using `transition` (not `animation`)

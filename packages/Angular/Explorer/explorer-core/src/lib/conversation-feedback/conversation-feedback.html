@@ -105,10 +105,11 @@
 
       @if (!loading) {
         @if (rows.length === 0) {
-          <div class="empty-state">
-            <i class="fa-solid fa-comment-slash"></i>
-            <p>No feedback matches the current filters.</p>
-          </div>
+          <mj-empty-state
+            class="feedback-empty-state"
+            Variant="no-results"
+            Icon="fa-solid fa-comment-slash"
+            Title="No feedback matches the current filters." />
         } @else {
           <div class="feedback-table-wrapper">
             <table class="feedback-table">

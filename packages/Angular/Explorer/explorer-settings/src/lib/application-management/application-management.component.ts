@@ -252,6 +252,21 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   public clearAllAppliedFilters(): void {
     this.updateFilter({ status: 'all' });
   }
+
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Status) and refresh
+   *  immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ status: 'all', search: '' });
+    this.applyFilters();
+    this.cdr.markForCheck();
+  }
   
   public toggleAppExpansion(appId: string): void {
     this.expandedAppId = this.expandedAppId === appId ? null : appId;

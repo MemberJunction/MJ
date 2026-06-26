@@ -36,10 +36,9 @@
             @if (Loading) {
                 <mj-loading text="Sampling existing tags…"></mj-loading>
             } @else if (NoTagsSampled) {
-                <div class="dry-empty">
-                    <i class="fa-solid fa-tags"></i>
-                    <p>No extracted tags found for this source yet. Run the pipeline first, then preview how its tags would be dispositioned.</p>
-                </div>
+                <mj-empty-state class="dry-empty" Icon="fa-solid fa-tags"
+                    Title="No extracted tags yet"
+                    Message="Run the pipeline first, then preview how its tags would be dispositioned." />
             } @else {
                 <!-- Estimate line (illustrative) -->
                 <div class="dry-estimate">
