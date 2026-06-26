@@ -28,8 +28,14 @@ import { configInfo } from './config';
  * {@link MSSQLConnection} on each cold-start so it reflects the values that
  * are present *after* `initializeConfig()` has run, not the empty defaults
  * that may have been visible at module load time.
+ *
+ * Exported for unit-test access to the `codegenPool.statementTimeoutMs` →
+ * `dbRequestTimeout` → 120000 precedence chain. Production code uses
+ * {@link MSSQLConnection} (which caches the resolved config + pool); this
+ * export gives tests a pure-function entry point without forcing them to
+ * mock `mssql.connect`.
  */
-function buildSqlConfig(): mssql.config {
+export function buildSqlConfig(): mssql.config {
   const {
     dbDatabase,
     dbHost,
