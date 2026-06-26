@@ -256,6 +256,43 @@
   background: var(--mj-bg-surface);
 }
 
+/* The real media player (mj-media-player / mj-storage-media-player) fills the stage. */
+.media-player {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Loading / no-access status for a FileID-backed image/pdf/web pane awaiting its streaming URL. */
+.media-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--mj-text-secondary);
+
+  &__icon {
+    font-size: 2rem;
+    color: var(--mj-text-muted);
+  }
+
+  &__text {
+    margin: 0;
+    font-size: 0.9rem;
+  }
+
+  &--error {
+    color: var(--mj-status-error-text);
+
+    .media-status__icon {
+      color: var(--mj-status-error);
+    }
+  }
+}
+
 /* ---------- Highlight overlay (fractional coords) ---------- */
 .media-highlight {
   position: absolute;

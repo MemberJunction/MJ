@@ -29,7 +29,9 @@ export const MEDIA_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
     Description:
       'Display a piece of media on the shared Media surface the user is watching during the call — ' +
       'an image, video, audio clip, PDF, or web page. It opens in its own tab and becomes the active ' +
-      'pane. Returns the new item id so you can later play, highlight, or close it.',
+      'pane. Provide `url` for an external/public asset, OR `fileId` to show a file stored in ' +
+      'MemberJunction (streamed securely, permission-gated) — supply at least one. Returns the new ' +
+      'item id so you can later play, highlight, or close it.',
     ParametersSchema: {
       type: 'object',
       properties: {
@@ -40,11 +42,15 @@ export const MEDIA_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
         },
         url: {
           type: 'string',
-          description: 'Absolute URL of the media to display (include the scheme, e.g. https://…).',
+          description:
+            'Absolute URL of an external/public media asset (include the scheme, e.g. https://…). ' +
+            'Provide this OR `fileId`.',
         },
         fileId: {
           type: 'string',
-          description: 'Optional MJ file/record id this media came from, for traceability.',
+          description:
+            'Id of an "MJ: Files" record to show a file stored in MemberJunction — streamed securely ' +
+            'and permission-gated (no public URL needed). Provide this OR `url`.',
         },
         displayName: {
           type: 'string',
@@ -55,7 +61,7 @@ export const MEDIA_TOOL_DEFINITIONS: RealtimeToolDefinition[] = [
           description: 'Optional one-line caption shown beneath the media.',
         },
       },
-      required: ['mediaType', 'url', 'displayName'],
+      required: ['mediaType', 'displayName'],
     },
   },
   {

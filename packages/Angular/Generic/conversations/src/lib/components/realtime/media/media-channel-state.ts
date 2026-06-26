@@ -27,14 +27,23 @@ export interface MediaItem {
   Id: string;
   /** Which render path the pane uses. */
   Type: MediaItemType;
-  /** Absolute URL of the media. */
-  Url: string;
+  /**
+   * Absolute URL of the media — for an EXTERNAL/public asset. Optional/empty when {@link FileID}
+   * is set (the surface resolves a secure streaming URL from the file id instead). At least one of
+   * `Url` / `FileID` is always present.
+   */
+  Url?: string;
+  /**
+   * Id of an "MJ: Files" record this item is backed by. When set, the item is streamed securely
+   * (permission-gated) from MJStorage rather than from a public {@link Url}; the surface resolves a
+   * short-lived streaming URL (via `CreateMediaAccessToken`) or hands the id straight to
+   * `mj-storage-media-player` for audio/video.
+   */
+  FileID?: string;
   /** Short tab label. */
   DisplayName: string;
   /** Optional one-line caption beneath the media. */
   Caption?: string;
-  /** Optional source file/record id for traceability (not rendered). */
-  FileId?: string;
   /** Optional fractional highlight overlay. */
   Highlight?: MediaHighlight;
   /** Set transiently to request playback of a video/audio item (consumed by the surface). */
@@ -172,16 +181,22 @@ export class MediaChannelState {
     }
   }
 
-  /** Validates one parsed item enough to render it safely (defensive against hand-edited / old payloads). */
+  /**
+   * Validates one parsed item enough to render it safely (defensive against hand-edited / old
+   * payloads). An item must carry a SOURCE — a non-empty `Url` OR a non-empty `FileID` — since one
+   * of the two backs every render path.
+   */
   private isValidItem(value: unknown): value is MediaItem {
     if (!value || typeof value !== 'object') {
       return false;
     }
     const item = value as Record<string, unknown>;
     const validTypes: MediaItemType[] = ['image', 'video', 'audio', 'pdf', 'web'];
+    const hasUrl = typeof item['Url'] === 'string' && (item['Url'] as string).length > 0;
+    const hasFileID = typeof item['FileID'] === 'string' && (item['FileID'] as string).length > 0;
     return (
       typeof item['Id'] === 'string' &&
-      typeof item['Url'] === 'string' &&
+      (hasUrl || hasFileID) &&
       typeof item['DisplayName'] === 'string' &&
       typeof item['Type'] === 'string' &&
       validTypes.includes(item['Type'] as MediaItemType)

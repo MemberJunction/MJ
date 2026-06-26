@@ -1040,6 +1040,11 @@ export class RealtimeSessionService {
     const service = this;
     return {
       AgentName: this.CurrentAgentName,
+      // The live session's provider — threaded by channels into MJ-backed surfaces (e.g. the Media
+      // channel's mj-storage-media-player / CreateMediaAccessToken). `get` so it stays current.
+      get Provider(): IMetadataProvider {
+        return service.Provider;
+      },
       SendContextNote: (text: string) => this.SendContextNote(text),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),

@@ -99,11 +99,16 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     });
   }
 
-  /** Wires the dynamically-created media surface: shared state engine + agent name, before first CD. */
+  /**
+   * Wires the dynamically-created media surface (before first CD): shared state engine + agent name,
+   * plus the live session's MJ provider so FileID-backed items stream securely (mj-storage-media-player
+   * + CreateMediaAccessToken) under the SAME authenticated, multi-provider-safe provider.
+   */
   public BindSurface(instance: RealtimeMediaSurfaceComponent): void {
     this.surface = instance;
     instance.State = this.State;
     instance.AgentName = this.Context?.AgentName ?? 'The agent';
+    instance.Provider = this.Context?.Provider ?? null;
   }
 
   public override UnbindSurface(): void {
@@ -144,16 +149,17 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     }
   }
 
-  /** Adds a media item and makes it active. */
+  /** Adds a media item and makes it active. Source is a public `url` OR an MJStorage `fileId` (>=1 required). */
   private applyShowMedia(args: Record<string, ToolArgValue>): string {
     const mediaType = asString(args['mediaType']);
     const url = asString(args['url']);
+    const fileId = asString(args['fileId']);
     const displayName = asString(args['displayName']);
     if (!mediaType || !VALID_MEDIA_TYPES.includes(mediaType as MediaItemType)) {
       return this.fail('Media_ShowMedia requires a "mediaType" of image | video | audio | pdf | web.');
     }
-    if (!url) {
-      return this.fail('Media_ShowMedia requires a non-empty "url".');
+    if (!url && !fileId) {
+      return this.fail('Media_ShowMedia requires a source — provide a "url" (external/public) OR a "fileId" (an MJ: Files id).');
     }
     if (!displayName) {
       return this.fail('Media_ShowMedia requires a "displayName".');
@@ -161,9 +167,9 @@ export class RealtimeMediaChannel extends BaseRealtimeChannelClient<RealtimeMedi
     const item = this.State.AddItem({
       Type: mediaType as MediaItemType,
       Url: url,
+      FileID: fileId,
       DisplayName: displayName,
       Caption: asString(args['caption']),
-      FileId: asString(args['fileId']),
     });
     this.note(`now showing ${mediaType} "${displayName}"`);
     return JSON.stringify({ success: true, id: item.Id, active: true });

@@ -54,62 +54,77 @@
             <span class="media-iconbtn__badge">{{ ImageZoom }}×</span>
           </button>
         }
-        <button
-          type="button"
-          class="media-iconbtn"
-          aria-label="Download media"
-          title="Download"
-          (click)="Download(active)"
-        >
-          <i class="fa-solid fa-download" aria-hidden="true"></i>
-        </button>
-        <button
-          type="button"
-          class="media-iconbtn"
-          aria-label="Open media in a new tab"
-          title="Open in new tab"
-          (click)="OpenInNew(active)"
-        >
-          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
-        </button>
+        @if (CanOpenOrDownload(active)) {
+          <button
+            type="button"
+            class="media-iconbtn"
+            aria-label="Download media"
+            title="Download"
+            (click)="Download(active)"
+          >
+            <i class="fa-solid fa-download" aria-hidden="true"></i>
+          </button>
+          <button
+            type="button"
+            class="media-iconbtn"
+            aria-label="Open media in a new tab"
+            title="Open in new tab"
+            (click)="OpenInNew(active)"
+          >
+            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          </button>
+        }
       </div>
 
       <!-- The single media pane (swaps as tabs switch). The highlight overlay sits on top. -->
       <div class="media-pane" #mediaPane>
         <div class="media-stage" [class.media-stage--scroll]="active.Type === 'image' && ImageZoom > 1">
-          @switch (active.Type) {
-            @case ('image') {
-              <img
-                class="media-image"
-                [src]="active.Url"
-                [style.transform]="'scale(' + ImageZoom + ')'"
-                [alt]="active.DisplayName"
-              />
-            }
-            @case ('video') {
-              <video class="media-video" [src]="active.Url" controls preload="metadata"></video>
-            }
-            @case ('audio') {
-              <div class="media-audio-wrap">
-                <i class="fa-solid fa-music media-audio-wrap__icon" aria-hidden="true"></i>
-                <audio class="media-audio" [src]="active.Url" controls preload="metadata"></audio>
-              </div>
-            }
-            @case ('pdf') {
-              <iframe
-                class="media-frame"
-                [src]="SafeUrl(active.Url)"
-                [title]="active.DisplayName"
-              ></iframe>
-            }
-            @case ('web') {
-              <iframe
-                class="media-frame"
-                [src]="SafeUrl(active.Url)"
-                [title]="active.DisplayName"
-                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                referrerpolicy="no-referrer"
-              ></iframe>
+          @if (UsesStoragePlayer(active)) {
+            <!-- Audio/video backed by an MJStorage file: secure, permission-gated streaming player. -->
+            <mj-storage-media-player
+              class="media-player"
+              [FileID]="active.FileID ?? null"
+              [Provider]="Provider"
+            ></mj-storage-media-player>
+          } @else if (UsesUrlPlayer(active)) {
+            <!-- Audio/video from a public URL: the real media player (waveform/transport). -->
+            <mj-media-player class="media-player" [Tracks]="TracksFor(active)"></mj-media-player>
+          } @else if (IsResolving(active)) {
+            <div class="media-status">
+              <i class="fa-solid fa-spinner fa-spin media-status__icon" aria-hidden="true"></i>
+              <p class="media-status__text">Loading secure media…</p>
+            </div>
+          } @else if (ResolveError(active); as err) {
+            <div class="media-status media-status--error">
+              <i class="fa-solid fa-triangle-exclamation media-status__icon" aria-hidden="true"></i>
+              <p class="media-status__text">{{ err }}</p>
+            </div>
+          } @else if (RenderUrl(active); as renderUrl) {
+            @switch (active.Type) {
+              @case ('image') {
+                <img
+                  class="media-image"
+                  [src]="renderUrl"
+                  [style.transform]="'scale(' + ImageZoom + ')'"
+                  [alt]="active.DisplayName"
+                />
+              }
+              @case ('pdf') {
+                <iframe
+                  class="media-frame"
+                  [src]="SafeUrl(renderUrl)"
+                  [title]="active.DisplayName"
+                ></iframe>
+              }
+              @case ('web') {
+                <iframe
+                  class="media-frame"
+                  [src]="SafeUrl(renderUrl)"
+                  [title]="active.DisplayName"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                  referrerpolicy="no-referrer"
+                ></iframe>
+              }
             }
           }
 
