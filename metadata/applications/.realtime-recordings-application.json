@@ -1,0 +1,22 @@
+{
+  "fields": {
+    "Name": "Realtime Recordings",
+    "Description": "Review and replay recorded realtime sessions — listen to the captured audio alongside its time-aligned, clickable transcript.",
+    "Icon": "fa-solid fa-circle-play",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 1020,
+    "Color": "#8b5cf6",
+    "DefaultNavItems": [
+      {
+        "Label": "Recordings",
+        "Icon": "fa-solid fa-circle-play",
+        "ResourceType": "Custom",
+        "DriverClass": "RealtimeRecordingsDashboard",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  }
+}

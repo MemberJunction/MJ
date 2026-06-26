@@ -1,0 +1,172 @@
+/* ===== Realtime Recordings dashboard ===== */
+
+.rr-split {
+  height: 100%;
+  width: 100%;
+}
+
+/* ----- master list pane ----- */
+
+.rr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem;
+  height: 100%;
+  overflow-y: auto;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-subtle);
+}
+
+.rr-list-item {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem;
+  border-radius: var(--mj-radius-md, 8px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.rr-list-item + .rr-list-item {
+  margin-top: 0.25rem;
+}
+
+.rr-list-item:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.rr-list-item:focus-visible {
+  outline: none;
+  border-color: var(--mj-border-focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+}
+
+.rr-list-item--active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+
+.rr-list-item-icon {
+  flex: 0 0 auto;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--mj-radius-md, 8px);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-size: 0.85rem;
+}
+
+.rr-list-item-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rr-list-item-title {
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rr-list-item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--mj-text-secondary);
+}
+
+.rr-list-item-meta i,
+.rr-list-item-conversation i {
+  margin-right: 0.25rem;
+  opacity: 0.85;
+}
+
+.rr-list-item-conversation {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: var(--mj-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ----- detail (playback) pane ----- */
+
+.rr-detail {
+  height: 100%;
+  overflow: auto;
+  background: var(--mj-bg-page);
+  padding: 1rem;
+}
+
+.rr-detail mj-realtime-evidence-playback {
+  display: block;
+  height: 100%;
+}
+
+/* ----- state blocks (loading / empty / error) ----- */
+
+.rr-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  min-height: 240px;
+  color: var(--mj-text-secondary);
+}
+
+.rr-state > i {
+  font-size: 2rem;
+  color: var(--mj-text-muted);
+}
+
+.rr-state-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--mj-text-primary);
+  margin: 0;
+}
+
+.rr-state-hint {
+  max-width: 380px;
+  font-size: 0.85rem;
+  color: var(--mj-text-muted);
+  margin: 0;
+}
+
+.rr-state--error {
+  color: var(--mj-status-error-text);
+}
+
+.rr-state--error > i {
+  color: var(--mj-status-error);
+}
+
+.rr-detail-empty,
+.rr-detail-loading {
+  height: 100%;
+}
+
+/* ----- responsive: tighten paddings on narrow viewports -----
+   (angular-split owns pane layout/direction via its [direction] input, so we
+   only adjust inner spacing here rather than overriding its flex-direction) */
+
+@media (max-width: 720px) {
+  .rr-list {
+    padding: 0.25rem;
+  }
+
+  .rr-detail {
+    padding: 0.5rem;
+  }
+}
