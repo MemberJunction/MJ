@@ -24,6 +24,14 @@ vi.mock('../github/github-client.js', () => ({
     DownloadMigrations: vi.fn(),
     GetLatestVersion: vi.fn(),
     ValidateGitHubTag: vi.fn(),
+    // The orchestrator derives an optional in-repo subpath from the Source URL;
+    // keep the real parser so single-app URLs resolve to `undefined` (root manifest).
+    ParseGitHubUrl: (repoUrl: string) => {
+        const m = repoUrl.match(/github\.com\/([^/?#]+)\/([^/?#]+)((?:\/[^?#]+)*)/);
+        if (!m) return null;
+        const sub = (m[3] ?? '').replace(/^\/+|\/+$/g, '');
+        return { Owner: m[1], Repo: m[2].replace(/\.git$/, ''), Subpath: sub.length ? sub : undefined };
+    },
     ListGitHubReleases: vi.fn(),
     ListGitHubTags: vi.fn(),
 }));
@@ -258,6 +266,55 @@ describe('InstallApp dependency orchestration', () => {
         expect(installSequence).toEqual([]);
         expect(vi.mocked(CreateAppSchema)).not.toHaveBeenCalled();
         expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
+    });
+});
+
+describe('HandleMigrations — platform-aware dialect directory', () => {
+    // A full Open App (schema + migrations) like the per-connector Integrations apps.
+    const fullAppJSON = JSON.stringify({
+        manifestVersion: 1, name: 'connector-hubspot', displayName: 'HubSpot Connector',
+        description: 'HubSpot connector test app description', version: '1.0.0', publisher: { name: 'Test' },
+        repository: 'https://github.com/MemberJunction/Integrations', mjVersionRange: '>=5.0.0 <6.0.0',
+        schema: { name: 'mj_connector_hubspot', createIfNotExists: true },
+        migrations: { directory: 'migrations', engine: 'skyway' },
+        packages: { server: [{ name: '@memberjunction/connector-hubspot', role: 'bootstrap', startupExport: 'registerConnector' }] },
+    });
+    const source = 'https://github.com/MemberJunction/Integrations/CRM/HubSpot';
+    const ctxFor = (platformKey: string) =>
+        ({ ...context, DatabaseProvider: { Dialect: { PlatformKey: platformKey } }, DatabaseConfig: {} } as unknown as OrchestratorContext);
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.mocked(SchemaExists).mockResolvedValue(false);
+        vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
+        vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true, MigrationsApplied: 1, AppliedFiles: ['V1__x.sql'] });
+        vi.mocked(AddAppPackages).mockReturnValue({ Success: true } as never);
+        vi.mocked(RunPackageInstall).mockReturnValue({ Success: true } as never);
+        vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });
+        vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
+        vi.mocked(SetAppStatus).mockResolvedValue(undefined);
+        vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined as never);
+        vi.mocked(FindInstalledApp).mockResolvedValue(null);
+        vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(RecordAppInstallation).mockResolvedValue('id-hubspot');
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: fullAppJSON });
+        vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, LocalPath: '/tmp/m', Files: ['V1__x.sql'] });
+    });
+
+    it('downloads migrations/ on SQL Server', async () => {
+        const r = await InstallApp({ Source: source }, ctxFor('sqlserver'));
+        expect(r.Success).toBe(true);
+        expect(vi.mocked(DownloadMigrations)).toHaveBeenCalledWith(
+            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations', expect.any(String), expect.anything(), 'CRM/HubSpot',
+        );
+    });
+
+    it('downloads migrations-pg/ on PostgreSQL', async () => {
+        const r = await InstallApp({ Source: source }, ctxFor('postgresql'));
+        expect(r.Success).toBe(true);
+        expect(vi.mocked(DownloadMigrations)).toHaveBeenCalledWith(
+            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations-pg', expect.any(String), expect.anything(), 'CRM/HubSpot',
+        );
     });
 });
 

@@ -20,6 +20,7 @@
     "@memberjunction/core-entities": "5.42.0",
     "@memberjunction/global": "5.42.0",
     "@memberjunction/sql-dialect": "5.42.0",
+    "@octokit/rest": "^21.1.1",
     "semver": "^7.7.1",
     "simple-git": "^3.27.0",
     "zod": "^3.24.3"

@@ -6,7 +6,7 @@
  */
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
@@ -14,7 +14,7 @@ import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/versi
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ListGitHubReleases, ListGitHubTags, ValidateGitHubTag, ParseGitHubUrl, type GitHubClientOptions, type MigrationDownloadResult } from '../github/github-client.js';
 import semver from 'semver';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
@@ -81,7 +81,12 @@ export interface OrchestratorContext {
 /**
  * Executes the full install flow for an Open App.
  *
- * Steps:
+ * Every capability block is optional and additive: an app may extend MJ via a schema,
+ * metadata, packages, any combination, or be manifest-only. Each step below is gated on
+ * its block being present, so a manifest-only app simply records itself and finishes. The
+ * persisted `MJ: Open Apps.ManifestJSON` is the source of truth re-read by upgrade/remove.
+ *
+ * Steps (each no-ops when its block is absent):
  * 1.  Fetch manifest from GitHub
  * 2.  Validate manifest (Zod)
  * 3.  Validate MJ version compatibility
@@ -107,20 +112,24 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
   let createdAppId: string | undefined;
   let manifest: MJAppManifest | undefined;
 
+  // In-repo subpath for multi-app repos. Explicit option wins; otherwise derive it
+  // from the Source URL (e.g. `.../Integrations/CRM/HubSpot`). undefined = repo root.
+  const subpath = options.Subpath ?? ParseGitHubUrl(options.Source)?.Subpath;
+
   try {
     // Step 1a: If an explicit version was requested, validate the tag exists on GitHub
     const explicitVersion = options.Version;
     if (explicitVersion) {
       Callbacks?.OnProgress?.('Fetch', `Validating version tag v${explicitVersion.replace(/^v/, '')} exists...`);
-      const tagResult = await ValidateGitHubTag(options.Source, explicitVersion, context.GitHubOptions);
+      const tagResult = await ValidateGitHubTag(options.Source, explicitVersion, context.GitHubOptions, subpath);
       if (!tagResult.Exists) {
         return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${explicitVersion} not found`);
       }
     }
 
-    // Step 1b: Fetch manifest
+    // Step 1b: Fetch manifest (from the app's subpath when this is a multi-app repo)
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
-    const fetchResult = await FetchManifestFromGitHub(options.Source, explicitVersion, context.GitHubOptions);
+    const fetchResult = await FetchManifestFromGitHub(options.Source, explicitVersion, context.GitHubOptions, subpath);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -200,7 +209,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Step 8: Run migrations
     if (manifest.migrations && manifest.schema) {
-      const migrationResult = await HandleMigrations(manifest, context);
+      const migrationResult = await HandleMigrations(manifest, context, subpath);
       if (!migrationResult.Success) {
         await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
@@ -209,7 +218,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Step 9: Record installation with 'Installing' status
     Callbacks?.OnProgress?.('Record', 'Recording app installation...');
-    const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks);
+    const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks, undefined, subpath);
     if (!recordResult.Success) {
       await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Record', startTime, recordResult.ErrorMessage ?? 'Failed to record installation');
@@ -332,13 +341,14 @@ async function RecordInstallationAtomically(
   manifest: MJAppManifest,
   callbacks?: AppInstallCallbacks,
   provider?: IMetadataProvider,
+  subpath?: string,
 ): Promise<InternalResult> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const tg = await md.CreateTransactionGroup();
 
   try {
     // Queue OpenApp save with 'Installing' status
-    const appId = await RecordAppInstallation(contextUser, manifest, callbacks, tg, 'Installing');
+    const appId = await RecordAppInstallation(contextUser, manifest, callbacks, tg, 'Installing', provider, subpath);
 
     if (manifest.dependencies) {
       await RecordAppDependencies(contextUser, appId, manifest.dependencies, tg);
@@ -408,14 +418,14 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 1: Fetch new manifest
     const explicitUpgradeVersion = options.Version;
-    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions));
+    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined));
     if (!targetVersion) {
       return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, 'Could not determine target version');
     }
 
     // If an explicit version was requested, validate the tag exists on GitHub
     if (explicitUpgradeVersion) {
-      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions);
+      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, existingApp.Subpath ?? undefined);
       if (!tagResult.Exists) {
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${targetVersion} not found`);
       }
@@ -437,8 +447,12 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       };
     }
 
+    // Re-fetch from the same in-repo subpath the app was originally installed from
+    // (null/undefined for root-manifest apps — fully backwards compatible).
+    const subpath = existingApp.Subpath ?? undefined;
+
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest for ${options.AppName} v${targetVersion}...`);
-    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions);
+    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -492,7 +506,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 4: Run migrations (Skyway applies only new ones)
     if (manifest.migrations && manifest.schema) {
-      const migrationResult = await HandleMigrations(manifest, context);
+      const migrationResult = await HandleMigrations(manifest, context, subpath);
       if (!migrationResult.Success) {
         // OpenApp migrations are forward-only — there is no automatic down/rollback, so the
         // schema may be partially upgraded. Skyway records each applied migration in the app
@@ -618,7 +632,11 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Executes the remove flow for an installed Open App.
+ * Executes the remove flow for an installed Open App, inverting whatever the install added.
+ *
+ * Symmetric teardown by form: a schema-backed app's schema is dropped; package/config/bootstrap
+ * references are removed in every case. The persisted `ManifestJSON` (the source of truth)
+ * decides which teardown steps apply.
  */
 export async function RemoveApp(options: RemoveOptions, context: OrchestratorContext): Promise<AppOperationResult> {
   const startTime = Date.now();
@@ -684,6 +702,17 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
       metadataResult = await RemoveAppEntityMetadata(existingApp.SchemaName, context.ContextUser, Callbacks);
     }
 
+    // Teardown — retire the rows this app's seed migrations wrote into the SHARED core schema
+    // (Integration/IO/IOF/Action rows in __mj); dropping the app's own schema cannot reach them.
+    // Data removal, so gated on !KeepData. No-op unless the manifest declares migrations.teardownDirectory.
+    let teardownResult: InternalResult = { Success: true };
+    if (!options.KeepData) {
+      teardownResult = await HandleTeardown(manifest, context, existingApp.Subpath ?? undefined);
+      if (!teardownResult.Success) {
+        Callbacks?.OnError?.('Metadata', `Teardown failed: ${teardownResult.ErrorMessage}`);
+      }
+    }
+
     let schemaDropError: string | undefined;
     if (!options.KeepData && existingApp.SchemaName && !schemaShared) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
@@ -698,8 +727,12 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
 
     // Abort BEFORE touching the filesystem if DB cleanup failed — the app stays installed
     // (status Error) with its files intact, so it can be retried/removed again cleanly.
-    const removalErrors = [shareCheckError, metadataResult.Success ? undefined : metadataResult.ErrorMessage, schemaDropError]
-      .filter((e): e is string => !!e);
+    const removalErrors = [
+      shareCheckError,
+      teardownResult.Success ? undefined : teardownResult.ErrorMessage,
+      metadataResult.Success ? undefined : metadataResult.ErrorMessage,
+      schemaDropError,
+    ].filter((e): e is string => !!e);
     if (removalErrors.length > 0) {
       const combined = removalErrors.join('; ');
       await RecordInstallHistoryEntry(context.ContextUser, existingApp.ID, 'Remove', manifest, {
@@ -872,7 +905,7 @@ interface InternalResult {
   Success: boolean;
   ErrorMessage?: string;
   AppId?: string;
-  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string }>;
+  DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>;
   /** True when package.json was updated but npm install failed (e.g., auth issue) */
   PackageJsonUpdated?: boolean;
   /** True when a NEW schema was actually created (vs an existing one reused) — for rollback (B18). */
@@ -917,7 +950,7 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
 
   const depsToInstall = (result.InstallOrder ?? [])
     .filter((d) => !d.AlreadyInstalled)
-    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange }));
+    .map((d) => ({ AppName: d.AppName, Repository: d.Repository, VersionRange: d.VersionRange, Subpath: d.Subpath }));
 
   return { Success: true, DepsToInstall: depsToInstall };
 }
@@ -927,8 +960,8 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
  * manifest from GitHub. Used by the graph builder to walk transitive deps.
  */
 function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
-  return async (repoUrl: string) => {
-    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions);
+  return async (repoUrl: string, subpath?: string) => {
+    const fetched = await FetchManifestFromGitHub(repoUrl, undefined, context.GitHubOptions, subpath);
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -964,7 +997,7 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  * to dependencies.
  */
 async function InstallDependencies(
-  deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
+  deps: Array<{ AppName: string; Repository: string; VersionRange: string; Subpath?: string }>,
   context: OrchestratorContext,
   inherited: PassthroughInstallOptions,
 ): Promise<InternalResult> {
@@ -988,6 +1021,7 @@ async function InstallDependencies(
     const result = await InstallApp(
       {
         Source: dep.Repository,
+        Subpath: dep.Subpath,
         // Pinned to satisfy the declared range; undefined ⇒ no constraint ⇒ default-branch latest.
         Version: resolved.Version,
         _skipDependencyResolution: true,
@@ -1083,7 +1117,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 /**
  * Downloads and runs Skyway migrations for an app's schema.
  */
-async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
+async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
   if (!manifest.schema || !manifest.migrations) {
     return { Success: true };
   }
@@ -1092,7 +1126,12 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
   const tempDir = join(tmpdir(), `mj-app-${manifest.name}-${Date.now()}`);
   mkdirSync(tempDir, { recursive: true });
 
-  const downloadResult = await DownloadAppMigrations(manifest, context, tempDir);
+  // Live DB platform — selects the Skyway provider for RunAppMigrations below.
+  const platform = context.DatabaseProvider.Dialect.PlatformKey;
+
+  // Platform-aware download with PG fallback (uses `<directory>-pg/` on Postgres when present,
+  // else the declared directory) + subpath-aware for multi-app repos.
+  const downloadResult = await DownloadAppMigrations(manifest, context, tempDir, subpath);
 
   if (!downloadResult.Success) {
     return { Success: false, ErrorMessage: downloadResult.ErrorMessage };
@@ -1107,10 +1146,68 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
     MJCoreSchema: context.MJCoreSchema,
     ExtraPlaceholders: context.MigrationPlaceholders,
     // Select the Skyway provider matching the live DB platform.
-    Platform: context.DatabaseProvider.Dialect.PlatformKey,
+    Platform: platform,
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
+}
+
+/**
+ * Remove-time teardown: runs the app's `migrations.teardownDirectory` scripts to retire the rows its
+ * seed migrations wrote into the SHARED core schema (Integration/IO/IOF/Action rows in __mj). Dropping
+ * the app's OWN schema cannot reach those, so without this they would orphan on `mj app remove`.
+ *
+ * Symmetric with {@link HandleMigrations}: platform-aware directory (`<teardownDirectory>-pg/` on
+ * Postgres), subpath-aware download. Scripts are one-shot inverse DELETEs (generated from the same
+ * metadata as the seed migration by the publisher's build) executed in filename order via the live
+ * provider — NOT through Skyway (they are not versioned migrations). `${mjSchema}` resolves to the
+ * core schema. No-op when the manifest declares no teardownDirectory.
+ */
+async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorContext, subpath?: string): Promise<InternalResult> {
+  const teardownDir = manifest.migrations?.teardownDirectory;
+  if (!teardownDir) {
+    return { Success: true };
+  }
+
+  const platform = context.DatabaseProvider.Dialect.PlatformKey;
+  const dir = platform === 'postgresql' ? `${teardownDir}-pg` : teardownDir;
+  const tempDir = join(tmpdir(), `mj-app-${manifest.name}-teardown-${Date.now()}`);
+  mkdirSync(tempDir, { recursive: true });
+
+  context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
+  const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
+  if (!download.Success) {
+    return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
+  }
+  // DownloadMigrations only writes .sql; sort by filename so a numbered teardown runs in order.
+  const files = (download.Files ?? []).filter((f) => f.endsWith('.sql')).sort();
+  if (files.length === 0) {
+    context.Callbacks?.OnWarn?.('Metadata', `No teardown scripts in '${dir}' — this app's rows in the shared core schema will NOT be retired on remove.`);
+    return { Success: true };
+  }
+
+  const mjSchema = context.MJCoreSchema ?? '__mj';
+  context.Callbacks?.OnProgress?.('Metadata', `Running ${files.length} teardown script(s) against '${mjSchema}'...`);
+  // Atomic: the inverse-DELETEs across all teardown files run in ONE transaction so a mid-list
+  // failure rolls back the whole teardown rather than leaving the app's rows half-retired (some
+  // files committed, some not) — which would orphan rows AND block a clean reinstall.
+  await context.DatabaseProvider.BeginTransaction();
+  try {
+    for (const file of files) {
+      const sql = readFileSync(join(tempDir, file), 'utf-8').split('${mjSchema}').join(mjSchema);
+      if (sql.trim()) {
+        await context.DatabaseProvider.ExecuteSQL(sql);
+      }
+    }
+    await context.DatabaseProvider.CommitTransaction();
+  } catch (error: unknown) {
+    await context.DatabaseProvider.RollbackTransaction();
+    const message = error instanceof Error ? error.message : String(error);
+    return { Success: false, ErrorMessage: `Teardown failed for '${manifest.name}' (rolled back): ${message}` };
+  }
+
+  context.Callbacks?.OnSuccess?.('Metadata', `Retired this app's rows from '${mjSchema}' (${files.length} teardown script(s)).`);
+  return { Success: true };
 }
 
 /**
@@ -1120,18 +1217,20 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
  * mirroring core `mj migrate`'s `migrations` → `migrations-pg` swap — and fall
  * back to the declared directory when no PG variant exists (dialect-neutral or
  * SQL-Server-only apps). On SQL Server, always use the declared directory.
+ * subpath-aware for multi-app repos.
  */
 async function DownloadAppMigrations(
   manifest: MJAppManifest,
   context: OrchestratorContext,
   tempDir: string,
+  subpath?: string,
 ): Promise<MigrationDownloadResult> {
   const baseDir = manifest.migrations!.directory;
   const isPG = context.DatabaseProvider.Dialect.PlatformKey === 'postgresql';
 
   if (isPG) {
     const pgDir = `${baseDir.replace(/\/+$/, '')}-pg`;
-    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions);
+    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath);
     // Use the PG-specific set only if it exists AND has files; otherwise fall
     // back to the declared directory (a 404 yields Success:false, an empty dir
     // yields Success:true with no files — both mean "no PG variant here").
@@ -1140,7 +1239,7 @@ async function DownloadAppMigrations(
     }
   }
 
-  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions);
+  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath);
 }
 
 /**

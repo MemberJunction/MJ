@@ -40,6 +40,7 @@ export async function RecordAppInstallation(
   transactionGroup?: TransactionGroupBase,
   initialStatus: AppStatus = 'Active',
   provider?: IMetadataProvider,
+  subpath?: string,
 ): Promise<string> {
   callbacks?.OnProgress?.('Record', 'Recording app installation...');
 
@@ -55,7 +56,7 @@ export async function RecordAppInstallation(
     entity.NewRecord();
   }
 
-  SetAppFields(entity, manifest, contextUser, initialStatus);
+  SetAppFields(entity, manifest, contextUser, initialStatus, subpath);
 
   if (transactionGroup) {
     entity.TransactionGroup = transactionGroup;
@@ -79,6 +80,7 @@ function SetAppFields(
   manifest: MJAppManifest,
   contextUser: UserInfo,
   status: AppStatus = 'Active',
+  subpath?: string,
 ): void {
   entity.Name = manifest.name;
   entity.DisplayName = manifest.displayName;
@@ -88,6 +90,9 @@ function SetAppFields(
   entity.PublisherEmail = manifest.publisher.email ?? null;
   entity.PublisherURL = manifest.publisher.url ?? null;
   entity.RepositoryURL = manifest.repository;
+  // Subpath persists which in-repo directory a multi-app repo installed from, so
+  // upgrade/remove re-fetch the right manifest. null = manifest at the repo root.
+  entity.Subpath = subpath ?? null;
   entity.SchemaName = manifest.schema?.name ?? null;
   entity.MJVersionRange = manifest.mjVersionRange;
   entity.License = manifest.license ?? null;
@@ -106,13 +111,16 @@ function SetAppFields(
  * @param appId - The OpenApp record ID
  * @param updates - Fields to update
  */
-export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Record<string, unknown>, provider?: IMetadataProvider): Promise<void> {
+export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Partial<MJOpenAppEntity>, provider?: IMetadataProvider): Promise<void> {
   const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const entity = await md.GetEntityObject<MJOpenAppEntity>('MJ: Open Apps', contextUser);
   const loaded = await entity.InnerLoad(CompositeKey.FromID(appId));
   if (!loaded) {
     throw new Error(`Open App record not found: ${appId}`);
   }
+  // `updates` is a typed Partial<MJOpenAppEntity>, so call sites get compile-time field-name +
+  // value-type checking. The body applies it dynamically via Set() — the only way to write an
+  // arbitrary field subset onto a BaseEntity (you can't index typed accessors by a runtime key).
   for (const [field, value] of Object.entries(updates)) {
     entity.Set(field, value);
   }
