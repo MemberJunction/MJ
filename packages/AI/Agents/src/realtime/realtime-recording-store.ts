@@ -8,7 +8,7 @@
  * @module @memberjunction/ai-agents
  */
 import { IMetadataProvider, UserInfo, LogError } from '@memberjunction/core';
-import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntity, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 import { RealtimeRecordingMedia } from './realtime-recording-capture';
 
@@ -70,6 +70,45 @@ function extensionForMime(mimeType: string): string {
 /** The per-session folder all of a session's recording artifacts live in (shards + final file). */
 function recordingFolder(sessionID: string): string {
     return `realtime-recordings/${sessionID}`;
+}
+
+/**
+ * Reads a stored recording's bytes back through **authenticated** MJStorage (server-side `GetObject` on
+ * the file's own provider/account) — NOT a public pre-signed link. Used to stream a recording to an
+ * authorized browser securely. Never throws.
+ *
+ * @param fileID The `MJ: Files` id of the recording.
+ * @returns `{ Bytes, MimeType }` or `null` when the file/account/object can't be resolved.
+ */
+export async function readRealtimeRecordingFile(
+    fileID: string, contextUser: UserInfo, provider: IMetadataProvider
+): Promise<{ Bytes: Buffer; MimeType: string } | null> {
+    try {
+        const file = await provider.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+        if (!await file.Load(fileID) || !file.ProviderKey) {
+            return null;
+        }
+        // Ensure the engine knows this provider's accounts (idempotent; force-refresh if missing).
+        await FileStorageEngine.Instance.Config(false, contextUser, provider);
+        let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+        if (accounts.length === 0) {
+            await FileStorageEngine.Instance.Config(true, contextUser, provider);
+            accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+        }
+        const account = accounts[0];
+        if (!account) {
+            return null;
+        }
+        const driver = await FileStorageEngine.Instance.GetDriver(account.ID, contextUser);
+        const bytes = await driver.GetObject({ fullPath: file.ProviderKey });
+        if (!bytes || bytes.length === 0) {
+            return null;
+        }
+        return { Bytes: bytes, MimeType: file.ContentType ?? 'audio/webm' };
+    } catch (error) {
+        LogError(`readRealtimeRecordingFile failed (file ${fileID}): ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+    }
 }
 
 /** Input to {@link writeRealtimeRecordingSegment}. */

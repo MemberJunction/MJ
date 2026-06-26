@@ -24,7 +24,7 @@
  *
  * @module @memberjunction/server
  */
-import { Resolver, Mutation, Arg, Ctx, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+import { Resolver, Mutation, Query, Arg, Ctx, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -52,6 +52,7 @@ import {
     storeRealtimeRecording,
     writeRealtimeRecordingSegment,
     deleteRealtimeRecordingSegments,
+    readRealtimeRecordingFile,
 } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
@@ -313,6 +314,29 @@ export class UploadRealtimeRecordingResult {
     /** ID of the created `MJ: Files` row holding the uploaded recording. Null on failure. */
     @Field(() => String, { nullable: true })
     FileID?: string;
+}
+
+/**
+ * Result of {@link RealtimeClientSessionResolver.GetRealtimeRecordingAudio} — a session's recording
+ * delivered as base64 bytes read through authenticated MJStorage (no public pre-signed link), so an
+ * authorized browser can build a local blob URL. Failures come back as `Success: false`.
+ */
+@ObjectType()
+export class RealtimeRecordingAudioResult {
+    @Field(() => Boolean)
+    Success: boolean;
+
+    /** Base64-encoded audio bytes. Null on failure. */
+    @Field(() => String, { nullable: true })
+    AudioBase64?: string;
+
+    /** The audio MIME type (e.g. `audio/webm;codecs=opus`). Null on failure. */
+    @Field(() => String, { nullable: true })
+    MimeType?: string;
+
+    /** Human-readable failure reason. Null on success. */
+    @Field(() => String, { nullable: true })
+    ErrorMessage?: string;
 }
 
 /**
@@ -720,6 +744,38 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         } catch (error) {
             LogError(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment failed for session ${agentSessionId}: ${error instanceof Error ? error.message : String(error)}`);
             return false;
+        }
+    }
+
+    /**
+     * Returns a session's recording as base64 audio, read through **authenticated** MJStorage
+     * (server-side `GetObject` on the file's own account) — NOT a public pre-signed link. The browser
+     * builds a local blob URL from this, so the audio never leaves an authenticated, ownership-gated
+     * path. Failures come back as `Success: false` (only authn/ownership still throws).
+     *
+     * @param agentSessionId The session whose recording to fetch (ownership-gated).
+     * @returns Base64 audio + MIME type, or a failure envelope.
+     */
+    @Query(() => RealtimeRecordingAudioResult)
+    async GetRealtimeRecordingAudio(
+        @Arg('agentSessionId', () => String) agentSessionId: string,
+        @Ctx() ctx: AppContext,
+    ): Promise<RealtimeRecordingAudioResult> {
+        try {
+            const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
+            const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
+            if (!session.RecordingFileID) {
+                return { Success: false, ErrorMessage: 'This session has no recording.' };
+            }
+            const audio = await readRealtimeRecordingFile(session.RecordingFileID, contextUser, provider);
+            if (!audio) {
+                return { Success: false, ErrorMessage: 'The recording could not be read from storage.' };
+            }
+            return { Success: true, AudioBase64: audio.Bytes.toString('base64'), MimeType: audio.MimeType };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`RealtimeClientSessionResolver.GetRealtimeRecordingAudio failed for session ${agentSessionId}: ${message}`);
+            return { Success: false, ErrorMessage: message };
         }
     }
 
