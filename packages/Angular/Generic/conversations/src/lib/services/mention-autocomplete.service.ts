@@ -1,20 +1,20 @@
 import { Injectable } from '@angular/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { UserInfo, Metadata, EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, Metadata, EntityInfo, QueryInfo, IMetadataProvider } from '@memberjunction/core';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 
 /**
  * Item in the autocomplete dropdown
  */
 export interface MentionSuggestion {
-  type: 'agent' | 'user' | 'entity';
+  type: 'agent' | 'user' | 'entity' | 'query';
   id: string;
   name: string;
   displayName: string;
   description?: string;
   avatarUrl?: string; // Deprecated, use imageUrl
   imageUrl?: string; // For agent LogoURL or user avatar
-  icon?: string; // For agents (FontAwesome class)
+  icon?: string; // FontAwesome class for agents, entities, and queries
 }
 
 /**
@@ -27,6 +27,9 @@ export class MentionAutocompleteService {
   private agentsCache: MJAIAgentEntityExtended[] = [];
   private usersCache: UserInfo[] = [];
   private entitiesCache: EntityInfo[] = [];
+  private queriesCache: QueryInfo[] = [];
+  /** Generic icon for all query mentions, sourced from the 'MJ: Queries' entity. */
+  private queriesEntityIcon = 'fa-solid fa-database';
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
 
@@ -82,6 +85,10 @@ export class MentionAutocompleteService {
       // Load entities the current user can read (candidates for #entity mentions)
       this.entitiesCache = this.loadReadableEntities(currentUser, provider);
 
+      // Load queries the current user can run (also surfaced under the '#' trigger)
+      this.queriesCache = this.loadRunnableQueries(currentUser, provider);
+      this.queriesEntityIcon = this.resolveQueriesEntityIcon(provider);
+
       this.isInitialized = true;
     } catch (error) {
       console.error('Failed to initialize MentionAutocompleteService:', error);
@@ -134,15 +141,48 @@ export class MentionAutocompleteService {
   }
 
   /**
+   * Load queries the current user has run permission for.
+   * These are the candidates surfaced for #query mentions.
+   */
+  private loadRunnableQueries(user: UserInfo, provider?: IMetadataProvider): QueryInfo[] {
+    try {
+      const md = provider ?? new Metadata();
+      return (md.Queries || []).filter(query => {
+        try {
+          return query.UserCanRun(user);
+        } catch {
+          // Fail closed — exclude query on permission-check error
+          return false;
+        }
+      });
+    } catch (error) {
+      console.error('Failed to load queries for mention autocomplete:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Resolve the generic icon used for all query mentions from the 'MJ: Queries' entity.
+   */
+  private resolveQueriesEntityIcon(provider?: IMetadataProvider): string {
+    try {
+      const md = provider ?? new Metadata();
+      return md.EntityByName('MJ: Queries')?.Icon || 'fa-solid fa-database';
+    } catch {
+      return 'fa-solid fa-database';
+    }
+  }
+
+  /**
    * Get suggestions based on search query
    * @param query The search text after @ symbol
    * @param includeUsers Whether to include users in suggestions
    * @returns Filtered and ranked suggestions
    */
   getSuggestions(query: string, includeUsers: boolean = true, trigger: string = '@'): MentionSuggestion[] {
-    // The '#' trigger searches entities; '@' searches agents + users
+    // The '#' trigger searches entities + queries; '@' searches agents + users
     if (trigger === '#') {
-      return this.getEntitySuggestions(query);
+      return this.getEntityAndQuerySuggestions(query);
     }
 
     const lowerQuery = query.toLowerCase().trim();
@@ -196,29 +236,50 @@ export class MentionAutocompleteService {
   }
 
   /**
-   * Get entity suggestions for #entity mentions, ranked by query match.
-   * Capped to keep the dropdown light (entity sets can be large).
+   * Get entity + query suggestions for #mentions, ranked by query match.
+   * Capped to keep the dropdown light (entity/query sets can be large).
    */
-  private getEntitySuggestions(query: string): MentionSuggestion[] {
+  private getEntityAndQuerySuggestions(query: string): MentionSuggestion[] {
     const lowerQuery = query.toLowerCase().trim();
-    const MAX_ENTITY_SUGGESTIONS = 12;
+    const MAX_SUGGESTIONS = 12;
 
-    return this.entitiesCache
-      .map(entity => ({ entity, score: this.calculateMatchScore(entity.Name || '', lowerQuery) }))
-      .filter(x => x.score > 0 || !lowerQuery)
-      .sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return (a.entity.Name || '').localeCompare(b.entity.Name || '');
-      })
-      .slice(0, MAX_ENTITY_SUGGESTIONS)
-      .map(({ entity }) => ({
+    const entityItems = this.entitiesCache.map(entity => ({
+      label: entity.DisplayNameOrName,
+      score: Math.max(
+        this.calculateMatchScore(entity.Name || '', lowerQuery),
+        this.calculateMatchScore(entity.DisplayName || '', lowerQuery)
+      ),
+      suggestion: {
         type: 'entity' as const,
         id: entity.ID,
         name: entity.Name,
-        displayName: entity.Name,
+        displayName: entity.DisplayNameOrName,
         description: entity.Description || undefined,
-        icon: 'fa-solid fa-table'
-      }));
+        icon: entity.Icon || 'fa-solid fa-table'
+      }
+    }));
+
+    const queryItems = this.queriesCache.map(q => ({
+      label: q.Name || '',
+      score: this.calculateMatchScore(q.Name || '', lowerQuery),
+      suggestion: {
+        type: 'query' as const,
+        id: q.ID,
+        name: q.Name || '',
+        displayName: q.Name || '',
+        description: q.Description || undefined,
+        icon: this.queriesEntityIcon
+      }
+    }));
+
+    return [...entityItems, ...queryItems]
+      .filter(x => x.score > 0 || !lowerQuery)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.label.localeCompare(b.label);
+      })
+      .slice(0, MAX_SUGGESTIONS)
+      .map(x => x.suggestion);
   }
 
   /**
@@ -286,6 +347,20 @@ export class MentionAutocompleteService {
    */
   getAvailableEntities(): EntityInfo[] {
     return this.entitiesCache;
+  }
+
+  /**
+   * Get available queries for parsing
+   */
+  getAvailableQueries(): QueryInfo[] {
+    return this.queriesCache;
+  }
+
+  /**
+   * Get the generic icon used for all query mentions.
+   */
+  getQueriesEntityIcon(): string {
+    return this.queriesEntityIcon;
   }
 
   /**

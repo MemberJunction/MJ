@@ -106,7 +106,8 @@ LoadEntityActionUX();
     MjSlidePanelComponent,
     MJButtonDirective,
     MJEmptyStateComponent,
-    FilterBuilderModule
+    FilterBuilderModule,
+    EntityActionUXHostComponent
   ],
   exports: [
     EntityCardsComponent,
