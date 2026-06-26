@@ -108,6 +108,10 @@ module.exports = {
     { type: 'ActionSubclasses', directory: './packages/GeneratedActions/src/generated' },
     { type: 'CoreEntitySubclasses', directory: './packages/MJCoreEntities/src/generated' },
     { type: 'EntitySubclasses', directory: './packages/GeneratedEntities/src/generated' },
+    // Remote Operations typed bases — parallel to the entity-subclass split: core MJ ops ship in
+    // @memberjunction/core-entities; downstream/user repos add a `RemoteOperations` entry pointing at
+    // their GeneratedEntities package (this repo doesn't generate non-core ops, so only the core target is set).
+    { type: 'CoreRemoteOperations', directory: './packages/MJCoreEntities/src/generated' },
     { type: 'DBSchemaJSON', directory: './Schema Files' },
   ],
 

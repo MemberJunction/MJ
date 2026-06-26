@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/record-comparison",
   "type": "module",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "MemberJunction: Framework-agnostic record comparison engine — loads a set of records for one entity and computes a structured field-level delta. Shared by the duplicate-detection reasoning path and the UI side-by-side comparison panel.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,7 +16,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.42.0"
+    "@memberjunction/core": "5.43.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

@@ -71,6 +71,7 @@ export class RecordSetProcessor extends BaseSingleton<RecordSetProcessor> {
             SourceFilter: descriptor.SourceFilter,
             BatchSize: batchSize,
             Configuration: options.configuration,
+            DryRun: options.dryRun,
         };
 
         const handle = await tracker.BeginRun(meta, contextUser, provider);

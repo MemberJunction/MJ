@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-clustering",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "MemberJunction: Reusable Angular clustering visualization components with scatter plot, config panel, and clustering service",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -32,15 +32,15 @@
     "@angular/forms": "21.1.3"
   },
   "dependencies": {
-    "@memberjunction/ai-engine-base": "5.42.0",
-    "@memberjunction/ai-vectors-memory": "5.42.0",
-    "@memberjunction/core": "5.42.0",
-    "@memberjunction/core-entities": "5.42.0",
-    "@memberjunction/global": "5.42.0",
-    "@memberjunction/graphql-dataprovider": "5.42.0",
-    "@memberjunction/ng-base-types": "5.42.0",
-    "@memberjunction/ng-entity-card": "5.42.0",
-    "@memberjunction/ng-entity-viewer": "5.42.0",
+    "@memberjunction/ai-engine-base": "5.43.0",
+    "@memberjunction/ai-vectors-memory": "5.43.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/graphql-dataprovider": "5.43.0",
+    "@memberjunction/ng-base-types": "5.43.0",
+    "@memberjunction/ng-entity-card": "5.43.0",
+    "@memberjunction/ng-entity-viewer": "5.43.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1",
     "umap-js": "^1.4.0"

@@ -1380,7 +1380,11 @@ export class FlowAgentType extends BaseAgentType {
 
         // Add action or subAgent based on LoopBodyType (using cached engine data - no await needed)
         if (node.LoopBodyType === 'Action') {
-            const action = AIEngine.Instance.Actions.find(a => UUIDsEqual(a.ID, node.ActionID));
+            // Use the regular Action registry (ActionEngineServer), NOT AIEngine.Instance.Actions —
+            // the latter is the legacy AI Actions collection (MJAIActionEntity) and never contains
+            // standard Actions like Web Search, so a loop body over a normal Action would always miss.
+            // This matches how regular (non-loop) Action steps resolve their action (see getActionName).
+            const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, node.ActionID));
             if (!action) {
                 return this.createNextStep('Failed', {
                     errorMessage: `Action not found for loop body: ${node.ActionID}`,
@@ -1464,7 +1468,11 @@ export class FlowAgentType extends BaseAgentType {
 
         // Add action or subAgent based on LoopBodyType
         if (node.LoopBodyType === 'Action') {
-            const action = AIEngine.Instance.Actions.find(a => UUIDsEqual(a.ID, node.ActionID));
+            // Use the regular Action registry (ActionEngineServer), NOT AIEngine.Instance.Actions —
+            // the latter is the legacy AI Actions collection (MJAIActionEntity) and never contains
+            // standard Actions like Web Search, so a loop body over a normal Action would always miss.
+            // This matches how regular (non-loop) Action steps resolve their action (see getActionName).
+            const action = ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, node.ActionID));
             if (!action) {
                 return this.createNextStep('Failed', {
                     errorMessage: `Action not found for loop body: ${node.ActionID}`,

@@ -1,13 +1,13 @@
 /**
  * Fire-and-forget persistence tests for AIModelRunner (embedding/model run records).
- * Mirrors the AIPromptRunner contract: the run record is observability, so saves are queued
- * (not awaited), chained per-instance so the INSERT precedes the UPDATE, non-fatal on failure,
- * and flushable via WaitForPendingPromptRunSaves. Tests the REAL queuePromptRunSave via cast.
+ * The run record is observability, so saves are queued (not awaited), sequenced per-instance so the
+ * INSERT precedes the UPDATE, non-fatal on failure, and flushable via WaitForPendingPromptRunSaves.
+ * Verifies the runner correctly delegates to its shared BaseEntitySaveQueue (cast to reach it).
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { AIModelRunner } from '../AIModelRunner';
 
-type RunnerInternals = { queuePromptRunSave(entity: unknown): Promise<boolean> };
+type RunnerInternals = { _promptRunQueue: { Insert(e: unknown): void; Update(e: unknown): void } };
 function priv(r: AIModelRunner): RunnerInternals { return r as unknown as RunnerInternals; }
 
 class FakePromptRun {
@@ -32,16 +32,16 @@ describe('AIModelRunner — fire-and-forget prompt-run saves', () => {
   it('chains same-instance saves: INSERT completes before UPDATE starts', async () => {
     const log: string[] = [];
     const entity = new FakePromptRun(log);
-    priv(runner).queuePromptRunSave(entity); // create
-    priv(runner).queuePromptRunSave(entity); // complete/fail
+    priv(runner)._promptRunQueue.Insert(entity); // create
+    priv(runner)._promptRunQueue.Update(entity); // complete/fail
     await runner.WaitForPendingPromptRunSaves();
     expect(log).toEqual(['start:1', 'end:1', 'start:2', 'end:2']);
   });
 
   it('runs different-instance saves concurrently', async () => {
     const log: string[] = [];
-    priv(runner).queuePromptRunSave(new FakePromptRun(log));
-    priv(runner).queuePromptRunSave(new FakePromptRun(log));
+    priv(runner)._promptRunQueue.Insert(new FakePromptRun(log));
+    priv(runner)._promptRunQueue.Insert(new FakePromptRun(log));
     await runner.WaitForPendingPromptRunSaves();
     expect(log.slice(0, 2)).toEqual(['start:1', 'start:1']); // both started before either ended
   });
@@ -49,8 +49,7 @@ describe('AIModelRunner — fire-and-forget prompt-run saves', () => {
   it('a failed save is non-fatal and the flush still settles', async () => {
     const log: string[] = [];
     const entity = new FakePromptRun(log, new Set([1]));
-    const p1 = priv(runner).queuePromptRunSave(entity);
-    await expect(p1).resolves.toBe(false);
+    priv(runner)._promptRunQueue.Insert(entity);
     await expect(runner.WaitForPendingPromptRunSaves()).resolves.toBeUndefined();
   });
 

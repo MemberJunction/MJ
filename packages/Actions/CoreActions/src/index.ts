@@ -12,6 +12,9 @@ export * from './custom/crud/get-record.action';
 export * from './custom/crud/update-record.action';
 export * from './custom/crud/delete-record.action';
 
+// Data processing
+export * from './custom/data/run-record-process.action';
+
 // Demo Actions
 export * from './custom/demo/get-weather.action';
 export * from './custom/demo/get-stock-price.action';
