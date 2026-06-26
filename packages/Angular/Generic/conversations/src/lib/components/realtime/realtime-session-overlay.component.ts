@@ -3,10 +3,12 @@ import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
 import { VoiceConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
-import { BuildReviewThreadItems, RealtimeSessionReview } from '../../services/realtime-session-review.service';
+import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionThreadComponent } from './realtime-session-thread.component';
@@ -21,6 +23,7 @@ import {
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeVoiceDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
+import { ShouldRegisterChannelTabUpFront, ShouldShowActivityTab } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 
@@ -51,6 +54,7 @@ export interface RealtimeStartLiveRequest {
   /** The reviewed session's id — chained as the new session's `lastSessionId`. */
   LastSessionId: string;
 }
+
 
 /**
  * The "call mode" overlay for a live real-time voice session. Hosted by the
@@ -110,12 +114,13 @@ export interface RealtimeStartLiveRequest {
     RealtimeChannelStripComponent,
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
-    RealtimeWhiteboardBoardComponent
+    RealtimeWhiteboardBoardComponent,
+    MJStorageMediaPlayerComponent
   ],
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
 })
-export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy {
+export class RealtimeSessionOverlayComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
   private _agentName = 'Sage';
 
   /**
@@ -197,8 +202,17 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
    */
   private pendingLiveContinuation = false;
 
-  /** The reviewed chain's history artifacts, registered as unfocused surface tabs. */
+  /**
+   * The reviewed chain's history artifacts, surfaced inside the Activity tab's "Session
+   * artifacts" group (no longer their own tabs). Bound into the surface panel via
+   * {@link ReviewArtifacts}. Empty for a live session.
+   */
   private reviewArtifacts: ParsedDelegationArtifact[] = [];
+
+  /** The reviewed chain's history artifacts for the surface panel's Activity tab. */
+  public get ReviewArtifacts(): ParsedDelegationArtifact[] {
+    return this.reviewArtifacts;
+  }
 
   /**
    * True while the surface panel carries the REVIEW-registered (template-based, read-only)
@@ -219,6 +233,23 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
    * channel state — rendered read-only by the review whiteboard tab. Null = no tab.
    */
   public ReviewWhiteboard: WhiteboardState | null = null;
+
+  /**
+   * The `MJ: Files` id of the reviewed session's recording, or null when nothing was recorded.
+   * Bound into the storage media player, which resolves the authenticated audio itself.
+   */
+  public get ReviewRecordingFileID(): string | null {
+    return this._reviewData?.RecordingFileID ?? null;
+  }
+
+  /**
+   * The reviewed session's transcript cues (built from its turns) for the recording player's
+   * transcript panel. Empty outside review.
+   */
+  public ReviewCues: MediaTranscriptCue[] = [];
+
+  /** True while the Recording tab is registered (a recording exists for the reviewed session). */
+  private reviewRecordingTabRegistered = false;
 
   /** Shared session state — single source for the thread AND the activity rail. */
   public readonly State = new RealtimeSessionState();
@@ -284,10 +315,11 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   private set surfaceTabsRef(ref: RealtimeSurfaceTabsComponent | undefined) {
     this.surfaceTabs = ref;
     if (ref) {
-      // A (re)created panel starts with a FRESH tab model: artifact tabs self-recover
-      // (the panel re-scans the session state) but CHANNEL tabs only registered when
-      // ActiveChannels$ emitted at session start — re-register the live set here so
-      // hiding the panel (pure-audio return, Details off) never loses the Whiteboard.
+      // A (re)created panel starts with a FRESH tab model. Re-register the live channel set
+      // here (gated to whiteboard + already-used channels) so hiding the panel (pure-audio
+      // return, Details off) never loses the Whiteboard or an already-used channel's tab.
+      // Artifacts live in the Activity rail now (driven by session state), so there's
+      // nothing artifact-specific to recover on the panel.
       this.registerChannelTabs([...this.voice.ActiveChannels]);
       this.flushPendingChannelTabs();
       const reveal = this.pendingRevealKey;
@@ -323,6 +355,9 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   /** Template hosting the read-only review whiteboard (root-level, so always resolvable). */
   @ViewChild('reviewBoardTpl') private reviewBoardTpl?: TemplateRef<unknown>;
 
+  /** Template hosting the review-mode recording player (root-level, so always resolvable). */
+  @ViewChild('recordingTpl') private recordingTpl?: TemplateRef<unknown>;
+
   /** Channel registrations received before the surface panel rendered (flushed in ngAfterViewInit). */
   private pendingChannelTabs: RealtimeChannelTabRegistration[] = [];
 
@@ -347,6 +382,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   private subs: Subscription[] = [];
 
   constructor() {
+    super();
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
     this.loadCaptionsPref();
@@ -371,6 +407,10 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.flushPendingChannelTabs();
     this.registerReviewBoardTab();
     this.registerReviewArtifactTabs();
+    // Cues were already built by enterReview() when ReviewData was set; here we only need to
+    // (re)register the recording tab now that the #recordingTpl ref exists. The storage media
+    // player resolves the authenticated audio itself from the RecordingFileID.
+    this.registerReviewRecordingTab();
   }
 
   // ── Surface-panel sizing (flex layout + pointer-drag handle; width persisted per-user) ──
@@ -553,6 +593,16 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     return !this.IsReviewing;
   }
 
+  /**
+   * Whether the surface panel's Activity tab should be shown: gated on ≥1 underlying agent
+   * run having occurred this session (the first delegated agent-run card the rail consumes),
+   * or review mode (a past session's activity is always relevant). Bound into the surface
+   * panel; re-evaluated on every merged-state change (delegation cards land on `State.Cards`).
+   */
+  public get ShowActivityTab(): boolean {
+    return ShouldShowActivityTab(this.State.Cards.length, this.IsReviewing);
+  }
+
   /** Reads the persisted disclosure milestones (tolerant; defaults to day one). */
   private loadDisclosurePref(): void {
     try {
@@ -615,9 +665,17 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     }
     this.revealedChannelKeys.add(plugin.ChannelName);
     this.DetailsPeek = true; // the panel shows via the same on-demand mechanism Details uses
+    // FIRST USE: a non-whiteboard channel was tab-less until now — register its tab
+    // SYNCHRONOUSLY (before the reveal/focus below) so the channel exists to be revealed.
+    // The whiteboard already has its tab from session start; re-registering is idempotent.
+    if (plugin.HasSurface()) {
+      this.registerPluginChannelTab(plugin);
+    }
     if (this.surfaceTabs) {
       // Stream handler (a tool call), not a change-detection pass — reveal synchronously
-      // so the board is the visible tab the instant the agent's first stroke lands.
+      // so the board is the visible tab the instant the agent's first stroke lands. The
+      // microtask-deferred RegisterChannelTab above is ordered before this RevealChannel,
+      // so the tab is in place when the focus lands.
       this.surfaceTabs.RevealChannel(plugin.ChannelName);
     } else {
       // Panel not rendered yet (the peek just created it) — reveal once it exists.
@@ -896,10 +954,14 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
   }
 
   /**
-   * Registers one surface tab per active channel plugin THAT HAS A SURFACE (key/title/icon from the
-   * plugin). Server-only channels ({@link BaseRealtimeChannelClient.HasSurface} === `false`) render no
-   * tab — their tools + perception are already wired by the session service; there is simply nothing
-   * to show in the surface panel.
+   * Registers a surface tab per active channel plugin THAT HAS A SURFACE — but ONLY for
+   * channels already in play: the WHITEBOARD tabs immediately (a user may be the first to
+   * draw), every OTHER channel stays tab-less until the agent first USES it (its first
+   * {@link onChannelActivity}). This keeps the strip decluttered to surfaces actually in
+   * play instead of pre-listing every registry-resolved channel.
+   *
+   * Server-only channels ({@link BaseRealtimeChannelClient.HasSurface} === `false`) render no
+   * tab — their tools + perception are wired by the session service regardless.
    */
   private registerChannelTabs(channels: BaseRealtimeChannelClient[]): void {
     this.cleanupStaleReviewBoardTab(channels);
@@ -907,14 +969,23 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
       }
-      this.RegisterChannelTab({
-        Key: plugin.ChannelName,
-        Title: plugin.TabTitle,
-        Icon: plugin.TabIcon,
-        Plugin: plugin
-      });
+      if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.voice.HasChannelBeenUsed(plugin.ChannelName))) {
+        continue; // not the whiteboard and not used yet — it earns its tab on first activity.
+      }
+      this.registerPluginChannelTab(plugin);
     }
     this.cdr.markForCheck();
+  }
+
+  /** Registers (or upgrades) one channel plugin's surface tab on the panel. */
+  private registerPluginChannelTab(plugin: BaseRealtimeChannelClient): void {
+    this.RegisterChannelTab({
+      Key: plugin.ChannelName,
+      Title: plugin.TabTitle,
+      Icon: plugin.TabIcon,
+      Color: plugin.TabColor,
+      Plugin: plugin
+    });
   }
 
   /**
@@ -1030,6 +1101,7 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.State.LoadHistoricalItems(BuildReviewThreadItems(review));
     this.ReviewWhiteboard = this.parseReviewWhiteboard(review);
     this.reviewArtifacts = review.Artifacts ?? [];
+    this.ReviewCues = this.buildReviewCues(review);
     if (this.viewReady) {
       // Let this CD pass create/refresh the surface panel before registering the tabs.
       // ngZone.run is REQUIRED: review often opens through the deep-link/query-param
@@ -1039,9 +1111,46 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       setTimeout(() => this.ngZone.run(() => {
         this.registerReviewBoardTab();
         this.registerReviewArtifactTabs();
+        this.registerReviewRecordingTab();
       }), 0);
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Builds time-aligned {@link MediaTranscriptCue}s from the reviewed session's turns, for the
+   * storage media player's transcript panel. Skips turns with no text; derives each cue's start from
+   * `UtteranceStartMs`, falling back to (turn-created − recording-start) ms, else 0. Sorts by start.
+   */
+  private buildReviewCues(review: RealtimeSessionReview): MediaTranscriptCue[] {
+    const startedAt = review.RecordingStartedAt;
+    const cues: MediaTranscriptCue[] = [];
+    (review.Turns ?? []).forEach((turn, index) => {
+      const text = (turn.Text ?? turn.Message ?? '').trim();
+      if (text.length === 0) {
+        return;
+      }
+      cues.push({
+        Id: turn.ID || `turn-${index}`,
+        StartMs: this.reviewCueStartMs(turn, startedAt),
+        EndMs: turn.UtteranceEndMs ?? undefined,
+        SpeakerLabel: turn.Role === 'User' ? 'You' : review.AgentName,
+        Text: text
+      });
+    });
+    cues.sort((a, b) => a.StartMs - b.StartMs);
+    return cues;
+  }
+
+  /** A review turn's media-relative start (ms): precise offset, else derived from t0, else 0. */
+  private reviewCueStartMs(turn: RealtimeSessionReviewTurn, startedAt: Date | null): number {
+    if (turn.UtteranceStartMs != null) {
+      return turn.UtteranceStartMs;
+    }
+    if (startedAt && turn.__mj_CreatedAt) {
+      return Math.max(0, turn.__mj_CreatedAt.getTime() - startedAt.getTime());
+    }
+    return 0;
   }
 
   /**
@@ -1054,6 +1163,12 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
    */
   private exitReview(): void {
     this.ReviewWhiteboard = null;
+    this.ReviewCues = [];
+    if (this.reviewRecordingTabRegistered) {
+      this.surfaceTabs?.RemoveTab('Recording');
+      this.pendingChannelTabs = this.pendingChannelTabs.filter(r => r.Key !== 'Recording');
+      this.reviewRecordingTabRegistered = false;
+    }
     if (this.pendingLiveContinuation) {
       this.pendingLiveContinuation = false;
       this.State.StartLiveContinuation();
@@ -1064,14 +1179,19 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
     this.cdr.markForCheck();
   }
 
-  /** Registers the reviewed chain's history artifacts as UNFOCUSED artifact tabs (idempotent). */
+  /**
+   * Surfaces the reviewed chain's history artifacts inside the Activity tab. In the redesign
+   * there are no per-artifact tabs — the artifacts ride the {@link ReviewArtifacts} input into
+   * the rail's "Session artifacts" group, so this only needs to ensure the Activity tab is
+   * shown (it carries the carryover artifacts). Idempotent; no-op without any review artifacts.
+   */
   private registerReviewArtifactTabs(): void {
     if (!this.surfaceTabs || this.reviewArtifacts.length === 0) {
       return;
     }
-    for (const artifact of this.reviewArtifacts) {
-      this.surfaceTabs.RegisterArtifactTab(artifact, false);
-    }
+    // Show the Activity tab (where the carryover artifacts now live); RegisterArtifactTab
+    // flips the gate on without opening any tab of its own.
+    this.surfaceTabs.RegisterArtifactTab(this.reviewArtifacts[0], false);
     this.cdr.markForCheck();
   }
 
@@ -1109,6 +1229,27 @@ export class RealtimeSessionOverlayComponent implements AfterViewInit, OnDestroy
       Focus: true
     });
     this.reviewWhiteboardTabRegistered = true;
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Registers the read-only review RECORDING tab (the time-aligned storage media player) — ONLY when
+   * the reviewed session carried a `RecordingFileID`. Idempotent (re-registering the same key updates
+   * it in place). The player resolves the authenticated audio itself from the `RecordingFileID` and
+   * shows its own no-access / loading states; the click-to-seek transcript is usable immediately.
+   * NOT focused — the channel surface / Activity rail keeps the default focus.
+   */
+  private registerReviewRecordingTab(): void {
+    if (!this._reviewData?.RecordingFileID || !this.recordingTpl) {
+      return;
+    }
+    this.RegisterChannelTab({
+      Key: 'Recording',
+      Title: 'Recording',
+      Icon: 'fa-solid fa-circle-play',
+      Content: this.recordingTpl
+    });
+    this.reviewRecordingTabRegistered = true;
     this.cdr.markForCheck();
   }
 

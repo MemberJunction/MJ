@@ -9694,6 +9694,17 @@ export class MJAIAgentSession_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.`}) 
+    @MaxLength(20)
+    RecordingMedia?: string;
+        
+    @Field({nullable: true, description: `Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.`}) 
+    RecordingStartedAt?: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RecordingFileID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -9705,6 +9716,10 @@ export class MJAIAgentSession_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    RecordingFile?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -9765,6 +9780,15 @@ export class CreateMJAIAgentSessionInput {
     @Field({ nullable: true })
     CloseReason: string | null;
 
+    @Field({ nullable: true })
+    RecordingMedia: string | null;
+
+    @Field({ nullable: true })
+    RecordingStartedAt: Date | null;
+
+    @Field({ nullable: true })
+    RecordingFileID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9807,6 +9831,15 @@ export class UpdateMJAIAgentSessionInput {
 
     @Field({ nullable: true })
     CloseReason?: string | null;
+
+    @Field({ nullable: true })
+    RecordingMedia?: string | null;
+
+    @Field({ nullable: true })
+    RecordingStartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    RecordingFileID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11053,6 +11086,14 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`}) 
     AllowMemoryWrite: boolean;
         
+    @Field({nullable: true, description: `Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`}) 
+    @MaxLength(20)
+    RecordingDefault?: string;
+        
+    @Field({nullable: true, description: `OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.`}) 
+    @MaxLength(36)
+    RecordingStorageProviderID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11088,6 +11129,10 @@ if this limit is exceeded.`})
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultCoAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    RecordingStorageProvider?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -11404,6 +11449,12 @@ export class CreateMJAIAgentInput {
     @Field(() => Boolean, { nullable: true })
     AllowMemoryWrite?: boolean;
 
+    @Field({ nullable: true })
+    RecordingDefault: string | null;
+
+    @Field({ nullable: true })
+    RecordingStorageProviderID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -11614,6 +11665,12 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMemoryWrite?: boolean;
+
+    @Field({ nullable: true })
+    RecordingDefault?: string | null;
+
+    @Field({ nullable: true })
+    RecordingStorageProviderID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -36601,6 +36658,19 @@ export class MJConversationDetail_ {
     @MaxLength(36)
     AgentSessionID?: string;
         
+    @Field({nullable: true, description: `Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.`}) 
+    TurnEndedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.`}) 
+    UtteranceStartMs?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.`}) 
+    UtteranceEndMs?: number;
+        
+    @Field({nullable: true, description: `Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`}) 
+    @MaxLength(20)
+    MediaType?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
@@ -36745,6 +36815,18 @@ export class CreateMJConversationDetailInput {
     @Field({ nullable: true })
     AgentSessionID: string | null;
 
+    @Field({ nullable: true })
+    TurnEndedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceStartMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceEndMs: number | null;
+
+    @Field({ nullable: true })
+    MediaType: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36832,6 +36914,18 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     AgentSessionID?: string | null;
+
+    @Field({ nullable: true })
+    TurnEndedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceStartMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceEndMs?: number | null;
+
+    @Field({ nullable: true })
+    MediaType?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37099,6 +37193,14 @@ export class MJConversation_ {
     @Field({nullable: true, description: `Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`}) 
     AdditionalData?: string;
         
+    @Field({nullable: true, description: `For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`}) 
+    @MaxLength(36)
+    RecordingFileID?: string;
+        
+    @Field({nullable: true, description: `The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.`}) 
+    @MaxLength(255)
+    EgressID?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -37130,6 +37232,10 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    RecordingFile?: string;
         
     @Field(() => [MJConversationDetail_])
     MJConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
@@ -37216,6 +37322,12 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     AdditionalData: string | null;
 
+    @Field({ nullable: true })
+    RecordingFileID: string | null;
+
+    @Field({ nullable: true })
+    EgressID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37282,6 +37394,12 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     AdditionalData?: string | null;
+
+    @Field({ nullable: true })
+    RecordingFileID?: string | null;
+
+    @Field({ nullable: true })
+    EgressID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -51715,6 +51833,9 @@ export class MJFileStorageProvider_ {
     @Field(() => [MJFileStorageAccount_])
     MJFileStorageAccounts_ProviderIDArray: MJFileStorageAccount_[]; // Link to MJFileStorageAccounts
     
+    @Field(() => [MJAIAgent_])
+    MJAIAgents_RecordingStorageProviderIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
     @Field(() => [MJAIConfiguration_])
     MJAIConfigurations_DefaultStorageProviderIDArray: MJAIConfiguration_[]; // Link to MJAIConfigurations
     
@@ -51882,6 +52003,16 @@ export class MJFileStorageProviderResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgent_])
+    async MJAIAgents_RecordingStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('RecordingStorageProviderID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfilestorageprovider_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIConfiguration_])
     async MJAIConfigurations_DefaultStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
@@ -51995,6 +52126,12 @@ export class MJFile_ {
     
     @Field(() => [MJArtifactVersion_])
     MJArtifactVersions_FileIDArray: MJArtifactVersion_[]; // Link to MJArtifactVersions
+    
+    @Field(() => [MJAIAgentSession_])
+    MJAIAgentSessions_RecordingFileIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
+    
+    @Field(() => [MJConversation_])
+    MJConversations_RecordingFileIDArray: MJConversation_[]; // Link to MJConversations
     
 }
 
@@ -52172,6 +52309,26 @@ export class MJFileResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactVersions')} WHERE ${provider.QuoteIdentifier('FileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentSession_])
+    async MJAIAgentSessions_RecordingFileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('RecordingFileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversation_])
+    async MJConversations_RecordingFileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversations')} WHERE ${provider.QuoteIdentifier('RecordingFileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

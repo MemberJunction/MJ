@@ -192,4 +192,74 @@ describe('LiveKitEgressService', () => {
     expect(list).toHaveLength(1);
     expect(list[0].EgressID).toBe('eg-1');
   });
+
+  // --- Output surfacing from EgressInfo.fileResults (stop/complete) -------------
+  // The SDK reports size/duration as bigint and duration in NANOseconds; toRecordingInfo
+  // normalizes both. These are the values a caller copies into MJStorage + the Conversation.
+
+  /** A stop client whose stopEgress returns the given EgressInfo-shaped payload. */
+  function makeStopClient(info: Record<string, unknown>): EgressClientLike {
+    return {
+      startRoomCompositeEgress: vi.fn(async () => ({}) as never),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      stopEgress: vi.fn(async () => info as any),
+      listEgress: vi.fn(async () => []),
+    } satisfies EgressClientLike;
+  }
+
+  it('surfaces OutputLocation/OutputSizeBytes/OutputDurationMs (ns→ms) from fileResults[0] on stop', async () => {
+    const client = makeStopClient({
+      egressId: 'eg-9',
+      roomName: 'room-9',
+      status: 'EGRESS_COMPLETE',
+      // duration is NANOseconds (90s = 90_000_000_000 ns); size is a bigint byte count.
+      fileResults: [{ filename: 'room-9/2026.mp4', size: BigInt(1234567), duration: BigInt(90_000_000_000) }],
+    });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-9');
+
+    expect(info.OutputLocation).toBe('room-9/2026.mp4');
+    expect(info.OutputSizeBytes).toBe(1234567);
+    expect(info.OutputDurationMs).toBe(90000); // 90_000_000_000 ns / 1_000_000 = 90_000 ms
+  });
+
+  it('rounds a sub-millisecond-precision nanosecond duration to the nearest ms', async () => {
+    const client = makeStopClient({
+      egressId: 'eg-r',
+      roomName: 'room-r',
+      status: 'EGRESS_COMPLETE',
+      // 1500ms expressed in ns, plus 600000 ns (0.6ms) → rounds up to 1501.
+      fileResults: [{ filename: 'f.mp4', size: BigInt(10), duration: BigInt(1_500_600_000) }],
+    });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-r');
+    expect(info.OutputDurationMs).toBe(1501);
+  });
+
+  it('leaves output fields undefined while the recording is in progress (no fileResults yet)', async () => {
+    const client = makeStopClient({ egressId: 'eg-2', roomName: 'room-2', status: 'EGRESS_ACTIVE' });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-2');
+
+    expect(info.Status).toBe('EGRESS_ACTIVE');
+    expect(info.OutputLocation).toBeUndefined();
+    expect(info.OutputSizeBytes).toBeUndefined();
+    expect(info.OutputDurationMs).toBeUndefined();
+  });
+
+  it('tolerates a partial fileResult — only the present fields are surfaced', async () => {
+    const client = makeStopClient({
+      egressId: 'eg-3',
+      roomName: 'room-3',
+      status: 'EGRESS_COMPLETE',
+      // filename present, but no size/duration reported (empty file edge / early result).
+      fileResults: [{ filename: 'partial.mp4' }],
+    });
+    const svc = new LiveKitEgressService(CONFIG, client);
+    const info = await svc.StopRecording('eg-3');
+
+    expect(info.OutputLocation).toBe('partial.mp4');
+    expect(info.OutputSizeBytes).toBeUndefined();
+    expect(info.OutputDurationMs).toBeUndefined();
+  });
 });
