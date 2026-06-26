@@ -170,14 +170,14 @@ async function main(): Promise<void> {
         mimeType: 'audio/wav',
         contextUser: user,
         storageAccountId: accountID,
-        pathPrefix: '' // upload to the account's configured root folder (Box driver can't resolve subfolders)
+        pathPrefix: 'realtime-recordings'
     });
     console.log(`✓ Uploaded to Box. MJ: Files ID=${uploaded.FileID}, key=${uploaded.StoragePath}`);
 
     // Read it back to prove the bytes landed (Box keys have no leading slash on read).
     try {
         const driver = await FileStorageEngine.Instance.GetDriver(accountID, user);
-        const got = await driver.GetObject(uploaded.StoragePath.replace(/^\/+/, ''));
+        const got = await driver.GetObject({ fullPath: uploaded.StoragePath });
         console.log(`✓ Read back ${got?.length ?? 0} bytes from Box (expected ${tone.Buffer.length}).`);
     } catch (e) {
         console.log(`⚠ Read-back check skipped (${e instanceof Error ? e.message : e}) — upload already succeeded.`);

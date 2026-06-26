@@ -1061,8 +1061,11 @@ export class BoxFileStorage extends FileStorageBase {
       const parentPath = lastSlashIndex > 0 ? normalizedPath.substring(0, lastSlashIndex) : '';
       const folderName = lastSlashIndex > 0 ? normalizedPath.substring(lastSlashIndex + 1) : normalizedPath;
 
-      // Make sure parent folder exists
-      let parentFolderId = '0'; // Default to root
+      // Make sure parent folder exists. Default to the account's CONFIGURED root folder
+      // (this._rootFolderId), NOT the absolute account root '0' — otherwise a top-level subfolder
+      // is created under '0' while _findFolderIdByPath (which searches under the configured root)
+      // can never find it, breaking every subfolder upload.
+      let parentFolderId = this._rootFolderId;
       if (parentPath) {
         try {
           // Recursive call to ensure parent directory exists
