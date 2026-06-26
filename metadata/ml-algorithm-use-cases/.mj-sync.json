@@ -1,0 +1,24 @@
+{
+  "entity": "MJ: ML Algorithm Use Cases",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "ProblemTypeScope": "any"
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".ml-algorithm-use-cases.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {},
+    "relatedEntities": {}
+  }
+}
