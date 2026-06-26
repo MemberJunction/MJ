@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-whiteboard",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "MemberJunction: Generic collaborative whiteboard for any Angular application — Angular-free state engine with undo/redo + change journal, agent perception deltas, a programmatic (AI-agent-ready) mutation tool API, sandboxed HTML widgets with an input bridge, markdown panels, and self-contained HTML/SVG export",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -33,9 +33,9 @@
     "@angular/platform-browser": "21.1.3"
   },
   "dependencies": {
-    "@memberjunction/global": "5.42.0",
-    "@memberjunction/ng-code-editor": "5.42.0",
-    "@memberjunction/ng-markdown": "5.42.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/ng-code-editor": "5.43.0",
+    "@memberjunction/ng-markdown": "5.43.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1"
   },
