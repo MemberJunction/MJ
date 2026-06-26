@@ -42,13 +42,13 @@
 | D7 | Incognito = `Conversation.IsTemporary`; persisted-but-hidden; skip memory read+write. | Locked |
 | D8 | Group chat: Phase 1 = metadata + mockups; Phase 2 = runtime code. | Locked |
 | D9 | Routines: **dedicated app** + reusable **`ng-user-routines`** widget, also embeddable in ng-conversations. | Locked |
-| D10 | Skill **authoring + sharing** via unified permissions: self-authoring open by default; **sharing requires elevated permission**. | Locked |
-| D11 | Public artifact sharing uses **Magic Links** AND requires an **elevated privilege**; the UI **hides/disables** the action when the user lacks it. | Locked (revised) |
+| D10 | **Skill authoring** = Entity CRUD on `MJ: AI Skills` + an RLS "own skills" filter (`CreatedByUserID = current user`) → open to self by default. **Skill sharing** = `MJ: Resource Permissions` (ResourceType `AI Skills`, View/Edit/Owner) via the existing `ResourcePermissionProvider`, with the **share action gated by a dedicated "Can Share Skills" privilege**. No bespoke permission tables. | Locked |
+| D11 | Public artifact sharing: the **link/session mechanism reuses Magic Links** (server mints a read-only, artifact-scoped RS256 link on publish), but **who may publish is gated by a dedicated lightweight privilege "Can Publish Artifacts Publicly"** — NOT the heavyweight magic-link *issuer* role (which creates external users + assigns roles, far higher risk). UI hides/disables publish when absent. | Locked (revised) |
 | D12 | **Concurrency (parallel agent turns) → Phase 2.** Phase 1 ships the **design only** (P1.0.3); chat stays serialized. | Locked (revised) |
 | D13 | Routines entity name = **`MJ: User Routines`** (generalizes beyond chat). | Locked |
 | D14 | **Realtime agents** run a separate session-driven path: **plan mode is skipped** (HITL via the delegated target's `AwaitingFeedback`, narrated live); **skills append at session build**; **memory uses the shared builder**; **not valid routine targets**; concurrency already handled by the **turn-moderator**. | Locked (from realtime study) |
 | D15 | **Proxy agents (Skip-style)** delegate their whole loop to the remote system: plan mode / skills / local memory injection are **OFF locally**; instead MJ passes a rich **context bag** (incl. project-scoped notes) for the remote to use. Betty is a `BaseLLM` used inside loop agents, so local features apply around it. | Locked (from proxy study) |
-| D16 | Standardize a **`BaseRemoteProxyAgent`** + "Remote Proxy" agent type + context contract (P1.9). | ⚠️ confirm Phase-1 implementation scope vs design-only |
+| D16 | Standardized proxy: **design in Phase 1, implement in Phase 2.** `BaseRemoteProxyAgent` + "Remote Proxy" agent type + a standard context contract; the **Skip API is the template** for how the remote side is invoked generically. | Locked |
 
 ---
 
@@ -140,7 +140,7 @@ erDiagram
 | `AIAgentNote`, `AIAgentExample` | `ProjectID UNIQUEIDENTIFIER NULL` (FK→`MJ: Projects`) |
 | `Conversation` | `IsTemporary BIT NOT NULL DEFAULT 0`, `IsGroup BIT NOT NULL DEFAULT 0` |
 
-**Permissions:** Skills authoring/sharing + the **public-artifact-share privilege** registered in unified permissions (no bespoke tables). **Seed** `SupportsPlanMode=0` for existing Realtime and Proxy (Skip) agent records via a metadata/data step.
+**Permissions (unified, seeded via metadata — no bespoke tables):** register an `AI Skills` **Resource Type**; Entity Permissions + an RLS "own skills" filter for `MJ: AI Skills`; a dedicated **"Can Share Skills"** privilege; a dedicated **"Can Publish Artifacts Publicly"** privilege. **Seed** `SupportsPlanMode=0` for existing Realtime + Proxy (Skip) agents.
 **Acceptance:** one migration; CodeGen green; strong types generate. **Risk:** Med (size — follow rules exactly).
 
 ### P1.0.3 — Concurrency model (DESIGN ONLY in Phase 1) — D12
@@ -228,7 +228,7 @@ flowchart TB
 | **P1.4.2** Skills engine | `BaseEngine` caching Active skills + agent-skill map (reactive); resolves available skills per agent. |
 | **P1.4.3** Prompt exposure | Inject **catalog (name+description only)** for accepted skills in `gatherPromptTemplateData()`. **For Realtime:** resolve + append skill instructions at `buildRealtimeSessionParams()` (session-static). **For Proxy:** skip local skill catalog (delegated). |
 | **P1.4.4** Activation | `step:'skill'` → `executeSkillStep()`: validate acceptance; append `Instructions`; add Actions+sub-agents to run tool-surface; honor min/max executions; record `Skill` run-step. Not a nested agent run. **Risk:** Med. |
-| **P1.4.5** Governance | `AcceptsSkills` + junction `Status` + `Skill.Status`; **authoring open / sharing elevated** via unified perms. |
+| **P1.4.5** Governance | `AcceptsSkills` + junction `Status` + `Skill.Status`. **Authoring:** Entity CRUD on `MJ: AI Skills` + RLS "own skills" (open to self). **Sharing:** `MJ: Resource Permissions` (ResourceType `AI Skills`, View/Edit/Owner) via `ResourcePermissionProvider`, share action gated by the dedicated **"Can Share Skills"** privilege. |
 | **P1.4.6** Authoring UI | Skill create/edit (instructions + pick Actions + sub-agents + status); agent form `AcceptsSkills` control + Limited picker; share dialog (permission-gated). |
 | **P1.4.7** (stretch) | `SKILL.md` import/export for portability. |
 | **Tests** | resolution (All/Limited); activation appends + enables tools; governance; realtime append; proxy skip. |
@@ -298,7 +298,7 @@ flowchart LR
 | Task | Detail |
 |---|---|
 | **P1.7.1** Editable viewer | text/code/markdown artifacts editable; user edit → **new `MJ: Artifact Versions` row**; agent stays collaborator. **Risk:** Med. |
-| **P1.7.2** Magic-link share (privileged) | public links via **Magic Links** (`guides/MAGIC_LINK_GUIDE.md`) with a read-only restricted role scoped to the artifact. **Requires an elevated privilege** most users lack; the share-public action is **hidden/disabled** in the UI when the user lacks it (no dead-end). **Risk:** Med (scope the restricted role tightly). |
+| **P1.7.2** Public share (Magic Links mechanism + dedicated privilege) | Link/session **mechanism reuses Magic Links** (`guides/MAGIC_LINK_GUIDE.md`): on publish, the **server** mints a read-only, single-artifact-scoped RS256 link (restricted role scoped to that artifact's read). **Who may publish** is gated by a **dedicated lightweight privilege "Can Publish Artifacts Publicly"** — NOT the magic-link issuer role. UI **hides/disables** publish when the user lacks it (no dead-end). **Risk:** Med (scope the restricted role to single-artifact read). |
 | **P1.7.3** Remix | clone artifact + latest version into a new user-owned artifact in a new conversation; original untouched. |
 | **P1.7.4** (spike) | component→agent `callAgent()` RPC (artifacts-as-apps). Writeup only. |
 | **Tests** | edit→new version; magic-link read-only scope; privilege gate hides action; remix non-mutating. |
@@ -318,7 +318,7 @@ flowchart LR
 
 ---
 
-## P1.9 — Standardized Agent Proxy (NEW — from proxy study) ⚠️ D16 scope
+## P1.9 — Standardized Agent Proxy (design Phase 1, build Phase 2)
 
 **Problem:** Skip (`BaseAgent` subclass, single-step, rich context bag) and Betty (`BaseLLM`) are **bespoke**; no shared abstraction. As MJ↔MJ/SaaS proxying grows, we want a richer-than-MCP, MJ-aware standard.
 
@@ -334,7 +334,7 @@ flowchart TB
 |---|---|
 | **P1.9.1** Design/ADR | `BaseRemoteProxyAgent` + a "Remote Proxy" **agent type** (metadata) + standard `RemoteProxyRequest` context contract; transport on **Remote Operations** (`guides/REMOTE_OPERATIONS_GUIDE.md`) for unified auth/progress. Define the **context-bag** policy (what MJ sends: entities/queries/project-scoped notes/artifacts/org/user/callback auth). |
 | **P1.9.2** Behavior policy | For proxy agents: plan mode / skills / local memory injection **OFF**; instead pass context for the remote to use (D15). Document that Betty stays a `BaseLLM` used inside loop agents (local features apply around it). |
-| **P1.9.3** (⚠️ scope) Reference migration | Migrate **Skip** to `BaseRemoteProxyAgent` as the reference impl. **Decision needed:** do this in Phase 1, or ship design + base class in Phase 1 and migrate Skip in Phase 2. |
+| **P1.9.3** Reference migration (Phase 2) | Migrate **Skip** to `BaseRemoteProxyAgent` as the reference impl in **Phase 2**. Phase 1 ships design + base class + agent-type + contract only. The **Skip API contract is the template** for the generic remote-invocation shape future proxies (and remote MJ systems) implement. |
 | **Tests** | proxy agent passes project-scoped notes in context bag; plan/skills not injected locally; response maps to next-step. **Risk:** Med-High (touches a shipping integration). |
 
 ---
@@ -384,9 +384,10 @@ flowchart LR
 - Proxy: standard design + base class delivered; Skip migration per D16 scope decision.
 - Docs: update `CONVERSATIONS_UX_STACK_GUIDE.md` + package READMEs per shipped feature.
 
-## 5. Remaining sign-off items
+## 5. Sign-off status
 
-- **D16** — Standardized proxy: implement `BaseRemoteProxyAgent` + migrate Skip **in Phase 1**, or design + base class now and migrate Skip in Phase 2?
-- **D10 detail** — exact elevated role/permission for skill **sharing**.
-- **D11 detail** — exact privilege for **public artifact sharing** (reuse magic-link issuance permission, or a new one?).
-- **Concurrency** — confirm fully deferred to Phase 2 (design-only in Phase 1), including no concurrent planning in plan mode.
+All major decisions are now **locked** (see Decision Log §0.3): plan-mode default (D5), public-artifact-share via Magic Links + dedicated privilege (D11), skill permissions (D10), proxy design-Phase-1/build-Phase-2 (D16), concurrency deferred to Phase 2 (D12), routines naming (D13), realtime/proxy behavior (D14/D15).
+
+Residual implementation-time choices (not blocking the plan; settle during P1.0):
+- Exact names/placement of the **"Can Share Skills"** and **"Can Publish Artifacts Publicly"** privileges in the unified-permissions seed.
+- Whether the public-artifact magic link is per-share (one link) or regenerable, and its TTL.
