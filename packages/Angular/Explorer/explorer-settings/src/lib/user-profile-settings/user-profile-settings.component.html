@@ -199,11 +199,11 @@
               </div>
             }
           } @else {
-            <div class="empty-state">
-              <i class="fa-solid fa-search empty-icon" aria-hidden="true"></i>
-              <p class="empty-text">No icons found</p>
-              <p class="empty-subtext">Try a different search term</p>
-            </div>
+            <mj-empty-state
+              Variant="no-results"
+              Size="compact"
+              Title="No icons found"
+              Message="Try a different search term" />
           }
         </div>
       </div>

@@ -91,12 +91,12 @@
 
       <!-- Empty State -->
       @if (!(isLoading$ | async) && (filteredActions$ | async)?.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-search-minus"></i>
-          <h3>No actions found</h3>
-          <p>Try adjusting your search criteria or selecting a different category</p>
-          <button mjButton (click)="clearSearch()">Clear Search</button>
-        </div>
+        <mj-empty-state
+          Variant="no-results"
+          Title="No actions found"
+          Message="Try adjusting your search criteria or selecting a different category"
+          ActionText="Clear Filters"
+          (Action)="clearSearch()" />
       }
 
       <!-- Grid View -->

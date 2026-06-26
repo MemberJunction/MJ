@@ -75,15 +75,16 @@
   @if (IsLoading) {
     <mj-loading text="Loading audit entries..." size="medium"></mj-loading>
   } @else if (!HasRunQuery) {
-    <div class="empty-state">
-      <i class="fa-solid fa-clock-rotate-left"></i>
-      <p>Set your filters and press Query to see audit entries.</p>
-    </div>
+    <mj-empty-state Icon="fa-solid fa-clock-rotate-left"
+      Title="No query yet"
+      Message="Set your filters and press Query to see audit entries." />
   } @else if (Entries.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-folder-open"></i>
-      <p>No audit entries match your filters.</p>
-    </div>
+    <mj-empty-state Variant="no-results" Icon="fa-solid fa-folder-open"
+      Title="No audit entries found"
+      Message="No audit entries match your filters."
+      ActionText="Reset filters"
+      ActionIcon="fa-solid fa-rotate-left"
+      (Action)="OnResetFilters()" />
   } @else {
     <div class="total-summary">
       <strong>{{ Entries.length }}</strong> entr{{ Entries.length === 1 ? 'y' : 'ies' }}

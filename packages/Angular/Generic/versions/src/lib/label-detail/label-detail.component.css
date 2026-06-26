@@ -415,27 +415,6 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-.tab-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
-}
-
-.tab-empty-icon {
-    font-size: 40px;
-    color: var(--mj-border-strong);
-    margin-bottom: 12px;
-}
-
-.tab-empty p {
-    font-size: 14px;
-    color: var(--mj-text-disabled);
-    margin: 0;
-}
-
 /* ================================================================= */
 /* OVERVIEW TAB */
 /* ================================================================= */
@@ -1005,17 +984,6 @@
     padding: 1px 8px;
     background: var(--mj-bg-surface-sunken);
     border-radius: 8px;
-}
-
-.dep-empty {
-    padding: 20px;
-    text-align: center;
-}
-
-.dep-empty p {
-    font-size: 14px;
-    color: var(--mj-text-disabled);
-    margin: 0;
 }
 
 /* ================================================================= */

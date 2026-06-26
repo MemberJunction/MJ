@@ -258,23 +258,7 @@ mj-entity-cards .loading-container {
   padding: 40px;
 }
 
-/* No results state */
+/* No results state — span the full grid width */
 mj-entity-cards .no-results {
   grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  color: var(--mj-text-muted);
-  text-align: center;
-}
-mj-entity-cards .no-results i {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-mj-entity-cards .no-results p {
-  margin: 0;
-  font-size: 14px;
 }

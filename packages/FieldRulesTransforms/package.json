@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/field-rules-transforms",
   "type": "module",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "MemberJunction: extended field-rules transform plugins (jsonpath, xpath) that register into the @memberjunction/global FieldTransform registry. Owns the heavier parsing libraries so global stays dependency-light.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,7 +17,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "5.42.0",
+    "@memberjunction/global": "5.43.0",
     "@xmldom/xmldom": "^0.8.11",
     "jsonpath-plus": "^10.3.0",
     "xpath": "^0.0.34"

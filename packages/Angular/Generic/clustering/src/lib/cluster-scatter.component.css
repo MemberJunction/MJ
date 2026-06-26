@@ -78,32 +78,10 @@
     color: var(--mj-brand-primary);
 }
 
-/* Empty state */
-.empty-state {
+/* Empty state — overlay the full scatter container */
+.empty-state-fill {
     position: absolute;
     inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: var(--mj-text-muted);
-    gap: 8px;
-}
-
-.empty-state i {
-    font-size: 3rem;
-    margin-bottom: 8px;
-    opacity: 0.4;
-}
-
-.empty-state p {
-    font-size: 1rem;
-    margin: 0;
-}
-
-.empty-hint {
-    font-size: 0.8rem !important;
-    opacity: 0.7;
 }
 
 /* Legend */

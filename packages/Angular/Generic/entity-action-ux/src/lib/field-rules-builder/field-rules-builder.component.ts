@@ -11,12 +11,13 @@ import { EntityFieldRules, Metadata, type EntityInfo, type IMetadataProvider } f
 import type { FieldRuleSet } from '@memberjunction/global';
 import { AIPromptSelectorComponent } from '../ai-prompt-selector/ai-prompt-selector.component';
 import { blankRuleDraft, draftsToRuleSet, ruleToDraft, type BuilderSourceKind, type RuleDraft } from '../field-rules-model';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 @Component({
     selector: 'mj-field-rules-builder',
     standalone: true,
     changeDetection: ChangeDetectionStrategy.OnPush,
-    imports: [AIPromptSelectorComponent],
+    imports: [AIPromptSelectorComponent, MJEmptyStateComponent],
     template: `
         <div class="frb">
             <div class="frb-head">
@@ -28,7 +29,7 @@ import { blankRuleDraft, draftsToRuleSet, ruleToDraft, type BuilderSourceKind, t
             </div>
 
             @if (Rules.length === 0) {
-                <div class="frb-empty">No rules yet. Click <strong>Add rule</strong> to start.</div>
+                <mj-empty-state class="frb-empty" Size="compact" Icon="" Title="No rules yet" Message="Click Add rule to start." />
             }
 
             @for (rule of Rules; track $index) {

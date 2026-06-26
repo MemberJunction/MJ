@@ -262,17 +262,12 @@
 
   <!-- ── Empty state ─────────────────────────────────────────────────── -->
   @if (visibleCount === 0) {
-    <div class="erd-empty">
-      <div class="erd-empty-icon">
-        <i [class]="config.emptyStateIcon || 'fa-solid fa-diagram-project'" aria-hidden="true"></i>
-      </div>
-      <div class="erd-empty-title">
-        {{ totalCount === 0 ? (config.emptyStateMessage || 'No entities to display') : 'No entities match' }}
-      </div>
-      @if (totalCount > 0) {
-        <div class="erd-empty-hint">Try adjusting schema filters or clearing search</div>
-      }
-    </div>
+    <mj-empty-state
+      class="erd-empty"
+      [Variant]="totalCount === 0 ? 'empty' : 'no-results'"
+      [Icon]="emptyStateIcon"
+      [Title]="emptyStateTitle"
+      [Message]="totalCount > 0 ? 'Try adjusting schema filters or clearing search' : ''" />
   }
 
   <!-- ── Loading overlay ─────────────────────────────────────────────── -->

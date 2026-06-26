@@ -150,6 +150,11 @@ export class SQLServerDialect extends SQLDialect {
         return aliasName;
     }
 
+    /** SQL Server is case-insensitive for identifiers; the schema name is stored as-given. */
+    CanonicalSchemaName(name: string): string {
+        return name;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {

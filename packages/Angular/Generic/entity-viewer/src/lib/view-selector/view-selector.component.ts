@@ -364,6 +364,13 @@ export class ViewSelectorComponent extends BaseAngularComponent implements OnCha
   }
 
   /**
+   * Title for the "no search results" empty state — echoes the current search term.
+   */
+  get NoViewsMatchMessage(): string {
+    return `No views match "${this.SearchText}"`;
+  }
+
+  /**
    * Check if the current user can edit the selected view
    */
   get CanEditSelectedView(): boolean {

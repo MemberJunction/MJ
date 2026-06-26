@@ -557,43 +557,6 @@
     padding: 60px 20px;
 }
 
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
-}
-
-.empty-icon {
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 20px;
-}
-
-.empty-icon i {
-    font-size: 36px;
-    color: var(--mj-brand-primary);
-}
-
-.empty-state h3 {
-    margin: 0 0 12px;
-    font-size: 20px;
-    color: var(--mj-text-primary);
-}
-
-.empty-state p {
-    margin: 0;
-    color: var(--mj-text-secondary);
-    max-width: 400px;
-}
-
 .items-table-container {
     background: var(--mj-bg-surface);
     border-radius: 12px;
@@ -939,23 +902,6 @@
     padding: 40px;
 }
 
-.add-records-dialog .empty-results {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    color: var(--mj-text-secondary);
-}
-
-.add-records-dialog .empty-results .empty-icon {
-    width: 48px;
-    height: 48px;
-    font-size: 24px;
-    margin-bottom: 12px;
-    background: var(--mj-bg-surface-card);
-}
-
 .add-records-dialog .selection-controls {
     display: flex;
     align-items: center;
@@ -1029,21 +975,6 @@
     border-radius: 8px;
     max-height: 320px;
     overflow-y: auto;
-}
-
-.views-list .empty-results {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 20px;
-    color: var(--mj-text-secondary);
-}
-
-.views-list .empty-results .empty-icon {
-    font-size: 36px;
-    color: var(--mj-border-strong);
-    margin-bottom: 12px;
 }
 
 .view-item {

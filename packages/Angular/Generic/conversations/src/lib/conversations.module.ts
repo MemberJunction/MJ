@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
 // MJ UI Components
-import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -166,6 +166,7 @@ const COMPONENTS = [
     MJDatepickerComponent,
     MJDialogComponent,
     MJDialogActionsComponent,
+    MJEmptyStateComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,

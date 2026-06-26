@@ -65,18 +65,14 @@
     <!-- Content Area -->
     <div class="content-area">
       @if (filteredCount === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-robot"></i>
-          <h4>No agents found</h4>
-          @if (totalAgentCount === 0) {
-            <p>No eligible root agents are available to become sub-agents.</p>
-          } @else {
-            <p>Try adjusting your search criteria or selecting a different agent type.</p>
-            <button mjButton (click)="clearSearch()" variant="primary">
-              Clear Search
-            </button>
-          }
-        </div>
+        <mj-empty-state
+          [Variant]="IsAgentListNarrowed ? 'no-results' : 'empty'"
+          Icon="fa-solid fa-robot"
+          Title="No agents found"
+          [Message]="NoAgentsMessage"
+          [ActionText]="IsAgentListNarrowed ? 'Clear Filters' : ''"
+          (Action)="clearFilters()"
+          Size="compact" />
       } @else {
         
         <!-- Agents Grid -->

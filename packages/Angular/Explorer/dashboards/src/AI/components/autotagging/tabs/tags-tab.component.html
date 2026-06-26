@@ -85,7 +85,8 @@
                         </div>
                         <div class="at-card-body" style="max-height: 300px; overflow-y: auto;">
                             @if (TagDrillDownItems.length === 0) {
-                                <div class="at-empty-state"><p>No content items found for this tag.</p></div>
+                                <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                                    Title="No content items found for this tag." />
                             } @else {
                                 <table class="at-tag-table">
                                     <thead>
@@ -127,7 +128,7 @@
                             [Animate]="true">
                         </mj-word-cloud>
                     } @else {
-                        <div class="at-tag-cloud-empty">No tags yet</div>
+                        <mj-empty-state Size="compact" Icon="fa-solid fa-tag" Title="No tags yet" />
                     }
                 </div>
                 <div class="at-card" style="padding: 16px; margin-top: 12px;">

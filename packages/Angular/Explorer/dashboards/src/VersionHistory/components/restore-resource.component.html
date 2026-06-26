@@ -168,20 +168,14 @@
     }
     <!-- Empty State -->
     @if (FilteredRestores.length === 0 && !IsLoading) {
-      <div class="empty-state">
-        <i class="fa-solid fa-clock-rotate-left empty-icon"></i>
-        <h3>No restore operations found</h3>
-        @if (StatusFilter) {
-          <p>
-            Try adjusting your filters.
-          </p>
-        }
-        @if (!StatusFilter) {
-          <p>
-            No restores have been performed yet. Use the VersionHistoryEngine to restore records to a labeled state.
-          </p>
-        }
-      </div>
+      <mj-empty-state
+        [Variant]="StatusFilter ? 'no-results' : 'empty'"
+        Icon="fa-solid fa-clock-rotate-left"
+        Title="No restore operations found"
+        [Message]="StatusFilter ? 'Try adjusting your filters.' : 'No restores have been performed yet. Use the VersionHistoryEngine to restore records to a labeled state.'"
+        [ActionText]="StatusFilter ? 'Reset filters' : ''"
+        ActionIcon="fa-solid fa-rotate-left"
+        (Action)="resetStatusFilter()" />
     }
   }
   </mj-page-body>

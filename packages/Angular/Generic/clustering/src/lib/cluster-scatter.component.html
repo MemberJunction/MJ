@@ -11,11 +11,11 @@
 
     <!-- Empty state -->
     @if (!IsLoading && Points.length === 0) {
-        <div class="empty-state">
-            <i class="fa-solid fa-chart-scatter"></i>
-            <p>No data to display</p>
-            <p class="empty-hint">Configure and run clustering to see results</p>
-        </div>
+        <mj-empty-state
+            class="empty-state-fill"
+            Icon="fa-solid fa-chart-simple"
+            Title="No data to display"
+            Message="Configure and run clustering to see results" />
     }
 
     <!-- SVG scatter plot -->

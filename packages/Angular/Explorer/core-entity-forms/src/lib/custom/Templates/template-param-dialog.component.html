@@ -120,15 +120,16 @@
                 </div>
               </div>
             } @else {
-              <div class="no-params-state">
-                <i class="fa-solid fa-info-circle"></i>
-                <p>No parameters defined yet</p>
-                <button mjButton variant="primary" size="sm"
+              <mj-empty-state
+                Size="compact"
+                Icon="fa-solid fa-circle-info"
+                Title="No parameters defined yet">
+                <button ngProjectAs="[actions]" mjButton variant="primary" size="sm"
                   (click)="addParameter()"
                   [disabled]="isRunning">
                   <i class="fa-solid fa-plus"></i> Add First Parameter
                 </button>
-              </div>
+              </mj-empty-state>
             }
           </div>
         </mj-accordion-panel>
@@ -220,12 +221,10 @@
                 </div>
               </div>
             } @else {
-              <div class="no-results-state">
-                <div style="text-align: center;">
-                  <i class="fa-solid fa-play-circle"></i>
-                  <p>No test results yet. Run the template to see results here.</p>
-                </div>
-              </div>
+              <mj-empty-state class="no-results-state"
+                Size="compact"
+                Icon="fa-solid fa-circle-play"
+                Title="No test results yet. Run the template to see results here." />
             }
           </div>
         </mj-accordion-panel>

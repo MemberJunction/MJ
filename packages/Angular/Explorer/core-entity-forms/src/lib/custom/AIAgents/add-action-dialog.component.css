@@ -170,32 +170,6 @@
   font-size: 1.1rem;
 }
 
-/* Empty State */
-.add-action-dialog .actions-container .empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 300px;
-  color: var(--mj-text-muted);
-  text-align: center;
-}
-
-.add-action-dialog .actions-container .empty-state i {
-  font-size: 3rem;
-  margin-bottom: 1rem;
-  color: var(--mj-border-default);
-}
-
-.add-action-dialog .actions-container .empty-state h3 {
-  margin: 0 0 0.5rem 0;
-  color: var(--mj-text-secondary);
-}
-
-.add-action-dialog .actions-container .empty-state p {
-  margin: 0 0 1.5rem 0;
-}
-
 /* === Grid View === */
 .add-action-dialog .actions-container .actions-grid {
   display: grid;

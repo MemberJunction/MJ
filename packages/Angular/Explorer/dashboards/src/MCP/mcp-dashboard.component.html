@@ -90,13 +90,10 @@
                         @case ('servers') {
                             <div class="data-grid servers-grid">
                                 @if (filteredServers.length === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-server"></i>
-                                        <p>No MCP servers configured</p>
-                                        <button mjButton variant="primary" size="sm" (click)="createServer()">
-                                            Add Your First Server
-                                        </button>
-                                    </div>
+                                    <mj-empty-state Icon="fa-solid fa-server"
+                                        Title="No MCP servers configured"
+                                        ActionText="Add Your First Server"
+                                        (Action)="createServer()" />
                                 } @else {
                                     @for (server of filteredServers; track server.ID) {
                                         <div class="data-card" [class.expanded]="isServerExpanded(server)">
@@ -203,13 +200,10 @@
                         @case ('connections') {
                             <div class="data-grid connections-grid">
                                 @if (filteredConnections.length === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-link"></i>
-                                        <p>No connections configured</p>
-                                        <button mjButton variant="primary" size="sm" (click)="createConnection()">
-                                            Add Your First Connection
-                                        </button>
-                                    </div>
+                                    <mj-empty-state Icon="fa-solid fa-link"
+                                        Title="No connections configured"
+                                        ActionText="Add Your First Connection"
+                                        (Action)="createConnection()" />
                                 } @else {
                                     @for (conn of filteredConnections; track conn.ID) {
                                         <div class="data-card" [class.expanded]="isConnectionExpanded(conn)">
@@ -362,11 +356,9 @@
                                     }
                                 </div>
                             } @else if (ServerGroups.length === 0) {
-                                <div class="empty-state">
-                                    <i class="fa-solid fa-wrench"></i>
-                                    <p>No tools discovered yet</p>
-                                    <span class="hint">Tools are discovered when connections sync with MCP servers</span>
-                                </div>
+                                <mj-empty-state Icon="fa-solid fa-wrench"
+                                    Title="No tools discovered yet"
+                                    Message="Tools are discovered when connections sync with MCP servers" />
                             } @else {
                                 <div class="tools-container">
                                     <!-- Server Groups -->
@@ -550,11 +542,9 @@
                         @case ('logs') {
                             <div class="data-table">
                                 @if (filteredLogs.length === 0) {
-                                    <div class="empty-state">
-                                        <i class="fa-solid fa-list-check"></i>
-                                        <p>No recent execution logs</p>
-                                        <span class="hint">Logs appear when tools are executed via MCP connections</span>
-                                    </div>
+                                    <mj-empty-state Icon="fa-solid fa-list-check"
+                                        Title="No recent execution logs"
+                                        Message="Logs appear when tools are executed via MCP connections" />
                                 } @else {
                                     <table>
                                         <thead>

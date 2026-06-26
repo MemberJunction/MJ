@@ -333,34 +333,6 @@ app-duplicate-detection-resource {
     min-height: 200px;
 }
 
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    min-height: 200px;
-    gap: 8px;
-}
-
-.empty-icon {
-    font-size: 48px;
-    color: var(--mj-text-disabled);
-}
-
-.empty-text {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    margin: 0;
-}
-
-.empty-subtext {
-    font-size: 13px;
-    color: var(--mj-text-muted);
-    margin: 0;
-}
-
 /* ---- Kanban Board ---- */
 
 .kanban-board {
@@ -443,20 +415,6 @@ app-duplicate-detection-resource {
     display: flex;
     flex-direction: column;
     gap: 10px;
-}
-
-.column-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding: 32px 16px;
-    color: var(--mj-text-disabled);
-    font-size: 13px;
-}
-
-.column-empty i {
-    font-size: 24px;
 }
 
 /* ---- Kanban Cards ---- */
@@ -977,14 +935,14 @@ app-duplicate-detection-resource {
     color: var(--mj-status-success-text);
     border-color: var(--mj-status-success-border);
 }
-.approve-btn-sm:hover { background: rgba(34,197,94,0.25); }
+.approve-btn-sm:hover { background: color-mix(in srgb, var(--mj-status-success) 25%, transparent); }
 
 .reject-btn-sm {
     background: var(--mj-status-error-bg);
     color: var(--mj-status-error-text);
     border-color: var(--mj-status-error-border);
 }
-.reject-btn-sm:hover { background: rgba(239,68,68,0.25); }
+.reject-btn-sm:hover { background: color-mix(in srgb, var(--mj-status-error) 25%, transparent); }
 
 .match-status-badge {
     display: inline-flex;

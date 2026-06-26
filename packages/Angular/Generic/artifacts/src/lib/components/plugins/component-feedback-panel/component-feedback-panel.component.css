@@ -195,16 +195,6 @@
   font-weight: 500;
 }
 
-.empty-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 20px;
-  color: var(--mj-text-disabled);
-  font-size: 14px;
-}
-
 /* Feedback Form Section */
 .feedback-section {
   background-color: var(--mj-bg-surface);
@@ -418,29 +408,6 @@
 
 .error-message i {
   color: var(--mj-status-error);
-}
-
-/* No Selection Message */
-.no-selection-message {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 40px 20px;
-  color: var(--mj-text-disabled);
-  text-align: center;
-}
-
-.no-selection-message i {
-  font-size: 48px;
-  color: var(--mj-border-strong);
-}
-
-.no-selection-message p {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
 }
 
 /* Scrollbar Styling */
