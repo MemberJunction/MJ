@@ -271,6 +271,19 @@ export abstract class BaseRealtimeClient {
     public abstract Connect(config: ClientRealtimeSessionConfig, micStream: MediaStream, cameraStream?: MediaStream): Promise<void>;
 
     /**
+     * Returns the AGENT's remote-audio {@link MediaStream} when this driver owns a tappable
+     * remote-audio plane (e.g. a WebRTC peer-connection driver routes the model's audio track
+     * here), or `null` otherwise. Hosts use it to MIX the agent's voice into a browser-side
+     * recording alongside the mic; a `null` return (the default, and what every non-WebRTC
+     * driver gives) degrades gracefully to mic-only capture.
+     *
+     * **Optional capability:** the method itself is optional — call sites must use
+     * `client.GetRemoteMediaStream?.() ?? null`. Drivers that can't expose a remote stream
+     * simply don't implement it (or return `null`).
+     */
+    public GetRemoteMediaStream?(): MediaStream | null;
+
+    /**
      * Injects typed text into the live session as a USER turn and asks the model to respond.
      * Implementations must route the reply through the same collision-safe path as tool
      * results so it never collides with an in-flight response. No-op when the control

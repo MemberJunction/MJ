@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
@@ -22,6 +23,15 @@ import {
 import { BuildNarrationInstructions } from './narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components/realtime/channels/base-realtime-channel-client';
+import { RealtimeAudioRecorder } from './realtime-audio-recorder';
+
+/**
+ * `MJ: User Settings` key for the per-user "record this voice call" consent toggle. Stored as
+ * the literal string `'true'`/`'false'` (read with `=== 'true'`), cross-device via
+ * {@link UserInfoEngine}. The pre-call picker writes it; the session service reads it as the
+ * default when the caller doesn't pass an explicit consent value.
+ */
+export const REALTIME_RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
 
 // Tree-shaking prevention: the OpenAI client is resolved dynamically through the
 // ClassFactory (by the server-reported Provider key), so this static call is what keeps
@@ -416,6 +426,22 @@ export class RealtimeSessionService {
    */
   private narrationTemplate: string | null = null;
 
+  // ── Browser-side call recording ────────────────────────────────────────────
+  /**
+   * The active session's audio recorder (mic + agent mix), or `null` when the user didn't
+   * consent or the browser can't record. Created after the client connects; stopped + uploaded
+   * at teardown.
+   */
+  private recorder: RealtimeAudioRecorder | null = null;
+  /** ISO timestamp of when recording started — sent to the server on session start. */
+  private recordingStartedAtIso: string | null = null;
+  /**
+   * Recording-relative ms offset at which the IN-FLIGHT turn began (the last final transcript
+   * boundary), or `null` before the first turn. Sent as `utteranceStartMs` on the next final
+   * transcript so per-turn timing lines up with the recording.
+   */
+  private currentTurnStartMs: number | null = null;
+
   // ── Delegated-run progress streaming ───────────────────────────────────────
   /** First spoken update fires no earlier than this long after delegated work starts. */
   private static readonly FirstNarrationDelayMs = 5000;
@@ -543,6 +569,10 @@ export class RealtimeSessionService {
    *   authorization on any overrides — hosts only populate this from authorization-gated
    *   pickers, and never synthesize overrides beyond what the user explicitly chose.
    *   Omit/`null` for the server's defaults (today's behavior).
+   * @param recordingConsent Optional EXPLICIT "record this call" consent for THIS session. When
+   *   `true`, the browser records a mic + agent-audio mix and uploads it at session end. When
+   *   omitted/`null`, the per-user persisted preference (`mj.realtimeVoice.recordingConsent.v1`
+   *   via {@link UserInfoEngine}) is read as the default. `false` never records.
    */
   public async StartVoiceSession(
     targetAgentId: string,
@@ -552,7 +582,8 @@ export class RealtimeSessionService {
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
     coAgentId?: string | null,
-    configOverridesJson?: string | null
+    configOverridesJson?: string | null,
+    recordingConsent?: boolean | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -565,11 +596,16 @@ export class RealtimeSessionService {
     this._active$.next(true);
     this._connectionState$.next('connecting');
 
+    // Resolve recording consent for this session: explicit value wins, else the per-user
+    // persisted preference. Computed before mint so it can be reported to the server.
+    const consent = recordingConsent ?? this.readPersistedRecordingConsent();
+    this.recordingStartedAtIso = consent ? new Date().toISOString() : null;
+
     try {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
@@ -589,6 +625,15 @@ export class RealtimeSessionService {
 
       this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       await client.Connect(this.buildClientConfig(session), this.localStream);
+
+      // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
+      // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
+      // and never blocks the call. The remote stream may still be null here (the WebRTC
+      // ontrack can land slightly after Connect resolves) — the recorder mixes the mic now
+      // and the agent audio rides through whenever its track is already attached.
+      if (consent) {
+        this.startRecording(client);
+      }
 
       this.subscribeDelegationProgress();
       // State advances to 'listening' once the provider control channel opens
@@ -697,6 +742,109 @@ export class RealtimeSessionService {
    */
   public GetAudioActivity(): RealtimeAudioActivity | null {
     return this.client?.GetAudioActivity() ?? null;
+  }
+
+  // ── Browser-side call recording ────────────────────────────────────────────
+
+  /**
+   * Reads the per-user recording-consent preference from `MJ: User Settings` (via
+   * {@link UserInfoEngine}'s synchronous cache). Defensive: any failure resolves to `false`
+   * (don't record) so a settings hiccup can never opt a user into recording.
+   */
+  private readPersistedRecordingConsent(): boolean {
+    try {
+      return UserInfoEngine.Instance.GetSetting(REALTIME_RECORDING_CONSENT_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Starts the browser-side recorder (mic + agent-audio mix). Best-effort — any failure is
+   * contained so it never disturbs the live call; an unsupported browser simply records
+   * nothing (the recorder disables itself).
+   */
+  private startRecording(client: BaseRealtimeClient): void {
+    try {
+      if (!this.localStream) {
+        return;
+      }
+      const remoteStream = client.GetRemoteMediaStream?.() ?? null;
+      const recorder = new RealtimeAudioRecorder();
+      recorder.Start(this.localStream, remoteStream);
+      this.recorder = recorder.IsRecording ? recorder : null;
+      this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
+    } catch (error) {
+      console.warn('[RealtimeSession] Failed to start call recording:', error);
+      this.recorder = null;
+    }
+  }
+
+  /**
+   * Stops the active recorder and uploads the captured audio via `UploadRealtimeRecording`.
+   * Fully best-effort and wrapped in try/catch — recording upload must NEVER block teardown.
+   * No-op when nothing was recorded or there's no session id to attach the file to.
+   */
+  private async stopAndUploadRecording(agentSessionId: string | null): Promise<void> {
+    const recorder = this.recorder;
+    this.recorder = null;
+    this.currentTurnStartMs = null;
+    if (!recorder) {
+      return;
+    }
+    try {
+      const blob = await recorder.Stop();
+      if (!blob || blob.size === 0 || !agentSessionId) {
+        return;
+      }
+      const audioBase64 = await this.blobToBase64(blob);
+      if (!audioBase64) {
+        return;
+      }
+      await this.uploadRecording(agentSessionId, audioBase64, recorder.MimeType);
+    } catch (error) {
+      console.warn('[RealtimeSession] Failed to stop/upload call recording:', error);
+    }
+  }
+
+  /** Runs the `UploadRealtimeRecording` mutation; failures are logged, never thrown. */
+  private async uploadRecording(agentSessionId: string, audioBase64: string, mimeType: string): Promise<void> {
+    const mutation = `
+      mutation UploadRealtimeRecording($agentSessionId: String!, $audioBase64: String!, $mimeType: String!, $consent: Boolean) {
+        UploadRealtimeRecording(agentSessionId: $agentSessionId, audioBase64: $audioBase64, mimeType: $mimeType, consent: $consent) {
+          Success
+          FileID
+          ErrorMessage
+        }
+      }
+    `;
+    const result = await this.gql().ExecuteGQL(mutation, {
+      agentSessionId,
+      audioBase64,
+      mimeType,
+      consent: true
+    });
+    const payload = result?.UploadRealtimeRecording as { Success?: boolean; FileID?: string; ErrorMessage?: string } | undefined;
+    if (!payload?.Success) {
+      console.warn(`[RealtimeSession] Recording upload reported failure: ${payload?.ErrorMessage ?? 'unknown error'}`);
+    }
+  }
+
+  /**
+   * Encodes a {@link Blob} as a base64 string (the data: prefix stripped) via {@link FileReader}.
+   * Resolves `''` on any read failure so the upload path can bail cleanly.
+   */
+  private blobToBase64(blob: Blob): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const commaIndex = result.indexOf(',');
+        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : '');
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    });
   }
 
   // ── Interactive channels (registry-driven plugins) ─────────────────────────
@@ -1385,11 +1533,13 @@ export class RealtimeSessionService {
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
     coAgentId?: string | null,
-    configOverridesJson?: string | null
+    configOverridesJson?: string | null,
+    recordingConsent?: boolean | null,
+    recordingStartedAt?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt) {
           AgentSessionId
           ConversationId
           Provider
@@ -1410,7 +1560,9 @@ export class RealtimeSessionService {
       preferredModelId: preferredModelId ?? null,
       clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null,
       coAgentId: coAgentId ?? null,
-      configOverridesJson: configOverridesJson ?? null
+      configOverridesJson: configOverridesJson ?? null,
+      recordingConsent: recordingConsent ?? false,
+      recordingStartedAt: recordingStartedAt ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
@@ -1475,6 +1627,13 @@ export class RealtimeSessionService {
 
   /**
    * Relays a final transcript turn to MJ via `RelayRealtimeTranscript`.
+   *
+   * When the session is being recorded, per-turn timing rides along: `utteranceEndMs` is the
+   * recording-relative offset at finalization, and `utteranceStartMs` is the offset captured at
+   * the PREVIOUS turn boundary (cheap turn-start tracking — the recording has no per-utterance
+   * VAD, so each turn is treated as spanning from the prior finalization to this one). Both are
+   * omitted (left `null`) when the session isn't being recorded.
+   *
    * @param replacesPrevious CORRECTION semantics: the server updates the session's most
    *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
    *   post-barge-in `agent_response_correction`).
@@ -1483,17 +1642,26 @@ export class RealtimeSessionService {
     if (!this.agentSessionId) {
       return;
     }
+    // Capture per-turn timing against the recording (when recording). A correction
+    // (replacesPrevious) doesn't open a new turn, so it doesn't advance the turn boundary.
+    const utteranceEndMs = this.recorder ? this.recorder.NowOffsetMs() : null;
+    const utteranceStartMs = this.recorder && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
+    if (this.recorder && !replacesPrevious && utteranceEndMs !== null) {
+      this.currentTurnStartMs = utteranceEndMs;
+    }
     try {
       const mutation = `
-        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!, $replacesPrevious: Boolean) {
-          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text, replacesPrevious: $replacesPrevious)
+        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!, $replacesPrevious: Boolean, $utteranceStartMs: Int, $utteranceEndMs: Int) {
+          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text, replacesPrevious: $replacesPrevious, utteranceStartMs: $utteranceStartMs, utteranceEndMs: $utteranceEndMs)
         }
       `;
       await this.gql().ExecuteGQL(mutation, {
         agentSessionId: this.agentSessionId,
         role,
         text,
-        replacesPrevious
+        replacesPrevious,
+        utteranceStartMs,
+        utteranceEndMs
       });
     } catch (error) {
       console.error('[RealtimeSession] Failed to relay transcript:', error);
@@ -1904,6 +2072,12 @@ export class RealtimeSessionService {
       this.client = null;
     }
 
+    // Stop + upload the call recording WHILE the live session id is still set (the file is
+    // attached to it). Best-effort and never blocks teardown — stopAndUploadRecording swallows
+    // its own errors. No-op when nothing was recorded.
+    await this.stopAndUploadRecording(this.agentSessionId);
+    this.recordingStartedAtIso = null;
+
     // Final usage flush WHILE the live session id is still set (the relay mutation also
     // accepts a Closed session, so ordering vs. CloseAgentSession is belt-and-braces).
     if (this.usageFlushTimer) {
@@ -1967,6 +2141,9 @@ export class RealtimeSessionService {
   private resetState(): void {
     this._captions$.next([]);
     this.SetMinimized(false);
+    this.recorder = null;
+    this.recordingStartedAtIso = null;
+    this.currentTurnStartMs = null;
   }
 
   /** The GraphQL provider used for relay mutations. */
