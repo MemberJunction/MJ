@@ -47,3 +47,10 @@ packages/Angular/Generic/markdown/src/lib/components/markdown.component.css
 # Category 6: Filter Depth Categorical Colors
 # Distinct colors for visually distinguishing nesting depth levels in filter builder.
 packages/Angular/Generic/filter-builder/src/lib/filter-group/filter-group.component.css
+
+# Category 3: Categorical colors (must remain distinct; no semantic token equivalent)
+# Iconic gold rating star (#ffd700) — intentional branding color, theme-independent (documented in-file).
+packages/Angular/Generic/artifacts/src/lib/components/plugins/component-feedback-panel/component-feedback-panel.component.css
+# Suggestion type-badge identity colors — entity badge teal (#11998e) distinguishes it
+# from the brand-blue user badge; no teal semantic token exists.
+packages/Angular/Generic/conversations/src/lib/components/mention/mention-dropdown.component.css

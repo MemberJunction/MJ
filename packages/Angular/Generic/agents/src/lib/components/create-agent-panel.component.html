@@ -278,10 +278,7 @@
                         }
                     </div>
                 } @else {
-                    <div class="cap-empty-state">
-                        <i class="fa-solid fa-comments"></i>
-                        <p>No prompts added yet</p>
-                    </div>
+                    <mj-empty-state Icon="fa-solid fa-comments" Title="No prompts added yet" Size="compact" />
                 }
 
                 <!-- Prompt Selector Dropdown -->
@@ -321,10 +318,7 @@
                                     </div>
                                 }
                             } @else {
-                                <div class="cap-selector-empty">
-                                    <i class="fa-solid fa-search"></i>
-                                    <span>No prompts found</span>
-                                </div>
+                                <mj-empty-state Variant="no-results" Title="No prompts found" Size="compact" />
                             }
                         </div>
                     </div>
@@ -374,10 +368,7 @@
                         }
                     </div>
                 } @else {
-                    <div class="cap-empty-state">
-                        <i class="fa-solid fa-bolt"></i>
-                        <p>No actions added yet</p>
-                    </div>
+                    <mj-empty-state Icon="fa-solid fa-bolt" Title="No actions added yet" Size="compact" />
                 }
 
                 <!-- Action Selector Dropdown -->
@@ -417,10 +408,7 @@
                                     </div>
                                 }
                             } @else {
-                                <div class="cap-selector-empty">
-                                    <i class="fa-solid fa-search"></i>
-                                    <span>No actions found</span>
-                                </div>
+                                <mj-empty-state Variant="no-results" Title="No actions found" Size="compact" />
                             }
                         </div>
                     </div>

@@ -530,13 +530,10 @@
         }
         <!-- Empty State -->
         @if (aiRunsLoaded && aiAgentRuns.length === 0 && aiPromptRuns.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-robot"></i>
-            </div>
-            <h3>No AI Runs</h3>
-            <p>This test execution didn't involve any AI agent or prompt runs.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-robot"
+            Title="No AI Runs"
+            Message="This test execution didn't involve any AI agent or prompt runs." />
         }
       </div>
     }
@@ -607,13 +604,10 @@
         }
         <!-- Empty State -->
         @if (feedbackLoaded && feedbacks.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-comments"></i>
-            </div>
-            <h3>No Feedback Yet</h3>
-            <p>No one has reviewed this test run yet. Be the first to provide feedback!</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-comments"
+            Title="No Feedback Yet"
+            Message="No one has reviewed this test run yet. Be the first to provide feedback!" />
         }
       </div>
     }

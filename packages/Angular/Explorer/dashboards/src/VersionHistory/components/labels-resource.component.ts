@@ -284,6 +284,23 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     // Filters
     // =======================================================================
 
+    /** True when search and/or any filter narrow the labels list. */
+    public get IsListNarrowed(): boolean {
+        return !!(this.SearchText || this.ScopeFilter || this.StatusFilter);
+    }
+
+    /** Empty-state CTA: reset search + filters when narrowed, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.IsListNarrowed) {
+            this.SearchText = '';
+            this.ScopeFilter = '';
+            this.StatusFilter = '';
+            this.applyFilters();
+        } else {
+            this.OpenCreateDialog();
+        }
+    }
+
     public applyFilters(): void {
         // First: exclude child labels (those with ParentID) from top-level list
         let result = this.Labels.filter(l => !l.ParentID);

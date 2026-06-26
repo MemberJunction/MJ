@@ -25,19 +25,23 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
         
           <!-- Error state -->
           @if (ErrorMessage && !IsLoading) {
-            <div class="error-state">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>{{ ErrorMessage }}</span>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Variant="error"
+              Icon="fa-solid fa-triangle-exclamation"
+              Title="Couldn't load view"
+              [Message]="ErrorMessage"
+              Size="compact" />
           }
-        
+
           <!-- No view configured -->
           @if (!IsLoading && !ErrorMessage && !hasView) {
-            <div class="empty-state">
-              <i class="fa-solid fa-table"></i>
-              <h4>No View Selected</h4>
-              <p>Click the configure button to select a view for this part.</p>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Icon="fa-solid fa-table"
+              Title="No View Selected"
+              Message="Click the configure button to select a view for this part."
+              Size="compact" />
           }
         
           <!-- Entity Viewer -->
@@ -67,9 +71,7 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
             background: var(--mj-bg-surface);
         }
 
-        .loading-state,
-        .error-state,
-        .empty-state {
+        .loading-state {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -80,25 +82,8 @@ import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } f
             padding: 24px;
         }
 
-        .error-state i,
-        .empty-state i {
-            font-size: 48px;
-            color: var(--mj-text-muted);
-            margin-bottom: 16px;
-        }
-
-        .error-state i {
-            color: var(--mj-status-error);
-        }
-
-        .empty-state h4 {
-            margin: 0 0 8px 0;
-            color: var(--mj-text-primary);
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 13px;
+        .part-placeholder {
+            height: 100%;
         }
 
         mj-entity-viewer {

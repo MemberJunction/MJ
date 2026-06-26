@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FFlowModule } from '@foblex/flow';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 // Generic components
 import { FlowEditorComponent } from './components/flow-editor.component';
@@ -33,7 +34,8 @@ import { AgentStepListComponent } from './agent-editor/agent-step-list.component
     CommonModule,
     FormsModule,
     FFlowModule,
-    CodeEditorModule
+    CodeEditorModule,
+    MJEmptyStateComponent
   ],
   exports: [
     // Generic — for any consumer

@@ -256,23 +256,6 @@
     border-top: 1px solid var(--mj-border-default);
 }
 
-/* No params state */
-.no-params-state {
-    text-align: center;
-    padding: 20px;
-    color: var(--mj-text-muted);
-}
-
-.no-params-state i {
-    font-size: 2em;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
-
-.no-params-state p {
-    margin: 0 0 12px 0;
-}
-
 /* JSON preview */
 .json-preview-box {
     background: var(--mj-bg-surface-card);
@@ -389,22 +372,7 @@
     height: 150px;
 }
 
-/* No results state */
-.no-results-state {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-    color: var(--mj-text-muted);
+/* No results state — fills the results pane */
+mj-empty-state.no-results-state {
     flex: 1;
-}
-
-.no-results-state i {
-    font-size: 3em;
-    margin-bottom: 12px;
-    opacity: 0.3;
-}
-
-.no-results-state p {
-    margin: 0;
 }

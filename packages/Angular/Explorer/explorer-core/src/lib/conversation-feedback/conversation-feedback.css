@@ -325,26 +325,11 @@
 /* -----------------------------------------------------------------------------
    Empty State
    ----------------------------------------------------------------------------- */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 4rem 1.25rem;
-  color: var(--mj-text-secondary);
+.feedback-empty-state {
+  display: block;
   background: var(--mj-bg-surface-card);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
-}
-.empty-state i {
-  font-size: 2.25rem;
-  margin-bottom: 0.875rem;
-  opacity: 0.5;
-}
-.empty-state p {
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin: 0;
 }
 
 /* -----------------------------------------------------------------------------

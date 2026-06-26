@@ -340,6 +340,21 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.openNewActionPanel();
   }
 
+  /** True when search/filters or a category selection narrow the list. */
+  public get IsListNarrowed(): boolean {
+    return this.StateService.hasActiveFilters() || this.SelectedCategoryId !== 'all';
+  }
+
+  /** Empty-state CTA: reset filters when narrowed, otherwise create. */
+  public onEmptyStateAction(): void {
+    if (this.IsListNarrowed) {
+      this.StateService.clearFilters();
+      this.StateService.setSelectedCategoryId('all');
+    } else {
+      this.onNewAction();
+    }
+  }
+
   public onActionClick(action: MJActionEntityExtended): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);

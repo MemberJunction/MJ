@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { MJWindowComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJWindowComponent, MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { UserInfo } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService, CollectionPermission, PermissionSet } from '../../services/collection-permission.service';
@@ -16,7 +16,7 @@ interface PermissionDisplay extends CollectionPermission {
 @Component({
     selector: 'mj-collection-share-modal',
     standalone: true,
-    imports: [FormsModule, MJWindowComponent, MJButtonDirective, UserPickerComponent],
+    imports: [FormsModule, MJWindowComponent, MJButtonDirective, MJEmptyStateComponent, UserPickerComponent],
     template: `
         @if (isOpen && collection) {
             <mj-window
@@ -119,10 +119,10 @@ interface PermissionDisplay extends CollectionPermission {
                         </h3>
 
                         @if (permissions.length === 0) {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-user-slash"></i>
-                                <p>Not shared with anyone yet</p>
-                            </div>
+                            <mj-empty-state
+                                Icon="fa-solid fa-user-slash"
+                                Title="Not shared with anyone yet"
+                                Size="compact" />
                         } @else {
                             <div class="permissions-list">
                                 @for (permission of permissions; track permission.id) {
