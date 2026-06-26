@@ -153,26 +153,51 @@ describe('PGConnection — lazy + cached pool', () => {
         expect(passed.ConnectionTimeoutMillis).toBeUndefined();
     });
 
-    it('wires a per-connection statement_timeout hook when statementTimeoutMs is set', async () => {
+    it('passes statementTimeoutMs as a libpq startup option (not a runtime listener)', async () => {
         configInfo.codegenPool = { statementTimeoutMs: 90_000 };
 
         await PGConnection();
-        // The connect listener should be registered exactly once.
-        expect(fakePool.listeners.connect?.length).toBe(1);
-
-        // Simulate a connect event — the listener fires `client.query()` with
-        // `SET statement_timeout = <ms>`. We verify the SQL via a stub client.
-        const queries: string[] = [];
-        const fakeClient = { query: (sql: string) => { queries.push(sql); return Promise.resolve(); } };
-        fakePool.listeners.connect![0](fakeClient);
-        await new Promise((resolve) => setImmediate(resolve));
-        expect(queries).toEqual(['SET statement_timeout = 90000']);
+        const passed = initializeMock.mock.calls[0]![0] as Record<string, unknown>;
+        // The cross-platform statement_timeout is plumbed through PGConnectionConfig.Options
+        // (libpq `-c statement_timeout=<ms>`), so PG applies it from the very first
+        // backend, including the verify-SELECT-1 connection. We verify the option string
+        // here; the previous runtime `connect` listener approach is intentionally gone
+        // because it attached AFTER Initialize()'s verify connection had already opened.
+        expect(passed.Options).toBe('-c statement_timeout=90000');
+        // No connect listener should be attached anymore.
+        expect(fakePool.listeners.connect ?? []).toHaveLength(0);
     });
 
-    it('does NOT register a statement_timeout hook when statementTimeoutMs is unset or zero', async () => {
+    it('omits Options entirely when statementTimeoutMs is unset or zero', async () => {
         configInfo.codegenPool = { statementTimeoutMs: 0 };
         await PGConnection();
+        const passed = initializeMock.mock.calls[0]![0] as Record<string, unknown>;
+        expect(passed.Options).toBeUndefined();
         expect(fakePool.listeners.connect ?? []).toHaveLength(0);
+    });
+
+    it('defaults SSL off to preserve pre-refactor inline-pool behavior', async () => {
+        // Pre-multi-provider PR, codegen built `new pg.Pool({...})` inline with no
+        // `ssl` key, so pg defaulted SSL OFF. PGConnectionManager defaults SSL ON
+        // when NODE_ENV=production, which would flip behavior under us. buildPgConfig()
+        // explicitly passes SSL: false to preserve the prior behavior.
+        await PGConnection();
+        const passed = initializeMock.mock.calls[0]![0] as Record<string, unknown>;
+        expect(passed.SSL).toBe(false);
+    });
+
+    it('honors an explicit codegenPool.ssl override (boolean true)', async () => {
+        configInfo.codegenPool = { ssl: true };
+        await PGConnection();
+        const passed = initializeMock.mock.calls[0]![0] as Record<string, unknown>;
+        expect(passed.SSL).toBe(true);
+    });
+
+    it('honors an explicit codegenPool.ssl override (object)', async () => {
+        configInfo.codegenPool = { ssl: { rejectUnauthorized: true } };
+        await PGConnection();
+        const passed = initializeMock.mock.calls[0]![0] as Record<string, unknown>;
+        expect(passed.SSL).toEqual({ rejectUnauthorized: true });
     });
 
     it('ClosePGConnection() resets the cache so the next PGConnection() rebuilds', async () => {
