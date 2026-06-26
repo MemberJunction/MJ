@@ -23,6 +23,19 @@
           </div>
         }
 
+        <!-- Loading / buffering overlay (primary element only). -->
+        @if (ShowBusyIndicator && !HasError) {
+          <div
+            class="mj-media-busy"
+            [class.mj-media-busy--static]="PrefersReducedMotion"
+            role="status"
+            aria-hidden="true"
+          >
+            <span class="mj-media-busy__spinner"></span>
+            <span class="mj-media-busy__label">{{ BusyLabel }}</span>
+          </div>
+        }
+
         @if (IsAudioOnly) {
           <!-- Single audio track: hidden <audio> + optional waveform -->
           @for (track of AudioTracks; track TrackById($index, track); let first = $first) {
@@ -32,13 +45,23 @@
                 class="mj-media-audio"
                 [src]="track.Url"
                 preload="metadata"
+                (loadstart)="OnMediaLoadStart($any($event.target))"
                 (loadedmetadata)="OnMediaLoadedMetadata($any($event.target))"
+                (canplay)="OnMediaCanPlay($any($event.target))"
+                (canplaythrough)="OnMediaCanPlay($any($event.target))"
+                (waiting)="OnMediaWaiting($any($event.target))"
+                (seeking)="OnMediaSeeking($any($event.target))"
+                (seeked)="OnMediaSeeked($any($event.target))"
+                (playing)="OnMediaPlaying($any($event.target))"
+                (stalled)="OnMediaStalled($any($event.target))"
+                (suspend)="OnMediaSuspend($any($event.target))"
+                (emptied)="OnMediaEmptied($any($event.target))"
                 (timeupdate)="OnMediaTimeUpdate($any($event.target))"
                 (durationchange)="OnMediaDurationChange($any($event.target))"
                 (play)="OnMediaPlay($any($event.target))"
                 (pause)="OnMediaPause($any($event.target))"
                 (ended)="OnMediaEnded($any($event.target))"
-                (error)="OnMediaError()"
+                (error)="OnMediaError($any($event.target))"
               ></audio>
             }
           }
@@ -116,13 +139,23 @@
                     [poster]="track.PosterUrl || null"
                     playsinline
                     preload="metadata"
+                    (loadstart)="OnMediaLoadStart($any($event.target))"
                     (loadedmetadata)="OnMediaLoadedMetadata($any($event.target))"
+                    (canplay)="OnMediaCanPlay($any($event.target))"
+                    (canplaythrough)="OnMediaCanPlay($any($event.target))"
+                    (waiting)="OnMediaWaiting($any($event.target))"
+                    (seeking)="OnMediaSeeking($any($event.target))"
+                    (seeked)="OnMediaSeeked($any($event.target))"
+                    (playing)="OnMediaPlaying($any($event.target))"
+                    (stalled)="OnMediaStalled($any($event.target))"
+                    (suspend)="OnMediaSuspend($any($event.target))"
+                    (emptied)="OnMediaEmptied($any($event.target))"
                     (timeupdate)="OnMediaTimeUpdate($any($event.target))"
                     (durationchange)="OnMediaDurationChange($any($event.target))"
                     (play)="OnMediaPlay($any($event.target))"
                     (pause)="OnMediaPause($any($event.target))"
                     (ended)="OnMediaEnded($any($event.target))"
-                    (error)="OnMediaError()"
+                    (error)="OnMediaError($any($event.target))"
                   ></video>
                 } @else {
                   <!-- Secondary videos follow the leader's timeline; no own controls -->
@@ -143,6 +176,19 @@
 
       <!-- Transport bar -->
       <div class="mj-media-transport">
+        <!-- Screen-reader + visible playback status (announced on transitions). -->
+        <div
+          class="mj-media-status"
+          [class.mj-media-status--busy]="ShowBusyIndicator"
+          role="status"
+          aria-live="polite"
+        >
+          @if (ShowBusyIndicator) {
+            <span class="mj-media-status__dot" aria-hidden="true"></span>
+          }
+          <span class="mj-media-status__text">{{ StatusLabel }}</span>
+        </div>
+
         <!-- Scrubber -->
         <div class="mj-media-scrubber-row">
           <span class="mj-media-time">{{ FormatTime(CurrentTimeMs) }}</span>

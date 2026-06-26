@@ -10,6 +10,33 @@
 export type MediaKind = 'audio' | 'video';
 
 /**
+ * The high-level playback lifecycle of the PRIMARY media element, derived from its
+ * native HTMLMediaElement events.
+ *
+ * - `idle`      — no source / nothing happening yet.
+ * - `loading`   — initial fetch of the source (post-`loadstart`, pre-`canplay`); the stage
+ *                 shows a "Loading…" indicator.
+ * - `buffering` — ran out of buffered data mid-playback, or seeking into un-buffered
+ *                 territory (e.g. a ±30s skip or a scrub); the stage shows "Buffering…".
+ * - `ready`     — enough data buffered to play, but not currently playing (post-`canplay`,
+ *                 paused at position).
+ * - `playing`   — actively playing.
+ * - `paused`    — user-paused (distinct from `ready`, which is "ready but never started /
+ *                 stopped at end-of-buffer").
+ * - `ended`     — playback reached the end of the media.
+ * - `error`     — the element raised an `error` (unplayable source, decode failure, etc.).
+ */
+export type MediaPlaybackState =
+  | 'idle'
+  | 'loading'
+  | 'buffering'
+  | 'ready'
+  | 'playing'
+  | 'paused'
+  | 'ended'
+  | 'error';
+
+/**
  * A single playable media source. A player may receive one or many.
  * For multiple video tracks the player renders a responsive grid; for a single
  * audio track it renders the transport bar (optionally with a waveform).

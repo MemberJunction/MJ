@@ -14,6 +14,7 @@ import {
 import { CommonModule } from '@angular/common';
 import {
   MediaCueEvent,
+  MediaPlaybackState,
   MediaPlayerCancelableEvent,
   MediaRateEvent,
   MediaSeekEvent,
@@ -21,7 +22,15 @@ import {
   MediaTranscriptCue,
 } from '../media-player.types';
 import { computeActiveCueIndex } from './cue-utils';
+import { MediaStateContext, MediaStateEvent, nextPlaybackState } from './playback-state';
 import { DEFAULT_WAVEFORM_BARS, downsamplePeaks } from './waveform-utils';
+
+/**
+ * Delay (ms) before the *buffering* spinner is shown, to avoid flicker on instant seeks
+ * that resolve immediately. The *loading* indicator shows with no delay. If a buffering
+ * state clears before this elapses, the spinner never appears.
+ */
+const BUFFERING_INDICATOR_DELAY_MS = 200;
 
 /**
  * `mj-media-player` — a generic, framework-agnostic media player.
@@ -133,6 +142,8 @@ export class MJMediaPlayerComponent implements OnDestroy {
   @Output() TimeUpdate = new EventEmitter<number>();
   @Output() DurationChange = new EventEmitter<number>();
   @Output() Ended = new EventEmitter<void>();
+  /** Emits whenever the primary element's {@link MediaPlaybackState} transitions. */
+  @Output() StateChanged = new EventEmitter<MediaPlaybackState>();
 
   // ---------------------------------------------------------------------------
   // View references
@@ -156,8 +167,23 @@ export class MJMediaPlayerComponent implements OnDestroy {
   private _isScrubbing = false;
   private _hasError = false;
   private _rateMenuOpen = false;
+  /** Media elements we've already nudged to resolve a real (finite) duration. */
+  private _durationForced = new WeakSet<HTMLMediaElement>();
+  /** True while a force-duration nudge is in flight — suppresses the transient time/position jump. */
+  private _suppressTimeUpdate = false;
   private _activeMediaEl: HTMLMediaElement | null = null;
   private _rateInitialized = false;
+
+  /** The high-level playback lifecycle state of the primary element. */
+  private _mediaState: MediaPlaybackState = 'idle';
+  /**
+   * Whether the buffering spinner is currently visible. Distinct from `_mediaState ===
+   * 'buffering'`: the state flips immediately, but the *visible* spinner is debounced by
+   * {@link BUFFERING_INDICATOR_DELAY_MS} so instant seeks don't flash it.
+   */
+  private _bufferingVisible = false;
+  /** Pending timer that promotes a `buffering` state to a visible spinner after the delay. */
+  private _bufferingTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Per-track computed/supplied waveform peaks (0..1), keyed by track Id. */
   private _peaksByTrackId = new Map<string, number[]>();
@@ -205,6 +231,51 @@ export class MJMediaPlayerComponent implements OnDestroy {
   }
   get HasError(): boolean {
     return this._hasError;
+  }
+
+  /** The current high-level playback lifecycle state of the primary element. */
+  get MediaState(): MediaPlaybackState {
+    return this._mediaState;
+  }
+  /** True during the initial source load (shows the "Loading…" stage indicator). */
+  get IsLoading(): boolean {
+    return this._mediaState === 'loading';
+  }
+  /**
+   * True while buffering — but reflects the *debounced* visible flag, so an instant seek
+   * that resolves within {@link BUFFERING_INDICATOR_DELAY_MS} never shows the spinner.
+   */
+  get IsBuffering(): boolean {
+    return this._bufferingVisible;
+  }
+  /** Whether the stage should show ANY busy indicator (loading or visible buffering). */
+  get ShowBusyIndicator(): boolean {
+    return this.IsLoading || this.IsBuffering;
+  }
+  /** The label shown alongside the busy spinner. */
+  get BusyLabel(): string {
+    return this.IsLoading ? 'Loading…' : 'Buffering…';
+  }
+  /** A short, screen-reader-friendly status phrase reflecting the current state. */
+  get StatusLabel(): string {
+    switch (this._mediaState) {
+      case 'loading':
+        return 'Loading';
+      case 'buffering':
+        return 'Buffering';
+      case 'playing':
+        return 'Playing';
+      case 'paused':
+        return 'Paused';
+      case 'ready':
+        return 'Ready';
+      case 'ended':
+        return 'Ended';
+      case 'error':
+        return 'Error';
+      default:
+        return 'Idle';
+    }
   }
   get HasTracks(): boolean {
     return this._tracks.length > 0;
@@ -423,6 +494,14 @@ export class MJMediaPlayerComponent implements OnDestroy {
   // Media element event handlers (bound in template)
   // ---------------------------------------------------------------------------
 
+  /** Initial source fetch began — drives the "Loading…" indicator. */
+  OnMediaLoadStart(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('loadstart', el);
+  }
+
   /** Wire-up when a media element fires its first event — caches the primary element & applies initial state. */
   OnMediaLoadedMetadata(el: HTMLMediaElement): void {
     this._hasError = false;
@@ -431,9 +510,16 @@ export class MJMediaPlayerComponent implements OnDestroy {
     }
     this.initializeMediaElement(el);
     const dur = el.duration;
-    if (isFinite(dur)) {
+    if (isFinite(dur) && dur > 0) {
       this._durationMs = Math.round(dur * 1000);
       this.DurationChange.emit(this._durationMs);
+    } else {
+      // MediaRecorder/streamed webm files often carry no duration in their header, so the
+      // element reports `Infinity` — which makes fraction-based seeking compute 0 (every
+      // timeline click snaps to the start). Nudge the element once to resolve a real duration;
+      // this also builds its internal seek index. The resulting `durationchange` is handled in
+      // OnMediaDurationChange.
+      this.forceDurationResolution(el);
     }
     if (this.StartAtMs != null && el === this._activeMediaEl) {
       el.currentTime = this.clampMs(this.StartAtMs) / 1000;
@@ -441,11 +527,79 @@ export class MJMediaPlayerComponent implements OnDestroy {
     if (this.Autoplay && el === this._activeMediaEl) {
       this.Play();
     }
+    this.applyMediaEvent('loadedmetadata', el);
     this.cdr.markForCheck();
+  }
+
+  /** Enough data buffered to begin playback — clears loading/buffering. */
+  OnMediaCanPlay(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('canplay', el);
+  }
+
+  /** Ran out of buffered data mid-playback — enters buffering. */
+  OnMediaWaiting(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('waiting', el);
+  }
+
+  /** Seek began (skip / scrub into un-buffered territory) — show buffering during the seek. */
+  OnMediaSeeking(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('seeking', el);
+  }
+
+  /** Seek completed — clears buffering once the element has playable data. */
+  OnMediaSeeked(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('seeked', el);
+  }
+
+  /** Element is actively playing — clears loading + buffering. */
+  OnMediaPlaying(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('playing', el);
+  }
+
+  /** Conservative buffering signals — only buffer when actively trying to play. */
+  OnMediaStalled(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('stalled', el);
+  }
+
+  OnMediaSuspend(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('suspend', el);
+  }
+
+  /** Track switch / source cleared — resets the lifecycle. */
+  OnMediaEmptied(el: HTMLMediaElement): void {
+    if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    this.applyMediaEvent('emptied', el);
   }
 
   OnMediaTimeUpdate(el: HTMLMediaElement): void {
     if (el !== this.resolveMediaElement()) {
+      return;
+    }
+    if (this._suppressTimeUpdate) {
+      // Ignore the transient end-seek the duration nudge produces.
       return;
     }
     this._currentTimeMs = Math.round(el.currentTime * 1000);
@@ -465,11 +619,48 @@ export class MJMediaPlayerComponent implements OnDestroy {
     }
   }
 
+  /**
+   * Forces a header-less media element (e.g. a MediaRecorder webm that reports `Infinity`
+   * duration) to resolve a real, finite duration by briefly seeking far past the end. The browser
+   * clamps to the true end, fires `durationchange` with the real value (picked up by
+   * {@link OnMediaDurationChange}) and builds its seek index — after which fraction-based seeking
+   * works. We then restore the prior position and suppress the transient time jump. Runs at most
+   * once per element.
+   */
+  private forceDurationResolution(el: HTMLMediaElement): void {
+    if (this._durationForced.has(el)) {
+      return;
+    }
+    this._durationForced.add(el);
+    const restoreSeconds = el.currentTime || 0;
+    this._suppressTimeUpdate = true;
+    const onResolved = (): void => {
+      if (!isFinite(el.duration)) {
+        return; // not the real value yet — wait for the next durationchange
+      }
+      el.removeEventListener('durationchange', onResolved);
+      this._suppressTimeUpdate = false;
+      try {
+        el.currentTime = restoreSeconds;
+      } catch {
+        /* best effort — restoring position is non-critical */
+      }
+    };
+    el.addEventListener('durationchange', onResolved);
+    try {
+      el.currentTime = 1e101;
+    } catch {
+      el.removeEventListener('durationchange', onResolved);
+      this._suppressTimeUpdate = false;
+    }
+  }
+
   OnMediaPlay(el: HTMLMediaElement): void {
     if (el !== this.resolveMediaElement()) {
       return;
     }
     this._isPlaying = true;
+    this.applyMediaEvent('play', el);
     this.AfterPlay.emit();
     this.cdr.markForCheck();
   }
@@ -479,6 +670,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
       return;
     }
     this._isPlaying = false;
+    this.applyMediaEvent('pause', el);
     this.AfterPause.emit();
     this.cdr.markForCheck();
   }
@@ -488,13 +680,77 @@ export class MJMediaPlayerComponent implements OnDestroy {
       return;
     }
     this._isPlaying = false;
+    this.applyMediaEvent('ended', el);
     this.Ended.emit();
     this.cdr.markForCheck();
   }
 
-  OnMediaError(): void {
+  OnMediaError(el?: HTMLMediaElement): void {
     this._hasError = true;
+    this.applyMediaEvent('error', el ?? this.resolveMediaElement());
     this.cdr.markForCheck();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Playback state machine (driven by the pure reducer + buffering debounce)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Runs the pure {@link nextPlaybackState} reducer for a native media event, commits the
+   * resulting state, manages the debounced buffering spinner, and emits {@link StateChanged}
+   * on transitions. The single funnel for all media-event → state changes.
+   */
+  private applyMediaEvent(event: MediaStateEvent, el: HTMLMediaElement | null): void {
+    const ctx: MediaStateContext = {
+      IsPlaying: this._isPlaying,
+      ReadyState: el?.readyState ?? 0,
+      Ended: el?.ended ?? false,
+    };
+    const next = nextPlaybackState(event, this._mediaState, ctx);
+    this.setMediaState(next);
+  }
+
+  /** Commits a new state, syncs the buffering spinner, and emits on change. */
+  private setMediaState(next: MediaPlaybackState): void {
+    this.syncBufferingIndicator(next);
+    if (next !== this._mediaState) {
+      this._mediaState = next;
+      this.StateChanged.emit(next);
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Keeps the visible buffering spinner in sync with the target state. `loading` shows
+   * immediately (no debounce); `buffering` is debounced so instant seeks don't flash it;
+   * any non-busy state clears the spinner and cancels a pending show.
+   */
+  private syncBufferingIndicator(next: MediaPlaybackState): void {
+    if (next === 'buffering') {
+      if (this._bufferingVisible || this._bufferingTimer) {
+        return; // already shown or scheduled
+      }
+      this._bufferingTimer = setTimeout(() => {
+        this._bufferingTimer = null;
+        if (this._mediaState === 'buffering') {
+          this._bufferingVisible = true;
+          this.cdr.markForCheck();
+        }
+      }, BUFFERING_INDICATOR_DELAY_MS);
+      return;
+    }
+    // Any non-buffering target clears the pending/visible buffering spinner.
+    this.clearBufferingTimer();
+    if (this._bufferingVisible) {
+      this._bufferingVisible = false;
+    }
+  }
+
+  private clearBufferingTimer(): void {
+    if (this._bufferingTimer) {
+      clearTimeout(this._bufferingTimer);
+      this._bufferingTimer = null;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -768,6 +1024,9 @@ export class MJMediaPlayerComponent implements OnDestroy {
     this._activeCueIndex = -1;
     this._hasError = false;
     this._rateInitialized = false;
+    this.clearBufferingTimer();
+    this._bufferingVisible = false;
+    this.setMediaState(this._tracks.length > 0 ? 'loading' : 'idle');
   }
 
   // ---------------------------------------------------------------------------
@@ -875,6 +1134,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.clearBufferingTimer();
     // object URLs are owned by the wrapper that created them; close our decode context.
     if (this._audioCtx) {
       void this._audioCtx.close().catch(() => undefined);
