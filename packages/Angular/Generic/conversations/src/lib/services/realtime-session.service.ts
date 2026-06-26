@@ -774,6 +774,7 @@ export class RealtimeSessionService {
       recorder.Start(this.localStream, remoteStream);
       this.recorder = recorder.IsRecording ? recorder : null;
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
+      console.info(`[RealtimeSession] 🎙️ recording start — IsRecording=${recorder.IsRecording}, mic tracks=${this.localStream.getAudioTracks().length}, remoteStream=${!!remoteStream}`);
     } catch (error) {
       console.warn('[RealtimeSession] Failed to start call recording:', error);
       this.recorder = null;
@@ -794,13 +795,17 @@ export class RealtimeSessionService {
     }
     try {
       const blob = await recorder.Stop();
+      console.info(`[RealtimeSession] 🎙️ recording stopped — blob size=${blob?.size ?? 'null'} bytes, session=${agentSessionId ?? 'null'}, mime=${recorder.MimeType}`);
       if (!blob || blob.size === 0 || !agentSessionId) {
+        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — empty blob or no session id.');
         return;
       }
       const audioBase64 = await this.blobToBase64(blob);
       if (!audioBase64) {
+        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — base64 encoding failed.');
         return;
       }
+      console.info(`[RealtimeSession] 🎙️ uploading recording (${audioBase64.length} base64 chars)…`);
       await this.uploadRecording(agentSessionId, audioBase64, recorder.MimeType);
     } catch (error) {
       console.warn('[RealtimeSession] Failed to stop/upload call recording:', error);
@@ -825,8 +830,10 @@ export class RealtimeSessionService {
       consent: true
     });
     const payload = result?.UploadRealtimeRecording as { Success?: boolean; FileID?: string; ErrorMessage?: string } | undefined;
-    if (!payload?.Success) {
-      console.warn(`[RealtimeSession] Recording upload reported failure: ${payload?.ErrorMessage ?? 'unknown error'}`);
+    if (payload?.Success) {
+      console.info(`[RealtimeSession] ✅ recording uploaded — FileID=${payload.FileID}`);
+    } else {
+      console.warn(`[RealtimeSession] ❌ recording upload reported failure: ${payload?.ErrorMessage ?? 'unknown error'} (full result: ${JSON.stringify(result)})`);
     }
   }
 
