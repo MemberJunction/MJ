@@ -152,10 +152,10 @@ token-minting run under the session's authenticated provider — multi-provider 
 
 ## Meeting-Room recording (LiveKit egress → MJStorage)
 
-> **Status: foundation only.** The schema + egress output surfacing below are built and tested. The two
-> follow-ups — **registering** the egress MP4 as an `MJ: Files` row and stamping it onto the Conversation,
-> and **playing it back** in the Meet app — land **after CodeGen** generates the new `Conversation`
-> entity-class properties. Treat anything past "egress surfaces its output" as planned.
+> **Status: BUILT.** The full loop — egress → register the MP4 as an `MJ: Files` row → stamp the
+> Conversation → play it back in the Meet app — is implemented and unit-tested. The one **deployment**
+> requirement is the storage config (`MJ_MEETING_RECORDING_STORAGE_PROVIDER`, below); without it the
+> recording still stops, it just isn't registered as a Files row.
 
 The per-session recording above captures *one agent session's* audio. A LiveKit **meeting** is different:
 it maps 1:1 to a **Meeting-Room Conversation** (`ApplicationScope='Application'`, so it stays out of normal
@@ -163,17 +163,64 @@ chat), and a single meeting can span **multiple** agent sessions. The room-level
 one MP4 that LiveKit egress produces for the whole room — therefore belongs on the **room (the
 Conversation)**, not on any single `AIAgentSession` (which keeps its own per-agent `RecordingFileID`).
 
-- **Schema** (`migrations/v5/V202606261600__v5.43.x__Meeting_Room_Recording.sql`, additive + nullable):
-  `Conversation.RecordingFileID` (FK → `MJ: Files`, the composite egress MP4 once copied into MJStorage) and
-  `Conversation.EgressID` (the LiveKit egress session id — set when recording starts, used to stop the
-  egress and correlate its completion result back to the conversation).
+- **Schema** (additive + nullable): `Conversation.RecordingFileID` (FK → `MJ: Files`, the composite egress
+  MP4) and `Conversation.EgressID` (the LiveKit egress session id — set when recording starts, used to stop
+  the egress and correlate its completion result back to the conversation).
 - **Egress service** (`LiveKitEgressService`, `packages/LiveKitRoomServer/src/livekit-egress-service.ts`):
   `StartRoomRecording` starts a composite MP4 egress and returns its `EgressID`; on stop/complete,
-  `RecordingInfo` now surfaces the egress's **`OutputLocation`** (the file's path/key in the egress sink),
+  `RecordingInfo` surfaces the egress's **`OutputLocation`** (the file's path/key in the egress sink),
   **`OutputSizeBytes`**, and **`OutputDurationMs`** (normalized from the SDK's nanosecond duration),
-  extracted from `EgressInfo.fileResults[0]`. These are exactly what a caller needs to **copy the MP4 into
-  MJStorage** and record it on the Conversation. While a recording is still in progress (no `fileResults`
-  yet), those three fields are `undefined`.
-- **Planned next**: a server path copies the egress MP4 into the configured MJStorage provider, creates the
-  `MJ: Files` row, and writes `Conversation.RecordingFileID` + `EgressID`; the Meet app then plays it back
-  via the same `mj-storage-media-player` streaming pipeline used for per-session recordings.
+  extracted from `EgressInfo.fileResults[0]`. While a recording is still in progress (no `fileResults` yet),
+  those three fields are `undefined`.
+- **Registration** (`packages/MJServer/src/resolvers/meetingRecordingRegistration.ts`, invoked from
+  `RealtimeBridgeResolver`):
+  - **On `StartLiveKitRecording`** — best-effort `correlateRecordingStart(roomName, egressID)` stamps
+    `Conversation.EgressID` onto the room's Meeting-Room Conversation *if it exists*, so a live recording is
+    correlated. If the conversation doesn't exist yet, it's skipped silently (the stop-flow resolves/creates
+    it). The recording start never fails on this.
+  - **On `StopLiveKitRecording`** — after stopping egress, `registerMeetingRecordingFile(...)`:
+    1. **Resolves the Meeting-Room Conversation** — prefer match by `EgressID`, fall back to room name
+       (`ExternalID` + `Type='Meeting Room'`), else create one (scoped `Application`, mirroring the
+       transcript sink).
+    2. **Resolves the storage account** — the `MJStorage` account linked to the configured provider (see
+       config below) whose sink LiveKit egress wrote to.
+    3. **Creates the `MJ: Files` row** — `ProviderID` = that provider, `ProviderKey` = the egress
+       `OutputLocation`, `ContentType='video/mp4'`, `Status='Uploaded'`, `Name='Meeting Recording — <Room> —
+       <date>'`. **v1 points the Files row DIRECTLY at the egress output — no byte copy** — so playback
+       streams straight from the sink.
+    4. **Stamps the Conversation** — `RecordingFileID` (+ `EgressID` if unset) and saves.
+    5. Returns the new file id, which `StopLiveKitRecording` surfaces as `LiveKitRecordingResult.RecordingFileID`.
+  - **All best-effort** — wrapped in try/catch, returns a non-throwing failure result with a clear message
+    (missing config, no account, save failure) and `LogError`s. A failed registration never crashes the
+    stop-recording mutation; the recording still stopped.
+
+#### Required storage configuration
+
+The egress sink and the MJStorage account must point at the **same** bucket/container so MJ can read the
+file LiveKit wrote. Configure the provider whose accounts target the sink:
+
+- **env**: `MJ_MEETING_RECORDING_STORAGE_PROVIDER=<MJ: File Storage Providers ID>`
+- **config** (`mj.config.cjs`): `meetingRecordingStorageProviderID: '<provider id>'`
+
+When unset, registration returns a clear, non-throwing failure (the recording stops, but isn't registered).
+
+#### Point-at-sink (default) vs. copy-to-canonical ("copy into Box")
+
+- **Default (point-at-sink)** — the Files row's `ProviderKey` IS the egress `OutputLocation` in the sink
+  provider. No bytes are moved; playback streams from the sink. Use when the egress sink (S3/Azure/MinIO/GCS)
+  is itself an MJStorage-readable provider.
+- **Optional (copy-to-canonical)** — set a **different** canonical provider via
+  `MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER` (or `meetingRecordingCanonicalStorageProviderID`). When
+  set and different from the sink, `copyEgressOutputToCanonical(...)` reads the bytes via the sink driver's
+  `GetObject({ fullPath })` and re-uploads them into the canonical provider (e.g. **Box**) via
+  `FileStorageEngine.UploadFile`, then points the Files row there. **OFF by default.**
+
+#### Meet app playback
+
+The Meet UI (`mj-livekit-agent-room`, `packages/Angular/Generic/mj-livekit-room/`) renders a dismissable
+**"Meeting recording"** panel with `<mj-storage-media-player [FileID]="recordingFileId" [Provider]="Provider">`
+whenever the room has a recording. `recordingFileId` is set two ways: (a) when the user **stops** a
+recording, `StopRecording` returns the freshly-registered `RecordingFileID`; (b) on **join/start**, the
+component resolves any prior recording for the room from its Meeting-Room Conversation
+(`ExternalID` + `Type='Meeting Room'`, `RecordingFileID IS NOT NULL`). Playback streams over HTTP Range via
+the same `mj-storage-media-player` pipeline used for per-session recordings.
