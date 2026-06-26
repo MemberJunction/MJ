@@ -39,6 +39,9 @@ describe('MJEmptyStateComponent', () => {
     it('should default Size to "default"', () => {
       expect(cmp.Size).toBe('default');
     });
+    it('should default Role to null (variant-driven default applies)', () => {
+      expect(cmp.Role).toBeNull();
+    });
   });
 
   describe('size host-class bindings', () => {
@@ -88,6 +91,31 @@ describe('MJEmptyStateComponent', () => {
       expect(cmp.IsError).toBe(true);
       expect(cmp.IsNoResults).toBe(false);
       expect(cmp.IsWarning).toBe(false);
+    });
+  });
+
+  describe('HostRole (live-region role)', () => {
+    it('should default to a polite "status" for the "empty" variant', () => {
+      expect(cmp.HostRole).toBe('status');
+    });
+    it('should be "status" for every non-error variant', () => {
+      for (const v of ['empty', 'no-results', 'success', 'warning'] as const) {
+        cmp.Variant = v;
+        expect(cmp.HostRole).toBe('status');
+      }
+    });
+    it('should be an assertive "alert" for the "error" variant', () => {
+      cmp.Variant = 'error';
+      expect(cmp.HostRole).toBe('alert');
+    });
+    it('should honor an explicit Role over the variant default', () => {
+      cmp.Variant = 'error';
+      cmp.Role = 'status';
+      expect(cmp.HostRole).toBe('status');
+    });
+    it('should opt out of the live region (null) when Role is ""', () => {
+      cmp.Role = '';
+      expect(cmp.HostRole).toBeNull();
     });
   });
 

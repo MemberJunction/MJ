@@ -197,6 +197,17 @@ export class MJEmptyStateComponent {
   /** Density — controls padding and icon size. Defaults to 'default'. */
   @Input() Size: MJEmptyStateSize = 'default';
 
+  /**
+   * ARIA live-region role on the host. When unset, it defaults from `Variant`:
+   * `error` → `'alert'` (assertive), everything else → `'status'` (polite). This
+   * makes a dynamically-appearing empty state announce itself to screen readers —
+   * the title + message are read together via the role's implicit
+   * `aria-live`/`aria-atomic`. (Empty states present at page load are not
+   * announced, per the live-region spec, so static placeholders stay quiet.)
+   * Pass an explicit role to override, or `''` to opt out of the live region.
+   */
+  @Input() Role: string | null = null;
+
   /** Emitted when the built-in CTA button is clicked. */
   @Output() Action = new EventEmitter<MouseEvent>();
 
@@ -217,6 +228,18 @@ export class MJEmptyStateComponent {
 
   @HostBinding('class.mj-empty-state--error')
   get IsError(): boolean { return this.Variant === 'error'; }
+
+  /**
+   * Live-region role applied to the host. Explicit `Role` wins (`''` ⇒ no role);
+   * otherwise an error state is an assertive `alert`, everything else a polite `status`.
+   */
+  @HostBinding('attr.role')
+  get HostRole(): string | null {
+    if (this.Role != null) {
+      return this.Role || null;
+    }
+    return this.Variant === 'error' ? 'alert' : 'status';
+  }
 
   /**
    * Icon actually rendered: the explicit `Icon` when provided (including ""
