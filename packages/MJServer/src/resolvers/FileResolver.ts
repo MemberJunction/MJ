@@ -38,6 +38,8 @@ import {
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
+import { configInfo } from '../config.js';
+import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -332,8 +334,84 @@ export class FileContentsResult {
   ErrorMessage?: string;
 }
 
+/**
+ * Result of {@link FileResolver.CreateMediaAccessToken} — a short-lived signed token plus the
+ * authenticated streaming URL the browser hands to a `<audio>`/`<video>` element. The token is
+ * minted only after a per-user permission check on the `MJ: Files` row; the `/media/:fileId`
+ * route re-verifies it (signature + expiry + file match) on each Range request.
+ */
+@ObjectType()
+export class MediaAccessTokenResult {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  Token?: string;
+
+  @Field(() => String, { nullable: true })
+  Url?: string;
+
+  @Field(() => Date, { nullable: true })
+  ExpiresAt?: Date;
+
+  /**
+   * The file's MIME type (from the already-loaded `MJ: Files` row). Lets the wrapper choose
+   * `<audio>` vs `<video>` WITHOUT re-downloading any bytes; the stream itself sets Content-Type.
+   */
+  @Field(() => String, { nullable: true })
+  MimeType?: string;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+}
+
 @Resolver(MJFile_)
 export class FileResolver extends FileResolverBase {
+  /**
+   * Resolves the server's public base URL the same way callbacks/magic-link do:
+   * `publicUrl` if configured (e.g. an ngrok URL), else `baseUrl:graphqlPort`. Trailing
+   * slash stripped so callers can append `/media/...`.
+   */
+  private resolvePublicBaseUrl(): string {
+    const base = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
+    return base.replace(/\/+$/, '');
+  }
+
+  /**
+   * Mints a short-lived signed media-access token for an `MJ: Files` record and returns the
+   * authenticated streaming URL (`<publicBase>/media/<fileId>?token=<token>`). Permission-gated
+   * IDENTICALLY to {@link GetFileContents}: the file is loaded under the CALLING USER's context, so
+   * MJ row-level security determines access. The returned token is the capability — the streaming
+   * route re-verifies it without re-checking row-level access. Never throws to the client.
+   *
+   * @param fileId The `MJ: Files` id to grant streaming access to.
+   * @returns `{ Success, Token?, Url?, ExpiresAt?, ErrorMessage? }`.
+   */
+  @Mutation(() => MediaAccessTokenResult)
+  async CreateMediaAccessToken(@Arg('fileId', () => String) fileId: string, @Ctx() context: AppContext): Promise<MediaAccessTokenResult> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const contextUser = this.GetUserFromPayload(context.userPayload);
+
+      // Permission gate: load the file under the USER's context. A failed load means the file
+      // does not exist OR the user lacks read access under MJ row-level security.
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+      const loaded = await fileEntity.Load(fileId);
+      if (!loaded) {
+        return { Success: false, ErrorMessage: 'You do not have access to this file or it does not exist.' };
+      }
+
+      // Access authorized — mint the capability token.
+      const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
+      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}?token=${encodeURIComponent(Token)}`;
+      return { Success: true, Token, Url: url, ExpiresAt, MimeType: fileEntity.ContentType ?? undefined };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`CreateMediaAccessToken failed (file ${fileId}): ${message}`);
+      return { Success: false, ErrorMessage: message };
+    }
+  }
+
   /**
    * Builds UserContextOptions for storage operations that may require OAuth authentication.
    * This passes the current user's ID and context to allow the storage utilities to

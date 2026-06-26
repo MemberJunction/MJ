@@ -42,15 +42,55 @@
               ></audio>
             }
           }
-          @if (ShowWaveform) {
-            <div class="mj-media-waveform" aria-hidden="true">
-              @for (h of WaveformBars(AudioTracks[0]); track $index; let i = $index) {
+          @if (ShowWaveform && ShowWaveformBars) {
+            <!-- Real audio waveform — doubles as the scrubber (click/drag to seek). -->
+            <div
+              #waveTrack
+              class="mj-media-waveform"
+              [class.mj-media-waveform--static]="PrefersReducedMotion"
+              role="slider"
+              tabindex="0"
+              aria-label="Seek"
+              [attr.aria-valuemin]="0"
+              [attr.aria-valuemax]="DurationMs"
+              [attr.aria-valuenow]="CurrentTimeMs"
+              [attr.aria-valuetext]="FormatTime(CurrentTimeMs) + ' of ' + FormatTime(DurationMs)"
+              (pointerdown)="OnWaveformPointerDown($event, waveTrack)"
+              (pointermove)="OnWaveformPointerMove($event, waveTrack)"
+              (pointerup)="OnWaveformPointerUp($event)"
+              (pointercancel)="OnWaveformPointerUp($event)"
+              (keydown)="OnScrubKeyDown($event)"
+            >
+              @for (p of WaveformPeaks; track $index; let i = $index; let count = $count) {
                 <span
                   class="mj-media-waveform__bar"
-                  [class.mj-media-waveform__bar--played]="(i / 64) <= ScrubFraction"
-                  [style.height.%]="h"
+                  [class.mj-media-waveform__bar--played]="(i + 1) / count <= WaveformPlayedFraction"
+                  [style.height.%]="2 + p * 98"
                 ></span>
               }
+              <div class="mj-media-waveform__progress" [style.left.%]="ScrubPercent"></div>
+            </div>
+          } @else if (ShowWaveform) {
+            <!-- Decode pending or failed (CORS/codec/etc) → plain progress bar fallback. -->
+            <div
+              #waveTrack
+              class="mj-media-waveform-fallback"
+              role="slider"
+              tabindex="0"
+              aria-label="Seek"
+              [attr.aria-valuemin]="0"
+              [attr.aria-valuemax]="DurationMs"
+              [attr.aria-valuenow]="CurrentTimeMs"
+              [attr.aria-valuetext]="FormatTime(CurrentTimeMs) + ' of ' + FormatTime(DurationMs)"
+              (pointerdown)="OnWaveformPointerDown($event, waveTrack)"
+              (pointermove)="OnWaveformPointerMove($event, waveTrack)"
+              (pointerup)="OnWaveformPointerUp($event)"
+              (pointercancel)="OnWaveformPointerUp($event)"
+              (keydown)="OnScrubKeyDown($event)"
+            >
+              <div class="mj-media-waveform-fallback__rail">
+                <div class="mj-media-waveform-fallback__fill" [style.width.%]="ScrubPercent"></div>
+              </div>
             </div>
           } @else {
             <div class="mj-media-audio-art" aria-hidden="true">

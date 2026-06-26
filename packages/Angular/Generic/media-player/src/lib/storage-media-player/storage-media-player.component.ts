@@ -3,7 +3,6 @@ import {
   ChangeDetectorRef,
   Component,
   Input,
-  OnDestroy,
   OnInit,
   inject,
 } from '@angular/core';
@@ -14,19 +13,26 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJMediaPlayerComponent } from '../media-player/media-player.component';
 import { MediaTrack, MediaTranscriptCue } from '../media-player.types';
 
-/** Shape of the `GetFileContents` server query result (one file). */
-interface GetFileContentsResult {
+/** Shape of the `CreateMediaAccessToken` server mutation result (one file). */
+interface CreateMediaAccessTokenResult {
   Success: boolean;
-  Base64?: string | null;
+  Token?: string | null;
+  Url?: string | null;
+  ExpiresAt?: string | null;
   MimeType?: string | null;
   ErrorMessage?: string | null;
 }
 
-/** The exact GraphQL query this wrapper consumes (server-side query added in parallel). */
-const GET_FILE_CONTENTS_QUERY = `query GetFileContents($fileId: String!) {
-  GetFileContents(fileId: $fileId) {
+/**
+ * The exact GraphQL mutation this wrapper consumes. Mints a short-lived signed token (after a
+ * server-side per-user permission check) and returns the authenticated `/media/<fileId>?token=`
+ * streaming URL — which `<audio>`/`<video>` stream natively with HTTP Range (seek-before-download).
+ */
+const CREATE_MEDIA_ACCESS_TOKEN_MUTATION = `mutation CreateMediaAccessToken($fileId: String!) {
+  CreateMediaAccessToken(fileId: $fileId) {
     Success
-    Base64
+    Url
+    ExpiresAt
     MimeType
     ErrorMessage
   }
@@ -35,10 +41,16 @@ const GET_FILE_CONTENTS_QUERY = `query GetFileContents($fileId: String!) {
 /**
  * `mj-storage-media-player` — an MJStorage-bound wrapper around {@link MJMediaPlayerComponent}.
  *
- * Resolves one or more MJ Storage file IDs into playable {@link MediaTrack}s by fetching
- * their base64 contents via the `GetFileContents` GraphQL query, decoding to object URLs,
- * and handing them to the generic player. Surfaces graceful loading / no-access / empty
- * states and revokes object URLs to avoid memory leaks.
+ * Resolves one or more MJ Storage file IDs into playable {@link MediaTrack}s by minting a
+ * short-lived authenticated streaming URL per file via the `CreateMediaAccessToken` GraphQL
+ * mutation, and handing those URLs to the generic player. The `<audio>`/`<video>` element
+ * streams each URL natively over HTTP Range (progressive playback + seek-before-download for
+ * large video) instead of base64'ing the whole file over GraphQL. Surfaces graceful loading /
+ * no-access / empty states.
+ *
+ * NOTE: server-side waveform peaks is a future optimization. For now audio waveforms decode
+ * client-side via the streaming URL (the waveform's one-time `fetch(Url)` issues a no-Range GET,
+ * which returns the full file — fine for audio). Video shows the progress bar, not a waveform.
  */
 @Component({
   selector: 'mj-storage-media-player',
@@ -48,7 +60,7 @@ const GET_FILE_CONTENTS_QUERY = `query GetFileContents($fileId: String!) {
   styleUrls: ['./storage-media-player.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class MJStorageMediaPlayerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+export class MJStorageMediaPlayerComponent extends BaseAngularComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
 
   // ---------------------------------------------------------------------------
@@ -97,7 +109,11 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
   @Input() ShowSpeedControl = true;
   @Input() ShowSkipControls = true;
   @Input() ShowVolume = true;
-  @Input() ShowWaveform = false;
+  /**
+   * Forwarded to the generic player. On by default — the streaming URL is same-origin (served by
+   * MJAPI) and a no-Range GET returns the full file, so client-side peak extraction decodes cleanly.
+   */
+  @Input() ShowWaveform = true;
   @Input() ShowFullscreen = true;
   @Input() SkipSeconds = 30;
   @Input() PlaybackRates: number[] = [0.5, 1, 1.25, 1.5, 2];
@@ -110,7 +126,6 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
   // ---------------------------------------------------------------------------
 
   private _initialized = false;
-  private _objectUrls: string[] = [];
   private _resolvedTracks: MediaTrack[] = [];
   private _isLoading = false;
   private _accessError: string | null = null;
@@ -134,21 +149,16 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     await this.resolveTracks();
   }
 
-  ngOnDestroy(): void {
-    this.revokeObjectUrls();
-  }
-
   // ---------------------------------------------------------------------------
   // Resolution
   // ---------------------------------------------------------------------------
 
-  /** Resolves all configured file ids into playable tracks. Re-entrant-safe via a token. */
+  /** Resolves all configured file ids into playable streaming tracks. Re-entrant-safe via a token. */
   private async resolveTracks(): Promise<void> {
     const ids = this.collectFileIds();
     const token = ++this._resolveToken;
 
     // start fresh
-    this.revokeObjectUrls();
     this._resolvedTracks = [];
     this._accessError = null;
 
@@ -165,15 +175,12 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     let firstError: string | null = null;
 
     for (const id of ids) {
-      const result = await this.fetchFileContents(id);
+      const result = await this.mintAccessToken(id);
       if (token !== this._resolveToken) {
         return; // a newer resolution superseded this one
       }
-      if (result && result.Success && result.Base64) {
-        const track = this.buildTrack(id, result);
-        if (track) {
-          tracks.push(track);
-        }
+      if (result && result.Success && result.Url) {
+        tracks.push(this.buildTrack(id, result.Url, result.MimeType ?? null));
       } else if (!firstError) {
         firstError = result?.ErrorMessage || 'This recording is not available.';
       }
@@ -190,56 +197,28 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     this.cdr.markForCheck();
   }
 
-  /** Executes the GetFileContents query for one file id via the active provider. */
-  private async fetchFileContents(fileId: string): Promise<GetFileContentsResult | null> {
+  /** Mints an authenticated streaming-URL token for one file id via the active provider. */
+  private async mintAccessToken(fileId: string): Promise<CreateMediaAccessTokenResult | null> {
     try {
       const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
-      const data = await provider.ExecuteGQL(GET_FILE_CONTENTS_QUERY, { fileId });
-      const payload = data?.GetFileContents as GetFileContentsResult | undefined;
+      const data = await provider.ExecuteGQL(CREATE_MEDIA_ACCESS_TOKEN_MUTATION, { fileId });
+      const payload = data?.CreateMediaAccessToken as CreateMediaAccessTokenResult | undefined;
       return payload ?? null;
     } catch (err) {
-      LogError(`GetFileContents failed for file '${fileId}': ${err instanceof Error ? err.message : String(err)}`);
+      LogError(`CreateMediaAccessToken failed for file '${fileId}': ${err instanceof Error ? err.message : String(err)}`);
       return { Success: false, ErrorMessage: 'Unable to load this recording.' };
     }
   }
 
-  /** Decodes base64 → Blob → object URL and builds a MediaTrack. */
-  private buildTrack(fileId: string, result: GetFileContentsResult): MediaTrack | null {
-    const mime = result.MimeType || 'application/octet-stream';
-    const url = this.base64ToObjectUrl(result.Base64 ?? '', mime);
-    if (!url) {
-      return null;
-    }
-    this._objectUrls.push(url);
+  /** Builds a MediaTrack from the streaming URL. Kind is MIME-derived (defaults to audio). */
+  private buildTrack(fileId: string, url: string, mimeType: string | null): MediaTrack {
+    const mime = mimeType || undefined;
     return {
       Id: fileId,
-      Kind: mime.startsWith('video') ? 'video' : 'audio',
+      Kind: mime && mime.startsWith('video') ? 'video' : 'audio',
       Url: url,
       MimeType: mime,
     };
-  }
-
-  private base64ToObjectUrl(base64: string, mimeType: string): string | null {
-    try {
-      const binary = atob(base64);
-      const len = binary.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binary.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: mimeType });
-      return URL.createObjectURL(blob);
-    } catch (err) {
-      LogError(`Failed to decode base64 media: ${err instanceof Error ? err.message : String(err)}`);
-      return null;
-    }
-  }
-
-  private revokeObjectUrls(): void {
-    for (const url of this._objectUrls) {
-      URL.revokeObjectURL(url);
-    }
-    this._objectUrls = [];
   }
 
   private collectFileIds(): string[] {

@@ -27,6 +27,21 @@ export interface MediaTrack {
   Label?: string;
   /** Optional poster image for video tracks shown before playback. */
   PosterUrl?: string;
+  /**
+   * Optional precomputed waveform peaks — an array of normalized `0..1` amplitude
+   * values, one per rendered bar (left → right across the track's duration).
+   *
+   * This is the **forward path** for server-precomputed peaks + streaming media:
+   * when a track supplies `Peaks`, the player renders them directly and performs
+   * **no client-side decoding** (no fetch, no `AudioContext`). When `Peaks` is
+   * absent (and the waveform is enabled for an audio track), the player extracts
+   * real peaks client-side by decoding {@link Url}; on any decode failure it falls
+   * back to a plain progress bar.
+   *
+   * Values are clamped to `[0, 1]` at render time; provide as many entries as you
+   * like — the player renders one bar per value.
+   */
+  Peaks?: number[];
 }
 
 /**

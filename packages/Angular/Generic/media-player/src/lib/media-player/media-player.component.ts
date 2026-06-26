@@ -21,14 +21,16 @@ import {
   MediaTranscriptCue,
 } from '../media-player.types';
 import { computeActiveCueIndex } from './cue-utils';
+import { DEFAULT_WAVEFORM_BARS, downsamplePeaks } from './waveform-utils';
 
 /**
  * `mj-media-player` — a generic, framework-agnostic media player.
  *
  * Renders one or many audio/video tracks with a custom transport bar (play/pause,
  * click-and-drag scrubber, skip ±N, playback-rate menu, volume + mute, fullscreen),
- * an optional synthetic waveform for audio, and an optional time-synced transcript
- * panel whose cues are clickable and auto-highlight as playback advances.
+ * a **real** audio waveform (decoded client-side, or supplied precomputed via
+ * `MediaTrack.Peaks`) that doubles as the scrubber, and an optional time-synced
+ * transcript panel whose cues are clickable and auto-highlight as playback advances.
  *
  * This component has ZERO MemberJunction-core dependencies — it is pure Angular and
  * is safe to reuse in any application. The MJStorage binding lives in the separate
@@ -46,6 +48,10 @@ export class MJMediaPlayerComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private host = inject(ElementRef<HTMLElement>);
 
+  constructor() {
+    this._prefersReducedMotion = this.detectReducedMotion();
+  }
+
   // ---------------------------------------------------------------------------
   // Inputs
   // ---------------------------------------------------------------------------
@@ -56,6 +62,7 @@ export class MJMediaPlayerComponent implements OnDestroy {
     this._tracks = value ?? [];
     this._activeMediaEl = null;
     this.resetPlaybackState();
+    this.ensureWaveforms();
     this.cdr.markForCheck();
   }
   get Tracks(): MediaTrack[] {
@@ -87,8 +94,15 @@ export class MJMediaPlayerComponent implements OnDestroy {
   @Input() ShowSkipControls = true;
   /** Whether the volume slider + mute are shown. */
   @Input() ShowVolume = true;
-  /** Whether the synthetic waveform is shown for audio tracks. */
-  @Input() ShowWaveform = false;
+  /**
+   * Whether the real audio waveform (which doubles as the scrubber) is shown for
+   * audio-only tracks. On by default. When a track supplies {@link MediaTrack.Peaks}
+   * those are rendered directly; otherwise the player decodes the track URL client-side
+   * to extract real peaks, falling back to a plain progress bar if decoding fails.
+   */
+  @Input() ShowWaveform = true;
+  /** Number of bars the waveform renders / downsamples to. */
+  @Input() WaveformBarCount = DEFAULT_WAVEFORM_BARS;
   /** Whether the fullscreen button is shown for video. */
   @Input() ShowFullscreen = true;
   /** Number of seconds the skip buttons jump. */
@@ -145,6 +159,17 @@ export class MJMediaPlayerComponent implements OnDestroy {
   private _activeMediaEl: HTMLMediaElement | null = null;
   private _rateInitialized = false;
 
+  /** Per-track computed/supplied waveform peaks (0..1), keyed by track Id. */
+  private _peaksByTrackId = new Map<string, number[]>();
+  /** Track Ids whose client-side decode failed (→ fall back to a plain progress bar). */
+  private _waveformFailedTrackIds = new Set<string>();
+  /** Track Ids currently being decoded (avoid duplicate in-flight decodes). */
+  private _waveformPendingTrackIds = new Set<string>();
+  /** Lazily-created AudioContext used only for client-side peak extraction. */
+  private _audioCtx: AudioContext | null = null;
+  /** Whether the user prefers reduced motion (suppresses the bar draw-in animation). */
+  private _prefersReducedMotion = false;
+
   // ---------------------------------------------------------------------------
   // Public getters (imperative read API + template bindings)
   // ---------------------------------------------------------------------------
@@ -192,6 +217,45 @@ export class MJMediaPlayerComponent implements OnDestroy {
   }
   get ScrubPercent(): number {
     return Math.min(100, Math.max(0, this.ScrubFraction * 100));
+  }
+  get PrefersReducedMotion(): boolean {
+    return this._prefersReducedMotion;
+  }
+
+  /** The active audio track that drives the waveform (the first audio track, if any). */
+  private get WaveformTrack(): MediaTrack | null {
+    return this.IsAudioOnly ? this.AudioTracks[0] ?? null : null;
+  }
+
+  /**
+   * True when the waveform should render as bars — i.e. it's enabled, the active track
+   * is audio, and we have peaks (supplied or successfully decoded) for it. When false
+   * (decode pending/failed, no track), the template shows a plain progress bar instead.
+   */
+  get ShowWaveformBars(): boolean {
+    const track = this.WaveformTrack;
+    if (!this.ShowWaveform || !track) {
+      return false;
+    }
+    return this.peaksForTrack(track) !== null;
+  }
+
+  /**
+   * The normalized `0..1` peaks for the active audio track, or `null` when none are
+   * available yet (still decoding) or decoding failed. Reading this lazily kicks off
+   * client-side extraction when needed — re-renders/seeks never re-decode (cached by Id).
+   */
+  get WaveformPeaks(): number[] | null {
+    const track = this.WaveformTrack;
+    if (!this.ShowWaveform || !track) {
+      return null;
+    }
+    return this.peaksForTrack(track);
+  }
+
+  /** The played/unplayed split point for the waveform, as a `0..1` fraction. */
+  get WaveformPlayedFraction(): number {
+    return this.ScrubFraction;
   }
 
   /** The single audio track when this is an audio-only player (drives waveform). */
@@ -459,6 +523,17 @@ export class MJMediaPlayerComponent implements OnDestroy {
     (event.target as Element).releasePointerCapture?.(event.pointerId);
   }
 
+  // The waveform IS a scrubber: reuse the exact same pointer/keyboard seek logic.
+  OnWaveformPointerDown(event: PointerEvent, trackEl: HTMLElement): void {
+    this.OnScrubPointerDown(event, trackEl);
+  }
+  OnWaveformPointerMove(event: PointerEvent, trackEl: HTMLElement): void {
+    this.OnScrubPointerMove(event, trackEl);
+  }
+  OnWaveformPointerUp(event: PointerEvent): void {
+    this.OnScrubPointerUp(event);
+  }
+
   /** Keyboard support for the scrubber (role="slider"). */
   OnScrubKeyDown(event: KeyboardEvent): void {
     let handled = true;
@@ -617,22 +692,6 @@ export class MJMediaPlayerComponent implements OnDestroy {
     return `hsl(${hue}, 55%, 45%)`;
   }
 
-  /** Synthetic waveform bar heights — deterministic from track id, for visual texture. */
-  WaveformBars(track: MediaTrack): number[] {
-    const count = 64;
-    const bars: number[] = [];
-    let seed = 0;
-    for (let i = 0; i < track.Id.length; i++) {
-      seed = (seed * 31 + track.Id.charCodeAt(i)) & 0xffffffff;
-    }
-    for (let i = 0; i < count; i++) {
-      seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-      const v = (seed % 1000) / 1000; // 0..1
-      bars.push(20 + Math.round(v * 80)); // 20%..100% height
-    }
-    return bars;
-  }
-
   TrackById(_index: number, track: MediaTrack): string {
     return track.Id;
   }
@@ -711,7 +770,115 @@ export class MJMediaPlayerComponent implements OnDestroy {
     this._rateInitialized = false;
   }
 
+  // ---------------------------------------------------------------------------
+  // Waveform peak extraction (client-side, best-effort, cached per track Id)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolves peaks for a track: supplied {@link MediaTrack.Peaks} win (rendered as-is,
+   * no decode); otherwise returns any cached/decoded peaks, kicking off a best-effort
+   * client-side decode on first miss. Returns `null` while decoding or after a failure.
+   */
+  private peaksForTrack(track: MediaTrack): number[] | null {
+    if (track.Peaks && track.Peaks.length > 0) {
+      return track.Peaks;
+    }
+    const cached = this._peaksByTrackId.get(track.Id);
+    if (cached) {
+      return cached;
+    }
+    if (this._waveformFailedTrackIds.has(track.Id)) {
+      return null;
+    }
+    void this.extractPeaks(track);
+    return null;
+  }
+
+  /** Kicks off client-side extraction for every audio track that still needs it. */
+  private ensureWaveforms(): void {
+    if (!this.ShowWaveform) {
+      return;
+    }
+    const track = this.IsAudioOnly ? this.AudioTracks[0] : null;
+    if (track) {
+      // Reading via peaksForTrack triggers a decode when needed (and is cache-safe).
+      this.peaksForTrack(track);
+    }
+  }
+
+  /**
+   * Best-effort: fetch → arrayBuffer → decodeAudioData → downsample channel 0 → cache.
+   * Never throws into the view; on any failure marks the track as failed so the template
+   * falls back to a plain progress bar (not the old synthetic bars).
+   */
+  private async extractPeaks(track: MediaTrack): Promise<void> {
+    if (this._waveformPendingTrackIds.has(track.Id)) {
+      return;
+    }
+    this._waveformPendingTrackIds.add(track.Id);
+    try {
+      const ctx = this.resolveAudioContext();
+      if (!ctx) {
+        this.markWaveformFailed(track.Id);
+        return;
+      }
+      const response = await fetch(track.Url);
+      if (!response.ok) {
+        this.markWaveformFailed(track.Id);
+        return;
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      const channel = audioBuffer.getChannelData(0);
+      const peaks = downsamplePeaks(channel, this.WaveformBarCount, 'max-abs');
+      this._peaksByTrackId.set(track.Id, peaks);
+      this.cdr.markForCheck();
+    } catch {
+      // CORS, unsupported codec, decode error → graceful fallback (no throw).
+      this.markWaveformFailed(track.Id);
+    } finally {
+      this._waveformPendingTrackIds.delete(track.Id);
+    }
+  }
+
+  private markWaveformFailed(trackId: string): void {
+    this._waveformFailedTrackIds.add(trackId);
+    this.cdr.markForCheck();
+  }
+
+  /** Lazily creates a single AudioContext used only for offline peak extraction. */
+  private resolveAudioContext(): AudioContext | null {
+    if (this._audioCtx) {
+      return this._audioCtx;
+    }
+    const Ctor =
+      typeof window !== 'undefined'
+        ? window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        : undefined;
+    if (!Ctor) {
+      return null;
+    }
+    try {
+      this._audioCtx = new Ctor();
+      return this._audioCtx;
+    } catch {
+      return null;
+    }
+  }
+
+  private detectReducedMotion(): boolean {
+    try {
+      return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      return false;
+    }
+  }
+
   ngOnDestroy(): void {
-    // nothing to dispose here (object URLs are owned by the wrapper that created them)
+    // object URLs are owned by the wrapper that created them; close our decode context.
+    if (this._audioCtx) {
+      void this._audioCtx.close().catch(() => undefined);
+      this._audioCtx = null;
+    }
   }
 }

@@ -613,6 +613,9 @@ export class GoogleFileStorage extends FileStorageBase {
    * }
    * ```
    */
+  // NOTE: SupportsStreaming intentionally left at the base default (false). Ranged streaming via
+  // GetObjectStream is a future enhancement for Google Cloud Storage (createReadStream supports
+  // start/end ranges and could back this in a later iteration).
   public async GetObject(params: GetObjectParams): Promise<Buffer> {
     // Validate params
     if (!params.objectId && !params.fullPath) {

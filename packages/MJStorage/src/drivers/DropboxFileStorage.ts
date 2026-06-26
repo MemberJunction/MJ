@@ -1061,6 +1061,9 @@ export class DropboxFileStorage extends FileStorageBase {
    * }
    * ```
    */
+  // NOTE: SupportsStreaming intentionally left at the base default (false). Ranged streaming via
+  // GetObjectStream is a future enhancement — the Dropbox SDK's filesDownload returns the full
+  // file binary and does not cleanly expose an HTTP Range / readable-stream seam.
   public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
       // Validate params

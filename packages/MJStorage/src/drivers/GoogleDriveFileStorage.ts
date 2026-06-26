@@ -964,6 +964,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * }
    * ```
    */
+  // NOTE: SupportsStreaming intentionally left at the base default (false). Ranged streaming via
+  // GetObjectStream is a future enhancement — the Google Drive files.get media download path does
+  // not cleanly expose an HTTP Range / readable-stream seam here.
   public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
       // Validate params

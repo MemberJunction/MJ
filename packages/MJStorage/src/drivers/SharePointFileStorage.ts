@@ -1100,6 +1100,9 @@ export class SharePointFileStorage extends FileStorageBase {
    * }
    * ```
    */
+  // NOTE: SupportsStreaming intentionally left at the base default (false). Ranged streaming via
+  // GetObjectStream is a future enhancement — the Microsoft Graph download path here does not
+  // cleanly expose an HTTP Range / readable-stream seam.
   public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
       // Validate params

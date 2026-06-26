@@ -78,24 +78,81 @@
   color: var(--mj-text-disabled);
 }
 
-/* Synthetic waveform */
+/* Real audio waveform — doubles as the scrubber */
 .mj-media-waveform {
+  position: relative;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
   height: 96px;
   padding: 0.75rem 1rem;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.mj-media-waveform:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--mj-border-focus);
+  border-radius: var(--mj-radius-sm, 4px);
 }
 
 .mj-media-waveform__bar {
   flex: 1 1 auto;
   min-width: 2px;
+  min-height: 2px;
+  align-self: center;
   background: var(--mj-border-strong);
   border-radius: 1px;
-  transition: background-color 0.1s ease;
+  pointer-events: none;
+  transform-origin: center;
+  transition: background-color 0.1s ease, transform 0.18s ease;
 }
 
 .mj-media-waveform__bar--played {
+  background: var(--mj-brand-primary);
+}
+
+/* Hover/seek position indicator. */
+.mj-media-waveform__progress {
+  position: absolute;
+  top: 0.5rem;
+  bottom: 0.5rem;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--mj-brand-primary);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Plain progress-bar fallback when decoding is pending or failed (no synthetic bars). */
+.mj-media-waveform-fallback {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 96px;
+  padding: 0 1rem;
+  cursor: pointer;
+  touch-action: none;
+  outline: none;
+}
+
+.mj-media-waveform-fallback:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--mj-border-focus);
+  border-radius: var(--mj-radius-sm, 4px);
+}
+
+.mj-media-waveform-fallback__rail {
+  position: relative;
+  flex: 1 1 auto;
+  height: 5px;
+  background: var(--mj-border-strong);
+  border-radius: var(--mj-radius-full, 999px);
+  overflow: hidden;
+}
+
+.mj-media-waveform-fallback__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
   background: var(--mj-brand-primary);
 }
 
@@ -428,11 +485,28 @@
 
 /* ---------------------------------------------------------------- Motion */
 
+/* Subtle draw-in for the waveform bars (skipped under reduced-motion). */
+.mj-media-waveform:not(.mj-media-waveform--static) .mj-media-waveform__bar {
+  animation: mj-media-bar-in 0.25s ease both;
+}
+
+@keyframes mj-media-bar-in {
+  from {
+    transform: scaleY(0.15);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mj-media-btn,
   .mj-media-cue,
   .mj-media-waveform__bar,
   .mj-media-scrubber__fill {
     transition: none;
+    animation: none;
   }
 }
