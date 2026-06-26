@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Standardized Agent Proxy — MJ Conversations Mockups</title>
+<link rel="stylesheet" href="../_shared.css">
+<style>
+  /* area-only styles — proxy.html */
+  .stack { display: flex; flex-direction: column; gap: 10px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ctx-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); background: var(--mj-bg-surface); }
+  .ctx-row .meta { min-width: 0; }
+  .ctx-row .meta .t { font-size: 13px; font-weight: 600; }
+  .ctx-row .meta .d { font-size: 11px; color: var(--mj-text-muted); }
+  .toggle { width: 38px; height: 22px; border-radius: 999px; background: var(--mj-brand-primary); position: relative; flex: none; }
+  .toggle::after { content: ""; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--mj-text-inverse); }
+  .toggle.off { background: var(--mj-bg-surface-active); }
+  .toggle.off::after { right: auto; left: 2px; }
+  .delegated { padding: 11px 13px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--mj-status-info) 9%, transparent); border: 1px dashed color-mix(in srgb, var(--mj-status-info) 45%, transparent); font-size: 12px; color: var(--mj-text-secondary); }
+  .delegated strong { color: var(--mj-status-info); }
+  .endpoint { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--mj-text-secondary); }
+
+  /* Option B store */
+  .store-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .store-card { border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); padding: 13px; background: var(--mj-bg-surface); display: flex; flex-direction: column; gap: 8px; }
+  .store-card .logo { width: 34px; height: 34px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 800; color: var(--mj-text-inverse); }
+  .store-card .name { font-size: 14px; font-weight: 700; }
+  .store-card .by { font-size: 11px; color: var(--mj-text-muted); }
+  .store-card .desc { font-size: 12px; color: var(--mj-text-secondary); flex: 1; }
+  .caps { display: flex; flex-wrap: wrap; gap: 5px; }
+  .ctx-share { font-size: 11px; color: var(--mj-text-muted); display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .ctx-share span::before { content: "● "; color: var(--mj-status-success); }
+  .store-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+
+  /* Option C transparency */
+  .remote-banner { display: flex; align-items: center; gap: 10px; padding: 9px 13px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 35%, transparent); font-size: 12px; }
+  .remote-banner .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--mj-status-success); flex: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 25%, transparent); }
+  .share-card { border: 1px solid var(--mj-border-default); border-radius: var(--radius-md); padding: 12px; background: var(--mj-bg-surface-card); }
+  .share-card .hd { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .share-list { display: flex; flex-direction: column; gap: 6px; }
+  .share-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+  .share-item .chk { color: var(--mj-status-success); font-weight: 700; }
+  .share-item.excluded { color: var(--mj-text-disabled); }
+  .share-item.excluded .chk { color: var(--mj-text-disabled); }
+  .crumbs { font-size: 11px; color: var(--mj-text-muted); margin-top: 8px; }
+  @media (max-width: 520px) { .grid2, .store-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <a class="mockup-back" href="../index.html">&larr; Back to mockups index</a>
+  <h1>Standardized Agent Proxy</h1>
+  <p>An MJ agent that is a thin proxy to a remote MJ-based / SaaS system (Skip, Betty, partner instances) — invoked in one step, passing a rich, MJ-aware context bag. Plan mode, skills, and local memory are delegated to the remote.</p>
+</div>
+
+<div class="variant-grid">
+
+  <!-- ============================ OPTION A ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option A · Admin</span>
+      <h2>Remote Proxy Agent Configuration</h2>
+    </div>
+    <div class="variant-body">
+      <div class="card" style="margin-bottom:14px;">
+        <div class="spread">
+          <div class="row">
+            <span class="avatar" style="background:color-mix(in srgb,var(--mj-brand-primary) 85%,#000);">SK</span>
+            <div>
+              <div style="font-weight:700;">Skip Analyst</div>
+              <div class="endpoint">Remote Proxy · BaseRemoteProxyAgent</div>
+            </div>
+          </div>
+          <span class="pill brand">Remote Proxy</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="label">Remote endpoint</label>
+        <input class="input" value="https://api.getskip.ai/v1/proxy" readonly>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label class="label">Auth method</label>
+          <select class="select"><option>API Key (vault ref)</option><option>OAuth 2.0 client</option><option>MJ-issued JWT</option></select>
+        </div>
+        <div class="field">
+          <label class="label">Timeout</label>
+          <input class="input" value="120s">
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="spread" style="margin-bottom:8px;">
+        <strong style="font-size:13px;">Context bag — what we send</strong>
+        <span class="small muted">Remote Operations payload</span>
+      </div>
+      <div class="stack">
+        <div class="ctx-row"><div class="meta"><div class="t">Entities &amp; schema</div><div class="d">Scoped entity metadata + sample rows</div></div><div class="toggle"></div></div>
+        <div class="ctx-row"><div class="meta"><div class="t">Stored queries</div><div class="d">RunQuery definitions the agent may call</div></div><div class="toggle"></div></div>
+        <div class="ctx-row"><div class="meta"><div class="t">Project-scoped notes</div><div class="d">Agent notes for this project only</div></div><div class="toggle"></div></div>
+        <div class="ctx-row"><div class="meta"><div class="t">Artifacts</div><div class="d">Conversation artifacts &amp; versions</div></div><div class="toggle off"></div></div>
+        <div class="ctx-row"><div class="meta"><div class="t">Organization context</div><div class="d">Org name, tenant, branding</div></div><div class="toggle"></div></div>
+        <div class="ctx-row"><div class="meta"><div class="t">User identity</div><div class="d">Name, email, roles (no PII beyond)</div></div><div class="toggle off"></div></div>
+      </div>
+
+      <div class="delegated" style="margin-top:14px;">
+        <strong>Delegated to remote:</strong> Plan mode, Skills, and Local Memory are turned off locally — the remote system owns reasoning, tool selection, and its own memory. MJ only assembles and ships the context bag.
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn">Save proxy agent</button>
+        <button class="btn secondary sm">Test connection</button>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> Admin form to register a remote system as a first-class MJ agent — endpoint, auth, and per-field toggles for the context bag, with an explicit "delegated" callout.</p>
+      <p><strong>Why world-class:</strong> Treats the rich MJ context bag as the product surface — admins see and govern exactly what crosses the boundary, not an opaque connector.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Config depth can intimidate; needs sensible defaults so the common case is two fields, not twenty.</p>
+    </div>
+  </div>
+
+  <!-- ============================ OPTION B ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option B · Discovery</span>
+      <h2>Connected MJ Systems Directory</h2>
+    </div>
+    <div class="variant-body">
+      <div class="spread" style="margin-bottom:12px;">
+        <strong style="font-size:13px;">Add a proxied agent</strong>
+        <span class="pill info">Richer than MCP · MJ-aware</span>
+      </div>
+      <div class="store-filters">
+        <span class="pill brand">All</span>
+        <span class="pill">Skip Ecosystem</span>
+        <span class="pill">Partner MJ</span>
+        <span class="pill">Vertical SaaS</span>
+      </div>
+
+      <div class="store-grid">
+        <div class="store-card">
+          <div class="row"><span class="logo" style="background:var(--mj-brand-primary);">S</span><div><div class="name">Skip</div><div class="by">by MemberJunction</div></div></div>
+          <div class="desc">Conversational analytics &amp; report generation over your data.</div>
+          <div class="caps"><span class="pill success">Analytics</span><span class="pill success">Reports</span><span class="pill success">Charts</span></div>
+          <div class="ctx-share"><span>Entities</span><span>Queries</span><span>Artifacts</span></div>
+          <button class="btn sm">Add as agent</button>
+        </div>
+
+        <div class="store-card">
+          <div class="row"><span class="logo" style="background:color-mix(in srgb,var(--mj-status-info) 90%,#000);">B</span><div><div class="name">Betty</div><div class="by">by MemberJunction</div></div></div>
+          <div class="desc">Membership &amp; engagement copilot for associations.</div>
+          <div class="caps"><span class="pill success">CRM</span><span class="pill success">Outreach</span></div>
+          <div class="ctx-share"><span>Entities</span><span>Notes</span><span>User</span></div>
+          <button class="btn sm">Add as agent</button>
+        </div>
+
+        <div class="store-card">
+          <div class="row"><span class="logo" style="background:color-mix(in srgb,var(--mj-status-success) 80%,#000);">AC</span><div><div class="name">Acme Insights</div><div class="by">Partner MJ instance</div></div></div>
+          <div class="desc">Cross-tenant benchmarking from a partner MJ deployment.</div>
+          <div class="caps"><span class="pill success">Benchmark</span><span class="pill warning">External</span></div>
+          <div class="ctx-share"><span>Org</span><span>Queries</span></div>
+          <button class="btn secondary sm">Review &amp; add</button>
+        </div>
+
+        <div class="store-card">
+          <div class="row"><span class="logo" style="background:color-mix(in srgb,var(--mj-text-secondary) 75%,#000);">+</span><div><div class="name">Custom endpoint</div><div class="by">Any BaseRemoteProxy</div></div></div>
+          <div class="desc">Point at any MJ-compatible remote that speaks the proxy contract.</div>
+          <div class="caps"><span class="pill">Bring-your-own</span></div>
+          <div class="ctx-share"><span>You choose</span></div>
+          <button class="btn secondary sm">Configure</button>
+        </div>
+      </div>
+
+      <div class="delegated" style="margin-top:14px;">
+        Each connector advertises its <strong>capabilities</strong> and the <strong>context it consumes</strong> — and notes that plan/skills/memory run remotely. Adding one drops a configured proxy agent into your picker.
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A gallery / store of remote MJ &amp; SaaS systems you can add as proxied agents in one click, each showing capabilities + exactly which context bag fields it shares.</p>
+      <p><strong>Why world-class:</strong> An MCP-style marketplace, but MJ-native — connectors are self-describing about MJ entities/queries/notes, not generic tools.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> A curated store implies trust/vetting responsibility; partner/external entries need clear provenance to avoid blind installs.</p>
+    </div>
+  </div>
+
+  <!-- ============================ OPTION C ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option C · In-chat</span>
+      <h2>Remote Agent Transparency</h2>
+    </div>
+    <div class="variant-body" style="padding:0;">
+      <div class="chat" style="height:520px;">
+        <div class="chat-header">
+          <div class="row">
+            <span class="avatar" style="background:color-mix(in srgb,var(--mj-brand-primary) 85%,#000);">SK</span>
+            <div>
+              <div class="chat-title">Skip Analyst</div>
+              <div class="small muted">Remote · api.getskip.ai</div>
+            </div>
+          </div>
+          <span class="pill info">Remote agent</span>
+        </div>
+        <div class="chat-body">
+          <div class="remote-banner">
+            <span class="dot"></span>
+            <span>You're talking to a <strong>remote agent</strong>. Your context is shared securely with Skip for this turn.&nbsp; <a href="#" style="color:var(--mj-text-link);">What's shared?</a></span>
+          </div>
+
+          <div class="msg user"><div class="who">You</div>Summarize Q2 member churn and chart the trend.</div>
+
+          <div class="share-card">
+            <div class="hd">↗ Context sent to Skip</div>
+            <div class="share-list">
+              <div class="share-item"><span>Entities · Members, Subscriptions</span><span class="chk">✓ shared</span></div>
+              <div class="share-item"><span>Stored query · Churn by Month</span><span class="chk">✓ shared</span></div>
+              <div class="share-item"><span>Project notes · "Q2 review"</span><span class="chk">✓ shared</span></div>
+              <div class="share-item excluded"><span>Artifacts</span><span class="chk">— off</span></div>
+              <div class="share-item excluded"><span>User PII</span><span class="chk">— off</span></div>
+            </div>
+            <div class="crumbs">Plan, skills &amp; memory handled remotely by Skip · 1-step proxy call</div>
+          </div>
+
+          <div class="msg agent"><div class="who">Skip · remote</div>Q2 churn rose to 4.1% (+0.6 pts vs Q1), concentrated in 1-year members. Trend chart below — drafted from your "Churn by Month" query.</div>
+        </div>
+        <div class="composer">
+          <textarea class="textarea" placeholder="Message Skip Analyst…"></textarea>
+          <button class="btn">Send</button>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> The in-thread experience of talking to a proxied agent — a persistent "remote" indicator plus an inline, per-turn receipt of exactly which context bag fields left MJ.</p>
+      <p><strong>Why world-class:</strong> Privacy-forward by default. Trust is earned in the moment data crosses the boundary, not buried in a settings page.</p>
+      <p class="tradeoff"><strong>Tradeoff:</strong> Per-turn disclosure can add visual noise; needs a collapsed default with an expandable "what's shared" affordance.</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

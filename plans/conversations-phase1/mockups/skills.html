@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skills — MJ Conversations Mockups</title>
+  <link rel="stylesheet" href="../_shared.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    /* Area-only styling — tokens only, no hardcoded colors */
+    .sk-cat-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .sk-chip-cat {
+      font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+      border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary); cursor: pointer;
+    }
+    .sk-chip-cat.is-active { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: transparent; }
+
+    /* A — marketplace grid */
+    .sk-market { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .sk-tile {
+      border: 1px solid var(--mj-border-default); border-radius: var(--radius-md);
+      background: var(--mj-bg-surface); padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .sk-tile.is-on { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); }
+    .sk-tile-icon {
+      width: 34px; height: 34px; border-radius: var(--radius-sm); flex: none;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 15px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent); color: var(--mj-brand-primary);
+    }
+    .sk-tile h4 { margin: 0; font-size: 14px; }
+    .sk-bundle { display: flex; flex-wrap: wrap; gap: 5px; }
+    .sk-bundle .pill { font-size: 11px; padding: 2px 8px; }
+    .sk-toggle {
+      width: 38px; height: 22px; border-radius: 999px; flex: none; position: relative;
+      background: var(--mj-bg-surface-active); cursor: pointer; transition: background .15s;
+    }
+    .sk-toggle::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--mj-bg-surface); box-shadow: var(--shadow-sm); transition: left .15s;
+    }
+    .sk-toggle.on { background: var(--mj-brand-primary); }
+    .sk-toggle.on::after { left: 18px; }
+    .sk-accepts {
+      display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm);
+      overflow: hidden; font-size: 12px; font-weight: 600;
+    }
+    .sk-accepts span { padding: 5px 12px; cursor: pointer; color: var(--mj-text-secondary); border-right: 1px solid var(--mj-border-default); }
+    .sk-accepts span:last-child { border-right: 0; }
+    .sk-accepts span.sel { background: var(--mj-brand-primary); color: var(--mj-text-inverse); }
+
+    /* B — wizard */
+    .sk-steps { display: flex; gap: 6px; margin-bottom: 16px; }
+    .sk-step { flex: 1; text-align: center; font-size: 11px; font-weight: 700; color: var(--mj-text-muted);
+      padding-bottom: 7px; border-bottom: 3px solid var(--mj-border-default); text-transform: uppercase; letter-spacing: .03em; }
+    .sk-step.done { color: var(--mj-status-success); border-bottom-color: var(--mj-status-success); }
+    .sk-step.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); }
+    .sk-capture {
+      display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; margin-bottom: 14px;
+      border-radius: var(--radius-md); border: 1px dashed var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 7%, transparent);
+    }
+    .sk-pick { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--mj-border-default);
+      border-radius: var(--radius-sm); margin-bottom: 7px; background: var(--mj-bg-surface); }
+    .sk-pick.picked { border-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 7%, transparent); }
+    .sk-check { width: 18px; height: 18px; border-radius: 4px; border: 1.5px solid var(--mj-border-strong); flex: none;
+      display: inline-flex; align-items: center; justify-content: center; font-size: 10px; color: var(--mj-text-inverse); }
+    .sk-check.on { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+
+    /* C — chips + timeline */
+    .sk-agent-card { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--mj-border-default);
+      border-radius: var(--radius-md); margin-bottom: 14px; }
+    .sk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sk-chip {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+      padding: 4px 10px; border-radius: 999px; border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface); color: var(--mj-text-secondary);
+    }
+    .sk-chip i.x { opacity: .5; font-size: 10px; }
+    .sk-chip.add { border-style: dashed; color: var(--mj-brand-primary); border-color: var(--mj-brand-primary); cursor: pointer; }
+    .sk-tl { position: relative; margin: 4px 0 0 8px; padding-left: 20px; }
+    .sk-tl::before { content: ""; position: absolute; left: 6px; top: 4px; bottom: 4px; width: 2px; background: var(--mj-border-default); }
+    .sk-ev { position: relative; padding: 8px 0; }
+    .sk-ev::before { content: ""; position: absolute; left: -17px; top: 13px; width: 10px; height: 10px; border-radius: 50%;
+      background: var(--mj-bg-surface); border: 2px solid var(--mj-border-strong); }
+    .sk-ev.skill::before { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+    .sk-ev.skill {
+      border-left: 3px solid var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+      border-radius: var(--radius-sm); padding: 9px 11px; margin-left: -3px;
+    }
+    .sk-ev-tools { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .sk-ev-tools .pill { font-size: 11px; padding: 2px 8px; }
+    .sk-time { font-size: 11px; color: var(--mj-text-muted); font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="mockup-header">
+    <a class="mockup-back" href="../index.html"><i class="fa-solid fa-arrow-left"></i> Back to index</a>
+    <h1>Skills</h1>
+    <p>Reusable capability bundles — instructions appended to an agent's prompt, plus optional Actions and sub-agents — that attach to one or more agents, with governance over authoring and sharing.</p>
+  </div>
+
+  <div class="variant-grid">
+
+    <!-- ============================ OPTION A ============================ -->
+    <div class="variant">
+      <div class="variant-head">
+        <span class="badge">Option A</span>
+        <h2>Skills Catalog &amp; Per-Agent Enablement</h2>
+      </div>
+      <div class="variant-body">
+        <div class="spread" style="margin-bottom:12px;">
+          <div class="row"><i class="fa-solid fa-magnifying-glass muted"></i><input class="input" style="max-width:170px;" placeholder="Search skills…"></div>
+          <button class="btn sm"><i class="fa-solid fa-plus"></i> New Skill</button>
+        </div>
+        <div class="sk-cat-row">
+          <span class="sk-chip-cat is-active">All</span>
+          <span class="sk-chip-cat">Research</span>
+          <span class="sk-chip-cat">CRM</span>
+          <span class="sk-chip-cat">Writing</span>
+          <span class="sk-chip-cat">Data</span>
+        </div>
+
+        <div class="sk-market">
+          <div class="sk-tile is-on">
+            <div class="spread">
+              <div class="row"><span class="sk-tile-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></span><h4>Deep Research</h4></div>
+              <span class="sk-toggle on" title="Enabled for this agent"></span>
+            </div>
+            <div class="small muted">Fans out web searches, verifies sources, writes a cited brief.</div>
+            <div class="sk-bundle">
+              <span class="pill brand"><i class="fa-solid fa-bolt"></i> 3 Actions</span>
+              <span class="pill"><i class="fa-solid fa-sitemap"></i> 1 Sub-agent</span>
+            </div>
+            <div class="spread"><span class="pill success"><i class="fa-solid fa-circle-check"></i> Active</span><span class="small muted"><i class="fa-solid fa-share-nodes"></i> Shared org-wide</span></div>
+          </div>
+
+          <div class="sk-tile is-on">
+            <div class="spread">
+              <div class="row"><span class="sk-tile-icon"><i class="fa-solid fa-address-card"></i></span><h4>CRM Lookup</h4></div>
+              <span class="sk-toggle on"></span>
+            </div>
+            <div class="small muted">Pulls account, contact &amp; pipeline context before replying.</div>
+            <div class="sk-bundle">
+              <span class="pill brand"><i class="fa-solid fa-bolt"></i> 2 Actions</span>
+            </div>
+            <div class="spread"><span class="pill success"><i class="fa-solid fa-circle-check"></i> Active</span><span class="small muted"><i class="fa-solid fa-lock"></i> Private</span></div>
+          </div>
+
+          <div class="sk-tile">
+            <div class="spread">
+              <div class="row"><span class="sk-tile-icon"><i class="fa-solid fa-pen-nib"></i></span><h4>Brand Voice</h4></div>
+              <span class="sk-toggle"></span>
+            </div>
+            <div class="small muted">Rewrites output to match the company style guide.</div>
+            <div class="sk-bundle"><span class="pill"><i class="fa-solid fa-align-left"></i> Instructions only</span></div>
+            <div class="spread"><span class="pill success"><i class="fa-solid fa-circle-check"></i> Active</span><span class="small muted"><i class="fa-solid fa-share-nodes"></i> Shared</span></div>
+          </div>
+
+          <div class="sk-tile">
+            <div class="spread">
+              <div class="row"><span class="sk-tile-icon"><i class="fa-solid fa-chart-line"></i></span><h4>Data Storyteller</h4></div>
+              <span class="sk-toggle"></span>
+            </div>
+            <div class="small muted">Runs queries and narrates trends with charts.</div>
+            <div class="sk-bundle">
+              <span class="pill brand"><i class="fa-solid fa-bolt"></i> 4 Actions</span>
+              <span class="pill"><i class="fa-solid fa-sitemap"></i> 2 Sub-agents</span>
+            </div>
+            <div class="spread"><span class="pill warning"><i class="fa-solid fa-clock"></i> Draft</span><span class="small muted"><i class="fa-solid fa-lock"></i> Private</span></div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div class="card" style="background:var(--mj-bg-surface-card);">
+          <div class="spread">
+            <div class="row"><span class="avatar">SA</span><div><div style="font-weight:600;">Sales Assistant</div><div class="small muted">Enabling skills for this agent</div></div></div>
+            <div>
+              <div class="label" style="text-align:right;">Accepts skills</div>
+              <div class="sk-accepts"><span>None</span><span class="sel">Limited</span><span>All</span></div>
+            </div>
+          </div>
+          <div class="small muted" style="margin-top:8px;"><i class="fa-solid fa-circle-info"></i> <strong style="color:var(--mj-text-primary);">Limited</strong> — only the 2 skills toggled on above are appended to this agent's system prompt.</div>
+        </div>
+      </div>
+      <div class="variant-notes">
+        <p><strong>What:</strong> A browsable, categorized catalog of skills showing exactly what each bundles (Actions / sub-agents / instructions-only) and its share state. Per-agent toggles plus an <em>AcceptsSkills</em> control (None / Limited / All).</p>
+        <p><strong>Why world-class:</strong> Treats capabilities as a discoverable marketplace — users grasp "what does this give my agent" at a glance, and the AcceptsSkills control makes the governance posture explicit instead of hidden in a settings page.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Grid scales poorly past a few dozen skills; "enabled where?" is agent-scoped, so the reverse view (which agents use a skill) needs a separate screen.</p>
+      </div>
+    </div>
+
+    <!-- ============================ OPTION B ============================ -->
+    <div class="variant">
+      <div class="variant-head">
+        <span class="badge">Option B</span>
+        <h2>Teach-a-Skill Authoring Wizard</h2>
+      </div>
+      <div class="variant-body">
+        <div class="sk-capture">
+          <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--mj-brand-primary);margin-top:2px;"></i>
+          <div>
+            <div style="font-weight:600;">Capture this workflow as a Skill</div>
+            <div class="small muted">Sage just ran a 4-step research flow in this chat. Save the steps, tools &amp; instructions so any agent can reuse it.</div>
+          </div>
+        </div>
+
+        <div class="sk-steps">
+          <div class="sk-step done">Name</div>
+          <div class="sk-step active">Instructions</div>
+          <div class="sk-step">Actions</div>
+          <div class="sk-step">Sub-agents</div>
+          <div class="sk-step">Access</div>
+        </div>
+
+        <div class="field">
+          <span class="label">What should we call this skill?</span>
+          <input class="input" value="Competitive Teardown">
+        </div>
+
+        <div class="field">
+          <span class="label">Teach it — these instructions get appended to the agent's prompt</span>
+          <textarea class="textarea" style="resize:none;min-height:78px;">When asked about a competitor, gather their pricing, positioning and recent launches, then produce a side-by-side teardown with a "where we win" section. Always cite sources.</textarea>
+          <div class="small muted" style="margin-top:5px;"><i class="fa-solid fa-lightbulb"></i> Pre-filled from this conversation — edit freely.</div>
+        </div>
+
+        <div class="field">
+          <span class="label">Bundle Actions <span class="muted small">(next step — preview)</span></span>
+          <div class="sk-pick picked"><span class="sk-check on"><i class="fa-solid fa-check"></i></span><i class="fa-solid fa-bolt muted"></i><div style="flex:1;"><div style="font-weight:600;font-size:13px;">Web Search</div></div></div>
+          <div class="sk-pick picked"><span class="sk-check on"><i class="fa-solid fa-check"></i></span><i class="fa-solid fa-bolt muted"></i><div style="flex:1;"><div style="font-weight:600;font-size:13px;">Fetch Page Content</div></div></div>
+          <div class="sk-pick"><span class="sk-check"></span><i class="fa-solid fa-sitemap muted"></i><div style="flex:1;"><div style="font-weight:600;font-size:13px;">Pricing Analyst <span class="pill" style="font-size:10px;">sub-agent</span></div></div></div>
+        </div>
+
+        <div class="card" style="background:var(--mj-bg-surface-card);">
+          <div class="label">Who can use this skill?</div>
+          <div class="row" style="margin-bottom:6px;"><i class="fa-solid fa-user-check muted"></i><span class="small">You — author &amp; attach to your agents</span><span class="pill success" style="margin-left:auto;">Allowed</span></div>
+          <div class="row"><i class="fa-solid fa-share-nodes muted"></i><span class="small">Share with the whole org</span><span class="pill warning" style="margin-left:auto;"><i class="fa-solid fa-lock"></i> Needs "Can Share Skills"</span></div>
+        </div>
+
+        <div class="row" style="margin-top:14px;">
+          <button class="btn">Continue <i class="fa-solid fa-arrow-right"></i></button>
+          <button class="btn secondary">Save draft</button>
+        </div>
+      </div>
+      <div class="variant-notes">
+        <p><strong>What:</strong> A guided 5-step builder (Name → Instructions → Actions → Sub-agents → Access) framed as <em>teaching the assistant a new capability</em>, with a one-click "capture this workflow as a skill" entry point from a live conversation.</p>
+        <p><strong>Why world-class:</strong> The capture-from-chat hook turns a successful ad-hoc flow into a durable, reusable asset at the moment of insight — zero blank-page friction — and the wizard makes the abstract concept (prompt text + tools) concrete and approachable.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Wizard is great for creation but heavy for quick edits; the captured-instructions draft can be noisy and needs human curation before it's trustworthy.</p>
+      </div>
+    </div>
+
+    <!-- ============================ OPTION C ============================ -->
+    <div class="variant">
+      <div class="variant-head">
+        <span class="badge">Option C</span>
+        <h2>Attached Chips &amp; Activation Timeline</h2>
+      </div>
+      <div class="variant-body">
+        <div class="sk-agent-card">
+          <span class="avatar"><i class="fa-solid fa-robot"></i></span>
+          <div style="flex:1;">
+            <div style="font-weight:600;">Research Analyst</div>
+            <div class="sk-chips" style="margin-top:6px;">
+              <span class="sk-chip"><i class="fa-solid fa-magnifying-glass-chart" style="color:var(--mj-brand-primary);"></i> Deep Research <i class="fa-solid fa-xmark x"></i></span>
+              <span class="sk-chip"><i class="fa-solid fa-pen-nib" style="color:var(--mj-brand-primary);"></i> Brand Voice <i class="fa-solid fa-xmark x"></i></span>
+              <span class="sk-chip add"><i class="fa-solid fa-plus"></i> Attach skill</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="spread" style="margin-bottom:8px;">
+          <div class="small" style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--mj-text-muted);">Run activation timeline</div>
+          <span class="pill info"><i class="fa-solid fa-circle-play"></i> Run #4821</span>
+        </div>
+
+        <div class="sk-tl">
+          <div class="sk-ev">
+            <div class="spread"><div class="row"><i class="fa-solid fa-message muted"></i><span class="small">Prompt received</span></div><span class="sk-time">00:00</span></div>
+          </div>
+
+          <div class="sk-ev skill">
+            <div class="spread">
+              <div class="row"><i class="fa-solid fa-magnifying-glass-chart" style="color:var(--mj-brand-primary);"></i><span style="font-weight:600;font-size:13px;">Skill activated · Deep Research</span></div>
+              <span class="sk-time">00:02</span>
+            </div>
+            <div class="small muted" style="margin-top:3px;">Instructions appended to prompt · enabled the bundled tools below</div>
+            <div class="sk-ev-tools">
+              <span class="pill brand"><i class="fa-solid fa-bolt"></i> Web Search</span>
+              <span class="pill brand"><i class="fa-solid fa-bolt"></i> Fetch Page</span>
+              <span class="pill"><i class="fa-solid fa-sitemap"></i> Source Verifier</span>
+            </div>
+          </div>
+
+          <div class="sk-ev">
+            <div class="spread"><div class="row"><i class="fa-solid fa-bolt muted"></i><span class="small">Action · Web Search ×3</span></div><span class="sk-time">00:05</span></div>
+          </div>
+          <div class="sk-ev">
+            <div class="spread"><div class="row"><i class="fa-solid fa-sitemap muted"></i><span class="small">Sub-agent · Source Verifier returned</span></div><span class="sk-time">00:14</span></div>
+          </div>
+
+          <div class="sk-ev skill">
+            <div class="spread">
+              <div class="row"><i class="fa-solid fa-pen-nib" style="color:var(--mj-brand-primary);"></i><span style="font-weight:600;font-size:13px;">Skill activated · Brand Voice</span></div>
+              <span class="sk-time">00:18</span>
+            </div>
+            <div class="small muted" style="margin-top:3px;">Instructions-only — applied to final response shaping</div>
+          </div>
+
+          <div class="sk-ev">
+            <div class="spread"><div class="row"><i class="fa-solid fa-circle-check" style="color:var(--mj-status-success);"></i><span class="small">Response delivered</span></div><span class="sk-time">00:21</span></div>
+          </div>
+        </div>
+
+        <hr class="divider">
+        <div class="small muted"><i class="fa-solid fa-eye-slash"></i> Progressive disclosure: catalog shows only name + description until a skill <em>activates</em> — its instructions and tools load on demand, recorded as a <strong style="color:var(--mj-text-primary);">Skill</strong> run-step.</div>
+      </div>
+      <div class="variant-notes">
+        <p><strong>What:</strong> Skills surface as removable chips directly on the agent. During a run, an activation timeline shows precisely when each skill fired and which Actions / sub-agents it unlocked — visualizing the <em>Skill</em> run-step.</p>
+        <p><strong>Why world-class:</strong> Makes invisible prompt-augmentation auditable. The timeline answers "why did the agent do that?" by tying every tool call back to the skill that enabled it, and the progressive-disclosure note explains the load-on-activate cost model.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Chips are tidy for 2–3 skills but crowd the header at scale; the timeline is reactive (post-hoc) — it shows what activated, not a place to author or govern skills.</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

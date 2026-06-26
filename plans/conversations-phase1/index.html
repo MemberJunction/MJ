@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversations Mega Phase 1 — Plans & UX Mockups</title>
+<link rel="stylesheet" href="mockups/_shared.css">
+<style>
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 28px 48px; }
+  .hero { padding: 36px 28px 24px; }
+  .hero h1 { margin: 0 0 6px; font-size: 26px; }
+  .hero p { margin: 0; color: var(--mj-text-secondary); max-width: 760px; }
+  .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); margin: 28px 0 12px; font-weight: 700; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  a.tile { text-decoration: none; color: inherit; display: block; }
+  a.tile .card { height: 100%; transition: border-color .15s, box-shadow .15s, transform .05s; }
+  a.tile:hover .card { border-color: var(--mj-brand-primary); box-shadow: var(--shadow-md); }
+  a.tile:active .card { transform: translateY(1px); }
+  .tile h3 { margin: 0 0 4px; font-size: 15px; }
+  .tile p { margin: 0; font-size: 13px; color: var(--mj-text-secondary); }
+  .tile .meta { margin-top: 10px; }
+  .doc-list { display: flex; flex-direction: column; gap: 8px; }
+  .doc { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+  .doc .ic { width: 30px; height: 30px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); color: var(--mj-brand-primary); display: inline-flex; align-items:center; justify-content:center; font-weight: 800; flex:none; }
+  .doc a { color: var(--mj-text-link); text-decoration: none; font-weight: 600; }
+  .doc a:hover { text-decoration: underline; }
+  .note { font-size: 12px; color: var(--mj-text-muted); margin-top: 18px; }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <span class="pill brand">MemberJunction · Conversations</span>
+    <h1>Mega Phase 1 — Plans &amp; UX Mockups</h1>
+    <p>The buildable plan for the conversations platform and the world-class UX exploration behind it. Each mockup area shows <strong>three divergent options</strong> to react to. Mockups are illustrative (static HTML, MJ design tokens); production uses the real components.</p>
+  </div>
+
+  <div class="wrap">
+    <div class="section-title">Plan documents</div>
+    <div class="doc-list">
+      <div class="card doc"><span class="ic">1</span><div><a href="conversations-mega-phase-1-wbs.md">Mega Phase 1 — Work Breakdown Structure</a><div class="small muted">The buildable plan: foundations gate, sub-phases P1.1–P1.9, decisions, diagrams.</div></div></div>
+      <div class="card doc"><span class="ic">2</span><div><a href="conversations-competitive-ux-study.md">Competitive UX Study</a><div class="small muted">MJ vs. the OSS field + ChatGPT / Claude / Gemini; world-class rubric + scorecard.</div></div></div>
+      <div class="card doc"><span class="ic">3</span><div><a href="conversations-librechat-parity-proposal.md">LibreChat Parity Proposal (first pass)</a><div class="small muted">The original starting point, superseded by the study + WBS.</div></div></div>
+    </div>
+
+    <div class="section-title">UX mockups — 3 options per area</div>
+    <div class="grid">
+      <a class="tile" href="mockups/context-gauge.html"><div class="card"><h3>Context &amp; Cost Gauge</h3><p>Surface context-window %, tokens, and running cost.</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/plan-mode.html"><div class="card"><h3>Plan Mode</h3><p>Agent returns an editable plan to approve before acting.</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/skills.html"><div class="card"><h3>Skills</h3><p>Reusable capability bundles (instructions + actions + sub-agents).</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/routines.html"><div class="card"><h3>User Routines</h3><p>User-controlled scheduled prompts with notifications.</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/memory.html"><div class="card"><h3>Memory</h3><p>Project-scoped, user-editable memory + incognito chat.</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/artifacts.html"><div class="card"><h3>Artifacts: Edit / Share / Remix</h3><p>Inline edit, Magic-Links public share, remix.</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/polish.html"><div class="card"><h3>UX Polish</h3><p>Quote, keyboard shortcuts, long-thread TOC, fork.</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/group-chat.html"><div class="card"><h3>Group Chat</h3><p>Multi-human + agents, roster, presence, concurrency. <span class="muted">(Phase 2 runtime)</span></p><div class="meta"><span class="pill">3 options</span></div></div></a>
+      <a class="tile" href="mockups/proxy.html"><div class="card"><h3>Standardized Agent Proxy</h3><p>Remote MJ/SaaS agents (Skip/Betty) via a rich context bag.</p><div class="meta"><span class="pill">3 options</span></div></div></a>
+    </div>
+
+    <p class="note">Tip: open any area, compare the three options, and tell me which direction (or hybrid) to pursue. Light/dark follows your OS theme.</p>
+  </div>
+</body>
+</html>

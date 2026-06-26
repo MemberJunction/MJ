@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Context &amp; Cost Gauge — MJ Conversations</title>
+<link rel="stylesheet" href="../_shared.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  /* ---- area-specific layout only; colors come from --mj-* tokens ---- */
+  .demo-chat {
+    height: 460px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--mj-bg-surface);
+    position: relative;
+  }
+  .demo-chat .chat-body { padding: 14px; }
+  .demo-chat .composer { gap: 8px; }
+
+  /* generic context-meter color ramp via tokens */
+  .ramp-ok    { --gauge: var(--mj-status-success); }
+  .ramp-warn  { --gauge: var(--mj-status-warning); }
+  .ramp-crit  { --gauge: var(--mj-status-error); }
+
+  /* ============ OPTION A — header chip ============ */
+  .ctx-chip {
+    position: relative;
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    color: var(--mj-text-secondary);
+    cursor: default;
+  }
+  .ctx-chip .ring {
+    width: 16px; height: 16px; border-radius: 50%;
+    background:
+      conic-gradient(var(--gauge) calc(var(--pct) * 1%), var(--mj-bg-surface-active) 0);
+    flex: none;
+    -webkit-mask: radial-gradient(circle 4px at center, transparent 98%, #000 100%);
+            mask: radial-gradient(circle 4px at center, transparent 98%, #000 100%);
+  }
+  .ctx-chip .pctnum { color: var(--mj-text-primary); }
+  /* hover popover */
+  .ctx-chip .chip-pop {
+    position: absolute; top: calc(100% + 8px); right: 0;
+    width: 230px; padding: 12px; z-index: 5;
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    opacity: 0; transform: translateY(-4px); pointer-events: none;
+    transition: opacity .15s ease, transform .15s ease;
+  }
+  .ctx-chip:hover .chip-pop { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .ctx-chip .chip-pop::before {
+    content:""; position:absolute; top:-5px; right:14px; width:9px; height:9px;
+    background: var(--mj-bg-surface-elevated);
+    border-left: 1px solid var(--mj-border-default);
+    border-top: 1px solid var(--mj-border-default);
+    transform: rotate(45deg);
+  }
+  .kv { display:flex; justify-content:space-between; gap:10px; font-size:12px; padding:3px 0; }
+  .kv .k { color: var(--mj-text-muted); }
+  .kv .v { color: var(--mj-text-primary); font-weight:600; font-variant-numeric: tabular-nums; }
+  .barline { height:6px; border-radius:999px; background: var(--mj-bg-surface-active); overflow:hidden; margin:6px 0 2px; }
+  .barline > i { display:block; height:100%; width: calc(var(--pct)*1%); background: var(--gauge); border-radius:999px; }
+
+  /* ============ OPTION B — gauge bar + drawer ============ */
+  .gauge-strip {
+    display:flex; align-items:center; gap:10px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+    font-size: 12px;
+  }
+  .gauge-strip .track {
+    position: relative; flex:1; height:8px; border-radius:999px;
+    background: var(--mj-bg-surface-active); overflow:hidden; cursor:pointer;
+  }
+  .gauge-strip .track > i { display:block; height:100%; width: calc(var(--pct)*1%); background: var(--gauge); border-radius:999px; }
+  /* segmented contribution markers */
+  .gauge-strip .track .seg { position:absolute; top:0; bottom:0; width:1px; background: var(--mj-bg-surface); opacity:.6; }
+  .gauge-strip .lbl { color: var(--mj-text-muted); white-space:nowrap; }
+  .gauge-strip .lbl b { color: var(--mj-text-primary); font-variant-numeric: tabular-nums; }
+  .gauge-strip .expand { color: var(--mj-text-link); cursor:pointer; white-space:nowrap; font-weight:600; }
+
+  .drawer {
+    border-top: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-elevated);
+    padding: 14px 16px;
+    max-height: 230px; overflow:auto;
+  }
+  .drawer h4 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color: var(--mj-text-muted); }
+  .bd-row { display:grid; grid-template-columns: 18px 1fr 64px 56px; align-items:center; gap:10px; padding:5px 0; font-size:12px; }
+  .bd-row .who { width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700; }
+  .bd-row .who.u { background: var(--mj-brand-primary); color: var(--mj-text-inverse); }
+  .bd-row .who.a { background: var(--mj-bg-surface-active); color: var(--mj-text-secondary); }
+  .bd-row .mini { height:6px; border-radius:999px; background: var(--mj-bg-surface-active); overflow:hidden; }
+  .bd-row .mini > i { display:block; height:100%; background: var(--gauge); }
+  .bd-row .tk, .bd-row .ct { text-align:right; font-variant-numeric:tabular-nums; color: var(--mj-text-secondary); }
+  .trendcard { margin-top:12px; padding:10px 12px; }
+  .spark { display:flex; align-items:flex-end; gap:3px; height:42px; margin-top:6px; }
+  .spark > i { flex:1; background: color-mix(in srgb, var(--mj-brand-primary) 55%, transparent); border-radius:2px 2px 0 0; }
+  .spark > i:last-child { background: var(--mj-brand-primary); }
+
+  /* ============ OPTION C — ambient ring + nudge ============ */
+  .ambient-composer {
+    position: relative;
+    padding: 14px;
+    border-top: 1px solid var(--mj-chat-composer-border);
+    background: var(--mj-chat-composer-bg);
+  }
+  .ambient-ring {
+    position: relative;
+    border-radius: var(--radius-md);
+    padding: 2px;
+    background:
+      conic-gradient(var(--gauge) calc(var(--pct)*1%),
+        color-mix(in srgb, var(--gauge) 16%, var(--mj-bg-surface-active)) 0);
+    transition: background .4s ease;
+  }
+  .ambient-ring.ramp-crit { animation: pulseGlow 1.8s ease-in-out infinite; }
+  @keyframes pulseGlow {
+    0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gauge) 0%, transparent); }
+    50%     { box-shadow: 0 0 0 4px color-mix(in srgb, var(--gauge) 28%, transparent); }
+  }
+  .ambient-inner {
+    display:flex; gap:8px; align-items:flex-end;
+    background: var(--mj-bg-surface);
+    border-radius: calc(var(--radius-md) - 2px);
+    padding: 8px;
+  }
+  .ambient-inner .textarea { border:none; box-shadow:none; background:transparent; min-height:38px; }
+  .ambient-inner .textarea:focus { box-shadow:none; }
+  .ambient-meta {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-top:8px; font-size:11px; color: var(--mj-text-muted);
+  }
+  .ambient-meta .dot { display:inline-block; width:8px;height:8px;border-radius:50%;background:var(--gauge); margin-right:5px; vertical-align:middle; }
+  .nudge {
+    display:flex; align-items:flex-start; gap:10px;
+    margin: 0 0 10px; padding: 11px 12px;
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+    font-size: 12.5px; color: var(--mj-text-primary);
+  }
+  .nudge .ic { color: var(--mj-status-warning); font-size:14px; margin-top:1px; }
+  .nudge .acts { margin-top:7px; display:flex; gap:8px; }
+  .nudge .x { margin-left:auto; color: var(--mj-text-muted); cursor:pointer; background:none;border:none;font-size:13px; }
+
+  .legend { display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:11px; color:var(--mj-text-muted); }
+  .legend span { display:inline-flex; align-items:center; gap:5px; }
+  .legend i { width:10px;height:10px;border-radius:50%; display:inline-block; }
+</style>
+</head>
+<body>
+
+<div class="mockup-header">
+  <a class="mockup-back" href="../index.html">← All mockups</a>
+  <h1>Context &amp; Cost Gauge</h1>
+  <p>Per-conversation visibility into context-window usage, tokens, and running cost — three divergent interaction models.</p>
+</div>
+
+<div class="variant-grid">
+
+  <!-- ============================ OPTION A ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option A</span>
+      <h2>Minimal Header Chip</h2>
+    </div>
+    <div class="variant-body">
+      <div class="demo-chat">
+        <div class="chat-header">
+          <div class="row">
+            <div class="chat-title">Q3 Pipeline Review</div>
+            <span class="pill brand"><i class="fa-solid fa-robot"></i> Sage</span>
+          </div>
+          <div class="row" style="gap:10px;">
+            <!-- the chip: tiny by default, expands on hover -->
+            <div class="ctx-chip ramp-ok" style="--pct:38;">
+              <span class="ring"></span>
+              <span class="pctnum">38%</span>
+              <div class="chip-pop">
+                <div class="spread" style="margin-bottom:6px;">
+                  <strong style="font-size:12px;">Context window</strong>
+                  <span class="small muted">GPT-4.1 · 1M</span>
+                </div>
+                <div class="barline ramp-ok" style="--pct:38;"><i></i></div>
+                <div class="kv"><span class="k">Used</span><span class="v">382K / 1M</span></div>
+                <div class="kv"><span class="k">This turn</span><span class="v">+6.1K tok</span></div>
+                <hr class="divider" style="margin:8px 0;">
+                <div class="kv"><span class="k">Run cost</span><span class="v">$0.74</span></div>
+                <div class="kv"><span class="k">Avg / msg</span><span class="v">$0.031</span></div>
+              </div>
+            </div>
+            <button class="btn ghost sm" title="Export"><i class="fa-solid fa-download"></i></button>
+            <button class="btn ghost sm" title="Share"><i class="fa-solid fa-share-nodes"></i></button>
+          </div>
+        </div>
+        <div class="chat-body">
+          <div class="msg agent"><div class="who">Sage</div>Pulled the 142 open opps. Want them grouped by stage or by owner?</div>
+          <div class="msg user"><div class="who">You</div>By owner, descending by amount.</div>
+          <div class="msg agent"><div class="who">Sage</div>Done — top owner is Dana with $1.2M across 11 deals. Table attached.</div>
+        </div>
+        <div class="composer">
+          <textarea class="textarea" placeholder="Message Sage…"></textarea>
+          <button class="btn"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--mj-status-success)"></i> &lt;60% healthy</span>
+        <span><i style="background:var(--mj-status-warning)"></i> 60–85% filling</span>
+        <span><i style="background:var(--mj-status-error)"></i> &gt;85% near limit</span>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A pill-sized chip in the existing header-actions row — a conic ring + a single % number. Hover (or tap) reveals a popover with tokens used/limit, this-turn delta, run cost, and avg cost/message.</p>
+      <p><strong>Why world-class:</strong> Zero chrome cost at rest — it sits next to Export/Share where users already look, and the ring reads like an Apple activity ring. Progressive disclosure: the 1% who care about exact tokens get the full breakdown without taxing the 99%.</p>
+      <p><span class="tradeoff">Tradeoff:</span> Hover-gated detail is undiscoverable on touch and easy to miss; the chip alone can't convey trend or per-message attribution.</p>
+    </div>
+  </div>
+
+  <!-- ============================ OPTION B ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option B</span>
+      <h2>Gauge Bar + Breakdown Drawer</h2>
+    </div>
+    <div class="variant-body">
+      <div class="demo-chat">
+        <div class="chat-header">
+          <div class="row">
+            <div class="chat-title">Migration Plan v2</div>
+            <span class="pill brand"><i class="fa-solid fa-robot"></i> Sage</span>
+          </div>
+          <div class="row"><button class="btn ghost sm"><i class="fa-solid fa-ellipsis"></i></button></div>
+        </div>
+        <!-- slim always-on gauge under the header -->
+        <div class="gauge-strip ramp-warn" style="--pct:71;">
+          <span class="lbl"><b>71%</b> context</span>
+          <div class="track" title="Click to expand breakdown">
+            <i></i>
+            <span class="seg" style="left:22%"></span>
+            <span class="seg" style="left:41%"></span>
+            <span class="seg" style="left:58%"></span>
+            <span class="seg" style="left:71%"></span>
+          </div>
+          <span class="lbl">142K tok · <b>$1.86</b></span>
+          <span class="expand">Breakdown <i class="fa-solid fa-chevron-up"></i></span>
+        </div>
+        <div class="chat-body" style="flex:1;">
+          <div class="msg user"><div class="who">You</div>Summarize the full schema diff again.</div>
+          <div class="msg agent"><div class="who">Sage</div>Re-reading 14 tables… that pushed us to 71% of the window.</div>
+        </div>
+        <!-- the open drawer -->
+        <div class="drawer ramp-warn" style="--pct:71;">
+          <h4>Token use by message</h4>
+          <div class="bd-row"><span class="who u">Y</span><div class="mini" style="--gauge:var(--mj-brand-primary)"><i style="width:14%"></i></div><span class="tk">2.0K</span><span class="ct">$0.02</span></div>
+          <div class="bd-row"><span class="who a">S</span><div class="mini"><i style="width:38%"></i></div><span class="tk">54K</span><span class="ct">$0.71</span></div>
+          <div class="bd-row"><span class="who u">Y</span><div class="mini" style="--gauge:var(--mj-brand-primary)"><i style="width:9%"></i></div><span class="tk">1.3K</span><span class="ct">$0.01</span></div>
+          <div class="bd-row"><span class="who a">S</span><div class="mini"><i style="width:61%"></i></div><span class="tk">85K</span><span class="ct">$1.12</span></div>
+          <div class="card trendcard">
+            <div class="spread"><span class="small muted">Cumulative cost over turns</span><span class="small" style="color:var(--mj-status-warning);font-weight:700;">$1.86</span></div>
+            <div class="spark">
+              <i style="height:18%"></i><i style="height:24%"></i><i style="height:40%"></i>
+              <i style="height:48%"></i><i style="height:55%"></i><i style="height:72%"></i><i style="height:100%"></i>
+            </div>
+          </div>
+        </div>
+        <div class="composer">
+          <textarea class="textarea" placeholder="Message Sage…"></textarea>
+          <button class="btn"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> A slim, always-visible progress bar pinned under the header (color-ramped, with tick marks per message contribution). Clicking it slides open a drawer that attributes tokens + cost per message and charts cumulative cost across turns.</p>
+      <p><strong>Why world-class:</strong> Persistent ambient awareness with deep on-demand analytics — the bar is glanceable; the drawer turns "why is this conversation expensive?" into a one-click forensic view. Per-message attribution is genuinely actionable for power users and cost owners.</p>
+      <p><span class="tradeoff">Tradeoff:</span> Consumes vertical space every conversation, and the drawer competes with the artifact pane for screen real estate on narrow layouts.</p>
+    </div>
+  </div>
+
+  <!-- ============================ OPTION C ============================ -->
+  <div class="variant">
+    <div class="variant-head">
+      <span class="badge">Option C</span>
+      <h2>Ambient Ring + Proactive Nudge</h2>
+    </div>
+    <div class="variant-body">
+      <div class="demo-chat">
+        <div class="chat-header">
+          <div class="row">
+            <div class="chat-title">Incident Postmortem</div>
+            <span class="pill brand"><i class="fa-solid fa-robot"></i> Sage</span>
+          </div>
+          <div class="row"><button class="btn ghost sm"><i class="fa-solid fa-ellipsis"></i></button></div>
+        </div>
+        <div class="chat-body">
+          <div class="msg user"><div class="who">You</div>And the timeline for the third outage window?</div>
+          <div class="msg agent"><div class="who">Sage</div>Reconstructed from 9 log sources — here's the minute-by-minute.</div>
+        </div>
+
+        <!-- proactive nudge appears as context fills -->
+        <div style="padding:0 14px;">
+          <div class="nudge">
+            <i class="fa-solid fa-triangle-exclamation ic"></i>
+            <div>
+              Approaching the context limit (<b>88%</b>). Older messages may start getting trimmed — responses can lose earlier detail.
+              <div class="acts">
+                <button class="btn sm">Start fresh thread</button>
+                <button class="btn secondary sm">Summarize &amp; continue</button>
+              </div>
+            </div>
+            <button class="x" title="Dismiss"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+
+        <!-- composer wrapped in an ambient color ring -->
+        <div class="ambient-composer">
+          <div class="ambient-ring ramp-crit" style="--pct:88;">
+            <div class="ambient-inner">
+              <textarea class="textarea" placeholder="Message Sage…"></textarea>
+              <button class="btn"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+          <div class="ambient-meta ramp-crit" style="--pct:88;">
+            <span><span class="dot"></span> Context 88% · 901K / 1M tok</span>
+            <span>$3.42 this conversation</span>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--mj-status-success)"></i> ring grows + greens early</span>
+        <span><i style="background:var(--mj-status-warning)"></i> ambers, no nudge yet</span>
+        <span><i style="background:var(--mj-status-error)"></i> pulses + nudge fires</span>
+      </div>
+    </div>
+    <div class="variant-notes">
+      <p><strong>What:</strong> The composer itself is the gauge — a thin ring around the input fills and shifts green→amber→red as context grows, with a quiet token/cost line beneath. Crossing a threshold (~85%) triggers a one-time proactive nudge offering "Start fresh thread" or "Summarize &amp; continue."</p>
+      <p><strong>Why world-class:</strong> The signal lives exactly where the user's attention already is (the input they're about to type into), so it needs no hunting and no hover. It's the only option that's <em>proactive</em> — it intervenes before quality silently degrades and offers the fix in-flow, turning a hidden failure mode into a guided decision.</p>
+      <p><span class="tradeoff">Tradeoff:</span> A pulsing/coloring composer risks feeling alarmist or distracting; the nudge must be rate-limited and dismissible or it becomes nagware.</p>
+    </div>
+  </div>
+
+</div>
+
+<div style="max-width:1400px;margin:0 auto;padding:0 28px 32px;">
+  <div class="card">
+    <strong>Data source (all three):</strong>
+    <span class="muted small">
+      Per-message tokens &amp; cost are already captured on <code>MJ: AI Agent Runs</code> / <code>MJ: AI Prompt Runs</code>
+      (input/output token counts + computed cost). The denominator — context-window limit — comes from the agent's
+      <em>resolved model</em> (max-input-tokens on the selected <code>MJ: AI Models</code> row). The gauge aggregates run rows for the
+      conversation; no new persisted state is required.
+    </span>
+  </div>
+</div>
+
+</body>
+</html>
