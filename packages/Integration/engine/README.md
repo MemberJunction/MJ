@@ -21,6 +21,23 @@ External System → Connector → FieldMappingEngine → MatchEngine → MJ Enti
 | `WatermarkService` | Manages incremental sync watermarks |
 | `IntegrationOrchestrator` | Top-level coordinator that runs end-to-end sync |
 
+### Field mapping — the shared transform engine
+
+`FieldMappingEngine` owns only the **integration-specific** concerns: source flattening, field-map
+iteration, and unmapped-field overflow capture. The actual per-value transform pipeline
+(`direct` / `regex` / `split` / `combine` / `lookup` / `format` / `coerce` / `substring` / `custom`) is
+**not** implemented here — it's the shared `FieldTransformEngine` in
+[`@memberjunction/global`](../../MJGlobal/README.md#field-rules-engine), so integration sync and the
+rules-based bulk-update tool run the *exact same* transform implementation (fix or extend a transform
+once, everywhere benefits).
+
+Integration is the right home **when the other side is a live external system** — it owns the protocol,
+auth, discovery, match resolution, sync direction, watermarks, and dead-lettering, and borrows the
+shared engine only for the field transforms. When *both* sides are MJ data (updating an entity from its
+own fields / related entities / provided context), use
+[`EntityFieldRules`](../../MJCore/README.md#entity-field-rules) in `@memberjunction/core` instead — same
+engine underneath, metadata-aware on top.
+
 ## Quick Start
 
 ```typescript

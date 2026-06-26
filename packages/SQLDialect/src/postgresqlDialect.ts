@@ -158,6 +158,13 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'PostgresQL';
     }
 
+    /**
+     * PostgreSQL has no in-row row-size limit (TOAST stores oversized variable-length values
+     * out-of-line), so {@link MaxInRowSizeBytes} stays `null` (inherited). It does enforce a
+     * hard 1600-column-per-table cap.
+     */
+    override get MaxColumnCount(): number { return 1600; }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
@@ -177,6 +184,16 @@ export class PostgreSQLDialect extends SQLDialect {
      */
     QuoteColumnAlias(aliasName: string): string {
         return `"${aliasName}"`;
+    }
+
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, so the physical schema an
+     * unquoted `CREATE SCHEMA __mj_BizAppsCommon` produces is `__mj_bizappscommon`.
+     * Canonicalize to that lowercase form so the engine's quoted operations target the
+     * same physical schema as the app's (typically unquoted) migration DDL.
+     */
+    CanonicalSchemaName(name: string): string {
+        return name.toLowerCase();
     }
 
     // ─── Pagination ──────────────────────────────────────────────────

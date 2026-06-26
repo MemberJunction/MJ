@@ -45276,6 +45276,10 @@ export class MJEntityActionInvocation_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`}) 
+    @MaxLength(255)
+    RuntimeUXDriverClass?: string;
+        
     @Field() 
     @MaxLength(425)
     EntityAction: string;
@@ -45303,6 +45307,9 @@ export class CreateMJEntityActionInvocationInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    RuntimeUXDriverClass: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45324,6 +45331,9 @@ export class UpdateMJEntityActionInvocationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    RuntimeUXDriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -60698,6 +60708,10 @@ export class MJOpenApp_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`}) 
+    @MaxLength(500)
+    Subpath?: string;
+        
     @Field() 
     @MaxLength(100)
     InstalledByUser: string;
@@ -60772,6 +60786,9 @@ export class CreateMJOpenAppInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Subpath: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -60835,6 +60852,9 @@ export class UpdateMJOpenAppInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Subpath?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -62039,6 +62059,9 @@ export class MJProcessRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`}) 
+    DryRun: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -62134,6 +62157,9 @@ export class CreateMJProcessRunInput {
     @Field({ nullable: true })
     StartedByUserID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -62212,6 +62238,9 @@ export class UpdateMJProcessRunInput {
 
     @Field({ nullable: true })
     StartedByUserID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -68054,6 +68083,9 @@ export class MJRecordProcess_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -68176,6 +68208,9 @@ export class CreateMJRecordProcessInput {
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -68266,6 +68301,9 @@ export class UpdateMJRecordProcessInput {
 
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -68670,6 +68708,15 @@ export class MJRemoteOperation_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`}) 
+    CodeLocked: boolean;
+        
+    @Field({nullable: true, description: `The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`}) 
+    CodeComments?: string;
+        
+    @Field({nullable: true, description: `JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`}) 
+    Libraries?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -68757,6 +68804,15 @@ export class CreateMJRemoteOperationInput {
     @Field(() => Int, { nullable: true })
     MaxConcurrency: number | null;
 
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments: string | null;
+
+    @Field({ nullable: true })
+    Libraries: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -68838,6 +68894,15 @@ export class UpdateMJRemoteOperationInput {
 
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments?: string | null;
+
+    @Field({ nullable: true })
+    Libraries?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -170,6 +170,16 @@ export class ConfigurePhase {
       }
     }
 
+    // Step 2.5: .gitignore — guarantee the secrets just written (.env, .env.*) are
+    // git-ignored. Scaffolded MJ projects historically shipped without a .gitignore,
+    // so a `git init && git add .` committed real .env credentials into public repos.
+    const gitignoreResult = await this.ensureGitignoreProtectsEnv(context.Dir);
+    if (gitignoreResult.Written) {
+      filesWritten.push(gitignoreResult.Path);
+    } else {
+      filesPreserved.push(gitignoreResult.Path);
+    }
+
     // Step 3: mj.config.cjs — preserve existing, create if missing, patch encryption + user
     const configCjsPath = path.join(context.Dir, 'mj.config.cjs');
     if (!overwrite && await this.fileSystem.FileExists(configCjsPath)) {
@@ -407,6 +417,54 @@ export class ConfigurePhase {
   // ---------------------------------------------------------------------------
   // File generation
   // ---------------------------------------------------------------------------
+
+  /**
+   * Ensures the install directory has a `.gitignore` that ignores environment
+   * secret files (`.env`, `.env.*`) while keeping the committed `.env.example`.
+   *
+   * Idempotent: creates the file when absent, and appends only the missing entries
+   * when one already exists (never reorders or rewrites the user's existing lines).
+   *
+   * Fixes the original scaffolding gap where a generated project shipped without a
+   * `.gitignore`, so the real `.env` written by this phase could be committed to a
+   * public repo.
+   *
+   * @param dir - Install directory root.
+   * @returns The `.gitignore` path and whether it was created/modified.
+   */
+  private async ensureGitignoreProtectsEnv(dir: string): Promise<{ Path: string; Written: boolean }> {
+    const gitignorePath = path.join(dir, '.gitignore');
+    // `.env.*` also matches `.env.example`, so re-include it with a negation that
+    // must follow the broad pattern to take effect.
+    const requiredEntries = ['.env', '.env.*', '!.env.example'];
+
+    if (await this.fileSystem.FileExists(gitignorePath)) {
+      const existing = await this.fileSystem.ReadText(gitignorePath);
+      const lines = existing.split(/\r?\n/).map((l) => l.trim());
+      const missing = requiredEntries.filter((entry) => !lines.includes(entry));
+      if (missing.length === 0) {
+        return { Path: gitignorePath, Written: false };
+      }
+      const appended =
+        existing.replace(/\s*$/, '') +
+        '\n\n# Environment secrets (added by MJ installer)\n' +
+        missing.join('\n') +
+        '\n';
+      await this.fileSystem.WriteText(gitignorePath, appended);
+      return { Path: gitignorePath, Written: true };
+    }
+
+    const body =
+      '# Environment secrets — never commit real credentials\n' +
+      '.env\n' +
+      '.env.*\n' +
+      '!.env.example\n\n' +
+      '# Dependencies & build output\n' +
+      'node_modules/\n' +
+      'dist/\n';
+    await this.fileSystem.WriteText(gitignorePath, body);
+    return { Path: gitignorePath, Written: true };
+  }
 
   /**
    * Write a fresh `.env` file with all config values including the encryption key.
