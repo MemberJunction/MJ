@@ -138,10 +138,10 @@
                   }
                 </div>
               } @else {
-                <div class="empty-section">
-                  <i class="fa-solid fa-table-columns"></i>
-                  <span>No fields defined</span>
-                </div>
+                <mj-empty-state
+                  Size="compact"
+                  Icon="fa-solid fa-table-columns"
+                  Title="No fields defined" />
               }
             </div>
           }
@@ -188,10 +188,10 @@
                   }
                 </div>
               } @else {
-                <div class="empty-section">
-                  <i class="fa-solid fa-sliders"></i>
-                  <span>No parameters required</span>
-                </div>
+                <mj-empty-state
+                  Size="compact"
+                  Icon="fa-solid fa-sliders"
+                  Title="No parameters required" />
               }
             </div>
           }
@@ -216,10 +216,10 @@
                   </mj-code-editor>
                 </div>
               } @else {
-                <div class="empty-section">
-                  <i class="fa-solid fa-code"></i>
-                  <span>SQL not available</span>
-                </div>
+                <mj-empty-state
+                  Size="compact"
+                  Icon="fa-solid fa-code"
+                  Title="SQL not available" />
               }
             </div>
           }

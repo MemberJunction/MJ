@@ -99,22 +99,6 @@
   overflow-y: auto;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  color: var(--mj-text-secondary);
-  text-align: center;
-}
-
-.empty-state i {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.5;
-}
-
 .app-item {
   display: flex;
   align-items: center;

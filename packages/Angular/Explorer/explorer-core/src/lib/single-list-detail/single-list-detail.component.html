@@ -268,11 +268,12 @@
             <mj-loading text="Loading lists..." size="small"></mj-loading>
           </div>
         } @else if (filteredMoveCopyTargets.length === 0) {
-          <div class="empty-results">
-            <span class="fa-solid fa-list empty-icon"></span>
-            <p>No other lists found for this entity.</p>
+          <mj-empty-state
+            Size="compact"
+            Icon="fa-solid fa-list"
+            Title="No other lists found for this entity.">
             <p class="dialog-note">Create a new list first if you need a new target.</p>
-          </div>
+          </mj-empty-state>
         } @else {
           <div class="records-scroll move-copy-targets">
             @for (target of filteredMoveCopyTargets; track target.ID) {
@@ -406,15 +407,16 @@
               <mj-loading [showText]="false" size="small"></mj-loading>
             </div>
           } @else if (addableRecords.length === 0 && addRecordsSearchFilter.length >= 2) {
-            <div class="empty-results">
-              <span class="fa-solid fa-search empty-icon"></span>
-              <p>No records found matching "{{ addRecordsSearchFilter }}"</p>
-            </div>
+            <mj-empty-state
+              Variant="no-results"
+              Size="compact"
+              Icon="fa-solid fa-magnifying-glass"
+              [Title]="AddRecordsNoMatchTitle" />
           } @else if (addableRecords.length === 0) {
-            <div class="empty-results">
-              <span class="fa-solid fa-list empty-icon"></span>
-              <p>Search for records to add to this list</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-list"
+              Title="Search for records to add to this list" />
           } @else {
             <!-- Selection controls -->
             <div class="selection-controls">
@@ -566,10 +568,10 @@
         <p class="dialog-instruction">Select views to add their records to this list:</p>
         <div class="views-list">
           @if (!userViews || userViews.length === 0) {
-            <div class="empty-results">
-              <span class="fa-solid fa-folder-open empty-icon"></span>
-              <p>No saved views found for this entity</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-folder-open"
+              Title="No saved views found for this entity" />
           } @else {
             @for (view of userViews; track view.ID) {
               <div class="view-item"

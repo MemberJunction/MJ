@@ -389,10 +389,10 @@
           </div>
           <!-- Empty state -->
           @if (FilteredSnapshotGroups.length === 0) {
-            <div class="tab-empty">
-              <i class="fa-solid fa-camera tab-empty-icon"></i>
-              <p>No snapshot items found.</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-camera"
+              Title="No snapshot items found." />
           }
         </div>
       }
@@ -417,17 +417,18 @@
                 }
               }
               @if (DependencyTree.length === 0) {
-                <div class="dep-empty">
-                  <p>No dependent entities found.</p>
-                </div>
+                <mj-empty-state
+                  Size="compact"
+                  Icon="fa-solid fa-diagram-project"
+                  Title="No dependent entities found." />
               }
             </div>
           }
           @if (!IsLoadingDependencies && !Label.EntityID) {
-            <div class="tab-empty">
-              <i class="fa-solid fa-diagram-project tab-empty-icon"></i>
-              <p>No entity associated with this label.</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-diagram-project"
+              Title="No entity associated with this label." />
           }
         </div>
       }
@@ -546,10 +547,10 @@
             }
             <!-- No changes -->
             @if (DiffResult.EntityGroups.length === 0 && DiffResult.Summary.Changed === 0) {
-              <div class="tab-empty">
-                <i class="fa-solid fa-circle-check tab-empty-icon" style="color: #10b981;"></i>
-                <p>No changes detected since this label was created.</p>
-              </div>
+              <mj-empty-state
+                Size="compact"
+                Variant="success"
+                Title="No changes detected since this label was created." />
             }
           }
         </div>
@@ -616,10 +617,10 @@
             }
             <!-- Empty -->
             @if (Restores.length === 0 && RelatedLabels.length === 0) {
-              <div class="tab-empty">
-                <i class="fa-solid fa-clock-rotate-left tab-empty-icon"></i>
-                <p>No restore history or related labels found.</p>
-              </div>
+              <mj-empty-state
+                Size="compact"
+                Icon="fa-solid fa-clock-rotate-left"
+                Title="No restore history or related labels found." />
             }
           }
         </div>

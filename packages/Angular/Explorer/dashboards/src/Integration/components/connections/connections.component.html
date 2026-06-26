@@ -34,15 +34,12 @@
 
     <!-- Empty state -->
     @if (!IsLoading && Connections.length === 0) {
-      <div class="empty-state">
-        <i class="fa-solid fa-plug empty-icon"></i>
-        <h3>No integrations yet</h3>
-        <p>Connect your first external system to start syncing data.</p>
-        <button mjButton variant="primary" (click)="OpenWizard()">
-          <i class="fa-solid fa-plus"></i>
-          Add Your First Integration
-        </button>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-plug"
+        Title="No integrations yet"
+        Message="Connect your first external system to start syncing data."
+        ActionText="Add Your First Integration"
+        ActionIcon="fa-solid fa-plus"
+        (Action)="OpenWizard()" />
     }
 
     <!-- Card grid -->
@@ -609,14 +606,11 @@
             <mj-loading text="Loading entity maps..."></mj-loading>
           </div>
         } @else if (DetailEntityMaps.length === 0 && !ShowAddMapPanel) {
-          <div class="detail-empty">
-            <i class="fa-solid fa-cube"></i>
-            <h3>No entity maps configured</h3>
-            <p>Entity maps define how external objects sync to MJ entities.</p>
-            <button class="add-map-btn add-map-btn-lg" (click)="ToggleAddMapPanel()">
-              <i class="fa-solid fa-plus"></i> Add Your First Entity Map
-            </button>
-          </div>
+          <mj-empty-state class="detail-empty" Icon="fa-solid fa-cube"
+            Title="No entity maps configured"
+            Message="Entity maps define how external objects sync to MJ entities."
+            ActionText="Add Your First Entity Map" ActionIcon="fa-solid fa-plus"
+            (Action)="ToggleAddMapPanel()" />
         } @else if (DetailEntityMaps.length > 0) {
           <!-- Table header -->
           <div class="detail-table-head">

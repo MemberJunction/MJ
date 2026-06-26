@@ -172,21 +172,19 @@
       @if (Loading) {
         <mj-loading text="Loading session data..." size="medium"></mj-loading>
       } @else if (LoadError) {
-        <div class="error-state">
-          <i class="fas fa-exclamation-triangle fa-2x"></i>
-          <p>{{ LoadError }}</p>
-        </div>
+        <mj-empty-state
+          Variant="error"
+          [Message]="LoadError" />
       } @else {
 
         <!-- Runs tab: the session's delegated run tree -->
         @if (ActiveTab === 'runs') {
           <div class="tab-content">
             @if (RunTree.length === 0) {
-              <div class="empty-state">
-                <i class="fas fa-diagram-project fa-2x"></i>
-                <h4>No Runs</h4>
-                <p>No agent runs have been recorded for this session yet.</p>
-              </div>
+              <mj-empty-state
+                Icon="fa-solid fa-diagram-project"
+                Title="No Runs"
+                Message="No agent runs have been recorded for this session yet." />
             } @else {
               <div class="run-tree">
                 @for (node of RunTree; track node.id) {
@@ -238,11 +236,10 @@
         @if (ActiveTab === 'channels') {
           <div class="tab-content">
             @if (Channels.length === 0) {
-              <div class="empty-state">
-                <i class="fas fa-plug fa-2x"></i>
-                <h4>No Channels</h4>
-                <p>No channel instances were attached to this session.</p>
-              </div>
+              <mj-empty-state
+                Icon="fa-solid fa-plug"
+                Title="No Channels"
+                Message="No channel instances were attached to this session." />
             } @else {
               <div class="channels-grid-wrap">
                 <table class="channels-grid">
@@ -301,11 +298,10 @@
         @if (ActiveTab === 'transcript') {
           <div class="tab-content">
             @if (Transcript.length === 0) {
-              <div class="empty-state">
-                <i class="fas fa-comments fa-2x"></i>
-                <h4>No Transcript</h4>
-                <p>No conversation messages were stamped with this session.</p>
-              </div>
+              <mj-empty-state
+                Icon="fa-solid fa-comments"
+                Title="No Transcript"
+                Message="No conversation messages were stamped with this session." />
             } @else {
               <div class="transcript-thread">
                 @for (turn of Transcript; track turn.ID) {

@@ -2,7 +2,7 @@ import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
-import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
@@ -144,6 +144,7 @@ import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/
         ReactiveFormsModule,
         DragDropModule,
         AgGridModule,
+        MJEmptyStateComponent,
         MJButtonDirective,
         MJAccordionPanelComponent,
         MJAccordionTitleDirective,

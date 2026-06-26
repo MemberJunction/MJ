@@ -342,21 +342,6 @@
     overflow: auto;
 }
 
-/* Empty State */
-.empty-section {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 16px;
-    color: var(--mj-text-muted);
-    font-style: italic;
-}
-
-.empty-section i {
-    font-size: 16px;
-    opacity: 0.6;
-}
-
 /* Footer */
 .panel-footer {
     display: flex;

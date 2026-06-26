@@ -236,6 +236,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return this.filteredAppEntityGroups.reduce((sum, g) => sum + g.entities.length, 0);
   }
 
+  /** No-results message for the entity list (echoes the filter text). */
+  get NoEntityResultsMessage(): string {
+    return `No entities match "${this.entityFilterText}".`;
+  }
+
   /**
    * Count of applications that have at least one visible entity
    */
