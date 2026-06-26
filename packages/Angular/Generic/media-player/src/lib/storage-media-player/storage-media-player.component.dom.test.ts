@@ -8,7 +8,7 @@ import { MJStorageMediaPlayerComponent } from './storage-media-player.component'
  * payload keyed by fileId, so the wrapper resolves streaming URLs without any network.
  */
 function stubProvider(
-  byFileId: Record<string, { Success: boolean; Url?: string; MimeType?: string; ErrorMessage?: string }>,
+  byFileId: Record<string, { Success: boolean; Url?: string; MimeType?: string; Peaks?: number[]; ErrorMessage?: string }>,
 ): IMetadataProvider {
   const ExecuteGQL = vi.fn(async (_query: string, vars: { fileId: string }) => ({
     CreateMediaAccessToken: byFileId[vars.fileId] ?? { Success: false, ErrorMessage: 'unknown' },
@@ -67,6 +67,39 @@ describe('MJStorageMediaPlayerComponent — streaming-URL resolution', () => {
 
     expect(fixture.componentInstance.ResolvedTracks).toHaveLength(0);
     expect(fixture.componentInstance.AccessError).toContain('do not have access');
+  });
+
+  it('sets MediaTrack.Peaks from the mutation result so the player skips client-side decode', async () => {
+    const provider = stubProvider({
+      'FILE-P': {
+        Success: true,
+        Url: 'http://localhost:4000/media/FILE-P?token=p',
+        MimeType: 'audio/wav',
+        Peaks: [0, 0.5, 1, 0.25],
+      },
+    });
+    const fixture = renderComponentFixture(MJStorageMediaPlayerComponent, {
+      inputs: { Provider: provider, FileID: 'FILE-P' },
+    });
+    await flush();
+
+    const tracks = fixture.componentInstance.ResolvedTracks;
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].Peaks).toEqual([0, 0.5, 1, 0.25]);
+  });
+
+  it('leaves MediaTrack.Peaks undefined when the result omits peaks', async () => {
+    const provider = stubProvider({
+      'FILE-NP': { Success: true, Url: 'http://localhost:4000/media/FILE-NP?token=np', MimeType: 'audio/wav' },
+    });
+    const fixture = renderComponentFixture(MJStorageMediaPlayerComponent, {
+      inputs: { Provider: provider, FileID: 'FILE-NP' },
+    });
+    await flush();
+
+    const tracks = fixture.componentInstance.ResolvedTracks;
+    expect(tracks).toHaveLength(1);
+    expect(tracks[0].Peaks).toBeUndefined();
   });
 
   it('defaults Kind to audio when MimeType is absent', async () => {

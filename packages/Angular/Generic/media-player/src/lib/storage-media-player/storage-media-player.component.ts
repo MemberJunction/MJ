@@ -20,6 +20,12 @@ interface CreateMediaAccessTokenResult {
   Url?: string | null;
   ExpiresAt?: string | null;
   MimeType?: string | null;
+  /**
+   * Optional precomputed waveform peaks (normalized `0..1`, one per bar) read from a `peaks.json`
+   * sidecar beside the file. When present, the player renders the real waveform instantly with NO
+   * client-side fetch/decode of the audio. Absent → the player falls back to client-side extraction.
+   */
+  Peaks?: number[] | null;
   ErrorMessage?: string | null;
 }
 
@@ -34,6 +40,7 @@ const CREATE_MEDIA_ACCESS_TOKEN_MUTATION = `mutation CreateMediaAccessToken($fil
     Url
     ExpiresAt
     MimeType
+    Peaks
     ErrorMessage
   }
 }`;
@@ -48,9 +55,11 @@ const CREATE_MEDIA_ACCESS_TOKEN_MUTATION = `mutation CreateMediaAccessToken($fil
  * large video) instead of base64'ing the whole file over GraphQL. Surfaces graceful loading /
  * no-access / empty states.
  *
- * NOTE: server-side waveform peaks is a future optimization. For now audio waveforms decode
- * client-side via the streaming URL (the waveform's one-time `fetch(Url)` issues a no-Range GET,
- * which returns the full file — fine for audio). Video shows the progress bar, not a waveform.
+ * Waveform peaks: when the recording has a `peaks.json` sidecar in storage, `CreateMediaAccessToken`
+ * returns precomputed peaks and this wrapper sets them on the {@link MediaTrack.Peaks}, so the player
+ * renders the real waveform instantly with NO client-side fetch/decode. When no sidecar exists, audio
+ * waveforms still decode client-side via the streaming URL (the waveform's one-time `fetch(Url)`
+ * issues a no-Range GET, which returns the full file — fine for audio). Video shows the progress bar.
  */
 @Component({
   selector: 'mj-storage-media-player',
@@ -106,6 +115,8 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
   // ---------------------------------------------------------------------------
 
   @Input() ShowTranscript = true;
+  /** Whether the transcript show/hide toggle button renders. Forwarded to the generic player. */
+  @Input() ShowTranscriptToggle = true;
   @Input() ShowSpeedControl = true;
   @Input() ShowSkipControls = true;
   @Input() ShowVolume = true;
@@ -119,7 +130,8 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
   @Input() PlaybackRates: number[] = [0.5, 1, 1.25, 1.5, 2];
   @Input() Autoplay = false;
   @Input() StartAtMs: number | null = null;
-  @Input() TranscriptPosition: 'side' | 'bottom' = 'side';
+  /** Where the transcript sits. Defaults to `'bottom'` (matches the generic player). */
+  @Input() TranscriptPosition: 'side' | 'bottom' = 'bottom';
 
   // ---------------------------------------------------------------------------
   // State
@@ -180,7 +192,7 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
         return; // a newer resolution superseded this one
       }
       if (result && result.Success && result.Url) {
-        tracks.push(this.buildTrack(id, result.Url, result.MimeType ?? null));
+        tracks.push(this.buildTrack(id, result.Url, result.MimeType ?? null, result.Peaks ?? null));
       } else if (!firstError) {
         firstError = result?.ErrorMessage || 'This recording is not available.';
       }
@@ -210,15 +222,24 @@ export class MJStorageMediaPlayerComponent extends BaseAngularComponent implemen
     }
   }
 
-  /** Builds a MediaTrack from the streaming URL. Kind is MIME-derived (defaults to audio). */
-  private buildTrack(fileId: string, url: string, mimeType: string | null): MediaTrack {
+  /**
+   * Builds a MediaTrack from the streaming URL. Kind is MIME-derived (defaults to audio). When the
+   * server supplied precomputed waveform `peaks` (from a peaks.json sidecar), they're attached so the
+   * player renders the real waveform instantly with NO extra fetch/decode; otherwise the player
+   * extracts peaks client-side from the streaming URL.
+   */
+  private buildTrack(fileId: string, url: string, mimeType: string | null, peaks: number[] | null): MediaTrack {
     const mime = mimeType || undefined;
-    return {
+    const track: MediaTrack = {
       Id: fileId,
       Kind: mime && mime.startsWith('video') ? 'video' : 'audio',
       Url: url,
       MimeType: mime,
     };
+    if (Array.isArray(peaks) && peaks.length > 0) {
+      track.Peaks = peaks;
+    }
+    return track;
   }
 
   private collectFileIds(): string[] {

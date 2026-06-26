@@ -2432,6 +2432,10 @@ export class BaseAgent {
             }
 
             const md = params.provider || this._activeProvider;
+            // Capture-time waveform peaks (max-abs per bucket, normalized 0..1) computed from the
+            // same mixed PCM as the WAV — persisted as a peaks.json sidecar so the player renders the
+            // real waveform without re-decoding the audio. Best-effort: an empty array writes no sidecar.
+            const peaks = controller.GetPeaks();
             const fileID = await storeRealtimeRecording({
                 Audio: encoded.Buffer,
                 MimeType: 'audio/wav',
@@ -2440,7 +2444,8 @@ export class BaseAgent {
                 StorageAccountID: storageAccountId,
                 SessionID: sessionID,
                 ContextUser: contextUser,
-                Provider: md
+                Provider: md,
+                Peaks: peaks.length > 0 ? peaks : undefined
             });
             if (fileID) {
                 this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${fileID}).`, true, params);

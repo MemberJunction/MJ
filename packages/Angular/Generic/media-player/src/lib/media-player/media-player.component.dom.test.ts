@@ -114,3 +114,59 @@ describe('MJMediaPlayerComponent — SeekToCue play/reposition decision', () => 
     expect(instance.ActiveCueIndex).toBe(0);
   });
 });
+
+describe('MJMediaPlayerComponent — transcript default position + show/hide toggle', () => {
+  it('defaults TranscriptPosition to "bottom"', () => {
+    const fixture = renderComponentFixture(MJMediaPlayerComponent, {
+      inputs: { Tracks: [audioTrack], Transcript: cues },
+    });
+    expect(fixture.componentInstance.TranscriptPosition).toBe('bottom');
+  });
+
+  it('shows the transcript by default when one is provided', () => {
+    const fixture = renderComponentFixture(MJMediaPlayerComponent, {
+      inputs: { Tracks: [audioTrack], Transcript: cues },
+    });
+    const instance = fixture.componentInstance;
+    expect(instance.TranscriptVisible).toBe(true);
+    expect(instance.ShowTranscriptPanel).toBe(true);
+    expect(instance.ShowTranscriptToggleButton).toBe(true);
+  });
+
+  it('ToggleTranscript hides/shows the panel and emits the new visibility', () => {
+    const fixture = renderComponentFixture(MJMediaPlayerComponent, {
+      inputs: { Tracks: [audioTrack], Transcript: cues },
+    });
+    const instance = fixture.componentInstance;
+    const emitted: boolean[] = [];
+    instance.TranscriptVisibilityChanged.subscribe((v) => emitted.push(v));
+
+    instance.ToggleTranscript();
+    expect(instance.TranscriptVisible).toBe(false);
+    expect(instance.ShowTranscriptPanel).toBe(false); // panel reclaimed
+    // Toggle button stays present so the user can re-show it.
+    expect(instance.ShowTranscriptToggleButton).toBe(true);
+
+    instance.ToggleTranscript();
+    expect(instance.TranscriptVisible).toBe(true);
+    expect(instance.ShowTranscriptPanel).toBe(true);
+
+    expect(emitted).toEqual([false, true]);
+  });
+
+  it('does not render the toggle button when ShowTranscriptToggle is false', () => {
+    const fixture = renderComponentFixture(MJMediaPlayerComponent, {
+      inputs: { Tracks: [audioTrack], Transcript: cues, ShowTranscriptToggle: false },
+    });
+    expect(fixture.componentInstance.ShowTranscriptToggleButton).toBe(false);
+  });
+
+  it('has no transcript panel or toggle when no transcript is supplied', () => {
+    const fixture = renderComponentFixture(MJMediaPlayerComponent, {
+      inputs: { Tracks: [audioTrack] },
+    });
+    const instance = fixture.componentInstance;
+    expect(instance.ShowTranscriptPanel).toBe(false);
+    expect(instance.ShowTranscriptToggleButton).toBe(false);
+  });
+});

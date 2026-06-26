@@ -283,4 +283,81 @@ describe('RealtimeRecordingController', () => {
             expect(wav.DurationMs).toBeCloseTo(1000, 5);
         });
     });
+
+    describe('GetPeaks', () => {
+        it('returns [] when nothing captured', () => {
+            const c = new RealtimeRecordingController({ Now: clock.Now });
+            c.Start();
+            expect(c.GetPeaks()).toEqual([]);
+        });
+
+        it('produces normalized 0..1 peaks (loudest bucket becomes 1)', () => {
+            const rate = 24000;
+            const c = new RealtimeRecordingController({ Now: clock.Now, OutputSampleRate: rate });
+            clock.Value = 0;
+            c.Start(); // t0 = 0
+            // Quiet frame (amplitude 1000), 4 samples, at offset 0 → samples [0..3].
+            c.AppendOutbound(pcm16(1000, -1000, 1000, -1000));
+            // Loud frame (amplitude 4000), 4 samples, at offset 1000ms → sample 24000 (far ahead,
+            // so the two frames land in the two distinct halves of the 2-bucket downsample).
+            clock.Value = 1000;
+            c.AppendOutbound(pcm16(4000, -4000, 4000, -4000));
+            const peaks = c.GetPeaks(2);
+            expect(peaks).toHaveLength(2);
+            // Quiet bucket relative to the loud one: 1000/4000 = 0.25; loud bucket normalizes to 1.
+            expect(peaks[0]).toBeCloseTo(0.25, 5);
+            expect(peaks[1]).toBeCloseTo(1, 5);
+            // Every value is within [0, 1].
+            for (const v of peaks) {
+                expect(v).toBeGreaterThanOrEqual(0);
+                expect(v).toBeLessThanOrEqual(1);
+            }
+        });
+
+        it('uses max-abs within a bucket (negative peak dominates)', () => {
+            const rate = 24000;
+            const c = new RealtimeRecordingController({ Now: clock.Now, OutputSampleRate: rate });
+            clock.Value = 0;
+            c.Start();
+            // Single bucket whose loudest sample is a large negative value.
+            c.AppendOutbound(pcm16(100, -8000, 200, 300));
+            const peaks = c.GetPeaks(1);
+            expect(peaks).toHaveLength(1);
+            // Only one bucket → it normalizes to itself = 1 (max-abs found the |-8000|).
+            expect(peaks[0]).toBeCloseTo(1, 5);
+        });
+
+        it('caps bucket count at the sample count for short recordings', () => {
+            const rate = 24000;
+            const c = new RealtimeRecordingController({ Now: clock.Now, OutputSampleRate: rate });
+            clock.Value = 0;
+            c.Start();
+            c.AppendOutbound(pcm16(1000, 2000, 3000)); // 3 samples
+            // Request 600 buckets but only 3 samples exist → at most 3 peaks.
+            const peaks = c.GetPeaks(600);
+            expect(peaks).toHaveLength(3);
+        });
+
+        it('returns [] for an all-silent timeline', () => {
+            const rate = 24000;
+            const c = new RealtimeRecordingController({ Now: clock.Now, OutputSampleRate: rate });
+            clock.Value = 0;
+            c.Start();
+            c.AppendOutbound(pcm16(0, 0, 0, 0));
+            expect(c.GetPeaks()).toEqual([]);
+        });
+
+        it('defaults to 600 buckets for a long recording', () => {
+            const rate = 24000;
+            const c = new RealtimeRecordingController({ Now: clock.Now, OutputSampleRate: rate });
+            clock.Value = 0;
+            c.Start();
+            const block: number[] = [];
+            for (let i = 0; i < 5000; i++) {
+                block.push((i % 100) - 50); // varied non-silent signal
+            }
+            c.AppendOutbound(pcm16(...block));
+            expect(c.GetPeaks()).toHaveLength(600);
+        });
+    });
 });

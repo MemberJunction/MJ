@@ -1,12 +1,17 @@
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  height: 100%;
+  min-height: 0;
   color: var(--mj-text-primary);
 }
 
 .mj-media-player {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
   gap: 0;
   background: var(--mj-bg-surface);
   border: 1px solid var(--mj-border-default);
@@ -30,6 +35,15 @@
   flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * Audio layouts keep the stage + transport compact at the top so the transcript can
+ * grow to fill the remaining height. Video layouts let the main area grow to fill space.
+ */
+.mj-media-player--audio.mj-media-player--bottom-transcript .mj-media-main {
+  flex: 0 0 auto;
 }
 
 /* ---------------------------------------------------------------- Empty / error */
@@ -65,6 +79,13 @@
   min-height: 80px;
 }
 
+/* Video stages grow to fill the available height of the player. */
+.mj-media-player--video .mj-media-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
 .mj-media-audio {
   display: none;
 }
@@ -83,9 +104,12 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
+  width: 100%;
+  box-sizing: border-box;
   height: 96px;
   padding: 0.75rem 1rem;
+  overflow: hidden;
   cursor: pointer;
   touch-action: none;
   outline: none;
@@ -97,8 +121,14 @@
 }
 
 .mj-media-waveform__bar {
-  flex: 1 1 auto;
-  min-width: 2px;
+  /*
+   * flex: 1 1 0 + min-width: 0 makes every bar share the row equally and compress to
+   * fit — N bars always span exactly the container width with no horizontal overflow,
+   * however narrow the widget gets. (A non-zero flex-basis or min-width would let the
+   * bars sum past 100% and spill.)
+   */
+  flex: 1 1 0;
+  min-width: 0;
   min-height: 2px;
   align-self: center;
   background: var(--mj-border-strong);
@@ -161,6 +191,9 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 4px;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   background: var(--mj-bg-surface-sunken);
 }
 
@@ -171,6 +204,7 @@
 .mj-media-video-cell {
   position: relative;
   display: flex;
+  min-height: 0;
 }
 
 .mj-media-video-cell__label {
@@ -190,6 +224,16 @@
   height: auto;
   display: block;
   background: var(--mj-bg-surface-sunken);
+}
+
+/*
+ * A single video fills the available stage height, letterboxed (object-fit: contain)
+ * so it never crops or stretches. Multi-video cells keep their natural height-by-width.
+ */
+.mj-media-video-grid:not(.mj-media-video-grid--multi) .mj-media-video {
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
 }
 
 /* ---------------------------------------------------------------- Busy overlay (loading / buffering) */
@@ -407,6 +451,16 @@
   background: var(--mj-brand-primary-active);
 }
 
+/* Active/pressed toggle state (e.g. transcript visible) — tinted to read as "on". */
+.mj-media-btn--active {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
+.mj-media-btn--active:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, transparent);
+}
+
 .mj-media-btn__skip-label {
   font-size: 0.625rem;
   font-variant-numeric: tabular-nums;
@@ -498,11 +552,18 @@
   padding: 0.5rem;
 }
 
+/*
+ * Bottom transcript: full width, below the player, growing to fill the remaining
+ * height of the container (min-height: 0 lets it shrink so its own overflow-y scrolls
+ * internally instead of pushing the player taller). No fixed max-height → no dead space.
+ */
 .mj-media-player--bottom-transcript .mj-media-transcript {
   width: auto;
   border-left: none;
   border-top: 1px solid var(--mj-border-subtle);
-  max-height: 240px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .mj-media-cue {

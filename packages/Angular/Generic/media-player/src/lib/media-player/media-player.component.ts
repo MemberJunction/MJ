@@ -23,6 +23,11 @@ import {
 } from '../media-player.types';
 import { computeActiveCueIndex } from './cue-utils';
 import { MediaStateContext, MediaStateEvent, nextPlaybackState } from './playback-state';
+import {
+  TranscriptPosition,
+  resolveTranscriptToggleVisible,
+  resolveTranscriptVisible,
+} from './transcript-layout';
 import { DEFAULT_WAVEFORM_BARS, downsamplePeaks } from './waveform-utils';
 
 /**
@@ -84,6 +89,8 @@ export class MJMediaPlayerComponent implements OnDestroy {
   set Transcript(value: MediaTranscriptCue[] | null) {
     this._transcript = value;
     this._activeCueIndex = -1;
+    // A newly-supplied transcript defaults to visible (the user can hide it via the toggle).
+    this._transcriptUserVisible = true;
     this.cdr.markForCheck();
   }
   get Transcript(): MediaTranscriptCue[] | null {
@@ -97,6 +104,8 @@ export class MJMediaPlayerComponent implements OnDestroy {
   @Input() StartAtMs: number | null = null;
   /** Whether the transcript panel is shown (when a transcript is provided). */
   @Input() ShowTranscript = true;
+  /** Whether the transcript show/hide toggle button renders in the transport bar. */
+  @Input() ShowTranscriptToggle = true;
   /** Whether the playback-rate menu is shown. */
   @Input() ShowSpeedControl = true;
   /** Whether the ±skip buttons are shown. */
@@ -122,8 +131,12 @@ export class MJMediaPlayerComponent implements OnDestroy {
   @Input() InitialRate = 1;
   /** The initial volume (0..1). */
   @Input() InitialVolume = 1;
-  /** Where the transcript panel sits relative to the media. */
-  @Input() TranscriptPosition: 'side' | 'bottom' = 'side';
+  /**
+   * Where the transcript panel sits relative to the media. Defaults to `'bottom'`
+   * (full width below the player, filling remaining height) which reads better than
+   * the narrower side layout; consumers can opt into `'side'`.
+   */
+  @Input() TranscriptPosition: TranscriptPosition = 'bottom';
 
   // ---------------------------------------------------------------------------
   // Outputs — Before* are cancelable (set event.Cancel = true to abort)
@@ -144,6 +157,8 @@ export class MJMediaPlayerComponent implements OnDestroy {
   @Output() Ended = new EventEmitter<void>();
   /** Emits whenever the primary element's {@link MediaPlaybackState} transitions. */
   @Output() StateChanged = new EventEmitter<MediaPlaybackState>();
+  /** Emits the new visibility (`true` = shown) whenever the transcript is toggled. */
+  @Output() TranscriptVisibilityChanged = new EventEmitter<boolean>();
 
   // ---------------------------------------------------------------------------
   // View references
@@ -173,6 +188,8 @@ export class MJMediaPlayerComponent implements OnDestroy {
   private _suppressTimeUpdate = false;
   private _activeMediaEl: HTMLMediaElement | null = null;
   private _rateInitialized = false;
+  /** Runtime (toggle-driven) transcript visibility. Reset to `true` when a transcript is set. */
+  private _transcriptUserVisible = true;
 
   /** The high-level playback lifecycle state of the primary element. */
   private _mediaState: MediaPlaybackState = 'idle';
@@ -280,8 +297,24 @@ export class MJMediaPlayerComponent implements OnDestroy {
   get HasTracks(): boolean {
     return this._tracks.length > 0;
   }
+  /** Whether a transcript (one or more cues) is available, regardless of visibility. */
+  get HasTranscript(): boolean {
+    return !!this._transcript && this._transcript.length > 0;
+  }
+  /**
+   * Whether the transcript panel should render right now — requires a transcript,
+   * the `ShowTranscript` master switch, AND the runtime toggle to be visible.
+   */
   get ShowTranscriptPanel(): boolean {
-    return this.ShowTranscript && !!this._transcript && this._transcript.length > 0;
+    return resolveTranscriptVisible(this.HasTranscript, this.ShowTranscript, this._transcriptUserVisible);
+  }
+  /** The current runtime visibility of the transcript (toggle-driven). */
+  get TranscriptVisible(): boolean {
+    return this._transcriptUserVisible;
+  }
+  /** Whether the transcript show/hide toggle button should render in the transport. */
+  get ShowTranscriptToggleButton(): boolean {
+    return resolveTranscriptToggleVisible(this.HasTranscript, this.ShowTranscript, this.ShowTranscriptToggle);
   }
   get ScrubFraction(): number {
     return this._durationMs > 0 ? this._currentTimeMs / this._durationMs : 0;
@@ -488,6 +521,16 @@ export class MJMediaPlayerComponent implements OnDestroy {
     } else {
       this.EnterFullscreen();
     }
+  }
+
+  /**
+   * Show/hide the transcript panel (pure component state — nothing is persisted).
+   * Emits {@link TranscriptVisibilityChanged} with the new visibility.
+   */
+  ToggleTranscript(): void {
+    this._transcriptUserVisible = !this._transcriptUserVisible;
+    this.TranscriptVisibilityChanged.emit(this._transcriptUserVisible);
+    this.cdr.markForCheck();
   }
 
   // ---------------------------------------------------------------------------

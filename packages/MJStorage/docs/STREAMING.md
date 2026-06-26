@@ -5,6 +5,10 @@
 object in memory**. This complements `GetObject`, which returns the entire object as a
 `Buffer` and is only appropriate for small payloads you genuinely need fully in memory.
 
+All seven built-in drivers (Box, AWS S3, Azure Blob, Google Cloud Storage, Google Drive,
+SharePoint, Dropbox) support ranged streaming. See the [provider support table](#provider-support)
+for the per-provider backing call and caveats.
+
 ## TL;DR
 
 ```typescript
@@ -99,10 +103,26 @@ try {
 | **Box** | ✅ `true` | `downloads.downloadFile(fileId, { headers: { range } })` → readable stream. Size/content-type are sourced from `GetObjectMetadata` (the Box stream call doesn't surface them). |
 | **AWS S3** | ✅ `true` | `GetObjectCommand` with `Range`; `Body` is a Node `Readable`; `ContentType`/`ContentLength`/`ContentRange` come straight off the response. |
 | **Azure Blob Storage** | ✅ `true` | `BlobClient.download(offset, count)` → `readableStreamBody`; inclusive range maps to `count = End - Start + 1`. |
-| **Google Cloud Storage** | ❌ `false` | Future enhancement (`createReadStream` supports `start`/`end`). |
-| **Google Drive** | ❌ `false` | Future enhancement. |
-| **Dropbox** | ❌ `false` | Future enhancement. |
-| **SharePoint** | ❌ `false` | Future enhancement. |
+| **Google Cloud Storage** | ✅ `true` | `File.createReadStream({ start, end })` → Node `Readable` (GCS native Range). Inclusive `Start`/`End` map directly. Size/content-type are sourced from `GetObjectMetadata` (the read stream doesn't surface them); range is clamped to the object size. |
+| **Google Drive** | ✅ `true` | `files.get({ fileId, alt: 'media' }, { responseType: 'stream', headers: { Range } })` → Node `Readable`; the media endpoint honors the `Range` header. Size/content-type from `GetObjectMetadata`. **Google Workspace files** (Docs/Sheets/Slides/Drawings) cannot be range-streamed — they require an export with no Range semantics, so `GetObjectStream` throws for those types; fall back to `GetObject` (which performs the export). |
+| **SharePoint** | ✅ `true` | Resolve the driveItem → read its `@microsoft.graph.downloadUrl` (short-lived pre-auth URL) → `fetch` it with the `Range` header. Body is a WHATWG `ReadableStream` → `Readable.fromWeb`. `Content-Type`/`Content-Length`/`Content-Range` come off the HTTP response (total falls back to the item `size`). |
+| **Dropbox** | ✅ `true` | `filesGetTemporaryLink` → short-lived pre-auth content URL → `fetch` it with the `Range` header (the SDK's `filesDownload` buffers the whole file, so the content URL is used instead). Body is a WHATWG `ReadableStream` → `Readable.fromWeb`. `Content-Type`/`Content-Length`/`Content-Range` come off the HTTP response (total falls back to the link `metadata.size`). |
 
-Providers marked ❌ throw `StreamingNotSupportedError` from `GetObjectStream` and report
-`SupportsStreaming === false`.
+All seven drivers now support ranged streaming. The base default for `SupportsStreaming` remains
+`false`, so any *future* driver that doesn't override it automatically inherits the
+`StreamingNotSupportedError` throw from `GetObjectStream`.
+
+### Per-provider notes
+
+- **Metadata-sourced size (Box, Google Cloud Storage, Google Drive)**: these SDKs return a stream
+  that doesn't carry the total object size, so the driver issues a lightweight `GetObjectMetadata`
+  call to populate `ContentLength` / `ContentRange` and clamps the requested range to the object
+  size. This means a ranged read costs one extra metadata round-trip on these providers.
+- **Pre-auth-URL streaming (SharePoint, Dropbox)**: these providers don't expose a Range-capable
+  readable stream directly through their SDK download call, so the driver fetches the provider's
+  short-lived download URL with the `Range` header and adapts the WHATWG `ReadableStream` to a Node
+  `Readable`. `Content-Range` is read from the HTTP response when the server returns it; otherwise
+  it's computed from the item size.
+- **Google Drive Workspace files**: `GetObjectStream` throws for `application/vnd.google-apps.*`
+  types because those files must be *exported* to a concrete format (no Range semantics). Use
+  `GetObject` for them.

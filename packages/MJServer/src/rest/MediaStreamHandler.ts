@@ -25,6 +25,7 @@ import { FileStorageEngine } from '@memberjunction/storage';
 import type { FileStorageBase, ByteRange } from '@memberjunction/storage';
 import { getSystemUser } from '../auth/index.js';
 import { MediaAccessKeyManager } from './MediaAccessKeys.js';
+import { parseRange, parseRangeHeaderLoose } from './mediaRange.js';
 
 /** A located bytes source for a file: the driver + the provider key to read. */
 interface FileBytesSource {
@@ -33,20 +34,6 @@ interface FileBytesSource {
   contentType: string;
 }
 
-/** A parsed, validated `Range` request against a known total size. */
-interface ParsedRange {
-  start: number;
-  end: number;
-}
-
-/**
- * A parsed `Range` request WITHOUT a known total (streaming path). `end` is undefined
- * for an open-ended `bytes=start-` request, matching {@link ByteRange}'s "omit End = EOF".
- */
-interface ParsedOpenRange {
-  start: number;
-  end?: number;
-}
 
 /**
  * Builds the Express router exposing `GET /media/:fileId`. Stateless — verification
@@ -120,9 +107,9 @@ function verifyMediaToken(token: string, fileId: string): { fileId: string; user
 async function resolveFileBytesSource(fileId: string): Promise<FileBytesSource | null> {
   const systemUser: UserInfo = await getSystemUser();
 
-  // global-provider-ok: the /media route runs pre-auth on the server's own provider; access
-  // was already authorized at token-mint time, so this load only locates the bytes.
-  const md = new Metadata();
+  // The /media route runs pre-auth on the server's own provider; access was already authorized
+  // at token-mint time, so this load only locates the bytes.
+  const md = new Metadata(); // global-provider-ok: pre-auth system-context route, no per-request provider
   const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', systemUser);
   if (!await file.Load(fileId) || !file.ProviderKey) {
     return null;
@@ -231,49 +218,3 @@ async function serveViaBuffer(res: Response, source: FileBytesSource, rangeHeade
   res.end(slice);
 }
 
-/**
- * Parses a single-range `bytes=start-end` header WITHOUT a known total (streaming path).
- * Returns the inclusive offsets, or undefined when the header is malformed/multi-range/
- * suffix-only (those we leave to the driver as a full read). `end` is left undefined when
- * open-ended (`bytes=start-`) so the driver streams to EOF.
- */
-function parseRangeHeaderLoose(rangeHeader: string): ParsedOpenRange | undefined {
-  const match = /^bytes=(\d+)-(\d*)$/.exec(rangeHeader.trim());
-  if (!match) {
-    return undefined;
-  }
-  const start = Number(match[1]);
-  if (!Number.isFinite(start)) {
-    return undefined;
-  }
-  if (match[2] === '') {
-    return { start };
-  }
-  const end = Number(match[2]);
-  if (!Number.isFinite(end) || end < start) {
-    return undefined;
-  }
-  return { start, end };
-}
-
-/**
- * Parses a single-range `bytes=start-end` header against a known total (buffer path),
- * clamping `end` to the last byte. Returns undefined when unsatisfiable (→ 416) or
- * malformed/multi-range.
- */
-function parseRange(rangeHeader: string, total: number): ParsedRange | undefined {
-  const match = /^bytes=(\d+)-(\d*)$/.exec(rangeHeader.trim());
-  if (!match) {
-    return undefined;
-  }
-  const start = Number(match[1]);
-  if (!Number.isFinite(start) || start >= total) {
-    return undefined; // start past EOF → unsatisfiable
-  }
-  const requestedEnd = match[2] === '' ? total - 1 : Number(match[2]);
-  const end = Math.min(requestedEnd, total - 1);
-  if (end < start) {
-    return undefined;
-  }
-  return { start, end };
-}

@@ -3,7 +3,9 @@ import { AuthenticationProvider } from '@microsoft/microsoft-graph-client';
 import { RegisterClass } from '@memberjunction/global';
 import env from 'env-var';
 import mime from 'mime-types';
+import { Readable } from 'stream';
 import {
+  BuildHttpRangeHeader,
   CreatePreAuthUploadUrlPayload,
   FileSearchOptions,
   FileSearchResult,
@@ -11,6 +13,8 @@ import {
   FileStorageBase,
   GetObjectParams,
   GetObjectMetadataParams,
+  GetObjectStreamParams,
+  ObjectStreamResult,
   StorageListResult,
   StorageObjectMetadata,
   UnsupportedOperationError,
@@ -1100,9 +1104,6 @@ export class SharePointFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  // NOTE: SupportsStreaming intentionally left at the base default (false). Ranged streaming via
-  // GetObjectStream is a future enhancement — the Microsoft Graph download path here does not
-  // cleanly expose an HTTP Range / readable-stream seam.
   public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
       // Validate params
@@ -1136,6 +1137,117 @@ export class SharePointFileStorage extends FileStorageBase {
       console.error('Error getting object', { params, error });
       throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
+  }
+
+  /**
+   * SharePoint supports ranged streaming: the Microsoft Graph driveItem `@microsoft.graph.downloadUrl`
+   * is a short-lived pre-authenticated URL that honors the HTTP `Range` header.
+   */
+  public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  /**
+   * Streams a file's content from SharePoint, optionally honoring a byte range.
+   *
+   * Resolves the driveItem (fast path via objectId, slow path via fullPath), reads its
+   * `@microsoft.graph.downloadUrl` (a short-lived pre-authenticated URL), and `fetch`es that URL
+   * with the inclusive `Range` encoded via {@link BuildHttpRangeHeader}. The fetch response body is
+   * a web `ReadableStream`, converted to a Node {@link Readable} via `Readable.fromWeb` so it is
+   * never buffered fully in memory. `Content-Type`, `Content-Length`, and (for ranged reads)
+   * `Content-Range` are read straight off the HTTP response headers, falling back to the item's
+   * `size` for the total when the server doesn't return a `Content-Range`.
+   *
+   * @param params - Object identifier (prefer objectId) plus optional Range.
+   * @returns A Promise resolving to an {@link ObjectStreamResult}.
+   * @throws Error if the file doesn't exist or cannot be streamed.
+   */
+  public override async GetObjectStream(params: GetObjectStreamParams): Promise<ObjectStreamResult> {
+    try {
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      // Resolve the driveItem (fast path via objectId, slow path via fullPath).
+      let item: { ['@microsoft.graph.downloadUrl']?: string; size?: number; file?: { mimeType?: string }; name?: string };
+      if (params.objectId) {
+        item = await this._client.api(`/drives/${this._driveId}/items/${params.objectId}`).get();
+      } else {
+        item = await this._getItemByPath(params.fullPath!);
+      }
+
+      const downloadUrl = item['@microsoft.graph.downloadUrl'];
+      if (!downloadUrl) {
+        throw new Error(`No download URL available for: ${params.objectId || params.fullPath}`);
+      }
+
+      const total = item.size ?? 0;
+      const fallbackContentType = item.file?.mimeType || (item.name ? mime.lookup(item.name) || undefined : undefined);
+
+      const headers = params.Range ? { Range: BuildHttpRangeHeader(params.Range) } : undefined;
+      const response = await fetch(downloadUrl, headers ? { headers } : undefined);
+
+      if (!response.ok && response.status !== 206) {
+        throw new Error(`Failed to stream item: ${response.statusText}`);
+      }
+      if (!response.body) {
+        throw new Error(`Empty response body for object: ${params.objectId || params.fullPath}`);
+      }
+
+      // The fetch body is a WHATWG ReadableStream; convert to a Node Readable without buffering.
+      const stream = Readable.fromWeb(response.body as Parameters<typeof Readable.fromWeb>[0]);
+
+      const contentLengthHeader = response.headers.get('content-length');
+      const result: ObjectStreamResult = {
+        Stream: stream,
+        ContentType: response.headers.get('content-type') || fallbackContentType,
+        ContentLength: contentLengthHeader != null ? Number(contentLengthHeader) : undefined,
+      };
+
+      if (params.Range) {
+        const contentRange = this._parseSharePointContentRange(response.headers.get('content-range'));
+        if (contentRange) {
+          result.ContentRange = contentRange;
+          if (result.ContentLength == null) {
+            result.ContentLength = contentRange.End - contentRange.Start + 1;
+          }
+        } else {
+          // Server didn't echo a Content-Range; compute it from the item size, clamped.
+          const start = Math.min(params.Range.Start, Math.max(total - 1, 0));
+          const end = params.Range.End != null ? Math.min(params.Range.End, total - 1) : total - 1;
+          result.ContentRange = { Start: start, End: end, Total: total };
+          if (result.ContentLength == null) {
+            result.ContentLength = end - start + 1;
+          }
+        }
+      } else if (result.ContentLength == null && total > 0) {
+        result.ContentLength = total;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Error streaming object', { params, error });
+      throw new Error(`Failed to stream object: ${params.objectId || params.fullPath}`);
+    }
+  }
+
+  /**
+   * Parses an HTTP `Content-Range` header value (`bytes start-end/total`) into the structured
+   * form used by {@link ObjectStreamResult.ContentRange}.
+   *
+   * @param contentRange - The raw `Content-Range` header value from the download response, if present.
+   * @returns The parsed range, or undefined when no (valid) range header was returned.
+   */
+  private _parseSharePointContentRange(contentRange: string | null): { Start: number; End: number; Total: number } | undefined {
+    if (!contentRange) {
+      return undefined;
+    }
+    const match = /bytes\s+(\d+)-(\d+)\/(\d+)/.exec(contentRange);
+    if (!match) {
+      return undefined;
+    }
+    return { Start: Number(match[1]), End: Number(match[2]), Total: Number(match[3]) };
   }
 
   /**

@@ -442,11 +442,21 @@ export class RealtimeSessionService {
   /** How often crash-recovery shards are flushed during a recording. */
   private static readonly SegmentFlushMs = 15000;
   /**
-   * Recording-relative ms offset at which the IN-FLIGHT turn began (the last final transcript
-   * boundary), or `null` before the first turn. Sent as `utteranceStartMs` on the next final
-   * transcript so per-turn timing lines up with the recording.
+   * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
+   * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
+   * interim transcript), NOT inherited from the previous turn's end. `null` before the first
+   * turn / between turns (until the next turn's audio starts). Sent as `utteranceStartMs` on
+   * the turn's final transcript so per-turn timing lines up with the recording even when a
+   * tool-call / silence gap sits between turns (the inherit-previous-end model mis-stamped
+   * the post-gap turn at the pre-gap offset). See {@link markTurnAudioStart}.
    */
   private currentTurnStartMs: number | null = null;
+  /**
+   * Per-turn guard for {@link markTurnAudioStart}: `true` once the in-flight turn's audio-start
+   * offset has been captured, so mid-turn interim deltas don't overwrite it. Reset to `false`
+   * at each finalization so the NEXT turn re-stamps from where ITS audio begins.
+   */
+  private turnAudioStartCaptured = false;
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
   /** First spoken update fires no earlier than this long after delegated work starts. */
@@ -779,9 +789,16 @@ export class RealtimeSessionService {
       const recorder = new RealtimeAudioRecorder();
       recorder.Start(this.localStream, remoteStream);
       this.recorder = recorder.IsRecording ? recorder : null;
+      // First turn's audio starts at ~0 (recording begins right as the call goes live). Seed it
+      // here so the very first turn has a sane start even if its first interim is missed; later
+      // turns re-stamp from where THEIR audio begins via markTurnAudioStart (handles tool gaps).
       this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
-      console.info(`[RealtimeSession] 🎙️ recording start — IsRecording=${recorder.IsRecording}, mic tracks=${this.localStream.getAudioTracks().length}, remoteStream=${!!remoteStream}`);
+      this.turnAudioStartCaptured = false;
       if (this.recorder) {
+        // The agent's WebRTC audio track usually lands AFTER Connect() resolves, so `remoteStream`
+        // above is typically null and we'd capture mic-only. Attach the agent stream whenever it
+        // arrives (fires immediately if already present) so the recording includes the agent voice.
+        client.OnRemoteMediaStream?.((stream) => this.recorder?.AttachRemoteStream(stream));
         this.startSegmentFlushing();
       }
     } catch (error) {
@@ -829,8 +846,11 @@ export class RealtimeSessionService {
           UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
         }
       `;
-      await this.gql().ExecuteGQL(mutation, { agentSessionId, segmentIndex: index, audioBase64, mimeType: recorder.MimeType });
-      console.info(`[RealtimeSession] 🎙️ flushed recording shard #${index} (${segment.size} bytes)`);
+      // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
+      // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
+      // seekable WAV is the consolidated end-of-call upload below.
+      const shardMime = `audio/L16;rate=${recorder.SampleRate}`;
+      await this.gql().ExecuteGQL(mutation, { agentSessionId, segmentIndex: index, audioBase64, mimeType: shardMime });
     } catch (error) {
       console.warn('[RealtimeSession] Failed to flush recording shard:', error);
     }
@@ -846,12 +866,16 @@ export class RealtimeSessionService {
     const recorder = this.recorder;
     this.recorder = null;
     this.currentTurnStartMs = null;
+    this.turnAudioStartCaptured = false;
     if (!recorder) {
       return;
     }
     try {
+      // Capture the recorder MIME (now 'audio/wav') BEFORE Stop() — the getter reads '' once stopped.
+      const mimeType = recorder.MimeType;
       const blob = await recorder.Stop();
-      console.info(`[RealtimeSession] 🎙️ recording stopped — blob size=${blob?.size ?? 'null'} bytes, session=${agentSessionId ?? 'null'}, mime=${recorder.MimeType}`);
+      // Read the real waveform peaks computed during capture (survives Stop via the recorder's snapshot).
+      const peaks = recorder.GetPeaks();
       if (!blob || blob.size === 0 || !agentSessionId) {
         console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — empty blob or no session id.');
         return;
@@ -861,18 +885,21 @@ export class RealtimeSessionService {
         console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — base64 encoding failed.');
         return;
       }
-      console.info(`[RealtimeSession] 🎙️ uploading recording (${audioBase64.length} base64 chars)…`);
-      await this.uploadRecording(agentSessionId, audioBase64, recorder.MimeType);
+      await this.uploadRecording(agentSessionId, audioBase64, mimeType, peaks);
     } catch (error) {
       console.warn('[RealtimeSession] Failed to stop/upload call recording:', error);
     }
   }
 
-  /** Runs the `UploadRealtimeRecording` mutation; failures are logged, never thrown. */
-  private async uploadRecording(agentSessionId: string, audioBase64: string, mimeType: string): Promise<void> {
+  /**
+   * Runs the `UploadRealtimeRecording` mutation; failures are logged, never thrown. Sends the
+   * capture-time waveform `peaks` (max-abs per bucket, normalized 0..1) so the server can persist a
+   * `peaks.json` sidecar for fast waveform rendering without re-decoding the audio.
+   */
+  private async uploadRecording(agentSessionId: string, audioBase64: string, mimeType: string, peaks: number[]): Promise<void> {
     const mutation = `
-      mutation UploadRealtimeRecording($agentSessionId: String!, $audioBase64: String!, $mimeType: String!, $consent: Boolean) {
-        UploadRealtimeRecording(agentSessionId: $agentSessionId, audioBase64: $audioBase64, mimeType: $mimeType, consent: $consent) {
+      mutation UploadRealtimeRecording($agentSessionId: String!, $audioBase64: String!, $mimeType: String!, $consent: Boolean, $peaks: [Float!]) {
+        UploadRealtimeRecording(agentSessionId: $agentSessionId, audioBase64: $audioBase64, mimeType: $mimeType, consent: $consent, peaks: $peaks) {
           Success
           FileID
           ErrorMessage
@@ -883,12 +910,11 @@ export class RealtimeSessionService {
       agentSessionId,
       audioBase64,
       mimeType,
-      consent: true
+      consent: true,
+      peaks
     });
     const payload = result?.UploadRealtimeRecording as { Success?: boolean; FileID?: string; ErrorMessage?: string } | undefined;
-    if (payload?.Success) {
-      console.info(`[RealtimeSession] ✅ recording uploaded — FileID=${payload.FileID}`);
-    } else {
+    if (!payload?.Success) {
       console.warn(`[RealtimeSession] ❌ recording upload reported failure: ${payload?.ErrorMessage ?? 'unknown error'} (full result: ${JSON.stringify(result)})`);
     }
   }
@@ -1310,14 +1336,21 @@ export class RealtimeSessionService {
   // ── Transcript policy ──────────────────────────────────────────────────────
 
   /**
-   * Applies transcript policy to client transcript events. Interim deltas are ignored
-   * (the client already drives the speaking state). Final NORMAL assistant turns become
+   * Applies transcript policy to client transcript events. Interim deltas don't become
+   * captions/turns (the client already drives the speaking state) but DO mark this turn's
+   * audio-start offset against the recording (the first interim fires as the audio/text
+   * starts flowing — see {@link markTurnAudioStart}). Final NORMAL assistant turns become
    * captions + persisted transcripts; final NARRATION turns are EPHEMERAL by product
    * decision — emitted on {@link DelegationNarration$} only, never a caption, never
    * relayed/persisted. User turns ride the caption + relay path.
    */
   private async onClientTranscript(transcript: RealtimeClientTranscript): Promise<void> {
     if (!transcript.IsFinal) {
+      // First interim of a NEW turn = that turn's audio is starting NOW. Stamp the
+      // recording-relative start here so a turn whose audio begins AFTER a tool-call /
+      // silence gap is timed where its audio really is — not inherited from the prior
+      // turn's end. Narration interims are ephemeral and excluded (Kind guard inside).
+      this.markTurnAudioStart(transcript.Kind);
       return;
     }
     if (transcript.Role === 'Assistant') {
@@ -1348,6 +1381,35 @@ export class RealtimeSessionService {
     } else {
       await this.onUserTranscript(transcript.Text);
     }
+  }
+
+  /**
+   * Stamps the recording-relative offset at which the IN-FLIGHT turn's audio actually began,
+   * the moment that turn's audio/text first starts flowing (its FIRST interim transcript).
+   *
+   * This is the fix for transcript cues drifting out of sync with the audio when a tool-call /
+   * silence gap sits between turns: the old model inherited the next turn's start from the
+   * PREVIOUS turn's end (assumes contiguous turns), so a post-gap turn's cue pointed ~gap-length
+   * too early. Capturing the start where the audio truly begins keeps the cue aligned.
+   *
+   * Guards:
+   * - only when recording ({@link recorder} present),
+   * - only ONCE per turn ({@link turnAudioStartCaptured}) so mid-turn interim deltas don't move it,
+   * - NORMAL turns only — NARRATION interims are ephemeral and never persisted, so they must not
+   *   claim the next real turn's start slot.
+   *
+   * Works for any role whose driver surfaces interim deltas (all drivers for the assistant; the
+   * relevant case here — the post-tool-gap assistant answer — and user-interim drivers like
+   * Gemini/AssemblyAI). For final-only user turns (OpenAI/xAI/ElevenLabs) no interim arrives, so
+   * {@link relayTranscript} falls back to the seeded/prior start — the gap case that drifts is the
+   * assistant answer, which always has interims.
+   */
+  private markTurnAudioStart(kind: 'normal' | 'narration'): void {
+    if (!this.recorder || this.turnAudioStartCaptured || kind === 'narration') {
+      return;
+    }
+    this.currentTurnStartMs = this.recorder.NowOffsetMs();
+    this.turnAudioStartCaptured = true;
   }
 
   /**
@@ -1692,10 +1754,16 @@ export class RealtimeSessionService {
    * Relays a final transcript turn to MJ via `RelayRealtimeTranscript`.
    *
    * When the session is being recorded, per-turn timing rides along: `utteranceEndMs` is the
-   * recording-relative offset at finalization, and `utteranceStartMs` is the offset captured at
-   * the PREVIOUS turn boundary (cheap turn-start tracking — the recording has no per-utterance
-   * VAD, so each turn is treated as spanning from the prior finalization to this one). Both are
-   * omitted (left `null`) when the session isn't being recorded.
+   * recording-relative offset at finalization, and `utteranceStartMs` is the offset captured by
+   * {@link markTurnAudioStart} when THIS turn's audio actually began (its first interim) — NOT
+   * inherited from the previous turn's end. That distinction is the timing fix: when a tool-call
+   * / silence gap sits between turns, the post-gap turn's audio starts much later, so inheriting
+   * the prior turn's end stamped the cue ~gap-length too early. Both are omitted (left `null`)
+   * when the session isn't being recorded.
+   *
+   * A correction (`replacesPrevious`) doesn't open a new turn, so it carries no start and doesn't
+   * reset the per-turn start guard. After a normal finalization the guard is cleared so the NEXT
+   * turn re-stamps its start from where ITS audio begins.
    *
    * @param replacesPrevious CORRECTION semantics: the server updates the session's most
    *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
@@ -1705,12 +1773,17 @@ export class RealtimeSessionService {
     if (!this.agentSessionId) {
       return;
     }
-    // Capture per-turn timing against the recording (when recording). A correction
-    // (replacesPrevious) doesn't open a new turn, so it doesn't advance the turn boundary.
+    // Per-turn timing against the recording (when recording). `utteranceStartMs` is where this
+    // turn's audio actually began (captured by markTurnAudioStart on the first interim); the
+    // `?? 0` fallback covers a turn whose interim was missed / a final-only first turn.
     const utteranceEndMs = this.recorder ? this.recorder.NowOffsetMs() : null;
     const utteranceStartMs = this.recorder && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
-    if (this.recorder && !replacesPrevious && utteranceEndMs !== null) {
-      this.currentTurnStartMs = utteranceEndMs;
+    if (this.recorder && !replacesPrevious) {
+      // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
+      // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
+      // next start. `null` means "not yet captured"; relay falls back to `?? 0` if no interim fires.
+      this.currentTurnStartMs = null;
+      this.turnAudioStartCaptured = false;
     }
     try {
       const mutation = `
@@ -2209,6 +2282,7 @@ export class RealtimeSessionService {
     this.recorder = null;
     this.recordingStartedAtIso = null;
     this.currentTurnStartMs = null;
+    this.turnAudioStartCaptured = false;
   }
 
   /** The GraphQL provider used for relay mutations. */

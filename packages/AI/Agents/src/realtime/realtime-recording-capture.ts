@@ -41,6 +41,8 @@ const PCM16_MIN = -32768;
 const PCM16_MAX = 32767;
 /** Canonical WAV/PCM header size in bytes. */
 const WAV_HEADER_BYTES = 44;
+/** Default waveform resolution (bucket count) produced by {@link RealtimeRecordingController.GetPeaks}. */
+const DEFAULT_PEAK_BUCKETS = 600;
 
 /**
  * Accumulates realtime PCM audio frames from both the model (outbound) and the
@@ -141,30 +143,90 @@ export class RealtimeRecordingController {
      * @returns The encoded buffer, duration, and sample rate; or null if {@link HasAudio} is false.
      */
     public EncodeWav(): { Buffer: Buffer; DurationMs: number; SampleRate: number } | null {
-        if (!this.HasAudio) {
+        const mixed = this.mixTimeline();
+        if (!mixed) {
             return null;
         }
+        const buffer = this.encodeWavBuffer(mixed.Pcm, mixed.SampleRate);
+        const durationMs = (mixed.Pcm.length / mixed.SampleRate) * 1000;
 
-        const targetRate = this.outputSampleRate;
-        const timelineLength = this.computeTimelineLength(targetRate);
-        if (timelineLength <= 0) {
-            return null;
+        return { Buffer: buffer, DurationMs: durationMs, SampleRate: mixed.SampleRate };
+    }
+
+    /**
+     * Compute capture-time waveform peaks from the accumulated PCM: a normalized `0..1` max-abs
+     * amplitude per bucket (one bucket per rendered waveform bar). Mirrors the client-direct peak
+     * math so server-bridged recordings render the same kind of waveform; the result is persisted
+     * as a `peaks.json` sidecar so a viewer renders the waveform without re-decoding the audio.
+     *
+     * @param buckets Desired bucket count (waveform resolution). Default 600; clamped to `>= 1` and
+     *   never exceeds the sample count (a short recording yields at most one peak per sample).
+     * @returns A bounded array of normalized `0..1` peaks; `[]` when there is no audio (or silence).
+     */
+    public GetPeaks(buckets: number = DEFAULT_PEAK_BUCKETS): number[] {
+        const mixed = this.mixTimeline();
+        if (!mixed) {
+            return [];
         }
-
-        const accumulator = new Float64Array(timelineLength);
-        this.mixFrames(accumulator, this.outboundFrames, targetRate, this.outputSampleRate);
-        this.mixFrames(accumulator, this.inboundFrames, targetRate, this.inputSampleRate);
-
-        const pcm = this.clampToInt16(accumulator);
-        const buffer = this.encodeWavBuffer(pcm, targetRate);
-        const durationMs = (timelineLength / targetRate) * 1000;
-
-        return { Buffer: buffer, DurationMs: durationMs, SampleRate: targetRate };
+        return this.computePeaks(mixed.Pcm, buckets);
     }
 
     // ---------------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------------
+
+    /**
+     * Mix all captured frames into a single mono PCM16 timeline at the output sample rate.
+     * Shared by {@link EncodeWav} and {@link GetPeaks} so the WAV and the peaks describe the
+     * exact same signal. Returns `null` when nothing was captured.
+     */
+    private mixTimeline(): { Pcm: Int16Array; SampleRate: number } | null {
+        if (!this.HasAudio) {
+            return null;
+        }
+        const targetRate = this.outputSampleRate;
+        const timelineLength = this.computeTimelineLength(targetRate);
+        if (timelineLength <= 0) {
+            return null;
+        }
+        const accumulator = new Float64Array(timelineLength);
+        this.mixFrames(accumulator, this.outboundFrames, targetRate, this.outputSampleRate);
+        this.mixFrames(accumulator, this.inboundFrames, targetRate, this.inputSampleRate);
+        return { Pcm: this.clampToInt16(accumulator), SampleRate: targetRate };
+    }
+
+    /**
+     * Downsample a PCM16 timeline into `buckets` normalized `0..1` max-abs peaks. Contiguous,
+     * index-ordered buckets; the loudest bucket becomes `1`. An all-silent timeline yields `[]`.
+     */
+    private computePeaks(pcm: Int16Array, buckets: number): number[] {
+        const length = pcm.length;
+        if (length === 0) {
+            return [];
+        }
+        const count = Math.min(Math.max(1, Math.floor(buckets)), length);
+        const out = new Array<number>(count).fill(0);
+        let globalMax = 0;
+        for (let b = 0; b < count; b++) {
+            const start = Math.floor((b * length) / count);
+            const end = b === count - 1 ? length : Math.floor(((b + 1) * length) / count);
+            let localMax = 0;
+            for (let i = start; i < end; i++) {
+                const abs = Math.abs(pcm[i]);
+                if (abs > localMax) {
+                    localMax = abs;
+                }
+            }
+            out[b] = localMax;
+            if (localMax > globalMax) {
+                globalMax = localMax;
+            }
+        }
+        if (globalMax <= 0) {
+            return [];
+        }
+        return out.map((v) => v / globalMax);
+    }
 
     /** Decode + copy a chunk into a frame and push it onto the given list. */
     private appendFrame(list: CapturedFrame[], chunk: ArrayBuffer): void {

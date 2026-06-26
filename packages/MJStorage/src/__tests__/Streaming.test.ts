@@ -358,3 +358,309 @@ describe('AWSFileStorage streaming (mocked S3 client)', () => {
     expect(bytes.toString('utf8')).toBe('456789');
   });
 });
+
+describe('GoogleFileStorage streaming (mocked GCS client)', () => {
+  beforeEach(() => {
+    // The GCS driver constructor reads required env vars. Provide dummy values so it can construct.
+    process.env.STORAGE_GOOGLE_KEY_JSON = JSON.stringify({ type: 'service_account', client_email: 'x@y.iam', private_key: 'k' });
+    process.env.STORAGE_GOOGLE_BUCKET_NAME = 'unit-test-bucket';
+  });
+
+  it('passes start/end to createReadStream and shapes ObjectStreamResult including ContentRange', async () => {
+    const { GoogleFileStorage } = await import('../drivers/GoogleFileStorage');
+
+    const driver = new GoogleFileStorage();
+    expect(driver.SupportsStreaming).toBe(true);
+
+    const sliceBytes = Buffer.from('456789', 'utf8');
+    let lastReadStreamOptions: { start?: number; end?: number } | undefined;
+    let lastFileKey: string | undefined;
+
+    // Mock bucket().file(key) → { createReadStream, getMetadata }
+    const mockClient = {
+      bucket: (_name: string) => ({
+        file: (key: string) => {
+          lastFileKey = key;
+          return {
+            createReadStream: (opts?: { start?: number; end?: number }) => {
+              lastReadStreamOptions = opts;
+              return Readable.from(sliceBytes);
+            },
+            // GetObjectMetadata path → file.getMetadata() returns [metadata]
+            getMetadata: async () => [{ size: '16', contentType: 'application/octet-stream', updated: new Date().toISOString(), etag: 'e' }],
+          };
+        },
+      }),
+    };
+
+    const internal = driver as unknown as { _client: typeof mockClient; _bucket: string };
+    internal._client = mockClient;
+    internal._bucket = 'unit-test-bucket';
+
+    const result = await driver.GetObjectStream({ objectId: 'media/clip.mp4', Range: { Start: 4, End: 9 } });
+
+    // Inclusive range mapped to GCS start/end (which are inclusive)
+    expect(lastReadStreamOptions).toEqual({ start: 4, end: 9 });
+    expect(lastFileKey).toBe('media/clip.mp4');
+
+    expect(result.ContentType).toBe('application/octet-stream');
+    expect(result.ContentLength).toBe(6);
+    expect(result.ContentRange).toEqual({ Start: 4, End: 9, Total: 16 });
+
+    const bytes = await readAll(result.Stream);
+    expect(bytes.toString('utf8')).toBe('456789');
+  });
+
+  it('streams the full object (no Range) with ContentLength = total and no ContentRange', async () => {
+    const { GoogleFileStorage } = await import('../drivers/GoogleFileStorage');
+    const driver = new GoogleFileStorage();
+
+    const fullBytes = Buffer.from('0123456789ABCDEF', 'utf8'); // 16 bytes
+    let lastReadStreamOptions: { start?: number; end?: number } | undefined = { start: -1 };
+
+    const mockClient = {
+      bucket: () => ({
+        file: () => ({
+          createReadStream: (opts?: { start?: number; end?: number }) => {
+            lastReadStreamOptions = opts;
+            return Readable.from(fullBytes);
+          },
+          getMetadata: async () => [{ size: '16', contentType: 'application/octet-stream', updated: new Date().toISOString(), etag: 'e' }],
+        }),
+      }),
+    };
+    (driver as unknown as { _client: typeof mockClient; _bucket: string })._client = mockClient;
+    (driver as unknown as { _bucket: string })._bucket = 'unit-test-bucket';
+
+    const result = await driver.GetObjectStream({ fullPath: 'media/clip.mp4' });
+
+    expect(lastReadStreamOptions).toBeUndefined(); // no Range → no start/end options
+    expect(result.ContentLength).toBe(16);
+    expect(result.ContentRange).toBeUndefined();
+    const bytes = await readAll(result.Stream);
+    expect(bytes.toString('utf8')).toBe('0123456789ABCDEF');
+  });
+});
+
+describe('GoogleDriveFileStorage streaming (mocked Drive client)', () => {
+  it('passes the Range header to files.get media and shapes ObjectStreamResult including ContentRange', async () => {
+    const { GoogleDriveFileStorage } = await import('../drivers/GoogleDriveFileStorage');
+
+    const driver = new GoogleDriveFileStorage();
+    expect(driver.SupportsStreaming).toBe(true);
+
+    const sliceBytes = Buffer.from('456789', 'utf8');
+    const getCalls: Array<{ params: { fileId?: string; alt?: string; fields?: string }; opts?: { responseType?: string; headers?: { Range?: string } } }> = [];
+
+    // Mock _drive.files.get — three call shapes:
+    //  1. { fileId, fields: 'mimeType' } → mimeType lookup (objectId fast path)
+    //  2. { fileId, fields: '...size...' } → GetObjectMetadata
+    //  3. { fileId, alt: 'media' } with responseType 'stream' → the ranged media stream
+    const mockDrive = {
+      files: {
+        get: async (
+          params: { fileId?: string; alt?: string; fields?: string },
+          opts?: { responseType?: string; headers?: { Range?: string } },
+        ) => {
+          getCalls.push({ params, opts });
+          if (params.alt === 'media') {
+            return { data: Readable.from(sliceBytes) };
+          }
+          if (params.fields === 'mimeType') {
+            return { data: { mimeType: 'video/mp4' } };
+          }
+          // GetObjectMetadata fields request
+          return {
+            data: { id: 'file-123', name: 'clip.mp4', mimeType: 'video/mp4', size: '16', modifiedTime: new Date().toISOString() },
+          };
+        },
+      },
+    };
+
+    (driver as unknown as { _drive: typeof mockDrive })._drive = mockDrive;
+
+    const result = await driver.GetObjectStream({ objectId: 'file-123', Range: { Start: 4, End: 9 } });
+
+    // The media call carried the Range header as inclusive bytes
+    const mediaCall = getCalls.find((c) => c.params.alt === 'media');
+    expect(mediaCall).toBeDefined();
+    expect(mediaCall?.opts?.responseType).toBe('stream');
+    expect(mediaCall?.opts?.headers?.Range).toBe('bytes=4-9');
+
+    expect(result.ContentType).toBe('video/mp4');
+    expect(result.ContentLength).toBe(6);
+    expect(result.ContentRange).toEqual({ Start: 4, End: 9, Total: 16 });
+
+    const bytes = await readAll(result.Stream);
+    expect(bytes.toString('utf8')).toBe('456789');
+  });
+
+  it('throws for Google Workspace files (no Range semantics — must export)', async () => {
+    const { GoogleDriveFileStorage } = await import('../drivers/GoogleDriveFileStorage');
+    const driver = new GoogleDriveFileStorage();
+
+    const mockDrive = {
+      files: {
+        get: async (params: { fileId?: string; fields?: string }) => {
+          if (params.fields === 'mimeType') {
+            return { data: { mimeType: 'application/vnd.google-apps.document' } };
+          }
+          return { data: {} };
+        },
+      },
+    };
+    (driver as unknown as { _drive: typeof mockDrive })._drive = mockDrive;
+
+    await expect(driver.GetObjectStream({ objectId: 'doc-1', Range: { Start: 0, End: 3 } })).rejects.toThrow('Failed to stream object');
+  });
+});
+
+describe('SharePointFileStorage streaming (mocked Graph client + fetch)', () => {
+  it('passes the Range header to the downloadUrl fetch and shapes ObjectStreamResult', async () => {
+    const { SharePointFileStorage } = await import('../drivers/SharePointFileStorage');
+
+    const driver = new SharePointFileStorage();
+    expect(driver.SupportsStreaming).toBe(true);
+
+    const sliceBytes = Buffer.from('456789', 'utf8');
+    let fetchedUrl: string | undefined;
+    let fetchedRange: string | undefined;
+
+    // Mock _client.api(path).get() → driveItem with a downloadUrl + size
+    const mockClient = {
+      api: (_path: string) => ({
+        get: async () => ({
+          '@microsoft.graph.downloadUrl': 'https://sp.example/download/clip.mp4',
+          size: 16,
+          name: 'clip.mp4',
+          file: { mimeType: 'video/mp4' },
+        }),
+      }),
+    };
+    (driver as unknown as { _client: typeof mockClient; _driveId: string })._client = mockClient;
+    (driver as unknown as { _driveId: string })._driveId = 'drive-1';
+
+    // Mock global fetch to capture the Range header and return a 206 with a web stream body.
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: { headers?: { Range?: string } }) => {
+      fetchedUrl = url;
+      fetchedRange = init?.headers?.Range;
+      return {
+        ok: true,
+        status: 206,
+        headers: new Headers({ 'content-type': 'video/mp4', 'content-length': '6', 'content-range': 'bytes 4-9/16' }),
+        body: Readable.toWeb(Readable.from(sliceBytes)),
+      };
+    }) as unknown as typeof fetch;
+
+    try {
+      const result = await driver.GetObjectStream({ objectId: 'item-1', Range: { Start: 4, End: 9 } });
+
+      expect(fetchedUrl).toBe('https://sp.example/download/clip.mp4');
+      expect(fetchedRange).toBe('bytes=4-9');
+
+      expect(result.ContentType).toBe('video/mp4');
+      expect(result.ContentLength).toBe(6);
+      expect(result.ContentRange).toEqual({ Start: 4, End: 9, Total: 16 });
+
+      const bytes = await readAll(result.Stream);
+      expect(bytes.toString('utf8')).toBe('456789');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('honors the objectId bypass and computes ContentRange from item size when server omits it', async () => {
+    const { SharePointFileStorage } = await import('../drivers/SharePointFileStorage');
+    const driver = new SharePointFileStorage();
+
+    let apiPath: string | undefined;
+    const mockClient = {
+      api: (path: string) => {
+        apiPath = path;
+        return {
+          get: async () => ({ '@microsoft.graph.downloadUrl': 'https://sp.example/d', size: 16, name: 'clip.mp4' }),
+        };
+      },
+    };
+    (driver as unknown as { _client: typeof mockClient; _driveId: string })._client = mockClient;
+    (driver as unknown as { _driveId: string })._driveId = 'drive-1';
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 206,
+      headers: new Headers({ 'content-type': 'application/octet-stream' }), // no content-range / content-length
+      body: Readable.toWeb(Readable.from(Buffer.from('0123', 'utf8'))),
+    })) as unknown as typeof fetch;
+
+    try {
+      const result = await driver.GetObjectStream({ objectId: 'item-xyz', Range: { Start: 0, End: 3 } });
+      // objectId bypass hits the /items/<id> endpoint directly
+      expect(apiPath).toContain('/items/item-xyz');
+      // ContentRange computed from item size (16) since the server didn't echo one
+      expect(result.ContentRange).toEqual({ Start: 0, End: 3, Total: 16 });
+      expect(result.ContentLength).toBe(4);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});
+
+describe('DropboxFileStorage streaming (mocked Dropbox client + fetch)', () => {
+  it('passes the Range header to the temporary-link fetch and shapes ObjectStreamResult', async () => {
+    const { DropboxFileStorage } = await import('../drivers/DropboxFileStorage');
+
+    const driver = new DropboxFileStorage();
+    expect(driver.SupportsStreaming).toBe(true);
+
+    const sliceBytes = Buffer.from('456789', 'utf8');
+    let linkPath: string | undefined;
+    let fetchedUrl: string | undefined;
+    let fetchedRange: string | undefined;
+
+    const mockClient = {
+      filesGetTemporaryLink: async (arg: { path: string }) => {
+        linkPath = arg.path;
+        return { result: { link: 'https://dl.dropboxusercontent.com/clip.mp4', metadata: { size: 16, name: 'clip.mp4' } } };
+      },
+    };
+    (driver as unknown as { _client: typeof mockClient })._client = mockClient;
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: { headers?: { Range?: string } }) => {
+      fetchedUrl = url;
+      fetchedRange = init?.headers?.Range;
+      return {
+        ok: true,
+        status: 206,
+        headers: new Headers({ 'content-type': 'video/mp4', 'content-length': '6', 'content-range': 'bytes 4-9/16' }),
+        body: Readable.toWeb(Readable.from(sliceBytes)),
+      };
+    }) as unknown as typeof fetch;
+
+    try {
+      // objectId bypass: Dropbox IDs are prefixed with "id:"
+      const result = await driver.GetObjectStream({ objectId: 'a4ayc_80', Range: { Start: 4, End: 9 } });
+
+      expect(linkPath).toBe('id:a4ayc_80');
+      expect(fetchedUrl).toBe('https://dl.dropboxusercontent.com/clip.mp4');
+      expect(fetchedRange).toBe('bytes=4-9');
+
+      expect(result.ContentType).toBe('video/mp4');
+      expect(result.ContentLength).toBe(6);
+      expect(result.ContentRange).toEqual({ Start: 4, End: 9, Total: 16 });
+
+      const bytes = await readAll(result.Stream);
+      expect(bytes.toString('utf8')).toBe('456789');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('throws when neither objectId nor fullPath is provided', async () => {
+    const { DropboxFileStorage } = await import('../drivers/DropboxFileStorage');
+    const driver = new DropboxFileStorage();
+    await expect(driver.GetObjectStream({})).rejects.toThrow('Failed to stream object');
+  });
+});

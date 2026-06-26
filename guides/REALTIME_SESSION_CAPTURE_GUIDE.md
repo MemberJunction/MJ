@@ -15,8 +15,16 @@ seam, or the `RealtimeRecordingController`.
   turn has no human speaker). No separate speaker column.
 - When recording is active, each turn also carries media-relative offsets **`UtteranceStartMs` /
   `UtteranceEndMs`** (milliseconds from the recording `t0`) and `MediaType='Audio'`.
-- Audio is captured server-side, mixed to a mono PCM16 **WAV**, and stored via **MJStorage**; the session
-  row holds `RecordingFileID` (→ `MJ: Files`), `RecordingMedia`, and `RecordingStartedAt` (the `t0`).
+- Audio is mixed to a mono PCM16 **WAV** (a **seekable** RIFF/WAVE container — its header carries the
+  exact duration and maps byte offset → time linearly, so HTTP-range seeking is exact) and stored via
+  **MJStorage**; the session row holds `RecordingFileID` (→ `MJ: Files`), `RecordingMedia`, and
+  `RecordingStartedAt` (the `t0`). Capture happens on **both** topologies: server-side (server-bridged)
+  and **in the browser** (client-direct).
+- A **capture-time waveform** (normalized `0..1` max-abs peaks) is computed cheaply *during* recording
+  and written as a **`peaks.json` sidecar** in the same storage folder as the WAV, so a player renders
+  the waveform instantly without re-decoding the audio.
+- Playback **streams** the recording over HTTP Range via `mj-storage-media-player` → the
+  `CreateMediaAccessToken` mutation → the `GET /media/:fileId?token=` route (not a base64 download).
 - Recording is **OFF by default**, resolved **runtime param > agent (`RecordingDefault`) > off**,
   **consent-gated**, and **fail-closed** (no storage provider or no consent ⇒ no capture).
 
@@ -25,9 +33,13 @@ seam, or the `RealtimeRecordingController`.
 | Concern | Where |
 |---|---|
 | Turn lifecycle persistence | `BaseAgent.persistRealtimeTranscript` (`packages/AI/Agents/src/base-agent.ts`) |
-| Recording resolution + finalize | `BaseAgent.resolveRealtimeRecording` / `finalizeRealtimeRecording` |
-| Audio accumulation + WAV encode | `RealtimeRecordingController` (`packages/AI/Agents/src/realtime/realtime-recording-capture.ts`) |
+| Recording resolution + finalize (server-bridged) | `BaseAgent.resolveRealtimeRecording` / `finalizeRealtimeRecording` |
+| Server-side audio accumulation + WAV encode | `RealtimeRecordingController` (`packages/AI/Agents/src/realtime/realtime-recording-capture.ts`) |
+| Recording store + `peaks.json` sidecar write | `realtime-recording-store.ts` (`storeRealtimeRecording` / `writeRecordingPeaksSidecar`) |
 | Session attach + finalize seam | `RealtimeSessionRunner` (`Recording` / `FinalizeRecording` deps) |
+| Client-direct browser capture | `RealtimeAudioRecorder` + `encodePcm16Wav` / `PeakAccumulator` (`packages/Angular/Generic/conversations/src/lib/services/realtime-audio-recorder.ts`, `realtime-pcm-wav.ts`) |
+| Streaming playback (server) | `CreateMediaAccessToken` mutation + `GET /media/:fileId` route (`packages/MJServer/src/rest/MediaStreamHandler.ts`, `peaksSidecar.ts`) |
+| Streaming playback (client) | `mj-storage-media-player` (`@memberjunction/ng-media-player`) |
 | Schema | `ConversationDetail.{TurnEndedAt,UtteranceStartMs,UtteranceEndMs,MediaType}`; `AIAgentSession.{RecordingMedia,RecordingStartedAt,RecordingFileID}`; `AIAgent.{RecordingDefault,RecordingStorageProviderID}` |
 
 ## Turn lifecycle (always on, recording or not)
@@ -55,29 +67,55 @@ created, and `null` when an existing in-flight row is merely updated — the run
    that provider's first account via `FileStorageEngine.GetAccountsByProviderID`. No account ⇒ off.
 
 Only when all three pass is a `RealtimeRecordingController` created. Finalize (`finalizeRealtimeRecording`)
-encodes the WAV, `UploadFile`s it to the resolved account, creates a `MJ: File Entity Record Links` row
-(EntityID = `MJ: AI Agent Sessions`, RecordID = session id), and stamps `RecordingFileID/Media/StartedAt`
-on the session. Any failure is logged, never thrown — a recording problem must not fail the session.
+encodes the WAV, `UploadFile`s it to the resolved account, writes the `peaks.json` sidecar beside it,
+creates a `MJ: File Entity Record Links` row (EntityID = `MJ: AI Agent Sessions`, RecordID = session id),
+and stamps `RecordingFileID/Media/StartedAt` on the session. Any failure is logged, never thrown — a
+recording problem must not fail the session.
 
 ## Topology: where audio is captured
 
-The server-side `IRealtimeSession` carries audio (`OnOutput` = model speech; `SendInput` = inbound) **only
-on the server-bridged topology** (LiveKit/Zoom/Teams/Twilio), where a bridge proxies the media. The
-`RealtimeSessionRunner` attaches the controller there: it taps `OnOutput` and wraps `SendInput`, then
-finalizes on `Stop()`.
+Recording works on **both** topologies; the difference is only *where* the audio is mixed.
+
+**Server-bridged sessions** (LiveKit/Zoom/Teams/Twilio): the server-side `IRealtimeSession` carries the
+media (`OnOutput` = model speech; `SendInput` = inbound), so the `RealtimeSessionRunner` attaches the
+`RealtimeRecordingController` there — it taps `OnOutput`, wraps `SendInput`, mixes to a mono PCM16 WAV,
+computes capture-time peaks, and finalizes on `Stop()`.
 
 **Client-direct browser sessions** negotiate audio in the browser — the server never sees those frames —
-so browser-side capture (record mic + remote audio, upload to MJStorage) is a **follow-up**. The schema,
-storage, config resolution, and the evidence player all already support it; only the browser capture +
-upload is outstanding. To add recording to any other live session, give that wiring a
-`RealtimeRecordingController`: feed `AppendOutbound`/`AppendInbound` and call `EncodeWav` on close.
+so capture happens **in the browser** via `RealtimeAudioRecorder` (`@memberjunction/ng-conversations`):
 
-## The evidence player
+- It mixes the user's microphone with the agent's remote-audio stream through the Web Audio API and
+  captures Float32 PCM frames off an `AudioWorkletNode` (preferred) or `ScriptProcessorNode` (fallback) —
+  **not** a `MediaRecorder` (whose webm/opus output is header-less, so range seeking is unreliable). At
+  `Stop()` the accumulated PCM is encoded to a seekable 16-bit PCM WAV via `encodePcm16Wav`.
+- A bounded `PeakAccumulator` computes the waveform peaks **during** capture (cost stays O(buckets)
+  regardless of call length); these become the `peaks.json` sidecar on upload.
+- **Agent-audio mixing:** the agent's WebRTC track usually lands *after* recording has already begun
+  (mic-only). The recorder exposes `AttachRemoteStream(stream)`, and the session service subscribes to
+  the client driver's `OnRemoteMediaStream(cb)` hook (`BaseRealtimeClient` / `OpenAIRealtimeClient`) so
+  the agent stream is wired into the live mix the moment it arrives — capturing both sides, not just the
+  mic. The recorder degrades gracefully (no `AudioContext` / no worklet+scriptprocessor / no remote
+  stream ⇒ disable or mic-only) so a recording problem never blocks the live call.
 
-`RealtimeEvidencePlaybackComponent` (`@memberjunction/ng-conversations`) renders the time-aligned
-transcript + audio: clicking a turn seeks the audio to `UtteranceStartMs/1000` (falling back to
-`__mj_CreatedAt − RecordingStartedAt` when the precise offsets are absent) and highlights the active turn
-during playback. It reads the stored recording's signed URL + the `ConversationDetail` rows.
+## Playback: streaming the recording
+
+Playback **streams** the stored WAV over HTTP Range rather than downloading it. The
+`mj-storage-media-player` component (`@memberjunction/ng-media-player`) takes the recording's
+`RecordingFileID` and:
+
+1. Calls the **`CreateMediaAccessToken`** mutation, which runs a per-user permission check, mints a
+   short-lived signed token, returns the authenticated `GET /media/:fileId?token=` streaming URL, and —
+   when the `peaks.json` sidecar exists — returns the precomputed waveform peaks.
+2. Hands the URL (and any peaks) to the generic `mj-media-player`, whose `<audio>` element streams the
+   WAV natively over HTTP Range via the `/media` route (re-verifies the token, then range-streams from
+   the storage provider through `FileStorageBase.GetObjectStream`). Supplied peaks render the real
+   waveform instantly with no client-side decode.
+
+The in-conversation **session-review overlay** (`realtime-session-overlay`) embeds
+`mj-storage-media-player` directly, passing the recording file id + the `ConversationDetail` transcript
+cues for click-to-seek + active-turn highlight. (The older `RealtimeEvidencePlaybackComponent` remains a
+generic, input-driven time-aligned player for callers that already hold an audio URL, falling back to
+`__mj_CreatedAt − RecordingStartedAt` when a turn has no precise `UtteranceStartMs`.)
 
 ## The Media channel (showing media during a call)
 

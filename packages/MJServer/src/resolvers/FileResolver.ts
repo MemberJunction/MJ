@@ -1,4 +1,4 @@
-import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, LogError } from '@memberjunction/core';
+import { EntityPermissionType, FieldValueCollection, EntitySaveOptions, LogError, UserInfo } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import { readRealtimeRecordingFile } from '@memberjunction/ai-agents';
@@ -9,6 +9,7 @@ import {
   DeleteOptionsInput,
   Field,
   FieldResolver,
+  Float,
   InputType,
   Int,
   Mutation,
@@ -40,6 +41,7 @@ import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
 import { configInfo } from '../config.js';
 import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
+import { deriveSidecarPath, parsePeaksSidecar } from './peaksSidecar.js';
 
 @InputType()
 export class CreateUploadURLInput {
@@ -361,6 +363,15 @@ export class MediaAccessTokenResult {
   @Field(() => String, { nullable: true })
   MimeType?: string;
 
+  /**
+   * Optional precomputed waveform peaks (normalized `0..1`, one per rendered bar) read from a
+   * `peaks.json` sidecar that sits beside the file in storage. When present, the player renders the
+   * real waveform instantly with NO client-side fetch/decode of the audio. Best-effort: a missing or
+   * malformed sidecar simply omits this field — it never blocks token minting or fails the mutation.
+   */
+  @Field(() => [Float], { nullable: true })
+  Peaks?: number[];
+
   @Field(() => String, { nullable: true })
   ErrorMessage?: string;
 }
@@ -404,11 +415,60 @@ export class FileResolver extends FileResolverBase {
       // Access authorized — mint the capability token.
       const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
       const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}?token=${encodeURIComponent(Token)}`;
-      return { Success: true, Token, Url: url, ExpiresAt, MimeType: fileEntity.ContentType ?? undefined };
+
+      // Best-effort: surface precomputed waveform peaks from a peaks.json sidecar beside the file, so
+      // the player renders the real waveform instantly without fetching/decoding the audio. Never
+      // blocks token minting — any failure just omits Peaks.
+      const peaks = await this.tryReadPeaksSidecar(fileEntity, contextUser);
+
+      return { Success: true, Token, Url: url, ExpiresAt, MimeType: fileEntity.ContentType ?? undefined, Peaks: peaks };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       LogError(`CreateMediaAccessToken failed (file ${fileId}): ${message}`);
       return { Success: false, ErrorMessage: message };
+    }
+  }
+
+  /**
+   * Best-effort read of a `peaks.json` waveform sidecar that sits in the SAME storage folder as the
+   * given file (a JSON array of normalized `0..1` numbers, written at capture time). Derives the
+   * folder from the file's `ProviderKey` (strips the final path segment), reads `<folder>/peaks.json`
+   * via the file's own storage driver, parses + validates it, and returns sanitized peaks. Returns
+   * `undefined` on ANY failure (no ProviderKey, no sidecar, parse error, garbage) — the caller treats
+   * peaks as a pure optimization and must never let a sidecar problem affect token minting.
+   *
+   * @param file The already-loaded (under the user's context) `MJ: Files` row.
+   * @param contextUser The calling user — used to resolve the storage driver.
+   * @returns Sanitized `0..1` peaks (length-capped), or `undefined`.
+   */
+  private async tryReadPeaksSidecar(file: MJFileEntity, contextUser: UserInfo): Promise<number[] | undefined> {
+    try {
+      // The sidecar lives next to the recording: replace the final path segment with peaks.json.
+      const sidecarPath = deriveSidecarPath(file.ProviderKey);
+      if (!sidecarPath) {
+        return undefined;
+      }
+
+      // Resolve the file's storage account → driver (mirror of readRealtimeRecordingFile's pattern).
+      await FileStorageEngine.Instance.Config(false, contextUser);
+      let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+      if (accounts.length === 0) {
+        await FileStorageEngine.Instance.Config(true, contextUser);
+        accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+      }
+      const account = accounts[0];
+      if (!account) {
+        return undefined;
+      }
+      const driver = await FileStorageEngine.Instance.GetDriver(account.ID, contextUser);
+      const bytes = await driver.GetObject({ fullPath: sidecarPath });
+      if (!bytes || bytes.length === 0) {
+        return undefined;
+      }
+      return parsePeaksSidecar(bytes);
+    } catch {
+      // No sidecar / unreadable / parse failure — peaks are optional, never surface the error.
+      return undefined;
     }
   }
 

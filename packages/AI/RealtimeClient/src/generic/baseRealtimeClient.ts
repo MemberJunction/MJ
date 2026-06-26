@@ -284,6 +284,15 @@ export abstract class BaseRealtimeClient {
     public GetRemoteMediaStream?(): MediaStream | null;
 
     /**
+     * **Optional capability:** registers a handler invoked when the agent's remote-audio stream
+     * becomes available — immediately if it has already landed, otherwise when the WebRTC track
+     * arrives (typically AFTER {@link Connect} resolves). Lets a host attach the agent voice to a
+     * recording that began before the track landed. Call as `client.OnRemoteMediaStream?.(cb)`;
+     * drivers without a remote stream simply don't implement it.
+     */
+    public OnRemoteMediaStream?(handler: (stream: MediaStream) => void): void;
+
+    /**
      * Injects typed text into the live session as a USER turn and asks the model to respond.
      * Implementations must route the reply through the same collision-safe path as tool
      * results so it never collides with an in-flight response. No-op when the control

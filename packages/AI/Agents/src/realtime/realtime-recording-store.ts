@@ -43,7 +43,7 @@ export async function resolveRecordingStorageAccountID(
 
 /** Input to {@link storeRealtimeRecording}. */
 export interface StoreRealtimeRecordingInput {
-    /** The encoded recording bytes (e.g. a WAV from the server mixer, or browser webm/ogg). */
+    /** The encoded recording bytes (e.g. a WAV from the server mixer, or the browser's seekable WAV). */
     Audio: Buffer;
     /** MIME type of the audio (`audio/wav`, `audio/webm`, `audio/ogg`, `audio/mp4`). */
     MimeType: string;
@@ -57,6 +57,12 @@ export interface StoreRealtimeRecordingInput {
     SessionID: string;
     ContextUser: UserInfo;
     Provider: IMetadataProvider;
+    /**
+     * Optional capture-time waveform peaks (max-abs per bucket, normalized 0..1). When present, written
+     * as a `peaks.json` sidecar in the SAME session folder as the recording so a viewer can render the
+     * waveform without re-decoding the audio. Best-effort — a sidecar failure never fails the recording.
+     */
+    Peaks?: number[];
 }
 
 /** A short, stable file extension for the recording's MIME type. */
@@ -64,6 +70,9 @@ function extensionForMime(mimeType: string): string {
     if (mimeType.includes('webm')) return 'webm';
     if (mimeType.includes('ogg')) return 'ogg';
     if (mimeType.includes('mp4') || mimeType.includes('m4a')) return 'm4a';
+    // Header-less raw PCM crash-recovery shards (audio/L16 / audio/pcm) — NOT individually playable;
+    // recovery concatenates them in order and WAV-wraps. The consolidated file is always WAV.
+    if (mimeType.includes('L16') || mimeType.includes('pcm')) return 'pcm';
     return 'wav';
 }
 
@@ -145,6 +154,30 @@ export async function writeRealtimeRecordingSegment(input: WriteRecordingSegment
 }
 
 /**
+ * Writes the capture-time waveform peaks as a `peaks.json` sidecar (a JSON array of numbers) into the
+ * session's recording folder via the storage driver. Best-effort and tolerant — a missing/empty peaks
+ * array is a no-op, and any storage failure is logged and swallowed (the recording itself already
+ * succeeded). Never throws.
+ *
+ * @returns `true` when a sidecar was written.
+ */
+export async function writeRecordingPeaksSidecar(
+    sessionID: string, storageAccountID: string, peaks: number[] | undefined, contextUser: UserInfo
+): Promise<boolean> {
+    if (!Array.isArray(peaks) || peaks.length === 0) {
+        return false;
+    }
+    try {
+        const driver = await FileStorageEngine.Instance.GetDriver(storageAccountID, contextUser);
+        const payload = Buffer.from(JSON.stringify(peaks), 'utf8');
+        return await driver.PutObject(`${recordingFolder(sessionID)}/peaks.json`, payload, 'application/json');
+    } catch (error) {
+        LogError(`writeRecordingPeaksSidecar failed (session ${sessionID}): ${error instanceof Error ? error.message : String(error)}`);
+        return false;
+    }
+}
+
+/**
  * Deletes the `seg-*` shards in a session's folder, leaving the consolidated `recording.*` file. Called
  * after {@link storeRealtimeRecording} writes the canonical file at end of call. Never throws.
  *
@@ -179,7 +212,7 @@ export async function deleteRealtimeRecordingSegments(sessionID: string, storage
  * @returns The created `MJ: Files` id, or `null` on failure.
  */
 export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput): Promise<string | null> {
-    const { Audio, MimeType, Media, StartedAt, StorageAccountID, SessionID, ContextUser, Provider } = input;
+    const { Audio, MimeType, Media, StartedAt, StorageAccountID, SessionID, ContextUser, Provider, Peaks } = input;
     try {
         // Canonical consolidated file in the session's own folder, alongside (then replacing) its shards.
         const uploaded = await FileStorageEngine.Instance.UploadFile({
@@ -191,6 +224,10 @@ export async function storeRealtimeRecording(input: StoreRealtimeRecordingInput)
             provider: Provider,
             pathPrefix: recordingFolder(SessionID)
         });
+
+        // Best-effort waveform-peaks sidecar (peaks.json) next to the recording, for fast waveform
+        // rendering without re-decoding the audio. A sidecar failure never fails the recording itself.
+        await writeRecordingPeaksSidecar(SessionID, StorageAccountID, Peaks, ContextUser);
 
         // Link the file to the session record so it's discoverable via MJ: File Entity Record Links.
         const sessionEntityID = Provider.EntityByName('MJ: AI Agent Sessions')?.ID;

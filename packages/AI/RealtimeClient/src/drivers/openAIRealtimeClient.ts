@@ -227,6 +227,8 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
      * mix the agent's voice into a browser-side recording. `null` until the remote track lands.
      */
     private remoteStream: MediaStream | null = null;
+    /** Host handlers notified when the agent's remote-audio stream lands (or immediately, if already present). */
+    private remoteStreamHandlers: Array<(stream: MediaStream) => void> = [];
     /**
      * The server-built session config applied verbatim via `session.update` when the data
      * channel opens. Protected so test subclasses can seed it without a full Connect.
@@ -549,6 +551,9 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
                 // Capture the agent's remote stream so a host can mix it into a recording
                 // (see GetRemoteMediaStream). Playback still flows through the <audio> element.
                 this.remoteStream = e.streams[0];
+                // Notify hosts (e.g. a browser recorder) that the agent's stream is now available
+                // so they can mix it in — the track typically lands AFTER recording already began.
+                this.notifyRemoteStream(e.streams[0]);
                 // Agent-side audio meter taps the remote stream (obligation #9). The
                 // analyser sinks nowhere — playback still flows through the <audio> element.
                 this.attachOutputAudioMeter(RealtimeAudioMeter.ForStream(e.streams[0]));
@@ -563,6 +568,34 @@ export class OpenAIRealtimeClient extends BaseRealtimeClient {
      */
     public GetRemoteMediaStream(): MediaStream | null {
         return this.remoteStream;
+    }
+
+    /**
+     * Registers a handler invoked when the agent's remote-audio stream becomes available — either
+     * later via the WebRTC `ontrack`, or IMMEDIATELY if the track has already landed. Lets a host
+     * attach the agent voice to a recording that started (mic-only) before the track arrived.
+     */
+    public OnRemoteMediaStream(handler: (stream: MediaStream) => void): void {
+        this.remoteStreamHandlers.push(handler);
+        if (this.remoteStream) {
+            this.invokeRemoteStreamHandler(handler, this.remoteStream);
+        }
+    }
+
+    /** Fans a freshly-landed remote stream out to all registered host handlers. */
+    private notifyRemoteStream(stream: MediaStream): void {
+        for (const handler of this.remoteStreamHandlers) {
+            this.invokeRemoteStreamHandler(handler, stream);
+        }
+    }
+
+    /** Invokes one remote-stream handler, isolating host errors so they never disturb the call. */
+    private invokeRemoteStreamHandler(handler: (stream: MediaStream) => void, stream: MediaStream): void {
+        try {
+            handler(stream);
+        } catch (error) {
+            console.warn('[OpenAIRealtimeClient] remote-stream handler threw:', error);
+        }
     }
 
     /**

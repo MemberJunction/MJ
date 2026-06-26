@@ -1,5 +1,5 @@
 import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { MJConversationDetailEntity, ResourceData } from '@memberjunction/core-entities';
@@ -121,7 +121,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
 
   /** Selects a session and loads its transcript into the playback pane (the player resolves audio). */
   public async SelectSession(session: RecordedSession): Promise<void> {
-    if (this.SelectedSession?.ID === session.ID) {
+    if (UUIDsEqual(this.SelectedSession?.ID, session.ID)) {
       return;
     }
     this.SelectedSession = session;
@@ -134,18 +134,18 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     try {
       const turns = await this.loadTurns(session.ID);
       // Guard against a newer selection having superseded this load.
-      if (this.SelectedSession?.ID !== session.ID) {
+      if (!UUIDsEqual(this.SelectedSession?.ID, session.ID)) {
         return;
       }
       this.SelectedTurns = turns;
       this.SelectedCues = this.buildCues(turns, session);
       this.maybeBackfillDuration(session, turns);
     } catch (err) {
-      if (this.SelectedSession?.ID === session.ID) {
+      if (UUIDsEqual(this.SelectedSession?.ID, session.ID)) {
         this.DetailErrorMessage = err instanceof Error ? err.message : String(err);
       }
     } finally {
-      if (this.SelectedSession?.ID === session.ID) {
+      if (UUIDsEqual(this.SelectedSession?.ID, session.ID)) {
         this.IsDetailLoading = false;
       }
       this.cdr.detectChanges();

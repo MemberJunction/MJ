@@ -2,6 +2,8 @@
   class="mj-media-player"
   [class.mj-media-player--bottom-transcript]="TranscriptPosition === 'bottom'"
   [class.mj-media-player--has-transcript]="ShowTranscriptPanel"
+  [class.mj-media-player--audio]="IsAudioOnly"
+  [class.mj-media-player--video]="VideoTracks.length > 0"
   tabindex="0"
   role="group"
   aria-label="Media player"
@@ -319,6 +321,20 @@
                   </ul>
                 }
               </div>
+            }
+
+            @if (ShowTranscriptToggleButton) {
+              <button
+                type="button"
+                class="mj-media-btn"
+                [class.mj-media-btn--active]="TranscriptVisible"
+                [attr.aria-pressed]="TranscriptVisible"
+                [attr.aria-label]="TranscriptVisible ? 'Hide transcript' : 'Show transcript'"
+                [title]="TranscriptVisible ? 'Hide transcript' : 'Show transcript'"
+                (click)="ToggleTranscript()"
+              >
+                <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
+              </button>
             }
 
             @if (ShowFullscreen && VideoTracks.length > 0) {

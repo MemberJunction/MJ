@@ -24,7 +24,7 @@
  *
  * @module @memberjunction/server
  */
-import { Resolver, Mutation, Query, Arg, Ctx, Int, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
+import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -52,7 +52,6 @@ import {
     storeRealtimeRecording,
     writeRealtimeRecordingSegment,
     deleteRealtimeRecordingSegments,
-    readRealtimeRecordingFile,
 } from '@memberjunction/ai-agents';
 import { AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
@@ -314,29 +313,6 @@ export class UploadRealtimeRecordingResult {
     /** ID of the created `MJ: Files` row holding the uploaded recording. Null on failure. */
     @Field(() => String, { nullable: true })
     FileID?: string;
-}
-
-/**
- * Result of {@link RealtimeClientSessionResolver.GetRealtimeRecordingAudio} — a session's recording
- * delivered as base64 bytes read through authenticated MJStorage (no public pre-signed link), so an
- * authorized browser can build a local blob URL. Failures come back as `Success: false`.
- */
-@ObjectType()
-export class RealtimeRecordingAudioResult {
-    @Field(() => Boolean)
-    Success: boolean;
-
-    /** Base64-encoded audio bytes. Null on failure. */
-    @Field(() => String, { nullable: true })
-    AudioBase64?: string;
-
-    /** The audio MIME type (e.g. `audio/webm;codecs=opus`). Null on failure. */
-    @Field(() => String, { nullable: true })
-    MimeType?: string;
-
-    /** Human-readable failure reason. Null on success. */
-    @Field(() => String, { nullable: true })
-    ErrorMessage?: string;
 }
 
 /**
@@ -629,10 +605,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * NEVER throw to the browser, mirroring the shared {@link storeRealtimeRecording} contract.
      *
      * @param agentSessionId The session the recording belongs to (ownership-gated).
-     * @param audioBase64 The base64-encoded recording bytes (webm/ogg/mp4/wav).
-     * @param mimeType The audio MIME type (`audio/webm`, `audio/ogg`, `audio/mp4`, `audio/wav`).
+     * @param audioBase64 The base64-encoded recording bytes (client-direct: seekable WAV/PCM).
+     * @param mimeType The audio MIME type (`audio/wav` for client-direct; legacy `audio/webm`/`ogg`/`mp4`).
      * @param durationMs Optional client-measured recording duration (ms) — informational.
      * @param consent Whether the user consented to recording. MUST be `true` or the upload is refused.
+     * @param peaks Optional capture-time waveform peaks (max-abs per bucket, normalized 0..1). When
+     *   present, persisted as a `peaks.json` sidecar beside the recording for fast waveform rendering
+     *   without re-decoding the audio.
      * @returns A structured {@link UploadRealtimeRecordingResult} with the created `MJ: Files` id.
      */
     @Mutation(() => UploadRealtimeRecordingResult)
@@ -643,6 +622,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Ctx() ctx: AppContext,
         @Arg('durationMs', () => Int, { nullable: true }) durationMs?: number,
         @Arg('consent', () => Boolean, { nullable: true }) consent?: boolean,
+        @Arg('peaks', () => [Float], { nullable: true }) peaks?: number[],
     ): Promise<UploadRealtimeRecordingResult> {
         const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
         const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
@@ -677,6 +657,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 SessionID: agentSessionId,
                 ContextUser: contextUser,
                 Provider: provider,
+                // Sanitized capture-time waveform peaks → persisted as a peaks.json sidecar.
+                Peaks: this.sanitizePeaks(peaks),
             });
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
@@ -744,38 +726,6 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         } catch (error) {
             LogError(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment failed for session ${agentSessionId}: ${error instanceof Error ? error.message : String(error)}`);
             return false;
-        }
-    }
-
-    /**
-     * Returns a session's recording as base64 audio, read through **authenticated** MJStorage
-     * (server-side `GetObject` on the file's own account) — NOT a public pre-signed link. The browser
-     * builds a local blob URL from this, so the audio never leaves an authenticated, ownership-gated
-     * path. Failures come back as `Success: false` (only authn/ownership still throws).
-     *
-     * @param agentSessionId The session whose recording to fetch (ownership-gated).
-     * @returns Base64 audio + MIME type, or a failure envelope.
-     */
-    @Query(() => RealtimeRecordingAudioResult)
-    async GetRealtimeRecordingAudio(
-        @Arg('agentSessionId', () => String) agentSessionId: string,
-        @Ctx() ctx: AppContext,
-    ): Promise<RealtimeRecordingAudioResult> {
-        try {
-            const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
-            const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
-            if (!session.RecordingFileID) {
-                return { Success: false, ErrorMessage: 'This session has no recording.' };
-            }
-            const audio = await readRealtimeRecordingFile(session.RecordingFileID, contextUser, provider);
-            if (!audio) {
-                return { Success: false, ErrorMessage: 'The recording could not be read from storage.' };
-            }
-            return { Success: true, AudioBase64: audio.Bytes.toString('base64'), MimeType: audio.MimeType };
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            LogError(`RealtimeClientSessionResolver.GetRealtimeRecordingAudio failed for session ${agentSessionId}: ${message}`);
-            return { Success: false, ErrorMessage: message };
         }
     }
 
@@ -910,6 +860,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
     private clampTokenDelta(value: number): number {
         return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    }
+
+    /**
+     * Sanitizes client-supplied waveform peaks before they're persisted: drops anything that isn't a
+     * finite number, clamps each to `[0, 1]`, and caps the array length so a hostile client can't bloat
+     * the sidecar. Returns `undefined` for a missing/empty array (no sidecar written).
+     */
+    private sanitizePeaks(peaks: number[] | undefined): number[] | undefined {
+        if (!Array.isArray(peaks) || peaks.length === 0) {
+            return undefined;
+        }
+        const MAX_PEAKS = 4096; // generous ceiling above the client's ~600-bucket target
+        const cleaned = peaks
+            .slice(0, MAX_PEAKS)
+            .filter((v) => Number.isFinite(v))
+            .map((v) => (v < 0 ? 0 : v > 1 ? 1 : v));
+        return cleaned.length > 0 ? cleaned : undefined;
     }
 
     /**
