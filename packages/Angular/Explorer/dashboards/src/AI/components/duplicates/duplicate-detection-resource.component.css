@@ -113,15 +113,17 @@ app-duplicate-detection-resource {
     font-size: 0.85rem;
 }
 
-/* LLM reasoning gate — sits alongside the vector sliders, separated by a subtle rule */
+/* LLM reasoning gate — sits alongside the vector sliders, separated by a subtle rule.
+   The toggle lives in the standard .threshold-label row (with the % value pushed right via
+   margin-left:auto) so the slider and hint line up row-for-row with the vector columns. */
 .reasoning-group {
     padding-left: 24px;
     border-left: 1px solid var(--mj-border-subtle);
 }
 
-/* Toggle sits right next to its label, not flung to the far edge of the column */
-.reasoning-toggle-row {
-    gap: 10px;
+/* Keep the switch compact so the label row matches the height of the vector columns' label rows */
+.reasoning-group mj-switch {
+    margin-left: 2px;
 }
 
 .threshold-slider {
