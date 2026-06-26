@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T213 - Add Record to List",
+    "Description": "Opens the 'Add to a list' dialog from a record's toolbar and verifies the list-selection UI renders.",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity grid — type 'Events' in the LEFT sidebar 'Search entities...' box and click the exact 'Events' node (or, if the search is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Events). Click a row, then click 'Open Full Record'. In the record toolbar (the row of icons at the TOP-LEFT, just above the Details card), click the 'Add to a list' control — the BOOKMARK icon. Verify a dialog/panel opens for adding the record to a List (it shows list options to pick from, or a create-list / select-list UI), with no error. You do NOT need to finish adding — opening the dialog is success. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Add to a list' (bookmark icon) control in the record toolbar was clicked",
+        "A dialog/panel for adding the record to a List opened (list selection or create-list UI)",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,lists"
+  },
+  "primaryKey": {
+    "ID": "71FB46FB-86BB-49FC-9B1A-05D99CBCAE1F"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:33:23.207Z",
+    "checksum": "2deb17a10fd2b368f2ee26a29f11ca2945f766d622d90b712f698227c355d32c"
+  }
+}

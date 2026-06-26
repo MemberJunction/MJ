@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T43 - Data Explorer Sort Events",
+    "Description": "Sorts the Events grid by clicking a visible column header.",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity grid in Data Explorer > Data. Click any visible column header (e.g. Name or Event Type) to sort the grid by that column; click again to toggle ascending/descending. Verify a sort indicator appears and the row order changes. Use a column already visible in the grid rather than adding a new column via Configure View. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "The Events grid is shown",
+        "Clicking a column header sorted the grid (sort indicator visible, row order changed)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,sort"
+  },
+  "primaryKey": {
+    "ID": "AD2AACA3-B688-4C37-82F9-DF16CC85C89E"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.434Z",
+    "checksum": "76dd46982b7101bc5d3de3907f190575a6b1ef56931ce76f25aa3871e7e14053"
+  }
+}

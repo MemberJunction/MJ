@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T106 - Dashboard Category Navigation",
+    "Description": "Verifies the Dashboards section renders and its navigation is usable.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer > Dashboards. Verify the Dashboards section renders. If a category tree/sidebar is present, use it to filter/navigate; if there are no dashboards yet, a valid empty-state without a category sidebar is acceptable. Confirm the section loads without errors. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Dashboards section is active and rendered",
+        "Navigation (category sidebar) is usable OR a valid empty-state is shown",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "A0940D5B-6EDF-4DBA-975F-21220500E720"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.638Z",
+    "checksum": "15db789a6f4a860aca056b8fdf23aebd3989b630529fe9e46ca5bc5ac33ce9db"
+  }
+}

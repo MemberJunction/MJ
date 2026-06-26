@@ -1,0 +1,90 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T199 - Session Persistence on Record Page",
+    "Description": "Verifies the session persists across a page reload (user stays logged in).",
+    "InputDefinition": {
+      "goal": "After logging in, navigate to Data Explorer > Data and open an entity grid (e.g. via the sidebar 'Search entities...' box). Then RELOAD the browser page. After the reload the app may show its loading screen again — WAIT (10-30s) for it to settle. Verify the user remains logged in (NOT bounced to the Auth0 login screen) and the app reloads to a usable Explorer state. Reload on the section/grid view (not a deep individual-record URL). Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "finalUrlPattern": "^http://localhost:4200(?!/login|/callback)",
+      "judgeValidationCriteria": [
+        "After reload, the user is still logged in (not on the Auth0 login screen)",
+        "The app reloaded to a usable Explorer state (the UI returned)",
+        "No permanent stuck-loading or blank white screen"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.5,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200(?!/login|/callback)"
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.2,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.5,
+        "url-match": 0.3,
+        "step-count": 0.2
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,session"
+  },
+  "primaryKey": {
+    "ID": "FD2A62F9-5985-411D-93F7-A9A9812B1AA3"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.552Z",
+    "checksum": "a8701dd52caad6582dc6894ebee14274e8485cae08db635dec59060efd9a3039"
+  }
+}

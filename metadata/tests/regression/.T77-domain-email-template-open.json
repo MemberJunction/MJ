@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T77 - Email Template View",
+    "Description": "Verifies an Email Template record form opens with its fields.",
+    "InputDefinition": {
+      "goal": "Open the 'Email Templates' entity via the LEFT sidebar 'Search entities...' box, click a template row, then click 'Open Full Record'. Verify the Email Template record form opened showing its fields (e.g. Name, Subject, Category). The body/content may live in a SEPARATE section lower on the form (scroll/expand if present), but verifying the template record form opened with its detail fields (including Subject) is success. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "An Email Template record form is displayed",
+        "Template fields including Subject are shown (the body/content may be in a separate section)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,form"
+  },
+  "primaryKey": {
+    "ID": "BD03D91E-B5E2-4628-81D2-D2BDF9BB4D27"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.724Z",
+    "checksum": "207a1feeec2244460f6df90ee878b5533282f4ddb5d52e101cf7f721c68e71cc"
+  }
+}

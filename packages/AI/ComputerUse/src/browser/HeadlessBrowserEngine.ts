@@ -86,6 +86,24 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
      */
     private _isolatedAdapters: WeakMap<SharedContextBrowserAdapter, IsolatedEntry> = new WeakMap();
 
+    /**
+     * Optional process-wide `storageState` seed shared by ALL isolated
+     * contexts, regardless of worker. When set, every `GetIsolated` context is
+     * seeded from this state and the per-worker capture is bypassed entirely —
+     * so a single up-front login (captured once into this slot) authenticates
+     * the whole suite without any test re-running a login flow.
+     *
+     * This is the "single login" mode: it overrides `_workerStorageState`
+     * (which otherwise forces one login per worker, plus a re-login whenever a
+     * per-test capture fails). With a shared seed, each test starts from the
+     * same pristine authenticated state, so a test that corrupts or logs out of
+     * its own context can never poison the next test.
+     */
+    private _sharedSeedState: StorageState | null = null;
+
+    /** Path the current `_sharedSeedState` was loaded from (memoizes file loads). */
+    private _sharedSeedLoadedFrom: string | null = null;
+
     // ─── Lifecycle ─────────────────────────────────────────
 
     /**
@@ -221,7 +239,9 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     ): Promise<SharedContextBrowserAdapter> {
         await this.ensureBrowser();
         const cfg = config ?? new BrowserConfig();
-        const cachedState = this._workerStorageState.get(workerKey);
+        // Shared seed (single-login mode) wins over the per-worker capture: every
+        // worker's context starts from the same up-front authenticated state.
+        const cachedState = this._sharedSeedState ?? this._workerStorageState.get(workerKey);
         const context = await this._browser!.newContext({
             viewport: {
                 width: cfg.ViewportWidth,
@@ -250,6 +270,12 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         this._isolatedAdapters.delete(adapter);
 
         try {
+            // Single-login mode: when a shared seed is active, GetIsolated never
+            // consults the per-worker cache, so capturing it is wasted work and
+            // a poisoning risk (a logged-out/expired context would override the
+            // pristine seed). Skip capture entirely and just close.
+            if (this._sharedSeedState) return;
+
             // Capture state BEFORE closing — context.storageState() requires
             // the context to still be alive. Swallow errors (e.g. context
             // was already aborted) and just don't update the cache.
@@ -279,6 +305,47 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
      */
     public get IsolatedStorageStateCount(): number {
         return this._workerStorageState.size;
+    }
+
+    /**
+     * Enable "single login" mode: seed EVERY isolated context from `state`
+     * (cookies + per-origin localStorage), overriding the per-worker capture.
+     * Pass `null` to disable. See {@link _sharedSeedState}.
+     */
+    public SetSharedStorageState(state: StorageState | null): void {
+        this._sharedSeedState = state;
+        if (!state) this._sharedSeedLoadedFrom = null;
+    }
+
+    /**
+     * Load a shared `storageState` JSON file (the shape written by Playwright's
+     * `context.storageState({ path })`) and use it as the shared seed for all
+     * isolated contexts. Idempotent — repeat calls with the same path are
+     * no-ops once loaded.
+     *
+     * @returns `true` if a shared seed is active after the call; `false` if the
+     *          file was missing or unparseable (caller falls back to the normal
+     *          per-worker login path — single-login mode degrades gracefully).
+     */
+    public async EnsureSharedStorageStateFromFile(path: string): Promise<boolean> {
+        if (this._sharedSeedState && this._sharedSeedLoadedFrom === path) return true;
+        try {
+            // Dynamic import mirrors this module's lazy-Node pattern (see the
+            // `import('playwright')` in Initialize): the engine is Node-only but
+            // never eagerly binds Node built-ins at module top level.
+            const { readFile } = await import('node:fs/promises');
+            const raw = await readFile(path, 'utf8');
+            this._sharedSeedState = JSON.parse(raw) as StorageState;
+            this._sharedSeedLoadedFrom = path;
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    /** Whether single-login mode is active (a shared seed is set). */
+    public get HasSharedStorageState(): boolean {
+        return this._sharedSeedState !== null;
     }
 
     /**
@@ -326,6 +393,8 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
         // Drop all cached storage states — they belong to a previous process
         // lifetime and the auth tokens may have expired anyway.
         this._workerStorageState.clear();
+        this._sharedSeedState = null;
+        this._sharedSeedLoadedFrom = null;
 
         // Close browser only if we launched it ourselves. When attached, the
         // external browser/server stays running — that's the whole point of

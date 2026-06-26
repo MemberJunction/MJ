@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T194 - Admin Class Registry Inspector",
+    "Description": "Opens the Admin app's Developer Tools section and navigates to the Class Registry sub-section. Verifies the class registry inspector renders.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box) - the pinned app list is short and Admin is visible without scrolling. Open the 'Developer Tools' section, then in its left sub-navigation click the 'Class Registry' sub-section. The success state is the class registry inspector rendered, showing a list/tree of registered classes (and typically search or detail controls) OR a valid empty-state. This is a developer tool view, so accept an empty-state as long as the inspector chrome renders. Pages can take 10-30s to load in this resource-constrained environment, so wait for the inspector to render rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Admin application is active and the Developer Tools section is open",
+        "The Class Registry sub-section is selected and the inspector renders a list/tree of classes or a valid empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "09DB4FAC-4564-4E44-A4E1-ADFF182D044F"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.361Z",
+    "checksum": "61852255470b52d4f163a4d8a77e235bd1897beb5f4ec6caa1e534b769e4b1d9"
+  }
+}

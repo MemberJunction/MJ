@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T179 - Open Competitions via Entity Search",
+    "Description": "Verifies that the LEFT sidebar 'Search entities...' box can locate and open the Competitions entity, displaying its grid.",
+    "InputDefinition": {
+      "goal": "Use the LEFT sidebar 'Search entities...' box to open the Competitions entity: type 'Competitions' into that box and click the node named EXACTLY 'Competitions' (NOT 'Competition Entries' or 'Competition Judges'). Do NOT fight a group expand-chevron and do NOT use the Ctrl+K global search box. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Success is reached when the Competitions entity grid is open and displayed in the Data Explorer Data section.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The 'Search entities...' sidebar box was used to find the Competitions entity",
+        "The 'Competitions' entity is selected and its grid is open in the Data Explorer Data section",
+        "The grid renders correctly with rows OR a valid empty-state (no crash)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,nav"
+  },
+  "primaryKey": {
+    "ID": "8FCFEB99-403A-44F2-A170-157AD690597C"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:26.782Z",
+    "checksum": "948f8ef2d3ae81425b238bdf42bf588a4bc6a7b2180c18a557b2a0f4923a8228"
+  }
+}

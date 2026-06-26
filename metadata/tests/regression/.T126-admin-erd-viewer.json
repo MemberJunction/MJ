@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T126 - Admin ERD Diagram Viewer",
+    "Description": "Verifies the Admin app's Data & Schema > ERD sub-section renders the interactive entity-relationship diagram with entity boxes and relationship lines without crashing.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin app using the application switcher dropdown next to the logo (NOT the Ctrl+K search box). Open the 'Data & Schema' section, then in its left sub-navigation click the 'ERD' sub-section. The success state is the interactive entity-relationship diagram rendering with entity boxes and lines connecting related entities. The diagram can be heavy and pages can take 10-30s to load in this resource-constrained env - wait for the diagram to render, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "The Admin app is active with the Data & Schema section open and the ERD sub-section selected in the left sub-navigation",
+        "An interactive entity-relationship diagram is rendered showing multiple entity boxes",
+        "Relationship lines connecting entities are visible in the diagram",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "5614418A-F9A1-457D-8310-A3F3F5A67B58"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:24.471Z",
+    "checksum": "a1809967cbda49a0acf32c7a87f5d764f904945f6a7bb9725160cbf8cee28980"
+  }
+}

@@ -4,7 +4,7 @@
     "Name": "T04 - Data Explorer Browse Entities",
     "Description": "Navigates to Data Explorer, browses the list of available entities, locates the Members entity from AssociationDB, and opens it to view records in a grid.",
     "InputDefinition": {
-      "goal": "Navigate to the Data Explorer application. Browse the list of available entities. Find and click on the 'Members' entity (from the AssociationDemo schema) to open it. Verify that a grid or list of member records is displayed with multiple rows of data.",
+      "goal": "Navigate to the Data Explorer application. Browse the list of available entities. open the 'Members' entity via the sidebar 'Search entities...' box to open it. Verify that a grid or list of member records is displayed with multiple rows of data.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -83,7 +83,7 @@
     "ID": "F83547E5-E480-424E-BF85-999324FB8DB4"
   },
   "sync": {
-    "lastModified": "2026-06-05T02:16:27.729Z",
-    "checksum": "c253bc1f594bdfe3ab25aa50907a6f303c0049353d421dad6661bb68217002bc"
+    "lastModified": "2026-06-25T01:08:23.201Z",
+    "checksum": "8ee95fcf14194fd6999115fc1f3f4db4f225b02011d3f71d4f32113e789b0e2f"
   }
 }

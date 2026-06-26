@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T102 - Query Result Entity Link",
+    "Description": "Runs a multi-row no-parameter query and interacts with the results grid (sort/click).",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer > Queries. Find and Run a no-parameter Approved query (use the 'Search queries...' sidebar box or a visible folder query like 'Entities with Field Counts'). Once results display in the grid, interact with the results — click a column header to sort, or click a result row — and verify the grid responds. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "A no-parameter query was run and results displayed in a grid",
+        "Interacting with the results grid (sort or row click) produced a visible response",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,query"
+  },
+  "primaryKey": {
+    "ID": "72C775CA-7C8B-411B-90C9-D1A812939D4D"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.456Z",
+    "checksum": "40daa772ce4ac2a6531e1288114db5377b695e006bf744fc7ad33e62a748180f"
+  }
+}

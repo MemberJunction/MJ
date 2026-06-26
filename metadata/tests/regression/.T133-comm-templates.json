@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T133 - Communication Templates",
+    "Description": "Verifies the Communication app's Templates section renders its template list and that opening a template shows its editor/detail view without crashing.",
+    "InputDefinition": {
+      "goal": "Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Templates section. Confirm the templates list renders (it has many template rows), then open one template and confirm its editor/detail view appears showing the template's CONTENT — a 'Contents' section with the template Text (which may include {{ placeholder }} parameters) and possibly a 'Template Includes' area. (These are MJ Templates whose body is the Contents/Text — there is NOT a separate 'subject'+'body' field pair, so do not look for those.) Pages can take 10-30s to load in this resource-constrained environment - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Communication app is open with the Templates section selected",
+        "The templates list/grid renders (rows or a valid empty-state)",
+        "After opening a template, an editor/detail view shows the template's content (a 'Contents' section with template Text, possibly with {{ }} parameters or Template Includes)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": {
+    "ID": "0CFD7FE9-091C-4C2A-8650-05E3D530F01A"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T10:41:38.205Z",
+    "checksum": "15eecea788c8141e515748df369790e04382e8d882786c2a577871934eac1254"
+  }
+}

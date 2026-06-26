@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T214 - Foreign Key Link Navigation",
+    "Description": "Navigates from a record to a related record via a foreign-key field's open-link affordance, verifying cross-record FK navigation.",
+    "InputDefinition": {
+      "goal": "Open the 'Event Registrations' entity grid — type 'Event Registrations' in the LEFT sidebar 'Search entities...' box and click it (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Event%20Registrations). Click a row, then 'Open Full Record'. The form has foreign-key fields (e.g. Member, Event). Next to a foreign-key field's value is a small OPEN/NAVIGATE icon (an up-right arrow / external-link icon). Click that icon on one FK field (e.g. Member) to open the RELATED record. Verify a DIFFERENT record's form opens (the URL changes to a different entity/record, e.g. a Member record). Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "Started on an Event Registration record and used a foreign-key field's open/navigate icon",
+        "A DIFFERENT related record opened (URL changed to another entity/record, e.g. a Member)",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,navigation"
+  },
+  "primaryKey": {
+    "ID": "EC4107C6-1615-4DEC-9431-2F9EBEBBCCDD"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:50:08.799Z",
+    "checksum": "60c8aeeb08f8f8999a960a96fb835ad462d3125b0f15007c1f04fc4d69df70cb"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "fields": {
+    "Name": "New Batch Check",
+    "Description": "Fast-validate the newest deeper tests.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md"
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T228 - AI Agent Run Analytics Tab",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B4E1D422-D901-43CB-8F42-63E6D783379F"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:46:57.738Z",
+          "checksum": "b30dcb66c8a172fe1beaaa277afcf2c726f783292f993d02bc2ca234f8443229"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T229 - AI Agent Run Details Tab",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "2FF08DFE-7DDC-49B3-919A-A15939EDCC06"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:46:57.748Z",
+          "checksum": "fa0864de325a273d5fbf2b4807e3920d843f41eec219cdbc0b593467c391f004"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T230 - Bulk Add Records to List",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "AC050A53-2BFD-4FEF-8BE7-74C402029FE6"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:46:57.759Z",
+          "checksum": "0a28d7577d865a1a673fdf3300443dd1589be2bafffda3562ea19ee7c1bda3e2"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "610911C4-2ED1-4403-B0C0-C0297DCF0FD1"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T10:46:57.724Z",
+    "checksum": "37409f7b7e45d4890a7dc8f61d25a981275d546e422948d5d54451add41b6e28"
+  }
+}

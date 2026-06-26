@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T26 - Data Explorer Browse Events",
+    "Description": "Verifies that the Events entity opens from the Data Explorer entity tree and displays a populated grid of event records.",
+    "InputDefinition": {
+      "goal": "Navigate to the Data Explorer application using the application switcher dropdown next to the logo (if the app does not change on the first click, wait and click again, or click the Data Explorer card on the Home page). Open the 'Events' entity via the sidebar 'Search entities...' box and verify a grid of multiple event records is displayed. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "The Data Explorer Data section is open with the entity tree visible on the left",
+        "The 'Events' entity is selected and a row grid is shown",
+        "The grid displays multiple event records (more than one row)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "2C12AEC1-3607-4F31-BB0A-40AF2ECAA63A"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.702Z",
+    "checksum": "7ef774a195e10c9cd6d56a4b41dbc93d4f1770b114106e14eea184fbea25a180"
+  }
+}

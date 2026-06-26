@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T147 - Global Search Member",
+    "Description": "Verifies the global 'Search everything' (Ctrl+K) returns results.",
+    "InputDefinition": {
+      "goal": "Use the 'Search everything' box (Ctrl+K) in the top bar to run a global search — type a broad term such as 'Cheese' or 'Certification'. Verify the global search executes and shows a results panel/list with one or more results from across entities. The search is functional if a results list appears (you do NOT need to find one specific record). Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The global 'Search everything' box accepted a query and executed it",
+        "A search results panel/list with one or more results is displayed",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,search"
+  },
+  "primaryKey": {
+    "ID": "E55BE17E-5177-49A3-9386-721E6A240120"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.436Z",
+    "checksum": "48e313646bda37402981df5232fe67750cb5ec66183fd23516774894e5e6333c"
+  }
+}

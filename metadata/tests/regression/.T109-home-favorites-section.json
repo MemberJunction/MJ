@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T109 - Home Favorites Section",
+    "Description": "Verifies the Home landing page personalized sections render.",
+    "InputDefinition": {
+      "goal": "On the Home landing page, verify the personalized sections render: the 'Pinned' items area (Quick Action Pins — may show 'No pinned items yet' / 'Add Pin' when empty) AND the 'My Applications' cards (and/or a 'Recent' items area). Confirm these Home sections display without errors. Note: the Home page uses a 'Pinned' items section, not a separate 'Favorites' section. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Home landing page is displayed",
+        "The Pinned items area and the My Applications cards (and/or Recent items) render (populated or valid empty-states)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "55C64095-60B5-41A5-B9E6-06D60E4DD19D"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.756Z",
+    "checksum": "aa2c18d04fa21eca268ff3a9ba3001cad24e11e97c9fa34ac59f8b6463363298"
+  }
+}

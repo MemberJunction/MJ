@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T64 - Entity Form Related Records Course",
+    "Description": "Verifies a Course record's related Enrollments section is present.",
+    "InputDefinition": {
+      "goal": "Open the 'Courses' entity via the LEFT sidebar 'Search entities...' box, open a course record's full form, scroll to its related-records sections and open the 'Enrollments' section. Verify the Enrollments related section is present for that course — it shows enrollment rows, OR a count badge (e.g. a number like '16' on the section), OR a valid loading/empty-state. The related section being present and indicating its enrollments (rows or a count) is success; the grid may be slow to populate. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A Course record full form is open",
+        "The 'Enrollments' related section is present (rows, a count badge, or a valid loading/empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,related"
+  },
+  "primaryKey": {
+    "ID": "1E66D7DE-5BDD-4919-A0F6-8349A5354A74"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.201Z",
+    "checksum": "d7c491c2b24fb3bfd101db43f8ae3b007fcb0d2554b5e7e19942bdbe13c2be33"
+  }
+}

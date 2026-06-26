@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T227 - Grid More Actions Menu",
+    "Description": "Opens a grid's 'More actions' (overflow) menu and verifies it lists additional actions.",
+    "InputDefinition": {
+      "goal": "Open the 'Products' entity grid — type 'Products' in the LEFT sidebar 'Search entities...' box and click it (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Products). In the grid toolbar (upper-right), click the 'More actions' control — the vertical ellipsis (three-dots) icon. Verify an overflow menu opens listing additional grid/row actions, with no error. (Seeing the menu open with action items is success; you do NOT need to run an action.) Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The grid's 'More actions' (vertical ellipsis) control was clicked",
+        "An overflow menu opened listing additional actions",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "D288D832-41DC-4F93-BE15-B28BDC5595E1"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T10:41:38.334Z",
+    "checksum": "2c07125e29129705dd10c07ebe48e9f1e51b30ce2f885e0161946168e395670a"
+  }
+}

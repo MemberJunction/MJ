@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T198 - Search No Results Handling",
+    "Description": "Verifies that searching a nonsense term in a grid quick-filter (or global search) produces a clean 'no results' / 'No Matching Rows' state without any error.",
+    "InputDefinition": {
+      "goal": "After logging in, open an AssociationDemo entity via the left sidebar 'Search entities...' box: click the search box, type 'Events', then click the exact 'Events' node (do NOT expand the entity group/chevron). Once the grid loads, type the nonsense term 'zzqxnomatch' into the grid quick-filter box ('Filter records...'). Verify the grid responds with a clean empty/'no results'/'No Matching Rows' state - no rows match and no error is shown. Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A grid (or global search) was searched with the nonsense term 'zzqxnomatch'",
+        "A clean 'no results' / 'No Matching Rows' empty-state is displayed with no matching rows",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,search"
+  },
+  "primaryKey": {
+    "ID": "93048B31-221E-416A-85A4-AABE8430D2A0"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.502Z",
+    "checksum": "d44f7ddd2428f4dc82418b86889ce474d868296f85d4c9ee993b18b0dd6b7a5b"
+  }
+}

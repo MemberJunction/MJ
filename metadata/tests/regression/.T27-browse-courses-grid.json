@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T27 - Data Explorer Browse Courses",
+    "Description": "Verifies that the Courses entity opens from the Data Explorer entity tree and displays a populated grid of course records.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box) and go to Data Explorer, then its Data section. In the left-hand entity tree locate the 'Courses' entity and click it. Wait patiently if the grid is slow to load (pages can take 10-30s in this resource-constrained environment). Success is reached when a grid of multiple course records is displayed, including course codes such as CHZ-101.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Courses' entity is selected in the Data Explorer Data section",
+        "A row grid of multiple course records is displayed",
+        "At least one course code in the CHZ-### or SAF-### format (e.g. CHZ-101) is visible",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "16336B46-E8D3-4832-8438-702E64379177"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.734Z",
+    "checksum": "514d0c94239c061379c0e455b80bac56aa5899b9b08ebadd0fa5fd6e7835b9d3"
+  }
+}

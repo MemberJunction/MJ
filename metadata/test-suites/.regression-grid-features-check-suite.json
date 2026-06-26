@@ -1,0 +1,66 @@
+{
+  "fields": {
+    "Name": "Grid Features Check",
+    "Description": "Tiny focused sub-suite to fast-validate grid Configure-View features (filters/columns/aggregates/views) after a goal fix.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md"
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T220 - Grid Advanced Filter Panel",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F68CD4B2-FDFD-4E9A-B3E2-3FAE48A268DB"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:49:27.396Z",
+          "checksum": "29a9a9430304daa3c11e8661b43418f7227f5df716a54425b171a21b16a25c89"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T221 - Grid Column Management",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "54884338-A169-4088-BA70-3010C07B0464"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:49:27.407Z",
+          "checksum": "542a8db5b98b16cc70514cdc586b1c85454ccc0ba665998844368ceab3a8a76c"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T222 - Grid Aggregates",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "75D54A14-5198-44CC-AAA3-71DFF3AF0793"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:49:27.417Z",
+          "checksum": "3537d1c46db1d0f7bd93e7a406fcd0298e3928ce1dfa895a90358e53ba447be3"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "FC12AD45-829A-48D1-97E4-848978FDF59B"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T07:49:27.383Z",
+    "checksum": "e8d05c60916746d9ca08f82005d8c1176fd4b0cff612888ea29016b64baf309a"
+  }
+}

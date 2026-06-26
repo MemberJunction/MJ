@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T143 - Lists Browse",
+    "Description": "Verifies the Lists application's Lists section loads and renders the list browser.",
+    "InputDefinition": {
+      "goal": "Open the Lists application and view the Lists section. Use the application switcher dropdown next to the logo (NOT the Ctrl+K search box). Verify the Lists browser renders — either showing existing saved lists (with names and item counts) or a valid empty-state with a 'Create List'/'New List' affordance — without errors. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Lists application's Lists section is active",
+        "The list browser renders existing lists OR a valid empty-state with a create-list option",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,lists"
+  },
+  "primaryKey": {
+    "ID": "CB942E68-9F4E-44EB-A4DB-9A3CD162BCF7"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.267Z",
+    "checksum": "2301f35a52da9cf0f885d65a46d83e053f9a490744d1eb57a593a3714a70f105"
+  }
+}

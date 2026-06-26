@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T208 - Edit Date Field and Save",
+    "Description": "Changes a date field value on an Event record using the date picker and saves, verifying date field editing.",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity grid — type 'Events' in the LEFT sidebar 'Search entities...' box and click the exact 'Events' node (or, if the search is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Events). Click a row, then click 'Open Full Record'. Find a date field on the form (for example 'Start Date' or 'Registration Open Date'). Change its value to a different date (click the field to open the date picker and pick a day, or type a valid date). An unsaved-changes 'Save Changes' banner appears at the TOP — click 'Save Changes'. Verify the save succeeds with no error. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A date field's value was changed on an Event record (via the date picker or typing)",
+        "Save Changes was clicked and the save succeeded with no error",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,edit"
+  },
+  "primaryKey": {
+    "ID": "1396719C-AFBC-4E7C-B372-85273900F0EB"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:33:23.141Z",
+    "checksum": "aaa0ce243758be1ea0616bd602ec21f63ea7036b4ca13ec631cf877b94902b1c"
+  }
+}

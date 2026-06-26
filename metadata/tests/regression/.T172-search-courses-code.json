@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T172 - Search Courses by Code",
+    "Description": "Verifies that the grid quick-filter on the Courses grid responds to a course-code fragment by narrowing the visible rows (or showing a clear no-match state).",
+    "InputDefinition": {
+      "goal": "To open the 'Courses' entity, use the LEFT sidebar 'Search entities...' box - type 'Courses' and click the node named EXACTLY 'Courses'. Do NOT fight a group expand-chevron. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Once the Courses grid is loaded, type a course-code fragment such as 'CHZ' into the grid's quick-filter box ('Filter records...'). NOTE: this quick-filter is CLIENT-SIDE over the rows already loaded on the current page, so do NOT expect it to find a specific off-page record. Success is reached when the grid visibly RESPONDS to the filter - the displayed rows narrow to those matching 'CHZ', OR the grid shows a clear no-match / empty state for that term.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Courses entity grid is open in the Data Explorer Data section",
+        "A course-code fragment (e.g. 'CHZ') has been entered into the grid's quick-filter ('Filter records...') box",
+        "The grid visibly responds to the filter: the displayed rows narrow to matches OR a clear no-match/empty state is shown for that term",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,search"
+  },
+  "primaryKey": {
+    "ID": "37DA9E9F-E4C3-4966-A2EB-72BA45700697"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:26.510Z",
+    "checksum": "614cbd6c01302f6b1b382e973a54680352dd0417f623ea2a1e025fca82642018"
+  }
+}

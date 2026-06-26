@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T127 - Admin Query Browser",
+    "Description": "Verifies the Admin app's Data & Schema > Query Browser sub-section renders the query tree and run area without errors.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin app using the application switcher dropdown next to the logo (NOT the Ctrl+K search box). Open the 'Data & Schema' section, then in its left sub-navigation click the 'Query Browser' sub-section. The success state is the query browser rendering with a query tree/list and a query run area. Pages can take 10-30s to load in this resource-constrained env - wait for the view to render, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Admin app is active with the Data & Schema section open and the Query Browser sub-section selected in the left sub-navigation",
+        "The query browser renders showing a query tree/list and an area to run or view a query",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "EA63A0AB-8F31-4800-B2F9-4D4EE50425C4"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:24.525Z",
+    "checksum": "87112a724aed0ab72ca0c955320c5d9bf47a67b2b3865f55641f653bcc948eac"
+  }
+}

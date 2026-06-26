@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T89 - Legislative Bodies Browse",
+    "Description": "Verifies the 'Legislative Bodies' entity grid loads with the seeded bodies and that one body's form opens.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, go to Data Explorer (Data section) and open the 'Legislative Bodies' entity from the entity tree. Confirm the grid shows body rows such as United States Senate and Food and Drug Administration. Then select one body and click 'Open Full Record' to confirm its form loads. Pages can take 10-30s to load - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The 'Legislative Bodies' entity grid shows body rows including recognizable names such as United States Senate or Food and Drug Administration",
+        "A Legislative Body full record form is subsequently opened and renders its detail fields",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "DC174907-C0C0-4AAA-AA1F-B09BAF5D444F"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:30.279Z",
+    "checksum": "0b1ee3c71a2ec9e730383cce1449a7dfa35c2e3f7e355ee6193356be2dff1de6"
+  }
+}

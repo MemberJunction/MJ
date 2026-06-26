@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T107 - Dashboard Search",
+    "Description": "Verifies that the search box in Data Explorer Dashboards filters the dashboard list by name, narrowing to matches or showing a clean no-results state without errors.",
+    "InputDefinition": {
+      "goal": "Use the application switcher dropdown next to the logo (NOT the Ctrl+K search box) to open the Data Explorer app, then go to its Dashboards section (route /app/data-explorer/Dashboards). Find the in-section search box for dashboards and type a search term to filter dashboards by name. The success state is that the dashboard list/card view filters to matching dashboards, OR shows a clean 'no results' state if nothing matches. Pages can take 10-30s to load in this resource-constrained environment - wait for the filtered results to settle, do not navigate away early.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Data Explorer Dashboards section is open and a search term has been entered into its search box",
+        "The dashboard list/card view responded to the search - it shows only matching dashboards, or a clean no-results state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "F6D07DDC-C50B-4D6C-9B4F-FA03B45B8040"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.679Z",
+    "checksum": "a9c6bbadeb80f21c04a5ad3972db3f7d9cb53a0c3c7c5fdac67464bfc732a97f"
+  }
+}

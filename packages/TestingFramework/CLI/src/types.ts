@@ -91,6 +91,13 @@ export interface SuiteFlags extends CommonFlags {
      * Recommended: 3 (statistical minimum), 5 (more reliable detection).
      */
     flakyCheck?: number;
+    /**
+     * Retry a FAILED test up to N extra times before accepting the failure
+     * (pass-if-any-attempt-passes). 0 (default) disables retries. A test that
+     * fails then passes is reported as flaky. Useful for non-deterministic
+     * (LLM-driven) suites where transient failures should not fail the run.
+     */
+    maxRetries?: number;
 }
 
 /**

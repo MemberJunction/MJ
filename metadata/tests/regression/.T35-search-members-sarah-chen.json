@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T35 - Data Explorer Search Members",
+    "Description": "Verifies the Members grid quick-filter is functional.",
+    "InputDefinition": {
+      "goal": "Open the 'Members' entity grid — type 'Members' in the LEFT sidebar 'Search entities...' box and click the EXACT 'Members' match (not 'Board Members'/'Memberships'); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Members. The grid loads ~100 of ~2,002 records per page. Type a value into the grid's filter box (placeholder 'Filter records...') — e.g. a common first-name fragment — and verify the grid RESPONDS to the filter: the displayed rows narrow to matching ones, OR a clear 'No Matching Rows' state appears if none match on the loaded page. Either response confirms the filter is functional (it is client-side over the loaded page). Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "The Members entity grid is displayed with rows",
+        "The grid responded to filter input (rows narrowed to matches, or a clear no-match state was shown)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,search"
+  },
+  "primaryKey": {
+    "ID": "FB8724E6-22E4-4E8A-8695-82A49A27306D"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.118Z",
+    "checksum": "dc47a98a4f8d77f405e8174188c22c445551cd33d19eaf53df31487e8e175a24"
+  }
+}

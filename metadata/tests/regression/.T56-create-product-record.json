@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T56 - Entity Form Create Product",
+    "Description": "Verifies that a new Product record can be created and saved through the entity form, confirming the create-and-save path works for the Products entity.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open the 'Products' entity via the LEFT sidebar 'Search entities...' box. Click the New Record button to open a blank product form. Fill the Name field with 'Regression Test Cheese' and fill EVERY required field — required fields are marked with a red asterisk (*). In particular, the form has a required 'Category' field: click its dropdown and select any available option. After all required fields (including Category) are filled, click Save. Reach the state where the record is saved successfully (a save confirmation appears, or the new product shows in the grid). If Save reports a still-missing required field, fill that field too and Save again. Pages can take 10-30s to load in this resource-constrained environment, so wait for loads and saves to finish rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A new product form was filled with Name 'Regression Test Cheese' and its required fields (including the required Category)",
+        "A save was performed and a save confirmation or saved-state indicator is visible (the product persisted)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,crud"
+  },
+  "primaryKey": {
+    "ID": "91215163-805B-4C04-944A-4B7F4B3EB364"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.944Z",
+    "checksum": "ba7bd972dbeab4e2723b9e5286bdf072fb080eca704e58dd6e4f4461af54d5fc"
+  }
+}

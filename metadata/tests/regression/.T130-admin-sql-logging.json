@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T130 - Admin SQL Logging",
+    "Description": "Verifies Admin > Monitoring > SQL Logging is reachable and handles permissions gracefully.",
+    "InputDefinition": {
+      "goal": "Open the Admin application > Monitoring and select the SQL Logging sub-section. Verify it is reachable: it either renders the SQL logging view (log table or a valid empty/disabled state), OR shows a clear graceful 'Access Denied'/insufficient-permissions message (this section may require elevated privileges the test user lacks). Either a rendered view or a graceful permission message is a pass; a crash or blank screen is a fail. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The SQL Logging sub-section was navigated to",
+        "Either the SQL logging view renders OR a graceful access-denied/permission message is shown",
+        "No crash, raw error stack, or blank white screen"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "18B8480A-0DBA-471C-BFF1-46ED3F45915C"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:24.679Z",
+    "checksum": "4e894e8ba79d6c6c51ec06d282db2a5aa00be560d396cf3e4ed32adee06f9ff3"
+  }
+}

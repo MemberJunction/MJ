@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T104 - Open Existing Dashboard",
+    "Description": "Verifies that an existing dashboard can be opened from the Data Explorer Dashboards browser and that its panels/widgets render (or a valid empty dashboard state) without errors.",
+    "InputDefinition": {
+      "goal": "Use the application switcher dropdown next to the logo (NOT the Ctrl+K search box) to open the Data Explorer app, then go to its Dashboards section (route /app/data-explorer/Dashboards). If one or more dashboards are listed, click into one to open it — success is the opened dashboard showing its panels/widgets (or a valid empty dashboard with no widgets). If NO dashboards exist (the section shows a 'Welcome to Dashboards' / empty state indicating 0 dashboards), then verify that empty state renders cleanly with no errors — that is ALSO success. Pages can take 10-30s to load in this resource-constrained environment - wait for the section to finish loading, do not navigate away early.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Data Explorer Dashboards section was reached and rendered its content",
+        "EITHER an existing dashboard was opened (its name/title and panels/widgets or an empty-dashboard state visible), OR — if no dashboards exist — the Dashboards list shows a clearly-labeled empty state (e.g. 'Welcome to Dashboards' / 0 dashboards) rendered cleanly",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "4A28DB0F-6F08-4631-A7B6-335699395A6B"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.557Z",
+    "checksum": "3fe6aa1baa1300d6d18e74846885dfa7f3e17d2c572925cf5f34881f02b9f215"
+  }
+}

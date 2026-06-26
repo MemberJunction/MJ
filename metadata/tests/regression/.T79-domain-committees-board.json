@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T79 - Governance Committees Browse",
+    "Description": "Verifies the 'Committees' entity grid loads with the seeded committees and that the 'Board Positions' entity also loads.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, go to Data Explorer (Data section) and open the 'Committees' entity from the entity tree. Confirm the grid shows committee rows such as Executive Committee and Finance Committee. Then open the 'Board Positions' entity from the tree and confirm its grid loads (rows or a valid empty-state). Pages can take 10-30s to load - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The 'Committees' entity grid shows committee rows including recognizable names such as Executive Committee or Finance Committee",
+        "The 'Board Positions' entity grid is subsequently opened and renders (rows or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "07A5E1DD-51A6-440D-B850-69C98F808AFA"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.793Z",
+    "checksum": "24c44c4ba239eb03cbe1cded22cf2a0e0e5774a2d2b1096c7dfc79fbff46a27e"
+  }
+}

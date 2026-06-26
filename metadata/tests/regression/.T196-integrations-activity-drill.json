@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T196 - Integrations Activity Drilldown",
+    "Description": "Opens the Integrations app's Activity section and views the activity/run log. Verifies the log renders with rows or a valid empty-state.",
+    "InputDefinition": {
+      "goal": "Switch to the Integrations application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box) - the pinned app list is short and Integrations is visible without scrolling. Open the Activity section and view the activity/run log. If log rows are present, click one row to view its details. The success state is the Integrations Activity view rendered, showing the activity/run log (rows, or a drilled-in run detail) OR a valid empty-state. This is a platform view that may have sparse data in a fresh regression DB, so accept an empty-state as long as the Activity view renders. Pages can take 10-30s to load in this resource-constrained environment, so wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Integrations application is active and the Activity section is open",
+        "The activity/run log renders rows (or a drilled-in run detail) or a valid empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "BF6F34A8-D942-4FFD-AF88-0F66CC2F0939"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.423Z",
+    "checksum": "668a7fa7b0d5f7603d4924be367de0e44e2a7e18b26e11811fcde762330358ef"
+  }
+}

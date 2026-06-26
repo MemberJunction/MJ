@@ -46,6 +46,7 @@ import {
     getMachineIdentifier
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
+import { runWithRetries } from './retry';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -347,6 +348,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // Calculate suite-level metrics
             const passedTests = testResults.filter(r => r.status === 'Passed').length;
             const failedTests = testResults.filter(r => r.status === 'Failed').length;
+            const flakyTests = testResults.filter(r => r.flaky === true).length;
             const totalScore = testResults.reduce((sum, r) => sum + r.score, 0);
             const avgScore = testResults.length > 0 ? totalScore / testResults.length : 0;
 
@@ -357,6 +359,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 status: suiteRun.Status as 'Completed' | 'Failed' | 'Cancelled' | 'Pending' | 'Running',
                 passedTests,
                 failedTests,
+                flakyTests,
                 totalTests: testResults.length,
                 averageScore: avgScore,
                 testResults,
@@ -367,7 +370,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             };
 
             this.log(
-                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed)`,
+                `Suite completed: ${result.status} (${passedTests}/${testResults.length} passed` +
+                    (flakyTests > 0 ? `, ${flakyTests} flaky — passed on retry` : '') + `)`,
                 options.verbose
             );
             return result;
@@ -561,8 +565,23 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
         }
 
-        // Single execution
-        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
+        // Single execution, with optional retry-on-failure (pass-if-any) to absorb
+        // transient non-determinism in LLM-driven targets. A test that fails then
+        // passes is marked `flaky` so the flakiness is reported, never masked.
+        // Retries get a fresh start time so each attempt's duration is its own.
+        const maxRetries = options.maxRetries ?? 0;
+        const result = await runWithRetries(
+            (attempt) => this.runSingleTestIteration(
+                test, suiteRunId, suiteTestSequence, options, contextUser,
+                attempt === 1 ? startTime : Date.now(), tags, suiteVariablesJson, workerIndex, suiteContext
+            ),
+            maxRetries,
+            (nextAttempt, last) => this.log(`[retry] "${test.Name}" was ${last.status} on attempt ${nextAttempt - 1}/${maxRetries + 1} — retrying`)
+        );
+        if (result.flaky) {
+            this.log(`[retry] "${test.Name}" PASSED on attempt ${result.attempts} — marking flaky`);
+        }
+        return result;
     }
 
     /**

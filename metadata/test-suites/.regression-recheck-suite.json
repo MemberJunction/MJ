@@ -1,0 +1,456 @@
+{
+  "fields": {
+    "Name": "Regression Recheck Suite",
+    "Description": "Subset re-run of the 29 tests that failed in the first full run, used to validate test-design fixes and confirm flaky vs real failures.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md"
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T04 - Data Explorer Browse Entities",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "95376501-166B-4FD7-85C8-FA31F60DDE0F"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.656Z",
+          "checksum": "5dfb09db9c957a32591d97cb09c2570e76a8c19586aa2d8d446c8051b81bf14e"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T08 - Navigation and Tab Management",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5AEDA80C-A723-409A-B875-C06008230837"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.669Z",
+          "checksum": "85c7f432c2ef294c413f36cc080f2580dbbf6a55e5a5364cc5056e8a702790be"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T15 - AI Application Prompt Management",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "2B4D134D-4DC1-4485-A1B0-EB9CF4F00C75"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.683Z",
+          "checksum": "8b284db34a172b7c8f02d98793f29d5f709257d4092fe9edefc5fc7842952d62"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T20 - Dashboard Browser",
+          "Sequence": 4,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BB8E75C4-ED26-4142-9D1B-64CBCE175442"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.698Z",
+          "checksum": "273298190b17ac0cabf2342f5e60537a1c8cfa432eb62e66b6814c0b2da019ad"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T22 - Integrations Overview",
+          "Sequence": 5,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3ACA9F48-CD8E-43D6-AC9C-9C1B38CF71EC"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.594Z",
+          "checksum": "4b98aba319389456ac395b407a3864115724eac55482a4b1835f0cc2e1adc250"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T26 - Data Explorer Browse Events",
+          "Sequence": 6,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B9F7289E-2717-434F-BB47-22A540E14202"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.710Z",
+          "checksum": "e1fe11b18631c25bdb079cbccade6b1d1782426364ebf144289e820bde7f9e4a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T35 - Data Explorer Search Members",
+          "Sequence": 7,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "193CD5C6-79AA-4F1A-98D6-56C45C36BBDB"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.723Z",
+          "checksum": "6c7dabb89024e0118cf6263228606112e62e2f052f656377401eacdac1036369"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T40 - Data Explorer Filter Events by Status",
+          "Sequence": 8,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8300A1B9-ADF7-4D77-B6FC-6579C6119004"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.735Z",
+          "checksum": "94acdccc0affeae91334cbbf86b28f52a0ba6db84201f32d3f4d15e6af67cdc9"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T43 - Data Explorer Sort Events",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DE3C85FC-174A-4485-B171-4D1A4143F7A8"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.750Z",
+          "checksum": "1f7078890e8a24a7f369cbef845bfdd2ee9254f9d81586ce41bf9cef3c58e7a5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T45 - Data Explorer Paginate Members",
+          "Sequence": 10,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "685C1E45-24E8-4F62-BCBE-0415236B6868"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.762Z",
+          "checksum": "0a21b73ac7ba8fb25970c32e1830f7f6772da8df1a8d760008b4e7c6eb1c70d3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T48 - Entity Form View Member",
+          "Sequence": 11,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DD58CBEE-CFA4-4638-9DDF-58440D149C54"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.855Z",
+          "checksum": "48fbf8e71576a3742cd15ecff89aa517e8009ccdb935543c327f3e2fa9c1d953"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T53 - Entity Form Create Event",
+          "Sequence": 12,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "086AF7B5-8ABC-498C-84E0-D89CF4686225"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.871Z",
+          "checksum": "8d9f7e09be5cf011023f2becfa32887861abca7760f815711a8326d340931e3f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T58 - Entity Form Edit Member",
+          "Sequence": 13,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5BF1D824-BB9A-4490-A0C3-27C4EC0FE4E0"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.886Z",
+          "checksum": "9f104679221f3bd4e0a49c12dc0bcc96da10d75380ea3a6dc66dfe513a3f8c6a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T59 - Entity Form Edit Event",
+          "Sequence": 14,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "63A0044D-9921-4025-ACA5-D821D5D50A03"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.900Z",
+          "checksum": "227ad27699dcb85838c65a5d36ea78cd3fc53e18f4692b3169e5b9843e524ab5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T61 - Entity Form Required Field Validation",
+          "Sequence": 15,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "131F616F-6400-4A15-A891-B4441282AC29"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.916Z",
+          "checksum": "8b6d30dd2cfe35177d810e6fb23a927162301e5e98a1799cd15523de1fd58092"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T62 - Entity Form Related Records Member",
+          "Sequence": 16,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DDB4B457-035A-4D12-AF0E-E36B384F8481"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.929Z",
+          "checksum": "a6a974e02994221bf54b3cbc5660319e2e3dda1569a87ee5c5c1274d5f189a81"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T68 - Membership Member History",
+          "Sequence": 17,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3EAE9DE4-4441-4E3A-907E-6D2C032DEE7A"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.943Z",
+          "checksum": "e680018dc877a324ceebfc8dee5f59a6f9654d45e96d95ff7cc4c46fdeb167d8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T70 - Events Registrations Drilldown",
+          "Sequence": 18,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8B7FEBC0-F002-4610-A853-EEE870149255"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.957Z",
+          "checksum": "ebff08a925ac1de2a7d86b090bee088d477f0ef096c5f2ca4795ded578a5e511"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T90 - Cross-Domain Member Traverse",
+          "Sequence": 19,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5127A6A4-1954-4AEC-AE7A-D57B644CEDFF"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.971Z",
+          "checksum": "b529ae874bfd7924051de0bc5fc6a14734d1ec07c2df7abf664bf1f78aed11ff"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T91 - Cross-Domain Org to Member",
+          "Sequence": 20,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0664C601-4ACF-46F5-840D-37B290A11344"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.981Z",
+          "checksum": "30e2feb4535b215035e8d6f33d437bd3f78d53f9b842c1cd8084e0f7b584735c"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T92 - Data Integrity FK Display Names",
+          "Sequence": 21,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "629C66F0-6820-4ED7-821D-0050BA9BEE4A"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.094Z",
+          "checksum": "a95d65881f5aa27330ac7880e8d4a64ed30b907e9911fc3e07fe5dcbdfc84019"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T94 - Query Total Outstanding Invoice Balance",
+          "Sequence": 22,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1C13FBD8-6B89-42DF-9857-AF838C111CE2"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.110Z",
+          "checksum": "4de03df225a6b91ae0189ae0d66ff5342cd38c7e512314f5728795fe81c474c4"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T98 - Query CEU Credits Awarded Summary",
+          "Sequence": 23,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "112CA4AE-4F6E-461F-8298-D9B9468057D6"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.124Z",
+          "checksum": "a161ba58b74e68b67b405771cfa460a7c73f59550cf41d892a02f40185563b79"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T106 - Dashboard Category Navigation",
+          "Sequence": 24,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3B6383C8-1414-4726-9E89-AFDF5DBD0352"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.138Z",
+          "checksum": "298a653421ed96e4a65e295d2e83216f43f9ada4e79250e333b45fcab50fe941"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T130 - Admin SQL Logging",
+          "Sequence": 25,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0A7719F8-1E95-4286-857E-F10268E61503"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.151Z",
+          "checksum": "eb6927b5974475af5bd1c5b4a0ce4d880184d0c588fe429960b24b84466867d1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T139 - Integrations Overview",
+          "Sequence": 26,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D853070D-AB69-455C-B2D9-71B3450D7EB7"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.017Z",
+          "checksum": "722125d4781867a0bfed73618ddb59763159f5fd71ad263c2d13c3613aa26c09"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T140 - Integrations Connections List",
+          "Sequence": 27,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A40A3F25-1D8E-418E-8C06-06DEDB775164"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.031Z",
+          "checksum": "33be86b5bcb009998bfd8233bbbbcb73995e7196c9fea5f39911c63c5a16175f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T141 - Integrations Activity Log",
+          "Sequence": 28,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "029FF112-D2DD-407E-AE79-CF77CC86B83C"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.045Z",
+          "checksum": "62c53993aa2153ebb8e848ed55451e77b3e3be452dd115ed5e6141f9c746da1c"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T147 - Global Search Member",
+          "Sequence": 29,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "15F2B9A3-4AB4-490F-99D8-6871159AFE05"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:39.163Z",
+          "checksum": "a583ed53d2e1a3bbb1fb7d84647761da9be838736e77791fb07d01eb3dfa5ac3"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "F2DBB920-08F7-457F-BF56-35CF2D8249F3"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T07:49:27.484Z",
+    "checksum": "e1cc0674de7cbc8bb3ace88f2bf422b0cdb775258f1632165be27fe297a7920c"
+  }
+}

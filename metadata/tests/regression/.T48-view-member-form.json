@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T48 - Entity Form View Member",
+    "Description": "Verifies that a Member record opens into its full editable entity form with populated fields, confirming the form rendering pipeline works for the Members entity.",
+    "InputDefinition": {
+      "goal": "IMPORTANT: To open the 'Members' entity, use the LEFT sidebar 'Search entities...' box — type 'Members' and click the node named EXACTLY 'Members' (individual member people, ~2000 records; NOT 'Board Members', 'Campaign Members', 'Member Follows', 'Memberships', 'Membership Types', 'Chapter Memberships', or 'Committee Memberships'). Do NOT fight a group expand-chevron. Navigate to Data Explorer and open the 'Members' entity from the entity tree. Click a member row in the grid (e.g. Sarah Chen), then click the 'Open Full Record' button to load the full editable member form in a tab. Reach the state where the form is fully rendered with populated fields such as the member's name and email. Pages can take 10-30s to load in this resource-constrained environment, so wait for loads to finish rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "The full Members record form is displayed in a tab, not just the grid preview panel",
+        "Form fields show populated member data such as a name and an email address",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,form"
+  },
+  "primaryKey": {
+    "ID": "3331C3DC-E483-497D-ABCD-6AD21B88B30D"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.620Z",
+    "checksum": "2e6d3e6a8dbf3d8980a6ad1176a33a866adfca96031fd3a61936b63b22f2d6f2"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T28 - Data Explorer Browse Organizations",
+    "Description": "Verifies that the Organizations entity opens from the Data Explorer entity tree and displays a populated grid of organization records.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box) and go to Data Explorer, then its Data section. In the left-hand entity tree locate the 'Organizations' entity and click it. Wait patiently if the grid is slow to load (pages can take 10-30s in this resource-constrained environment). Success is reached when a grid of multiple organization records is displayed.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Organizations' entity is selected in the Data Explorer Data section",
+        "A row grid is shown with multiple organization records (more than one row)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "1239E498-B6E2-4490-BAE8-78655BEB9748"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.779Z",
+    "checksum": "4d8ac143fcca7e20739745043c39904965dda80faf34444ece62acfafa9e2d7b"
+  }
+}

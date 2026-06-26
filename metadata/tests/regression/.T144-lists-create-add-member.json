@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T144 - Lists Create and Populate",
+    "Description": "Verifies that a new list can be created in the Lists app for the Members entity and that at least one Member record can be added to it and shown in the list.",
+    "InputDefinition": {
+      "goal": "Open the Lists app using the application switcher dropdown next to the logo (NOT the Ctrl+K search box). In the Lists section, use the Create list action to create a new list named 'Regression Test List 2' for the Members entity — when choosing the entity for the list, select the one named exactly 'Members' (NOT 'Memberships', 'Membership Types', or any other Member-prefixed entity). Then add at least one Member record to the list. Confirm success by reaching a state where the new list 'Regression Test List 2' exists and displays the added Member record. Pages can take 10-30s to load in this resource-constrained env - wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "A list named 'Regression Test List 2' was created for the Members entity",
+        "At least one Member record has been added to the list",
+        "The list view displays the added Member record (a populated row, not an empty list)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,lists"
+  },
+  "primaryKey": {
+    "ID": "437E0E1B-3DBA-4CE3-B6DC-011524191B81"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.311Z",
+    "checksum": "e465f1f57d5dd109ac1f88baffef19c856c620557b22f089d30a51cefa674dbf"
+  }
+}

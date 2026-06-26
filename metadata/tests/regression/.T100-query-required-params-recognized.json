@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T100 - Query Required Parameters",
+    "Description": "Verifies the Queries UI surfaces required input parameters before a query can return data.",
+    "InputDefinition": {
+      "goal": "In Data Explorer > Queries, use the LEFT sidebar 'Search queries...' box (NOT the global Ctrl+K box) to find a query that requires input parameters: type 'Recent Entity Changes' (or 'Tag Distribution For Entity') and select it. Verify its Query Parameters panel appears with one or more fields marked with a red asterisk (*), indicating input is required before results are returned (the grid shows no results until a parameter is supplied). If neither named query is present, pick any query whose selection reveals a Query Parameters panel with asterisked required field(s). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A query requiring parameters was selected",
+        "A Query Parameters panel with a required field (red asterisk) is shown",
+        "No results are returned until the required parameter is provided",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,query"
+  },
+  "primaryKey": {
+    "ID": "BDF012ED-0688-4522-BA2D-90D0B89ECFC0"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.359Z",
+    "checksum": "09db1b3e5f189a707cc4cb4009ef90b23826a30b30b364370acd303ad5a2bab3"
+  }
+}

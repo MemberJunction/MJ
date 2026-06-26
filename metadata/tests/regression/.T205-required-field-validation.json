@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T205 - Required Field Validation Error",
+    "Description": "Attempts to save a new record with a required field left empty and verifies the app surfaces a validation error gracefully rather than crashing.",
+    "InputDefinition": {
+      "goal": "Open the 'Members' entity grid — type 'Members' in the LEFT sidebar 'Search entities...' box and click the EXACT 'Members' match (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Members). Click the 'New Record' (New/Create) button to open a blank Member form. WITHOUT filling the required fields (those marked with a red asterisk *), click Save. Verify the app responds with a clear VALIDATION message indicating required field(s) are missing (e.g. a field-level error or a 'required' message) and does NOT crash, show a blank screen, or save an invalid record. Reaching that validation-blocked state is success. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A new record form was opened and Save attempted with required field(s) empty",
+        "The app surfaced a clear validation/required-field message and blocked the invalid save",
+        "No crash, blank screen, or raw server error — handled gracefully"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,validation"
+  },
+  "primaryKey": {
+    "ID": "EBA37AB4-1A44-4195-85FC-E9F776841BDE"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:33:23.095Z",
+    "checksum": "893f3c63464b6f191c6ea19f948d9fb33616a7a57833082bd8c4e5037444e446"
+  }
+}

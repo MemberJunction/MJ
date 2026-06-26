@@ -1,0 +1,36 @@
+{
+  "fields": {
+    "Name": "F5 Check",
+    "Description": "Validates the AI Prompt form loads (F5 TemplateContents crash fix).",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md"
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T231 - AI Prompt Record Loads",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "499E1DE5-594A-4D76-86AA-ABF1F879BAC8"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T11:03:49.882Z",
+          "checksum": "c786b2d5af8ab61e214bb8df46cfa887b0b9fda9933acbbfc0d0c5f3eb821cfd"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "CF9826E0-D02E-4435-AC32-9AF28A35D103"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T11:03:49.869Z",
+    "checksum": "d0af95af0dcf1572a90c60e2ee1c3f95ca7e3f3689289af310542e3a5567c24d"
+  }
+}

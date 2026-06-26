@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T200 - Open System Entity via Entity Search",
+    "Description": "Verifies a core system/MJ entity (e.g. Users or AI Prompts) can be found via the Data Explorer sidebar 'Search entities...' box and that its grid loads.",
+    "InputDefinition": {
+      "goal": "After logging in, use the left sidebar 'Search entities...' box to find a SYSTEM/MJ entity: click the search box, type 'Users' (or 'AI Prompts'), then click the matching system entity node in the results (do NOT expand the entity group/chevron). Verify the entity's grid loads - showing rows, or a valid empty-state for sparse system entities. Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A system/MJ entity (e.g. Users or AI Prompts) was found via the sidebar 'Search entities...' box and selected",
+        "The entity's grid loaded - showing rows OR a valid empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "D9765363-BA8A-4C17-B7E6-8FD81E850D56"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.626Z",
+    "checksum": "02122bcd6819579c4a9905379fdda7e46afb0e8a534dcc6d5808288ad63713d5"
+  }
+}

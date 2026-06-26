@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T42 - Data Explorer Sort Members",
+    "Description": "Verifies that clicking a column header in the Members grid sorts the rows and visibly reorders the grid.",
+    "InputDefinition": {
+      "goal": "Open the 'Members' entity grid in Data Explorer. The reliable way: type 'Members' in the LEFT sidebar 'Search entities...' box and click the EXACT 'Members' match (not 'Board Members'/'Memberships'/etc.); if that is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Members. Wait patiently if the grid is slow to load (10-30s in this resource-constrained environment). Then click a column header (e.g. Last Name) to sort the grid by that column. Success is reached when the column shows a sort indicator and the row order visibly changes to reflect the sort.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Members entity grid is open in the Data Explorer Data section",
+        "A column header (e.g. Last Name) has been clicked and shows a sort indicator (ascending or descending arrow)",
+        "The grid row order reflects the applied sort",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,sort"
+  },
+  "primaryKey": {
+    "ID": "36702EB5-F2FD-4287-900C-08323CE97B4F"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.404Z",
+    "checksum": "98539c9113736886980674b4bfdc904a5e6c4b32a6230ba8b89a14afab35cebe"
+  }
+}

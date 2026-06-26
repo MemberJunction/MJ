@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T72 - Learning Course Enrollments",
+    "Description": "Verifies a Course's related Enrollments can be reached from the full record form and that enrollment rows render.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, go to Data Explorer (Data section) and open the 'Courses' entity from the entity tree. Select the course 'CHZ-101 Cheesemaking Fundamentals' (or any course) and click 'Open Full Record' to load the full course form. On that form, locate the related Enrollments section/tab and view the enrollments, confirming enrollment rows are displayed. Pages can take 10-30s to load - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "A Course full record form is open showing course detail fields",
+        "The related Enrollments section/tab is visible with enrollment rows (or a valid empty-state for a course with no enrollments)",
+        "The enrollments grid shows member or status columns",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,related"
+  },
+  "primaryKey": {
+    "ID": "D9ECE763-BEF6-4691-8E93-E4DE28F31263"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.512Z",
+    "checksum": "dcdcef0a6522b60be706b5d29af60fa52bfd6a06edf9bc82c4259e10e977459b"
+  }
+}

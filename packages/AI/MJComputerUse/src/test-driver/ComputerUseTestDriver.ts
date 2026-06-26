@@ -610,6 +610,20 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         // "new" (default) — isolated context with per-worker auth replay
         if (strategy === 'new') {
+            // Single-login mode: when MJ_TEST_AUTH_STATE_FILE points at a captured
+            // storageState (one up-front login for the whole suite), seed EVERY
+            // worker's context from it instead of forcing a per-worker login.
+            // Missing/unreadable file degrades gracefully to per-worker login.
+            const authStateFile = process.env.MJ_TEST_AUTH_STATE_FILE;
+            if (authStateFile && !browserEngine.HasSharedStorageState) {
+                const ok = await browserEngine.EnsureSharedStorageStateFromFile(authStateFile);
+                if (!ComputerUseTestDriver._sharedAuthLogged) {
+                    ComputerUseTestDriver._sharedAuthLogged = true;
+                    this.logToTestRun(context, ok ? 'info' : 'warn', ok
+                        ? `[auth] single-login mode active — seeding all browser contexts from ${authStateFile}`
+                        : `[auth] MJ_TEST_AUTH_STATE_FILE not loadable (${authStateFile}); using per-worker login`);
+                }
+            }
             const workerKey = `worker-${context.workerIndex ?? 'sequential'}`;
             return browserEngine.GetIsolated(workerKey, browserConfig);
         }
@@ -630,6 +644,9 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         return browserEngine.GetRecycled(key, browserConfig);
     }
+
+    /** One-time log guard for single-login (shared auth-state) mode. */
+    private static _sharedAuthLogged = false;
 
     private static _sharedSessionWarned = false;
     private static warnSharedSessionOnce(): void {

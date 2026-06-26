@@ -4,7 +4,7 @@
     "Name": "T23 - Handle Invalid Navigation Gracefully",
     "Description": "Attempts to navigate to a non-existent entity or URL path and verifies the application handles it gracefully without crashing.",
     "InputDefinition": {
-      "goal": "Navigate the browser to an invalid URL path like http://localhost:4200/app/nonexistent/invalid-path. Verify that the application handles this gracefully by showing an error page, a 'not found' message, or redirecting to a valid page. The application should NOT show a blank white screen or crash.",
+      "goal": "Navigate the browser to an invalid URL path like http://localhost:4200/app/nonexistent/invalid-path. The app handles invalid routes gracefully by REDIRECTING to the Home page (you will end up at /app/home/Home) — this may take a brief loading moment, so WAIT for the redirect to settle (do not conclude failure while it is still loading). Success = the app ends on a valid page (Home), or shows an error/'not found' message; it must NOT show a blank white screen or crash. Reaching the Home page after the invalid URL counts as graceful handling.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "36A5AAA2-25B8-42FC-A06A-DF19BFEA56F0"
   },
   "sync": {
-    "lastModified": "2026-06-05T02:16:28.198Z",
-    "checksum": "619fcbdf6ec0ff0fa0f18eb13fcb060076e15759208a2c9804646ac70caf2e7a"
+    "lastModified": "2026-06-25T02:11:23.386Z",
+    "checksum": "4bc6fbfc2a8c4edbe36daa89866296e0f5c01bd009cd047c34d42287b8f5ab4f"
   }
 }

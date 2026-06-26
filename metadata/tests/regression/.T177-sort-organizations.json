@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T177 - Sort Organizations Grid",
+    "Description": "Verifies that clicking the Name column header in the Organizations grid sorts the rows and visibly reorders the grid.",
+    "InputDefinition": {
+      "goal": "To open the 'Organizations' entity, use the LEFT sidebar 'Search entities...' box - type 'Organizations' and click the node named EXACTLY 'Organizations'. Do NOT fight a group expand-chevron. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Once the Organizations grid is loaded, click the 'Name' column header to sort the grid by organization name. Success is reached when the Name column shows a sort indicator (an ascending or descending arrow) and the row order visibly changes to reflect the sort.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Organizations entity grid is open in the Data Explorer Data section",
+        "The 'Name' column header has been clicked and shows a sort indicator (ascending or descending arrow)",
+        "The grid row order visibly changes to reflect the applied sort",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,sort"
+  },
+  "primaryKey": {
+    "ID": "541C937E-8DA9-4409-B4D9-0BAC60FF607E"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:26.710Z",
+    "checksum": "25e4bc84cc34860255ee7f9a1f464c65429fb8c55da1864ac913ed8523301fb2"
+  }
+}

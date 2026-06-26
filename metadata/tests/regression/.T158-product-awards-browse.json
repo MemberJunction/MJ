@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T158 - Browse Product Awards",
+    "Description": "Verifies the Product Awards entity opens via the Data Explorer sidebar search and displays a grid of product award records.",
+    "InputDefinition": {
+      "goal": "Open the 'Product Awards' entity via the left sidebar 'Search entities...' box: click the search box, type 'Product Awards', then click the exact 'Product Awards' node in the results. Do NOT expand the entity group/chevron - use the search box. Verify a grid of records is displayed (multiple rows, or a valid empty-state for sparse entities). Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Product Awards' entity is selected in the Data Explorer Data section",
+        "A row grid of product award records is displayed (multiple rows, or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "BC6216C2-B4DA-44A9-8034-031A1EFBA566"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.929Z",
+    "checksum": "b96e10547ae8be7e2ed7e95c7e2e5565ab88b65f621550e8d146a1093eb07aa0"
+  }
+}

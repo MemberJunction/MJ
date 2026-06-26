@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T168 - Entity Form View Email Template",
+    "Description": "Verifies an Email Template record opens from the grid into its full record form with populated subject and body content.",
+    "InputDefinition": {
+      "goal": "Open the 'Email Templates' entity via the left sidebar 'Search entities...' box (type 'Email Templates' and click the exact node), or navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Email%20Templates. When the grid loads, click a row, then click 'Open Full Record'. Verify the full record form displays with populated detail fields such as Subject, From Name, From Email, and Preview Text. (NOTE: the email body/content is stored in a related 'Template Contents' section, not as a direct field on this form — you do NOT need to find a 'body' field; seeing the populated metadata fields is success.) Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "An Email Template full record form is open (not just the grid/preview panel)",
+        "The form shows populated detail fields such as Subject, From Name/Email, and Preview Text (the body/content lives in a related Template Contents section, not a direct field)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,form"
+  },
+  "primaryKey": {
+    "ID": "89151C0D-DE8C-45D3-9559-C5C48BDFE5F8"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:33:22.977Z",
+    "checksum": "baf6a4e3e95d6ec054bce243079f27bff0b8282bd2bdc5e1e38e2f73c4aa1644"
+  }
+}

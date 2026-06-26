@@ -77,24 +77,35 @@ const { sql, connect } = require('./lib/db.cjs');
         }
     }
 
-    // 3. Pin every Active application to the user.
-    // MJAPI's autoCreateNewUsers (CreateUserApplicationRecords:true) only pins
-    // apps where DefaultForNewUser=1 (~8 of 20 apps), leaving Admin/AI/etc.
-    // hidden behind the configure modal. We pin the rest here.
+    // 3. Pin ONLY the test-relevant applications; deactivate the rest.
+    // A short, focused switcher list keeps every app the tests target visible
+    // WITHOUT scrolling. Pinning ALL ~22 active apps made the dropdown long enough
+    // that the last app (Integrations, highest DefaultSequence) sat clipped at the
+    // bottom edge, so the LLM agent intermittently failed to reach it. Apps not in
+    // this list are set IsActive=0 (they move to the Configure "Available" list, out
+    // of the switcher) — an FK-safe UPDATE, no deletes.
+    const TEST_APPS = ['Home', 'Data Explorer', 'AI', 'Admin', 'Integrations', 'Communication', 'Lists', 'AssociationDemo'];
+    const appList = TEST_APPS.map(n => `'${n.replace(/'/g, "''")}'`).join(', ');
     const appPin = await pool.request()
         .input('userId', sql.UniqueIdentifier, userId)
         .query(`
             INSERT INTO __mj.UserApplication (UserID, ApplicationID, Sequence, IsActive)
             SELECT @userId, a.ID, a.DefaultSequence, 1
             FROM __mj.Application a
-            WHERE a.Status = 'Active'
+            WHERE a.Status = 'Active' AND a.Name IN (${appList})
               AND NOT EXISTS (
                   SELECT 1 FROM __mj.UserApplication ua
                   WHERE ua.UserID = @userId AND ua.ApplicationID = a.ID
               );
-            SELECT @@ROWCOUNT AS pinned;
+            UPDATE ua SET ua.IsActive = 1
+            FROM __mj.UserApplication ua JOIN __mj.Application a ON ua.ApplicationID = a.ID
+            WHERE ua.UserID = @userId AND a.Name IN (${appList});
+            UPDATE ua SET ua.IsActive = 0
+            FROM __mj.UserApplication ua JOIN __mj.Application a ON ua.ApplicationID = a.ID
+            WHERE ua.UserID = @userId AND a.Name NOT IN (${appList});
+            SELECT (SELECT COUNT(*) FROM __mj.UserApplication ua WHERE ua.UserID = @userId AND ua.IsActive = 1) AS pinned;
         `);
-    console.log(`  Pinned ${appPin.recordset[0].pinned} applications to user`);
+    console.log(`  Pinned ${appPin.recordset[0].pinned} test-relevant applications to user (others deactivated)`);
 
     // 4. Make every entity within those apps visible.
     // Without UserApplicationEntity rows, the user's app navigation shows the

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T151 - Browse Memberships",
+    "Description": "Verifies the Memberships entity opens via the Data Explorer sidebar search and displays a grid of membership records.",
+    "InputDefinition": {
+      "goal": "Open the 'Memberships' entity via the left sidebar 'Search entities...' box: click the search box, type 'Memberships', then click the exact 'Memberships' node in the results. Do NOT expand the entity group/chevron - use the search box. Verify a grid of records is displayed (multiple rows, or a valid empty-state for sparse entities). Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Memberships' entity is selected in the Data Explorer Data section",
+        "A row grid of membership records is displayed (multiple rows, or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "86CB6CFF-9754-4317-8966-B7FBE4B7E906"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.645Z",
+    "checksum": "f7f9890c30ce328cbc6f8643da457b019e373bd09a3813a1e62b3c5a0eb13842"
+  }
+}

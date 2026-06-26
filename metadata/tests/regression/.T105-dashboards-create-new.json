@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T105 - Create New Dashboard",
+    "Description": "Verifies the dashboard creation flow: clicking New Dashboard, naming it, saving, and confirming the new dashboard is created and appears in the Data Explorer Dashboards browser.",
+    "InputDefinition": {
+      "goal": "Use the application switcher dropdown next to the logo (NOT the Ctrl+K search box) to open the Data Explorer app, then go to its Dashboards section (route /app/data-explorer/Dashboards). Click the 'New Dashboard' button, set the dashboard name to 'Regression Test Dashboard', and save it. The success state is the new dashboard created: it either opens directly after saving, or it appears as 'Regression Test Dashboard' in the dashboards list/card view. Pages and save operations can take 10-30s in this resource-constrained environment - wait for the save to complete, do not navigate away early.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "A new dashboard creation flow was completed with the name 'Regression Test Dashboard' entered",
+        "After saving, the dashboard named 'Regression Test Dashboard' is shown - either opened in its own view/tab or listed in the Dashboards browser",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "B5FF9AF6-44BF-45D2-B87B-52A6DCAA5E28"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.604Z",
+    "checksum": "cc85e49b51c20bf3397fbcf2baf571e4204fa47ea7e56dd79c9bde5e278c6126"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T189 - AI Model Detail View",
+    "Description": "Opens an AI model from the AI app's Models section and verifies its detail/configuration view renders. Confirms the model drilldown path stays intact.",
+    "InputDefinition": {
+      "goal": "Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box) - the pinned app list is short and AI is visible without scrolling. Open the Models section, then click a model row to open it. If a preview panel appears, click 'Open Full Record' to load the full detail form. The success state is the model's detail/configuration view rendered, showing the model's fields/settings (such as name, vendor, type, or token limits) OR a valid form for that record. Pages can take 10-30s to load in this resource-constrained environment, so wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The AI application is active and the Models section was opened",
+        "A single model's detail or configuration view is displayed, showing the model's fields/settings or its full record form",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "F18C061B-D171-4B50-81DF-E17F7AA7B03D"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.128Z",
+    "checksum": "07bfc63cd5050296bf7bbb336ab5ec3fa2ae0dc6c30d15dcb334a6031da9459c"
+  }
+}

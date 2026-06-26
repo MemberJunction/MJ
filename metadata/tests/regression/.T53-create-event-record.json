@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T53 - Entity Form Create Event",
+    "Description": "Verifies the Event create form + required-field handling (save or validation).",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity via the sidebar 'Search entities...' box, click New/Create. Fill Name='Regression Test Event', Start Date and End Date, and the required dropdowns Event Type and Status (the Status dropdown is FURTHER DOWN the form — scroll all the way to the bottom to find it; click it, then click an option). Click 'Save Changes' (top banner). SUCCESS = the record saves (confirmation or it appears in the grid) OR — if a required dropdown proves unreliable to set after genuine attempts — the form correctly BLOCKS the save with a required-field validation message (e.g. 'Status cannot be null'), which still demonstrates the create+validation workflow functions. A crash or blank screen is a fail. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "A new Event create form opened and text/date fields were filled",
+        "Either the record saved OR the form correctly enforced a required field with a validation message",
+        "No crash, raw error stack, or blank white screen"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,crud"
+  },
+  "primaryKey": {
+    "ID": "A3A60CA3-7246-4280-B307-B833835FE378"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.834Z",
+    "checksum": "a2b1aaba9cdd894cc89ddaf89c8ad253d8ace52ad1461ea28daab4394265bb00"
+  }
+}

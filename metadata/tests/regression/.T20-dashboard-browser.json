@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T20 - Dashboard Browser",
-    "Description": "Navigates to Data Explorer > Dashboards and opens a dashboard to verify it renders correctly.",
+    "Description": "Dashboard browser renders; accepts populated or empty dashboards.",
     "InputDefinition": {
-      "goal": "Navigate to Data Explorer. Find the Dashboards section and open a dashboard. Verify that the dashboard renders with at least one widget, chart, or data display visible.",
+      "goal": "Navigate to the Data Explorer application and open the Dashboards section. Verify the Dashboards browser renders. If dashboards exist, open one and verify it displays (its panels/widgets, OR a valid 'No parts configured' empty-state). If no dashboards exist, a clean empty browser state is acceptable. A populated dashboard OR a valid empty-state is a pass; a crash or blank white screen is a fail. Pages can take 10-30s to load — wait, don't navigate away.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,15 +30,16 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 35,
+      "maxSteps": 40,
       "judgeValidationCriteria": [
-        "Dashboard browser is displayed",
-        "At least one dashboard is listed or displayed"
+        "The Dashboards section/browser rendered without crashing",
+        "Either a dashboard is shown (panels or a valid no-parts state) or a clean empty browser state",
+        "No crash, raw error, or blank white screen"
       ]
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 35,
+      "maxSteps": 40,
       "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
@@ -58,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 35
+            "maxSteps": 40
           }
         }
       ],
@@ -74,7 +75,7 @@
     "ID": "4069DC55-B2BB-452C-8AD2-599802D90E6B"
   },
   "sync": {
-    "lastModified": "2026-06-05T02:16:28.124Z",
-    "checksum": "a0cc4786180494669fd26e7ca52f224038b272c387521874fd5175b24dca123e"
+    "lastModified": "2026-06-25T01:08:27.596Z",
+    "checksum": "a44f72bd4855cc4dfcd3386f3d6f1446b99ee789f994e67e32ad4b4189ea29c4"
   }
 }

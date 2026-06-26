@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T134 - Communication Providers",
+    "Description": "Verifies the Communication app's Providers section renders the providers list/configuration view without errors.",
+    "InputDefinition": {
+      "goal": "Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Providers section. Confirm the providers list or configuration view renders correctly, showing provider entries or a valid empty-state. Pages can take 10-30s to load in this resource-constrained environment - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Communication app is open with the Providers section selected",
+        "The providers list or configuration view renders (provider entries or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": {
+    "ID": "B855768F-B6EE-44AD-BBC2-B63413BB37BE"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:24.859Z",
+    "checksum": "a3e47c23edd20b1c8230a08c7871bf810a42df7dc5820d2fb49a1bc806fef07a"
+  }
+}

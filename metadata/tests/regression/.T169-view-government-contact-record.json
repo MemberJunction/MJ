@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T169 - Entity Form View Government Contact",
+    "Description": "Verifies a Government Contact record can be opened from the grid into its full record form with populated detail fields.",
+    "InputDefinition": {
+      "goal": "Open the 'Government Contacts' entity via the left sidebar 'Search entities...' box: click the search box, type 'Government Contacts', then click the exact 'Government Contacts' node in the results (do NOT expand the entity group/chevron). When the grid loads, click a row, then click the 'Open Full Record' button. Verify the full record form displays with populated detail fields. Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "A Government Contact full record form is open (not just the grid/preview panel)",
+        "The form shows populated detail fields for the government contact record",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,form"
+  },
+  "primaryKey": {
+    "ID": "F36891E0-6254-4D3D-8F76-AF60B424DDD9"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:26.408Z",
+    "checksum": "21f78043e379c500f0826928d3dfa69fed7c37269e779dc0d5b59501a29891e9"
+  }
+}

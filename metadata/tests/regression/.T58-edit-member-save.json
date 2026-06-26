@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T58 - Entity Form Edit Member",
+    "Description": "Verifies that an existing Member record can be edited and the change saved through the entity form, confirming the update-and-save path works for the Members entity.",
+    "InputDefinition": {
+      "goal": "IMPORTANT: To open the 'Members' entity, use the LEFT sidebar 'Search entities...' box — type 'Members' and click the node named EXACTLY 'Members' (individual member people, ~2000 records; NOT 'Board Members', 'Campaign Members', 'Member Follows', 'Memberships', 'Membership Types', 'Chapter Memberships', or 'Committee Memberships'). Do NOT fight a group expand-chevron. Navigate to Data Explorer, open the 'Members' entity, click a member row, and click 'Open Full Record' to load the full member form. Change an editable field such as Title or City to a new value, then click Save. Reach the state where the change is saved (a save confirmation appears or the new value is persisted in the form). Pages can take 10-30s to load in this resource-constrained environment, so wait for loads and saves to finish rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "The full member form is open and an editable field such as Title or City was changed to a new value",
+        "A save was performed and a save confirmation or the persisted new value is visible",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,crud"
+  },
+  "primaryKey": {
+    "ID": "363FA576-A4E1-48B9-B18C-6006C07C964B"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.006Z",
+    "checksum": "e3b77b1f3bad6fbf4f8bc97a7e0d46ca59a421b7dfa57d4523a4613cd258e82e"
+  }
+}

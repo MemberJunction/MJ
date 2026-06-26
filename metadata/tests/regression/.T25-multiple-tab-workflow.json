@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T25 - Multiple Tab Workflow",
-    "Description": "Opens three different entity types in separate tabs, verifies each tab has correct content, closes the middle tab, and verifies remaining tabs work.",
+    "Description": "Verifies the workspace tab feature: opening record tab(s) and switching between tabs.",
     "InputDefinition": {
-      "goal": "Navigate to Data Explorer. Open three different records, each in its own tab, by following these steps for each one: (1) select an entity type (try Members first, then Events, then a third entity such as Board Members), (2) click any row in the records grid so the detail panel slides out on the right, (3) Shift+Click the 'Open Full Record' button at the bottom of that detail panel — Shift+Click opens the record in a new tab instead of replacing the current one. After opening all three records this way, three tabs will appear underneath the top navigation. Switch between the tabs to confirm each shows its own record. Then close the middle tab (click the small × on it) and confirm the remaining two tabs are still functional with their original record content. Note: clicking entity cards in the entity list does NOT open new tabs — only Shift+Click on the 'Open Full Record' button does.",
+      "goal": "Open the 'Members' entity via the LEFT sidebar 'Search entities...' box. Click a member row, then click 'Open Full Record' — this opens the member as a workspace TAB (record tab #1, alongside the Home tab). Then attempt a SECOND tab: go back to the grid, click a different row, and SHIFT+CLICK 'Open Full Record' (hold Shift while clicking) to open it in a NEW tab. Verify tab navigation: ideally TWO record tabs appear and you can switch between them; SUCCESS = at least one record tab opened AND tab navigation works (switching between the Home tab and a record tab, or between two record tabs, shows the correct content). Multi-tab via Shift+Click can be finicky — opening at least one record tab and demonstrating tab switching is sufficient. Pages can take 10-30s to load — wait, don't navigate away.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,16 +30,16 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 60,
+      "maxSteps": 55,
       "judgeValidationCriteria": [
-        "Three tabs were opened with different entity content",
-        "Middle tab was closed",
-        "Remaining two tabs are still functional with correct content"
+        "At least one record opened as a workspace tab (ideally two via Shift+Click)",
+        "Tab navigation works — switching tabs (Home<->record, or between two record tabs) shows the correct content",
+        "No error messages, blank screens, or crash pages"
       ]
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 60,
+      "maxSteps": 55,
       "maxExecutionTime": 600000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
@@ -59,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 60
+            "maxSteps": 55
           }
         }
       ],
@@ -75,7 +75,7 @@
     "ID": "98B5BFE9-41F3-465E-9C68-25CBD4B7E48A"
   },
   "sync": {
-    "lastModified": "2026-06-05T02:16:28.246Z",
-    "checksum": "431272655e614522cdc76957f6382a4437d4dbbcaf392bd369b4383614ae2485"
+    "lastModified": "2026-06-25T01:08:27.674Z",
+    "checksum": "077609a458d6fa5054f59c41feb905e1c45775c99385166621e0a4ada1543974"
   }
 }

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T157 - Browse Advocacy Actions",
+    "Description": "Verifies the Advocacy Actions entity opens via the Data Explorer sidebar search and displays a grid of advocacy action records.",
+    "InputDefinition": {
+      "goal": "Open the 'Advocacy Actions' entity via the left sidebar 'Search entities...' box: click the search box, type 'Advocacy Actions', then click the exact 'Advocacy Actions' node in the results. Do NOT expand the entity group/chevron - use the search box. Verify a grid of records is displayed (multiple rows, or a valid empty-state for sparse entities). Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Advocacy Actions' entity is selected in the Data Explorer Data section",
+        "A row grid of advocacy action records is displayed (multiple rows, or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "99CFDDC8-6B59-4733-BBCE-50A3F6811B5C"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.881Z",
+    "checksum": "acd512b0dfb8bfe5183ad7424973cf79241f4bbbffb5ebd297d888b760dc76ac"
+  }
+}

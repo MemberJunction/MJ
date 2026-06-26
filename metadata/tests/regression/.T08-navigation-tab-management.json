@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T08 - Navigation and Tab Management",
-    "Description": "Opens multiple entity records in separate tabs, switches between tabs, and closes a tab without losing the others. Validates the core tab management workflow.",
+    "Description": "Verifies workspace tab navigation between Home and an open record.",
     "InputDefinition": {
-      "goal": "Navigate to Data Explorer. Open at least two different entity records so they appear in separate tabs in the tab bar. Switch between the tabs to verify each shows its own content. Then close one of the tabs and verify that the remaining tab(s) are still open and functional with their correct content displayed. Use Shift+Click on the tab to open the page as a tab.",
+      "goal": "Open a record: open the 'Events' (or 'Members') entity via the LEFT sidebar 'Search entities...' box, click a row, then click 'Open Full Record'. The record opens as a TAB in the top workspace bar alongside the 'Home' tab. Click the 'Home' tab to switch back to Home, then click the record's tab to switch back to the record. Verify switching between the Home tab and the record tab works and each shows its own content. (You do NOT need multiple record tabs — this verifies tab navigation between Home and an open record.) Pages can take 10-30s to load — wait, don't navigate away.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,16 +30,16 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 35,
+      "maxSteps": 40,
       "judgeValidationCriteria": [
-        "Multiple tabs are visible in the tab bar",
-        "Content changed when switching tabs",
-        "After closing a tab, at least one other tab remained open"
+        "A record opened as a workspace tab alongside the Home tab",
+        "Switching between the Home tab and the record tab works, each showing its own content",
+        "No error messages, blank screens, or crash pages"
       ]
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 35,
+      "maxSteps": 40,
       "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
@@ -59,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 35
+            "maxSteps": 40
           }
         }
       ],
@@ -75,7 +75,7 @@
     "ID": "8F37873C-FD30-4C2C-A875-716DCE7C9E77"
   },
   "sync": {
-    "lastModified": "2026-06-05T02:16:27.828Z",
-    "checksum": "c82f78891220be517c0eb291f946de7956fe29f62ddb14f03262129a10ae38fb"
+    "lastModified": "2026-06-25T01:08:23.303Z",
+    "checksum": "039b2fd1c078310f4362372ef12663f6e3c0ae6d4d91d40f58d0ef44d5f16570"
   }
 }

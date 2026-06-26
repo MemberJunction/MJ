@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T191 - Admin App Roles Section",
+    "Description": "Opens the Admin app's Identity & Access section and navigates to the App Roles sub-section. Verifies the App Roles view renders.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box) - the pinned app list is short and Admin is visible without scrolling. Open the 'Identity & Access' section, then in its left sub-navigation click the 'App Roles' sub-section. The success state is the App Roles view rendered, showing a list/grid of application-role entries OR a valid empty-state. This is a platform view that may have sparse data in a fresh regression DB, so accept an empty-state as long as the App Roles view renders. Pages can take 10-30s to load in this resource-constrained environment, so wait for the view to render rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Admin application is active and the Identity & Access section is open",
+        "The App Roles sub-section is selected and its view renders a list/grid or a valid empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "17F07B41-D198-4EB6-8A66-970F6B699D57"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.208Z",
+    "checksum": "5665e6a0912fa363c14eccfa4c6200a2cc2e11dd1a061b85fcc51210029ea60a"
+  }
+}

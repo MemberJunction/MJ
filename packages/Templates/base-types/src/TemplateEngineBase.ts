@@ -14,12 +14,23 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
 
+    // Initialized to empty collections so the cache getters never throw when the
+    // dataset hasn't loaded (or failed to load). A consumer accessing template
+    // data before/without a successful Config() gets empty arrays — never an
+    // "undefined" NPE that would crash the whole consuming UI (e.g. the AI Prompt
+    // form, which reads TemplateContents to resolve a prompt's template text).
     private _Metadata: {
         TemplateContentTypes: MJTemplateContentTypeEntity[],
         TemplateCategories: MJTemplateCategoryEntity[],
         Templates: MJTemplateEntityExtended[],
         TemplateContents: MJTemplateContentEntity[],
         TemplateParams: MJTemplateParamEntity[]
+    } = {
+        TemplateContentTypes: [],
+        TemplateCategories: [],
+        Templates: [],
+        TemplateContents: [],
+        TemplateParams: []
     };
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
@@ -43,20 +54,20 @@ export class TemplateEngineBase extends BaseEngine<TemplateEngineBase> {
     }
 
     public get Templates(): MJTemplateEntityExtended[] {
-        return this._Metadata.Templates;
+        return this._Metadata?.Templates ?? [];
     }
 
     public get TemplateContentTypes(): MJTemplateContentTypeEntity[] {
-        return this._Metadata.TemplateContentTypes;
+        return this._Metadata?.TemplateContentTypes ?? [];
     }
     public get TemplateCategories(): MJTemplateCategoryEntity[] {
-        return this._Metadata.TemplateCategories;
+        return this._Metadata?.TemplateCategories ?? [];
     }
     public get TemplateContents(): MJTemplateContentEntity[] {
-        return this._Metadata.TemplateContents;
+        return this._Metadata?.TemplateContents ?? [];
     }
     public get TemplateParams(): MJTemplateParamEntity[] {
-        return this._Metadata.TemplateParams;
+        return this._Metadata?.TemplateParams ?? [];
     }
 
     /**

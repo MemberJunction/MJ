@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T47 - Data Explorer Entity Tree Navigation",
+    "Description": "Verifies that the Data Explorer left-hand entity tree can be expanded to reach the AssociationDemo demo entities and that opening one navigates to its grid.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer > Data (use the application switcher dropdown next to the logo, NOT the Ctrl+K search). Use the LEFT sidebar 'Search entities...' box to find an AssociationDemo demo entity — type 'Members' (or 'Events'/'Products') and click the matching entity node. Verify the entity's grid loads with rows. Use the sidebar 'Search entities...' box rather than expanding group chevrons. Pages can take 10-30s to load — wait. Success = the searched entity opens and its grid of records is displayed.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Data Explorer Data section is open with the entity tree visible on the left",
+        "The entity tree shows AssociationDemo demo entities (e.g. Members, Events, Products)",
+        "One of those entities was clicked and its row grid is displayed on the right",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "28B4DC00-80A3-4B1F-A007-EE66CEA5C47B"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.565Z",
+    "checksum": "f868747aba2ff62931bc47f54a2984557e3bc473bcebe90dcb1ac5586f87474a"
+  }
+}

@@ -129,6 +129,21 @@ export interface TestRunOptions {
    * If undefined, the test's own RepeatCount is used.
    */
   repeatCountOverride?: number;
+
+  /**
+   * Number of extra attempts to retry a FAILED test before accepting the failure
+   * (pass-if-any-attempt-passes). 0 (default) disables retries.
+   *
+   * For non-deterministic targets (e.g. LLM-driven Computer Use tests) a test can
+   * fail transiently — a timeout, a navigation loop, or the agent giving up — yet
+   * pass cleanly on a re-run. Retrying absorbs that variance so the suite result
+   * reflects genuine failures, not one-off flakes. A test that fails then passes is
+   * marked `flaky` (see {@link TestRunResult.flaky}) so flakiness stays visible and
+   * is never silently masked.
+   *
+   * Only applies to single-execution tests; RepeatCount tests are not retried.
+   */
+  maxRetries?: number;
 }
 
 /**
@@ -309,6 +324,19 @@ export interface TestRunResult {
   sequence?: number;
 
   /**
+   * Total number of attempts made for this test, including the first.
+   * 1 when no retry occurred; >1 when retried (see {@link TestRunOptions.maxRetries}).
+   */
+  attempts?: number;
+
+  /**
+   * True when the test FAILED at least once but ultimately PASSED on a retry.
+   * The final `status` is `Passed`, but `flaky` flags that it was non-deterministic
+   * — so reports can surface it and genuine app flakiness is never silently masked.
+   */
+  flaky?: boolean;
+
+  /**
    * Resolved variables that were used for this test run
    */
   resolvedVariables?: ResolvedTestVariables;
@@ -347,6 +375,12 @@ export interface TestSuiteRunResult {
    * Tests that failed
    */
   failedTests: number;
+
+  /**
+   * Tests that passed only after a retry (failed at least once first).
+   * A subset of `passedTests` — surfaces flakiness without masking it.
+   */
+  flakyTests?: number;
 
   /**
    * Total tests

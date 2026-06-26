@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T197 - Resilience Invalid Record Navigation",
+    "Description": "Verifies invalid record/URL navigation does not crash (shows error or recovery prompt).",
+    "InputDefinition": {
+      "goal": "Navigate to an invalid / non-existent record URL or entity (e.g. open a record then alter it to a clearly-bogus value, or use a known-bad path). Verify the app handles it WITHOUT crashing to a blank white screen — it should show EITHER a clean 'record not found' / error message, OR a recovery prompt (e.g. a 'Taking longer than expected' notice with a 'Reset' button). Either a not-found message or a recovery prompt counts as graceful, non-crashing handling. A fully blank white screen or raw error stack is a fail. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Navigated to an invalid record/URL",
+        "The app did NOT crash — it shows a not-found/error message OR a recovery prompt (e.g. a 'Reset' option)",
+        "No fully blank white screen or raw error stack"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,nav"
+  },
+  "primaryKey": {
+    "ID": "50377581-D1A3-425E-8C6C-760DB04958E5"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.467Z",
+    "checksum": "113864970d86abb40f7d1e9015835e94712b6937ef3166688e50a8bc34f8399a"
+  }
+}

@@ -49,13 +49,14 @@ Respond with ONLY a JSON object (no other text):
 - **"done"**: `true` ONLY if the goal is fully accomplished and visible on screen
 - **"impossible"**: `true` when you are confident the goal **cannot** be accomplished regardless of what actions the agent takes. Set this when you observe:
   - Access denied / permission errors that the agent cannot resolve
-  - The target page, element, or feature does not exist
-  - The agent is stuck in an unrecoverable loop (same actions, same results, no progress)
+  - The target page, element, or feature definitively does not exist
   - A prerequisite is missing that the agent has no way to fulfill
-  - An error message on screen indicates a permanent failure (not a transient/retryable error)
-  - The agent has tried multiple distinct approaches and all have failed
+  - An error message on screen indicates a **permanent** failure (NOT a transient/retryable condition)
+  - The agent has tried multiple **distinct** approaches and all have clearly failed
+
+  **NEVER mark `impossible` for a page that is still loading.** A loading or boot screen — a spinner, a blank/white page that is still initializing, or text such as `Loading workspace...`, `Loading configurations...`, `Spinning up resources...`, or a `Reset` prompt — is a **transient environment condition, not impossibility**. This app runs in a resource-constrained environment where these screens can persist for **60+ seconds** and across **several reloads** before the UI appears. Repeatedly waiting on or reloading a loading screen is **correct, progressing recovery behavior** — it is explicitly NOT an "unrecoverable loop." While such a screen is showing, return `"impossible": false` and `"done": false` so the agent can keep waiting/retrying. Only conclude the load has failed if the app has clearly never appeared after the agent has reloaded **several times over multiple minutes**.
 - **"confidence"**: how certain you are (0.0 = guessing, 1.0 = absolutely certain)
 - **"reason"**: concise explanation of what you see and why you reached your verdict
 - **"feedback"**: if not done and not impossible, specific guidance on what the agent should do next. Empty string if done or impossible.
 
-**Important:** Be conservative with `"impossible": true`. Only use it when you are genuinely confident there is no path forward. If the agent has only tried one approach and it failed, suggest an alternative approach instead. Reserve impossibility for situations where all reasonable paths are clearly blocked.
+**Important:** Be conservative with `"impossible": true`. Only use it when you are genuinely confident there is no path forward. If the agent has only tried one approach and it failed, suggest an alternative approach instead. Reserve impossibility for situations where all reasonable paths are clearly blocked. **A still-loading page is never impossible — when in doubt on a loading/boot screen, return `impossible: false`.**

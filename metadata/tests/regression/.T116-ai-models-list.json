@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T116 - AI Models List",
+    "Description": "Verifies the Models section of the AI app renders a list of AI models without errors.",
+    "InputDefinition": {
+      "goal": "Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Models section. Confirm a list of AI models is displayed. Pages can take 10-30s to load in this resource-constrained environment, so wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The AI app Models section is displayed",
+        "The view shows a list of AI models or a clear empty-state message",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "63E92078-5F6E-4101-A748-485E05FEE4BA"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:24.050Z",
+    "checksum": "37af2de7c57abf5e4e74c327a99bd64d84640ba5b7356a505af53c6b8e140396"
+  }
+}

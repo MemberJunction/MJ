@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T206 - Edit Persists After Reopen",
+    "Description": "Edits and saves a field on an Event record, then reopens the record to verify the change persisted to the database.",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity grid — type 'Events' in the LEFT sidebar 'Search entities...' box and click the exact 'Events' node (or, if the search is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Events). Click a row, then click 'Open Full Record'. Change the 'Location' text field to 'Persisted Edit 206', then click the 'Save Changes' button in the top banner and wait for the save to confirm. Then navigate back to the Events grid (or reload) and re-open the SAME record's full form again. Verify the 'Location' field still shows 'Persisted Edit 206' — confirming the edit persisted. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "A field was edited and saved on an Event record",
+        "After reopening the same record, the saved value ('Persisted Edit 206') is still shown — the change persisted",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,edit"
+  },
+  "primaryKey": {
+    "ID": "349CD6D7-35BF-4331-8A7E-C0FE708CDA45"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:33:23.110Z",
+    "checksum": "1f4d3002da44935ff2c40bac3450c694ac45c4e601c44d7df3e197ddf1eaa304"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T188 - Legislative Body Issues Drilldown",
+    "Description": "Verifies a Legislative Body's full record form exposes a related Legislative Issues section that renders related rows or a valid empty-state.",
+    "InputDefinition": {
+      "goal": "Open the 'Legislative Bodies' entity via the left sidebar 'Search entities...' box: click the search box, type 'Legislative Bodies', then click the exact 'Legislative Bodies' node in the results (do NOT expand the entity group/chevron). Open a legislative body record's full form (click a row, then click 'Open Full Record'). Scroll down to the form's related-records sections and open the 'Legislative Issues' related section. Verify it shows related rows OR a valid empty-state (the related section being present and rendering is success). Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "A Legislative Body full record form is open showing body detail fields",
+        "The related 'Legislative Issues' section is present and rendering - showing issue rows OR a valid empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,related"
+  },
+  "primaryKey": {
+    "ID": "C5A90F6E-0437-401B-999D-B208F85308AA"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.090Z",
+    "checksum": "aa0eaf7e57779dcee4e409d9d4f019d45aeda4074d3f7b4aabc36f1c558b9528"
+  }
+}

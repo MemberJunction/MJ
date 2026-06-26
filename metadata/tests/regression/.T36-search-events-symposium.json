@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T36 - Data Explorer Search Events",
+    "Description": "Verifies that the Events entity grid search/filter box narrows results to events matching a term.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K global search) and go to Data Explorer, then its Data section. In the left-hand entity tree open the 'Events' entity. Wait patiently if the grid is slow to load (10-30s in this resource-constrained environment). Then use the grid's own search/filter box (within the Events grid, not the global Ctrl+K search) to search for 'Symposium'. Success is reached when the grid filters down to matching event(s), such as 'International Cheddar Symposium 2024'.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Events entity grid is open in the Data Explorer Data section",
+        "A search/filter term of 'Symposium' has been entered into the grid's search box",
+        "The grid shows at least one matching event containing 'Symposium' in its title",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,search"
+  },
+  "primaryKey": {
+    "ID": "B115DCCB-DDA5-4BD3-B8D6-A9A093EA1B56"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.153Z",
+    "checksum": "5ceedc00240d87ab3ba5a7f4fc3abfe6a09e676b41767f1c32a6a7a5f6e96c40"
+  }
+}

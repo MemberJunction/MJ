@@ -1,0 +1,66 @@
+{
+  "fields": {
+    "Name": "Fixes Check",
+    "Description": "Tiny sub-suite to fast-validate recent fixes + new tests.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md"
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T133 - Communication Templates",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F1BF5143-7AA5-4223-B4D9-2708BDF62361"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:41:44.820Z",
+          "checksum": "294305ccadb501f8001312a9b749de776f4cd1df3cb6dcb57ba082845bfec77d"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T226 - Notifications Panel",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "73B9B718-65F9-433D-B2E1-8B530929473B"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:41:44.800Z",
+          "checksum": "3e56fb1a6a5572ea2675f98575c4f86a180ef14136ef413ea4f87f195cf44109"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T227 - Grid More Actions Menu",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A770F53C-EB4C-4BDB-8BF6-577EE8150ECC"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:41:44.809Z",
+          "checksum": "d3ff2af0fa6169858a766e9a37361a13ccd43cc801b7cd798fac68424cf25de8"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "3382FF79-87A0-46DC-99A3-1E0B288A5CF3"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T10:41:44.786Z",
+    "checksum": "d87d001a89315f817211420e7e550704a1d1177c84a098176a372257d5589a24"
+  }
+}

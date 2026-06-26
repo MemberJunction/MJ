@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T142 - Integrations Schedules",
+    "Description": "Verifies the Schedules section of the Integrations app renders the schedules view without errors.",
+    "InputDefinition": {
+      "goal": "Switch to the Integrations app using the application switcher dropdown next to the logo/Home icon (NOT the Ctrl+K search box). Open the Schedules section (/app/integrations/Schedules) from the app's left navigation. Confirm the schedules view renders: either schedule rows/cards are visible, or a clean empty-state placeholder is shown if none are configured. Pages can take 10-30s to load in this resource-constrained environment, so wait for content rather than navigating away. Success is the Integrations Schedules view rendering with no crash.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Integrations app is active and the Schedules section is displayed",
+        "The schedules view shows schedule rows/cards, or a clean empty-state placeholder",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "C286CA20-0C31-44EC-98A2-6B21980D13F3"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.234Z",
+    "checksum": "1bef002797572a84a82395c8379e3be64052ab90333bbfef3b49059050ff1ea3"
+  }
+}

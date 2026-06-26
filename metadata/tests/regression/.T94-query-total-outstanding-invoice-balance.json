@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T94 - Query Total Outstanding Invoice Balance",
+    "Description": "Runs a saved query that needs no input parameters and verifies tabular results.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer > Queries (queries are grouped in folders in the left panel). Find a query that is Approved (green dot) and has NO required parameters — use the LEFT sidebar 'Search queries...' box, or pick one from a visible folder (e.g. 'Server Installed Version History' or 'Entities with Field Counts' under the Admin folder). AVOID queries marked 'Pending' or showing required-parameter asterisks. Select the query and click Run; verify results display in a table with data rows. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "A no-parameter Approved query was located (via the 'Search queries...' box or a visible folder) and run",
+        "Query results are displayed in a table with data rows",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,query"
+  },
+  "primaryKey": {
+    "ID": "A378483D-C240-462D-89C7-ABA3F376A88F"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:30.545Z",
+    "checksum": "f2eb370cd9ae4498a4d789a579fd9b3cccfaef113f1e26a5dba11c60942a0281"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T108 - Home Quick Action Pins",
+    "Description": "Verifies that the Quick Action Pins / pinned items area on the Home landing dashboard renders correctly, showing pinned items or a valid empty/add-pin state without errors.",
+    "InputDefinition": {
+      "goal": "Navigate to the Home app landing dashboard (route /app/home) - use the Home icon/logo or the application switcher dropdown next to the logo if needed (NOT the Ctrl+K search box). On the Home landing page, locate the Quick Action Pins / pinned items area. The success state is that the Quick Action Pins area renders: it shows pinned dashboards/views/queries, OR a valid empty-state inviting the user to add a pin. Pages can take 10-30s to load in this resource-constrained environment - wait for the landing page widgets to finish rendering, do not navigate away early.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Home app landing dashboard is loaded (route /app/home)",
+        "The Quick Action Pins / pinned items area is visible and rendered - showing pinned items, or a valid empty/add-pin state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "F4C863B9-5ACF-477C-922C-042997C62AFB"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.712Z",
+    "checksum": "e47dc6ad703fddc23b6c6d1dd966765c081b6602b2774848c92e09bec63bf180"
+  }
+}

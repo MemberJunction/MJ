@@ -349,6 +349,7 @@ Used for Mode A. Big steps:
 7. **Preflight diagnostics:** `scripts/preflight-checks.cjs` probes MJAPI/nginx/socat/Auth0 + memory snapshot → `preflight.json`
 8. **Per-run output dir:** `test-results/run-{TIMESTAMP}/` with `screenshots/`
 9. **Background health monitor:** `scripts/health-monitor.cjs` writes `diagnostics.json` every 10s while the suite runs
+9b. **Single-login auth bootstrap:** `scripts/auth-bootstrap.cjs` logs in to Auth0 **once** as the test user and captures the browser `storageState` (cookies + localStorage) to `MJ_TEST_AUTH_STATE_FILE` (`/tmp/mj-auth-state.json`). The `ComputerUseTestDriver` then seeds **every** browser context from this one file (`HeadlessBrowserEngine` shared seed), so no individual test re-authenticates — one Auth0 login per suite run instead of ~one per test. On bootstrap failure the env var is unset and the suite falls back to the per-worker login path. Skipped in bacpac mode. See [§ Single-login mode](#single-login-mode).
 10. **Run the suite:** `npx mj test suite --name "${TEST_SUITE_NAME:-MJ Explorer Regression Suite}" --parallel --max-parallel ${MAX_PARALLEL_WORKERS:-4}` (with `--oracles-module=…` if `ORACLES_MODULE` is set)
 11. **Stop health monitor**
 12. **Extract screenshots** from `__mj.vwTestRunOutputs` → `screenshots/<test>/step_NN.png`
@@ -356,6 +357,41 @@ Used for Mode A. Big steps:
 14. **Generate HTML report:** `scripts/generate-html-report.cjs` (lightbox gallery)
 15. **Optional archive flow:** if `ARCHIVE_DB_DATABASE` is set, pull the suite run + children to JSON, tag, push to destination MJ
 16. **Update `test-results/latest` symlink**
+
+### Single-login mode
+
+The suite drives MJ Explorer through Auth0's hosted login. Historically **every
+test logged in**: `browserSession: "new"` gives each test a fresh
+`BrowserContext`, and the per-worker `storageState` capture/replay that was meant
+to dedup logins did not hold reliably under parallel load — so a 200-test run
+issued ~200 Auth0 logins and throttled the tenant.
+
+Single-login mode collapses that to **one** Auth0 login per run:
+
+1. **Bootstrap (one login):** `scripts/auth-bootstrap.cjs` runs once before the
+   suite. It performs a deterministic (non-LLM) Playwright login as the test user
+   over the socat-forwarded `http://localhost:4200` and writes the resulting
+   `storageState` (cookies + per-origin localStorage, including the
+   `@@auth0spajs@@` tokens) to `MJ_TEST_AUTH_STATE_FILE`. The captured Auth0
+   session cookie + refresh token let the seeded state **silently renew** for the
+   whole run, so token expiry mid-suite is a non-issue.
+2. **Seed every context:** `ComputerUseTestDriver.resolveBrowserAdapter` reads
+   `MJ_TEST_AUTH_STATE_FILE` (once, memoized) and calls
+   `HeadlessBrowserEngine.SetSharedStorageState`. From then on **every**
+   `GetIsolated` context — across all workers — is seeded from that single state
+   (the shared seed overrides the per-worker capture). The SPA boots already
+   authenticated, so the controller LLM never sees a login form and the test's
+   `FormLogin` binding becomes a harmless no-op.
+3. **No poisoning:** with a shared seed active, `ReleaseIsolated` skips the
+   per-worker capture entirely — a test that logs out or corrupts its own context
+   can never overwrite the pristine seed for the next test.
+
+**Graceful fallback:** if the bootstrap fails (or `MJ_TEST_AUTH_STATE_FILE` is
+unset / unreadable), `EnsureSharedStorageStateFromFile` returns `false` and the
+suite reverts to the original per-worker login path — no hard failure. The
+mechanism is generic (the shared seed lives in `@memberjunction/computer-use`);
+only `auth-bootstrap.cjs` is Auth0-specific, so it's wired into the Mode-A
+entrypoint only.
 
 ### Remote entrypoint — `test-runner-remote-entrypoint.sh`
 

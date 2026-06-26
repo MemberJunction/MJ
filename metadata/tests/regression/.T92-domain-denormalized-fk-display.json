@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T92 - Data Integrity FK Display Names",
+    "Description": "Verifies entity form foreign-key fields display readable related names where configured.",
+    "InputDefinition": {
+      "goal": "Open a Certifications (or Memberships) record full form. Verify foreign-key fields display readable related names where a display field is configured (e.g. 'Certification Type' shows a type name). Note some identifier fields may still show a raw ID. Confirm the related-name fields render without errors. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The record form is displayed",
+        "At least one foreign-key field shows a readable related name (e.g. Certification Type)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,form"
+  },
+  "primaryKey": {
+    "ID": "B297CBC5-0512-4E1F-ABB2-39F07CEFF9E4"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:30.433Z",
+    "checksum": "c8a0532dcde6803769d6643c03d08c923b88b82153bf6840db3456128cd567d3"
+  }
+}

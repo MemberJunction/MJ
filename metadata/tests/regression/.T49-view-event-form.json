@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T49 - Entity Form View Event",
+    "Description": "Verifies that an Event record opens into its full editable entity form with populated fields, confirming the form rendering pipeline works for the Events entity.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open the 'Events' entity from the entity tree. Click an event row in the grid (e.g. 'ICF 2024 Annual Meeting'), then click the 'Open Full Record' button to load the full event form in a tab. Reach the state where the form is fully rendered with populated fields such as the event name, dates, and type. Pages can take 10-30s to load in this resource-constrained environment, so wait for loads to finish rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The full Events record form is displayed in a tab, not just the grid preview panel",
+        "Form fields show populated event data such as a name and date or type values",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,form"
+  },
+  "primaryKey": {
+    "ID": "85DE3A25-E9EB-490C-9555-902789BF35E5"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.685Z",
+    "checksum": "f880932ba4c1fb62cdf8bd1defbdf19d9d5cf194baa15e0f17064e5bc9da56c3"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T55 - Entity Form Create Organization",
+    "Description": "Verifies that a new Organization record can be created and saved through the entity form, confirming the create-and-save path works for the Organizations entity.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open the 'Organizations' entity from the entity tree. Click the New Record button to open a blank organization form. Fill the Name field with 'Regression Test Org', select or fill an Industry, then click Save. Reach the state where the record is saved successfully (a save confirmation appears, or the new organization shows in the grid). Pages can take 10-30s to load in this resource-constrained environment, so wait for loads and saves to finish rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A new organization form was filled with Name 'Regression Test Org' and an industry value",
+        "A save was performed and a save confirmation or saved-state indicator is visible",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,crud"
+  },
+  "primaryKey": {
+    "ID": "1C646215-0971-46CE-8CA3-51CDA4A6DCF7"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.906Z",
+    "checksum": "da576f1c505ea5bc16502dab049a04ba9a6a2f3ef981a9e182c4474cb10baf91"
+  }
+}

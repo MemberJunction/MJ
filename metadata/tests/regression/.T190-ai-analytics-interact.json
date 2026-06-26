@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T190 - AI Analytics Interaction",
+    "Description": "Opens the AI Analytics dashboard and attempts to interact with a date-range or filter control. Verifies the dashboard renders and responds to a control without crashing.",
+    "InputDefinition": {
+      "goal": "Use the application switcher to open the AI app, then the Analytics section. Verify the Analytics view renders — it should show analytics content (KPIs, charts, date-range/filter controls) OR a valid empty-state. If it shows a brief loading state, WAIT (10-30s) for it to render. Try interacting with a date-range or filter control if present. Success = the Analytics view renders its content or a valid empty-state without crashing. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The AI Analytics view was opened",
+        "The Analytics view rendered (KPIs/charts/controls or a valid empty-state) after waiting",
+        "No crash, raw error, or permanent blank/stuck screen"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "1E28B4C1-1A8A-4A1E-87EC-4EBB6DFFE99A"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.165Z",
+    "checksum": "f82bd6999a4b4eb4620576f1f7e1242f4b8a1de7bf9599fdd2bb7bfbe7d2977f"
+  }
+}

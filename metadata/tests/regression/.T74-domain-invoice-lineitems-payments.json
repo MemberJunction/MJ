@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T74 - Finance Invoice Drilldown",
+    "Description": "Verifies an Invoice's related Invoice Line Items and Payments can be reached from the full record form and that the related financial rows render.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, go to Data Explorer (Data section) and open the 'Invoices' entity from the entity tree. Select an invoice row and click 'Open Full Record' to load the full invoice form. On that form, locate the related Invoice Line Items and Payments sections/tabs and view them, confirming the related financial rows are displayed. Pages can take 10-30s to load - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "An Invoice full record form is open showing invoice detail fields",
+        "The related Invoice Line Items section/tab is visible with line-item rows (or a valid empty-state)",
+        "The related Payments section/tab is visible with payment rows (or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,related"
+  },
+  "primaryKey": {
+    "ID": "D51EA6C2-3519-426D-90E8-C178171E2A73"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.590Z",
+    "checksum": "61878c5eb753a462de16f64c45442cd999bff63386ca7f6084e71af42dff83fc"
+  }
+}

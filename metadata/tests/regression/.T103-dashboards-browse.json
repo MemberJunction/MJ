@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T103 - Dashboards Browser Loads",
+    "Description": "Verifies that the Data Explorer Dashboards browser loads its list/card view (or a valid empty-state) without errors, confirming the dashboards section is reachable and renders.",
+    "InputDefinition": {
+      "goal": "Use the application switcher dropdown next to the logo (NOT the Ctrl+K search box) to open the Data Explorer app, then navigate to its Dashboards section (route /app/data-explorer/Dashboards). The success state is the dashboard browser fully rendered: a list or card view of dashboards, OR a valid empty-state if no dashboards exist. Pages can take 10-30s to load in this resource-constrained environment - wait for the view to settle, do not navigate away early.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Data Explorer Dashboards section is open, with a 'Dashboards' heading or breadcrumb visible",
+        "A dashboard browser is rendered: either a list/card view of one or more dashboards, or a clearly-labeled empty-state inviting a new dashboard",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "C612D1FF-6505-4D1A-9CFF-0DFABD299708"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.510Z",
+    "checksum": "d0f70a9464ce4709257f457303c39831ee7855d41fac0a718690d09f30091999"
+  }
+}

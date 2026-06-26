@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T175 - Sort Invoices Grid",
+    "Description": "Verifies that clicking a column header in the Invoices grid sorts the rows and visibly reorders the grid.",
+    "InputDefinition": {
+      "goal": "To open the 'Invoices' entity, use the LEFT sidebar 'Search entities...' box - type 'Invoices' and click the node named EXACTLY 'Invoices' (NOT 'Invoice Line Items'). Do NOT fight a group expand-chevron. Pages can take 10-30s to load in this resource-constrained environment - wait, don't navigate away. Once the Invoices grid is loaded, click a visible column header (for example Status, Invoice Number, or Total Amount) to sort the grid by that column. Success is reached when the clicked column shows a sort indicator (an ascending or descending arrow) and the row order visibly changes to reflect the sort.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Invoices entity grid is open in the Data Explorer Data section",
+        "A visible column header has been clicked and shows a sort indicator (ascending or descending arrow)",
+        "The grid row order visibly changes to reflect the applied sort",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,sort"
+  },
+  "primaryKey": {
+    "ID": "D934C61D-7E0B-49BE-A76A-F096E7620CEA"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:26.648Z",
+    "checksum": "9a406009696b97e56ff637ed55b42ed4f1bc943facd4eac058862a14c26da1b4"
+  }
+}

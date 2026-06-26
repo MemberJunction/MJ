@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T135 - Communication Monitor",
+    "Description": "Verifies the Communication app's Monitor section renders the delivery monitoring dashboard with its status widgets or a valid empty-state, without crashing.",
+    "InputDefinition": {
+      "goal": "Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Monitor section (the default landing section). Confirm the delivery monitoring dashboard renders, showing status widgets/metrics or a valid empty-state. Pages can take 10-30s to load in this resource-constrained environment - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Communication app is open with the Monitor section selected",
+        "The delivery monitoring dashboard renders, showing status widgets/metrics or a valid empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": {
+    "ID": "23A3147F-4BCF-47D8-9AC5-F729A01C67B0"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:24.893Z",
+    "checksum": "b9f0eb9a532b1f33c1e9ec3e4cdada267ee48ee91c2b95fdd888b9510d76627f"
+  }
+}

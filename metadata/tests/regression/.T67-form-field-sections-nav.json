@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T67 - Entity Form Field Sections Navigation",
+    "Description": "Verifies a record form renders its multi-section structure + section controls.",
+    "InputDefinition": {
+      "goal": "Open a record's full form (open an entity via the sidebar 'Search entities...' box -> click a row -> 'Open Full Record'). Verify the form's multi-section structure renders: the 'Details' field section is shown, a section-control toolbar is present near the top (icons to collapse/expand sections and/or a 'Search sections...' box), and scrolling DOWN reveals additional section headers (related-record sections). Confirming the form renders its Details section plus the section controls and further section headers is success. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A record full form is displayed with a 'Details' section",
+        "A section-control toolbar (collapse/expand icons and/or a 'Search sections...' box) is present and additional section headers are visible on scroll",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,form"
+  },
+  "primaryKey": {
+    "ID": "39D7CDB2-16B5-413D-863E-B343ED071152"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.319Z",
+    "checksum": "df2f3638d78a52533749f22c3a95e28c7e2001cf91dde8e2714234f7d990ba1d"
+  }
+}

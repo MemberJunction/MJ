@@ -4,7 +4,7 @@
     "Name": "T02 - Home Application Load",
     "Description": "After login, verifies the Home application loads with navigation elements visible including header, app switcher, and at least one navigation item.",
     "InputDefinition": {
-      "goal": "Verify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
+      "goal": "Verify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed. If the page is COMPLETELY blank/white after login, wait ~20s and if still entirely blank, RELOAD the page once (the SPA occasionally renders blank on first load and a single reload recovers it).",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -76,7 +76,7 @@
     "ID": "5FF83062-9015-4E5E-8BD7-3C38F22A5356"
   },
   "sync": {
-    "lastModified": "2026-06-05T02:16:27.680Z",
-    "checksum": "5459c28c0db51cefbf1f836240bb004b5cad5520e5ab7f81057fa4e31a98b4db"
+    "lastModified": "2026-06-25T01:08:23.110Z",
+    "checksum": "6165721e34c0e8a06a0d8eb22428311b88a5c87b46d063670791fef96b732880"
   }
 }

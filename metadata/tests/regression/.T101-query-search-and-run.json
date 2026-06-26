@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T101 - Query Search and Run",
+    "Description": "Searches for a specific no-parameter query by name, runs it, and verifies results.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer > Queries. Use the LEFT sidebar 'Search queries...' box (NOT the global Ctrl+K box) to search for a query by a name fragment (e.g. 'Version' or 'Entities'); verify the query list filters to matches, select a matching no-parameter query, click Run, and verify results appear in a table. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The sidebar 'Search queries...' box filtered the query list to matches",
+        "A matching no-parameter query was selected and run",
+        "Results are displayed in a table; no errors or blank screen"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,query"
+  },
+  "primaryKey": {
+    "ID": "81B648AC-9B93-46DB-B01C-356C6289B821"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:23.414Z",
+    "checksum": "2ba8564040b63f9fe333b56602c43ec1ba020f90560df1687db771671452fbbf"
+  }
+}

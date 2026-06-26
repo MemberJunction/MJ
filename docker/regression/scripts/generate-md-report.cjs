@@ -33,6 +33,9 @@ try {
     lines.push(`| **Date** | ${new Date(r.startedAt).toISOString().split('T')[0]} |`);
     lines.push(`| **Duration** | ${Math.round(r.durationMs / 1000)}s |`);
     lines.push(`| **Passed** | ${r.passedTests}/${r.totalTests} |`);
+    if (r.flakyTests) {
+        lines.push(`| **Flaky (passed on retry)** | ${r.flakyTests} |`);
+    }
     lines.push(`| **Average Score** | ${(r.averageScore * 100).toFixed(1)}% |`);
     lines.push('');
 
@@ -43,7 +46,8 @@ try {
     lines.push('|---|------|--------|-------|-------|----------|---------|');
 
     for (const t of r.testResults) {
-        const status = t.status === 'Passed' ? 'PASS' : t.status === 'Timeout' ? 'TIMEOUT' : 'FAIL';
+        let status = t.status === 'Passed' ? 'PASS' : t.status === 'Timeout' ? 'TIMEOUT' : 'FAIL';
+        if (t.flaky) status = `FLAKY (passed on attempt ${t.attempts})`;
         const score = t.score > 0 ? (t.score * 100).toFixed(0) + '%' : '-';
         const dur = Math.round(t.durationMs / 1000) + 's';
 

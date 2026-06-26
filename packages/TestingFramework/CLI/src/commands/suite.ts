@@ -105,6 +105,7 @@ export class SuiteCommand {
                 delayBetweenTests: flags.delay,
                 parallel: flags.parallel,
                 maxParallel: flags.maxParallel,
+                maxRetries: flags.maxRetries,
                 repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
             }, contextUser);
 

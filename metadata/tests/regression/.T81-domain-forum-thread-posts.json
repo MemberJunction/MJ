@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T81 - Forums Thread Posts",
+    "Description": "Opens a Forum Thread record (not a Forum Category).",
+    "InputDefinition": {
+      "goal": "In the LEFT sidebar 'Search entities...' box, type 'Forum Threads' and open the entity named exactly 'Forum Threads' (NOT 'Forum Categories' — if both appear in the results, choose 'Forum Threads'). In the Forum Threads grid, click directly on a row's Title text (a discussion title such as 'Help! My cheese is too crumbly'), then click 'Open Full Record'. Do NOT click any Category name or link inside the row. Verify a Forum Thread record form is displayed with thread fields (Title, Status, view/reply counts). Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "The Forum Threads entity grid was opened (not Forum Categories)",
+        "A forum thread record form is displayed with its thread fields",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,related"
+  },
+  "primaryKey": {
+    "ID": "77061F6B-64A0-434B-ABEC-87BA64E18081"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.882Z",
+    "checksum": "6af6b187495515e54ca11cb82cf3a97ca9a1f93ebba10e8b57f6c5e3aa1fd806"
+  }
+}

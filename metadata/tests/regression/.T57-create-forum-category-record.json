@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T57 - Entity Form Create Forum Category",
+    "Description": "Verifies that a new Forum Category record can be created and saved through the entity form, confirming the create-and-save path works for the Forum Categories entity.",
+    "InputDefinition": {
+      "goal": "Navigate to Data Explorer and open the 'Forum Categories' entity from the entity tree. Click the New Record button to open a blank forum category form. Fill the Name field with 'Regression Test Forum', fill a Description, then click Save. Reach the state where the record is saved successfully (a save confirmation appears, or the new category shows in the grid). Pages can take 10-30s to load in this resource-constrained environment, so wait for loads and saves to finish rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A new forum category form was filled with Name 'Regression Test Forum' and a description",
+        "A save was performed and a save confirmation or saved-state indicator is visible",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,crud"
+  },
+  "primaryKey": {
+    "ID": "6C8CF209-2C68-4B64-943E-CEB3D11BC81D"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.974Z",
+    "checksum": "b8012dd222b78037ca45419be82f12e5656e6a3cc63a3062b89a145b0eafba71"
+  }
+}

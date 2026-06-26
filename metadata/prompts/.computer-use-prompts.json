@@ -21,6 +21,8 @@
       "RetryStrategy": "Fixed",
       "OutputType": "object",
       "OutputExample": "{\"reasoning\":\"The page has loaded and I can see the text editor area. I will click on it to focus it.\",\"actions\":[{\"Type\":\"Click\",\"BoundingBox\":{\"XMin\":100,\"YMin\":200,\"XMax\":900,\"YMax\":600}}],\"toolCalls\":[]}",
+      "Temperature": 0.1,
+      "Seed": 42,
       "EffortLevel": 1
     },
     "relatedEntities": {
@@ -28,7 +30,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 100
           },
@@ -36,8 +38,8 @@
             "ID": "01E5B77E-AFF1-4ECD-9B61-88B7680F393E"
           },
           "sync": {
-            "lastModified": "2026-06-22T03:38:22.544Z",
-            "checksum": "6bdec42eec23da3ff567f0bc23cb25792d0a2362172ac21e78b57652c387e814"
+            "lastModified": "2026-06-25T02:10:06.030Z",
+            "checksum": "61e55c66ecfbb83fc6bb753e0375db298d4a91d3318bcf249b9fa436792b6733"
           }
         },
         {
@@ -151,8 +153,8 @@
       "ID": "35FF7A4B-B64A-4052-AD78-9DA8FBCF021A"
     },
     "sync": {
-      "lastModified": "2026-06-22T03:38:22.497Z",
-      "checksum": "f6b466b9938711d4b1ef7a1422f99ce9645e7437d93b4ed5d29a3e3f9d7cf816"
+      "lastModified": "2026-06-25T01:11:11.858Z",
+      "checksum": "65b31e33a5e0e085b7157dfc40c4ff7d76ecf59800175feebee86a798b116e3e"
     }
   },
   {
@@ -177,6 +179,8 @@
       "RetryStrategy": "Fixed",
       "OutputType": "object",
       "OutputExample": "{\"done\":false,\"confidence\":0.3,\"reason\":\"The agent has navigated to the page but has not yet completed the goal.\",\"feedback\":\"Try clicking on the search input field next.\"}",
+      "Temperature": 0,
+      "Seed": 42,
       "EffortLevel": 1
     },
     "relatedEntities": {
@@ -184,7 +188,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 100
           },
@@ -192,8 +196,8 @@
             "ID": "96A9E0B4-AC7D-4D91-B579-3AE1E8E8C149"
           },
           "sync": {
-            "lastModified": "2026-06-22T03:38:22.659Z",
-            "checksum": "6bdec42eec23da3ff567f0bc23cb25792d0a2362172ac21e78b57652c387e814"
+            "lastModified": "2026-06-25T02:10:06.044Z",
+            "checksum": "61e55c66ecfbb83fc6bb753e0375db298d4a91d3318bcf249b9fa436792b6733"
           }
         },
         {
@@ -307,8 +311,8 @@
       "ID": "DAFE960C-1CDA-4612-965C-A3CD400387E6"
     },
     "sync": {
-      "lastModified": "2026-06-22T03:38:21.865Z",
-      "checksum": "9ac1b9ca7f41e25f49bbcefe3fdb077f4990730cf3c746356f31932ac2196547"
+      "lastModified": "2026-06-25T01:11:13.570Z",
+      "checksum": "6ae78c41c4d5ce1c0122d327f6b39d85e8be2b211c4c4aa5e084e7338a716726"
     }
   }
 ]

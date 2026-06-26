@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T85 - Certifications Accrediting Bodies",
+    "Description": "Verifies the 'Accrediting Bodies' entity grid loads with the seeded bodies and that one body's form opens.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, go to Data Explorer (Data section) and open the 'Accrediting Bodies' entity from the entity tree. Confirm the grid shows body rows such as American Cheese Society and Wisconsin Cheese Makers Association. Then select one body and click 'Open Full Record' to confirm its form loads. Pages can take 10-30s to load - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The 'Accrediting Bodies' entity grid shows body rows including recognizable names such as American Cheese Society or Wisconsin Cheese Makers Association",
+        "An Accrediting Body full record form is subsequently opened and renders its detail fields",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "B0ED7A54-2223-417A-95C5-F78B33B16CDC"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:30.070Z",
+    "checksum": "cd86e748f37575cd05061d2c28d7104cf379f3daa01f765ca5c732c778197b4f"
+  }
+}

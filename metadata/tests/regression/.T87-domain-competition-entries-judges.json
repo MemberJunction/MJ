@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T87 - Competitions Entries Drilldown",
+    "Description": "Verifies a Competition's related Competition Entries or Competition Judges can be reached from the full record form and that related rows render.",
+    "InputDefinition": {
+      "goal": "In MJ Explorer, go to Data Explorer (Data section) and open the 'Competitions' entity from the entity tree. Select 'World Championship Cheese Contest' (or any competition) and click 'Open Full Record' to load the full form. On that form, locate the related Competition Entries or Competition Judges section/tab and view it, confirming related rows are displayed (or a valid empty-state). Pages can take 10-30s to load - wait, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "A Competition full record form is open showing competition detail fields",
+        "A related Competition Entries or Competition Judges section/tab is visible with related rows (or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,related"
+  },
+  "primaryKey": {
+    "ID": "F1199839-018B-4B8C-8F1A-3327EFBCAFFB"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:30.202Z",
+    "checksum": "4f77c0f4732af1c76a8b845a4f2b34786a5a3fcfc8d4b365634aaa5c3c405b73"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T230 - Bulk Add Records to List",
+    "Description": "Selects multiple grid rows and opens the bulk Add-to-List dialog, verifying multi-record selection + bulk action.",
+    "InputDefinition": {
+      "goal": "Open the 'Products' entity grid — type 'Products' in the LEFT sidebar 'Search entities...' box and click it (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Products). Select MULTIPLE rows using the row checkboxes at the left of the grid (click the checkbox on a few rows, or the header checkbox to select the whole page). Then click the 'Add to List' button in the grid toolbar (it enables once rows are selected). Verify a bulk 'Add N Records to List' dialog opens — it shows a list search box, a 'New' / 'Create List' option, and list selection (or a 'No lists yet' empty state with a Create List button). Seeing the bulk add-to-list dialog open is success — you do NOT need to finish adding. No error. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "Multiple grid rows were selected via the row checkboxes",
+        "Clicking 'Add to List' opened a bulk 'Add N Records to List' dialog (list search / Create List / list selection or empty state)",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,bulk"
+  },
+  "primaryKey": {
+    "ID": "D26333AD-BC32-459D-8040-F18DC2AD5569"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T10:46:51.287Z",
+    "checksum": "1140243c9f7f6867bde80456395558c85bcd249f5511cb6d0abce29cb17c17ed"
+  }
+}

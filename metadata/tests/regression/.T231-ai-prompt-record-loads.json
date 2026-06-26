@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T231 - AI Prompt Record Loads",
+    "Description": "Opens an MJ: AI Prompts record and verifies the form loads with prompt details (regression guard for the TemplateContents NPE that crashed the AI Prompt form).",
+    "InputDefinition": {
+      "goal": "Open the 'MJ: AI Prompts' entity grid — type 'AI Prompts' in the LEFT sidebar 'Search entities...' box and click the 'MJ: AI Prompts' node (or navigate to http://localhost:4200/app/data-explorer/Data?entity=MJ:%20AI%20Prompts). Click a prompt row, then click 'Open Full Record'. Verify the AI Prompt record form LOADS SUCCESSFULLY and displays the prompt's details (such as its Name, Status, Type, and/or Description). It must NOT show a 'Failed to load' error and must NOT get stuck on 'Loading record...'. (The prompt's template text may or may not be populated — that is fine; the form loading with the prompt's details is success.) Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "An MJ: AI Prompts record form opened and LOADED successfully (no 'Failed to load' error, not stuck on 'Loading record...')",
+        "The form displays the prompt's details such as Name, Status, Type, or Description",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "5715E8E0-C6EF-48A2-80A8-B073CC564F57"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T11:03:43.524Z",
+    "checksum": "04461388d7ecdf1767d62b85581dcf0b9d2a2a69105ddc2efa74bac8ce23ab6a"
+  }
+}

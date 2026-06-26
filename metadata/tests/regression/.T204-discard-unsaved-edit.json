@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T204 - Discard Unsaved Edit",
+    "Description": "Edits a field on an Event record then discards/cancels the change without saving, verifying unsaved changes can be abandoned cleanly.",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity grid — type 'Events' in the LEFT sidebar 'Search entities...' box and click the exact 'Events' node (or, if the search is giving you trouble, navigate directly to http://localhost:4200/app/data-explorer/Data?entity=Events). Click a row, then click 'Open Full Record'. Change the 'Location' text field to 'Temporary Edit 204'. An unsaved-changes banner appears at the TOP with a 'Save Changes' button and usually a 'Revert'/'Cancel'/'Discard' option. Do NOT save — instead discard the change (click Revert/Cancel/Discard, or navigate away and decline saving). Verify you end up with the change abandoned and no error (the field shows its original value, or you are back on a clean view). Pages can take 10-30s to load — wait, don't navigate away unexpectedly.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A field was edited then the change was discarded/reverted without saving",
+        "The app handled the discard cleanly (original value retained or clean navigation), no error",
+        "No crash pages or stuck states"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,edit"
+  },
+  "primaryKey": {
+    "ID": "A7B930DE-6862-4160-AC7A-F8D0D70EC8C1"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:33:23.080Z",
+    "checksum": "78f959d992e66792b4cdd8c7bcef06e9421506c7aae7b8813e15b0aa83d772a5"
+  }
+}

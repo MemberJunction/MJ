@@ -1,0 +1,501 @@
+{
+  "fields": {
+    "Name": "Deeper Validation Suite",
+    "Description": "Focused sub-suite to fast-validate the new deeper interactive tests + recent fixes (edit/validation/toolbar). Not release-gating.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md"
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T138 - Communication New Message",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "50D35BA4-1680-4C4A-9187-F68C4A9C9BEB"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.661Z",
+          "checksum": "accb6a714ca2f829a652004ee93f5b2c5c52bedede59e8092f4c26a0292f05fe"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T168 - Entity Form View Email Template",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "14D96DAB-4A84-4D0C-B01B-C0F87F0A78BA"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.672Z",
+          "checksum": "14c18589b7df06471bed8380681d8119b0d47a9fe7c0e14e33e1ac3dae05fe62"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T201 - Edit Event Location and Save",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "862F3BA0-7447-4BD7-9DC7-4F5AFD07CB85"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.682Z",
+          "checksum": "fa771ba0b6ce8dd702bf2def104fbd769c6159c2049b728f56f2d3c24383aed0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T202 - Toggle Event Boolean and Save",
+          "Sequence": 4,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F151B13B-4F80-4A6F-88D5-4CEF5061B726"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.694Z",
+          "checksum": "966a7ea3f333d5420f1fc46c8f8ed82572c6950cbb67400d2e329e5019a6630d"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T203 - Edit Event Capacity Numeric and Save",
+          "Sequence": 5,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "480FB026-E055-4EE9-BBE4-DA62013C1506"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.706Z",
+          "checksum": "bea600578f86e221414466a33f11a6b48eb10eef29a35dcc447e8aefc47e13aa"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T204 - Discard Unsaved Edit",
+          "Sequence": 6,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "465ADEAC-3FC2-43F6-834B-F547DBB6A163"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.717Z",
+          "checksum": "b1e2f05fb54999dd426e6628846f802de7e2181da6b1415978fd326020c6ce08"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T205 - Required Field Validation Error",
+          "Sequence": 7,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B8B99F96-8208-40CC-AEC6-99ACD6A1699F"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.727Z",
+          "checksum": "d9fa9f9188441d995162466cbd5c2008902edca71a3e5d07f72c11a79110a915"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T206 - Edit Persists After Reopen",
+          "Sequence": 8,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6DC5E911-3296-4E68-8019-C8BA41178F6F"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.737Z",
+          "checksum": "31fff3f18c0ee3ae77c91a70c8dc98a667ff0c1f28f72070f21fadb15146a222"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T207 - Edit Dropdown Field and Save",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C8D31050-E545-4279-88AA-5A18F8BE81F7"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.746Z",
+          "checksum": "b5a323807a48b34fc49d49f19828168220b142239ac6a17b2bc924d4ee1aab60"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T208 - Edit Date Field and Save",
+          "Sequence": 10,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "68AD7CDE-D48F-4B0A-91E9-B5D8CADFD4E7"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.755Z",
+          "checksum": "7541ada283a545ade3a66c43fe8ded6ceab612030200c06328b419779595f9b3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T209 - Edit Multiple Fields and Save",
+          "Sequence": 11,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CB1AE0B7-E9FC-438E-B398-5E0B95854F8A"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.793Z",
+          "checksum": "4c94d16ffe0dcde589a3e1b606d30a8272ce512fb00892183123c12cfe54b726"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T210 - Record Change History",
+          "Sequence": 12,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9C066A40-27F8-4EF9-8C92-CA3399DB71FE"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.804Z",
+          "checksum": "b05eed92add015a5e8b48489083f7777348acf7337aeac326c8cf5149397ffdc"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T211 - Favorite a Record",
+          "Sequence": 13,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "2C2037EF-9004-4AD4-B9E9-384DF20BFC22"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.813Z",
+          "checksum": "cc813777e27fed6971a4a3deb039dbc6bb005dbde9e4ba999097189691006028"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T212 - View Record Tags",
+          "Sequence": 14,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "72961B54-37D4-4680-B74E-817F5A899AEF"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.822Z",
+          "checksum": "b7c7c5c62362e1976dc07e4f90706f8f8c25062d37a9b125830a831e87699fac"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T213 - Add Record to List",
+          "Sequence": 15,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "7C435A23-0552-4C41-B29D-555421B58635"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:33:29.830Z",
+          "checksum": "9937225981f53dbbbd5b2b9db331fc32402e1966b724a09ce0a01ea7cf99b55a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T214 - Foreign Key Link Navigation",
+          "Sequence": 16,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "FE9E14C6-B07E-4033-92D9-6493828DAA2E"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:50:15.187Z",
+          "checksum": "ce9de1e2acc9a878fbe4215c64ab4ccfbfa6b2f802005b57b81ff2e2c02eafb2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T215 - AI Agent Requests Section",
+          "Sequence": 17,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "AC62A4E9-D793-4898-9CE9-764919455562"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:50:15.199Z",
+          "checksum": "8d1ee111f5a4355bac70a157447cadafae1559c0796fd3c2df9d9292bc0c9612"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T216 - AI MCP Section",
+          "Sequence": 18,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C7910C07-20B0-4593-A9E4-0C57AC0B5D8E"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:50:15.210Z",
+          "checksum": "319a272df76ed1a8dfc4e8faf330e8d380b8ee598bb30ab444f0e6ecbb75fa1f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T217 - AI Configuration Section",
+          "Sequence": 19,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "74474428-3827-4869-808E-FB1F8A4C3197"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T06:50:15.220Z",
+          "checksum": "e9fa894a5d7cc218de732a3c779f69c8854b36dde3105ec2b2cbbf849343a956"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T218 - AI Agent Run Timeline Steps",
+          "Sequence": 20,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C06F9065-1EB0-4D24-8973-06EEA62F06D5"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:09:54.491Z",
+          "checksum": "7149efd1cf4304e92642a12782200c41a9a9c20a20dba3aef370b7dbedf08cda"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T219 - AI Agent Run Visualization Tab",
+          "Sequence": 21,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5BC0EEA9-022C-41A2-9AEC-116FC6D9554E"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:09:54.536Z",
+          "checksum": "169a824ce1f32ca6409c26eb8873946d5f4bf4d6b0764071c60bb662a747a693"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T220 - Grid Advanced Filter Panel",
+          "Sequence": 22,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0BF1F278-225B-4F03-84C3-BB19A77F2873"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:09:54.546Z",
+          "checksum": "c72497d35a6597e1510826d2a9de99d3b2da7c510760a7f9de65a61e1b4ad801"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T221 - Grid Column Management",
+          "Sequence": 23,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BF6A908B-7259-44D4-AFC8-B1023F9B4A65"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:09:54.556Z",
+          "checksum": "f92f31a56eb19c9656041d18386cceae169eff71723dd868ee0bbf2d9cadfbe9"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T222 - Grid Aggregates",
+          "Sequence": 24,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "150B39CD-640D-48F1-8ED5-EA65637C7E24"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:09:54.565Z",
+          "checksum": "a73c64786f03b38c0c829237efba4419b5cb9d72d81b0ae1dff2f8728a1c0688"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T223 - Grid Export to Excel",
+          "Sequence": 25,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "65007D77-F010-4D98-9254-832B9874E017"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:09:54.574Z",
+          "checksum": "d52d6378a8654cb814d1774afe7ebbf57e6695b4cc71e149efe76982216995e4"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T224 - Grid Multi-Column Sort",
+          "Sequence": 26,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "6CA9ECC2-00EE-481A-9C21-3B5A7C689F15"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T07:09:54.581Z",
+          "checksum": "f9bd7af6443d333d314239be37aed9c8876745ee17719ba0be006a91dd32d5b3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T226 - Notifications Panel",
+          "Sequence": 28,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BFADF33A-BF74-4799-A209-D3F35D441712"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:41:44.753Z",
+          "checksum": "4b7c7f4b038f1f42589981c95c930d57cc9d095d4eee1c50b69db56cf633612f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T227 - Grid More Actions Menu",
+          "Sequence": 29,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CD7E4549-607C-485B-929A-423DF5B41D41"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:41:44.762Z",
+          "checksum": "58db8e2724ddfbd7e1b58007c4872a0521c3be672cc0fde2ce4077fc2fdb46f4"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T228 - AI Agent Run Analytics Tab",
+          "Sequence": 30,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9267A0BF-087F-44E3-ABC8-650152B2EC05"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:46:57.668Z",
+          "checksum": "478bb0a0d269eee5efae96d1a18dd822a633c2bfcab354dfe32a16deb9aaa674"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T229 - AI Agent Run Details Tab",
+          "Sequence": 31,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "983A3827-CFAC-4D9F-BB36-E9ECE13C63E2"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:46:57.677Z",
+          "checksum": "05dd5f472bcbb260c4d006efc59f7bc88e238cef3b36d6cc1fab4c7e175c6938"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T230 - Bulk Add Records to List",
+          "Sequence": 32,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C2AF2E93-7BFB-4D73-BA29-1B7F98B87FC5"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T10:46:57.693Z",
+          "checksum": "3cb559b0c25ce7d6b5556f5aeaebf0f899a3ba9ed4a84b615e738563a7c5eb28"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T231 - AI Prompt Record Loads",
+          "Sequence": 33,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "C8987C5D-C735-4AC6-A86A-CC3608DD5E09"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T11:03:49.844Z",
+          "checksum": "f17bd26b5891fbc5160dd66547edc1f9fbdc4e3e1c9854e512b373f8e4c56217"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "02D267E0-B1C7-46B8-84D3-413D6873A323"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T07:49:27.313Z",
+    "checksum": "568625e1b9a73e4f66e4dd61136e9b6fcfdccfbb93b7c8ee43249e05d3b39727"
+  }
+}

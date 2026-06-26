@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T161 - Browse Chapter Memberships",
+    "Description": "Verifies the Chapter Memberships entity opens via the Data Explorer sidebar search and displays a grid of chapter membership records.",
+    "InputDefinition": {
+      "goal": "Open the 'Chapter Memberships' entity via the left sidebar 'Search entities...' box: click the search box, type 'Chapter Memberships', then click the exact 'Chapter Memberships' node in the results. Do NOT expand the entity group/chevron - use the search box. Verify a grid of records is displayed (multiple rows, or a valid empty-state for sparse entities). Pages can take 10-30s to load in this resource-constrained environment - wait patiently, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'Chapter Memberships' entity is selected in the Data Explorer Data section",
+        "A row grid of chapter membership records is displayed (multiple rows, or a valid empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "56459DDC-09AA-4627-816B-E6C7E9891D2B"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:26.066Z",
+    "checksum": "661c1a58b0166fe2fac9ed6a23c9d73e32dfd6e5a7801de60328cce862902113"
+  }
+}

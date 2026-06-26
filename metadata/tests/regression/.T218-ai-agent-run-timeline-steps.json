@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T218 - AI Agent Run Timeline Steps",
+    "Description": "Opens a completed AI Agent Run and verifies the Timeline tab shows the run's execution steps with type/duration/status — exercising MJ's agent-run detail UI.",
+    "InputDefinition": {
+      "goal": "Open the 'MJ: AI Agent Runs' entity grid — type 'AI Agent Runs' in the LEFT sidebar 'Search entities...' box and click the 'MJ: AI Agent Runs' node (or navigate to http://localhost:4200/app/data-explorer/Data?entity=MJ:%20AI%20Agent%20Runs). Click a row whose Status is 'Completed', then click 'Open Full Record'. The AI Agent Run detail opens with a header (the agent name e.g. 'Memory Manager', a COMPLETED badge, and Started/Completed/Duration/Result fields) and a row of tabs: Timeline, Visualization, Analytics, Details. On the default 'Timeline' tab, verify the run's execution STEPS are listed — each step shows a name (e.g. 'Agent Validation', 'Load Conversations With New Activity'), a Type (e.g. Validation or Decision), a duration in ms, and a Completed status. Confirm at least the run header (Duration, Result: Success) AND one or more timeline steps are visible. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A Completed AI Agent Run record opened showing its run header (agent name, COMPLETED, Duration, Result)",
+        "The Timeline lists one or more execution steps, each with a name, type, duration, and status",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "967A045A-97AF-4EF1-A38D-16E05B62DB7E"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T07:09:48.019Z",
+    "checksum": "dbdccc012ea209928a01e52719da9fbf13e8ea321be4a027a1c629b4da2ab9dc"
+  }
+}

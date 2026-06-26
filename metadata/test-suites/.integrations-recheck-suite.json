@@ -1,0 +1,96 @@
+{
+  "fields": {
+    "Name": "Integrations Recheck Suite",
+    "Description": "Validates the app-switcher scrollable-dropdown context fix against the Integrations-application tests.",
+    "Status": "Active",
+    "Configuration": {
+      "applicationContext": "@file:context/mjexplorer-context.md"
+    }
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T22 - Integrations Overview",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F63A98D3-0816-40AF-A91F-0E0883FA4CA1"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.489Z",
+          "checksum": "ed8615dc91cc9e2992167ab0f6f766eaf48be676f7a8bf99d5624af76def1e7c"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T139 - Integrations Overview",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "66AFF6FB-9CB0-473A-9448-F3C71A34829F"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.504Z",
+          "checksum": "85b08dc66fb60ecd5d84bed631e78c69b0b1c4a913dedcfbde2f92137303e2be"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T140 - Integrations Connections List",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9555C71C-CE9A-4B4E-87A7-AB7EF4D12296"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.520Z",
+          "checksum": "9bc3d26a674f72b708ea4977c40a201f605ebf0acab5ce50e602335c3d781858"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T141 - Integrations Activity Log",
+          "Sequence": 4,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "151A8BC8-A511-48ED-BD53-9F7D43F4C250"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.531Z",
+          "checksum": "68953a487b9962052a1c559a7f5d6cf40c87e798686a778458fcab646e360dad"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T142 - Integrations Schedules",
+          "Sequence": 5,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "46B0533D-8932-4D36-B2D4-A53A2EEA7D93"
+        },
+        "sync": {
+          "lastModified": "2026-06-25T01:08:38.545Z",
+          "checksum": "ce1fe499f7f0cda90a43231b3879847d6187d83fbe74e4cdf913f883f849516a"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "BA5C6E3F-CA05-4643-8381-BD7B4CD03D82"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T07:49:27.241Z",
+    "checksum": "d24b80c61cc02695942bfcbd6837bbe3a11c9ef38649cdcbdfd3ed5ab754e5fd"
+  }
+}

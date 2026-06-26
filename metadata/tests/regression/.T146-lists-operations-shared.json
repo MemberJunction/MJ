@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T146 - Lists Operations Section",
+    "Description": "Verifies that the Operations section (and/or Shared With Me) of the Lists app renders without errors.",
+    "InputDefinition": {
+      "goal": "Open the Lists app using the application switcher dropdown next to the logo (NOT the Ctrl+K search box). Navigate to the Operations section (and/or the Shared With Me section). Confirm the section renders with its expected widgets or empty-state and no crash or error. Pages can take 10-30s to load in this resource-constrained env - wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Lists app is open and the Operations section (or Shared With Me section) is the active view",
+        "The section renders its expected content or a clean empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,lists"
+  },
+  "primaryKey": {
+    "ID": "39DCE0CB-2F91-412E-AA12-1CD2357413B6"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.394Z",
+    "checksum": "e8302ea75d0dc0726e036efc410bc19204969a4f8f7ddced87656dcfa81fcbd1"
+  }
+}

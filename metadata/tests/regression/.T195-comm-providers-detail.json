@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T195 - Communication Providers Detail",
+    "Description": "Opens the Communication app's Providers section and opens a single provider's detail/configuration. Verifies the provider detail view renders.",
+    "InputDefinition": {
+      "goal": "Switch to the Communication application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box) - the pinned app list is short and Communication is visible without scrolling. Open the Providers section, then click a provider entry to open its detail or configuration view. If a preview panel appears, click 'Open Full Record' to load the full detail form. The success state is a single provider's detail/configuration view rendered, showing the provider's fields/settings OR its full record form. If the Providers list is empty in this fresh regression DB, it is acceptable for the success state to be the Providers list/configuration view rendering with a valid empty-state. Pages can take 10-30s to load in this resource-constrained environment, so wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Communication application is active and the Providers section was opened",
+        "A single provider's detail/configuration view renders (its fields/settings or full record form), or the Providers view renders with a valid empty-state when no providers exist",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": {
+    "ID": "E7BC3D57-4A40-4A1A-B898-7F9B14D8B6E1"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.395Z",
+    "checksum": "b30c3f8c4d570a94ed8d82c78b2d4df49fc1945ca1fb4502be06dd83b11aaac5"
+  }
+}

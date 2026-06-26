@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T46 - Data Explorer Record Preview Panel",
+    "Description": "Verifies that clicking a single event row opens the Data Explorer record Preview panel showing that event's details without opening the full record form.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K global search) and go to Data Explorer, then its Data section. In the left-hand entity tree open the 'Events' entity. Wait patiently if the grid is slow to load (10-30s in this resource-constrained environment). Then single-click one event row to open its Preview panel (do NOT click 'Open Full Record' and do NOT open the full editable form). Success is reached when the Preview panel is shown with that event's details.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The Events entity grid is open in the Data Explorer Data section",
+        "A single event row was clicked and the record Preview panel is displayed",
+        "The Preview panel shows details for that specific event (field values such as its name/status are visible)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,data-explorer"
+  },
+  "primaryKey": {
+    "ID": "328793A4-1D16-4938-B811-D3DFD79307CD"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:28.538Z",
+    "checksum": "6c0a8e679c02a79f72e88b0e2d3c9966bbb5a03fd3ba42228ce4d28197d31d6d"
+  }
+}

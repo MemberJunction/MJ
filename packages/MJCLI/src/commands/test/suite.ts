@@ -54,6 +54,10 @@ export default class TestSuite extends Command {
     'flaky-check': Flags.integer({
       description: 'Run each test N times to detect flakiness (variance > 0.3 or mixed pass/fail = flaky). Recommended: 3 or 5',
     }),
+    'max-retries': Flags.integer({
+      description: 'Retry a FAILED test up to N extra times, passing if any attempt passes (absorbs transient/non-deterministic flakiness). A test that fails then passes is reported as flaky. Default 0 (no retries).',
+      default: 0,
+    }),
     'oracles-module': Flags.string({
       description:
         'Path to a JS/TS module that exports custom IOracle classes or instances. ' +
@@ -80,6 +84,7 @@ export default class TestSuite extends Command {
         parallel: flags.parallel,
         maxParallel: flags['max-parallel'],
         flakyCheck: flags['flaky-check'],
+        maxRetries: flags['max-retries'],
         oraclesModule: flags['oracles-module'],
       });
 

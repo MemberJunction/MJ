@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T139 - Integrations Overview",
+    "Description": "Verifies the Integrations app Overview view renders its KPI/activity widgets or a valid empty-state without crashing.",
+    "InputDefinition": {
+      "goal": "Open the Integrations application. To reach it, open the application switcher dropdown next to the logo and SCROLL the full list (it is long) to find 'Integrations'; if it is not in the switcher, try the application cards on the Home page, or the 'Configure Apps' option to add/open it. In Integrations, view the Overview and verify it renders with KPI cards/activity (or a valid empty-state), no crash. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "The Integrations app is active and the Overview section is displayed",
+        "The Overview shows KPI cards and/or an activity feed, or a clean empty-state placeholder",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,integrations"
+  },
+  "primaryKey": {
+    "ID": "7E856969-FF8F-4A46-B32C-031EADD6ED30"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.100Z",
+    "checksum": "5b91e67acaaa273be208c29f0384573f5b838c4ff2581781693489edb2c723e0"
+  }
+}

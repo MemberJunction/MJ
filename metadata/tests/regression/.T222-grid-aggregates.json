@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T222 - Grid Aggregates",
+    "Description": "Opens a grid's Aggregates panel and configures a column aggregation, verifying the aggregates feature.",
+    "InputDefinition": {
+      "goal": "Open the 'Products' entity grid — type 'Products' in the LEFT sidebar 'Search entities...' box and click it (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Products). Wait for the grid to load. Click 'Configure view settings' (the sliders icon in the grid toolbar) to open the Configure View panel, then select its 'Aggregates' tab. Use 'Add Aggregate' to configure ONE column aggregation (e.g. count or sum on a column). Confirm the aggregate is added and an aggregate result/summary is shown, with no error. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The grid's 'Aggregates' panel opened with options to aggregate a column",
+        "An aggregate was configured/shown (a count/sum/avg or summary value displayed)",
+        "No error messages or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,grid"
+  },
+  "primaryKey": {
+    "ID": "D7251782-940F-40A6-A904-08EA465DC4E1"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T07:49:20.977Z",
+    "checksum": "3cbfdd6887bf03eb3ad21c82be61d7f438edd27df1f2b18cf60d54263c371496"
+  }
+}

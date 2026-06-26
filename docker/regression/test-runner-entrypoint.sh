@@ -154,6 +154,26 @@ MONITOR_PID=$!
 echo "  Health monitor PID: $MONITOR_PID"
 echo ""
 
+# ─── 5b. Single-login auth bootstrap ─────────────────────────────────────────
+# Log in to Auth0 ONCE and capture the browser storageState (cookies +
+# localStorage). The ComputerUseTestDriver seeds EVERY browser context from this
+# single file, so no individual test re-authenticates — one Auth0 login for the
+# whole suite instead of ~one per test (which previously throttled the tenant).
+# On failure we unset the var so the suite falls back to the per-worker login
+# path. Skipped in bacpac mode (the imported DB has the customer's own users,
+# not the computeruse@ test user).
+if [ -z "${BACPAC_FILE:-}" ]; then
+    export MJ_TEST_AUTH_STATE_FILE=/tmp/mj-auth-state.json
+    echo "Running single-login auth bootstrap..."
+    if node "$SCRIPTS/auth-bootstrap.cjs" 2>&1; then
+        echo "  ✓ Single-login mode ENABLED (state: $MJ_TEST_AUTH_STATE_FILE)"
+    else
+        echo "  ✗ Auth bootstrap failed — falling back to per-worker login"
+        unset MJ_TEST_AUTH_STATE_FILE
+    fi
+    echo ""
+fi
+
 # ─── 6. Run the suite ────────────────────────────────────────────────────────
 # Disable set -e so we can capture screenshots + reports on failure.
 #
@@ -162,7 +182,11 @@ echo ""
 # suite — e.g., TEST_SUITE_NAME="BYO Regression Suite".
 WORKERS=${MAX_PARALLEL_WORKERS:-4}
 SUITE_NAME="${TEST_SUITE_NAME:-MJ Explorer Regression Suite}"
-echo "Running '${SUITE_NAME}' (${WORKERS} parallel workers)..."
+# Retry a failed test up to N extra times (pass-if-any) to absorb the inherent
+# non-determinism of LLM-driven Computer Use tests; a test that fails then passes
+# is reported as flaky so genuine regressions stay visible. Override via MAX_RETRIES.
+RETRIES=${MAX_RETRIES:-2}
+echo "Running '${SUITE_NAME}' (${WORKERS} parallel workers, up to ${RETRIES} retries on failure)..."
 
 # Optional --oracles-module arg (Phase 5). Lets BYO Mode D / Mode C adopters
 # ship custom IOracle implementations alongside their tests.
@@ -182,6 +206,7 @@ npx mj test suite --name "${SUITE_NAME}" \
     --output "$RUN_DIR/results.json" \
     --parallel \
     --max-parallel "$WORKERS" \
+    --max-retries "$RETRIES" \
     "${ORACLES_ARGS[@]}"
 EXIT_CODE=$?
 set -e

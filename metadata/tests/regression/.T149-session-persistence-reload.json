@@ -1,0 +1,91 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T149 - Session Persistence Reload",
+    "Description": "Verifies that reloading the browser after logging in keeps the user authenticated (no bounce to Auth0 login) and the app reloads to a usable state.",
+    "InputDefinition": {
+      "goal": "After logging in, navigate to a section such as Data Explorer (use the application switcher dropdown next to the logo, NOT the search box). Then reload the browser page. After reload the app may briefly show the loading screen again - WAIT for it to finish (this is a resource-constrained env; pages can take 10-30s to load). Success state: the user remains logged in (the app stays at localhost:4200 and is NOT bounced to the Auth0 login page) and the app reloads to a usable, rendered state with navigation chrome visible.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "finalUrlPattern": "^http://localhost:4200(?!/login|/callback)",
+      "judgeValidationCriteria": [
+        "The browser page was reloaded after the user had logged in and navigated to a section",
+        "After the reload the user is still authenticated - the page stays in the MJ Explorer app and is NOT showing the Auth0 login form",
+        "The app reloaded to a usable state with the main navigation chrome and content area rendered",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.5,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200(?!/login|/callback)"
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.2,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.5,
+        "url-match": 0.3,
+        "step-count": 0.2
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,session"
+  },
+  "primaryKey": {
+    "ID": "22A87476-4051-462E-AAF4-E3AE5D38D4B7"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.518Z",
+    "checksum": "dbdc82edca1dfc20886aebd6de47c5b61309733f5c968b6a1f672157ce39e5bb"
+  }
+}

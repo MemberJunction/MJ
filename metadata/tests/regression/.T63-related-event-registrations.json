@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T63 - Entity Form Related Records Event",
+    "Description": "Verifies an Event record's related section renders (rows or empty-state).",
+    "InputDefinition": {
+      "goal": "Open the 'Events' entity via the LEFT sidebar 'Search entities...' box, open an event's full record. Scroll to its related sections and open 'Event Registrations' (or 'Event Sessions'). Verify the related section is displayed for that event — it shows related rows OR a valid '0 records'/empty-state (some events legitimately have no registrations). The related section being present and rendering its state is success. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "An Event record full form is open",
+        "The 'Event Registrations' (or 'Event Sessions') related section is shown (rows or a valid 0-records/empty-state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,related"
+  },
+  "primaryKey": {
+    "ID": "F73ED8F2-7AFD-4F09-8703-8E5AD62A3F65"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:29.168Z",
+    "checksum": "0548fa50b00d5b294ab68b330ada0d388543918b4428e0df0c6683e82bdb4a27"
+  }
+}

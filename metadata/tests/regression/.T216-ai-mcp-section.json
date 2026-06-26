@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T216 - AI MCP Section",
+    "Description": "Opens the AI app's MCP section and verifies it renders.",
+    "InputDefinition": {
+      "goal": "Open the AI app using the application switcher dropdown next to the logo (NOT the Ctrl+K box). The AI app's LEFT nav lists sections: Overview, Agents, Agent Requests, Prompts, Models, MCP, Analytics, Configuration. Click the 'MCP' section in the left nav. Verify the MCP view renders — MCP server entries/dashboard, or a clearly-labeled empty state — with no error. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The AI app's 'MCP' section was opened",
+        "The MCP view rendered (server entries/dashboard or a clear empty state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "C5108795-B727-4D66-B3DF-C8C9A79B1C0B"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T06:50:08.833Z",
+    "checksum": "b54f9a2622eaa47b8acbcd32d7987853769903b21d6a841f52c8f57e0a4fd534"
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T229 - AI Agent Run Details Tab",
+    "Description": "Opens a completed AI Agent Run and switches to the Details tab, verifying the run's detail fields render.",
+    "InputDefinition": {
+      "goal": "Open the 'MJ: AI Agent Runs' entity grid — type 'AI Agent Runs' in the LEFT sidebar 'Search entities...' box and click the 'MJ: AI Agent Runs' node (or navigate to http://localhost:4200/app/data-explorer/Data?entity=MJ:%20AI%20Agent%20Runs). Click a row whose Status is 'Completed', then click 'Open Full Record'. The AI Agent Run detail opens with a header (agent name, COMPLETED, Started/Completed/Duration/Result) and a row of tabs: Timeline, Visualization, Analytics, Details. Click the 'Details' tab. Verify the Details view renders the run's detail fields/metadata — e.g. the agent, status, started/completed timestamps, duration, result, and other run metadata — with no error. Pages can take 10-30s to load — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "A Completed AI Agent Run record opened",
+        "The 'Details' tab was selected and rendered the run's detail fields/metadata",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,ai"
+  },
+  "primaryKey": {
+    "ID": "46F5162E-2CE7-4F4F-AAC9-3F08F40474BE"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T10:46:51.270Z",
+    "checksum": "30bdde53feef8f726b0a3404256745bb9c0ad3411970a308c38a124da664c314"
+  }
+}

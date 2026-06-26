@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T150 - Application Switcher Cycle",
+    "Description": "Verifies the application switcher dropdown can cycle through several apps and that each selected application's main view loads.",
+    "InputDefinition": {
+      "goal": "Use the application switcher dropdown (the chevron next to the logo/Home icon - NOT the Ctrl+K search box) to switch between several of the available applications in turn, for example Home, then Data Explorer, then AI, then Admin. For each app you switch to, wait for its main view to load (pages can take 10-30s in this resource-constrained env) and confirm it rendered before moving on. Success state: the switcher dropdown was used to navigate to at least three different applications and each one's main view loaded successfully.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 50,
+      "judgeValidationCriteria": [
+        "The application switcher dropdown next to the logo was opened and used to change applications (not the search box)",
+        "At least three different applications were navigated to in sequence (e.g. Home, Data Explorer, AI, Admin)",
+        "Each selected application's main view loaded and rendered its expected content",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 50,
+      "maxExecutionTime": 600000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 50
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,nav"
+  },
+  "primaryKey": {
+    "ID": "D57547EB-D2CA-4F85-826B-AD1AFE49E8A6"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:25.613Z",
+    "checksum": "8616725e38c031ba3e4ba0acd9024c10ea96737fc69e7f82cba84fb570037dd5"
+  }
+}

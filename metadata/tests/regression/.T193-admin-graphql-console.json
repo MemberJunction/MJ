@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T193 - Admin GraphQL Console",
+    "Description": "Opens the Admin app's Developer Tools section and navigates to the GraphQL Console sub-section. Verifies the GraphQL console/editor renders.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box) - the pinned app list is short and Admin is visible without scrolling. Open the 'Developer Tools' section, then in its left sub-navigation click the 'GraphQL Console' sub-section. The success state is the GraphQL console/editor rendered, showing a query editor pane (and typically a run button or results/schema panel) OR a valid empty editor. This is a developer tool view, so accept an empty editor as long as the console chrome renders. Pages can take 10-30s to load in this resource-constrained environment, so wait for the console to render rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Admin application is active and the Developer Tools section is open",
+        "The GraphQL Console sub-section is selected and a query editor/console pane renders",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "1EE9FB40-01A8-4B3D-96B5-A3CDCA866A54"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.282Z",
+    "checksum": "db3d51664f279421daebf3c5900ab1c5c8486a4080d02e46329e6b324d8eee7a"
+  }
+}

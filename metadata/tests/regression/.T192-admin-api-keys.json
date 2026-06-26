@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T192 - Admin API Keys Section",
+    "Description": "Opens the Admin app's Identity & Access section and navigates to the API Keys sub-section. Verifies the API Keys view renders.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box) - the pinned app list is short and Admin is visible without scrolling. Open the 'Identity & Access' section, then in its left sub-navigation click the 'API Keys' sub-section. The success state is the API Keys view rendered, showing a list/grid of API key entries OR a valid empty-state (e.g. a prompt to create a key). This is a platform view that may have sparse data in a fresh regression DB, so accept an empty-state as long as the API Keys view renders. Pages can take 10-30s to load in this resource-constrained environment, so wait for the view to render rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Admin application is active and the Identity & Access section is open",
+        "The API Keys sub-section is selected and its view renders a list/grid or a valid empty-state",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "D597B481-ACCA-4D8B-A1A0-2B12F1920409"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:27.246Z",
+    "checksum": "2c6903012bf51c66476e13386b13cdb1b073f1b3bd8585deb058bd94d4f0ca94"
+  }
+}

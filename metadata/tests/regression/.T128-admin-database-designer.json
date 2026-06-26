@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T128 - Admin Database Designer",
+    "Description": "Verifies the Admin app's Data & Schema > Database Designer sub-section renders without errors.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin app using the application switcher dropdown next to the logo (NOT the Ctrl+K search box). Open the 'Data & Schema' section, then in its left sub-navigation click the 'Database Designer' sub-section. The success state is the Database Designer view rendering its expected widgets/controls. Pages can take 10-30s to load in this resource-constrained env - wait for the view to render, do not navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 40,
+      "judgeValidationCriteria": [
+        "The Admin app is active with the Data & Schema section open and the Database Designer sub-section selected in the left sub-navigation",
+        "The Database Designer view renders its expected widgets/controls (or a valid empty state)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 40,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 40
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": {
+    "ID": "D4484810-B963-4816-AB89-D04E4B279BC5"
+  },
+  "sync": {
+    "lastModified": "2026-06-25T01:08:24.594Z",
+    "checksum": "836a635781ddd7caff6c3c463f3a1bc215202564176707852922baa8d21509dd"
+  }
+}
