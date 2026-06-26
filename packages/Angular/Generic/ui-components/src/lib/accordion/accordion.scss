@@ -26,10 +26,34 @@
   .mj-accordion-panel--expanded & { transform: rotate(180deg); }
 }
 
+/* Body animates open/close via grid-template-rows 0fr -> 1fr (smooth auto-height,
+   no JS measuring). The body stays in the DOM when collapsed (inert) so the
+   transition has something to animate. */
+.mj-accordion-body-outer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--mj-transition-base);
+}
+.mj-accordion-panel--expanded .mj-accordion-body-outer {
+  grid-template-rows: 1fr;
+}
+/* The clip element is what the grid collapses — it must carry NO padding, or a
+   padding-height sliver survives the 0fr collapse. overflow:hidden + min-height:0
+   let it shrink to a true 0. */
+.mj-accordion-body-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+/* Padding lives on the inner element (fully clipped at 0fr). Keeps the
+   .mj-accordion-body name so existing ::ng-deep consumer overrides still apply. */
 .mj-accordion-body {
   padding: 16px;
-  border-top: 1px solid var(--mj-border-default);
   background: var(--mj-bg-surface);
+}
+/* Header/body separator lives on the header so it only shows while open
+   (a border on the collapsing body would leave a stray line at 0fr). */
+.mj-accordion-panel--expanded .mj-accordion-header {
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .mj-accordion-title { flex: 1; }
@@ -40,6 +64,39 @@
   &:hover { background: var(--mj-bg-surface-sunken); }
 }
 
+/* ── Emphasis variants (visual hierarchy, brand-colored — not status) ───────
+   Make a panel read bolder/quieter. All driven by brand tokens, so they
+   adapt to dark mode + white-labeling. Set via [Variant] on the panel.
+   The header owns its text colour; custom title slots should inherit it
+   (e.g. `color: inherit`) so the bold `primary` reads correctly. */
+
+/* secondary — subtle brand tint */
+.mj-accordion-panel[data-variant='secondary'] {
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
+  .mj-accordion-header {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    &:hover { background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface)); }
+  }
+  .mj-accordion-icon { color: var(--mj-brand-primary); }
+  &.mj-accordion-panel--expanded .mj-accordion-header {
+    border-bottom-color: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-border-default));
+  }
+}
+
+/* primary — bold, solid brand header (its own colour separates it; no extra line) */
+.mj-accordion-panel[data-variant='primary'] {
+  border-color: var(--mj-brand-primary);
+  .mj-accordion-header {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    &:hover { background: var(--mj-brand-primary-hover); }
+  }
+  .mj-accordion-icon { color: var(--mj-text-inverse); }
+  &.mj-accordion-panel--expanded .mj-accordion-header { border-bottom-color: transparent; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mj-accordion-icon { transition: none; }
+  .mj-accordion-body-outer { transition: none; }
 }

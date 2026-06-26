@@ -52,7 +52,8 @@ export class MJAccordionTitleDirective {
   standalone: true,
   imports: [NgTemplateOutlet],
   template: `
-    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled">
+    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled"
+      [attr.data-variant]="Variant !== 'default' ? Variant : null">
       <button class="mj-accordion-header" type="button"
         [attr.aria-expanded]="Expanded"
         [disabled]="Disabled"
@@ -66,11 +67,13 @@ export class MJAccordionTitleDirective {
         </span>
         <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
       </button>
-      @if (Expanded) {
-        <div class="mj-accordion-body" role="region">
-          <ng-content></ng-content>
+      <div class="mj-accordion-body-outer" [attr.inert]="Expanded ? null : ''">
+        <div class="mj-accordion-body-clip">
+          <div class="mj-accordion-body" role="region">
+            <ng-content></ng-content>
+          </div>
         </div>
-      }
+      </div>
     </div>
   `
 })
@@ -78,6 +81,14 @@ export class MJAccordionPanelComponent {
   @Input() Title = '';
   @Input() Expanded = false;
   @Input() Disabled = false;
+  /**
+   * Emphasis variant for visual hierarchy:
+   * - `primary`   — bold, solid brand-colored header (use to make a panel stand out)
+   * - `secondary` — subtle brand tint
+   * - `default`   — standard neutral header
+   * All brand-token-driven, so dark-mode-safe and themeable.
+   */
+  @Input() Variant: 'default' | 'primary' | 'secondary' = 'default';
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
