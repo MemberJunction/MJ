@@ -11,12 +11,11 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAIAgentSessionEntity, MJFileEntityRecordLinkEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { FileStorageEngine } from '@memberjunction/storage';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
@@ -40,6 +39,7 @@ import {
 import { RealtimeClientSessionService, PrepareClientSessionInput } from './realtime/realtime-client-session-service';
 import { BuildRealtimeAgentFraming } from './realtime/realtime-tool-broker';
 import { RealtimeRecordingController, RealtimeRecordingMedia } from './realtime/realtime-recording-capture';
+import { resolveRecordingStorageAccountID, storeRealtimeRecording } from './realtime/realtime-recording-store';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -2381,20 +2381,14 @@ export class BaseAgent {
             }
 
             // Storage: recording provider, else attachment provider; then that provider's first account.
-            const providerId = agent.RecordingStorageProviderID || agent.AttachmentStorageProviderID;
-            if (!providerId) {
-                this.logStatus('🔴 Realtime recording on but no storage provider configured (RecordingStorageProviderID/AttachmentStorageProviderID) — recording disabled.', false, params);
-                return null;
-            }
-            const accounts = FileStorageEngine.Instance.GetAccountsByProviderID(providerId);
-            const account = accounts[0];
-            if (!account) {
-                this.logStatus(`🔴 Realtime recording on but no active storage account exists for provider '${providerId}' — recording disabled.`, false, params);
+            const storageAccountId = resolveRecordingStorageAccountID(agent);
+            if (!storageAccountId) {
+                this.logStatus('🔴 Realtime recording on but no resolvable storage account (RecordingStorageProviderID/AttachmentStorageProviderID) — recording disabled.', false, params);
                 return null;
             }
 
             const controller = new RealtimeRecordingController({ Media: media });
-            return { controller, storageAccountId: account.ID };
+            return { controller, storageAccountId };
         } catch (error) {
             this.logError(`Failed to resolve realtime recording (recording disabled): ${error instanceof Error ? error.message : String(error)}`, {
                 agent: params.agent, category: 'RealtimeSession'
@@ -2436,46 +2430,19 @@ export class BaseAgent {
             }
 
             const md = params.provider || this._activeProvider;
-            const fileName = `realtime-session-${sessionID}.wav`;
-            const uploaded = await FileStorageEngine.Instance.UploadFile({
-                content: encoded.Buffer,
-                fileName,
-                mimeType: 'audio/wav',
-                contextUser,
-                storageAccountId,
-                provider: md,
-                // Single-level folder: some providers (e.g. Box) don't create nested folders in one upload.
-                pathPrefix: 'realtime-recordings'
+            const fileID = await storeRealtimeRecording({
+                Audio: encoded.Buffer,
+                MimeType: 'audio/wav',
+                Media: controller.Media,
+                StartedAt: controller.StartedAt ?? new Date(),
+                StorageAccountID: storageAccountId,
+                SessionID: sessionID,
+                ContextUser: contextUser,
+                Provider: md
             });
-
-            // Link the file to the session record so it's discoverable via MJ: File Entity Record Links.
-            const sessionEntityID = md.EntityByName('MJ: AI Agent Sessions')?.ID;
-            if (sessionEntityID) {
-                const link = await md.GetEntityObject<MJFileEntityRecordLinkEntity>('MJ: File Entity Record Links', params.contextUser);
-                link.NewRecord();
-                link.FileID = uploaded.FileID;
-                link.EntityID = sessionEntityID;
-                link.RecordID = sessionID;
-                if (!await link.Save()) {
-                    this.logError(`Failed to link recording file to session: ${link.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
-                        agent: params.agent, category: 'RealtimeSession'
-                    });
-                }
+            if (fileID) {
+                this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${fileID}).`, true, params);
             }
-
-            // Stamp the recording fields on the session (t0 + file + media kind).
-            const session = await md.GetEntityObject<MJAIAgentSessionEntity>('MJ: AI Agent Sessions', params.contextUser);
-            if (await session.Load(sessionID)) {
-                session.RecordingFileID = uploaded.FileID;
-                session.RecordingMedia = controller.Media;
-                session.RecordingStartedAt = controller.StartedAt ?? new Date();
-                if (!await session.Save()) {
-                    this.logError(`Failed to stamp recording fields on session: ${session.LatestResult?.CompleteMessage ?? 'unknown error'}`, {
-                        agent: params.agent, category: 'RealtimeSession'
-                    });
-                }
-            }
-            this.logStatus(`🎬 Realtime recording stored (${Math.round(encoded.DurationMs / 1000)}s, file ${uploaded.FileID}).`, true, params);
         } catch (error) {
             this.logError(`Failed to finalize realtime recording: ${error instanceof Error ? error.message : String(error)}`, {
                 agent: params.agent, category: 'RealtimeSession'

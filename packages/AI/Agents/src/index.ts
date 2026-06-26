@@ -61,6 +61,7 @@ export * from './realtime/meeting-controls-state';
 export * from './realtime/meeting-controls-channel-server';
 export * from './realtime/media-channel-server';
 export * from './realtime/realtime-recording-capture';
+export * from './realtime/realtime-recording-store';
 
 // Re-export from ai-reranker for backward compatibility
 export {
