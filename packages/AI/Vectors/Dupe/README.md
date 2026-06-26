@@ -66,7 +66,7 @@
 | `@memberjunction/core-entities` | Generated entity classes for Duplicate Runs, Lists, Entity Documents (incl. the `*Reasoning*` / `AutomationLevel` columns) |
 | `@memberjunction/global` | `MJGlobal` class factory (resolves the reasoning provider by mode), `UUIDsEqual` |
 
-> The `'Agent'`-mode provider (`AgentReasoningProvider`) is **not** a dependency of this package -- it lives in `@memberjunction/ai-agents` and registers against the reasoning seam at runtime. See [LLM Reasoning Layer](#llm-reasoning-layer).
+> The `'Agent'`-mode provider (`DuplicateReasoningAgentProvider`) is **not** a dependency of this package -- it lives in `@memberjunction/ai-agents` and registers against the reasoning seam at runtime. See [LLM Reasoning Layer](#llm-reasoning-layer).
 
 ---
 
@@ -266,7 +266,7 @@ Reasoning is delegated through an abstract `DuplicateReasoningProvider`, resolve
 | Provider | `@RegisterClass` key | Package | Path |
 |---|---|---|---|
 | `PromptReasoningProvider` | `PROMPT_REASONING_PROVIDER_KEY` (`'Prompt'`) | `@memberjunction/ai-vector-dupe` | Single-shot AI Prompt. Persists `AIPromptRunID`. |
-| `AgentReasoningProvider` | `AGENT_REASONING_PROVIDER_KEY` (`'Agent'`) | `@memberjunction/ai-agents` | Orchestrated agent run (unlocks memory-note injection + future context tools). Persists `AIAgentRunID`. |
+| `DuplicateReasoningAgentProvider` | `AGENT_REASONING_PROVIDER_KEY` (`'Agent'`) | `@memberjunction/ai-agents` | Orchestrated agent run (unlocks memory-note injection + future context tools). Persists `AIAgentRunID`. |
 
 > The Agent provider lives in `@memberjunction/ai-agents`, **not** this package, because `ai-agents` depends on `ai-vector-dupe` -- importing `AgentRunner` here would create a build cycle. It registers against the seam under the `'Agent'` key, so the detector resolves it via the class factory with no static import back into the pipeline. Registration is handled by the class-registration manifest (no `Load*()` helper needed).
 

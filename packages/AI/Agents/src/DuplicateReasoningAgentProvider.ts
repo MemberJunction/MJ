@@ -36,7 +36,7 @@ const DEFAULT_REASONING_AGENT_NAME = 'Duplicate Resolution Agent';
  * Agent-backed reasoning provider. Registered under the 'Agent' `ReasoningMode`.
  */
 @RegisterClass(DuplicateReasoningProvider, AGENT_REASONING_PROVIDER_KEY)
-export class AgentReasoningProvider extends DuplicateReasoningProvider {
+export class DuplicateReasoningAgentProvider extends DuplicateReasoningProvider {
     /**
      * Reason over a matched set via an orchestrated agent run.
      */

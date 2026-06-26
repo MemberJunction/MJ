@@ -198,6 +198,13 @@ export class PotentialDuplicateResult {
      * FieldMap. Populated alongside {@link ReasoningRecommendation}.
      */
     ReasoningFieldMap?: { FieldName: string; Value: unknown }[];
+    /**
+     * Optional human-readable explanation from the LLM for this set's recommendation — the
+     * overall summary verdict (per-candidate rationales are persisted on each match row's
+     * LLM* columns). Populated alongside {@link ReasoningRecommendation} so API consumers can
+     * surface *why* without re-querying. Undefined when reasoning did not run for this set.
+     */
+    ReasoningText?: string;
 }
 
 /**

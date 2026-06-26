@@ -42,7 +42,7 @@ export * from './memory-manager-agent';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
-export * from './AgentReasoningProvider';
+export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';

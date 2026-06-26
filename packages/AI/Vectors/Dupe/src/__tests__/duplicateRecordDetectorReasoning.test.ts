@@ -25,6 +25,10 @@ vi.mock('@memberjunction/core', () => {
         },
         RunView: MockRunView,
         BaseEntity: vi.fn(),
+        // Transitively loaded via @memberjunction/record-comparison's index (the Compare
+        // Remote Operation): base class for @RegisterClass + key-mapping helper.
+        BaseRemotableOperation: class {},
+        KeyValuePair: class { FieldName = ''; Value = ''; },
         CompositeKey: class {
             KeyValuePairs: { FieldName: string; Value: string }[] = [];
             Values = vi.fn().mockReturnValue('key-1');
@@ -85,6 +89,9 @@ vi.mock('@memberjunction/global', () => ({
     },
     UUIDsEqual: vi.fn((a: string, b: string) => a === b),
     NormalizeUUID: vi.fn((s: string) => String(s).toLowerCase()),
+    // No-op decorator stub — the Compare Remote Operation (transitively loaded via
+    // @memberjunction/record-comparison) is decorated with @RegisterClass at module load.
+    RegisterClass: () => () => { /* no-op */ },
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
@@ -94,6 +101,9 @@ vi.mock('@memberjunction/core-entities', () => ({
     MJEntityDocumentEntity: vi.fn(),
     MJListDetailEntity: vi.fn(),
     MJListEntity: vi.fn(),
+    // Re-exported transitively via @memberjunction/record-comparison's index (the Compare
+    // operation extends this CodeGen-emitted base); provide a stub so module load succeeds.
+    RecordComparisonCompareOperation: class {},
     KnowledgeHubMetadataEngine: { Instance: { Config: vi.fn() } },
 }));
 

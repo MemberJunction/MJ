@@ -1584,6 +1584,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
         result.ReasoningRecommendation = output.Recommendation;
         result.ReasoningFieldMap = fieldMap.length > 0 ? fieldMap : undefined;
+        result.ReasoningText = output.Reasoning?.trim() ? output.Reasoning : undefined;
     }
 
     // ─────────────────────────────────────────────

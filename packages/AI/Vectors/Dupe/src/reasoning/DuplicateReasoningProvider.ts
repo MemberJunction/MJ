@@ -5,7 +5,7 @@
  * {@link DuplicateRecordDetector} selects an implementation per Entity Document via
  * `ReasoningMode` ('Prompt' | 'Agent') and calls {@link DuplicateReasoningProvider.Reason}
  * once per source record's matched set. Both shipped implementations
- * (`PromptReasoningProvider`, and `AgentReasoningProvider` in `@memberjunction/ai-agents`)
+ * (`PromptReasoningProvider`, and `DuplicateReasoningAgentProvider` in `@memberjunction/ai-agents`)
  * consume the same {@link DuplicateReasoningInput} and emit the same
  * {@link DuplicateReasoningOutput}; only the runtime (single-shot prompt vs. orchestrated
  * agent) differs.
