@@ -29,6 +29,32 @@ export class MJAccordionTitleDirective {
 }
 
 /**
+ * Directive to mark a template as the accordion header **actions** — interactive
+ * controls (edit / copy / run / checkbox, etc.) that sit in the header row but
+ * are NOT the expand/collapse toggle. Rendered as a sibling of the toggle
+ * `<button>`, so there's no button-in-button and the toggle stays a clean,
+ * accessible control.
+ *
+ * @example
+ * ```html
+ * <mj-accordion-panel>
+ *   <ng-template mjAccordionTitle>Connection</ng-template>
+ *   <ng-template mjAccordionActions>
+ *     <button mjButton variant="icon" (click)="edit()"><i class="fa fa-pen"></i></button>
+ *   </ng-template>
+ *   …body…
+ * </mj-accordion-panel>
+ * ```
+ */
+@Directive({
+  selector: '[mjAccordionActions]',
+  standalone: true
+})
+export class MJAccordionActionsDirective {
+  constructor(public templateRef: TemplateRef<unknown>) {}
+}
+
+/**
  * mj-accordion-panel — Collapsible panel. Replaces `<kendo-panelbar-item>` and `<kendo-expansionpanel>`.
  *
  * Supports two title modes:
@@ -58,22 +84,32 @@ export class MJAccordionTitleDirective {
   template: `
     <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled"
       [class.mj-accordion-panel--muted-icon]="TitleIconMuted"
+      [class.mj-accordion-panel--sm]="Size === 'sm'"
+      [class.mj-accordion-panel--bare]="Bare"
+      [class.mj-accordion-panel--flush-body]="FlushBody"
       [attr.data-variant]="Variant !== 'default' ? Variant : null">
-      <button class="mj-accordion-header" type="button"
-        [id]="HeaderId"
-        [attr.aria-expanded]="Expanded"
-        [attr.aria-controls]="BodyId"
-        [disabled]="Disabled"
-        (click)="Toggle()">
-        <span class="mj-accordion-title">
-          @if (titleTemplate) {
-            <ng-container [ngTemplateOutlet]="titleTemplate.templateRef"></ng-container>
-          } @else {
-            {{ Title }}
-          }
-        </span>
-        <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
-      </button>
+      <div class="mj-accordion-header-row">
+        <button class="mj-accordion-header" type="button"
+          [id]="HeaderId"
+          [attr.aria-expanded]="Expanded"
+          [attr.aria-controls]="BodyId"
+          [disabled]="Disabled"
+          (click)="Toggle()">
+          <span class="mj-accordion-title">
+            @if (titleTemplate) {
+              <ng-container [ngTemplateOutlet]="titleTemplate.templateRef"></ng-container>
+            } @else {
+              {{ Title }}
+            }
+          </span>
+          <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
+        </button>
+        @if (actionsTemplate) {
+          <div class="mj-accordion-actions">
+            <ng-container [ngTemplateOutlet]="actionsTemplate.templateRef"></ng-container>
+          </div>
+        }
+      </div>
       <div class="mj-accordion-body-outer" [attr.inert]="Expanded ? null : ''">
         <div class="mj-accordion-body-clip">
           <div class="mj-accordion-body" role="region" [id]="BodyId" [attr.aria-labelledby]="HeaderId">
@@ -102,8 +138,25 @@ export class MJAccordionPanelComponent {
    * without writing CSS. Status/brand-colored icons can still be colored inline.
    */
   @Input() TitleIconMuted = false;
+  /**
+   * Density. `md` (default) is the standard size; `sm` tightens header padding and
+   * font for dense contexts (sidebars, flyouts, nested panels).
+   */
+  @Input() Size: 'sm' | 'md' = 'md';
+  /**
+   * Bare chrome — drop the panel's own border and header background so the panel
+   * sits cleanly inside a host that already provides chrome (e.g. an expandable
+   * card). The toggle/title/chevron/body still work; only the box styling is removed.
+   */
+  @Input() Bare = false;
+  /**
+   * Remove the body's default padding, for bodies that manage their own spacing
+   * (code editors, full-bleed grids, custom forms).
+   */
+  @Input() FlushBody = false;
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
+  @ContentChild(MJAccordionActionsDirective) actionsTemplate: MJAccordionActionsDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
 
   /** Stable per-instance ids that programmatically associate the header

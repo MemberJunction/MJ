@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { Component } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MJAccordionPanelComponent } from './accordion.component';
+import { MJAccordionPanelComponent, MJAccordionActionsDirective } from './accordion.component';
 
 /**
  * DOM-level spec for `<mj-accordion-panel>`. Focuses on the WAI-ARIA accordion
@@ -96,5 +97,59 @@ describe('MJAccordionPanelComponent (DOM)', () => {
     const b = render();
     expect(headerOf(a).getAttribute('id')).not.toBe(headerOf(b).getAttribute('id'));
     expect(regionOf(a).getAttribute('id')).not.toBe(regionOf(b).getAttribute('id'));
+  });
+
+  it('applies the density / bare / flush-body modifier classes from inputs', () => {
+    const fixture = TestBed.createComponent(MJAccordionPanelComponent);
+    fixture.componentRef.setInput('Size', 'sm');
+    fixture.componentRef.setInput('Bare', true);
+    fixture.componentRef.setInput('FlushBody', true);
+    fixture.detectChanges();
+    const panel = fixture.nativeElement.querySelector('.mj-accordion-panel') as HTMLElement;
+    expect(panel.classList.contains('mj-accordion-panel--sm')).toBe(true);
+    expect(panel.classList.contains('mj-accordion-panel--bare')).toBe(true);
+    expect(panel.classList.contains('mj-accordion-panel--flush-body')).toBe(true);
+  });
+
+  it('does not render an actions region when no mjAccordionActions template is projected', () => {
+    const fixture = render();
+    expect(fixture.nativeElement.querySelector('.mj-accordion-actions')).toBeNull();
+  });
+});
+
+/**
+ * Header-actions slot needs content projection, so it's exercised through a host
+ * component. Proves the projected actions render in `.mj-accordion-actions` and —
+ * critically for a11y — as a SIBLING of the toggle `<button>`, never inside it.
+ */
+describe('MJAccordionPanelComponent header actions slot (DOM)', () => {
+  it('projects mjAccordionActions beside (not inside) the toggle button', () => {
+    @Component({
+      standalone: true,
+      imports: [MJAccordionPanelComponent, MJAccordionActionsDirective],
+      template: `
+        <mj-accordion-panel Title="Connection">
+          <ng-template mjAccordionActions>
+            <button class="host-edit-btn" type="button">edit</button>
+          </ng-template>
+          <p>body</p>
+        </mj-accordion-panel>
+      `,
+    })
+    class HostComponent {}
+
+    const fixture = TestBed.createComponent(HostComponent);
+    fixture.detectChanges();
+
+    const actions = fixture.nativeElement.querySelector('.mj-accordion-actions') as HTMLElement;
+    const toggle = fixture.nativeElement.querySelector('button.mj-accordion-header') as HTMLButtonElement;
+    const editBtn = fixture.nativeElement.querySelector('.host-edit-btn') as HTMLButtonElement;
+
+    expect(actions).not.toBeNull();
+    expect(editBtn).not.toBeNull();
+    // the action button is inside .mj-accordion-actions ...
+    expect(actions.contains(editBtn)).toBe(true);
+    // ... and NOT inside the toggle button (no button-in-button)
+    expect(toggle.contains(editBtn)).toBe(false);
   });
 });
