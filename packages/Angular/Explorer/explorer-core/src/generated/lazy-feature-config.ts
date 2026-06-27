@@ -49,6 +49,9 @@ const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/
 // --- @memberjunction/ng-dashboards → ./module (3 entries) ---
 const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
 
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (1 entries) ---
+const loadPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
+
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
 const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/scheduling-dashboards.module'));
 
@@ -178,6 +181,9 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::ArchiveRunsResource': loadModule,
   'BaseResourceComponent::DatabaseDesignerDashboard': loadModule,
 
+  // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
+  'BaseDashboard::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
+
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
   'BaseResourceComponent::SchedulingActivityResource': loadSchedulingDashboardsModule,
@@ -208,4 +214,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 105;
+export const LAZY_FEATURE_CONFIG_COUNT = 106;

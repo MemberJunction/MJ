@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "Model Development Agent - Main Prompt",
+      "Description": "System prompt for the Model Development Agent — the conversational Loop orchestrator that collaborates with a business user to build a strongly-typed ModelingPlanSpec, gates on approval, drives the deterministic experiment session, enforces the leakage warn/sign-off rule, and authors the ML Experiment Results artifact.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/model-development-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/model-development-agent.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio?create&Description=System prompts for the Predictive Studio Model Development Agent and its sub-agents"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    }
+  },
+  {
+    "fields": {
+      "Name": "Goal Analyst - Main Prompt",
+      "Description": "System prompt for the Goal Analyst sub-agent. Refines a fuzzy business goal into a precise target definition (entity, target variable, problem type, success metric, as-of strategy). Writes only the Goal and TargetDefinition slices of the ModelingPlanSpec.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/goal-analyst.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/goal-analyst.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    }
+  },
+  {
+    "fields": {
+      "Name": "Data Scout - Main Prompt",
+      "Description": "System prompt for the Data Scout sub-agent. Studies approved MJ: Queries, DBAutoDoc, Agent Notes, and existing approved ML Models to propose candidate sources/features and to flag leakage risks. Writes only the CandidateSources, CandidateFeatures, and LeakageNotes slices of the ModelingPlanSpec; agent-drafted queries land Status='Pending'.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/data-scout.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/data-scout.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    }
+  },
+  {
+    "fields": {
+      "Name": "Experiment Designer - Main Prompt",
+      "Description": "System prompt for the Experiment Designer sub-agent. Proposes a ranked set of experiments (features × algorithms × hyperparameters) with rationale, a validation strategy with a locked holdout, and a proposed budget. Writes only the ProposedExperiments, ValidationStrategy, and ProposedBudget slices of the ModelingPlanSpec.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/model-development-agent/experiment-designer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "OutputType": "object",
+      "OutputExample": "@file:output/model-development-agent/experiment-designer.example.json",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Predictive Studio"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    }
+  }
+]

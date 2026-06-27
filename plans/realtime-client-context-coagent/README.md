@@ -14,7 +14,7 @@ It does this by **collapsing three parallel tool systems into one**, inserting a
 |---|---|---|---|
 | **1** | `Application.AgentSettings` metadata | New JSONType column + `IAgentSettings` interface + CodeGen; folded into default-agent resolution | [01-move1-application-agentsettings.md](01-move1-application-agentsettings.md) |
 | **2** | Unified client-tool resolver | One tier-agnostic resolver in `ai-core-plus`, run client-side (no server hop) or server-side; delete the two parallel paths | [02-move2-unified-client-tool-resolver.md](02-move2-unified-client-tool-resolver.md) |
-| **3** | `ClientContextChannel` + `ContextTool` | Headless realtime channel streaming context + capability manifest; single stable proxy tool | [03-move3-client-context-channel.md](03-move3-client-context-channel.md) |
+| **3** | `ClientContextChannel` + `ContextTool` | Headless realtime channel streaming context + capability manifest; single stable proxy tool; **+ `MJ: AI Agent Channels` metadata extension** (`IsHeadless` column + `ChannelConfig` JSONType bag: DisplayName/GroupName/Color/Icon) | [03-move3-client-context-channel.md](03-move3-client-context-channel.md) |
 | **4** | Many-agent co-agent | `invoke-target-agent` → `invoke_agent` over a static+dynamic union of allowed targets (loop or flow) | [04-move4-many-agent-coagent.md](04-move4-many-agent-coagent.md) |
 
 Cross-cutting: [05-config-cascade-and-shared-types.md](05-config-cascade-and-shared-types.md) — the config cascade (where the app layer inserts), the shared `ai-core-plus` types, and the disclosure/persona model.

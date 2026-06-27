@@ -96,7 +96,7 @@ export function FormatContextNote(snapshot: ClientContextSnapshot): string { /* 
 
 ### 3.3 The channel implementation
 - **Server half:** `ClientContextChannelServer extends BaseRealtimeChannelServer` in `packages/AI/Agents/src/realtime/` (next to `whiteboard-channel-server.ts`). `ToolNamePrefix` empty (it owns `ContextTool` as a session-level tool, not a prefixed channel tool). `GetServerToolDefinitions()` contributes `ContextTool` when active. `OnChannelStateSave` is a no-op (this channel is ephemeral — it persists no state-of-record; it's a live wire).
-- **Client half:** `ClientContextChannelClient extends BaseRealtimeChannelClient` in `ng-conversations` realtime channels dir. Overrides a new `IsSurfaceless = true` so the host doesn't try to mount a tab/surface. `BindSurface()` becomes a no-op. It exposes a small API the app calls:
+- **Client half:** `ClientContextChannelClient extends BaseRealtimeChannelClient` in `ng-conversations` realtime channels dir. The host knows to skip surface-mounting from **channel metadata** (`MJ: AI Agent Channels.IsHeadless` — see 3.4), not a code constant. `BindSurface()` becomes a no-op. It exposes a small API the app calls:
 
 ```typescript
 // Surface pushes context; channel debounces + diffs + sends a note.
@@ -108,8 +108,47 @@ RegisterAllowedAgent(ref: ClientContextAgentRef): void;        // dynamic allowe
 
 Debounce/coalesce snapshot deltas (≈ the whiteboard's 3s coalescing) so rapid navigation doesn't spam the model. Only send a note when the *manifest or salient location* actually changes.
 
-### 3.4 Mark a channel as surfaceless
-Add `IsSurfaceless?: boolean` to the channel base contract (`BaseRealtimeChannelClient`), defaulting false. The host's channel-mount loop skips surface binding when true. Tiny additive change to the base — pushes the capability to the generic level so future headless channels are free.
+### 3.4 Extend the `MJ: AI Agent Channels` registry entity (metadata, generic-level win)
+The channel registry entity (`MJAIAgentChannelEntity`) today has only `ID, Name, Description, ServerPluginClass, ClientPluginClass, TransportType, ConfigSchema, IsActive`. It has **no** way to say a channel is headless, no tab display name, no grouping, no color/icon. We add a **behavioral column + a JSONType presentation bag** — benefiting *every* channel (whiteboard/media/remote-browser get nicer chrome for free).
+
+**Why the split (column vs. bag):**
+- `IsHeadless` is a **behavioral contract** the framework reads to decide surface-mounting. It belongs as a first-class `BIT NOT NULL DEFAULT 0` column: unambiguous, schema-self-documenting, native form checkbox, and a missing/typo'd JSON key can't silently flip mount behavior.
+- `DisplayName`, `GroupName`, `Color`, `Icon` (and future chrome — sort order, badge, default-open, visibility rules) are **presentation**: read in-memory by the UI, never SQL-filtered, open-ended. That's exactly the JSONType case — extensible with **zero future migrations**.
+
+Migration (single `ALTER TABLE`, with `sp_addextendedproperty` per column):
+
+```sql
+ALTER TABLE ${flyway:defaultSchema}.AIAgentChannel ADD
+    IsHeadless     BIT            NOT NULL DEFAULT 0,
+    ChannelConfig  NVARCHAR(MAX)  NULL;   -- JSONType; shape = IChannelConfig
+```
+
+> **Naming:** `ConfigSchema` (existing) validates the *per-session* `AIAgentSessionChannel.Config` state-of-record. `ChannelConfig` (new) is *channel-definition-level* presentation config — different scope. Document the distinction inline, or rename the new column **`UIConfig`** (`IChannelUIConfig`) to remove any "config vs. configschema" ambiguity. **Open micro-decision** — lean `UIConfig`.
+
+`IChannelConfig` interface (`metadata/entities/JSONType-interfaces/IChannelConfig.ts`, registered via `.entity-field-jsontype-channel-config.json` exactly like Move 1):
+
+```typescript
+/** Channel-definition-level presentation/chrome config. Stored as JSON in AIAgentChannel.ChannelConfig. */
+export interface IChannelConfig {
+    /** Human label for the tab/chrome. Null → fall back to the channel's Name. */
+    DisplayName?: string | null;
+    /** Optional group for clustering channels in the UI. Null → ungrouped. */
+    GroupName?: string | null;
+    /** Chrome accent. Prefer a semantic design-token name (e.g. "--mj-brand-primary"); hex allowed but discouraged. */
+    Color?: string | null;
+    /** Font Awesome class, e.g. "fa-solid fa-satellite-dish". */
+    Icon?: string | null;
+    /** Display order within a group/list. */
+    SortOrder?: number | null;
+    // Extensible: add future chrome here with no DB change.
+}
+```
+
+> `Color` guidance: the consuming chrome resolves token names through the design-token system (no hardcoded hex in component CSS) so dark-mode / white-label stay correct.
+
+Then: run migration + CodeGen against `MJ_5_43_0_Predictive` so `IsHeadless` (typed `boolean`) and `ChannelConfigObject: IChannelConfig | null` generate. Seed `ClientContextChannel` (`IsHeadless=1`) and backfill existing whiteboard/media/remote-browser rows with sensible `ChannelConfig` chrome via **metadata sync**, not SQL inserts. The host's channel-mount loop reads `channel.IsHeadless` to skip binding; the tab chrome reads `ChannelConfigObject?.DisplayName ?? Name`, `.Icon`, `.Color`, and clusters by `.GroupName`.
+
+**Alternative (one mechanism):** put `IsHeadless` in the bag too — trades the schema-level guarantee for uniformity. Not recommended here, but a clean fallback.
 
 ### 3.5 Wire `ContextTool` dispatch to the resolver
 The realtime broker (Move 2.5) now, on `ContextTool` call:
@@ -126,7 +165,8 @@ These are *demonstration* adopters; the heavy lifting is all in the generic chan
 
 ## Tests
 - `client-context.test.ts` (ai-core-plus): `FormatContextNote` shape, partial-snapshot merge, empty.
-- Channel unit: surfaceless mount skips binding; `ContextTool` dispatch validates `action` against the live set; stale action → structured error.
+- Channel unit: `IsHeadless` channel skips surface binding; visible channels still mount; `DisplayName ?? Name` fallback; `ContextTool` dispatch validates `action` against the live set; stale action → structured error.
+- CodeGen smoke: `IsHeadless` (boolean) and `ChannelConfigObject` (`IChannelConfig`) generate and round-trip.
 - Debounce/coalesce: N rapid `PublishContext` calls → ≤1 note within the window.
 - Run `AI/Agents`, `ai-core-plus`, and the `ng-conversations` channel suites.
 
