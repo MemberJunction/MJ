@@ -1,8 +1,14 @@
 # @memberjunction/predictive-studio
 
-The **server-side engine** for **MemberJunction Predictive Studio** — the layer that assembles features, trains models, scores records, and orchestrates experiment searches. It composes onto existing MJ substrates (Record Set Processing, entities/`RunView`, Remote Operations, Agents, vectors) and the Python ML sidecar, rather than re-implementing them.
+> The **server-side engine** of **MemberJunction Predictive Studio** — assemble features, train models, score records, run experiment searches.
 
-For the full architecture, read the **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)**; for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
+**What** — the four engines that turn a client's data into a trained, scored predictive model: `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, and `ExperimentOrchestrator`.
+
+**Why** — predictive modeling needs feature assembly, anti-skew correctness, honest validation, batch scoring, and a budgeted search. Each of those already has a home in MJ's substrate; this engine **composes onto** them (Record Set Processing, entities/`RunView`, Remote Operations, Agents, vectors) plus the Python ML sidecar — rather than re-implementing batching, audit, or inference.
+
+**How it fits** — it sits above the [type contracts](../Core/README.md) and the [`MLSidecar` client](../Sidecar/README.md), and is consumed by the (planned) Remote Operations / Actions / Model Development Agent and the Studio dashboard. See [How it fits the whole](#how-it-fits-the-whole).
+
+For the full architecture, read the **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§4–§7 cover these engines); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
 
 ## Install
 

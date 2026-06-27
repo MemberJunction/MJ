@@ -1,8 +1,14 @@
 # @memberjunction/predictive-studio-core
 
-Pure-TypeScript **type contracts** for **MemberJunction Predictive Studio** — MJ's capability for training predictive models on a client's own data and scoring records with them. This package has **zero runtime dependencies**: it defines only interfaces and union types, shared across the Predictive Studio server engine, the Python sidecar client, the Studio UI, and the Model Development Agent. Defining the contract once, here, is what keeps those four layers in lockstep.
+> The shared vocabulary of **MemberJunction Predictive Studio** — every type the sidecar, engine, UI, and agent agree on, defined exactly once.
 
-For the full picture, read the **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)**; for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
+**What** — pure-TypeScript **type contracts** for Predictive Studio (MJ's capability for training predictive models on a client's own data and scoring records with them). Only interfaces and union types; **zero runtime dependencies**.
+
+**Why** — four layers (server engine, Python sidecar client, Studio UI, Model Development Agent) must agree on the same shapes. Defining the contract once, here, is what keeps them in lockstep — change a shape and every consumer fails to compile until it's reconciled.
+
+**How it fits** — it's the bottom of the stack: imported by everything, importing nothing. See [How it fits the whole](#how-it-fits-the-whole) below.
+
+For the full architecture, read the **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§3 covers this package); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
 
 ## Install
 

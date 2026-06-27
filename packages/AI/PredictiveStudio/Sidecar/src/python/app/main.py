@@ -123,7 +123,9 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     rows = req.data.rows
     target_idx = columns.index(target)
 
-    # Fit preprocessing on the FULL training data, then transform.
+    # Fit preprocessing on the FULL training data, then transform. This `fitted`
+    # payload is FROZEN: it is what gets applied (never re-fit) to the locked
+    # holdout below and at /predict — the anti-skew guarantee (plan §6.2).
     ops_spec = [op.model_dump(exclude_none=True) for op in req.preprocessing]
     matrix, output_columns, fitted = preprocessing.fit_transform(
         columns, rows, ops_spec, feature_cols
@@ -135,8 +137,11 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     # Classification: label-encode to contiguous ints. XGBoost's sklearn wrapper
     # requires integer-encoded labels [0..n-1]; encoding uniformly across all
     # classifiers keeps the metrics + decode path identical. The original string
-    # labels are stashed on the estimator so /predict can decode back.
+    # labels are stashed on the estimator so /predict can decode back. The same
+    # fitted encoder is reused to encode the locked-holdout labels so the holdout
+    # score uses an identical label mapping.
     label_classes: List[str] = []
+    encoder = None
     if is_classification:
         from sklearn.preprocessing import LabelEncoder
 
@@ -148,10 +153,22 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
 
     rng = req.validation.random_state or 42
 
-    # Carve off the locked holdout first (scored exactly once).
-    X_dev, X_hold, y_dev, y_hold = _split_holdout(
-        matrix, y, req.validation.holdout_size, rng
+    # Carve off a locked holdout for scoring exactly once. Precedence:
+    #   1. An explicit forwarded `req.holdout` (the orchestrator-carved locked
+    #      holdout) — scored via the FROZEN fitted transform (apply-only).
+    #   2. Else `validation.holdout_size` — the sidecar re-carves from `matrix`
+    #      (fallback used by the sidecar's own fixtures).
+    # When (1) is used, `data` already excludes the holdout, so we DON'T re-carve.
+    forwarded_holdout = _prepare_forwarded_holdout(
+        req, fitted, feature_cols, is_classification, encoder
     )
+    if forwarded_holdout is not None:
+        X_dev, y_dev = matrix, y
+        X_hold, y_hold = forwarded_holdout
+    else:
+        X_dev, X_hold, y_dev, y_hold = _split_holdout(
+            matrix, y, req.validation.holdout_size, rng
+        )
 
     # Train/validation split (or full-fit fallback for kfold/none).
     train_metrics, estimator = _fit_and_score(req, X_dev, y_dev, is_classification, rng)
@@ -175,6 +192,49 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
             estimator, X_hold, y_hold, is_classification
         )
     return result
+
+
+def _prepare_forwarded_holdout(
+    req: TrainRequest,
+    fitted: Dict[str, Any],
+    feature_cols: List[str],
+    is_classification: bool,
+    encoder,
+) -> Tuple[np.ndarray, np.ndarray] | None:
+    """Transform + encode an explicit orchestrator-forwarded locked holdout.
+
+    Returns ``(X_hold, y_hold)`` ready to score, or ``None`` when no `holdout`
+    matrix was forwarded. The holdout feature rows are run through the FROZEN
+    fitted preprocessing (``preprocessing.transform`` — apply only, never re-fit),
+    so the holdout score is free of train/serve skew. Classification labels are
+    encoded with the SAME fitted ``encoder`` used on the training labels.
+    """
+    if req.holdout is None or not req.holdout.rows:
+        return None
+
+    hold_columns = list(req.holdout.columns)
+    if req.target not in hold_columns:
+        raise ValueError(
+            f"Holdout matrix is missing the target column '{req.target}'."
+        )
+    target_idx = hold_columns.index(req.target)
+
+    # Map each holdout row to a feature-name -> value dict (the /predict shape)
+    # so the frozen `preprocessing.transform` apply-path produces a positionally
+    # identical vector to training.
+    hold_rows = req.holdout.rows
+    feature_dicts = [
+        {c: r[i] for i, c in enumerate(hold_columns) if c != req.target}
+        for r in hold_rows
+    ]
+    X_hold = preprocessing.transform(feature_dicts, fitted, feature_cols)
+
+    y_raw_hold = [r[target_idx] for r in hold_rows]
+    if is_classification:
+        y_hold = encoder.transform([str(v) for v in y_raw_hold])
+    else:
+        y_hold = np.array([float(v) for v in y_raw_hold], dtype=float)
+    return X_hold, y_hold
 
 
 def _fit_and_score(

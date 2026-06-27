@@ -4,9 +4,29 @@
 
 MJ already runs *off-the-shelf* models well — embeddings, LLMs, image/audio inference via `MJ: AI Models`. It does **not** train models on a client's own data. **Predictive Studio** closes that gap: a reasonably technical business user (not a career data scientist) can assemble features from across MJ's entire data surface, train a genuinely useful predictive model (member retention, renewal, lapse risk, lead scoring), and score who is likely to renew/lapse/return — and an **agent can drive the same object model end to end**.
 
-It is **core MJ, not an OpenApp**. It composes on substrates MJ already has (entities, Queries, vectors, Record Set Processing, Remote Operations, Agents, Artifacts) and adds a small, opinionated set of objects + a Python ML sidecar + world-class UI + an agent.
+---
 
-**Status (2026-06-27):** the data model (10 entities), the self-managing Python sidecar, the FeatureAssembly executor, the TrainingEngine, the `MLModelInferenceProcessor` scoring work type, the ExperimentOrchestrator, the Studio dashboard UI, and the live integration test are **built**. The Remote Operations layer, the Model Development Agent, materialization, and the Knowledge Hub Feature Pipelines are **planned** — flagged inline throughout. The authoritative task backlog is [`plans/predictive-studio.md` §14 (WBS)](../plans/predictive-studio.md).
+## At a glance
+
+| | |
+|---|---|
+| **What it is** | A core MJ capability for **training predictive models on a client's own data** and **scoring records** with them — feature assembly, training, scoring, and a budgeted agentic experiment search. |
+| **Who it's for** | A reasonably technical business user (renewal/retention/lead-scoring analyst) **and** an agent — the same object model drives both. |
+| **What it is *not*** | SageMaker/Databricks. No GPU. No training embeddings from scratch (it *uses* pre-trained embeddings as features). Deliberately rigid about algorithms (a fixed 6-catalog), flexible about data. |
+| **Compute** | **CPU-bound, no GPU.** Gradient boosting / logistic / random forest / small MLP on tabular data train in seconds-to-minutes — matches MJ's API-runtime infra. |
+| **Differentiation** | **Data assembly + agentic search over MJ's entire data surface**, not algorithmic innovation. |
+| **Status** | Engines, sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the Studio UI, and a live integration test are **built**. Remote Operations, the Model Development Agent, materialization, and Knowledge Hub Feature Pipelines are **planned** (flagged inline). |
+
+**Proof it works — real numbers from the live integration test** (`live-train-score.integration.test.ts`, real managed sidecar, 420-row synthetic dataset with a genuinely learnable signal, no DB):
+
+- **XGBoost classifier** — **holdout AUC ≥ 0.70** on the locked holdout the search never saw.
+- **Logistic Regression classifier** — **holdout AUC ≥ 0.70**.
+- **Ridge regressor** — **holdout R² ≥ 0.40** on a continuous target.
+- **Held-out directional accuracy > 0.60** — the model beats coin-flip on rows it never trained on.
+
+These are asserted thresholds on a deterministically-seeded dataset, so they hold every run — the metrics above are floors the suite enforces, not best-case cherry-picks.
+
+It is **core MJ, not an OpenApp**. It composes on substrates MJ already has (entities, Queries, vectors, Record Set Processing, Remote Operations, Agents, Artifacts) and adds a small, opinionated set of objects + a Python ML sidecar + world-class UI + an agent.
 
 This guide ties together the packages that each document one layer:
 
@@ -16,6 +36,32 @@ This guide ties together the packages that each document one layer:
 | Python sidecar | [`@memberjunction/predictive-studio-sidecar`](../packages/AI/PredictiveStudio/Sidecar/README.md) | `MLSidecar` — self-managing, bundled FastAPI ML service (managed-spawn default; no Docker) |
 | Server engine | [`@memberjunction/predictive-studio`](../packages/AI/PredictiveStudio/Engine/README.md) | `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, `ExperimentOrchestrator` |
 | Studio UI | `@memberjunction/ng-dashboards` (`PredictiveStudio/`) | the lazy-loaded Explorer dashboard + embedded copilot |
+
+---
+
+## Table of contents
+
+1. [The four-layer architecture](#1-the-four-layer-architecture)
+2. [The self-managing Python sidecar](#2-the-self-managing-python-sidecar)
+3. [The type contracts (`predictive-studio-core`)](#3-the-type-contracts-memberjunctionpredictive-studio-core)
+4. [The FeatureAssembly executor — the correctness backbone](#4-the-featureassembly-executor--the-correctness-backbone)
+5. [Training — immutable versioned models with honest metrics](#5-training--immutable-versioned-models-with-honest-metrics)
+6. [Scoring — a Record Set Processing work type](#6-scoring--a-record-set-processing-work-type)
+7. [The experiment engine — a generic agentic-search primitive](#7-the-experiment-engine--a-generic-agentic-search-primitive)
+8. [The data model — entities and relationships](#8-the-data-model--entities-and-relationships)
+9. [The guidance layer — algorithm catalog + the 6×7 matrix](#9-the-guidance-layer--algorithm-catalog--the-67-matrix)
+10. [The API surface — Actions, Remote Operations, and the agent (planned)](#10-the-api-surface--actions-remote-operations-and-the-agent-planned)
+11. [The Model Development Agent (planned)](#11-the-model-development-agent-planned)
+12. [The Studio UI](#12-the-studio-ui)
+13. [Getting started — train and score a model](#13-getting-started--train-and-score-a-model)
+14. [Quick reference — what's built vs planned](#14-quick-reference--whats-built-vs-planned)
+
+> **The five invariants** this system is built to protect. Each is enforced by code, not convention — they recur throughout the guide:
+> 1. **Anti train/serve skew** — one assembly code path for train and score; preprocessing is *fit once, applied everywhere* (§4.2).
+> 2. **Locked holdout** — a slice the search never sees, scored exactly once → the only *honest* metric (§5.1).
+> 3. **Leakage gate** — deny-list at assembly + single-feature-dominance flag post-train, blocking auto-promotion (§4.4).
+> 4. **Point-in-time correctness** — features assembled as-of the decision date, never leaking the future (§4.3).
+> 5. **Model immutability** — every successful run yields a new versioned `MJ: ML Models` row, never a mutation (§5.2).
 
 ---
 
@@ -46,7 +92,7 @@ flowchart TB
     end
     DATA --> FEAT
     FEAT --> TRAIN
-    TRAIN <-->|/train · /predict| SIDE
+    TRAIN <-->|"/train · /predict"| SIDE
     TRAIN --> MM
     MM --> RSP
     MM --> MAT
@@ -62,7 +108,7 @@ The differentiation is **data assembly + agentic search over MJ's entire data su
 |---|---|---|
 | **1 · Data** | existing | Entities, `MJ: Queries`, external entities (#2449), vectors, DBAutoDoc — all become feed-ins via `RunView`/`RunQuery` |
 | **2 · Feature** | ✅ | `FeatureAssemblyExecutor` — the single correctness backbone (§4) |
-| **3 · Model** | ✅ | `MLSidecar` + `TrainingEngine` → immutable versioned `MJ: ML Models` (§3, §5) |
+| **3 · Model** | ✅ | `MLSidecar` + `TrainingEngine` → immutable versioned `MJ: ML Models` (§2, §5) |
 | **4 · Inference** | ✅ scoring / ⏳ materialization | `MLModelInferenceProcessor` (§6); population-wide indexed columns wait on #2770 |
 
 ---
@@ -157,7 +203,7 @@ A pure-types package — zero runtime dependencies, only interfaces and union ty
 import type { ModelingPlanSpec, TrainRequest, FeatureStepGraph } from '@memberjunction/predictive-studio-core';
 ```
 
-Import the sidecar contract types from **here**, not from the Sidecar package (which only re-uses them).
+> **Import the sidecar contract types from *here*, not from the Sidecar package** (which only re-uses them). Re-exporting cross-package shapes is forbidden by root `CLAUDE.md` rule 5.
 
 ---
 
@@ -189,12 +235,28 @@ flowchart LR
 
 ### 4.2 The raw-vs-preprocessing split (anti train/serve skew)
 
+```mermaid
+flowchart TB
+    G["FeatureStep graph"] --> SPLIT{{"executor partitions<br/>the graph"}}
+    SPLIT -->|"data-assembly steps<br/>select · embedding · llm-derived · flow-agent"| RAW["RAW matrix<br/>built in TypeScript<br/>(RunView · Query · external · vectors)"]
+    SPLIT -->|"preprocessing steps<br/>impute · standardize · onehot · bin"| RECIPE["PreprocessingOp[] recipe<br/>NOT applied in TS — shipped to sidecar"]
+    RAW --> TRAIN["sidecar /train"]
+    RECIPE --> TRAIN
+    TRAIN -->|"fit_transform() learns<br/>mean/std · vocab · bin edges · fill values"| FITTED["FittedPreprocessing<br/>(frozen params)"]
+    FITTED -->|serialized into model · travels WITH it| MODEL["MJ: ML Models"]
+    MODEL --> PRED["sidecar /predict"]
+    RECIPE -.same recipe.-> PRED
+    PRED -->|"transform() — APPLY frozen params only · never re-fit"| OUT["aligned predictions"]
+    style FITTED fill:#fef3c7,stroke:#d97706
+    style RECIPE fill:#ecfeff,stroke:#0891b2
+```
+
 This is the subtle, critical design. The TypeScript executor partitions the FeatureStep graph into **two kinds of step**:
 
 - **Data-assembly steps** (`select`, `embedding`, `llm-derived`, `flow-agent`) → produce the **raw matrix** in TypeScript, drawing from `RunView`/`RunViews`, Query bindings, external entities, and persisted vectors.
 - **Preprocessing steps** (`impute`, `standardize`, `onehot`, `bin`) → are **NOT applied in TypeScript**. They are emitted as a `PreprocessingOp[]` recipe and shipped to the sidecar.
 
-Why? Stateful transforms (normalization mean/std, one-hot vocabulary, bin edges, imputation fill values) must be **fit once on the training data** and then *only applied* — never re-fit — at inference. The sidecar (`app/preprocessing.py`) does exactly this: `fit_transform()` at `/train` learns the params and returns them as `fitted_preprocessing`; `transform()` at `/predict` only applies those frozen params. The fitted preprocessing is serialized into `MLModel.FittedPreprocessing` alongside the weights and **travels with the model**. This is why `FeatureSchema` alone is insufficient: the fitted pipeline is part of the model's identity. The Python golden test (`src/python/tests/test_preprocessing_golden.py`) locks this down — the same raw row produces an identical transformed vector at train and at predict.
+> **Why:** Stateful transforms (normalization mean/std, one-hot vocabulary, bin edges, imputation fill values) must be **fit once on the training data** and then *only applied* — never re-fit — at inference. The sidecar (`app/preprocessing.py`) does exactly this: `fit_transform()` at `/train` learns the params and returns them as `fitted_preprocessing`; `transform()` at `/predict` only applies those frozen params. The fitted preprocessing is serialized into `MLModel.FittedPreprocessing` alongside the weights and **travels with the model**. This is why `FeatureSchema` alone is insufficient: the fitted pipeline is part of the model's identity. The Python golden test (`src/python/tests/test_preprocessing_golden.py`) locks this down — the same raw row produces an identical transformed vector at train and at predict.
 
 ### 4.3 Point-in-time / "as-of" assembly
 
@@ -217,7 +279,7 @@ An automated feature-search agent will relentlessly exploit target leakage (a fi
 1. **Deny-list enforcement (assembly-time).** `LeakageGuardEnforcer` normalizes the `LeakageGuard.DenyFields` / `DenySources` into case-insensitive sets; deny-listed fields/sources are filtered out of the matrix **before any column is produced** (`isFieldAllowed`, `isSourceAllowed`, `partitionColumns`).
 2. **Single-feature-dominance detection (post-train).** `detectSingleFeatureDominance(featureImportance, threshold)` normalizes the importance map to shares of total importance (using magnitudes, so signed coefficients work) and flags when the top feature's share exceeds `SingleFeatureDominanceThreshold` (e.g. `0.6`).
 
-When a run is flagged, the system does **not** silently proceed and does **not** auto-promote. It surfaces a clear, **business-person-friendly** warning ("One field is doing almost all the predicting — this often means we're accidentally peeking at the answer. A human should confirm this is legitimate before we trust this model.") and **blocks promotion** until a human signs off (the promotion sign-off gate is part of the planned agent/UI work — SP9 PS-AGENT-7).
+> When a run is flagged, the system does **not** silently proceed and does **not** auto-promote. It surfaces a clear, **business-person-friendly** warning — *"One field is doing almost all the predicting — this often means we're accidentally peeking at the answer. A human should confirm this is legitimate before we trust this model."* — and **blocks promotion** until a human signs off (the promotion sign-off gate is part of the planned agent/UI work — SP9 PS-AGENT-7).
 
 ---
 
@@ -241,11 +303,36 @@ The flow:
 8. **Leakage check** — run `detectSingleFeatureDominance`; a dominant feature flags the run and blocks auto-promotion.
 9. **Finalize the run** (`Completed`/`Failed`, results, costs, notes).
 
-The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar).
+```mermaid
+sequenceDiagram
+    participant C as Caller
+    participant TE as TrainingEngine
+    participant FA as FeatureAssemblyExecutor
+    participant SC as MLSidecar (Python)
+    participant ST as MJStorage (MJ: Files)
+    participant DB as MJ: ML Models / Training Runs
+    C->>TE: trainModel(input, deps)
+    TE->>DB: create Training Run (Status='Running')
+    TE->>FA: assemble(context='train')
+    FA-->>TE: raw matrix + schema + PreprocessingOp[]
+    TE->>TE: carve locked holdout FIRST (LockedHoldoutFraction)
+    TE->>SC: POST /train (matrix + recipe + holdout)
+    SC->>SC: fit_transform · fit estimator · score holdout ONCE
+    SC-->>TE: artifact · fitted_preprocessing · metrics · importance · holdout_metrics
+    TE->>ST: persist artifact → ArtifactFileID
+    TE->>DB: create immutable ML Model (Status='Draft')
+    TE->>TE: detectSingleFeatureDominance → flag?
+    TE->>DB: finalize Training Run (Completed/Failed)
+    TE-->>C: { model, run }
+```
+
+The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §13.4).
 
 ### 5.1 Validation discipline + locked holdout
 
 Be opinionated; don't ship broken models. Default to a train/test split with overfitting detection; optional k-fold and holdout. The decisive primitive is the **locked final holdout** — a slice the search never sees, scored *exactly once* on the promoted model → `MLModel.HoldoutMetrics` is the **honest number**. This prevents leaderboard optimism and the multiple-comparisons overfitting an automated search inevitably produces. Deterministic scoring (AUC/F1/accuracy/RMSE) drives the loop.
+
+> The integration test (§13.4) asserts this end-to-end: the holdout is carved *before* training, scored *once* on the final model, and the resulting `HoldoutMetrics.auc` clears **0.70** for both XGBoost and Logistic Regression on a deliberately noisy synthetic signal.
 
 ### 5.2 `MJ: ML Models` is distinct from `MJ: AI Models`
 
@@ -255,7 +342,7 @@ Be opinionated; don't ship broken models. Default to a train/test split with ove
 | Inference path | vendor API + driver class | the **Python sidecar** |
 | Produced by | seeded vendor metadata | a `TrainingEngine` run |
 
-An ML Model is **immutable + versioned** — each successful run yields a new row, never a mutation. It may *reference* an AI Model in its `Lineage` (e.g. the embedding model used to build features) — a pointer, not membership.
+An ML Model is **immutable + versioned** — each successful run yields a new row, never a mutation. It may *reference* an AI Model in its `Lineage` (e.g. the embedding model used to build features) — a pointer, not membership. The generated entity classes are `MJMLModelEntity` / `MJMLTrainingPipelineEntity` in `@memberjunction/core-entities`.
 
 ---
 
@@ -330,9 +417,18 @@ public async runSession(plan: ModelingPlanSpec, deps: ExperimentDeps, options?: 
 
 It asserts `plan.Approved === true` (the approval gate is the agent's job, not the orchestrator's) and runs iterations in **waves through Record Set Processing**:
 
-```
-generate wave (strategist) → train wave (bounded concurrency) → evaluate
-  → update leaderboard → prune → budget-gate → decide next wave
+```mermaid
+flowchart LR
+    START([approved ModelingPlanSpec]) --> GEN["generate wave<br/>(IWaveStrategist)"]
+    GEN --> TRAIN["train wave<br/>(runBounded · bounded concurrency)"]
+    TRAIN --> EVAL["evaluate<br/>(normalized Score)"]
+    EVAL --> LB["update leaderboard"]
+    LB --> PRUNE["prune<br/>(top-K / threshold)"]
+    PRUNE --> GATE{"budget gate<br/>MaxRuns · MaxComputeCost ·<br/>MaxWallclockMinutes?"}
+    GATE -->|within budget & more to try| GEN
+    GATE -->|bound hit| PAUSE(["Status='Paused'<br/>(clean, resumable)"])
+    GATE -->|plan exhausted| DONE(["Status='Completed'"])
+    style GATE fill:#fef3c7,stroke:#d97706
 ```
 
 | Concern | How |
@@ -347,7 +443,45 @@ A session may spawn **one Process Run per wave** (the two are kept distinct, no 
 
 ---
 
-## 8. The guidance layer — algorithm catalog + the 6×7 matrix
+## 8. The data model — entities and relationships
+
+10 core entities. CodeGen generates timestamps, FK indexes, sprocs, views, and the strongly-typed entity classes (`MJMLModelEntity`, `MJMLTrainingPipelineEntity`, …) in `@memberjunction/core-entities`. Names follow the MJ "MJ: " prefix convention. The three `Experiment*` tables are **generic** (ML-agnostic); everything `ML *` is the Predictive Studio leaf.
+
+```mermaid
+erDiagram
+    ML_Algorithms ||--o{ ML_Algorithm_Use_Case_Rankings : "ranked in"
+    ML_Algorithm_Use_Cases ||--o{ ML_Algorithm_Use_Case_Rankings : "scored for"
+    ML_Algorithms ||--o{ ML_Training_Pipelines : "uses"
+    ML_Training_Pipelines ||--o{ ML_Training_Runs : "produces"
+    ML_Training_Pipelines ||--o{ ML_Models : "versions"
+    ML_Training_Runs ||--o| ML_Models : "yields (nullable)"
+    Experiments ||--o{ Experiment_Sessions : "executions over time"
+    Experiment_Sessions ||--o{ Experiment_Session_Iterations : "attempts"
+    Experiment_Session_Iterations ||--o| ML_Training_Runs : "ML leaf (nullable)"
+    ML_Models ||--o{ ML_Model_Scoring_Bindings : "scored via"
+    ML_Model_Scoring_Bindings }o--|| Record_Processes : "runs through"
+```
+
+_(Entity names shown without the "MJ: " prefix for diagram clarity. `Record_Processes` is the existing Record Set Processing entity. `MaterializedResultID` on a scoring binding is a **soft** reference to #2770's table — not a FK until that table exists.)_
+
+| Entity | Role | Key fields |
+|---|---|---|
+| `MJ: ML Algorithms` | the fixed 6-algorithm catalog | `ProblemTypes`, `DriverClass` (sidecar key), `HyperparameterSchema`, `DefaultHyperparameters`, `SupportsFeatureImportance` |
+| `MJ: ML Algorithm Use Cases` | 7 decision-relevant scenarios | `ProblemTypeScope`, `Guidance`, `DisplayOrder` |
+| `MJ: ML Algorithm Use Case Rankings` | the 6×7 join (42 rows) | `SuitabilityScore` (1–5), `RecommendationLevel`, `Rationale`; UNIQUE(Algorithm, UseCase) |
+| `MJ: ML Training Pipelines` | declarative training definition | `TargetEntityID`, `TargetVariable`, `ProblemType`, `AlgorithmID`, `SourceBindings`, `FeatureSteps`, `AsOfStrategy`, `LeakageGuard`, `ValidationStrategy` |
+| `MJ: ML Models` | **immutable, versioned** trained model | `FittedPreprocessing`, `FeatureSchema`, `Metrics`, `HoldoutMetrics`, `FeatureImportance`, `Lineage`, `ArtifactFileID`, `Status` |
+| `MJ: ML Training Runs` | one training attempt (iteration leaf) | `PipelineID`, `ResultingModelID`, `ExperimentSessionIterationID` (nullable), `ValidationResults`, `ComputeCost`, `TokensUsed` |
+| `MJ: Experiments` | durable "what we optimize" (generic) | `ExperimentType` (open NVARCHAR), `Goal`, `TargetMetric`, `PlanSpecTemplate` |
+| `MJ: Experiment Sessions` | one execution (generic) | `ExperimentID`, `Budget`, `PlanSpec`, `Leaderboard`, `AgentRunID` |
+| `MJ: Experiment Session Iterations` | one attempt / leaderboard unit (generic) | `Sequence`, `Status`, `Score`, `ComputeCost`, `TokensUsed`, `Rationale`, `AIAgentRunID` |
+| `MJ: ML Model Scoring Bindings` | lineage for scoring/retraining | `MLModelID`, `RecordProcessID`, `TargetEntityID`/`TargetColumn`, `Mode`, `MaterializedResultID` (soft), `LastScoredAt` |
+
+> **CLAUDE.md rule 2b reminder:** don't write code against new fields until the migration + CodeGen have run. All ML reference data (`ml-algorithms/`, `ml-algorithm-use-cases/`, `ml-algorithm-use-case-rankings/`) is seeded via **metadata files + `mj sync push`**, never SQL INSERTs.
+
+---
+
+## 9. The guidance layer — algorithm catalog + the 6×7 matrix
 
 Neither the agent nor a non-expert user should have to guess which algorithm fits. Three seeded metadata entities encode evidence-based defaults:
 
@@ -355,23 +489,74 @@ Neither the agent nor a non-expert user should have to guess which algorithm fit
 - **`MJ: ML Algorithm Use Cases`** — **decision-relevant** scenarios that genuinely differentiate algorithms (7 of them), NOT business labels (churn/renewal/attendee-return are all the same *binary classification* shape and so don't differentiate). E.g. "Binary classification", "Regression", "Interpretability required", "Minimal tuning (business-user)", "Large/wide dataset (speed)", "Embedding/LLM-feature-heavy", "Small dataset".
 - **`MJ: ML Algorithm Use Case Rankings`** — the **6×7 join** (42 rows). Each cell carries a `SuitabilityScore` (1–5), a `RecommendationLevel` (`Primary` / `Strong` / `Viable` / `Weak` / `NotRecommended`), and the real payoff: a **`Rationale`** (agent- and human-readable, e.g. *"Gives feature importances but not simple coefficients — if a stakeholder needs to see exactly why each prediction was made, prefer Logistic/Ridge."*).
 
+The seeded recommendation matrix (the per-cell `Rationale` is the real payoff):
+
+| Use case ↓ / Algo → | XGBoost | LightGBM | Logistic Reg | Random Forest | Linear/Ridge | MLP |
+|---|---|---|---|---|---|---|
+| Binary classification | **Primary** | Strong | Viable | Strong | NotRec | Viable |
+| Regression | **Primary** | Strong | NotRec | Strong | Strong | Viable |
+| Interpretability required | Weak | Weak | **Primary** | Viable | **Primary** | NotRec |
+| Minimal tuning (business-user) | Viable | Viable | Strong | **Primary** | Strong | Weak |
+| Large/wide dataset (speed) | Strong | **Primary** | Strong | Viable | Strong | Viable |
+| Embedding/LLM-feature-heavy | Strong | Strong | Viable | Viable | Viable | **Primary** |
+| Small dataset | Viable | Viable | **Primary** | Strong | **Primary** | Weak |
+
 All three are seeded via **metadata files** (`metadata/ml-algorithms/`, `metadata/ml-algorithm-use-cases/`, `metadata/ml-algorithm-use-case-rankings/`) with `@lookup:` refs and `mj sync push` — **never SQL INSERTs**. The dashboard's catalog panel and the (planned) Experiment Designer both query this matrix for ranked, rationale-bearing recommendations per scenario (the UI computes "best level across selected scenarios" via `PredictiveStudioEngine.BestLevelsForScenarios`).
 
 ---
 
-## 9. The API surface — Actions, Remote Operations, and the agent (planned)
+## 10. The API surface — Actions, Remote Operations, and the agent (planned)
 
-> **Status: planned (SP3/SP4/SP8/SP9 in the WBS).** The engines above are built and unit/integration-tested; the invocation layer below is the next tranche. Document references the *intended* shape so you don't hand-roll a divergent one.
+> **Status: planned (SP3/SP4/SP8/SP9 in the WBS).** The engines above are built and unit/integration-tested; the invocation layer below is the next tranche. This documents the *intended* shape so you don't hand-roll a divergent one.
 
 Every server-side capability is intended to be a **Remote Operation** (Manual mode) + a thin **Action**, so agents / Skip / Query Builder inherit it. See the [Remote Operations Guide](REMOTE_OPERATIONS_GUIDE.md) and [Transport-Layer Architecture Guide](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md).
 
 - **Remote Operations** (`MJ: Remote Operations` rows, `GenerationType='Manual'`, `RequiredScope='predictive:execute'`, `LongRunning` progress where applicable): `PredictiveStudio.TrainModel`, `.ScoreRecordSet`, `.RunFeaturePipeline`, `.StartExperimentSession`, `.ControlExperimentSession`, `.PromoteModel`.
 - **Actions** — thin wrappers over those ops for agent/workflow/low-code use (code→agent boundary only, per the Actions philosophy). Plus a generic **"Write Entity Field(s)" Action** usable by Flow Agents and as a Feature Pipeline terminal step.
-- **Model Development Agent** (the capstone, planned) — a **Loop** agent (conversational) that mirrors **Agent Manager**: collaborate with the user to build a strongly-typed `ModelingPlanSpec`, get approval, then execute mostly with deterministic code (the `ExperimentOrchestrator`), then report with an LLM-authored rich artifact. Three sub-agents (Goal Analyst, Data Scout, Experiment Designer) are constrained via metadata payload-path guards (`PayloadDownstreamPaths` / `PayloadUpstreamPaths` / `PayloadSelfReadPaths` / `PayloadSelfWritePaths`) so each can only read/write its slice of the plan. The Data Scout reads **ground truth** only from `MJ: Queries` where `Status='Approved'` (plus DBAutoDoc descriptions, Agent Notes, and existing approved ML Models); queries it drafts itself land `Status='Pending'` for human approval.
 
 ---
 
-## 10. The Studio UI
+## 11. The Model Development Agent (planned)
+
+> **Status: planned (SP9 — the capstone).** Documented here so the shipped object model isn't bent into a divergent design.
+
+A **Loop** agent (conversational) that mirrors **Agent Manager**: collaborate with the user to build a strongly-typed `ModelingPlanSpec`, get approval, then execute mostly with deterministic code (the `ExperimentOrchestrator`), then report with an LLM-authored rich artifact.
+
+```mermaid
+flowchart TB
+    U([User: business goal]) --> GA
+    subgraph PLAN["Plan phase · LLM-heavy · Loop orchestrator"]
+        GA[Goal Analyst] --> DS[Data Scout] --> ED[Experiment Designer]
+    end
+    GA -.writes slice.-> SPEC[("ModelingPlanSpec<br/>payload-path guarded")]
+    DS -.writes slice.-> SPEC
+    ED -.writes slice.-> SPEC
+    DS -->|reads| GT["Approved MJ: Queries · DBAutoDoc<br/>Agent Notes · existing ML Models"]
+    SPEC --> GATE{"User approves plan?"}
+    GATE -->|edits| PLAN
+    GATE -->|approved| EXEC
+    subgraph EXEC["Execution phase · deterministic"]
+        ORCH[ExperimentOrchestrator] --> RUNS["waves through Record Set Processing<br/>train/score · prune · budget-gate · leaderboard"]
+    end
+    RUNS --> LEAK{"Leakage / dominance?"}
+    LEAK -->|suspicious| SIGN["Warn in plain language<br/>block promotion → human sign-off"]
+    LEAK -->|clean| REPORT
+    SIGN -.->|signed off| REPORT
+    REPORT["Report phase · LLM<br/>ML Experiment Results artifact<br/>→ drill-through to ML Models"] --> U
+    style GATE fill:#fef3c7,stroke:#d97706
+    style LEAK fill:#fee2e2,stroke:#dc2626
+```
+
+- **Three sub-agents** (Goal Analyst, Data Scout, Experiment Designer) are constrained via metadata payload-path guards (`PayloadDownstreamPaths` / `PayloadUpstreamPaths` / `PayloadSelfReadPaths` / `PayloadSelfWritePaths`) so each can only read/write its slice of the plan — sequencing is *declarative*, not hardcoded control flow.
+- **Goal Analyst** refines the business goal into a precise target + problem type + success metric. **Data Scout** studies the data (reads **ground truth** only from `MJ: Queries` where `Status='Approved'`, plus DBAutoDoc descriptions, Agent Notes, and existing approved ML Models) and flags leakage risks. **Experiment Designer** proposes a ranked set of experiments with rationale + a proposed budget.
+- **Approval gate** — the plan is emitted as an artifact + a `responseForm`/`Chat` step; the user approves/edits before any execution.
+- **Deterministic execution** — once approved, the `ExperimentOrchestrator` runs the plan as RSP waves (§7); internal LLM inference is used *only* for "what to try next," the bulk is deterministic loop/compare/prune code.
+- **Semantic-layer guard** — queries the Data Scout *drafts itself* land `Status='Pending'` for human approval; they're usable for the current exploration but never treated as ground truth until a human signs off.
+- **Reporting** — an LLM authors the **ML Experiment Results artifact** (`application/vnd.mj.ml-experiment-results`) with a `MLExperimentResultsViewerPlugin` rendering goal/leaderboard/metrics/importance and clickable drill-through (`NavigationRequest`) to each winning `MJ: ML Models` record.
+
+---
+
+## 12. The Studio UI
 
 Predictive Studio is an MJ Explorer dashboard built to the ng-dashboards world-class standards (see [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md)) and **lazy-loaded** (see [Lazy Loading Guide](LAZY_LOADING_GUIDE.md)). It lives at `packages/Angular/Explorer/dashboards/src/PredictiveStudio/`.
 
@@ -397,9 +582,9 @@ The HTML option mockups (the source of the pinned designs) are at [`plans/predic
 
 ---
 
-## 11. Getting started — train and score a model
+## 13. Getting started — train and score a model
 
-### 11.1 One-time setup
+### 13.1 One-time setup
 
 ```bash
 # 1. Set up the bundled Python sidecar environment (once)
@@ -413,7 +598,7 @@ cd ../Sidecar                            && npm run build
 cd ../Engine                             && npm run build
 ```
 
-### 11.2 Train (programmatic shape)
+### 13.2 Train (programmatic shape)
 
 The `TrainingEngine` orchestrates assembly → sidecar `/train` → model persistence. In production you'd invoke it via the (planned) `PredictiveStudio.TrainModel` Remote Op; directly, the shape is:
 
@@ -424,7 +609,7 @@ import { TrainingEngine } from '@memberjunction/predictive-studio';
 
 const engine = new TrainingEngine();
 const result = await engine.trainModel(
-  { PipelineID: retentionPipelineId, /* … */ },
+  { pipelineId: retentionPipelineId, /* … */ },
   productionDeps,
 );
 // → a new immutable MJ: ML Models row (Status='Draft') with FittedPreprocessing,
@@ -433,11 +618,11 @@ const result = await engine.trainModel(
 
 A pipeline (`MJ: ML Training Pipelines`) declares the target entity, target variable, problem type, algorithm, `SourceBindings`, `FeatureSteps` DAG, `AsOfStrategy`, `LeakageGuard`, and `ValidationStrategy` (including the locked-holdout fraction).
 
-### 11.3 Score (Record Set Processing)
+### 13.3 Score (Record Set Processing)
 
 Scoring runs as the `'ML Model'` work type. On-demand against a view/list/selection via `RecordProcess.RunNow` with a scope override; scheduled via the `Schedule` trigger. Attach an `OutputMapping` to write the prediction back as a sortable/filterable column; omit it for ephemeral scores. See the [Record Set Processing Guide](RECORD_SET_PROCESSING_GUIDE.md) for the substrate mechanics.
 
-### 11.4 Run the live integration test (`PS_INTEGRATION=1`)
+### 13.4 Run the live integration test (`PS_INTEGRATION=1`)
 
 The engine ships an opt-in end-to-end test that spawns the **real** managed sidecar and trains + scores against it (`packages/AI/PredictiveStudio/Engine/src/__tests__/integration/live-train-score.integration.test.ts`):
 
@@ -449,11 +634,11 @@ cd packages/AI/PredictiveStudio/Sidecar && npm run setup:python
 cd packages/AI/PredictiveStudio/Engine && npm run test:integration
 ```
 
-It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (managed-spawn of XGBoost / Logistic / Ridge), and `MLModelInferenceProcessor`, faking only the entity factory / record loader / artifact store (no DB needed). It **skips gracefully** with a clear console note when the venv or Python is unavailable, so it is CI-safe by default — the standard `npm run test` (mocked) always runs; the live suite is explicit opt-in.
+It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (managed-spawn of XGBoost / Logistic / Ridge), and `MLModelInferenceProcessor`, faking only the entity factory / record loader / artifact store (no DB needed). The thresholds it asserts are the [at-a-glance numbers](#at-a-glance): **holdout AUC ≥ 0.70** (XGBoost, Logistic), **holdout R² ≥ 0.40** (Ridge), **held-out directional accuracy > 0.60**. It **skips gracefully** with a clear console note when the venv or Python is unavailable, so it is CI-safe by default — the standard `npm run test` (mocked) always runs; the live suite is explicit opt-in.
 
 ---
 
-## 12. Quick reference — what's built vs planned
+## 14. Quick reference — what's built vs planned
 
 | Area | Status |
 |---|---|
@@ -471,5 +656,9 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | Knowledge Hub Feature Pipelines | ⏳ planned (SP6) |
 | Materialized prediction columns (#2770) | ⏳ planned (SP5) |
 | Maintenance / retraining triggers | ⏳ planned (SP10) |
+
+**Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the planned API surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot).
+
+**Package READMEs**: [Core (types)](../packages/AI/PredictiveStudio/Core/README.md) · [Sidecar (`MLSidecar`)](../packages/AI/PredictiveStudio/Sidecar/README.md) · [Engine (assembly/training/scoring/experiments)](../packages/AI/PredictiveStudio/Engine/README.md).
 
 For the authoritative, dependency-ordered task list, see [`plans/predictive-studio.md` §14](../plans/predictive-studio.md).

@@ -108,16 +108,21 @@ export class MJSidecarTrainer implements ISidecarTrainer {
   constructor(private readonly sidecar: MLSidecar = new MLSidecar()) {}
 
   /** @inheritdoc */
-  public async train(req: TrainRequest, _lockedHoldout?: MatrixData): Promise<TrainResponse> {
+  public async train(req: TrainRequest, lockedHoldout?: MatrixData): Promise<TrainResponse> {
     if (!this.started) {
       await this.sidecar.start();
       this.started = true;
     }
-    // The current public sidecar `/train` contract takes a single `TrainRequest`;
-    // the locked holdout is carried in the request's data convention when the
-    // sidecar gains a holdout channel. Until then the engine still carves the
-    // holdout deterministically (so HoldoutMetrics provenance is honest) — see
-    // PS-SIDE-2 for wiring the holdout scoring into the Python `/train` path.
-    return this.sidecar.train(req);
+    // Forward the orchestrator-carved **locked holdout** (plan §8.2) on the shared
+    // `TrainRequest.holdout` channel. The sidecar fits preprocessing on the
+    // training `data` only, then APPLIES that frozen fitted transform to these
+    // holdout rows and scores them exactly once → `holdout_metrics` (the anti-skew
+    // guarantee, plan §6.2 — holdout preprocessing is never re-fit). `req.data`
+    // already excludes the holdout, so the carve stays deterministic + auditable
+    // on the TypeScript side. When no holdout was carved (e.g. tiny datasets) we
+    // simply omit it and the sidecar returns no `holdout_metrics`.
+    const withHoldout: TrainRequest =
+      lockedHoldout && lockedHoldout.rows.length > 0 ? { ...req, holdout: lockedHoldout } : req;
+    return this.sidecar.train(withHoldout);
   }
 }

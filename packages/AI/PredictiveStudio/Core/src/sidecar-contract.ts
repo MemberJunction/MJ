@@ -73,6 +73,19 @@ export interface ValidationConfig {
   test_size?: number;
   /** Number of folds for `kfold`. */
   k?: number;
+  /**
+   * Locked-holdout fraction the **sidecar** should re-carve from the training
+   * `data` and score exactly once (plan §8.2). This is the *fallback* path used
+   * when the orchestrator does not forward an explicit {@link TrainRequest.holdout}
+   * matrix — e.g. the sidecar's own pytest fixtures. The production
+   * orchestrator carves the locked holdout in TypeScript and forwards the exact
+   * rows via `TrainRequest.holdout` instead (which takes precedence), so the
+   * holdout is auditable and the carve is deterministic. Omitted ⇒ no
+   * sidecar-side re-carve.
+   */
+  holdout_size?: number;
+  /** Random seed for the sidecar's holdout / train-test splits (default 42). */
+  random_state?: number;
 }
 
 /**
@@ -127,6 +140,21 @@ export interface TrainRequest {
   data?: MatrixData;
   /** Shared-storage handle to the matrix (Parquet/Arrow), used for very large sets. */
   data_ref?: string;
+  /**
+   * The **locked holdout** matrix (plan §8.2), carved off the assembled data by
+   * the orchestrator *before* any train/test split and never present in
+   * {@link TrainRequest.data}. Same columns as `data` (it includes the `target`
+   * column). When supplied, the sidecar scores these rows **exactly once** using
+   * the preprocessing fitted on the training `data` (frozen fitted transform,
+   * **never re-fit** — the anti-skew guarantee, plan §6.2) and returns the result
+   * as {@link TrainResponse.holdout_metrics}.
+   *
+   * This is the honest, deterministic holdout: the orchestrator carves the exact
+   * rows in TypeScript (auditable) and forwards them here, rather than asking the
+   * sidecar to re-derive a holdout via {@link ValidationConfig.holdout_size}.
+   * When both `holdout` and `validation.holdout_size` are set, `holdout` wins.
+   */
+  holdout?: MatrixData;
 }
 
 /**

@@ -78,6 +78,12 @@ class TrainRequest(BaseModel):
     target: str
     data: Optional[MatrixData] = None
     data_ref: Optional[str] = None  # shared-storage handle (not implemented in v1)
+    # The locked holdout (plan §8.2): rows carved off by the orchestrator BEFORE
+    # any train/test split and absent from `data`. Same columns as `data` (it
+    # includes the target). When present, preprocessing fitted on `data` is
+    # APPLIED (never re-fit) to these rows and they are scored exactly once. Takes
+    # precedence over `validation.holdout_size` (the sidecar-side re-carve).
+    holdout: Optional[MatrixData] = None
 
 
 class TrainResponse(BaseModel):

@@ -48,11 +48,8 @@ import { fileURLToPath } from 'node:url';
 import type { BaseEntity, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type {
-  TrainRequest,
-  TrainResponse,
   PredictRequest,
   PredictResponse,
-  MatrixData,
   ModelMetrics,
   SourceBinding,
   FeatureStepGraph,
@@ -66,9 +63,9 @@ import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
 import {
   TrainingEngine,
   InMemoryArtifactStore,
+  MJSidecarTrainer,
   type IEntityFactory,
   type IRecordLoader,
-  type ISidecarTrainer,
   type TrainingDeps,
   type TrainModelInput,
 } from '../../training';
@@ -390,33 +387,21 @@ function buildPipeline(opts: {
 // region: live-sidecar seam adapters (REAL training / REAL predict) ----------
 
 /**
- * Live {@link ISidecarTrainer} backed by the REAL {@link MLSidecar}. Unlike the
- * production `MJSidecarTrainer` (which leaves holdout scoring to a future Python
- * channel), this adapter sets `validation.holdout_size` on the request so the
- * Python sidecar carves a **locked holdout, scores it exactly once**, and returns
- * genuine `holdout_metrics` — giving the test an honest holdout AUC/R² to assert.
+ * Build the **production** {@link MJSidecarTrainer} against the already-running
+ * sidecar, so this test exercises the real production holdout path end-to-end.
  *
- * Lifecycle is owned by the test (start/stop around the suite); this adapter does
- * not start/stop the sidecar.
+ * The production trainer forwards the orchestrator-carved **locked holdout** on
+ * the shared `TrainRequest.holdout` contract field; the Python `/train` then
+ * applies the FROZEN fitted preprocessing to those exact rows and scores them
+ * once → genuine `holdout_metrics`. This is the same code that runs in
+ * production — the test no longer needs a bespoke trainer that reaches around the
+ * contract via `validation.holdout_size`.
+ *
+ * `MJSidecarTrainer.train` calls `sidecar.start()` lazily, which is a no-op when
+ * the suite has already started the sidecar (lifecycle stays owned by the test).
  */
-class LiveHoldoutSidecarTrainer implements ISidecarTrainer {
-  constructor(
-    private readonly sidecar: MLSidecar,
-    private readonly holdoutSize: number,
-  ) {}
-
-  public async train(req: TrainRequest, _lockedHoldout?: MatrixData): Promise<TrainResponse> {
-    const withHoldout: TrainRequest = {
-      ...req,
-      validation: {
-        ...req.validation,
-        // Python ValidationConfig accepts holdout_size + random_state; the TS
-        // ValidationConfig type doesn't surface them, so attach via a typed merge.
-        ...({ holdout_size: this.holdoutSize, random_state: 42 } as Record<string, number>),
-      },
-    };
-    return this.sidecar.train(withHoldout);
-  }
+function makeProductionTrainer(sidecar: MLSidecar): MJSidecarTrainer {
+  return new MJSidecarTrainer(sidecar);
 }
 
 /** Live {@link ISidecarPredictor} backed by the REAL {@link MLSidecar}. */
@@ -503,7 +488,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     const deps: TrainingDeps = {
       entityFactory: factory,
       recordLoader: new FakeRecordLoader(pipeline),
-      sidecar: new LiveHoldoutSidecarTrainer(sidecar, 0.2),
+      sidecar: makeProductionTrainer(sidecar),
       artifactStore,
     };
 
@@ -624,7 +609,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     const deps: TrainingDeps = {
       entityFactory: factory,
       recordLoader: new FakeRecordLoader(pipeline),
-      sidecar: new LiveHoldoutSidecarTrainer(sidecar, 0.2),
+      sidecar: makeProductionTrainer(sidecar),
       artifactStore,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));
@@ -669,7 +654,7 @@ describe.runIf(SHOULD_RUN)('Predictive Studio — live end-to-end train + score 
     const deps: TrainingDeps = {
       entityFactory: factory,
       recordLoader: new FakeRecordLoader(pipeline),
-      sidecar: new LiveHoldoutSidecarTrainer(sidecar, 0.2),
+      sidecar: makeProductionTrainer(sidecar),
       artifactStore,
     };
     const engine = new TrainingEngine(makeAssemblerForRows(DATASET));

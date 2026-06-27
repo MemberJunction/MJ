@@ -1,21 +1,15 @@
 # @memberjunction/predictive-studio-sidecar
 
-Self-managing TypeScript wrapper for the Predictive Studio **Python ML sidecar** —
-a CPU-only FastAPI service that **trains** and **serves** tabular ML models. It is
-the server side of the contract defined in
-[`@memberjunction/predictive-studio-core`](../Core/src/sidecar-contract.ts):
-MJ (TypeScript) assembles the feature matrix and orchestrates; this sidecar does
-the CPU-bound fitting and inference.
+> A self-managing TypeScript wrapper for Predictive Studio's **Python ML sidecar** — `new MLSidecar(); await s.start()` and you have a live training/inference service. **No Docker required.**
 
-This package follows the [`@memberjunction/sqlglot-ts`](../../../SQLGlotTS) pattern:
-the Python microservice is **bundled** (`src/python/`) and the `MLSidecar` class
-spawns it as a child process on demand. **Managed spawn is the default and needs
-no Docker** — `new MLSidecar(); await s.start()` just works once the bundled venv
-exists (`npm run setup:python`). A remote/containerized topology is available when
-you want it, but it is opt-in, not a prerequisite.
+**What** — `MLSidecar`, a TypeScript class fronting a CPU-only FastAPI service (bundled in `src/python/`) that **trains** and **serves** tabular ML models over the contract defined in [`@memberjunction/predictive-studio-core`](../Core/src/sidecar-contract.ts).
+
+**Why** — Node is poor at ML training; Python is excellent. So MJ (TypeScript) assembles the feature matrix and orchestrates, and this sidecar does the CPU-bound **fitting** (`/train`) and **inference** (`/predict`). Keeping it self-managing means a developer needs zero infrastructure to train a model locally.
+
+**How it fits** — it follows the [`@memberjunction/sqlglot-ts`](../../../SQLGlotTS) pattern: the Python microservice is **bundled** and `MLSidecar` spawns it as a child process on demand. **Managed spawn is the default and needs no Docker** — it just works once the bundled venv exists (`npm run setup:python`). A remote/containerized topology is opt-in, not a prerequisite.
 
 For the full architecture, read the
-**[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)**.
+**[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§2 covers this package); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
 
 ## Two topologies
 
