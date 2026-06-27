@@ -19,7 +19,7 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
 const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (16 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (17 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
@@ -93,6 +93,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::AutotaggingPipelineResource': loadAiDashboardsModule,
   'BaseResourceComponent::ClusterVisualizationResource': loadAiDashboardsModule,
   'BaseResourceComponent::DuplicateDetectionResource': loadAiDashboardsModule,
+  'BaseResourceComponent::FeaturePipelinesResource': loadAiDashboardsModule,
   'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
   'BaseResourceComponent::Tags': loadAiDashboardsModule,
@@ -214,4 +215,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 106;
+export const LAZY_FEATURE_CONFIG_COUNT = 107;
