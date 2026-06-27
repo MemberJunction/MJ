@@ -73,13 +73,10 @@ export interface MatrixColumnClickEvent {
     
       <!-- Empty state -->
       @if (!loading && (!data || data.columns.length === 0)) {
-        <div class="matrix-empty">
-          <div class="empty-icon">
-            <i class="fas fa-th"></i>
-          </div>
-          <h4>{{ emptyTitle }}</h4>
-          <p>{{ emptyMessage }}</p>
-        </div>
+        <mj-empty-state
+          Icon="fa-solid fa-table-cells"
+          [Title]="emptyTitle"
+          [Message]="emptyMessage" />
       }
     
       <!-- Matrix table -->
@@ -200,35 +197,6 @@ export interface MatrixColumnClickEvent {
     .loading-spinner {
       font-size: 32px;
       color: var(--mj-brand-primary);
-    }
-
-    /* Empty State */
-    .matrix-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      text-align: center;
-      color: var(--mj-text-muted);
-    }
-
-    .empty-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .matrix-empty h4 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .matrix-empty p {
-      margin: 0;
-      font-size: 14px;
     }
 
     /* Matrix Wrapper */

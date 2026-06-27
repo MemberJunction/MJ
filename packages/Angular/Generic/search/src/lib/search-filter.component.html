@@ -104,8 +104,7 @@
     }
 
     @if (Filters.length === 0 && !ShowRelevanceSlider) {
-        <div class="filter-empty">
-            <p>No filters available</p>
-        </div>
+        <mj-empty-state class="filter-empty" Size="compact"
+            Icon="" Title="No filters available" />
     }
 </div>

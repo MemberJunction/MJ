@@ -62,10 +62,8 @@
                     </button>
                 </div>
                 @if (History.length === 0) {
-                    <div class="gc-history-empty">
-                        <i class="fa-regular fa-circle-question"></i>
-                        Run a query to see it here. Star <i class="fa-solid fa-star"></i> to keep it.
-                    </div>
+                    <mj-empty-state class="gc-history-empty" Size="compact" Icon="fa-regular fa-circle-question"
+                        Title="Run a query to see it here" Message="Star a query to keep it." />
                 } @else {
                     <div class="gc-history-list">
                         @for (h of History; track TrackByHistory($index, h)) {
@@ -190,15 +188,10 @@
                             </div>
                         }
                         @if (FilteredEntities.length === 0) {
-                            <div class="gc-ent-empty">
-                                <i class="fa-solid fa-search"></i>
-                                <span>No entities match.</span>
-                                @if (EntitiesSearch || EntitySchemaFilter) {
-                                    <button class="gc-ent-clear" type="button" (click)="ClearEntityFilters()">
-                                        Clear filters
-                                    </button>
-                                }
-                            </div>
+                            <mj-empty-state class="gc-ent-empty" Variant="no-results" Size="compact"
+                                Icon="fa-solid fa-magnifying-glass" Title="No entities match."
+                                [ActionText]="(EntitiesSearch || EntitySchemaFilter) ? 'Clear filters' : ''"
+                                (Action)="ClearEntityFilters()" />
                         }
                     </div>
                 } @else {
@@ -402,10 +395,8 @@
                     }
                     <pre class="gc-response"><code>{{ ResponseJson }}</code></pre>
                 } @else {
-                    <div class="gc-empty">
-                        <i class="fa-solid fa-arrow-up-from-bracket"></i>
-                        <span>Run a query to see results here.</span>
-                    </div>
+                    <mj-empty-state class="gc-empty" Icon="fa-solid fa-arrow-up-from-bracket"
+                        Title="Run a query to see results here." />
                 }
             </div>
         </div>

@@ -38,6 +38,12 @@
     gap: 16px;
 }
 
+/* Empty-state placeholder spans the full grid so it centers instead of
+   sitting in a single 350px column. */
+.data-grid > mj-empty-state {
+    grid-column: 1 / -1;
+}
+
 .data-card {
     border: 1px solid var(--mj-border-default);
     border-radius: 8px;
@@ -323,37 +329,6 @@
 /* Status badge icons */
 .status-badge i {
     font-size: 12px;
-}
-
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
-    background: var(--mj-bg-surface);
-    border-radius: 8px;
-    border: 1px solid var(--mj-border-default);
-}
-
-.empty-state i {
-    font-size: 48px;
-    color: var(--mj-border-default);
-    margin-bottom: 16px;
-}
-
-.empty-state p {
-    margin: 0 0 8px 0;
-    font-size: 16px;
-    color: var(--mj-text-primary);
-}
-
-.empty-state .hint {
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-    margin-bottom: 16px;
 }
 
 /* ========================================

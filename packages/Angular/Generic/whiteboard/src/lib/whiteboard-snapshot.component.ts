@@ -1,6 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { RealtimeWhiteboardBoardComponent } from './whiteboard-board.component';
 import { WhiteboardState } from './whiteboard-state';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 /**
  * Parse a persisted whiteboard payload ({@link WhiteboardState.ToJSON} output) into a
@@ -30,17 +31,16 @@ export function ParseBoardStateJson(json: string | null | undefined): Whiteboard
 @Component({
   standalone: true,
   selector: 'mj-whiteboard-snapshot',
-  imports: [RealtimeWhiteboardBoardComponent],
+  imports: [RealtimeWhiteboardBoardComponent, MJEmptyStateComponent],
   template: `
     @if (State) {
       <div class="wb-snapshot-board">
         <mj-realtime-whiteboard [State]="State" [AgentName]="AgentName" [ReadOnly]="true" [Tool]="'pan'" />
       </div>
     } @else {
-      <div class="wb-snapshot-empty">
-        <i class="fa-solid fa-chalkboard" aria-hidden="true"></i>
-        <span>No board content</span>
-      </div>
+      <mj-empty-state class="wb-snapshot-empty" Size="compact"
+        Icon="fa-solid fa-chalkboard"
+        Title="No board content" />
     }
   `,
   styles: [`

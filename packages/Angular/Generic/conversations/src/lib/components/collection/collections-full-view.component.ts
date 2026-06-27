@@ -271,32 +271,19 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
     
         <!-- Empty state -->
         @if (!isLoading && unifiedItems.length === 0) {
-          <div class="empty-state">
-            <i class="fas fa-folder-open"></i>
-            <!-- Search returned no results -->
-            @if (searchQuery) {
-              <h3>No items found</h3>
-              <p>Try adjusting your search</p>
-            }
-            <!-- Empty root level -->
-            @if (!searchQuery && !currentCollectionId) {
-              <h3>No collections yet</h3>
-              <p>Create your first collection to get started</p>
-              @if (canEditCurrent()) {
-                <button class="btn-primary empty-state-cta"
-                  (click)="createCollection()"
-                  >
-                  <i class="fas fa-plus"></i>
-                  Create Collection
-                </button>
-              }
-            }
-            <!-- Empty collection (has parent) -->
+          <mj-empty-state
+            [Variant]="searchQuery ? 'no-results' : 'empty'"
+            Icon="fa-solid fa-folder-open"
+            [Title]="EmptyStateTitle"
+            [Message]="EmptyStateMessage"
+            [ActionText]="(!searchQuery && !currentCollectionId && canEditCurrent()) ? 'Create Collection' : ''"
+            ActionIcon="fa-solid fa-plus"
+            (Action)="createCollection()">
+            <!-- Empty collection (has parent): rich hint with emphasis -->
             @if (!searchQuery && currentCollectionId) {
-              <h3>This collection is empty</h3>
-              <p>Use the <strong>New</strong> button above to add collections or artifacts</p>
+              <p class="empty-collection-hint">Use the <strong>New</strong> button above to add collections or artifacts</p>
             }
-          </div>
+          </mj-empty-state>
         }
     
         <!-- Grid view -->
@@ -1048,7 +1035,7 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
     }
 
     /* Loading and empty states */
-    .loading-state, .empty-state {
+    .loading-state {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -1060,37 +1047,15 @@ import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
       padding: 24px;
     }
 
-    .empty-state > i {
-      font-size: 64px;
-      margin-bottom: 24px;
-      opacity: 0.3;
-      color: var(--mj-border-strong);
+    .collections-content mj-empty-state {
+      flex: 1;
+      min-height: 0;
     }
 
-    .empty-state h3 {
-      margin: 0 0 8px 0;
-      color: var(--mj-text-secondary);
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    .empty-state p {
-      margin: 0 0 24px 0;
+    .empty-collection-hint {
+      margin: 0;
       font-size: 14px;
       color: var(--mj-text-muted);
-    }
-
-    .empty-state .empty-state-cta {
-      padding: 10px 20px;
-      font-size: 14px;
-      border-radius: 8px;
-    }
-
-    .empty-state-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
     }
 
     /* Grid view */
@@ -1776,6 +1741,21 @@ export class CollectionsFullViewComponent extends BaseAngularComponent implement
   public sortBy: CollectionSortBy = 'name';
   public sortOrder: CollectionSortOrder = 'asc';
   public searchQuery: string = '';
+
+  /** Empty-state heading — varies by search / root / inside-collection context. */
+  public get EmptyStateTitle(): string {
+    if (this.searchQuery) return 'No items found';
+    if (!this.currentCollectionId) return 'No collections yet';
+    return 'This collection is empty';
+  }
+
+  /** Empty-state supporting message (the rich inside-collection hint is projected, not bound here). */
+  public get EmptyStateMessage(): string {
+    if (this.searchQuery) return 'Try adjusting your search';
+    if (!this.currentCollectionId) return 'Create your first collection to get started';
+    return '';
+  }
+
   public unifiedItems: CollectionViewItem[] = [];
   public selectedItems: Set<string> = new Set();
   public showNewDropdown: boolean = false;

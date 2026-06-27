@@ -13,23 +13,22 @@
 
   <!-- Error State -->
   @if (errorMessage && !isLoading) {
-    <div class="error-state">
-      <div class="error-icon">
-        <i class="fa-solid fa-triangle-exclamation"></i>
-      </div>
-      <p class="error-message">{{ errorMessage }}</p>
-    </div>
+    <mj-empty-state
+      class="storage-providers-empty-fill"
+      Variant="error"
+      Icon="fa-solid fa-triangle-exclamation"
+      [Title]="errorMessage"
+      Size="compact" />
   }
 
   <!-- Empty State -->
   @if (!isLoading && !errorMessage && accounts.length === 0) {
-    <div class="empty-state">
-      <div class="empty-icon">
-        <i class="fa-solid fa-folder-plus"></i>
-      </div>
-      <p class="empty-message">No storage accounts configured</p>
-      <p class="empty-hint">Contact your administrator to set up file storage accounts</p>
-    </div>
+    <mj-empty-state
+      class="storage-providers-empty-fill"
+      Icon="fa-solid fa-folder-plus"
+      Title="No storage accounts configured"
+      Message="Contact your administrator to set up file storage accounts"
+      Size="compact" />
   }
 
   <!-- Account List -->

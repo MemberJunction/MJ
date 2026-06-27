@@ -123,7 +123,8 @@ interface TestAlert {
                   </div>
                 </div>
               } @empty {
-                <div class="empty-state">No completed test runs found</div>
+                <mj-empty-state Size="compact" Icon="fa-solid fa-flask-vial"
+                  Title="No completed test runs found" />
               }
             </div>
           </div>
@@ -157,7 +158,8 @@ interface TestAlert {
                     </div>
                   </div>
                 } @empty {
-                  <div class="empty-state">No test suites found</div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-layer-group"
+                    Title="No test suites found" />
                 }
               </div>
             </div>
@@ -188,10 +190,8 @@ interface TestAlert {
                     <app-test-status-badge [status]="alert.status"></app-test-status-badge>
                   </div>
                 } @empty {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success); margin-right: 6px;"></i>
-                    No alerts - all tests healthy
-                  </div>
+                  <mj-empty-state Variant="success" Size="compact"
+                    Title="No alerts - all tests healthy" />
                 }
               </div>
             </div>
@@ -570,17 +570,6 @@ interface TestAlert {
     .alert-reason {
       font-size: 11px;
       color: var(--mj-text-disabled);
-    }
-
-    /* ===== Empty State ===== */
-    .empty-state {
-      padding: 32px 20px;
-      text-align: center;
-      color: var(--mj-text-disabled);
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
     }
 
     /* ===== Responsive ===== */

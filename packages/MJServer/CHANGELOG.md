@@ -1,5 +1,119 @@
 # Change Log - @memberjunction/server
 
+## 5.43.0
+
+### Minor Changes
+
+- 9f6aa87: Generic fire-and-forget save queue, realtime multi-agent floor control, and telemetry fixes.
+
+  **Generic fire-and-forget save queue** (`@memberjunction/global`, `@memberjunction/core`, + adopters) — de-duplicates the hand-rolled "INSERT (fire-and-forget) → chained UPDATE" persistence pattern and makes the "stuck at Running" race structurally impossible:
+  - `KeyedSerialTaskQueue` (`@memberjunction/global`) — entity-agnostic per-key serial task chain: same-key tasks serialize, different keys run concurrently, failures are tallied for `flush()` and never propagate. Self-bounding (in-flight set + failure counters), so a long-lived queue that never flushes doesn't grow.
+  - `BaseEntitySaveQueue` (`@memberjunction/core`) — entity façade: `Insert` / `Update(entity, applyMutation?)` / `Flush`, with an optional `onError` hook for structured logging. `Update`'s mutation runs _inside_ the post-INSERT task, so it can never be reverted by the INSERT's reload.
+  - Adopted in all three hand-rolled copies + the new consumer: `GenericProcessRunTracker` (`@memberjunction/record-set-processor`), `AgentRunStepSaveQueue` (`@memberjunction/ai-core-plus`), `ActionEngine`'s execution log (`@memberjunction/actions`), and `AIPromptRunner` / `AIModelRunner` (`@memberjunction/ai-prompts`). Also fixes a pre-existing `MJLruCache` mock gap in the Actions/Engine test suite.
+
+  **Realtime** (`@memberjunction/ai`, `@memberjunction/ai-bridge-server`, `@memberjunction/ai-gemini`, `@memberjunction/ai-openai`, `@memberjunction/livekit-room-server`, `@memberjunction/ng-livekit-room`) — multi-agent floor control, Gemini meeting mode, the session capability surface with first-agent re-gating, and an idle reaper.
+
+  **Telemetry / core** (`@memberjunction/core`, `@memberjunction/server`) — cacheability-aware duplicate-RunView suggestion for `AllowCaching=false` entities; fixes the telemetry pagination-fingerprint false-duplicate and batches the janitor channel reads.
+
+### Patch Changes
+
+- b98366b: Integration framework hardening for wide-catalog and multi-level connectors (extracted from the 20-connector close-out; no connector-specific code).
+  - **Wide-table safety (dialect-driven in-row size + column-count limits).** The row-size knowledge now lives in the dialect abstraction, not in platform string-branching: `SQLDialect` gains `MaxInRowSizeBytes` (SQL Server `8060`, PostgreSQL `null`), `MaxColumnCount` (SQL Server `1024`, PostgreSQL `1600`), and `EstimateInRowBytes(rawSqlType)` (SQL Server's per-type in-row footprint; base default a conservative off-row pointer). `SchemaBuilder` consumes these via `GetDialect()` — for a dialect with a hard in-row limit it keeps all primary-key columns + a declared-priority core subset within budget, defers the rest (they still sync and land in `__mj_integration_CustomOverflow`), and emits a structured warning instead of shipping a table that fails every `INSERT` with `Cannot create a row of size … greater than 8060`; a dialect with no in-row limit (PostgreSQL/TOAST) only gets a soft advisory near its column-count cap. `IntegrationEngine` adds an env-clamped per-table column ceiling (`MJ_INTEGRATION_MAX_COLUMNS_PER_TABLE`, max 1000 = SQL Server's 1024 minus framework column headroom) so column-count-driven failures degrade to a reversible auto-disable at apply time. Proven on netFORUM (wide objects 8/17 → 15/17, zero 8060 INSERT failures); 17 row-size unit tests.
+  - **Multi-level template-var traversal.** `BaseRESTIntegrationConnector.ResolveParentForVar` adds a per-variable parent map (`Configuration.parentObjectNames` `{ "<var>": "<SiblingObject>" }`, with optional `parentObjectIDFieldNames`), checked before the existing single-valued `parentObjectName`. This lets a path with more than one template variable (e.g. `/events/{eventCode}/sessions/{sessionCode}/…`) resolve each variable to its own parent object instead of collapsing both to one parent and tripping the `PARENT_CYCLE` guard (→ 0 rows). Backward-compatible: connectors that declare no `parentObjectNames` are unaffected.
+  - **Large-catalog ApplyAll performance.** `IntegrationDiscoveryResolver.createEntityAndFieldMaps` reuses the already-in-memory persisted field schema (built in Phase 1) instead of issuing a live per-object `DiscoverFields` describe in a sequential loop, and resolves the target entity via an `O(1)` `schema.table → EntityInfo` map instead of an `O(N²)` scan. This removes the per-object round-trips and ~millions of comparisons that pushed very large catalogs (e.g. Salesforce's ~1,695 objects) past the client timeout with zero maps created.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [d94275b]
+- Updated dependencies [fe89e68]
+- Updated dependencies [aa21fef]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [4e05350]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/codegen-lib@5.43.0
+  - @memberjunction/postgresql-dataprovider@5.43.0
+  - @memberjunction/ai-agents@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/ai-prompts@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/ai-bridge-server@5.43.0
+  - @memberjunction/livekit-room-server@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/integration-schema-builder@5.43.0
+  - @memberjunction/integration-engine@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/sqlserver-dataprovider@5.43.0
+  - @memberjunction/ai-agent-manager-actions@5.43.0
+  - @memberjunction/ai-agent-manager@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/clustering-engine@5.43.0
+  - @memberjunction/computer-use@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/tag-engine@5.43.0
+  - @memberjunction/tag-engine-base@5.43.0
+  - @memberjunction/ai-mcp-client@5.43.0
+  - @memberjunction/computer-use-engine@5.43.0
+  - @memberjunction/remote-browser-base@5.43.0
+  - @memberjunction/remote-browser-cdp@5.43.0
+  - @memberjunction/remote-browser-selfhost@5.43.0
+  - @memberjunction/remote-browser-server@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+  - @memberjunction/ai-vectors-pinecone@5.43.0
+  - @memberjunction/ai-vector-sync@5.43.0
+  - @memberjunction/api-keys@5.43.0
+  - @memberjunction/actions-apollo@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/actions-bizapps-accounting@5.43.0
+  - @memberjunction/actions-bizapps-crm@5.43.0
+  - @memberjunction/actions-bizapps-formbuilders@5.43.0
+  - @memberjunction/actions-bizapps-lms@5.43.0
+  - @memberjunction/actions-bizapps-social@5.43.0
+  - @memberjunction/core-actions@5.43.0
+  - @memberjunction/auth-providers@5.43.0
+  - @memberjunction/communication-types@5.43.0
+  - @memberjunction/communication-engine@5.43.0
+  - @memberjunction/entity-communications-base@5.43.0
+  - @memberjunction/entity-communications-server@5.43.0
+  - @memberjunction/notifications@5.43.0
+  - @memberjunction/communication-ms-graph@5.43.0
+  - @memberjunction/communication-sendgrid@5.43.0
+  - @memberjunction/component-registry-client-sdk@5.43.0
+  - @memberjunction/doc-utils@5.43.0
+  - @memberjunction/encryption@5.43.0
+  - @memberjunction/external-change-detection@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/lists@5.43.0
+  - @memberjunction/core-entities-server@5.43.0
+  - @memberjunction/data-context@5.43.0
+  - @memberjunction/data-context-server@5.43.0
+  - @memberjunction/queue@5.43.0
+  - @memberjunction/storage@5.43.0
+  - @memberjunction/redis-provider@5.43.0
+  - @memberjunction/scheduling-actions@5.43.0
+  - @memberjunction/scheduling-engine-base@5.43.0
+  - @memberjunction/scheduling-engine@5.43.0
+  - @memberjunction/schema-engine@5.43.0
+  - @memberjunction/search-engine@5.43.0
+  - @memberjunction/server-extensions-core@5.43.0
+  - @memberjunction/skip-types@5.43.0
+  - @memberjunction/templates@5.43.0
+  - @memberjunction/testing-engine@5.43.0
+  - @memberjunction/testing-engine-base@5.43.0
+  - @memberjunction/version-history@5.43.0
+  - @memberjunction/esignature@5.43.0
+  - @memberjunction/integration-progress-artifacts@5.43.0
+  - @memberjunction/scheduling-base-types@5.43.0
+  - @memberjunction/ai-provider-bundle@5.43.0
+  - @memberjunction/config@5.43.0
+  - @memberjunction/lists-base@5.43.0
+
 ## 5.42.0
 
 ### Minor Changes

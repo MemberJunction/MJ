@@ -23,8 +23,7 @@ export class MJRecordProcessFormComponent extends BaseFormComponent {
             { sectionKey: 'performanceAndOptimization', sectionName: 'Performance and Optimization', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
-            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
-            { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false }
+            { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false }
         ]);
     }
 }

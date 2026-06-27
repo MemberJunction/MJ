@@ -26,27 +26,6 @@
   animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* -----------------------------------------------------------------------------
-   Empty State
-   ----------------------------------------------------------------------------- */
-.empty-state {
-  text-align: center;
-  padding: 3rem 1.5rem;
-}
-
-.empty-state i {
-  font-size: 4rem;
-  color: var(--mj-border-strong);
-  margin-bottom: 1.5rem;
-  display: block;
-}
-
-.empty-state p {
-  font-size: 1.125rem;
-  font-weight: 500;
-  color: var(--mj-text-muted);
-  margin: 0;
-}
 
 /* -----------------------------------------------------------------------------
    Notification Types Grid

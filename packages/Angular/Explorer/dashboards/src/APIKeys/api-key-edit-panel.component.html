@@ -352,11 +352,9 @@
                 </div>
               }
               @if (UsageLogs.length === 0) {
-                <div class="empty-state">
-                  <i class="fa-solid fa-chart-area"></i>
-                  <span>No usage logs yet</span>
-                  <p>Usage will be recorded when this API key is used for authentication</p>
-                </div>
+                <mj-empty-state Icon="fa-solid fa-chart-area"
+                  Title="No usage logs yet"
+                  Message="Usage will be recorded when this API key is used for authentication" />
               }
             </div>
           }

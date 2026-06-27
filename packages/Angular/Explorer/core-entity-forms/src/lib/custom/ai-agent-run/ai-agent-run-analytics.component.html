@@ -9,11 +9,12 @@
 
   <!-- Error State -->
   @if (error && !isLoading) {
-    <div class="error-state">
-      <i class="fas fa-exclamation-triangle fa-2x"></i>
-      <p>{{ error }}</p>
-      <button mjButton (click)="loadData()">Retry</button>
-    </div>
+    <mj-empty-state
+      Variant="error"
+      [Message]="error"
+      ActionText="Retry"
+      ActionIcon="fa-solid fa-arrows-rotate"
+      (Action)="loadData()" />
   }
 
   <!-- Analytics Content -->
@@ -127,11 +128,10 @@
               }
               <!-- No prompts message -->
               @if (promptMetrics.totalCount === 0) {
-                <div class="no-data-message">
-                  <i class="fas fa-info-circle"></i>
-                  <p>No prompt executions found in this agent run.</p>
-                  <p class="small">This agent run may have only executed actions without any AI prompts.</p>
-                </div>
+                <mj-empty-state
+                  Icon="fa-solid fa-circle-info"
+                  Title="No prompt executions found in this agent run."
+                  Message="This agent run may have only executed actions without any AI prompts." />
               }
               @if (promptMetrics.totalCount > 0) {
                 <div class="charts-grid">
@@ -406,10 +406,9 @@
                   </div>
                 }
                 @if (actionMetrics.errorAnalysis.size === 0) {
-                  <div class="no-errors">
-                    <i class="fas fa-check-circle"></i>
-                    <p>No action errors detected in this run. All actions completed successfully!</p>
-                  </div>
+                  <mj-empty-state
+                    Variant="success"
+                    Message="No action errors detected in this run. All actions completed successfully!" />
                 }
               </div>
             </div>
