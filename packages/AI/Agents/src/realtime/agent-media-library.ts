@@ -19,6 +19,7 @@
  */
 
 import { IMetadataProvider, RunView, UserInfo, LogError } from '@memberjunction/core';
+import { IsValidUUID } from '@memberjunction/global';
 import { MJCollectionArtifactEntity, MJArtifactVersionEntity, MJAIAgentEntity } from '@memberjunction/core-entities';
 
 /** The media kinds the realtime Media channel can render (mirrors the client `Media_ShowMedia` enum). */
@@ -65,7 +66,17 @@ export async function resolveAgentMediaCollectionID(
     overrideCollectionID?: string | null,
 ): Promise<string | null> {
     if (overrideCollectionID) {
-        return overrideCollectionID;
+        // The override may come from a calling app / per-session input, so validate it as a UUID before it
+        // ever reaches a filter. A malformed override is ignored (logged) and resolution falls back to the
+        // agent default — never a broken or injected query.
+        const trimmed = overrideCollectionID.trim();
+        if (IsValidUUID(trimmed)) {
+            return trimmed;
+        }
+        LogError(
+            `[agent-media-library] Ignoring malformed overrideCollectionID '${overrideCollectionID}' — ` +
+                'falling back to the agent default media kit.',
+        );
     }
     const rv = RunView.FromMetadataProvider(provider);
     const result = await rv.RunView<MJAIAgentEntity>(

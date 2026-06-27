@@ -44,6 +44,16 @@ export interface RealtimeChannelServerContext {
     ConversationID: string | null;
 
     /**
+     * **Optional raw per-session config blob** — the verbatim `AIAgentSession.Config_` string the
+     * session was created with (the host passes it through; it stays opaque to the contract). A
+     * data-aware channel parses out only the keys it owns — e.g. the Media channel reads a per-session
+     * `mediaCollectionID` override here. Kept as a plain string (not a typed bag) so the base contract
+     * stays free of `@memberjunction/core` and channel-agnostic; `null`/absent when the session carries
+     * no config. Channels MUST treat it as untrusted input (validate ids before use).
+     */
+    SessionConfig?: string | null;
+
+    /**
      * **Optional perception sink** — feeds a background context note into the live realtime model
      * (the server-side counterpart of the client channel's `RealtimeChannelContext.SendContextNote`).
      * The host wires this to `IRealtimeSession.SendContextNote` when the provider supports mid-session

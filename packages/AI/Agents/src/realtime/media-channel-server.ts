@@ -63,10 +63,40 @@ export class MediaChannelServer extends BaseRealtimeChannelServer implements IRe
         if (!agentID || !this.sessionContextUser || !this.sessionProvider) {
             return; // no agent / data context — nothing to resolve (ad-hoc Media_ShowMedia still works)
         }
-        const note = await buildAgentMediaContextNote(this.sessionProvider, this.sessionContextUser, agentID);
+        // Per-session override (runtime kit) takes precedence over the agent default; the resolver
+        // already UUID-validated it, and the library re-validates before use (defense in depth).
+        const overrideCollectionID = this.readMediaCollectionOverride();
+        const note = await buildAgentMediaContextNote(
+            this.sessionProvider,
+            this.sessionContextUser,
+            agentID,
+            overrideCollectionID,
+        );
         if (note) {
             this.Context?.SendContextNote?.(note);
         }
+    }
+
+    /**
+     * Reads the per-session media-kit override (`mediaCollectionID`) from the session config blob the
+     * host handed over on {@link RealtimeChannelServerContext.SessionConfig}. Returns `null` when there
+     * is no config, it does not parse, or it carries no override — the agent default kit then applies.
+     */
+    private readMediaCollectionOverride(): string | null {
+        const raw = this.Context?.SessionConfig;
+        if (!raw) {
+            return null;
+        }
+        try {
+            const parsed: unknown = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                const value = (parsed as { mediaCollectionID?: unknown }).mediaCollectionID;
+                return typeof value === 'string' && value.length > 0 ? value : null;
+            }
+        } catch {
+            // Opaque/legacy config that isn't our JSON shape — no override, fall back to the agent default.
+        }
+        return null;
     }
 
     public override Dispose(): void {

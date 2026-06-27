@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (381 classes)
+// @memberjunction/core-entities (391 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -395,6 +395,9 @@ import {
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
+    MJExperimentEntity,
+    MJExperimentSessionEntity,
+    MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
     MJFileCategoryEntity,
     MJFileEntity,
@@ -426,6 +429,13 @@ import {
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMLAlgorithmEntity,
+    MJMLAlgorithmUseCaseEntity,
+    MJMLAlgorithmUseCaseRankingEntity,
+    MJMLModelEntity,
+    MJMLModelScoringBindingEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1342,6 +1352,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEnvironmentEntity,
     MJEnvironmentEntityExtended,
     MJErrorLogEntity,
+    MJExperimentEntity,
+    MJExperimentSessionEntity,
+    MJExperimentSessionIterationEntity,
     MJExplorerNavigationItemEntity,
     MJFileCategoryEntity,
     MJFileEntity,
@@ -1373,6 +1386,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
     MJMCPToolFavoriteEntity,
+    MJMLAlgorithmEntity,
+    MJMLAlgorithmUseCaseEntity,
+    MJMLAlgorithmUseCaseRankingEntity,
+    MJMLModelEntity,
+    MJMLModelScoringBindingEntity,
+    MJMLTrainingPipelineEntity,
+    MJMLTrainingRunEntity,
     MJMagicLinkInviteAllowedDomainEntity,
     MJMagicLinkInviteAllowedPathEntity,
     MJMagicLinkInviteApplicationEntity,
@@ -1909,7 +1929,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 819;
+export const CLASS_REGISTRATIONS_COUNT = 829;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

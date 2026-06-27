@@ -74,10 +74,18 @@ describe('formatAgentMediaManifest', () => {
 });
 
 describe('resolveAgentMediaCollectionID', () => {
-    it('prefers an explicit override and skips the agent lookup', async () => {
-        const id = await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1', 'override-col');
-        expect(id).toBe('override-col');
+    it('prefers a valid (UUID) override and skips the agent lookup', async () => {
+        const override = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
+        const id = await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1', override);
+        expect(id).toBe(override);
         expect(runViewMock).not.toHaveBeenCalled();
+    });
+
+    it('ignores a malformed (non-UUID) override and falls back to the agent default', async () => {
+        runViewMock.mockResolvedValueOnce({ Success: true, Results: [{ DefaultMediaCollectionID: 'agent-col' }] });
+        const id = await resolveAgentMediaCollectionID(PROVIDER, USER, 'agent-1', 'not-a-uuid; DROP TABLE');
+        expect(id).toBe('agent-col');
+        expect(runViewMock).toHaveBeenCalledTimes(1);
     });
 
     it('falls back to AIAgent.DefaultMediaCollectionID', async () => {

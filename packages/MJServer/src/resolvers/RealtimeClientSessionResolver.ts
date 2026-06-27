@@ -27,7 +27,7 @@
 import { Resolver, Mutation, Arg, Ctx, Int, Float, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { AuthorizationEvaluator, UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import {
     MJAIAgentEntity,
     MJAIAgentSessionEntity,
@@ -160,6 +160,13 @@ interface RealtimeSessionConfig {
      * rather than starting fresh. Re-stored if the resumed run pauses again.
      */
     pendingFeedbackRunID?: string;
+    /**
+     * Per-session override for the agent's media kit — a `MJ: Collections` id that takes precedence
+     * over the agent's `DefaultMediaCollectionID` when the server-side `MediaChannelServer` resolves
+     * the media manifest at session start. Validated as a UUID at the mutation boundary; absent ⇒ the
+     * agent default kit is used (the common case).
+     */
+    mediaCollectionID?: string;
 }
 
 /**
@@ -376,6 +383,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         @Arg('configOverridesJson', () => String, { nullable: true }) configOverridesJson?: string,
         @Arg('recordingStartedAt', () => String, { nullable: true }) recordingStartedAt?: string,
         @Arg('recordingConsent', () => Boolean, { nullable: true }) recordingConsent?: boolean,
+        @Arg('mediaCollectionId', () => String, { nullable: true }) mediaCollectionId?: string,
     ): Promise<StartRealtimeClientSessionResult> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
 
@@ -391,6 +399,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         await this.assertRuntimeOverridesAuthorized(coAgentID, configOverridesJson, preferredModelId, contextUser, provider);
 
         const config: RealtimeSessionConfig = { targetAgentID: effectiveTargetId };
+        // Per-session media-kit override: stored on the session config so the server-side MediaChannelServer
+        // resolves it (over the agent default) at start. Validate the id here — a malformed value is
+        // dropped (logged), never interpolated; the session still starts and falls back to the agent kit.
+        const mediaOverride = mediaCollectionId?.trim();
+        if (mediaOverride) {
+            if (IsValidUUID(mediaOverride)) {
+                config.mediaCollectionID = mediaOverride;
+            } else {
+                LogStatus(
+                    `StartRealtimeClientSession: ignoring malformed mediaCollectionId '${mediaCollectionId}' — ` +
+                        'using the agent default media kit.',
+                );
+            }
+        }
         const session = await this.sessionManager.CreateSession(
             {
                 agentID: coAgentID,

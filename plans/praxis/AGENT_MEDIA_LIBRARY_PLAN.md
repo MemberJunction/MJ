@@ -73,11 +73,20 @@ resolution, end-to-end note, and fail-closed behavior.
 - [ ] **T6 — Run migration + CodeGen locally, build `@memberjunction/ai-agents`, run its tests.** Done
   by a maintainer who can reach the DB (the code is written assuming CodeGen has produced
   `MJCollectionArtifactEntity.ContextDescription/.Preload` and `MJAIAgentEntity.DefaultMediaCollectionID`).
-- [ ] **T7 — Per-session runtime override delivery (follow-up).** The resolver already accepts an
-  `overrideCollectionID`; wiring the *source* of that override (the calling app — e.g. a Praxis
-  Protocol — supplying a per-session collection at session start, likely via the Media channel's
-  session config) is a thin follow-up. Until then, the agent default (`DefaultMediaCollectionID`)
-  fully covers the common case (one kit per protocol-bound agent).
+- [x] **T7 — Per-session runtime override delivery (server seam wired).** <!-- @2026-06-27 -->
+  The override now flows end-to-end through the GraphQL boundary:
+  - `StartRealtimeClientSession` gains an optional `mediaCollectionId` arg, UUID-validated at the
+    boundary (malformed ⇒ dropped + logged, session still starts) and stored on the session config
+    (`RealtimeSessionConfig.mediaCollectionID` → `AIAgentSession.Config_`).
+  - `RealtimeChannelServerContext` gains a generic `SessionConfig?` (the verbatim config blob);
+    `SessionManager` hands it over so any data-aware channel can read its own keys.
+  - `MediaChannelServer.OnSessionStarted()` parses `mediaCollectionID` out of `SessionConfig` and
+    passes it as the override (precedence: `runtime override > agent default > none`).
+  - `IsValidUUID` was added to `@memberjunction/global` (UUIDUtils) and used at both the resolver
+    boundary and inside the library (defense in depth).
+  - **Remaining (genuine app-side follow-up):** the *caller* sending a specific collection — a Praxis
+    Protocol passing `mediaCollectionId` from the browser/app when it starts a session. The framework
+    seam is complete and functional from the API boundary today.
 
 ## Acceptance
 - ☐ Migration applies cleanly; CodeGen regenerates the three new typed props.
