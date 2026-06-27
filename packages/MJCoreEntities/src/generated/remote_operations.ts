@@ -11,99 +11,6 @@
 **************************************************/
 import { BaseRemotableOperation } from "@memberjunction/core";
 
-/** A single primary-key field/value pair identifying a record to compare. */
-export interface RecordComparisonKeyValuePair {
-    /** Primary-key field name (e.g. "ID"). */
-    FieldName: string;
-    /** Primary-key value, as a string (UUIDs, ints, etc. are all sent as strings). */
-    Value: string;
-}
-
-/**
- * One record to compare, expressed as its composite key (one pair for single-PK
- * entities, multiple for composite-PK entities).
- */
-export interface RecordComparisonKey {
-    /** The primary-key field/value pairs uniquely identifying this record. */
-    KeyValuePairs: RecordComparisonKeyValuePair[];
-}
-
-/** Input for `RecordComparison.Compare`. */
-export interface RecordComparisonCompareInput {
-    /** Registered entity name (e.g. "Accounts"), NOT the physical table name. */
-    EntityName: string;
-    /**
-     * The records to compare, in column order. By convention the first key is the
-     * survivor candidate (the reference column); the rest are potential matches.
-     */
-    Keys: RecordComparisonKey[];
-    /**
-     * Optional include-list of field names to restrict the comparison to. When omitted,
-     * all non-PK, non-system fields are compared (matched case-insensitively).
-     */
-    IncludeFields?: string[];
-}
-
-/** A scalar field value as loaded from the database. */
-export type RecordComparisonFieldValue = string | number | boolean | null;
-
-/** One loaded record in the comparison. Mirrors the engine's `RecordComparisonRecord`. */
-export interface RecordComparisonRecord {
-    /** Zero-based index aligned with the input `Keys` array (the comparison column). */
-    ColumnIndex: number;
-    /** The composite key identifying this record (as supplied in the input). */
-    Key: unknown;
-    /** A human-readable label for the record. */
-    Label: string;
-    /** Plain field-name → value map for this record (only the compared fields). */
-    Values: Record<string, RecordComparisonFieldValue>;
-}
-
-/** Per-record value of a single field. Mirrors the engine's `RecordComparisonFieldCell`. */
-export interface RecordComparisonFieldCell {
-    /** Column index aligned with the record's `ColumnIndex`. */
-    ColumnIndex: number;
-    /** The field's value for this record. */
-    Value: RecordComparisonFieldValue;
-    /**
-     * True when this cell's value equals (case-insensitive, trimmed) the reference
-     * cell (column 0). Column 0 is always true.
-     */
-    EqualsReference: boolean;
-}
-
-/**
- * The delta for a single field across all compared records. Mirrors the engine's
- * `RecordComparisonFieldDelta`.
- */
-export interface RecordComparisonFieldDelta {
-    /** Field name (matches the entity field metadata Name). */
-    FieldName: string;
-    /** Display name for the field. */
-    DisplayName: string;
-    /** Optional grouping category from the field metadata. */
-    Category: string | null;
-    /** Per-record values for this field, in column order. */
-    Cells: RecordComparisonFieldCell[];
-    /** True when at least one record's value differs from the reference (column 0). */
-    Differs: boolean;
-}
-
-/**
- * Output of `RecordComparison.Compare` — the loaded records plus the per-field delta
- * matrix. Logical success/failure is carried by the wrapping `RemoteOpResult` (a failed
- * comparison surfaces as `Success=false` + `ErrorMessage`), so this payload is the
- * success body only.
- */
-export interface RecordComparisonCompareOutput {
-    /** The registered entity name that was compared. */
-    EntityName: string;
-    /** The loaded records, in input column order. */
-    Records: RecordComparisonRecord[];
-    /** The per-field delta matrix. Only fields with at least one non-empty value. */
-    Fields: RecordComparisonFieldDelta[];
-}
-
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -371,6 +278,99 @@ export interface PredictiveStudioTrainModelOutput {
     status: string;
 }
 
+/** A single primary-key field/value pair identifying a record to compare. */
+export interface RecordComparisonKeyValuePair {
+    /** Primary-key field name (e.g. "ID"). */
+    FieldName: string;
+    /** Primary-key value, as a string (UUIDs, ints, etc. are all sent as strings). */
+    Value: string;
+}
+
+/**
+ * One record to compare, expressed as its composite key (one pair for single-PK
+ * entities, multiple for composite-PK entities).
+ */
+export interface RecordComparisonKey {
+    /** The primary-key field/value pairs uniquely identifying this record. */
+    KeyValuePairs: RecordComparisonKeyValuePair[];
+}
+
+/** Input for `RecordComparison.Compare`. */
+export interface RecordComparisonCompareInput {
+    /** Registered entity name (e.g. "Accounts"), NOT the physical table name. */
+    EntityName: string;
+    /**
+     * The records to compare, in column order. By convention the first key is the
+     * survivor candidate (the reference column); the rest are potential matches.
+     */
+    Keys: RecordComparisonKey[];
+    /**
+     * Optional include-list of field names to restrict the comparison to. When omitted,
+     * all non-PK, non-system fields are compared (matched case-insensitively).
+     */
+    IncludeFields?: string[];
+}
+
+/** A scalar field value as loaded from the database. */
+export type RecordComparisonFieldValue = string | number | boolean | null;
+
+/** One loaded record in the comparison. Mirrors the engine's `RecordComparisonRecord`. */
+export interface RecordComparisonRecord {
+    /** Zero-based index aligned with the input `Keys` array (the comparison column). */
+    ColumnIndex: number;
+    /** The composite key identifying this record (as supplied in the input). */
+    Key: unknown;
+    /** A human-readable label for the record. */
+    Label: string;
+    /** Plain field-name → value map for this record (only the compared fields). */
+    Values: Record<string, RecordComparisonFieldValue>;
+}
+
+/** Per-record value of a single field. Mirrors the engine's `RecordComparisonFieldCell`. */
+export interface RecordComparisonFieldCell {
+    /** Column index aligned with the record's `ColumnIndex`. */
+    ColumnIndex: number;
+    /** The field's value for this record. */
+    Value: RecordComparisonFieldValue;
+    /**
+     * True when this cell's value equals (case-insensitive, trimmed) the reference
+     * cell (column 0). Column 0 is always true.
+     */
+    EqualsReference: boolean;
+}
+
+/**
+ * The delta for a single field across all compared records. Mirrors the engine's
+ * `RecordComparisonFieldDelta`.
+ */
+export interface RecordComparisonFieldDelta {
+    /** Field name (matches the entity field metadata Name). */
+    FieldName: string;
+    /** Display name for the field. */
+    DisplayName: string;
+    /** Optional grouping category from the field metadata. */
+    Category: string | null;
+    /** Per-record values for this field, in column order. */
+    Cells: RecordComparisonFieldCell[];
+    /** True when at least one record's value differs from the reference (column 0). */
+    Differs: boolean;
+}
+
+/**
+ * Output of `RecordComparison.Compare` — the loaded records plus the per-field delta
+ * matrix. Logical success/failure is carried by the wrapping `RemoteOpResult` (a failed
+ * comparison surfaces as `Success=false` + `ErrorMessage`), so this payload is the
+ * success body only.
+ */
+export interface RecordComparisonCompareOutput {
+    /** The registered entity name that was compared. */
+    EntityName: string;
+    /** The loaded records, in input column order. */
+    Records: RecordComparisonRecord[];
+    /** The per-field delta matrix. Only fields with at least one non-empty value. */
+    Fields: RecordComparisonFieldDelta[];
+}
+
 /** Input for the pause / resume / cancel control operations. */
 export interface ProcessRunControlInput {
     /** The `MJ: Process Runs` row to control. */
@@ -450,21 +450,6 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
-}
-
-// ============================================================
-// RecordComparison.Compare — Compare Records
-// ============================================================
-/**
- * Compare Records
- * Load a set of an entity's records (by composite key, column 0 = survivor/reference) and compute the field-level delta matrix between them. Read-only. Returns the loaded records + per-field deltas. Implemented by RecordComparisonCompareServerOperation in @memberjunction/record-comparison.
- * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
- * under 'RecordComparison.Compare'. This generated base provides the typed contract only (client-safe).
- */
-export class RecordComparisonCompareOperation extends BaseRemotableOperation<RecordComparisonCompareInput, RecordComparisonCompareOutput> {
-    public readonly OperationKey = "RecordComparison.Compare";
-    public readonly ExecutionMode = 'Sync' as const;
-    public readonly RequiresSystemUser = false;
 }
 
 // ============================================================
@@ -560,6 +545,21 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
     public readonly OperationKey = "PredictiveStudio.TrainModel";
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// RecordComparison.Compare — Compare Records
+// ============================================================
+/**
+ * Compare Records
+ * Load a set of an entity's records (by composite key, column 0 = survivor/reference) and compute the field-level delta matrix between them. Read-only. Returns the loaded records + per-field deltas. Implemented by RecordComparisonCompareServerOperation in @memberjunction/record-comparison.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'RecordComparison.Compare'. This generated base provides the typed contract only (client-safe).
+ */
+export class RecordComparisonCompareOperation extends BaseRemotableOperation<RecordComparisonCompareInput, RecordComparisonCompareOutput> {
+    public readonly OperationKey = "RecordComparison.Compare";
+    public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiresSystemUser = false;
 }
 
