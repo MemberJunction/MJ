@@ -2,6 +2,8 @@ export * from './teams-sdk';
 export * from './teams-meeting-controls';
 export * from './teams-bridge';
 export * from './teams-native-sdk';
+export * from './real-teams-bindings';
+export * from './teams-ingress';
 export * from './register-native';
 
 import { LoadTeamsBridge } from './teams-bridge';

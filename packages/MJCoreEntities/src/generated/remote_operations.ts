@@ -6,7 +6,8 @@
 * emitted from the operation's metadata: OperationKey, ExecutionMode, RequiredScope, and the raw
 * TypeScript Input/Output type definitions. GenerationType=Manual rows emit a typed SHELL — a
 * hand-authored server subclass (registered via @RegisterClass) supplies the InternalExecute body.
-* GenerationType=AI/Default rows with Approved Code emit a complete, registered class.
+* GenerationType=AI/Default rows with Approved Code emit a complete, registered class whose body imports
+* the default libraries plus whatever it declared in its Libraries metadata.
 **************************************************/
 import { BaseRemotableOperation } from "@memberjunction/core";
 

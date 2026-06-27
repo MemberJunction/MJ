@@ -1,5 +1,7 @@
 export * from './ringcentral-call-sdk';
 export * from './ringcentral-native-call-sdk';
+export * from './real-ringcentral-bindings';
+export * from './ringcentral-ingress';
 export * from './ringcentral-bridge';
 export * from './register-native';
 

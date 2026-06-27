@@ -42,6 +42,7 @@ import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { createMagicLinkHandler, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
+import { createWidgetHandler, WIDGET_MOUNT_PATH } from './widget/index.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -1011,6 +1012,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     registerMagicLinkAuthProvider(oauthPublicUrl, configInfo.magicLink);
     app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), publicRouter);
     startupLog.LogIf('verbose', `[MagicLink] Public routes registered at ${MAGIC_LINK_MOUNT_PATH}/redeem and ${MAGIC_LINK_MOUNT_PATH}/jwks.json`);
+  }
+
+  // ─── Public web widget: guest-session mint (PUBLIC, before auth mw) ───────
+  // Visitors hold no MJ JWT yet, so POST /widget/session is public. It reuses the
+  // magic-link RS256 key + `magic-link` auth provider (ensured idempotently inside
+  // createWidgetHandler), so it stands on its own even if magicLink.enabled is false.
+  if (configInfo.widget?.enabled) {
+    const { publicRouter: widgetRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
+    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
+    startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
   }
 
   // ─── Global CORS (before auth so 401 responses include CORS headers) ─────

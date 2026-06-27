@@ -154,5 +154,39 @@
       "lastModified": "2026-06-09T06:32:37.016Z",
       "checksum": "6b43ad0f9ccf2ed20b57fe820c11d7d822abda933a1ba55c3b8e5322332f645d"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversations",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "46E2294F-7319-4A0D-9BD5-C3471CF919EA"
+    },
+    "sync": {
+      "lastModified": "2026-06-25T00:50:39.735Z",
+      "checksum": "11162037342d1bb99c508814ec4586849807cdb5c4be353b39e651d691a5054f"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Details",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "89D1B400-7C2F-4390-93A3-7D05353EEF16"
+    },
+    "sync": {
+      "lastModified": "2026-06-25T00:50:39.770Z",
+      "checksum": "84f3e0c9de34999695c6078dc5d5ae46847132e74c766541b2f7dfc1b1448568"
+    }
   }
 ]

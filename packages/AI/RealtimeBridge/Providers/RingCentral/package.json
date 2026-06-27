@@ -22,6 +22,10 @@
     "@memberjunction/core-entities": "5.43.0",
     "@memberjunction/ai-bridge-base": "5.43.0"
   },
+  "//optionalDependencies": "@ringcentral/sdk is an OPTIONAL PEER SDK (CLAUDE rule 8, category 2): the package never statically imports it. Production wires RealRingCentralBindings over the real @ringcentral/sdk Call Control REST client + a media stream through the injected IRingCentralCallControlLike/IRingCentralMediaPump surfaces, so the package builds and unit-tests with no @ringcentral/sdk install and no network. Loaded only when the RingCentral provider is configured at deployment.",
+  "optionalDependencies": {
+    "@ringcentral/sdk": "^5.0.4"
+  },
   "devDependencies": {
     "@types/node": "24.10.11",
     "ts-node-dev": "^2.0.0",
