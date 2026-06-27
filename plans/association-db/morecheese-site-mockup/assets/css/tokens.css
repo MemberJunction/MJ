@@ -1,0 +1,173 @@
+/* MoreCheese.org — Design Tokens
+ * International Cheese Federation
+ * Warm, artisan, contemporary. Inspired by the materiality of cheese:
+ * butter golds, rind burgundies, pastoral greens, oak browns, cream papers.
+ */
+
+:root {
+  /* ============== Brand Palette ============== */
+  --mc-gold-50:  #fdf8ea;
+  --mc-gold-100: #f8eccb;
+  --mc-gold-200: #f0db98;
+  --mc-gold-300: #e6c462;
+  --mc-gold-400: #d4a82e;
+  --mc-gold-500: #c2941e;  /* PRIMARY brand */
+  --mc-gold-600: #a07918;
+  --mc-gold-700: #7d5d13;
+  --mc-gold-800: #5a430e;
+  --mc-gold-900: #382909;
+
+  --mc-rind-50:  #f7ecec;
+  --mc-rind-100: #ecd0cf;
+  --mc-rind-200: #d59c98;
+  --mc-rind-300: #b86862;
+  --mc-rind-400: #8e3934;
+  --mc-rind-500: #6b1f1c;  /* SECONDARY (deep rind / wine) */
+  --mc-rind-600: #561815;
+  --mc-rind-700: #421210;
+  --mc-rind-800: #2d0c0b;
+  --mc-rind-900: #190706;
+
+  --mc-sage-50:  #f1f5ee;
+  --mc-sage-100: #dee7d4;
+  --mc-sage-200: #bccfa9;
+  --mc-sage-300: #93b079;
+  --mc-sage-400: #6c8f50;
+  --mc-sage-500: #547139;  /* ACCENT (pastoral, fresh) */
+  --mc-sage-600: #425a2d;
+  --mc-sage-700: #324522;
+  --mc-sage-800: #233018;
+  --mc-sage-900: #131a0d;
+
+  --mc-oak-50:  #f7f1ea;
+  --mc-oak-100: #ead9c5;
+  --mc-oak-200: #d4b48d;
+  --mc-oak-300: #ba8e58;
+  --mc-oak-400: #98703d;
+  --mc-oak-500: #7a5930;
+  --mc-oak-600: #604626;
+  --mc-oak-700: #46341c;
+  --mc-oak-800: #2e2213;
+  --mc-oak-900: #181109;
+
+  --mc-cream:   #fbf7ed;
+  --mc-paper:   #faf6ee;
+  --mc-ivory:   #f5ecd9;
+  --mc-bone:    #efe5cf;
+
+  --mc-ink-50:  #f4f1ec;
+  --mc-ink-100: #d4cebf;
+  --mc-ink-200: #a39a85;
+  --mc-ink-300: #6a624f;
+  --mc-ink-400: #3e3829;
+  --mc-ink-500: #2a2620;  /* PRIMARY TEXT */
+  --mc-ink-600: #1f1b16;
+  --mc-ink-700: #15110d;
+  --mc-ink-800: #0c0907;
+  --mc-ink-900: #050402;
+
+  --mc-white:    #ffffff;
+  --mc-success:  #2f7d4d;
+  --mc-warning:  #c47914;
+  --mc-error:    #a02e21;
+  --mc-info:     #2a5b8a;
+
+  /* ============== Semantic ============== */
+  --mc-bg-page:           var(--mc-paper);
+  --mc-bg-surface:        var(--mc-white);
+  --mc-bg-surface-warm:   var(--mc-cream);
+  --mc-bg-surface-sunken: var(--mc-ivory);
+  --mc-bg-inverse:        var(--mc-ink-500);
+  --mc-bg-brand:          var(--mc-gold-500);
+  --mc-bg-brand-dark:     var(--mc-rind-500);
+  --mc-bg-accent:         var(--mc-sage-500);
+  --mc-bg-overlay:        rgba(15, 12, 8, 0.65);
+
+  --mc-text-primary:      var(--mc-ink-500);
+  --mc-text-secondary:    var(--mc-ink-400);
+  --mc-text-muted:        var(--mc-ink-300);
+  --mc-text-inverse:      var(--mc-cream);
+  --mc-text-link:         var(--mc-rind-500);
+  --mc-text-link-hover:   var(--mc-rind-400);
+  --mc-text-brand:        var(--mc-gold-700);
+
+  --mc-border-subtle:     var(--mc-bone);
+  --mc-border-default:    var(--mc-oak-200);
+  --mc-border-strong:     var(--mc-oak-300);
+  --mc-border-brand:      var(--mc-gold-500);
+
+  /* ============== Typography ============== */
+  --mc-font-display: 'Fraunces', 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --mc-font-body:    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --mc-font-mono:    'JetBrains Mono', 'SF Mono', Menlo, Monaco, Consolas, monospace;
+
+  --mc-fs-xs:   0.75rem;     /* 12px */
+  --mc-fs-sm:   0.875rem;    /* 14px */
+  --mc-fs-base: 1rem;        /* 16px */
+  --mc-fs-lg:   1.125rem;    /* 18px */
+  --mc-fs-xl:   1.375rem;    /* 22px */
+  --mc-fs-2xl:  1.75rem;     /* 28px */
+  --mc-fs-3xl:  2.25rem;     /* 36px */
+  --mc-fs-4xl:  3rem;        /* 48px */
+  --mc-fs-5xl:  4rem;        /* 64px */
+  --mc-fs-6xl:  5.5rem;      /* 88px */
+
+  --mc-lh-tight:   1.1;
+  --mc-lh-snug:    1.25;
+  --mc-lh-normal:  1.5;
+  --mc-lh-relaxed: 1.65;
+  --mc-lh-loose:   1.85;
+
+  --mc-ls-tight:   -0.02em;
+  --mc-ls-normal:  0;
+  --mc-ls-wide:    0.04em;
+  --mc-ls-wider:   0.12em;
+
+  --mc-fw-regular: 400;
+  --mc-fw-medium:  500;
+  --mc-fw-semi:    600;
+  --mc-fw-bold:    700;
+
+  /* ============== Spacing / Layout ============== */
+  --mc-space-1:  0.25rem;    /* 4 */
+  --mc-space-2:  0.5rem;     /* 8 */
+  --mc-space-3:  0.75rem;    /* 12 */
+  --mc-space-4:  1rem;       /* 16 */
+  --mc-space-5:  1.5rem;     /* 24 */
+  --mc-space-6:  2rem;       /* 32 */
+  --mc-space-7:  2.75rem;    /* 44 */
+  --mc-space-8:  4rem;       /* 64 */
+  --mc-space-9:  6rem;       /* 96 */
+  --mc-space-10: 8rem;       /* 128 */
+
+  --mc-container-tight:  720px;
+  --mc-container-narrow: 960px;
+  --mc-container:        1200px;
+  --mc-container-wide:   1440px;
+
+  --mc-radius-sm:  4px;
+  --mc-radius-md:  8px;
+  --mc-radius-lg:  16px;
+  --mc-radius-xl:  24px;
+  --mc-radius-pill: 999px;
+
+  --mc-shadow-sm: 0 1px 2px rgba(46, 34, 19, 0.08);
+  --mc-shadow-md: 0 4px 12px rgba(46, 34, 19, 0.10), 0 1px 3px rgba(46, 34, 19, 0.06);
+  --mc-shadow-lg: 0 12px 32px rgba(46, 34, 19, 0.14), 0 4px 12px rgba(46, 34, 19, 0.08);
+  --mc-shadow-xl: 0 24px 56px rgba(46, 34, 19, 0.18), 0 8px 20px rgba(46, 34, 19, 0.10);
+  --mc-shadow-glow-gold: 0 0 0 4px rgba(212, 168, 46, 0.25);
+  --mc-shadow-glow-rind: 0 0 0 4px rgba(107, 31, 28, 0.20);
+
+  --mc-ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --mc-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --mc-dur-fast:   150ms;
+  --mc-dur-base:   240ms;
+  --mc-dur-slow:   480ms;
+
+  --mc-z-base:    0;
+  --mc-z-raised:  10;
+  --mc-z-sticky:  100;
+  --mc-z-overlay: 500;
+  --mc-z-modal:   1000;
+  --mc-z-voice:   1500;
+}
