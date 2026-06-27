@@ -36,6 +36,13 @@
         "isDefault": false
       },
       {
+        "Label": "Feature Pipelines",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "FeaturePipelinesResource",
+        "isDefault": false
+      },
+      {
         "Label": "Analytics",
         "Icon": "fa-solid fa-chart-line",
         "ResourceType": "Custom",

@@ -1,0 +1,9 @@
+[
+  {
+    "fields": {
+      "Name": "Feature Pipeline",
+      "Description": "Feature Pipelines for Predictive Studio / Knowledge Hub: a Record Process (WorkType Infer / Action / Agent + a write-back OutputMapping) that derives a feature value per record and persists it back to the entity. Generalizes Content Autotagging (LLM classify -> persisted tags) into reusable, discoverable derived attributes with standalone analytics value, independent of any model. See plans/predictive-studio.md SS5.4 / SP6.",
+      "ParentID": null
+    }
+  }
+]
