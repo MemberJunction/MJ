@@ -73,6 +73,28 @@
                     [disabled]="IsDetecting" />
                 <span class="threshold-hint">Score above which duplicates are auto-confirmed</span>
             </div>
+            <div class="threshold-slider-group reasoning-group">
+                <div class="threshold-label">
+                    <i class="fa-solid fa-brain"></i> LLM Reasoning
+                    <mj-switch [(ngModel)]="EnableLLMReasoning"
+                        (ngModelChange)="OnEnableReasoningChanged($event)"
+                        [Disabled]="IsDetecting"></mj-switch>
+                    @if (EnableLLMReasoning) {
+                        <span class="threshold-value">{{ (ReasoningThreshold * 100).toFixed(0) }}%</span>
+                    }
+                </div>
+                @if (EnableLLMReasoning) {
+                    <input type="range" class="threshold-slider"
+                        [min]="30" [max]="99" [step]="1"
+                        [value]="ReasoningThreshold * 100"
+                        (input)="OnReasoningThresholdChanged($any($event.target).value / 100)"
+                        (change)="OnReasoningThresholdCommitted($any($event.target).value / 100)"
+                        [disabled]="IsDetecting" />
+                    <span class="threshold-hint">Only run the LLM on matches at or above this vector score — controls LLM cost</span>
+                } @else {
+                    <span class="threshold-hint">Vector-only — enable to let an LLM judge borderline matches per entity</span>
+                }
+            </div>
         </div>
     }
 
@@ -514,10 +536,36 @@
                              [class.match-rejected]="match.Match.ApprovalStatus === 'Rejected'">
                             <div class="col-header-top">
                                 <span class="col-header-name">{{ match.Name }}</span>
-                                <span class="score-indicator" [class]="GetScoreClass(match.Score)">
+                                <span class="score-indicator" [class]="GetScoreClass(match.Score)"
+                                      title="Vector similarity score">
                                     {{ (match.Score * 100).toFixed(0) }}%
                                 </span>
                             </div>
+                            <!-- LLM verdict (compact — full reasoning prose opens in a floating popover) -->
+                            @if (match.LLMRecommendation) {
+                                <div class="llm-verdict-row">
+                                    <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(match.LLMRecommendation)"
+                                          title="AI recommendation (distinct from the vector similarity score)">
+                                        <i class="fa-solid" [class]="GetLLMRecommendationIcon(match.LLMRecommendation)"></i>
+                                        {{ GetLLMRecommendationLabel(match.LLMRecommendation) }}
+                                        @if (match.LLMConfidence != null) {
+                                            <span class="llm-conf-inline">{{ (match.LLMConfidence * 100).toFixed(0) }}%</span>
+                                        }
+                                    </span>
+                                    @if (match.HasDisagreement) {
+                                        <span class="llm-disagree-chip" title="The AI verdict conflicts with the vector score — click for the AI's reasoning"
+                                              (click)="match.LLMReasoning && OpenReasoningPopover(match, mi + 1, $event)">
+                                            <i class="fa-solid fa-triangle-exclamation"></i>
+                                        </span>
+                                    }
+                                    @if (match.LLMReasoning) {
+                                        <button type="button" class="llm-why-btn" [class.active]="IsReasoningPopoverOpen(mi + 1)"
+                                                (click)="OpenReasoningPopover(match, mi + 1, $event)" title="Show the AI's reasoning">
+                                            <i class="fa-solid fa-circle-info"></i> Why?
+                                        </button>
+                                    }
+                                </div>
+                            }
                             <span class="col-header-diff-count">{{ match.DiffCount }} difference{{ match.DiffCount !== 1 ? 's' : '' }}</span>
                             <div class="surviving-selector">
                                 <input type="radio" name="survivor" class="surviving-radio"
@@ -655,6 +703,39 @@
                     }
                 </div>
             </div>
+
+            <!-- ═══ Floating LLM reasoning popover ═══ -->
+            @if (ReasoningPopover) {
+                <div class="reasoning-popover-backdrop" (click)="CloseReasoningPopover()"></div>
+                <div class="reasoning-popover" [style.top.px]="ReasoningPopover.top" [style.left.px]="ReasoningPopover.left">
+                    <div class="reasoning-popover-header">
+                        <span class="reasoning-popover-title">
+                            <i class="fa-solid fa-robot"></i>
+                            AI reasoning &middot; {{ ReasoningPopover.name }}
+                        </span>
+                        <button class="reasoning-popover-close" (click)="CloseReasoningPopover()" title="Close (Esc)">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="reasoning-popover-meta">
+                        @if (ReasoningPopover.recommendation) {
+                            <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(ReasoningPopover.recommendation)">
+                                <i class="fa-solid" [class]="GetLLMRecommendationIcon(ReasoningPopover.recommendation)"></i>
+                                {{ GetLLMRecommendationLabel(ReasoningPopover.recommendation) }}
+                            </span>
+                        }
+                        @if (ReasoningPopover.confidence != null) {
+                            <span class="llm-confidence-badge">{{ (ReasoningPopover.confidence * 100).toFixed(0) }}% confidence</span>
+                        }
+                        @if (ReasoningPopover.hasDisagreement) {
+                            <span class="llm-disagreement-pill">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Disagrees with vector score
+                            </span>
+                        }
+                    </div>
+                    <div class="reasoning-popover-body">{{ ReasoningPopover.reasoning }}</div>
+                </div>
+            }
 
             <!-- Footer -->
             <div class="comparison-footer">

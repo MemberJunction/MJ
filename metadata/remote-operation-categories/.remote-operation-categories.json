@@ -40,5 +40,19 @@
       "lastModified": "2026-06-26T21:32:07.702Z",
       "checksum": "6222e90ca9346d966983e89311fbddcfe3960777285fdc7ce0eda37eab3a51f6"
     }
+  },
+  {
+    "fields": {
+      "Name": "Record Comparison",
+      "Description": "Field-level record comparison operations (load a set of records + compute the per-field delta matrix).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "578A2891-14D5-449C-9DF0-BBC715A29918"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:57:14.278Z",
+      "checksum": "93af6c2f0757b3365840e65647cdd8495e3ccba5c3a2fdd2a0f08e211212347b"
+    }
   }
 ]
