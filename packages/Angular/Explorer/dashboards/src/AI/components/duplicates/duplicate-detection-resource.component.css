@@ -868,19 +868,59 @@ app-duplicate-detection-resource {
     color: var(--mj-status-warning-text);
 }
 
-/* ── LLM reasoning display (additive — degrades gracefully when no LLM data) ── */
-.llm-reasoning-block {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 2px;
-}
-
-.llm-badge-row {
+/* ── LLM verdict (compact — full reasoning lives in a floating popover) ── */
+.llm-verdict-row {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 4px;
+    margin-top: 2px;
+}
+
+/* Confidence rendered inline inside the recommendation badge */
+.llm-conf-inline {
+    margin-left: 5px;
+    padding-left: 5px;
+    border-left: 1px solid currentColor;
+    opacity: 0.85;
+    font-weight: 700;
+}
+
+/* Compact disagreement marker (full text in tooltip + popover) */
+.llm-disagree-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    font-size: 0.6rem;
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+    cursor: pointer;
+}
+
+/* "Why?" trigger that opens the reasoning popover */
+.llm-why-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--mj-text-link);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.llm-why-btn:hover,
+.llm-why-btn.active {
+    background: color-mix(in srgb, var(--mj-text-link) 12%, transparent);
+    border-color: color-mix(in srgb, var(--mj-text-link) 35%, transparent);
 }
 
 .llm-rec-badge {
@@ -937,32 +977,94 @@ app-duplicate-detection-resource {
     border: 1px solid var(--mj-status-warning-border);
 }
 
-.llm-reasoning-toggle {
+/* ── Floating reasoning popover (overlays the grid; keeps headers compact) ── */
+.reasoning-popover-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10001;
+    background: transparent;
+}
+
+.reasoning-popover {
+    position: fixed;
+    z-index: 10002;
+    width: 380px;
+    max-width: calc(100vw - 24px);
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    animation: reasoningPopIn 0.12s ease-out;
+}
+
+@keyframes reasoningPopIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.reasoning-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.reasoning-popover-title {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    align-self: flex-start;
-    font-size: 0.62rem;
-    font-weight: 500;
-    color: var(--mj-text-link);
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reasoning-popover-title i {
+    color: var(--mj-brand-primary);
+}
+
+.reasoning-popover-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--mj-text-muted);
     cursor: pointer;
-    user-select: none;
+    transition: background 0.12s ease, color 0.12s ease;
 }
 
-.llm-reasoning-toggle:hover {
-    text-decoration: underline;
+.reasoning-popover-close:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
 }
 
-.llm-reasoning-text {
-    font-size: 0.66rem;
-    line-height: 1.4;
+.reasoning-popover-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px 0;
+}
+
+.reasoning-popover-body {
+    padding: 10px 12px 12px;
+    font-size: 0.74rem;
+    line-height: 1.5;
     color: var(--mj-text-secondary);
-    background: var(--mj-bg-surface-sunken);
-    border: 1px solid var(--mj-border-subtle);
-    border-radius: 6px;
-    padding: 6px 8px;
     white-space: pre-wrap;
-    max-height: 180px;
     overflow-y: auto;
 }
 

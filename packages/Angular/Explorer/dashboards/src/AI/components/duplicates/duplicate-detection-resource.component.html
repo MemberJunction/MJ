@@ -541,35 +541,28 @@
                                     {{ (match.Score * 100).toFixed(0) }}%
                                 </span>
                             </div>
-                            <!-- LLM reasoning (additive — only renders when reasoning ran for this match) -->
+                            <!-- LLM verdict (compact — full reasoning prose opens in a floating popover) -->
                             @if (match.LLMRecommendation) {
-                                <div class="llm-reasoning-block">
-                                    <div class="llm-badge-row">
-                                        <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(match.LLMRecommendation)">
-                                            <i class="fa-solid" [class]="GetLLMRecommendationIcon(match.LLMRecommendation)"></i>
-                                            {{ GetLLMRecommendationLabel(match.LLMRecommendation) }}
-                                        </span>
+                                <div class="llm-verdict-row">
+                                    <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(match.LLMRecommendation)"
+                                          title="AI recommendation (distinct from the vector similarity score)">
+                                        <i class="fa-solid" [class]="GetLLMRecommendationIcon(match.LLMRecommendation)"></i>
+                                        {{ GetLLMRecommendationLabel(match.LLMRecommendation) }}
                                         @if (match.LLMConfidence != null) {
-                                            <span class="llm-confidence-badge"
-                                                  title="AI confidence in its recommendation (distinct from vector score)">
-                                                {{ (match.LLMConfidence * 100).toFixed(0) }}% conf.
-                                            </span>
+                                            <span class="llm-conf-inline">{{ (match.LLMConfidence * 100).toFixed(0) }}%</span>
                                         }
-                                    </div>
+                                    </span>
                                     @if (match.HasDisagreement) {
-                                        <div class="llm-disagreement-pill" title="The AI verdict conflicts with the vector score — review recommended">
+                                        <span class="llm-disagree-chip" title="The AI verdict conflicts with the vector score — click for the AI's reasoning"
+                                              (click)="match.LLMReasoning && OpenReasoningPopover(match, mi + 1, $event)">
                                             <i class="fa-solid fa-triangle-exclamation"></i>
-                                            AI disagrees with vector score
-                                        </div>
+                                        </span>
                                     }
                                     @if (match.LLMReasoning) {
-                                        <div class="llm-reasoning-toggle" (click)="ToggleLLMReasoning(mi + 1)">
-                                            <span>{{ IsLLMReasoningExpanded(mi + 1) ? 'Hide reasoning' : 'Why?' }}</span>
-                                            <i class="fa-solid" [class.fa-chevron-down]="!IsLLMReasoningExpanded(mi + 1)" [class.fa-chevron-up]="IsLLMReasoningExpanded(mi + 1)"></i>
-                                        </div>
-                                        @if (IsLLMReasoningExpanded(mi + 1)) {
-                                            <div class="llm-reasoning-text">{{ match.LLMReasoning }}</div>
-                                        }
+                                        <button type="button" class="llm-why-btn" [class.active]="IsReasoningPopoverOpen(mi + 1)"
+                                                (click)="OpenReasoningPopover(match, mi + 1, $event)" title="Show the AI's reasoning">
+                                            <i class="fa-solid fa-circle-info"></i> Why?
+                                        </button>
                                     }
                                 </div>
                             }
@@ -710,6 +703,39 @@
                     }
                 </div>
             </div>
+
+            <!-- ═══ Floating LLM reasoning popover ═══ -->
+            @if (ReasoningPopover) {
+                <div class="reasoning-popover-backdrop" (click)="CloseReasoningPopover()"></div>
+                <div class="reasoning-popover" [style.top.px]="ReasoningPopover.top" [style.left.px]="ReasoningPopover.left">
+                    <div class="reasoning-popover-header">
+                        <span class="reasoning-popover-title">
+                            <i class="fa-solid fa-robot"></i>
+                            AI reasoning &middot; {{ ReasoningPopover.name }}
+                        </span>
+                        <button class="reasoning-popover-close" (click)="CloseReasoningPopover()" title="Close (Esc)">
+                            <i class="fa-solid fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="reasoning-popover-meta">
+                        @if (ReasoningPopover.recommendation) {
+                            <span class="llm-rec-badge" [class]="GetLLMRecommendationClass(ReasoningPopover.recommendation)">
+                                <i class="fa-solid" [class]="GetLLMRecommendationIcon(ReasoningPopover.recommendation)"></i>
+                                {{ GetLLMRecommendationLabel(ReasoningPopover.recommendation) }}
+                            </span>
+                        }
+                        @if (ReasoningPopover.confidence != null) {
+                            <span class="llm-confidence-badge">{{ (ReasoningPopover.confidence * 100).toFixed(0) }}% confidence</span>
+                        }
+                        @if (ReasoningPopover.hasDisagreement) {
+                            <span class="llm-disagreement-pill">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Disagrees with vector score
+                            </span>
+                        }
+                    </div>
+                    <div class="reasoning-popover-body">{{ ReasoningPopover.reasoning }}</div>
+                </div>
+            }
 
             <!-- Footer -->
             <div class="comparison-footer">

@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject, ViewEncapsulation, HostListener } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { CompositeKey, LogStatus, Metadata, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
+import { CompositeKey, LogStatus, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
     ResourceData,
@@ -119,10 +119,12 @@ interface EntityDocumentOption {
 })
 export class DuplicateDetectionResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
 
-    /** Close comparison panel on Escape key */
+    /** Close the reasoning popover first (if open), otherwise the comparison panel, on Escape */
     @HostListener('document:keydown.escape')
     OnEscapeKey(): void {
-        if (this.ComparisonGroup) {
+        if (this.ReasoningPopover) {
+            this.CloseReasoningPopover();
+        } else if (this.ComparisonGroup) {
             this.CloseComparison();
         }
     }
@@ -156,8 +158,21 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public ComparisonClosing = false;
     /** Loaded entity records keyed by record ID (populated on panel open via RunView) */
     private comparisonRecords = new Map<string, Record<string, unknown>>();
-    /** Match column indices whose LLM reasoning text is currently expanded */
-    public LLMReasoningExpandedColumns = new Set<number>();
+    /**
+     * Floating LLM-reasoning popover state. Rendered as a fixed-position card over the
+     * comparison grid so the full reasoning prose no longer lives inline in the column
+     * header (which made headers tall, uneven, and visually cluttered). Null when closed.
+     */
+    public ReasoningPopover: {
+        columnIndex: number;
+        name: string;
+        recommendation: LLMRecommendation | null;
+        confidence: number | null;
+        hasDisagreement: boolean;
+        reasoning: string;
+        top: number;
+        left: number;
+    } | null = null;
     /** True once the LLM proposed survivor/field-map has been applied to the selection state */
     public LLMProposalsApplied = false;
 
@@ -1090,7 +1105,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.DepsExpandedColumns.clear();
         this.depsEntityGroupExpanded.clear();
         this.ShowMergeConfirm = false;
-        this.LLMReasoningExpandedColumns.clear();
+        this.ReasoningPopover = null;
         this.LLMProposalsApplied = false;
         this.cdr.detectChanges();
 
@@ -1119,7 +1134,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.ComparisonDependencies.clear();
             this.DepsExpandedColumns.clear();
         this.depsEntityGroupExpanded.clear();
-            this.LLMReasoningExpandedColumns.clear();
+            this.ReasoningPopover = null;
             this.LLMProposalsApplied = false;
             this.cdr.detectChanges();
         }, 250);
@@ -1427,19 +1442,49 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
     }
 
-    /** Toggle the expanded state of a match column's LLM reasoning text */
-    public ToggleLLMReasoning(columnIndex: number): void {
-        if (this.LLMReasoningExpandedColumns.has(columnIndex)) {
-            this.LLMReasoningExpandedColumns.delete(columnIndex);
-        } else {
-            this.LLMReasoningExpandedColumns.add(columnIndex);
+    /**
+     * Open (or toggle) the floating reasoning popover for a match column, anchored under
+     * the "Why?" trigger that was clicked. Rendering the prose in a fixed-position card
+     * keeps the column headers short and uniform instead of letting reasoning text balloon
+     * the header inline.
+     */
+    public OpenReasoningPopover(match: ComparisonMatchInfo, columnIndex: number, event: MouseEvent): void {
+        event.stopPropagation();
+        // Clicking the active trigger again closes the popover
+        if (this.ReasoningPopover?.columnIndex === columnIndex) {
+            this.CloseReasoningPopover();
+            return;
         }
+
+        const trigger = event.currentTarget as HTMLElement;
+        const rect = trigger.getBoundingClientRect();
+        const popoverWidth = 380;
+        const margin = 12;
+        const left = Math.max(margin, Math.min(rect.left, window.innerWidth - popoverWidth - margin));
+        const top = Math.min(rect.bottom + 6, window.innerHeight - 120);
+
+        this.ReasoningPopover = {
+            columnIndex,
+            name: match.Name,
+            recommendation: match.LLMRecommendation,
+            confidence: match.LLMConfidence,
+            hasDisagreement: match.HasDisagreement,
+            reasoning: match.LLMReasoning ?? '',
+            top,
+            left,
+        };
         this.cdr.detectChanges();
     }
 
-    /** Whether a match column's LLM reasoning is currently expanded */
-    public IsLLMReasoningExpanded(columnIndex: number): boolean {
-        return this.LLMReasoningExpandedColumns.has(columnIndex);
+    /** Close the floating reasoning popover */
+    public CloseReasoningPopover(): void {
+        this.ReasoningPopover = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Whether the reasoning popover is currently open for a given match column */
+    public IsReasoningPopoverOpen(columnIndex: number): boolean {
+        return this.ReasoningPopover?.columnIndex === columnIndex;
     }
 
     // ════════════════════════════════════════════
