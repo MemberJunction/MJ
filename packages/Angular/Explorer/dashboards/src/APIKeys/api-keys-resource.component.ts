@@ -8,6 +8,7 @@ import { TabConfig } from '@memberjunction/ng-ui-components';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
 import { APIKeyCreateResult } from './api-key-create-dialog.component';
+import { validateEnumParam, validateStringParam } from '../shared/agent-tool-validation';
 
 /** Activity types for recent activity display */
 type ActivityAction = 'Created' | 'Updated' | 'Revoked' | 'Used' | 'Extended';
@@ -108,7 +109,117 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();
+        this.registerAgentClientTools();
         await this.loadData();
+        this.publishAgentContext();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+    // API Keys is a highly security-sensitive admin surface. The agent context
+    // and client tools registered here are strictly NAVIGATIONAL + READ-ONLY:
+    // tab switches, status filtering, search, and data refresh. The mutating
+    // operations on this component (create key, revoke key, extend expiration,
+    // edit) are DELIBERATELY NOT exposed to the agent — they must remain
+    // human-initiated. Context exposes only aggregate counts and navigation
+    // state — NEVER the API key secret/token, hashed value, or any credential.
+    // ================================================================
+
+    /**
+     * Publish the current API Keys dashboard state to the AI agent. Re-invoked on
+     * every meaningful state change (data load, tab switch, selection). Only
+     * counts and navigation state are exposed — never key secrets.
+     */
+    private publishAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            TotalKeys: this.TotalKeys,
+            ActiveKeys: this.ActiveKeys,
+            RevokedKeys: this.RevokedKeys,
+            ExpiringSoonCount: this.ExpiringSoonCount,
+            MainTab: this.MainTab,
+            SelectedKeyId: this.SelectedKeyId,
+        });
+    }
+
+    /**
+     * Register the read-only / navigational client tools the agent may invoke.
+     * Every Handler is tolerant: validates input and returns
+     * `{ Success: false, ErrorMessage }` rather than throwing.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchAPIKeysTab',
+                Description: 'Switch the active API Keys tab. Valid tabs: keys, applications, scopes, usage.',
+                ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: ['keys', 'applications', 'scopes', 'usage'] } }, required: ['tab'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSwitchTabTool(params),
+            },
+            {
+                Name: 'FilterAPIKeysByStatus',
+                Description: 'Show the API key list filtered by status. Valid filters: all, active, revoked, expiring, expired, never-used.',
+                ParameterSchema: { type: 'object', properties: { filter: { type: 'string', enum: ['all', 'active', 'revoked', 'expiring', 'expired', 'never-used'] } }, required: ['filter'] },
+                Handler: async (params: Record<string, unknown>) => this.handleFilterByStatusTool(params),
+            },
+            {
+                Name: 'SearchAPIKeys',
+                Description: 'Search the API key list by label or other text. Switches to the list view if needed.',
+                ParameterSchema: { type: 'object', properties: { searchText: { type: 'string' } }, required: ['searchText'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
+            },
+            {
+                Name: 'RefreshAPIKeyData',
+                Description: 'Reload all API key dashboard data. Read-only — does not create, revoke, or modify any keys.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleRefreshTool(),
+            },
+        ]);
+    }
+
+    private static readonly API_KEYS_TABS = ['keys', 'applications', 'scopes', 'usage'] as const;
+    private static readonly API_KEYS_FILTERS = ['all', 'active', 'revoked', 'expiring', 'expired', 'never-used'] as const;
+
+    private handleSwitchTabTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['tab'], APIKeysResourceComponent.API_KEYS_TABS, 'tab');
+        if (!v.ok) return v.result;
+        this.switchTab(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleFilterByStatusTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['filter'], APIKeysResourceComponent.API_KEYS_FILTERS, 'filter');
+        if (!v.ok) return v.result;
+        this.MainTab = 'keys';
+        this.showListView(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateStringParam(params?.['searchText'], 'searchText');
+        if (!v.ok) return v.result;
+        // Ensure the list view is active so the list component (and its search box) exists.
+        this.MainTab = 'keys';
+        this.showListView(this.ListFilter);
+        this.cdr.detectChanges();
+        if (this.keyListComponent) {
+            this.keyListComponent.SearchText = v.value;
+            this.keyListComponent.onSearch();
+        }
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        try {
+            await this.refresh();
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+        }
     }
 
     ngOnDestroy(): void {
@@ -334,6 +445,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public showListView(filter: APIKeyFilter = 'all'): void {
         this.ListFilter = filter;
         this.CurrentView = 'list';
+        this.publishAgentContext();
     }
 
     /**
@@ -372,6 +484,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public openEditPanel(key: MJAPIKeyEntity): void {
         this.SelectedKeyId = key.ID;
         this.ShowEditPanel = true;
+        this.publishAgentContext();
     }
 
     /**
@@ -571,6 +684,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         if (tab === 'keys') {
             this.CurrentView = 'overview';
         }
+        this.publishAgentContext();
     }
 
     /**

@@ -1181,6 +1181,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.RunCurrentItem = '';
         this.CurrentPipelineRunID = null;
         this.CurrentProcessRunID = null;
+        this.emitAgentContext();
         this.cdr.detectChanges();
 
         try {
@@ -1192,6 +1193,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             if (!result.Success || !result.PipelineRunID) {
                 this.IsRunning = false;
                 this.RunStage = '';
+                this.emitAgentContext();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Pipeline failed: ${result.ErrorMessage ?? 'Unknown error'}`, 'error', 5000
                 );
@@ -1212,6 +1214,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             console.error('[Autotagging] Error starting pipeline:', msg);
             this.IsRunning = false;
             this.RunStage = '';
+            this.emitAgentContext();
             MJNotificationService.Instance.CreateSimpleNotification(`Pipeline error: ${msg}`, 'error', 5000);
             this.cdr.detectChanges();
         }
@@ -1305,6 +1308,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.RunCurrentItem = '';
         this.CurrentPipelineRunID = null;
         this.CurrentProcessRunID = null;
+        this.emitAgentContext();
         MJNotificationService.Instance.CreateSimpleNotification('Pipeline cancelled', 'info', 3000);
         this.cdr.detectChanges();
     }
@@ -1374,6 +1378,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                         );
                     }
                 }
+                this.emitAgentContext();
                 this.cdr.detectChanges();
             });
         };

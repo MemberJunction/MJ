@@ -263,10 +263,63 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     ngAfterViewInit(): void {
         this.loadConfiguration();
+        this.emitAgentContext();
+        this.registerAgentTools();
+        this.NotifyLoadComplete();
+    }
+
+    // ================================================================
+    // Agent context + client tools
+    // ================================================================
+
+    /**
+     * Publish the current Config surface state to the AI agent. Re-emitted on
+     * every section change so the streamed context never goes stale.
+     */
+    private emitAgentContext(): void {
         this.navigationService.SetAgentContext(this, {
             ActiveSection: this.ActiveSection,
+            ActiveSectionLabel: this.currentSection?.Label ?? this.ActiveSection,
+            SectionCount: this.Sections.length,
+            SearchScopeCount: this.SearchScopes.length,
         });
-        this.NotifyLoadComplete();
+    }
+
+    /**
+     * Register the agent-actionable operations for the Config surface: navigate
+     * between sections and reload configuration. Both wire to existing methods.
+     */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchConfigSection',
+                Description:
+                    'Switch the Knowledge Hub Configuration section. Valid sections: ' +
+                    this.Sections.map(s => s.ID).join(', '),
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { section: { type: 'string' } },
+                    required: ['section'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const section = String(params['section'] ?? '');
+                    if (!this.Sections.some(s => s.ID === section)) {
+                        return { Success: false, ErrorMessage: `Unknown config section "${section}"` };
+                    }
+                    this.SelectSection(section);
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'ReloadConfiguration',
+                Description: 'Reload the Knowledge Hub configuration (vector DB, indexes, embedding models, thresholds) from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.loadConfiguration();
+                    return { Success: true };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -316,6 +369,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         if (sectionId === 'search-permissions' && !this.PermissionsLoaded && !this.PermissionsLoading) {
             void this.LoadPermissionsAudit();
         }
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 

@@ -150,6 +150,7 @@ export class FeaturePipelinesResourceComponent
   /** Apply the search filter (called on every keystroke). */
   public OnSearchChanged(): void {
     this.applyFilter();
+    this.emitAgentContext();
     this.cdr.detectChanges();
   }
 

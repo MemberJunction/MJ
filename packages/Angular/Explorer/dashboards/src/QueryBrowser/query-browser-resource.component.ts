@@ -11,6 +11,7 @@ import {
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
+import { validateStringParam } from '../shared/agent-tool-validation';
 /**
  * Tree node for the query category hierarchy
  */
@@ -136,7 +137,121 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.loadSavedPanelWidth();
         this.loadSavedStatusFilters();
         this.loadSavedExpandedState();
+        this.registerAgentClientTools();
         this.loadData();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+    // Query Browser can execute stored SQL. The agent context and client tools
+    // registered here are strictly NAVIGATIONAL + READ-ONLY: search the query
+    // catalog, filter by status, select a query to view, and refresh the list.
+    // DELIBERATELY NOT exposed to the agent: saving/deleting queries, and —
+    // critically — RUNNING queries (with or without arbitrary parameters).
+    // Selecting a query only opens its definition in the viewer; it does not
+    // execute it. Context exposes only catalog metadata (query name/id, search
+    // text, category, count) — never SQL text or result data.
+    // ================================================================
+
+    /**
+     * Publish the current Query Browser state to the AI agent. Re-invoked on
+     * every meaningful state change (selection, search, refresh). Only catalog
+     * metadata is exposed — never SQL or query results.
+     */
+    private publishAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            SelectedQueryId: this.selectedQuery?.ID ?? null,
+            SelectedQueryName: this.selectedQuery?.Name ?? null,
+            SearchText: this.searchText,
+            SelectedCategory: this.selectedQuery?.Category ?? null,
+            QueryCount: this.queries.length,
+        });
+    }
+
+    /**
+     * Register the read-only / navigational client tools the agent may invoke.
+     * Every Handler is tolerant: validates input and returns
+     * `{ Success: false, ErrorMessage }` rather than throwing. No tool here runs
+     * a query.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SearchQueries',
+                Description: 'Free-text search across the stored-query catalog (name, description, category).',
+                ParameterSchema: { type: 'object', properties: { searchText: { type: 'string' } }, required: ['searchText'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
+            },
+            {
+                Name: 'FilterQueriesByStatus',
+                Description: 'Show only queries with the given status in the catalog tree. Valid values: Approved, Pending, Rejected, Expired.',
+                ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: ['Approved', 'Pending', 'Rejected', 'Expired'] } }, required: ['status'] },
+                Handler: async (params: Record<string, unknown>) => this.handleFilterByStatusTool(params),
+            },
+            {
+                Name: 'SelectQuery',
+                Description: 'Open a stored query in the viewer by its ID. This only displays the query definition; it does NOT run the query.',
+                ParameterSchema: { type: 'object', properties: { queryId: { type: 'string' } }, required: ['queryId'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSelectQueryTool(params),
+            },
+            {
+                Name: 'RefreshQueries',
+                Description: 'Reload the stored-query catalog from the server. Read-only.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleRefreshTool(),
+            },
+        ]);
+    }
+
+    private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateStringParam(params?.['searchText'], 'searchText');
+        if (!v.ok) return v.result;
+        this.onSearchChange(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleFilterByStatusTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const status = String(params?.['status'] ?? '');
+        if (!this.AllStatuses.includes(status)) {
+            return { Success: false, ErrorMessage: `Invalid status "${status}". Expected one of: ${this.AllStatuses.join(', ')}.` };
+        }
+        // Show only the requested status — enable it, disable the others.
+        for (const s of this.AllStatuses) {
+            this.StatusFilters[s] = s === status;
+        }
+        this.applyFilters();
+        this.buildCategoryTree();
+        this.saveStatusFilters();
+        this.cdr.markForCheck();
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleSelectQueryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const queryId = String(params?.['queryId'] ?? '');
+        if (!queryId) {
+            return { Success: false, ErrorMessage: 'queryId is required.' };
+        }
+        const query = this.queries.find(q => UUIDsEqual(q.ID, queryId));
+        if (!query) {
+            return { Success: false, ErrorMessage: `No query found with ID "${queryId}" (or you lack permission to view it).` };
+        }
+        this.selectQuery(query);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        try {
+            await this.loadData(true);
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+        }
     }
 
     ngOnDestroy(): void {
@@ -197,6 +312,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.isLoading = false;
             this.NotifyLoadComplete();
             this.cdr.markForCheck();
+            this.publishAgentContext();
         }
     }
 
@@ -280,6 +396,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
 
         this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     public clearSearch(): void {
@@ -458,6 +575,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.UpdateQueryParams({ queryId: query.ID });
         this.NotifyDisplayNameChanged(query.Name || 'Query');
         this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     public isQueryVisible(query: MJQueryEntityExtended): boolean {

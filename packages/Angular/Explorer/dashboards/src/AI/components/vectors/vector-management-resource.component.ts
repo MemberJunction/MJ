@@ -505,11 +505,80 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     async ngAfterViewInit(): Promise<void> {
         await this.LoadData();
+        // When embedded in a parent shell, that host owns agent reporting.
+        if (!this.HideToolbar) {
+            this.emitAgentContext();
+            this.registerAgentTools();
+        }
+        this.NotifyLoadComplete();
+    }
+
+    // ================================================================
+    // Agent context + client tools
+    // ================================================================
+
+    /**
+     * Publish the vector-management surface state to the AI agent. Re-emitted on
+     * every data refresh and whenever an entity's sync starts or finishes, so the
+     * streamed context tracks live vectorization. No-op when embedded (the host
+     * owns reporting).
+     */
+    private emitAgentContext(): void {
+        if (this.HideToolbar) {
+            return;
+        }
         this.navigationService.SetAgentContext(this, {
             TotalVectors: this.TotalVectors,
             KPICount: this.KPICards.length,
+            EntityDocumentCount: this.SyncRows.length,
+            SyncingCount: this.SyncingIds.size,
+            Entities: this.SyncRows.map(r => ({
+                EntityName: r.EntityName,
+                VectorCount: r.VectorCount,
+                Status: r.Status,
+            })),
         });
-        this.NotifyLoadComplete();
+    }
+
+    /**
+     * Register the safe, agent-actionable operations: reload the dashboard and
+     * trigger vectorization for a named entity. Both wire to existing methods
+     * and never throw.
+     */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'RefreshVectors',
+                Description: 'Reload the vector management dashboard (vector counts, sync rows, KPIs) from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.LoadData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { TotalVectors: this.TotalVectors } };
+                },
+            },
+            {
+                Name: 'SyncVectorsForEntity',
+                Description: 'Start vectorization (embedding sync) for an entity by its name. The entity must already have a vector entity document configured.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { entityName: { type: 'string', description: 'The entity name to vectorize' } },
+                    required: ['entityName'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const name = String(params['entityName'] ?? '').toLowerCase().trim();
+                    const row = this.SyncRows.find(r => r.EntityName.toLowerCase().trim() === name);
+                    if (!row) {
+                        return { Success: false, ErrorMessage: `No vector entity document for entity "${params['entityName']}"` };
+                    }
+                    if (this.SyncingIds.has(row.EntityDocumentID)) {
+                        return { Success: false, ErrorMessage: `"${row.EntityName}" is already syncing` };
+                    }
+                    await this.SyncEntity(row.EntityDocumentID);
+                    return { Success: true };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -545,6 +614,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.buildKPICards();
             this.buildSidebarData();
             this.checkPrerequisites();
+            this.emitAgentContext();
         } catch (error) {
             console.error('[VectorManagement] Error loading data:', error);
         } finally {
@@ -711,6 +781,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      */
     private addSyncingId(id: string): void {
         this.SyncingIds = new Set([...this.SyncingIds, id]);
+        this.emitAgentContext();
     }
 
     /**
@@ -722,6 +793,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             const next = new Set(this.SyncingIds);
             next.delete(id);
             this.SyncingIds = next;
+            this.emitAgentContext();
         }
     }
 

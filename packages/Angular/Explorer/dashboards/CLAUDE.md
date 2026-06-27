@@ -104,16 +104,36 @@ The shell component waits for `onFirstResourceLoadComplete()` before hiding the 
 
 **Do NOT add a parallel mechanism.** `SetAgentContext`/`SetAgentClientTools` are the single surface API — they already flow to async agents and the realtime co-agent consumes the same snapshot + resolved tools. Wire them in from the start when scaffolding a new dashboard.
 
-**Currently implemented dashboards:**
+**Living registry of wired surfaces** (keep current as surfaces are wired — gaps are visible here):
 
+**Knowledge Hub / AI**
 | Dashboard | Context Fields | Tools |
 |-----------|---------------|-------|
 | Search | CurrentQuery, ResultCount, ShowFilters, MinScoreThreshold, TopResults | RunKnowledgeSearch, ClearKnowledgeSearch, ToggleSearchFilters |
-| Classify | ActiveTab, SourceCount, ContentItemCount, TagCount, PipelineStatus | SwitchClassifyTab, RunClassificationPipeline, SearchClassifyTags |
+| Classify | ActiveTab, SourceCount, ContentItemCount, TagCount, PipelineStatus, PipelineProgress | SwitchClassifyTab, RunClassificationPipeline, SearchClassifyTags |
 | Analytics | ActiveTab, DateRange, EntityFilter, KPIs | SwitchAnalyticsTab, SetAnalyticsDateRange, ExportAnalyticsCSV |
-| Clusters | IsVisualizationLoaded, ClusterCount, TotalPoints | (context only) |
-| Duplicates | DetectionStatus, PendingCount, ApprovedCount, RejectedCount | (context only) |
-| Vectors | TotalVectors, KPICount | (context only) |
-| Config | ActiveSection | (context only) |
+| Visualize | ActiveVisualizationMode | SwitchVisualizationMode |
+| Clusters | IsVisualizationLoaded, ClusterCount, TotalPoints | RegenerateClusters, ResetClusterAnalysis |
+| Config | ActiveSection, ActiveSectionLabel, SectionCount, SearchScopeCount | SwitchConfigSection, ReloadConfiguration |
+| Scheduling | job counts (Active/Paused/Disabled), StatusFilter | RefreshSchedules, FilterSchedulesByStatus, OpenSchedulingApp |
+| Duplicates | DetectionStatus, DetectionProgress, Pending/Approved/Rejected, DisplayMode, EntityFilter | RunDuplicateDetection, RefreshDuplicateDetection |
+| Vectors | TotalVectors, EntityDocumentCount, SyncingCount, per-entity breakdown | RefreshVectors, SyncVectorsForEntity |
+| Feature Pipelines | counts, SearchQuery, Pipelines[] | RunFeaturePipeline, SearchFeaturePipelines |
+
+**Data Explorer** (entity grid + record detail + home)
+| Surface | Context Fields | Tools |
+|---------|---------------|-------|
+| Data Explorer | SelectedEntityName, ViewMode, ActiveViewId, FilterText, Total/FilteredRecordCount, SelectedRecordName, DetailPanelOpen, Home: HomeViewMode/EntitySearchText/VisibleEntityCount | OpenEntityData, FilterRecords, ClearRecordFilter, SetViewMode, SelectView, OpenRecord, CreateNewRecord, NavigateToRelated |
+
+**Admin** (🔒 **read-only / navigational tools only — no mutations exposed to the agent**)
+| Surface | Context Fields | Tools (all read-only) |
+|---------|---------------|-------|
+| System Diagnostics | ActiveSection, PerfTab, EngineCount, memory/cache/slow-query metrics | SwitchDiagnosticsSection, SwitchPerformanceTab, RefreshDiagnostics, FilterTelemetryByCategory, SetSlowQueryThreshold |
+| Users | counts (Total/Filtered/Active), CurrentFilterStatus/Role, SelectedUserId | SwitchUserStatusFilter, FilterUsersByRole, SearchUsers, ClearAllFilters, RefreshUserList, ExportUsers |
+| Roles | counts (Total/Filtered/System/Custom), CurrentFilterType | FilterRolesByType, SearchRoles, ClearRoleFilters, RefreshRoles |
+| API Keys | key counts, MainTab, SelectedKeyId (never secrets) | SwitchAPIKeysTab, FilterAPIKeysByStatus, SearchAPIKeys, RefreshAPIKeyData |
+| Query Browser | SelectedQueryId/Name, SearchText, SelectedCategory, QueryCount (never SQL/results) | SearchQueries, FilterQueriesByStatus, SelectQuery, RefreshQueries |
+
+> **Admin safety rule:** Admin surfaces expose ONLY navigational / filter / search / export / read-only-diagnostic tools to the agent. **Never** wire create/edit/delete (users/roles/keys), schema mutations, GraphQL execution, query-run-with-arbitrary-params, or secret/token values into agent context or tools. Each Admin component carries a documented SAFETY BOUNDARY comment.
 
 See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](../../../AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full architecture guide.

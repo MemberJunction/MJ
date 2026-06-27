@@ -105,7 +105,85 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
 
     async ngAfterViewInit(): Promise<void> {
         await this.loadData();
+        // When embedded in KH Configuration's Scheduling section, that host owns
+        // agent reporting; skip here to avoid double-registration.
+        if (!this.HideToolbar) {
+            this.emitAgentContext();
+            this.registerAgentTools();
+        }
         this.NotifyLoadComplete();
+    }
+
+    // ================================================================
+    // Agent context + client tools
+    // ================================================================
+
+    /**
+     * Publish the scheduling surface state to the AI agent. Re-emitted whenever
+     * jobs reload or the filter/search changes, so the streamed context tracks
+     * the visible job set. No-op when embedded (the host owns reporting).
+     */
+    private emitAgentContext(): void {
+        if (this.HideToolbar) {
+            return;
+        }
+        this.navigationService.SetAgentContext(this, {
+            TotalJobs: this.AllJobs.length,
+            VisibleJobs: this.FilteredJobs.length,
+            ActiveCount: this.ActiveCount,
+            PausedCount: this.PausedCount,
+            DisabledCount: this.DisabledCount,
+            StatusFilter: this.StatusFilter || 'All',
+            SearchQuery: this.SearchQuery,
+            RecentRunCount: this.RecentRuns.length,
+        });
+    }
+
+    /**
+     * Register the safe, agent-actionable operations for the scheduling surface:
+     * refresh, filter by status, and open the full Scheduling application. All
+     * wire to existing methods and never throw.
+     */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'RefreshSchedules',
+                Description: 'Reload the scheduled jobs and recent run history from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.loadData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { TotalJobs: this.AllJobs.length } };
+                },
+            },
+            {
+                Name: 'FilterSchedulesByStatus',
+                Description: 'Filter the scheduled jobs by status. Pass an empty string to clear. Valid statuses: Active, Paused, Disabled.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { status: { type: 'string', enum: ['', 'Active', 'Paused', 'Disabled'] } },
+                    required: ['status'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const status = String(params['status'] ?? '');
+                    if (status && !['Active', 'Paused', 'Disabled'].includes(status)) {
+                        return { Success: false, ErrorMessage: `Unknown status "${status}"` };
+                    }
+                    this.StatusFilter = status;
+                    this.OnFilterChanged();
+                    return { Success: true, Data: { VisibleJobs: this.FilteredJobs.length } };
+                },
+            },
+            {
+                Name: 'OpenSchedulingApp',
+                Description: 'Navigate to the full Scheduling application to manage all scheduled jobs.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.GoToSchedulingApp();
+                    return { Success: true };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -126,11 +204,13 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
 
     public OnFilterChanged(): void {
         this.applyFilters();
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
     public OnSearchChanged(): void {
         this.applyFilters();
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -161,6 +241,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
 
         if (result.Saved || result.Deleted) {
             await this.loadData();
+            this.emitAgentContext();
         }
 
         this.cdr.detectChanges();

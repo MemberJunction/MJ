@@ -96,10 +96,142 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
   protected initDashboard(): void {
     this.setupFilterSubscription();
+    this.registerAgentClientTools();
   }
 
   protected loadData(): void {
     this.loadInitialData();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+  // User Management is a security-sensitive admin surface. The agent context
+  // and client tools registered here are strictly READ-ONLY: status/role
+  // filters, free-text search, clearing filters, refreshing the list, and CSV
+  // export of the already-visible rows. The mutating operations on this
+  // component (create/edit/delete users, toggle status, bulk enable/disable/
+  // delete, bulk role assignment) are DELIBERATELY NOT exposed to the agent —
+  // they must remain human-initiated. Context exposes only counts and the
+  // active filter selections, never passwords, tokens, or other secrets.
+  // ================================================================
+
+  /**
+   * Publish the current user-management state to the AI agent. Re-invoked on
+   * every meaningful state change (data load, filter change) so the agent sees
+   * a fresh, read-only snapshot.
+   */
+  private publishAgentContext(): void {
+    const filters = this.filters$.value;
+    this.navigationService.SetAgentContext(this, {
+      TotalUserCount: this.users.length,
+      FilteredUserCount: this.filteredUsers.length,
+      ActiveUserCount: this.stats.activeUsers,
+      CurrentFilterStatus: filters.status,
+      CurrentFilterRole: filters.role || null,
+      SelectedUserId: this.selectedUser?.ID ?? null,
+    });
+  }
+
+  /**
+   * Register the read-only / navigational client tools the agent may invoke.
+   * Every Handler is tolerant: validates input and returns
+   * `{ Success: false, ErrorMessage }` rather than throwing.
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchUserStatusFilter',
+        Description: 'Filter the user list by status. Valid values: all, active, inactive.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: ['all', 'active', 'inactive'] } }, required: ['status'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSwitchStatusFilterTool(params),
+      },
+      {
+        Name: 'FilterUsersByRole',
+        Description: 'Filter the user list by role ID. Pass an empty string to clear the role filter. Use the role IDs visible in the role filter options.',
+        ParameterSchema: { type: 'object', properties: { roleId: { type: 'string' } }, required: ['roleId'] },
+        Handler: async (params: Record<string, unknown>) => this.handleFilterByRoleTool(params),
+      },
+      {
+        Name: 'SearchUsers',
+        Description: 'Free-text search across user name, email, first name, and last name.',
+        ParameterSchema: { type: 'object', properties: { searchText: { type: 'string' } }, required: ['searchText'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
+      },
+      {
+        Name: 'ClearAllFilters',
+        Description: 'Clear all user filters (status, role, and search) and show the full list.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleClearFiltersTool(),
+      },
+      {
+        Name: 'RefreshUserList',
+        Description: 'Reload the user list from the server. Read-only — does not mutate any data.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleRefreshTool(),
+      },
+      {
+        Name: 'ExportUsers',
+        Description: 'Export the currently filtered users as a CSV file.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleExportTool(),
+      },
+    ]);
+  }
+
+  private handleSwitchStatusFilterTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const status = String(params?.['status'] ?? '');
+    if (status !== 'all' && status !== 'active' && status !== 'inactive') {
+      return { Success: false, ErrorMessage: `Invalid status "${status}". Expected one of: all, active, inactive.` };
+    }
+    this.onStatusFilterChange(status);
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleFilterByRoleTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const roleId = String(params?.['roleId'] ?? '');
+    if (roleId && !this.roles.some(r => UUIDsEqual(r.ID, roleId))) {
+      return { Success: false, ErrorMessage: `No role found with ID "${roleId}".` };
+    }
+    this.updateFilter({ role: roleId });
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const searchText = params?.['searchText'];
+    if (typeof searchText !== 'string') {
+      return { Success: false, ErrorMessage: 'searchText must be a string.' };
+    }
+    this.updateFilter({ search: searchText });
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleClearFiltersTool(): { Success: boolean } {
+    this.resetAllFiltersAndSearch();
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    try {
+      await this.loadInitialData();
+      this.publishAgentContext();
+      return { Success: true };
+    } catch (e) {
+      return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+    }
+  }
+
+  private handleExportTool(): { Success: boolean; ErrorMessage?: string } {
+    if (this.filteredUsers.length === 0) {
+      return { Success: false, ErrorMessage: 'No users to export.' };
+    }
+    this.exportUsers();
+    return { Success: true };
   }
 
   override ngOnDestroy(): void {
@@ -136,6 +268,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       this.ngZone.run(() => {
         this.isLoading = false;
         this.cdr.markForCheck();
+        this.publishAgentContext();
       });
     }
   }
@@ -195,13 +328,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       )
       .subscribe(() => {
         this.applyFilters();
+        this.publishAgentContext();
       });
   }
-  
+
   private applyFilters(): void {
     const filters = this.filters$.value;
     let filtered = [...this.users];
-    
+
     // Apply status filter
     if (filters.status !== 'all') {
       filtered = filtered.filter(user => 

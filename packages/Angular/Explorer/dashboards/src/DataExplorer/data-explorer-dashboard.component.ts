@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
 
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -26,6 +26,7 @@ import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
+import { buildDataExplorerAgentContext, isValidViewMode } from './data-explorer-agent-context';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -52,7 +53,7 @@ import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@me
   ]
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
-export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
+export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   protected override destroy$ = new Subject<void>();
   private metadata = this.ProviderToUse;
 
@@ -450,6 +451,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // Update URL query params to reflect current state (for deep linking)
         this.pushCurrentStateToUrl();
 
+        // Keep the AI agent's view of this surface in sync with every state change
+        // (entity selection, view mode, filter, record selection, detail panel, etc.).
+        this.publishAgentContext();
+
         this.cdr.detectChanges();
       });
 
@@ -504,6 +509,201 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // it would otherwise hang the screen forever on a direct-URL (deep-link) refresh.
       this.NotifyLoadComplete();
     }
+  }
+
+  /**
+   * After the view initializes, publish the initial agent context and register the
+   * client tools the AI agent can invoke against this surface. The ongoing context
+   * re-emit happens in the state subscription set up in {@link ngOnInit}.
+   */
+  ngAfterViewInit(): void {
+    this.publishAgentContext();
+    this.registerAgentClientTools();
+  }
+
+  // ========================================
+  // AI AGENT CONTEXT & CLIENT TOOLS
+  // ========================================
+
+  /**
+   * Publish the current Data Explorer state to the AI agent via NavigationService.
+   *
+   * When an entity is selected this reports the record-browsing surface
+   * (SelectedEntityName, ViewMode, ActiveViewId, FilterText, Total/Filtered record
+   * counts, SelectedRecordName, DetailPanelOpen). At the home level it instead reports
+   * the entity-browsing surface (HomeViewMode, EntitySearchText, VisibleEntityCount).
+   * The shaping lives in the pure {@link buildDataExplorerAgentContext} helper so it
+   * stays unit-testable. Called on init and on every state change.
+   */
+  private publishAgentContext(): void {
+    const context = buildDataExplorerAgentContext({
+      SelectedEntityName: this.selectedEntity?.Name ?? null,
+      ViewMode: this.state.viewMode,
+      ActiveViewId: this.state.selectedViewId,
+      FilterText: this.debouncedFilterText,
+      TotalRecordCount: this.totalRecordCount,
+      FilteredRecordCount: this.filteredRecordCount,
+      SelectedRecordName: this.state.selectedRecordName,
+      DetailPanelOpen: this.state.detailPanelOpen,
+      HomeViewMode: this.state.homeViewMode,
+      EntitySearchText: this.entityFilterText,
+      VisibleEntityCount: this.filteredEntityCount,
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  /**
+   * Register the client tools the AI agent can invoke against the Data Explorer.
+   * Each handler delegates to the same component method a user interaction would call,
+   * and returns `{ Success: true, Data? }` on success or `{ Success: false, ErrorMessage }`
+   * on failure. Handlers are tolerant — they never throw.
+   *
+   * Tools:
+   * - OpenEntityData: select an entity by name and load its data.
+   * - FilterRecords: apply a record filter for the selected entity.
+   * - ClearRecordFilter: clear the current record filter.
+   * - SetViewMode: switch the record-view mode (grid/cards/timeline/map).
+   * - SelectView: select a saved view by ID.
+   * - OpenRecord: open the currently-selected record in its full form.
+   * - CreateNewRecord: open a new-record form for the selected entity.
+   * - NavigateToRelated: navigate to a related entity, optionally with a filter.
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'OpenEntityData',
+        Description: 'Open and load data for an entity by its name (e.g. "Users", "Accounts").',
+        ParameterSchema: { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenEntityData(params),
+      },
+      {
+        Name: 'FilterRecords',
+        Description: 'Filter the records of the currently-selected entity by a search string.',
+        ParameterSchema: { type: 'object', properties: { filterText: { type: 'string' } }, required: ['filterText'] },
+        Handler: async (params: Record<string, unknown>) => this.toolFilterRecords(params),
+      },
+      {
+        Name: 'ClearRecordFilter',
+        Description: 'Clear the current record filter for the selected entity.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.clearRecordFilter();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SetViewMode',
+        Description: 'Set the record-view mode. Valid modes: grid, cards, timeline, map.',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string' } }, required: ['mode'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSetViewMode(params),
+      },
+      {
+        Name: 'SelectView',
+        Description: 'Select a saved view for the current entity by its view ID.',
+        ParameterSchema: { type: 'object', properties: { viewId: { type: 'string' } }, required: ['viewId'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSelectView(params),
+      },
+      {
+        Name: 'OpenRecord',
+        Description: 'Open the currently-selected record in its full record form.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.toolOpenSelectedRecord(),
+      },
+      {
+        Name: 'CreateNewRecord',
+        Description: 'Open a new-record form for the currently-selected entity.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.toolCreateNewRecord(),
+      },
+      {
+        Name: 'NavigateToRelated',
+        Description: 'Navigate to a related entity by name, optionally applying a SQL filter to show related records.',
+        ParameterSchema: {
+          type: 'object',
+          properties: { entityName: { type: 'string' }, filter: { type: 'string' } },
+          required: ['entityName'],
+        },
+        Handler: async (params: Record<string, unknown>) => this.toolNavigateToRelated(params),
+      },
+    ]);
+  }
+
+  /** Resolve an entity by name and open its data. */
+  private toolOpenEntityData(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const entityName = String(params['entityName'] ?? '');
+    const entity = this.entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    if (!entity) {
+      return { Success: false, ErrorMessage: `Entity "${entityName}" is not available in this explorer.` };
+    }
+    this.onEntitySelected(entity);
+    return { Success: true, Data: { EntityName: entity.Name } };
+  }
+
+  /** Apply a record filter for the selected entity. */
+  private toolFilterRecords(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected to filter.' };
+    }
+    this.onFilterInputChanged(String(params['filterText'] ?? ''));
+    return { Success: true };
+  }
+
+  /** Switch the record-view mode after validating it. */
+  private toolSetViewMode(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const mode = params['mode'];
+    if (!isValidViewMode(mode)) {
+      return { Success: false, ErrorMessage: `Invalid view mode "${String(mode)}". Valid modes: grid, cards, timeline, map.` };
+    }
+    this.stateService.setViewMode(mode);
+    return { Success: true, Data: { ViewMode: mode } };
+  }
+
+  /** Select a saved view by ID. */
+  private toolSelectView(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const viewId = String(params['viewId'] ?? '');
+    if (!viewId) {
+      return { Success: false, ErrorMessage: 'A viewId is required.' };
+    }
+    this.stateService.selectView(viewId);
+    return { Success: true };
+  }
+
+  /** Open the currently-selected record in its full form. */
+  private toolOpenSelectedRecord(): { Success: boolean; ErrorMessage?: string } {
+    if (!this.selectedRecord) {
+      return { Success: false, ErrorMessage: 'No record is currently selected to open.' };
+    }
+    // onOpenRecord uses detailPanelEntity; fall back to the selected entity when
+    // the record came from the grid rather than the detail panel.
+    if (!this.detailPanelEntity) {
+      this.detailPanelEntity = this.selectedEntity;
+    }
+    if (!this.detailPanelEntity) {
+      return { Success: false, ErrorMessage: 'No entity context is available for the selected record.' };
+    }
+    this.onOpenRecord(this.selectedRecord);
+    return { Success: true };
+  }
+
+  /** Open a new-record form for the selected entity. */
+  private toolCreateNewRecord(): { Success: boolean; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected to create a record for.' };
+    }
+    this.onCreateNewRecord();
+    return { Success: true };
+  }
+
+  /** Navigate to a related entity, optionally applying a filter. */
+  private toolNavigateToRelated(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const entityName = String(params['entityName'] ?? '');
+    const entity = this.entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    if (!entity) {
+      return { Success: false, ErrorMessage: `Entity "${entityName}" is not available in this explorer.` };
+    }
+    const filter = params['filter'] != null ? String(params['filter']) : '';
+    this.onNavigateToRelated({ entityName: entity.Name, filter });
+    return { Success: true };
   }
 
   /**

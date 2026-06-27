@@ -9,6 +9,7 @@ import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjuncti
 import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { TabConfig } from '@memberjunction/ng-ui-components';
+import { validateEnumParam, validateNonNegativeNumberParam } from '../shared/agent-tool-validation';
 import * as d3 from 'd3';
 
 /**
@@ -1522,6 +1523,141 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (this.activeSection === 'performance' && this.perfTab === 'monitor') {
             setTimeout(() => this.renderPerfChart(), 100);
         }
+
+        // Wire the agent context + read-only client tools (see SAFETY BOUNDARY below).
+        this.registerAgentClientTools();
+        this.publishAgentContext();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+    // System Diagnostics is a monitoring surface. The agent context and the
+    // client tools registered here are strictly NAVIGATIONAL + READ-ONLY:
+    // section/tab switches, refresh, telemetry category filter, and the
+    // slow-query display threshold. Destructive maintenance operations that
+    // exist on this component (clearTelemetry, clearAllCache, toggleTelemetry,
+    // refreshAllEngines) are DELIBERATELY NOT exposed to the agent — they mutate
+    // runtime state and must remain human-initiated. Context exposes only
+    // aggregate read-only metrics, never raw telemetry payloads or cache values.
+    // ================================================================
+
+    /**
+     * Publish the current diagnostics state to the AI agent. Re-invoked on every
+     * meaningful state change (section/tab switch, data refresh) so the agent
+     * always sees a fresh, read-only snapshot of the dashboard.
+     */
+    private publishAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            ActiveSection: this.activeSection,
+            PerfTab: this.perfTab,
+            EngineCount: this.engineStats?.totalEngines ?? 0,
+            TotalMemoryBytes: this.engineStats?.totalEstimatedMemoryBytes ?? 0,
+            RedundantLoadCount: this.redundantLoads.length,
+            TelemetryEnabled: this.telemetryEnabled,
+            SlowQueryCount: this.slowQueries.length,
+            CacheHitRate: this.cacheHitRate,
+        });
+    }
+
+    /**
+     * Register the read-only / navigational client tools the agent may invoke.
+     * Every Handler is tolerant: it validates input and returns
+     * `{ Success: false, ErrorMessage }` rather than throwing.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchDiagnosticsSection',
+                Description: 'Switch the active System Diagnostics section. Valid sections: engines, redundant, performance, cache.',
+                ParameterSchema: { type: 'object', properties: { section: { type: 'string', enum: ['engines', 'redundant', 'performance', 'cache'] } }, required: ['section'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSwitchSectionTool(params),
+            },
+            {
+                Name: 'SwitchPerformanceTab',
+                Description: 'Switch the active Performance sub-tab. Valid tabs: monitor, overview, events, patterns, insights.',
+                ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: ['monitor', 'overview', 'events', 'patterns', 'insights'] } }, required: ['tab'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSwitchPerfTabTool(params),
+            },
+            {
+                Name: 'RefreshDiagnostics',
+                Description: 'Refresh all diagnostics data (engine registry, telemetry, redundant loads). Read-only — does not clear or mutate any state.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleRefreshTool(),
+            },
+            {
+                Name: 'FilterTelemetryByCategory',
+                Description: "Filter the performance telemetry view by category. Valid categories: all, RunView, RunQuery, Engine, AI, Cache.",
+                ParameterSchema: { type: 'object', properties: { category: { type: 'string', enum: ['all', 'RunView', 'RunQuery', 'Engine', 'AI', 'Cache'] } }, required: ['category'] },
+                Handler: async (params: Record<string, unknown>) => this.handleFilterTelemetryTool(params),
+            },
+            {
+                Name: 'SetSlowQueryThreshold',
+                Description: 'Set the slow-query display threshold in milliseconds (controls which operations are flagged slow). Read-only display setting.',
+                ParameterSchema: { type: 'object', properties: { thresholdMs: { type: 'number', minimum: 0 } }, required: ['thresholdMs'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSetSlowQueryThresholdTool(params),
+            },
+        ]);
+    }
+
+    private static readonly DIAGNOSTICS_SECTIONS = ['engines', 'redundant', 'performance', 'cache'] as const;
+    private static readonly PERF_TABS = ['monitor', 'overview', 'events', 'patterns', 'insights'] as const;
+    private static readonly TELEMETRY_CATEGORIES = ['all', 'RunView', 'RunQuery', 'Engine', 'AI', 'Cache'] as const;
+
+    private handleSwitchSectionTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['section'], SystemDiagnosticsComponent.DIAGNOSTICS_SECTIONS, 'section');
+        if (!v.ok) return v.result;
+        this.setActiveSection(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleSwitchPerfTabTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['tab'], SystemDiagnosticsComponent.PERF_TABS, 'tab');
+        if (!v.ok) return v.result;
+        this.setPerfTab(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        try {
+            await this.refreshData();
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+        }
+    }
+
+    private handleFilterTelemetryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['category'], SystemDiagnosticsComponent.TELEMETRY_CATEGORIES, 'category');
+        if (!v.ok) return v.result;
+        this.setCategoryFilter(v.value as TelemetryCategory | 'all');
+        return { Success: true };
+    }
+
+    private handleSetSlowQueryThresholdTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateNonNegativeNumberParam(params?.['thresholdMs'], 'thresholdMs');
+        if (!v.ok) return v.result;
+        this.SetSlowQueryThreshold(v.value);
+        return { Success: true };
+    }
+
+    /**
+     * Set the slow-query display threshold (ms) and re-derive the slow-query list
+     * from the already-loaded telemetry events. Read-only display control — does
+     * not refetch or mutate any telemetry data.
+     */
+    public SetSlowQueryThreshold(thresholdMs: number): void {
+        this.slowQueryThresholdMs = thresholdMs;
+        this.slowQueries = this.telemetryEvents
+            .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.slowQueryThresholdMs)
+            .sort((a, b) => (b.elapsedMs || 0) - (a.elapsedMs || 0))
+            .slice(0, 20);
+        this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     setActiveSection(section: 'engines' | 'redundant' | 'performance' | 'cache'): void {
@@ -1535,6 +1671,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+        this.publishAgentContext();
     }
 
     /**
@@ -1635,6 +1772,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         } finally {
             this.isLoading = false;
             this.cdr.markForCheck();
+            this.publishAgentContext();
         }
     }
 
@@ -1790,6 +1928,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+        this.publishAgentContext();
     }
 
     jumpToPatternsByCategory(categoryName: string): void {

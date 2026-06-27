@@ -138,14 +138,67 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         // When embedded in the Visualize host, the host owns agent context +
         // the resource load lifecycle; skip them here to avoid double-reporting.
         if (!this.Embedded) {
-            this.navigationService.SetAgentContext(this, {
-                IsVisualizationLoaded: !!this.Result,
-                VisualizationTitle: this.VisualizationTitle || null,
-                ClusterCount: this.Result?.Clusters?.length ?? 0,
-                TotalPoints: this.Result?.Points?.length ?? 0,
-            });
+            this.emitAgentContext();
+            this.registerAgentTools();
             this.NotifyLoadComplete();
         }
+    }
+
+    // ================================================================
+    // Agent context + client tools
+    // ================================================================
+
+    /**
+     * Publish the current clustering state to the AI agent. Re-emitted whenever
+     * a run completes, a saved visualization is selected, or the analysis is
+     * reset — so the streamed context tracks what's on screen. No-op when
+     * embedded (the Visualize host owns reporting).
+     */
+    private emitAgentContext(): void {
+        if (this.Embedded) {
+            return;
+        }
+        this.navigationService.SetAgentContext(this, {
+            IsVisualizationLoaded: !!this.Result,
+            VisualizationTitle: this.VisualizationTitle || null,
+            ClusterCount: this.Result?.Clusters?.length ?? 0,
+            TotalPoints: this.Result?.Points?.length ?? 0,
+            IsRunning: this.IsRunning,
+            SavedVisualizationCount: this.SavedVisualizations.length,
+        });
+    }
+
+    /**
+     * Register the agent-actionable operations: re-run clustering with the
+     * current configuration, and reset to a fresh analysis. Both wire to
+     * existing methods and never throw.
+     */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'RegenerateClusters',
+                Description: 'Re-run the clustering analysis using the currently configured entity, algorithm, and parameters.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    if (this.IsRunning) {
+                        return { Success: false, ErrorMessage: 'A clustering run is already in progress' };
+                    }
+                    await this.OnRunClustering(this.ActiveConfig);
+                    return this.RunError
+                        ? { Success: false, ErrorMessage: this.RunError }
+                        : { Success: true, Data: { ClusterCount: this.Result?.Clusters?.length ?? 0 } };
+                },
+            },
+            {
+                Name: 'ResetClusterAnalysis',
+                Description: 'Clear the current cluster visualization and start a fresh analysis.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.OnNewAnalysis();
+                    return { Success: true };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -226,6 +279,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             this.activityService.Complete(activityID, 'error', this.RunError);
         } finally {
             this.IsRunning = false;
+            this.emitAgentContext();
             this.cdr.detectChanges();
         }
     }
@@ -321,10 +375,11 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     this.cdr.detectChanges();
                 }, 50);
             }
+            this.emitAgentContext();
             return;
         }
 
-        // No cached results — re-run from scratch
+        // No cached results — re-run from scratch (OnRunClustering re-emits context)
         await this.OnRunClustering(config);
     }
 
@@ -347,6 +402,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         this.ClusterLabels = [];
         this.VisualizationTitle = 'New Cluster Analysis';
         this.ActiveConfig = DefaultClusterConfig();
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 

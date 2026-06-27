@@ -74,10 +74,108 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
 
   protected initDashboard(): void {
     this.setupFilterSubscription();
+    this.registerAgentClientTools();
   }
 
   protected loadData(): void {
     this.loadInitialData();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+  // Role Management is a security-sensitive admin surface. The agent context
+  // and client tools registered here are strictly READ-ONLY: type filter,
+  // free-text search, clearing filters, and refreshing the list. The mutating
+  // operations on this component (create/edit/delete roles) are DELIBERATELY
+  // NOT exposed to the agent — they must remain human-initiated. Context exposes
+  // only counts and the active filter selection.
+  // ================================================================
+
+  /**
+   * Publish the current role-management state to the AI agent. Re-invoked on
+   * every meaningful state change (data load, filter change).
+   */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      TotalRoleCount: this.roles.length,
+      FilteredRoleCount: this.filteredRoles.length,
+      SystemRoleCount: this.stats.systemRoles,
+      CustomRoleCount: this.stats.customRoles,
+      CurrentFilterType: this.filters$.value.type,
+      SelectedRoleId: this.expandedRoleId ?? null,
+    });
+  }
+
+  /**
+   * Register the read-only / navigational client tools the agent may invoke.
+   * Every Handler is tolerant: validates input and returns
+   * `{ Success: false, ErrorMessage }` rather than throwing.
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'FilterRolesByType',
+        Description: 'Filter the role list by type. Valid values: all, system, custom.',
+        ParameterSchema: { type: 'object', properties: { type: { type: 'string', enum: ['all', 'system', 'custom'] } }, required: ['type'] },
+        Handler: async (params: Record<string, unknown>) => this.handleFilterByTypeTool(params),
+      },
+      {
+        Name: 'SearchRoles',
+        Description: 'Free-text search across role name and description.',
+        ParameterSchema: { type: 'object', properties: { searchText: { type: 'string' } }, required: ['searchText'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
+      },
+      {
+        Name: 'ClearRoleFilters',
+        Description: 'Clear all role filters (type and search) and show the full list.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleClearFiltersTool(),
+      },
+      {
+        Name: 'RefreshRoles',
+        Description: 'Reload the role list from the server. Read-only — does not mutate any data.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.handleRefreshTool(),
+      },
+    ]);
+  }
+
+  private handleFilterByTypeTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const type = String(params?.['type'] ?? '');
+    if (type !== 'all' && type !== 'system' && type !== 'custom') {
+      return { Success: false, ErrorMessage: `Invalid type "${type}". Expected one of: all, system, custom.` };
+    }
+    this.onTypeFilterChange(type);
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleSearchTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const searchText = params?.['searchText'];
+    if (typeof searchText !== 'string') {
+      return { Success: false, ErrorMessage: 'searchText must be a string.' };
+    }
+    this.updateFilter({ search: searchText });
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleClearFiltersTool(): { Success: boolean } {
+    this.resetAllFiltersAndSearch();
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    try {
+      await this.loadInitialData();
+      this.publishAgentContext();
+      return { Success: true };
+    } catch (e) {
+      return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+    }
   }
 
   override ngOnDestroy(): void {
@@ -104,6 +202,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       this.ngZone.run(() => {
         this.isLoading = false;
         this.cdr.markForCheck();
+        this.publishAgentContext();
       });
     }
   }
@@ -128,9 +227,10 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       )
       .subscribe(() => {
         this.applyFilters();
+        this.publishAgentContext();
       });
   }
-  
+
   private applyFilters(): void {
     const filters = this.filters$.value;
     let filtered = [...this.roles];

@@ -292,6 +292,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.SelectedEntityFilter = entityName;
         this.Filters.EntityName = entityName;
         this.autoSelectDisplayMode();
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -364,14 +365,81 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     async ngAfterViewInit(): Promise<void> {
         this.setupFilterDebounce();
         await this.LoadData();
+        // When embedded in a parent shell, that host owns agent reporting.
+        if (!this.HideToolbar) {
+            this.emitAgentContext();
+            this.registerAgentTools();
+        }
+        this.NotifyLoadComplete();
+    }
+
+    // ════════════════════════════════════════════
+    // Agent context + client tools
+    // ════════════════════════════════════════════
+
+    /**
+     * Publish the duplicate-detection surface state to the AI agent. Re-emitted
+     * whenever detection status changes or a group moves between Pending /
+     * Approved / Rejected, so the streamed context tracks the live board. No-op
+     * when embedded (the host owns reporting).
+     */
+    private emitAgentContext(): void {
+        if (this.HideToolbar) {
+            return;
+        }
         this.navigationService.SetAgentContext(this, {
             DetectionStatus: this.IsDetecting ? 'running' : 'idle',
+            DetectionProgress: this.DetectionProgress,
             PendingCount: this.PendingGroups.length,
             ApprovedCount: this.ApprovedGroups.length,
             RejectedCount: this.RejectedGroups.length,
             SelectedEntityDoc: this.SelectedEntityDocumentID || null,
+            DisplayMode: this.DisplayMode,
+            EntityFilter: this.SelectedEntityFilter || 'All',
         });
-        this.NotifyLoadComplete();
+    }
+
+    /**
+     * Register the safe, agent-actionable operations: re-run detection and
+     * reload results. Group-level approve/reject are intentionally NOT exposed
+     * as agent tools — they mutate match approval state and require an explicit
+     * group identity (and a selection model) the agent can't safely reference.
+     */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'RunDuplicateDetection',
+                Description: 'Run duplicate detection for the currently selected entity document. Requires an entity document to be selected first.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    if (this.IsDetecting) {
+                        return { Success: false, ErrorMessage: 'A detection run is already in progress' };
+                    }
+                    if (!this.SelectedEntityDocumentID) {
+                        return { Success: false, ErrorMessage: 'No entity document is selected' };
+                    }
+                    await this.RunDetection();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'RefreshDuplicateDetection',
+                Description: 'Reload the duplicate detection runs, groups, and matches from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.LoadData();
+                    this.emitAgentContext();
+                    return {
+                        Success: true,
+                        Data: {
+                            PendingCount: this.PendingGroups.length,
+                            ApprovedCount: this.ApprovedGroups.length,
+                            RejectedCount: this.RejectedGroups.length,
+                        },
+                    };
+                },
+            },
+        ]);
     }
 
     ngOnDestroy(): void {
@@ -509,6 +577,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.DetectionProgress = 0;
         this.DetectionStage = 'Initializing...';
         this.DetectionCurrentItem = '';
+        this.emitAgentContext();
         this.cdr.detectChanges();
 
         try {
@@ -524,6 +593,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 );
                 this.IsDetecting = false;
                 this.DetectionStage = '';
+                this.emitAgentContext();
                 this.cdr.detectChanges();
                 return;
             }
@@ -548,6 +618,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 );
                 this.IsDetecting = false;
                 this.DetectionStage = '';
+                this.emitAgentContext();
                 this.cdr.detectChanges();
                 return;
             }
@@ -564,6 +635,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             console.error('[DuplicateDetection] Error starting detection:', msg);
             this.IsDetecting = false;
             this.DetectionStage = '';
+            this.emitAgentContext();
             this.cdr.detectChanges();
         }
     }
@@ -921,6 +993,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 if (success) {
                     await this.LoadData();
                 }
+                this.emitAgentContext();
                 this.cdr.detectChanges();
             });
         };
@@ -2123,6 +2196,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             // Update the local group state
             group.ApprovalStatus = status;
             this.applyFilters();
+            this.emitAgentContext();
         } catch (error) {
             console.error(`Error updating match approval status to ${status}:`, error);
         } finally {
