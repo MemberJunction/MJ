@@ -167,6 +167,57 @@ describe('WriteEntityFieldsAction', () => {
         });
     });
 
+    describe('unknown-field rejection (M11)', () => {
+        it('rejects the whole write with VALIDATION_ERROR listing every unknown field, before any mutation', async () => {
+            const entity = new FakeEntity();
+            // Entity only has Name + Status; the caller supplies two typo'd fields.
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Things' },
+                    { Name: 'PrimaryKey', Value: { ID: '1' } },
+                    { Name: 'Fields', Value: { Naem: 'typo', Stauts: 'typo2', Status: 'Active' } },
+                ],
+                provider
+            );
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const r = await action.InternalRunAction(params as any);
+
+            // Fails with VALIDATION_ERROR (not a silent SUCCESS) and names BOTH typos.
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('VALIDATION_ERROR');
+            expect(r.Message).toMatch(/Naem/);
+            expect(r.Message).toMatch(/Stauts/);
+            // The valid field is NOT mentioned as unknown.
+            expect(r.Message).not.toMatch(/'Status'/);
+            // Rejected up front: no load and no save side-effects on the entity.
+            expect(entity.newRecordCalled).toBe(false);
+            expect(entity.values.Status).toBeUndefined();
+        });
+
+        it('matches field names case-insensitively (a valid field with different casing is NOT flagged)', async () => {
+            const entity = new FakeEntity();
+            entity.values.ID = 'abc';
+            const provider = makeProvider({ entityInfo: makeEntityInfo(['Name', 'Status']), entity });
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Things' },
+                    { Name: 'PrimaryKey', Value: { ID: 'abc' } },
+                    { Name: 'Fields', Value: { name: 'lower', STATUS: 'Active' } },
+                ],
+                provider
+            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const r = await action.InternalRunAction(params as any);
+            expect(r.Success).toBe(true);
+            expect(r.ResultCode).toBe('SUCCESS');
+            // Written through the canonical entity field name.
+            expect(entity.values.Name).toBe('lower');
+            expect(entity.values.Status).toBe('Active');
+        });
+    });
+
     describe('update path (existing record)', () => {
         it('loads, sets fields, saves, and returns the PrimaryKey + Saved outputs', async () => {
             const entity = new FakeEntity();

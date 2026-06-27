@@ -52,9 +52,14 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
       }
       // Validate the untrusted JSON against the Core schema BEFORE delegating —
       // no blind double-cast of an arbitrary object into a ModelingPlanSpec.
+      // NB: the server tsconfig runs with strictNullChecks OFF, under which a
+      // discriminated-union return type does NOT narrow on `validation.ok`. We
+      // therefore read the failure detail off the concrete failure shape rather
+      // than relying on control-flow narrowing of the union member.
       const validation = validateModelingPlanSpec(rawPlan);
       if (!validation.ok) {
-        return this.fail('VALIDATION_ERROR', `PlanSpec is not a valid modeling plan: ${validation.error}`);
+        const error = (validation as { error?: string }).error ?? 'unknown validation error';
+        return this.fail('VALIDATION_ERROR', `PlanSpec is not a valid modeling plan: ${error}`);
       }
       const plan = validation.value;
       if (plan.Approved !== true) {

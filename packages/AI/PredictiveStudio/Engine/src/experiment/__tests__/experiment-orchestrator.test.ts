@@ -645,6 +645,32 @@ describe('runBounded', () => {
     expect(results).toEqual([0, 1, 2, 3]); // input order, not completion order
     expect(maxInFlight).toBeLessThanOrEqual(2);
   });
+
+  // H2 — at the concurrency primitive: once `shouldStop` flips true, workers must
+  // stop pulling NEW tasks (in-flight ones still finish), so no extra dispatch.
+  it('stops dispatching new tasks the instant shouldStop() returns true (no overrun, concurrency 3)', async () => {
+    let dispatched = 0;
+    let stop = false;
+    // 9 tasks, 3 workers. After the first 3 (one batch) complete we trip the bound;
+    // workers must not pull a 4th-onward task.
+    const tasks = Array.from({ length: 9 }, (_, i) => async () => {
+      dispatched++;
+      await new Promise((r) => setTimeout(r, 1));
+      // Trip the stop bound as soon as the first batch has all been claimed.
+      if (dispatched >= 3) {
+        stop = true;
+      }
+      return i;
+    });
+
+    const results = await runBounded(tasks, 3, { shouldStop: () => stop });
+
+    // Exactly the initial 3 in-flight tasks ran; no worker pulled a 4th once the
+    // bound tripped. The un-dispatched slots stay `undefined`.
+    expect(dispatched).toBe(3);
+    expect(results.slice(0, 3)).toEqual([0, 1, 2]);
+    expect(results.slice(3).every((r) => r === undefined)).toBe(true);
+  });
 });
 
 describe('extractNormalizedScore', () => {

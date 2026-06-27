@@ -11,6 +11,8 @@ import type {
   ScoreRecordSetResult,
 } from '../score-record-set.action';
 import type { JsonObject } from '../base-predictive-studio.action';
+import type { RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
+import type { MLInferenceResultPayload } from '../../scoring/ml-model-inference-processor';
 
 /**
  * Unit tests for the Score Record Set action. NO live DB, NO live sidecar — the
@@ -46,7 +48,10 @@ class TestableScoreAction extends PredictiveStudioScoreRecordSetAction {
 }
 
 function params(list: ActionParam[]): RunActionParams {
-  return { Params: list } as RunActionParams;
+  // Server-side scoring is user-scoped: the action requires a ContextUser (M4).
+  // A stub user is sufficient here — the runner is mocked, so no real data access
+  // occurs; this just lets the action pass its ContextUser guard and delegate.
+  return { Params: list, ContextUser: { ID: 'test-user' } } as unknown as RunActionParams;
 }
 function out(p: RunActionParams, name: string): unknown {
   return p.Params.find((x) => x.Name === name)?.Value;
@@ -185,10 +190,17 @@ function fakeProvider(name: string, fieldNames: string[]): IMetadataProvider {
   } as unknown as IMetadataProvider;
 }
 
-/** Subclass exposing the protected `primaryKeyFilter` for direct testing. */
+/** Subclass exposing the protected `primaryKeyFilter` + `summarize` for direct testing. */
 class TestableRunner extends ProductionScoreRecordSetRunner {
   public buildFilter(entityName: string, pk: JsonObject, provider: IMetadataProvider): string {
     return this.primaryKeyFilter(entityName, pk, provider);
+  }
+  public summarizeResults(
+    records: RecordRef[],
+    results: RecordResult[],
+    request: ScoreRecordSetRequest,
+  ): ScoreRecordSetResult {
+    return this.summarize(records, results, request);
   }
 }
 
@@ -218,5 +230,60 @@ describe('ProductionScoreRecordSetRunner.primaryKeyFilter — SQL-injection guar
 
   it('throws when no primary-key fields are supplied', () => {
     expect(() => runner.buildFilter('Customers', {}, provider)).toThrow(/no primary-key fields/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M2 — the run summary must surface `skippedCount` AND correlate each prediction
+// to its record by the PAIRED record's RecordID (not a bare positional lookup).
+// ---------------------------------------------------------------------------
+
+describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correlation (M2)', () => {
+  const runner = new TestableRunner();
+
+  function ref(id: string): RecordRef {
+    return { EntityID: 'e1', RecordID: id };
+  }
+  function payload(score: number, klass?: string): MLInferenceResultPayload {
+    return { modelId: 'm1', score, class: klass } as unknown as MLInferenceResultPayload;
+  }
+  function baseRequest(): ScoreRecordSetRequest {
+    return { modelId: 'm1', scope: { records: [] } };
+  }
+
+  it('tallies Succeeded / Failed / Skipped into the three count buckets', () => {
+    const records = [ref('a'), ref('b'), ref('c'), ref('d')];
+    const results: RecordResult[] = [
+      { Status: 'Succeeded', ResultPayload: payload(0.9, 'churn') },
+      { Status: 'Failed', ErrorMessage: 'boom' },
+      { Status: 'Skipped' },
+      { Status: 'Succeeded', ResultPayload: payload(0.2, 'retain') },
+    ];
+    const summary = runner.summarizeResults(records, results, baseRequest());
+    expect(summary.scoredCount).toBe(2);
+    expect(summary.failedCount).toBe(1);
+    expect(summary.skippedCount).toBe(1);
+    expect(summary.wroteBack).toBe(false);
+  });
+
+  it('keys each prediction off the PAIRED record RecordID (record-correlated, not array index)', () => {
+    const records = [ref('rec-A'), ref('rec-B')];
+    const results: RecordResult[] = [
+      { Status: 'Succeeded', ResultPayload: payload(0.7, 'yes') },
+      { Status: 'Succeeded', ResultPayload: payload(0.3, 'no') },
+    ];
+    const summary = runner.summarizeResults(records, results, baseRequest());
+    expect(summary.predictions).toEqual([
+      { recordId: 'rec-A', score: 0.7, class: 'yes' },
+      { recordId: 'rec-B', score: 0.3, class: 'no' },
+    ]);
+  });
+
+  it('omits ephemeral predictions when writing back', () => {
+    const records = [ref('a')];
+    const results: RecordResult[] = [{ Status: 'Succeeded', ResultPayload: payload(0.5) }];
+    const summary = runner.summarizeResults(records, results, { ...baseRequest(), writeBack: true });
+    expect(summary.wroteBack).toBe(true);
+    expect(summary.predictions).toBeUndefined();
   });
 });

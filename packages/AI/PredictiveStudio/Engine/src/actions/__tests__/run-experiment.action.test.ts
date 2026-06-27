@@ -115,6 +115,34 @@ describe('PredictiveStudioRunExperimentAction — validation', () => {
     expect(result.ResultCode).toBe('PLAN_NOT_APPROVED');
     expect(orch.CallCount).toBe(0);
   });
+
+  // M5 — the untrusted PlanSpec JSON is schema-validated BEFORE delegating, so a
+  // structurally-malformed plan is rejected with the field error (never blindly
+  // double-cast into a ModelingPlanSpec and handed to the orchestrator).
+  it('rejects a structurally-invalid plan (no ProposedExperiments) with the validation detail', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    // Approved=true but the required ProposedExperiments array is empty → invalid.
+    const bad = { ...approvedPlan(), ProposedExperiments: [] };
+    const result = await new TestableExperimentAction(orch).run(
+      params([{ Name: 'PlanSpec', Type: 'Input', Value: bad }]),
+    );
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('VALIDATION_ERROR');
+    expect(result.Message).toMatch(/ProposedExperiments/);
+    expect(orch.CallCount).toBe(0);
+  });
+
+  it('rejects a plan missing a TargetDefinition field with the field path in the error', async () => {
+    const orch = new MockOrchestrator(sessionResult());
+    const bad = { ...approvedPlan(), TargetDefinition: { EntityName: 'Members', TargetVariable: 'Churned', ProblemType: 'classification' } };
+    const result = await new TestableExperimentAction(orch).run(
+      params([{ Name: 'PlanSpec', Type: 'Input', Value: bad }]),
+    );
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('VALIDATION_ERROR');
+    expect(result.Message).toMatch(/SuccessMetric/);
+    expect(orch.CallCount).toBe(0);
+  });
 });
 
 describe('PredictiveStudioRunExperimentAction — happy path', () => {
