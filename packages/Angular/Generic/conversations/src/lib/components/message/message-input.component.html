@@ -20,16 +20,16 @@
     [acceptedFileTypes]="acceptedFileTypes"
     [currentUser]="currentUser"
     [rows]="3"
-    [enableVoice]="true"
+    [enableRealtime]="true"
     [voiceActive]="voiceActive"
-    [canStartVoice]="canStartVoice"
+    [canStartRealtime]="canStartRealtime"
     [(value)]="messageText"
     (textSubmitted)="onTextSubmitted($event)"
     (attachmentsChanged)="onAttachmentsChanged($event)"
     (attachmentError)="onAttachmentError($event)"
     (artifactPickerRequested)="onArtifactPickerRequested()"
-    (voiceRequested)="onStartVoice()"
-    (voiceOptionsRequested)="onVoiceOptions()">
+    (voiceRequested)="onStartRealtime()"
+    (voiceOptionsRequested)="onRealtimeOptions()">
   </mj-message-input-box>
 
   <!-- Voice agent/co-agent/model picker — shown when starting a call on a conversation

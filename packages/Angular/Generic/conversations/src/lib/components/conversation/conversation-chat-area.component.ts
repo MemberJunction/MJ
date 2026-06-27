@@ -745,14 +745,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         namedThisSession = false;
-        this.onVoiceSessionStarted();
+        this.onRealtimeSessionStarted();
       });
     let voiceWasActive = false;
     this.RealtimeSession.Active$
       .pipe(takeUntil(this.destroy$))
       .subscribe((active) => {
         if (voiceWasActive && !active) {
-          this.onVoiceSessionEnded();
+          this.onRealtimeSessionEnded();
         }
         voiceWasActive = active;
       });
@@ -2735,7 +2735,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * `openEntityRecord` chain every other chat record-open uses, so the Explorer
    * wrapper routes it through `NavigationService.OpenEntityRecord`.
    */
-  onVoiceNavigateRequest(event: RealtimeNavigateRequest): void {
+  onRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
     const compositeKey = new CompositeKey();
     compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: event.RecordID });
     this.openEntityRecord.emit({
@@ -2753,7 +2753,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * selects on close). No-op when the session joined an existing conversation. Fire-and-forget
    * on the load: a failed load just leaves the host's emit to fold it in.
    */
-  private onVoiceSessionStarted(): void {
+  private onRealtimeSessionStarted(): void {
     const created = this.RealtimeSession.SessionCreatedConversationId;
     if (!created) {
       return;
@@ -2771,7 +2771,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *     helper (covered elsewhere on first utterance; this covers a silent call) and
    *     emit {@link realtimeConversationReady} so the host can refresh the list + select.
    */
-  private onVoiceSessionEnded(): void {
+  private onRealtimeSessionEnded(): void {
     // (1) Refresh the active conversation's timeline (cheap — single conversation).
     void this.reloadActiveConversationTimeline();
 
@@ -2882,7 +2882,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
     const agentName = this.RealtimeReview?.AgentName ?? null;
     try {
-      const start = this.RealtimeSession.StartVoiceSession(
+      const start = this.RealtimeSession.StartRealtimeSession(
         request.TargetAgentId,
         request.ConversationId ?? this.conversationId,
         request.LastSessionId,

@@ -237,14 +237,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
     private bridge: ConversationBridgeService,
-    private voiceSession: RealtimeSessionService
+    private realtimeSession: RealtimeSessionService
   ) {
   super();}
 
   // ── Voice session (Realtime Co-Agent) ───────────────────────────────
   /** True while a live voice session is active — drives the overlay + mic state. */
   public voiceActive: boolean = false;
-  private voiceActiveSub?: Subscription;
+  private realtimeActiveSub?: Subscription;
 
   async ngOnInit() {
     // Bind provider-aware services to this component's provider.
@@ -253,10 +253,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.dataCache.Provider = p;
     this.activeTasks.Provider = p;
     this.attachmentService.Provider = p;
-    this.voiceSession.Provider = p;
+    this.realtimeSession.Provider = p;
 
     // Reflect the live voice-session Active flag into a local field for the template.
-    this.voiceActiveSub = this.voiceSession.Active$.subscribe(active => {
+    this.realtimeActiveSub = this.realtimeSession.Active$.subscribe(active => {
       this.voiceActive = active;
     });
 
@@ -312,10 +312,10 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ngOnDestroy() {
     // Unregister all streaming callbacks
     this.unregisterAllCallbacks();
-    this.voiceActiveSub?.unsubscribe();
+    this.realtimeActiveSub?.unsubscribe();
     // If the user navigates away mid-call, tear the session down.
-    if (this.voiceSession.IsActive) {
-      void this.voiceSession.EndVoiceSession();
+    if (this.realtimeSession.IsActive) {
+      void this.realtimeSession.EndRealtimeSession();
     }
   }
 
@@ -337,7 +337,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /** True when the mic button should be enabled (have an agent + not disabled). */
-  public get canStartVoice(): boolean {
+  public get canStartRealtime(): boolean {
     return !this.disabled && !this.voiceActive && !!this.resolveCurrentAgentId();
   }
 
@@ -346,7 +346,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * owns the conversation's routing context) and passed to RealtimeSessionService at
    * session start so the chat-area-hosted overlay can read it from the service.
    */
-  private resolveVoiceAgentName(): string {
+  private resolveRealtimeAgentName(): string {
     const agentId = this.resolveCurrentAgentId();
     if (agentId) {
       const match = this.mentionAutocomplete
@@ -377,7 +377,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Agents the voice picker offers — the same cached set the @mention
-   * autocomplete and {@link resolveVoiceAgentName} use, so the picker can
+   * autocomplete and {@link resolveRealtimeAgentName} use, so the picker can
    * never offer an agent the conversation couldn't otherwise route to.
    */
   public get voicePickerAgents(): MJAIAgentEntityExtended[] {
@@ -412,8 +412,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    *   the user never chose — so show a compact agent picker instead and start
    *   with whichever agent they pick.
    */
-  public async onStartVoice(): Promise<void> {
-    if (!this.canStartVoice) {
+  public async onStartRealtime(): Promise<void> {
+    if (!this.canStartRealtime) {
       return;
     }
     // New/empty conversation (no prior agent turn): let the user choose who
@@ -429,7 +429,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       return;
     }
     const coAgentId = await this.resolveInstantCoAgentId(targetAgentId);
-    await this.startVoiceWithAgent(targetAgentId, this.resolveVoiceAgentName(), null, coAgentId);
+    await this.startRealtimeWithAgent(targetAgentId, this.resolveRealtimeAgentName(), null, coAgentId);
   }
 
   /**
@@ -440,15 +440,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * choice one click away. Falls through to the instant path when there is nothing to
    * pick from.
    */
-  public async onVoiceOptions(): Promise<void> {
-    if (!this.canStartVoice) {
+  public async onRealtimeOptions(): Promise<void> {
+    if (!this.canStartRealtime) {
       return;
     }
     if (this.voicePickerAgents.length > 0) {
       await this.openRealtimeAgentPicker();
       return;
     }
-    void this.onStartVoice();
+    void this.onStartRealtime();
   }
 
   /** Loads the persisted co-agent preference, then shows the picker (pref preselected). */
@@ -461,9 +461,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   public async onRealtimeAgentPicked(pick: RealtimeAgentPick): Promise<void> {
     this.showRealtimeAgentPicker = false;
     this.persistCoAgentChoice(pick.CoAgentId);
-    await this.startVoiceWithAgent(
+    await this.startRealtimeWithAgent(
       pick.Agent.ID,
-      pick.Agent.Name || this.resolveVoiceAgentName(),
+      pick.Agent.Name || this.resolveRealtimeAgentName(),
       pick.PreferredModelId,
       pick.CoAgentId,
       BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice),
@@ -543,7 +543,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * passed here — the session service resolves the active channel plugins from the
    * `MJ: AI Agent Channels` registry and aggregates their tool sets at mint itself.
    */
-  private async startVoiceWithAgent(
+  private async startRealtimeWithAgent(
     agentId: string,
     agentName: string,
     preferredModelId?: string | null,
@@ -552,7 +552,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     recordingConsent?: boolean | null
   ): Promise<void> {
     try {
-      await this.voiceSession.StartVoiceSession(
+      await this.realtimeSession.StartRealtimeSession(
         agentId,
         this.conversationId,
         null,

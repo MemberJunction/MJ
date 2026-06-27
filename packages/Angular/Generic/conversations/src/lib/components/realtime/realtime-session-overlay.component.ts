@@ -6,7 +6,7 @@ import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJStorageMediaPlayerComponent, MediaTranscriptCue } from '@memberjunction/ng-media-player';
-import { VoiceConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
+import { RealtimeConnectionState, RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
 import { RealtimeSessionState } from './realtime-session-state';
@@ -21,7 +21,7 @@ import {
   SURFACE_PANEL_COLLAPSED_WIDTH, SURFACE_PANEL_DEFAULT_WIDTH, SURFACE_PANEL_PREF_KEY
 } from './realtime-surface-panel-prefs';
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
-import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeVoiceDirection } from './realtime-audio-visuals';
+import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
 import { ShouldRegisterChannelTabUpFront, ShouldShowActivityTab } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
@@ -159,7 +159,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       return;
     }
     this._reviewData = value;
-    if (value && !this.voice.IsActive) {
+    if (value && !this.realtime.IsActive) {
       this.enterReview(value);
     } else if (!value) {
       this.exitReview();
@@ -189,7 +189,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Review mode's Close: the host clears its review state, returning to the conversation. */
   @Output() ReviewClosed = new EventEmitter<void>();
 
-  private voice = inject(RealtimeSessionService);
+  private realtime = inject(RealtimeSessionService);
   private cdr = inject(ChangeDetectorRef);
 
   private _reviewData: RealtimeSessionReview | null = null;
@@ -225,7 +225,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** True while the overlay renders a PAST session (review data set, no live call). */
   public get IsReviewing(): boolean {
-    return this._reviewData !== null && !this.voice.IsActive;
+    return this._reviewData !== null && !this.realtime.IsActive;
   }
 
   /**
@@ -278,10 +278,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public ComposerOpen = false;
 
   /** Live turn-state from the session service — drives the banner + connecting screen. */
-  public readonly ConnectionState$ = this.voice.ConnectionState$;
+  public readonly ConnectionState$ = this.realtime.ConnectionState$;
 
   /** Server-reported realtime model name for the active session — shown subtly in the banner. */
-  public readonly ModelName$ = this.voice.ModelName$;
+  public readonly ModelName$ = this.realtime.ModelName$;
 
   /**
    * Whether the conversation renders as TEXT (the thread) or stays voice-first (the
@@ -301,7 +301,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** ID of the live server-side agent session record, for the banner's dev link. */
   public get SessionID(): string | null {
-    return this.voice.CurrentAgentSessionId;
+    return this.realtime.CurrentAgentSessionId;
   }
 
   /**
@@ -320,7 +320,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // return, Details off) never loses the Whiteboard or an already-used channel's tab.
       // Artifacts live in the Activity rail now (driven by session state), so there's
       // nothing artifact-specific to recover on the panel.
-      this.registerChannelTabs([...this.voice.ActiveChannels]);
+      this.registerChannelTabs([...this.realtime.ActiveChannels]);
       this.flushPendingChannelTabs();
       const reveal = this.pendingRevealKey;
       this.pendingRevealKey = null;
@@ -386,19 +386,19 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.loadPanelWidthPref();
     this.loadDisclosurePref();
     this.loadCaptionsPref();
-    this.State.Attach(this.voice);
+    this.State.Attach(this.realtime);
     this.subs.push(
       // Re-render on merged-state changes; content arrival raises the disclosure level.
       this.State.Changed$.subscribe(() => this.onSessionStateChanged()),
       this.Disclosure.Changed$.subscribe(() => this.cdr.markForCheck()),
       // One surface tab per registry-resolved channel plugin (replays the current set).
-      this.voice.ActiveChannels$.subscribe(channels => this.registerChannelTabs(channels)),
+      this.realtime.ActiveChannels$.subscribe(channels => this.registerChannelTabs(channels)),
       // Any channel may request the focus layout through its host context.
-      this.voice.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
+      this.realtime.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
       // The agent ACTED on a channel — auto-reveal its surface tab on first activity.
-      this.voice.ChannelActivity$.subscribe(plugin => this.onChannelActivity(plugin)),
+      this.realtime.ChannelActivity$.subscribe(plugin => this.onChannelActivity(plugin)),
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
-      this.voice.Active$.subscribe(active => this.onActiveChanged(active))
+      this.realtime.Active$.subscribe(active => this.onActiveChanged(active))
     );
   }
 
@@ -716,7 +716,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   private audioRafHandle: number | null = null;
   /** Last attribute values written (attributes are only touched on change). */
   private lastAudioLive: boolean | null = null;
-  private lastVoiceDirection: RealtimeVoiceDirection | null = null;
+  private lastDirection: RealtimeDirection | null = null;
 
   /** Starts the sampling loop (idempotent). Runs outside Angular — no CD per frame. */
   private startAudioVisualLoop(): void {
@@ -730,7 +730,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
         if (this.Hidden) {
           return; // minimized — skip the work, keep the loop armed
         }
-        const frame = this.audioSmoother.Next(this.voice.GetAudioActivity(), performance.now());
+        const frame = this.audioSmoother.Next(this.realtime.GetAudioActivity(), performance.now());
         this.applyAudioVisualFrame(frame);
       };
       this.audioRafHandle = requestAnimationFrame(tick);
@@ -745,7 +745,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     }
     this.audioSmoother.Reset();
     this.lastAudioLive = null;
-    this.lastVoiceDirection = null;
+    this.lastDirection = null;
     this.overlayElement()?.setAttribute('data-audio-live', 'false');
   }
 
@@ -774,8 +774,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     for (let i = 0; i < frame.Bins.length; i++) {
       el.style.setProperty(`--eq-${i + 1}`, frame.Bins[i].toFixed(3));
     }
-    if (frame.Direction !== this.lastVoiceDirection) {
-      this.lastVoiceDirection = frame.Direction;
+    if (frame.Direction !== this.lastDirection) {
+      this.lastDirection = frame.Direction;
       el.setAttribute('data-voice-dir', frame.Direction);
     }
   }
@@ -817,17 +817,17 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** App-bar Minimize: hide the call view (CSS) — the call stays fully live. */
   public OnMinimize(): void {
-    this.voice.SetMinimized(true);
+    this.realtime.SetMinimized(true);
   }
 
   /** App-bar / strip End: tear the session down, then notify the host. */
   public async OnEndCall(): Promise<void> {
-    await this.voice.EndVoiceSession();
+    await this.realtime.EndRealtimeSession();
     this.Ended.emit();
   }
 
   /** Maps the realtime state onto the hero orb's `data-state` (active turn-states only). */
-  public HeroOrbState(state: VoiceConnectionState): 'speaking' | 'listening' | 'thinking' {
+  public HeroOrbState(state: RealtimeConnectionState): 'speaking' | 'listening' | 'thinking' {
     switch (state) {
       case 'speaking': return 'speaking';
       case 'thinking': return 'thinking';
@@ -836,7 +836,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /** Short first-person status line for the pure-audio hero. */
-  public HeroStateLabel(state: VoiceConnectionState): string {
+  public HeroStateLabel(state: RealtimeConnectionState): string {
     switch (state) {
       case 'speaking': return `${this.AgentName} is speaking…`;
       case 'thinking': return `${this.AgentName} is working…`;
@@ -855,7 +855,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @HostListener('document:keydown', ['$event'])
   public OnDocumentKeydown(event: KeyboardEvent): void {
-    if (this.Hidden || this.IsReviewing || !this.voice.IsActive) {
+    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive) {
       return;
     }
     if ((event.key !== 't' && event.key !== 'T') || event.metaKey || event.ctrlKey || event.altKey) {
@@ -969,7 +969,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       if (!plugin.HasSurface()) {
         continue; // server-only channel — no surface to tab.
       }
-      if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.voice.HasChannelBeenUsed(plugin.ChannelName))) {
+      if (!ShouldRegisterChannelTabUpFront(plugin.ChannelName, this.realtime.HasChannelBeenUsed(plugin.ChannelName))) {
         continue; // not the whiteboard and not used yet — it earns its tab on first activity.
       }
       this.registerPluginChannelTab(plugin);
@@ -1000,7 +1000,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     if (!this.reviewWhiteboardTabRegistered) {
       return;
     }
-    if (ShouldRemoveReviewWhiteboardTab(this.voice.IsActive, this.reviewWhiteboardTabRegistered, channels)) {
+    if (ShouldRemoveReviewWhiteboardTab(this.realtime.IsActive, this.reviewWhiteboardTabRegistered, channels)) {
       this.surfaceTabs?.RemoveTab('Whiteboard');
       // Also drop a still-queued review registration (panel not rendered yet — rare but possible).
       this.pendingChannelTabs = this.pendingChannelTabs.filter(r => !(r.Key === 'Whiteboard' && r.Content));
@@ -1259,12 +1259,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * server cancel channel and flips the card to a failed "Cancelled by user" result.
    */
   public OnCancelDelegation(callId: string): void {
-    void this.voice.CancelDelegation(callId);
+    void this.realtime.CancelDelegation(callId);
   }
 
   /** Minimizes the live call (it stays running) and asks the host to open the record. */
   private requestNavigate(entityName: string, recordId: string): void {
-    this.voice.SetMinimized(true);
+    this.realtime.SetMinimized(true);
     this.NavigateRequest.emit({ EntityName: entityName, RecordID: recordId });
   }
 
@@ -1279,7 +1279,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** Focus pill: toggle the mic mute. */
   public OnFocusPillMute(): void {
-    this.FocusPillMuted = this.voice.ToggleMute();
+    this.FocusPillMuted = this.realtime.ToggleMute();
   }
 
   /** Focus pill: leave focus mode (show the thread column again). */
@@ -1294,12 +1294,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   /** Focus pill: end the call (mirrors the controls row's End button). */
   public async OnFocusPillEnd(): Promise<void> {
-    await this.voice.EndVoiceSession();
+    await this.realtime.EndRealtimeSession();
     this.Ended.emit();
   }
 
   /** Short status line for the focus pill (first person — the co-agent owns the work). */
-  public FocusStateLabel(state: VoiceConnectionState): string {
+  public FocusStateLabel(state: RealtimeConnectionState): string {
     switch (state) {
       case 'speaking': return `${this.AgentName} is speaking…`;
       case 'thinking': return `${this.AgentName} is working…`;

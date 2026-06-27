@@ -55,7 +55,7 @@ LoadxAIRealtimeClient();
  * - `error`       — a fatal error occurred; the session is no longer usable
  * - `closed`      — the session has been torn down
  */
-export type VoiceConnectionState =
+export type RealtimeConnectionState =
   | 'connecting'
   | 'listening'
   | 'speaking'
@@ -64,7 +64,7 @@ export type VoiceConnectionState =
   | 'closed';
 
 /** A single caption line (one side of the conversation) shown in the live-captions list. */
-export interface VoiceCaption {
+export interface RealtimeCaption {
   Role: 'User' | 'Assistant';
   Text: string;
 }
@@ -74,7 +74,7 @@ export interface VoiceCaption {
  * These originate server-side during an `invoke-target-agent` delegation (e.g. while Sage works) and let a
  * future overlay render a "working" card while the realtime model narrates the same progress aloud.
  */
-export interface VoiceDelegationProgress {
+export interface RealtimeDelegationProgress {
   /** The `invoke-target-agent` call this progress belongs to. */
   CallID: string;
   /** The delegation phase: `prompt_execution` | `action_execution` | `subagent_execution` | `decision_processing`. */
@@ -90,7 +90,7 @@ export interface VoiceDelegationProgress {
  * when the delegation finishes so the overlay can flip the "working" card into a result card with real
  * content + provenance.
  */
-export interface VoiceDelegationResult {
+export interface RealtimeDelegationResult {
   /** The `invoke-target-agent` call this result belongs to. */
   CallID: string;
   /** Whether the delegated work succeeded. */
@@ -150,7 +150,7 @@ interface RealtimeChannelDefinitionRow {
  * decision they are NOT captions and NOT persisted as ConversationDetails — they exist
  * only as a live note in the overlay, replaced by each newer narration.
  */
-export interface VoiceDelegationNarration {
+export interface RealtimeDelegationNarration {
   /** The narration transcript text. */
   Text: string;
 }
@@ -247,17 +247,17 @@ interface StartRealtimeClientSessionResult {
  * bakes the companion instructions + tool set into `SessionConfigJson`, which the client
  * driver applies verbatim.
  *
- * Lifecycle: {@link StartVoiceSession} → live duplex → {@link EndVoiceSession}.
+ * Lifecycle: {@link StartRealtimeSession} → live duplex → {@link EndRealtimeSession}.
  */
 @Injectable({ providedIn: 'root' })
 export class RealtimeSessionService {
   // ── Reactive UI state ──────────────────────────────────────────────────────
-  private _connectionState$ = new BehaviorSubject<VoiceConnectionState>('closed');
-  private _captions$ = new BehaviorSubject<VoiceCaption[]>([]);
+  private _connectionState$ = new BehaviorSubject<RealtimeConnectionState>('closed');
+  private _captions$ = new BehaviorSubject<RealtimeCaption[]>([]);
   private _active$ = new BehaviorSubject<boolean>(false);
-  private _delegationProgress$ = new Subject<VoiceDelegationProgress>();
-  private _delegationResult$ = new Subject<VoiceDelegationResult>();
-  private _delegationNarration$ = new Subject<VoiceDelegationNarration>();
+  private _delegationProgress$ = new Subject<RealtimeDelegationProgress>();
+  private _delegationResult$ = new Subject<RealtimeDelegationResult>();
+  private _delegationNarration$ = new Subject<RealtimeDelegationNarration>();
   private _agentName$ = new BehaviorSubject<string>('Sage');
   private _modelName$ = new BehaviorSubject<string | null>(null);
   private _minimized$ = new BehaviorSubject<boolean>(false);
@@ -274,24 +274,24 @@ export class RealtimeSessionService {
   private _channelActivity$ = new Subject<BaseRealtimeChannelClient>();
 
   /** Current connection / turn state. */
-  public readonly ConnectionState$: Observable<VoiceConnectionState> = this._connectionState$.asObservable();
+  public readonly ConnectionState$: Observable<RealtimeConnectionState> = this._connectionState$.asObservable();
   /** Live captions for both sides of the conversation. */
-  public readonly Captions$: Observable<VoiceCaption[]> = this._captions$.asObservable();
+  public readonly Captions$: Observable<RealtimeCaption[]> = this._captions$.asObservable();
   /** True while a session is open (mic button active, overlay shown). */
   public readonly Active$: Observable<boolean> = this._active$.asObservable();
   /**
    * Progress updates from a delegated agent run (e.g. Sage) while the realtime model waits on it.
    * The future overlay subscribes to render a "working" card; the model also narrates these aloud.
    */
-  public readonly DelegationProgress$: Observable<VoiceDelegationProgress> = this._delegationProgress$.asObservable();
+  public readonly DelegationProgress$: Observable<RealtimeDelegationProgress> = this._delegationProgress$.asObservable();
   /** Terminal result of a delegation, so the overlay can complete the working card with real content. */
-  public readonly DelegationResult$: Observable<VoiceDelegationResult> = this._delegationResult$.asObservable();
+  public readonly DelegationResult$: Observable<RealtimeDelegationResult> = this._delegationResult$.asObservable();
   /**
-   * EPHEMERAL spoken progress narrations (see {@link VoiceDelegationNarration}). These are
+   * EPHEMERAL spoken progress narrations (see {@link RealtimeDelegationNarration}). These are
    * deliberately kept OUT of {@link Captions$} and never relayed/persisted — the overlay
    * renders them as a transient "live note" near the active working card.
    */
-  public readonly DelegationNarration$: Observable<VoiceDelegationNarration> = this._delegationNarration$.asObservable();
+  public readonly DelegationNarration$: Observable<RealtimeDelegationNarration> = this._delegationNarration$.asObservable();
   /** Display name of the agent the active session fronts (set at session start). */
   public readonly AgentName$: Observable<string> = this._agentName$.asObservable();
   /**
@@ -342,7 +342,7 @@ export class RealtimeSessionService {
    * Fired EXACTLY ONCE per session as teardown begins, with the prior
    * `agentSessionId` (so subscribers can correlate against `SessionStarted$`'s
    * sessionId) and the client-distinguishable reason — `'explicit'` when the
-   * user called `EndVoiceSession`, `'error'` when teardown ran from a catch
+   * user called `EndRealtimeSession`, `'error'` when teardown ran from a catch
    * block. Server-side close paths (janitor, shutdown) do NOT propagate here —
    * they happen out-of-process and have no client push channel today.
    */
@@ -612,8 +612,12 @@ export class RealtimeSessionService {
    *   `true`, the browser records a mic + agent-audio mix and uploads it at session end. When
    *   omitted/`null`, the per-user persisted preference (`mj.realtimeVoice.recordingConsent.v1`
    *   via {@link UserInfoEngine}) is read as the default. `false` never records.
+   * @param mediaCollectionId Optional per-session media-kit override (`MJ: Collections.ID`). When set,
+   *   the server-side Media channel resolves THIS collection as the agent's media kit for the session,
+   *   taking precedence over the agent's `DefaultMediaCollectionID`. The server UUID-validates it
+   *   (malformed ⇒ ignored, the agent default applies). Omit/`null` to use the agent default kit.
    */
-  public async StartVoiceSession(
+  public async StartRealtimeSession(
     targetAgentId: string,
     conversationId?: string | null,
     lastSessionId?: string | null,
@@ -622,7 +626,8 @@ export class RealtimeSessionService {
     clientTools?: RealtimeToolDefinition[] | null,
     coAgentId?: string | null,
     configOverridesJson?: string | null,
-    recordingConsent?: boolean | null
+    recordingConsent?: boolean | null,
+    mediaCollectionId?: string | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -644,7 +649,7 @@ export class RealtimeSessionService {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
@@ -697,7 +702,7 @@ export class RealtimeSessionService {
    * End the active session: stop the mic, tear down the provider connection, and close
    * the server-side agent session. Safe to call when no session is active.
    */
-  public async EndVoiceSession(): Promise<void> {
+  public async EndRealtimeSession(): Promise<void> {
     if (!this.IsActive && !this.agentSessionId) {
       return;
     }
@@ -1338,11 +1343,11 @@ export class RealtimeSessionService {
   }
 
   /**
-   * Translates {@link RealtimeClientState} into {@link VoiceConnectionState}. `'connected'`
+   * Translates {@link RealtimeClientState} into {@link RealtimeConnectionState}. `'connected'`
    * is suppressed (the UI stays 'connecting' until the control channel opens → 'listening'),
    * and `'closed'` never overwrites a terminal 'error' the service itself recorded.
    */
-  private mapClientState(state: RealtimeClientState): VoiceConnectionState | null {
+  private mapClientState(state: RealtimeClientState): RealtimeConnectionState | null {
     switch (state) {
       case 'connecting':
         return 'connecting';
@@ -1561,8 +1566,8 @@ export class RealtimeSessionService {
    * {@link ParseDelegationResultJson}; if it isn't JSON, surfaces the raw string. Only delegation
    * cards (created from progress events) react — non-delegation tool results have no card and are
    * harmlessly ignored downstream. The `runId` (the delegated `MJ: AI Agent Runs` record) rides
-   * along as {@link VoiceDelegationResult.RunID} for the overlay's dev links, and any `artifacts`
-   * ride along as {@link VoiceDelegationResult.Artifacts} for the surface panel's artifact tabs.
+   * along as {@link RealtimeDelegationResult.RunID} for the overlay's dev links, and any `artifacts`
+   * ride along as {@link RealtimeDelegationResult.Artifacts} for the surface panel's artifact tabs.
    */
   private emitDelegationResult(callId: string, resultJson: string): void {
     // The result will be spoken next — a deferred interim update is now pointless
@@ -1692,11 +1697,12 @@ export class RealtimeSessionService {
     coAgentId?: string | null,
     configOverridesJson?: string | null,
     recordingConsent?: boolean | null,
-    recordingStartedAt?: string | null
+    recordingStartedAt?: string | null,
+    mediaCollectionId?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String, $mediaCollectionId: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt, mediaCollectionId: $mediaCollectionId) {
           AgentSessionId
           ConversationId
           Provider
@@ -1719,7 +1725,8 @@ export class RealtimeSessionService {
       coAgentId: coAgentId ?? null,
       configOverridesJson: configOverridesJson ?? null,
       recordingConsent: recordingConsent ?? false,
-      recordingStartedAt: recordingStartedAt ?? null
+      recordingStartedAt: recordingStartedAt ?? null,
+      mediaCollectionId: mediaCollectionId ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
@@ -2070,7 +2077,7 @@ export class RealtimeSessionService {
    * Parses a push-status message and returns it only when it's a delegation
    * progress event for the active voice session — otherwise `null` (ignored).
    */
-  private parseProgress(raw: string): VoiceDelegationProgress | null {
+  private parseProgress(raw: string): RealtimeDelegationProgress | null {
     let payload: RealtimeDelegationProgressPayload;
     try {
       payload = JSON.parse(raw) as RealtimeDelegationProgressPayload;
@@ -2093,7 +2100,7 @@ export class RealtimeSessionService {
   }
 
   /** Emits the progress to the UI observable and feeds it to the realtime model. */
-  private dispatchProgress(progress: VoiceDelegationProgress): void {
+  private dispatchProgress(progress: RealtimeDelegationProgress): void {
     // Drop stale progress: PubSub delivery can lag the mutation result, so events for a
     // call that already completed (or was never seen) must not update cards or narrate.
     if (!this.inFlightCallIds.has(progress.CallID)) {
@@ -2108,7 +2115,7 @@ export class RealtimeSessionService {
    * then (throttled) asks the model to briefly voice a reassuring update so the
    * background work doesn't sit in silence — without chattering or interrupting.
    */
-  private narrateProgress(progress: VoiceDelegationProgress): void {
+  private narrateProgress(progress: RealtimeDelegationProgress): void {
     const client = this.client;
     if (!client) {
       return;
@@ -2274,7 +2281,7 @@ export class RealtimeSessionService {
     }
 
     // Surface generic session-ended for the conversations runtime bridge.
-    // `closeServerSession=true` means the user explicitly called EndVoiceSession;
+    // `closeServerSession=true` means the user explicitly called EndRealtimeSession;
     // `false` means teardown ran from a catch block (start path error path).
     if (closedSessionId) {
       this._sessionEnded$.next({
@@ -2301,7 +2308,7 @@ export class RealtimeSessionService {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   /** Pushes a caption onto the live list (immutable update for change detection). */
-  private appendCaption(caption: VoiceCaption): void {
+  private appendCaption(caption: RealtimeCaption): void {
     this._captions$.next([...this._captions$.value, caption]);
   }
 

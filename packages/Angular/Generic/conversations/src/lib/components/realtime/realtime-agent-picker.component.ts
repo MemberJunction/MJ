@@ -98,13 +98,13 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             </div>
             @if (ShowCoAgentSelect) {
                 <div class="mj-voice-picker__select-row">
-                    <label class="mj-voice-picker__select-label" for="mjVoiceCoAgentSelect">
+                    <label class="mj-voice-picker__select-label" for="mjRealtimeCoAgentSelect">
                         <i class="fa-solid fa-headset"></i>
                         <span>Co-agent</span>
                     </label>
                     <select
                         #coAgentSelect
-                        id="mjVoiceCoAgentSelect"
+                        id="mjRealtimeCoAgentSelect"
                         class="mj-voice-picker__select"
                         [value]="SelectedCoAgentId ?? ''"
                         (change)="OnCoAgentChange(coAgentSelect.value)">
@@ -150,13 +150,13 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             </div>
             @if (CanOverrideSessionConfig && Models.length > 0) {
                 <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model">
-                    <label class="mj-voice-picker__select-label" for="mjVoiceModelSelect">
+                    <label class="mj-voice-picker__select-label" for="mjRealtimeModelSelect">
                         <i class="fa-solid fa-microchip"></i>
                         <span>Voice model</span>
                     </label>
                     <select
                         #modelSelect
-                        id="mjVoiceModelSelect"
+                        id="mjRealtimeModelSelect"
                         class="mj-voice-picker__select"
                         [value]="SelectedModelId ?? ''"
                         (change)="OnModelChange(modelSelect.value)">
@@ -168,13 +168,13 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
                 </div>
                 @if (SelectedModelVoices.length) {
                     <div class="mj-voice-picker__select-row mj-voice-picker__select-row--model">
-                        <label class="mj-voice-picker__select-label" for="mjVoiceVoiceSelect">
+                        <label class="mj-voice-picker__select-label" for="mjRealtimeVoiceSelect">
                             <i class="fa-solid fa-waveform-lines"></i>
                             <span>Voice</span>
                         </label>
                         <select
                             #voiceSelect
-                            id="mjVoiceVoiceSelect"
+                            id="mjRealtimeVoiceSelect"
                             class="mj-voice-picker__select"
                             [value]="SelectedVoiceId ?? ''"
                             (change)="OnVoiceChange(voiceSelect.value)">

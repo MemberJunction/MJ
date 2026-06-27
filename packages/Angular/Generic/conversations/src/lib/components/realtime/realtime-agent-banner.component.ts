@@ -1,6 +1,6 @@
 import { Component, EventEmitter, HostListener, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { VoiceConnectionState } from '../../services/realtime-session.service';
+import { RealtimeConnectionState } from '../../services/realtime-session.service';
 import { RealtimeUxDensity } from './realtime-disclosure';
 
 /**
@@ -30,7 +30,7 @@ import { RealtimeUxDensity } from './realtime-disclosure';
 })
 export class RealtimeAgentBannerComponent {
   /** Current connection / turn state — drives the orb animation + state label. */
-  @Input({ required: true }) State!: VoiceConnectionState;
+  @Input({ required: true }) State!: RealtimeConnectionState;
 
   /** Display name of the agent the voice session fronts (e.g. "Sage"). */
   @Input() AgentName = 'the agent';
@@ -200,7 +200,7 @@ export class RealtimeAgentBannerComponent {
   }
 
   /** Maps the realtime state to the orb's `data-state` (the orb only models active turn-states). */
-  public OrbState(state: VoiceConnectionState): 'speaking' | 'listening' | 'thinking' {
+  public OrbState(state: RealtimeConnectionState): 'speaking' | 'listening' | 'thinking' {
     switch (state) {
       case 'speaking': return 'speaking';
       case 'thinking': return 'thinking';
@@ -209,7 +209,7 @@ export class RealtimeAgentBannerComponent {
   }
 
   /** Human-readable state label, agent-aware where it reads better. */
-  public StateLabel(state: VoiceConnectionState): string {
+  public StateLabel(state: RealtimeConnectionState): string {
     switch (state) {
       case 'connecting': return 'Connecting…';
       case 'listening': return 'Listening';
@@ -222,7 +222,7 @@ export class RealtimeAgentBannerComponent {
   }
 
   /** True while the state pill should show a spinner instead of the waveform. */
-  public IsBusy(state: VoiceConnectionState): boolean {
+  public IsBusy(state: RealtimeConnectionState): boolean {
     return state === 'connecting' || state === 'thinking';
   }
 }

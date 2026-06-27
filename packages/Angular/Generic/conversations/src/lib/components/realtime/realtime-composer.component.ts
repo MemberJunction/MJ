@@ -65,7 +65,7 @@ export class RealtimeComposerComponent {
 
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement>;
 
-  private voice = inject(RealtimeSessionService);
+  private realtime = inject(RealtimeSessionService);
 
   /** True when there's non-whitespace text to send. */
   public get CanSend(): boolean {
@@ -79,7 +79,7 @@ export class RealtimeComposerComponent {
 
   /** Toggle the local microphone mute. */
   public ToggleMute(): void {
-    this.IsMuted = this.voice.ToggleMute();
+    this.IsMuted = this.realtime.ToggleMute();
   }
 
   /** Toggle captions visibility and notify the overlay. */
@@ -98,7 +98,7 @@ export class RealtimeComposerComponent {
     if (!this.CanSend) {
       return;
     }
-    this.voice.SendText(this.Draft);
+    this.realtime.SendText(this.Draft);
     this.Draft = '';
   }
 
