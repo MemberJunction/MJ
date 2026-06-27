@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -2886,7 +2886,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         request.TargetAgentId,
         request.ConversationId ?? this.conversationId,
         request.LastSessionId,
-        agentName
+        agentName,
+        null, // preferredModelId
+        null, // clientTools
+        null, // coAgentId
+        null, // configOverridesJson
+        null, // recordingConsent
+        null, // mediaCollectionId
+        // App awareness — see message-input.startVoiceSession for the rationale.
+        this.applicationId,
+        this.appContext as AppContextSnapshot | null
       );
       this.RealtimeReview = null;
       await start;

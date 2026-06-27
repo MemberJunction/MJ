@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, O
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -561,7 +561,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         null,
         coAgentId ?? null,
         configOverridesJson ?? null,
-        recordingConsent ?? null
+        recordingConsent ?? null,
+        null,
+        // App awareness: the app the session runs in + the live app-context snapshot (where the
+        // user is, what they see, capability manifest) — drives the server-side app cascade + the
+        // mint-time prompt injection, and seeds the ClientContextChannel's streaming.
+        this.applicationId,
+        this.appContext as AppContextSnapshot | null
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);

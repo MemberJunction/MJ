@@ -22,7 +22,7 @@ import { NavigationService, AgentContextUpdate } from '@memberjunction/ng-shared
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
@@ -98,6 +98,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
     private bridge: ConversationBridgeService,
+    private realtimeSession: RealtimeSessionService,
     // Injected (not just used statically) so the root singleton is constructed
     // before handleLogin runs. Magic-link logs in instantly (token already in the
     // URL hash, no redirect round-trip), so without this injection handleLogin can
@@ -409,6 +410,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     // the change directly via its [AppContext] template binding; this
     // observable channel is for chats mounted outside the overlay.
     this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+    // Keep any live realtime co-agent's streamed context in sync on app/nav changes too.
+    this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
     this.cdr.detectChanges();
 
     // Keep the bridge in sync with workspace visibility.
@@ -443,6 +446,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       // new dashboard slice — the floating overlay sees it via the
       // [AppContext] template binding regardless.
       this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+      // Continuous-streaming half of client-context delivery: push the updated snapshot to any LIVE
+      // realtime session so the ClientContextChannel streams it to the co-agent as a context note.
+      this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
       this.cdr.detectChanges();
     }
 
@@ -465,6 +471,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           Handler: tool.Handler as (params: Record<string, unknown>) => Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }>,
         });
       }
+
+      // Mirror the surface tools into the realtime session so the co-agent's ContextTool proxy can
+      // execute them client-side (the realtime analogue of the async agentClient registration above).
+      this.realtimeSession.RegisterAppClientTools(
+        update.AgentClientTools.map(t => ({ Name: t.Name, Handler: t.Handler })),
+      );
     }
   }
 
