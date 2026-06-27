@@ -22,6 +22,9 @@ export * from './feature-assembly';
 // Training orchestration — TrainingEngine + its injected seams (§3/§4.3/§4.4/§8.2/§11).
 export * from './training';
 
+// Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
+export * from './scoring';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.
