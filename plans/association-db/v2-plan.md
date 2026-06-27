@@ -31,17 +31,22 @@
 
 AssociationDB v1 has served us well as a basic demonstration database. It contains roughly 58 tables, 10,000+ records, and enough realistic association data (the fictional “American Cheese Association”) that prospects can navigate it, Skip can generate components against it, and our team can use it in sales conversations. But v1 has a structural limitation: **every table is custom to AssociationDB**. It doesn’t demonstrate what MemberJunction is actually uniquely good at — composing purpose-built open apps into a complete business ecosystem while layering AI capabilities on top of existing enterprise data.
 
-AssociationDB v2 rebuilds the demo from the ground up around the composition story. Rather than owning its own `Member`, `Organization`, `Committee`, and `Task` tables, v2 delegates to the open app ecosystem:
+AssociationDB v2 rebuilds the demo from the ground up around the composition story. Rather than owning its own `Member`, `Organization`, `Committee`, `Task`, `Invoice`, `Order`, `Message`, or `Issue` tables, v2 delegates to the full BizApps open app catalog:
 
-- **biz-apps-common** becomes the identity substrate (People, Organizations, Relationships, Contact/Address management)
-- **tasks** owns all project/task/assignment logic
-- **committees** owns governance — real committee management with charters, terms, meetings, and deliverables
-- **payments** owns the payment-provider abstraction (Stripe, Chase, Authorize.net)
-- **subscriptions** owns recurring billing and membership-as-subscription semantics
+- **biz-apps-common** — identity substrate (People, Organizations, Relationships, Contact/Address management)
+- **tasks** — all project/task/assignment logic across committees, events, legislative actions
+- **committees** — governance: charters, terms, meetings, member assignments, deliverables
+- **issues** — issue tracking / case management (helpdesk, member service requests, committee action items)
+- **sonar** — engagement signal aggregation and scoring — the substrate for member engagement scores, used as feature inputs into Predictive Studio models
+- **secure-messaging** — direct and group messaging between members, staff, committees, and boards
+- **orders** — order capture and fulfillment for product purchases, event registrations, course enrollments, certification fees
+- **payments** — payment-provider abstraction (Stripe, Chase, Authorize.net)
+- **subscriptions** — recurring billing and membership-as-subscription semantics
+- **accounting** — GL, chart of accounts, journal entries, fiscal periods — the financial backbone behind orders / payments / subscriptions
 
-What remains in AssociationDB v2’s custom schema is *only* the stuff that is genuinely association-specific and not yet factored into a reusable open app: events/conferences, learning/certifications, legislative tracking, cheese products/competitions, resource library, chapters, and email/marketing campaigns. This is the honest architectural split: “here’s what’s truly domain-specific, and here’s what you compose from the ecosystem.”
+What remains in AssociationDB v2’s custom schema is *only* the stuff that is genuinely association-specific and not yet factored into a reusable open app: events/conferences, learning/certifications, legislative tracking, cheese products/competitions, resource library, chapters, and email/marketing campaigns. This is the honest architectural split: "here’s what’s truly domain-specific, and here’s what you compose from the ecosystem." The depth of composition — ten production-grade open apps fully populated with realistic interlinked data — is itself the demonstration.
 
-On top of the rearchitected schema, v2 ships with the full MJ AI feature set pre-configured and pre-populated: entity documents translating structured records into LLM-readable markdown, **pre-computed embeddings loaded into MJ’s Search Vector Service (SVS)** (no live OpenAI calls at install, no external vector DB required), Apollo-powered enrichment with pre-computed before/after data, duplicate detection results baked in, clustering pre-applied, unified search spanning database records / vector embeddings / bundled PDF Content Sources. Preloaded Skip components, **predictive models** (member churn, renewal likelihood, event ROI, lifetime value, engagement scoring, certification completion, attendance forecast), research agent reports, prebuilt Lists, Views, Queries, Scheduled Actions, Workspaces, and custom form overrides demonstrate the entire MJ capability surface as already-working examples. Every preloaded artifact includes a full conversation history so users can see *how* it was produced.
+On top of the rearchitected schema, v2 ships with the full MJ AI feature set pre-configured and pre-populated: entity documents translating structured records into LLM-readable markdown, **pre-computed embeddings loaded into MJ’s Search Vector Service (SVS)** (no live OpenAI calls at install, no external vector DB required), Apollo-powered enrichment with pre-computed before/after data, duplicate detection results baked in, clustering pre-applied, unified search spanning database records / vector embeddings / bundled PDF Content Sources. Preloaded Skip components, **predictive models in the new MJ Predictive Studio** (member churn, renewal likelihood, event ROI, lifetime value, engagement scoring, certification completion, attendance forecast — all driven by **Sonar engagement signals** computed across every association activity), research agent reports, prebuilt Lists, Views, Queries, Scheduled Actions, Workspaces, and custom form overrides demonstrate the entire MJ capability surface as already-working examples. The **Blue Cypress SaaS portfolio is woven in** — Skip and Izzy (and Betty) as in-Explorer agent proxies, Izzy and rasa.io as integration sources — showing how MJ composes with the broader commercial AI ecosystem rather than competing with it. Every preloaded artifact includes a full conversation history so users can see *how* it was produced.
 
 The entire v2 experience is available via one-click deployment in MJCentral. Any visitor can register for a free account, click “Demo,” and be exploring a shared AssociationDB v2 instance within minutes — no qualification, no sales call, no setup friction. This is our primary top-of-funnel motion. Private instances remain available on upgrade.
 
@@ -49,7 +54,8 @@ Sage, our ambient agent, becomes the onboarding experience itself. A welcome scr
 
 ### 1.2 High-Level Bullet Points
 
-- **Rearchitect AssociationDB on composable open apps** — biz-apps-common, tasks, committees, payments, subscriptions
+- **Rearchitect AssociationDB on the full BizApps open app catalog** — biz-apps-common, tasks, committees, issues, sonar, secure-messaging, orders, payments, subscriptions, accounting (ten open apps composed together, each with all tables fully populated). **Standing rule**: every future BizApps open app gets woven into v2 in the next quarterly release after it ships.
+- **Wire in the BC multi-tenant SaaS portfolio** — Skip and Izzy as **agent proxies** (in-Explorer agents that delegate work to those SaaS products without leaving the MJ UI), Izzy and rasa.io as **integration sources** (external systems v2 pulls data from to demo MJ's integration framework end-to-end), and Betty wired in as appropriate (see §13.2 OQ for clarification)
 - **Ship AssociationDB v2 itself as a fully portable Open App** — versioned, semver-released quarterly, installable on any MJ instance (local, MJCentral, or a customer’s own) with zero external service dependencies beyond what the host MJ already needs
 - **Split into two packages**: `@memberjunction/associationdb` (the reusable application) and `@memberjunction/associationdb-demo-data` (optional companion with fake people, dirty data, sample PDFs, preloaded conversations) — so the schema and capabilities can be studied or forked without dragging demo content into a production DB
 - **Pre-configure entity documents, vectorization, clustering, and Apollo enrichment** so AI features work out of the box; **ship pre-computed embeddings as Entity Record Documents loaded into MJ’s Search Vector Service (SVS)** at install time — no live OpenAI calls required during install, no external vector DB required for the demo
@@ -152,10 +158,16 @@ flowchart TB
         Marketing[Marketing & Email Campaigns]
     end
 
-    subgraph OpenApps["Open Apps (composable layers)"]
-        Committees[committees]
+    subgraph BizApps["BizApps Open Apps (composable layers)"]
+        direction TB
+        Accounting[accounting]
         Subscriptions[subscriptions]
         Payments[payments]
+        Orders[orders]
+        Committees[committees]
+        Issues[issues]
+        Sonar[sonar]
+        Messaging[secure-messaging]
         Tasks[tasks]
         BAC[biz-apps-common]
     end
@@ -165,27 +177,44 @@ flowchart TB
         Entities[Entity Framework]
         CodeGen[CodeGen]
         Explorer[MJ Explorer UI]
-        KnowledgeHub[Knowledge Hub]
+        KnowledgeHub[Knowledge Hub + SVS]
         Agents[Agent Framework + Sage]
+        PredStudio[Predictive Studio]
     end
 
     Custom --> Committees
     Custom --> Subscriptions
+    Custom --> Orders
+    Custom --> Issues
+    Custom --> Sonar
+    Custom --> Messaging
     Custom --> Tasks
     Custom --> BAC
     Committees --> Tasks
     Committees --> BAC
+    Issues --> Tasks
+    Issues --> BAC
+    Subscriptions --> Orders
     Subscriptions --> Payments
     Subscriptions --> BAC
+    Orders --> Payments
+    Orders --> BAC
+    Payments --> Accounting
     Payments --> BAC
+    Accounting --> BAC
     Tasks --> BAC
+    Sonar --> BAC
+    Messaging --> BAC
     BAC --> MJCore
     Custom --> MJCore
+    Sonar -.feeds.-> PredStudio
 
     style Custom fill:#7c5295,stroke:#563a6b,color:#fff
-    style OpenApps fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style BizApps fill:#2d6a9f,stroke:#1a4971,color:#fff
     style MJCore fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
+
+**Note on Sonar's role:** Sonar aggregates engagement signals from every other open app (event attendance from the AssociationDB custom schema, forum activity, course completions, committee participation, message activity from secure-messaging, issue/case interactions, payment recency, etc.) and produces composite engagement scores. These scores become first-class features feeding the **Predictive Studio** models (lapse risk, renewal likelihood, lifetime value) — not ad-hoc SQL aggregates computed inside each model. This decoupling means engagement scoring is *one* substrate consumed by many downstream consumers (predictive models, list filters, Sage prompts, dashboard tiles, scheduled actions).
 
 **Key property:** each open app is independently installable and independently versioned. AssociationDB v2 declares its dependencies in its Open App manifest (the JSON file at repo root), and the MJ installer resolves and applies them in the correct order.
 
@@ -203,11 +232,11 @@ sequenceDiagram
 
     User->>Installer: mj install @memberjunction/associationdb [+ demo-data]
     Installer->>Registry: Resolve dependency graph
-    Registry-->>Installer: biz-apps-common, tasks, committees,<br/>payments, subscriptions, associationdb (+ demo-data)
-    Installer->>DB: Apply migrations in dependency order<br/>(MJ core → open apps → associationdb → demo-data)
-    Note over Installer,DB: Migrations carry the seed data,<br/>baked at quarterly release time<br/>with current-relative dates
+    Registry-->>Installer: biz-apps-common, tasks, sonar,<br/>secure-messaging, issues, committees,<br/>orders, payments, accounting,<br/>subscriptions, associationdb (+ demo-data)
+    Installer->>DB: Apply migrations in dependency order<br/>(MJ core → 10 BizApps open apps<br/>→ associationdb → demo-data)
+    Note over Installer,DB: Migrations carry the seed data,<br/>baked at quarterly release time<br/>with current-relative dates<br/>(all 10 open apps' tables populated)
     Installer->>DB: Run CodeGen (entity classes, APIs, forms)
-    Installer->>DB: mj sync push — metadata (conversations,<br/>lists, views, queries, scheduled actions,<br/>content sources, etc.)
+    Installer->>DB: mj sync push — metadata (conversations,<br/>lists, views, queries, scheduled actions,<br/>predictive models, content sources, etc.)
     Installer->>SVS: Load pre-computed embeddings<br/>(shipped as Entity Record Documents)
     Installer->>User: Environment ready — AI features fully active
 ```
@@ -862,14 +891,19 @@ This section is the primary execution reference. Each phase contains tasks with 
 
 **Goal:** Establish the directory structure, repository conventions, and tooling needed for v2 work.
 
-- [ ] **0.0** **Open App Readiness Gate** — v2 work begins only after all five open app dependencies reach production-ready status. Current state (as of plan authoring):
+- [ ] **0.0** **Open App Readiness Gate** — v2 work begins only after all ten BizApps open app dependencies reach production-ready status. Current state (as of plan authoring — confirm/update each before Phase 1):
   - `@memberjunction/biz-apps-common` — ✅ done
   - `@memberjunction/tasks` — ✅ first cut done
   - `@memberjunction/committees` — ✅ first cut done
-  - `@memberjunction/subscriptions` — 🚧 in development (**blocking**)
+  - `@memberjunction/issues` — ⏳ status TBD (confirm)
+  - `@memberjunction/sonar` — ⏳ status TBD (confirm) — **critical**: feeds Predictive Studio engagement features
+  - `@memberjunction/secure-messaging` — ⏳ status TBD (confirm)
+  - `@memberjunction/orders` — ⏳ status TBD (confirm)
   - `@memberjunction/payments` — 🚧 in development (**blocking**)
+  - `@memberjunction/subscriptions` — 🚧 in development (**blocking**)
+  - `@memberjunction/accounting` — ⏳ status TBD (confirm)
 
-  **Definition of production-ready for this gate**: migrations stable, entity classes generated and tested, package published to npm under a pinned version, README/CLAUDE.md complete, no known blocker bugs. v2 Phase 1 does not begin until `subscriptions` and `payments` clear this bar — starting earlier forces re-tooling later as those open apps settle.
+  **Definition of production-ready for this gate**: migrations stable, entity classes generated and tested, package published to npm under a pinned version, README/CLAUDE.md complete, no known blocker bugs. v2 Phase 1 does not begin until **all ten** open apps clear this bar — starting earlier forces re-tooling later as those open apps settle. The bar is uniform regardless of which app is upstream of which: every dependency is pinned, every dependency is mature.
 
 - [ ] **0.0.5** **MJ Capability Readiness Gate** — confirm or build the host MJ capabilities that v2 depends on at install time. None of these are v2-specific; each is a sibling MJ feature that this work surfaces and lands as part of a complete portable-AI story:
   - **SVS (Search Vector Service) with a default in-DB search provider** — for storing/querying pre-computed embeddings on small-to-medium datasets without an external vector DB. Required for v2’s self-contained install. Build or extend if not already present.
@@ -883,12 +917,17 @@ This section is the primary execution reference. Each phase contains tasks with 
   - Both packages have `schema/`, `metadata/` (mj-sync JSON), `docs/`, `openapp.json`, `README.md`, `CLAUDE.md`
   - MJCentral installs both. A customer studying the architecture can install just the application. Anyone forking installs the application and supplies their own data.
 
-- [ ] **0.2** Author `openapp.json` manifests declaring dependencies. `associationdb` declares dependencies on the five open apps + the MJ capabilities from 0.0.5; `associationdb-demo-data` declares dependency on `associationdb` only:
+- [ ] **0.2** Author `openapp.json` manifests declaring dependencies. `associationdb` declares dependencies on the ten BizApps open apps + the MJ capabilities from 0.0.5; `associationdb-demo-data` declares dependency on `associationdb` only:
   - `@memberjunction/biz-apps-common` (pinned version)
   - `@memberjunction/tasks` (pinned version)
   - `@memberjunction/committees` (pinned version)
+  - `@memberjunction/issues` (pinned version)
+  - `@memberjunction/sonar` (pinned version)
+  - `@memberjunction/secure-messaging` (pinned version)
+  - `@memberjunction/orders` (pinned version)
   - `@memberjunction/payments` (pinned version)
   - `@memberjunction/subscriptions` (pinned version)
+  - `@memberjunction/accounting` (pinned version)
   - Minimum `@memberjunction/core` version with SVS + open-app-install-hooks support
 - [ ] **0.3** Verify the Open App installer correctly resolves the dependency chain, applies migrations in order, runs post-install `mj sync push`, and loads pre-computed embeddings into SVS. Write integration tests if not present.
 - [ ] **0.4** Establish CI job that builds a fresh install of both packages on every PR and runs smoke tests against a fresh DB (this is also the quarterly-release smoke-test job — same script, run on every PR for safety)
@@ -925,19 +964,40 @@ This section is the primary execution reference. Each phase contains tasks with 
 
 ### Phase 3 — Open App Seed Data (mj-sync metadata, lives in `associationdb-demo-data`)
 
-**Goal:** Populate the open apps with v2-appropriate data, declaratively, via mj-sync JSON metadata. All seed data ships in the `associationdb-demo-data` package as committed JSON files under `metadata/`. A reproducible procedural generator script (committed, run at release time) produces the JSON; the JSON is what install consumes.
+**Goal:** Populate **every table of all ten BizApps open apps** with realistic interlinked data, declaratively, via mj-sync JSON metadata. All seed data ships in the `associationdb-demo-data` package as committed JSON files under `metadata/`. A reproducible procedural generator script (committed, run at release time) produces the JSON; the JSON is what install consumes.
 
-- [ ] **3.0** Build the procedural data generator (seeded, deterministic) that produces all mj-sync JSON below from a small config + name/org distributions. Generator is committed; output JSON is committed; install does NOT run the generator.
-- [ ] **3.1** Date anchor convention: all date fields in metadata use `OFFSET_DAYS_FROM_RELEASE` semantics. Release pipeline (see §7.3) resolves them at tag time.
-- [ ] **3.2** `metadata/biz-apps-common/people/` — ~2,000 `Person` records (realistic name distributions, demographics, contact info)
-- [ ] **3.3** `metadata/biz-apps-common/organizations/` — 40 `Organization` records (cheese producers, retailers, suppliers, distributors)
-- [ ] **3.4** `metadata/biz-apps-common/employment/` — Employment records linking people to organizations with realistic tenure
-- [ ] **3.5** `metadata/biz-apps-common/dirty-data/` — intentional ~50 duplicate Person records with realistic variations (name spelling, alternate emails, divergent employer snapshots) — sourced from a documented corruption model so they don’t feel staged
-- [ ] **3.6** `metadata/biz-apps-common/stale-employment/` — intentional ~100 Person records with stale employer data (departed company X-months ago) for Apollo enrichment showcase
-- [ ] **3.7** `metadata/tasks/` — task records (committee deliverables, event logistics, legislative action items)
-- [ ] **3.8** `metadata/payments/` — transaction records (membership renewals, event registrations, etc.)
-- [ ] **3.9** `metadata/subscriptions/` — subscription records representing memberships with varying statuses (active, lapsed, canceled)
-- [ ] **3.10** `metadata/committees/` — 12 committees with charters, terms, meeting cadence, member assignments, and deliverables
+The standard for this phase is **full coverage, not just headline tables**: lookup/reference tables, history/audit tables, status enums, junction tables — everything that ships with the open app schema gets representative data. The demo only feels real if you can drill into any entity and find populated, sensible records.
+
+- [ ] **3.0** Build the procedural data generator (seeded, deterministic) that produces all mj-sync JSON below from a small config + name/org distributions + realistic transaction patterns. Generator is committed; output JSON is committed; install does NOT run the generator.
+- [ ] **3.1** Date anchor convention: **all date fields in all open app metadata** use `OFFSET_DAYS_FROM_RELEASE` semantics. Release pipeline (see §7.3) resolves them at tag time — uniformly across all ten open apps, not just AssociationDB-specific data.
+
+- [ ] **3.2** **biz-apps-common** — `metadata/biz-apps-common/`:
+  - ~2,000 `Person` records (realistic name distributions, demographics, contact info)
+  - 40 `Organization` records (cheese producers, retailers, suppliers, distributors)
+  - Employment records linking people to organizations with realistic tenure
+  - Addresses, PersonEmails, PersonPhones, Relationships fully populated
+  - Intentional ~50 duplicate Person records (realistic corruption model for de-dupe showcase)
+  - Intentional ~100 Person records with stale employer data (for Apollo enrichment showcase)
+
+- [ ] **3.3** **tasks** — `metadata/tasks/`: tasks, assignments, comments, status transitions, priority levels, task templates. Cross-linked to committees (deliverables), events (logistics), legislative issues (action items).
+
+- [ ] **3.4** **committees** — `metadata/committees/`: 12 committees with charters, terms, meeting cadence, member assignments, deliverables, meeting minutes, agenda items — every table populated.
+
+- [ ] **3.5** **issues** — `metadata/issues/`: realistic case load — member-service tickets, helpdesk issues, committee action items, legislative-policy issues. All tables filled: issues, comments, assignments, priorities, statuses, categories.
+
+- [ ] **3.6** **sonar** — `metadata/sonar/`: signal definitions across every association activity (event attendance, course completion, forum post, committee meeting attendance, message sent, issue interaction, payment recency); computed engagement scores per Person with score component breakdowns; score history across time windows. **This data feeds the Predictive Studio models in Phase 7.B.**
+
+- [ ] **3.7** **secure-messaging** — `metadata/secure-messaging/`: message threads, individual messages, recipients, attachments, read states. Realistic patterns: committee-internal threads, board communications, staff-to-member service exchanges, peer-to-peer member messaging.
+
+- [ ] **3.8** **orders** — `metadata/orders/`: orders for event registrations, course enrollments, product purchases (cheese-product catalog), certification fees, membership dues. Order line items, statuses, fulfillment records, refunds.
+
+- [ ] **3.9** **payments** — `metadata/payments/`: transactions backing every order in 3.8 plus subscription renewals; payment methods on file per Person; refunds and chargebacks; provider attribution (Stripe / Chase / Authorize.net showcasing the abstraction).
+
+- [ ] **3.10** **subscriptions** — `metadata/subscriptions/`: subscription records representing memberships with varying statuses (active, lapsed, canceled, pending renewal); renewal history; tier changes over time.
+
+- [ ] **3.11** **accounting** — `metadata/accounting/`: chart of accounts, fiscal periods (5 years of closed periods + current open period), journal entries backing every payment in 3.9, line items, AR/AP positions. The financial backbone is internally consistent: every dollar in payments has a corresponding GL entry.
+
+- [ ] **3.12** **Cross-open-app referential integrity check** at install time: every FK across every open app boundary resolves. This is the smoke test that proves the composition actually works.
 
 ### Phase 4 — AssociationDB v2 Domain Data (mj-sync metadata, lives in `associationdb-demo-data`)
 
@@ -1025,16 +1085,19 @@ All assets persist via the same uniform mechanism: authored in a dev environment
 
 The demo should heavily emphasize Predictive Studio. Ship a curated portfolio of prebuilt models covering canonical association use cases. Each model has training config, feature definitions, evaluation metrics, and ready-to-serve endpoints, all in metadata.
 
-- [ ] **7.B.1** **Member Churn / Lapse Prediction** — probability that an active member will not renew by their renewal date. Features draw from engagement (event attendance, course completions, forum activity, committee service), tenure, payment history.
-- [ ] **7.B.2** **Renewal Likelihood Scoring** — companion to churn, scored on a 0–100 scale with explanation factors surfaced in the member detail view
-- [ ] **7.B.3** **Event Attendance Forecast** — predicted registration counts per event, given marketing campaigns and historical patterns
-- [ ] **7.B.4** **Member Lifetime Value Estimate** — projected total revenue contribution (dues + events + courses + products) over a member’s expected tenure
-- [ ] **7.B.5** **Engagement Scoring** — composite score representing how actively engaged a member is, surfaced across the UI and used as a feature input for the above
-- [ ] **7.B.6** **Certification Completion Likelihood** — probability an enrolled learner completes their certification, given pace and engagement signals
-- [ ] **7.B.7** **Event ROI Predictor** — projected return on an event given budget, audience, and historical comps
-- [ ] **7.B.8** Pre-train all models against the seed data at release time; ship trained model artifacts in metadata; install loads them ready-to-serve
-- [ ] **7.B.9** Wire predictions into UI: member detail shows lapse risk and renewal score; event detail shows attendance forecast and ROI estimate; chapter dashboard shows aggregate engagement scoring distribution
-- [ ] **7.B.10** Wire predictions into Sage as client tools: "explain why this member’s lapse risk is high," "rank members in this view by renewal likelihood," "list the events with the lowest predicted ROI this quarter"
+**Feature substrate**: feature inputs come from **Sonar engagement scores** (event attendance signal, course-completion signal, forum-activity signal, committee-participation signal, message-activity signal, issue-interaction signal, payment-recency signal — all aggregated by Sonar into composite scores with component breakdowns). This is the architectural posture: predictive models consume Sonar scores rather than re-computing engagement from raw SQL each time. Sonar is the source of truth; Predictive Studio is the consumer.
+
+- [ ] **7.B.1** **Engagement Scoring** (foundational — comes from Sonar, not from a model) — composite score representing how actively engaged a member is, surfaced across the UI and used as a primary feature input for the predictive models below. Sonar handles the math; v2 ships realistic seed signals across every activity (§3.6).
+- [ ] **7.B.2** **Member Churn / Lapse Prediction** — probability that an active member will not renew by their renewal date. Features: Sonar engagement score + tenure + payment history (from accounting) + recent messaging activity (from secure-messaging).
+- [ ] **7.B.3** **Renewal Likelihood Scoring** — companion to churn, scored on a 0–100 scale with explanation factors surfaced in the member detail view
+- [ ] **7.B.4** **Event Attendance Forecast** — predicted registration counts per event, given marketing campaigns, Sonar engagement distribution of the target segment, and historical patterns
+- [ ] **7.B.5** **Member Lifetime Value Estimate** — projected total revenue contribution (dues + events + courses + products) over a member’s expected tenure; uses accounting + orders history
+- [ ] **7.B.6** **Certification Completion Likelihood** — probability an enrolled learner completes their certification, given pace and Sonar learning-signal trajectory
+- [ ] **7.B.7** **Event ROI Predictor** — projected return on an event given budget (accounting), audience composition (Sonar segmentation), and historical comps
+- [ ] **7.B.8** Pre-train all models against the seed data at release time; ship trained model artifacts in metadata; install loads them ready-to-serve in Predictive Studio
+- [ ] **7.B.9** Wire predictions into UI: member detail shows lapse risk + renewal score + driving Sonar signal breakdown; event detail shows attendance forecast and ROI estimate; chapter dashboard shows aggregate Sonar engagement distribution
+- [ ] **7.B.10** Wire predictions into Sage as client tools: "explain why this member’s lapse risk is high" (Sage walks through the Sonar signal decomposition + model feature contributions), "rank members in this view by renewal likelihood," "list the events with the lowest predicted ROI this quarter"
+- [ ] **7.B.11** Predictive Studio UI tour: a guided walkthrough exposed via the onboarding flow showing model training, evaluation metrics, prediction inspection, and how to fork an existing model — teaches Predictive Studio by example
 
 #### 7.C — Prebuilt Lists & List Details
 
@@ -1114,10 +1177,36 @@ Several entities get custom form overrides demonstrating MJ’s `EntityFormOverr
 - [ ] **7.I.5** **Record Processes** — Bulk Operations Studio prebuilt processes such as "tag selected members as VIP," "send renewal email," "rescoring sweep with the lapse model" — shows MJ’s record-set processing substrate
 - [ ] **7.I.6** **Tags & Tag Scopes** — meaningful prebuilt taxonomy (Member Status tags, Resource topic tags, Event audience tags) demonstrating MJ’s tagging primitives
 
-#### 7.J — End-to-End Validation
+#### 7.K — Blue Cypress SaaS Product Wiring (Skip, Izzy, Betty, rasa.io)
 
-- [ ] **7.J.1** Verify every prebuilt asset above survives the pull → JSON → push cycle and renders correctly on a fresh install
-- [ ] **7.J.2** Verify artifact lineage navigation works end-to-end across all asset types (e.g., predictions can be inspected for input features, list memberships traceable to driving query, etc.)
+v2 demonstrates how the broader Blue Cypress SaaS portfolio integrates *with* MJ — not as competitors to MJ's own agents but as complementary capability layers. Two integration patterns are showcased:
+
+**Pattern 1 — Agent Proxies (in-Explorer agents that delegate to external SaaS products)**
+
+- [ ] **7.K.1** **Skip agent proxy** — Skip components and research-style outputs are already integrated; the demo makes the Skip-as-SaaS positioning explicit so prospects understand they're seeing a multi-tenant product reached through MJ, not a built-in MJ feature. Branding, attribution, and pricing model surfaced.
+- [ ] **7.K.2** **Izzy agent proxy** — in-Explorer agent that delegates communications / marketing tasks (campaign drafting, segmentation, send orchestration) to Izzy via its API. User says "draft a renewal campaign for our high-lapse-risk members and send it next Tuesday" — Sage routes to the Izzy proxy, which calls Izzy's APIs and surfaces the result back in the conversation.
+- [ ] **7.K.3** **Betty agent proxy** — (integration model TBD — confirm Betty's role and surface area, see §13.2 OQ-10). Wire in as an additional agent proxy with appropriate domain scope.
+- [ ] **7.K.4** Each proxy is implemented via the standard MJ agent framework with the SaaS product as a tool/endpoint backend — same machinery customers can use to wire their own SaaS products in, taught by example.
+- [ ] **7.K.5** Demo conversations (§7.A) include examples that route through each proxy, with artifact lineage showing "this output was produced by Skip / Izzy / Betty," not by MJ directly.
+
+**Pattern 2 — Integration Sources (external systems v2 pulls data from to demo MJ's integration framework)**
+
+- [ ] **7.K.6** **Izzy as integration source** — pull campaign / engagement data from Izzy into v2 (campaign sends, opens, clicks, unsubscribes, segment metadata). Demonstrates MJ's integration framework lifting data from an external system into queryable MJ entities, then layered with MJ AI on top (Sonar scoring from Izzy engagement signals, predictive features fed by Izzy data, etc.).
+- [ ] **7.K.7** **rasa.io as integration source** — pull newsletter content engagement (article opens, dwell time, click-throughs) into v2. Drives Sonar's content-engagement signal axis and feeds into the engagement scoring model.
+- [ ] **7.K.8** Both integrations are exposed in the Integration framework dashboard (the same place a customer would configure their own AMS sync) so the integration mechanism itself is part of the demo, not hidden plumbing.
+- [ ] **7.K.9** Pre-computed integration data ships in `associationdb-demo-data` for the demo flow; the live integration is optionally activatable if the installer supplies real Izzy / rasa.io credentials (parallel to the optional Box.com Content Source pattern in §7.5).
+
+**Why this matters strategically**
+
+Showcasing the BC SaaS portfolio inside the v2 demo achieves three things simultaneously:
+1. **Cross-sell visibility** — prospects evaluating MJ see the broader BC product story without a separate pitch
+2. **Architecture demonstration** — proves MJ is genuinely an open AI/data platform that *integrates* (rather than competing with) other tools, including BC's own
+3. **Reference implementation for customers** — customers building their own MJ stacks see exactly how to wire their own commercial SaaS subscriptions in as either agent proxies or integration sources
+
+#### 7.L — End-to-End Validation
+
+- [ ] **7.L.1** Verify every prebuilt asset above survives the pull → JSON → push cycle and renders correctly on a fresh install
+- [ ] **7.L.2** Verify artifact lineage navigation works end-to-end across all asset types (e.g., predictions can be inspected for input features, list memberships traceable to driving query, agent-proxy outputs attributable to the originating SaaS product, etc.)
 
 ### Phase 8 — Welcome Screen & Onboarding Agent Flow
 
@@ -1207,6 +1296,7 @@ Several entities get custom form overrides demonstrating MJ’s `EntityFormOverr
 - [ ] **13.6** Content review: all preloaded artifacts and conversations reviewed for quality, accuracy, brand consistency
 - [ ] **13.7** Launch announcement plan: blog post, social, direct outreach to MJ customer list
 - [ ] **13.8** Ongoing maintenance checklist: quarterly release pipeline runbook, demo content refresh, upstream open app version bumps, embedding-model upgrade flow
+- [ ] **13.9** **Standing rule for future open apps** — every new BizApps open app that lands in the MJ ecosystem is incorporated into v2 as part of the **next quarterly release after the open app reaches readiness**. That means: declare the new dependency in `openapp.json`, populate every table of the new open app via mj-sync metadata using the same date-anchor convention (§7.3), wire any relevant new entities into the engagement-scoring / Predictive Studio / search / list / view / scheduled-action / workspace layers, and document the addition in v2's release notes. The composition story only stays compelling if v2 *grows* with the open app catalog — a six-month-old catalog snapshot reads as stale even if the apps themselves are fresh. Build this rule into the open-app authoring CLAUDE.md so future open-app PRs explicitly include "v2 incorporation plan" as a checklist item.
 
 ### 11.1 Phase Dependency Graph
 
@@ -1318,7 +1408,10 @@ The v2 effort is successful when all of the following are demonstrably true:
 - **OQ-6:** Does BCSaaS need any reference or acknowledgment in v2 docs (as "here’s how multi-tenancy is added in a real deployment") or do we keep it entirely private?
 - **OQ-7:** Who authors the preloaded conversations, research reports, and the prompt library — Blue Cypress team exercise, or Claude Code-assisted with human review?
 - **OQ-8:** Quarterly release cadence target month within the quarter — e.g., always release in month 2 to keep average staleness at 1.5 months, or release at the start of the quarter for maximum freshness window?
-- **OQ-9:** Predictive Studio model portfolio scope — the proposed seven models (churn, renewal, attendance forecast, LTV, engagement, cert completion, event ROI) cover the headline use cases. Confirm or trim/expand.
+- **OQ-9:** Predictive Studio model portfolio scope — the proposed seven models (churn, renewal, attendance forecast, LTV, engagement, cert completion, event ROI) cover the headline use cases. Confirm or trim/expand. Confirm that **Sonar** is the canonical engagement-signal substrate feeding these models (rather than ad-hoc SQL aggregates).
+- **OQ-10:** **Betty's integration model** — Skip and Izzy are agent proxies; Izzy and rasa.io are integration sources. Where does Betty land — agent proxy only, integration source only, both, or something else (e.g., a domain-specific service like analytics or research)? Confirm before Phase 7.K.3 starts.
+- **OQ-11:** **Readiness status of the five new open apps** added in this revision — issues, sonar, secure-messaging, orders, accounting. Confirm which are production-ready, which are first-cut, which are in development, and which are not yet started. Phase 0 readiness gate is the formal place this lands, but knowing early shapes the schedule.
+- **OQ-12:** **Quarterly release ownership** — who owns the release pipeline runbook, the v2-incorporation review for new open apps, and the SaaS-portfolio (Skip / Izzy / Betty / rasa.io) integration maintenance? These are recurring operational commitments that need a named owner.
 
 -----
 
