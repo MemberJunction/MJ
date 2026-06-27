@@ -19,27 +19,29 @@ Best viewed at desktop width (≥1200px). Responsive breakpoints handle tablet/m
 
 The mockup reflects the **public-facing surface** of the redesigned morecheese.org as a real production demo site (per Phase 14 of the plan — backed by a single production deployment of the `@memberjunction/demo-morecheese` Open App).
 
-| Page | Purpose |
-|---|---|
-| `index.html` | Homepage — hero, six pillars, Betty showcase, upcoming events, membership / education / advocacy / community teasers, big CTA |
-| `about.html` | The federation's story, mission, history, leadership, financials |
-| `membership.html` | Five tiers, benefits, join flow (member application → order → payment confirmation) |
-| `events.html` | Calendar + event listing with filters |
-| `event-detail.html` | One detailed event with registration flow visible (registration → cart → checkout) |
-| `education.html` | Courses, certifications (Apprentice through Master Cheesemaker), continuing education |
-| `awards.html` | National Cheese Awards — competitions, finalists, judges, past winners |
-| `standards.html` | Standards library — published standards, draft standards under review, the plenary process |
-| `advocacy.html` | Legislative tracking — active positions, advocacy actions, position papers |
-| `chapters.html` | The 15 chapters worldwide — chapter directory, officer rosters, regional events |
-| `community.html` | Public preview of the member forums |
-| `committees.html` | Public-facing committee information (Standards, Education, Awards, Advocacy, etc.) |
-| `resources.html` | Resource library — research, white papers, the bundled Content Source PDFs |
-| `portal.html` | Member portal (mock signed-in view) — subscription status, certifications, courses in progress, upcoming registrations, recent messages, Sonar engagement score, recommended actions |
-| `messaging.html` | Secure messaging (mock signed-in) — threads with staff, committee discussions, peer-to-peer messages |
-| `betty-voice.html` | Standalone Betty voice-agent showcase — the conversational/voice surface in full-screen demonstration mode |
-| `contact.html` | Contact info, office locations, Betty as primary entry point |
+### Pages in this mockup
 
-> Some pages may ship in later iterations of this mockup as the design firms up. `index.html`, `membership.html`, `events.html`, `event-detail.html`, `education.html`, `portal.html`, `betty-voice.html`, `about.html` are the priority set.
+| Page | Purpose | Status |
+|---|---|---|
+| `index.html` | Homepage — hero, six pillars, Betty showcase, upcoming events, membership/education/advocacy/community teasers, big CTA | ✅ |
+| `about.html` | The federation's story, mission, 9-event timeline, leadership/board, committees, financials w/ 990s, sponsor policy | ✅ |
+| `membership.html` | Five tiers, benefits, "what dues pay for", 3-step join flow with form, FAQ | ✅ |
+| `events.html` | Format + region filters, featured Annual Conference card, 9-event grid, "host an event" CTA | ✅ |
+| `event-detail.html` | ICF Annual Conference 2026 deep dive — hero, sticky tab bar (overview / schedule / speakers / venue / sponsors / FAQ), full 4-day session schedule, speakers grid, sticky registration sidebar with tier selection + add-ons + live subtotal | ✅ |
+| `education.html` | Four certification tracks (Apprentice / Specialist / Master / Educator), 10-course CE library, institutional partners CTA | ✅ |
+| `awards.html` | National Cheese Awards — 4-stat hero, how-it-works, 12-category grid, 9 finalist cards (with Best in Show), 8-judge panel | ✅ |
+| `advocacy.html` | 12 active positions panel, 5 detailed position cards across FDA / EU / US Congressional / CFIA / Codex with status pills + comment CTAs, recent 5-action timeline | ✅ |
+| `community.html` | Forum preview — 11-category sidebar, hot tags, pinned banner, 8 representative threads with reply counts | ✅ |
+| `portal.html` | Member portal (signed-in as Elena Rodriguez, Producer-tier) — side nav, KPI tiles, renewal nudge, Sonar engagement gauge w/ 6-signal breakdown, upcoming events, certifications in progress, recent messages, Betty contextual prompts | ✅ |
+| `messaging.html` | Secure messaging — 3-column (portal nav / 7-thread inbox with filters / active thread view with secure-tag chips + 3 bubble messages + compose footer) | ✅ |
+| `betty-voice.html` | Standalone full-screen voice showcase — animated orb with pulse rings, status line, sourced-answer transcript, mic + side controls, 8 try-these prompts, technical footer explaining the Caliber stack | ✅ |
+| `chapters.html` | The 15 chapters worldwide | ⏳ deferred |
+| `committees.html` | Public-facing committee information | ⏳ deferred |
+| `standards.html` | Standards library — published standards, drafts under review, plenary process | ⏳ deferred |
+| `resources.html` | Resource library — research, white papers, bundled Content Source PDFs | ⏳ deferred |
+| `contact.html` | Contact info, office locations, Betty as primary entry point | ⏳ deferred |
+
+12 pages shipped (the priority set). Remaining 5 are routine variations of patterns already established (especially `committees.html` and `chapters.html` which mirror the directory layout in `awards.html` judges + `about.html` board). They'll be added in a later iteration if needed.
 
 ## Design language
 
