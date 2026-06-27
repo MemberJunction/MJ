@@ -33,6 +33,11 @@ export * from './experiment';
 // score / experiment / promote), so agents / UI / workflows can invoke them (§12).
 export * from './actions';
 
+// Remote Operations — the six Manual-mode server bodies for the CodeGen-emitted
+// `PredictiveStudio.*` operation bases. The typed peers of the Actions (same engine
+// delegation path), invocable by stable key from client or server (§12).
+export * from './operations';
+
 // Maintenance — MaintenanceEngine (staleness detection / scheduled re-scoring /
 // retraining triggers + challenger-vs-incumbent promotion recommendation), the
 // RetrainingPolicy model, its DI seams, and the default honest drift detector (§12 / SP10).

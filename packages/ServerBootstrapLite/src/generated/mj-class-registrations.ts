@@ -859,9 +859,10 @@ import {
     PromptReasoningProvider,
 } from '@memberjunction/ai-vector-dupe';
 
-// @memberjunction/ai-agents (18 classes)
+// @memberjunction/ai-agents (20 classes)
 import {
     CSVToolLibrary,
+    ClientContextChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
@@ -871,6 +872,7 @@ import {
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
+    MediaChannelServer,
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
@@ -1730,6 +1732,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     LLMReranker,
     PromptReasoningProvider,
     CSVToolLibrary,
+    ClientContextChannelServer,
     DataSnapshotToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
@@ -1739,6 +1742,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     JSONToolLibrary,
     LoopAgentType,
     MJAIAgentRequestEntityServer,
+    MediaChannelServer,
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
@@ -1943,7 +1947,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 830;
+export const CLASS_REGISTRATIONS_COUNT = 834;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

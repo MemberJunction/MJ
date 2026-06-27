@@ -457,7 +457,7 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/ng-artifacts (13 classes)
+// @memberjunction/ng-artifacts (14 classes)
 import {
     AudioArtifactViewerComponent,
     CodeArtifactViewerComponent,
@@ -467,6 +467,7 @@ import {
     HtmlArtifactViewerComponent,
     ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
+    MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
@@ -483,8 +484,9 @@ import {
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-conversations (4 classes)
+// @memberjunction/ng-conversations (5 classes)
 import {
+    ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RemoteBrowserChannel,
@@ -1104,6 +1106,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     HtmlArtifactViewerComponent,
     ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
+    MLExperimentResultsViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
@@ -1114,6 +1117,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
+    ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
     RemoteBrowserChannel,
@@ -1269,7 +1273,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 581;
+export const CLASS_REGISTRATIONS_COUNT = 583;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
