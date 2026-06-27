@@ -72,6 +72,17 @@ Examples:
 >
 > **The four moves (see `connector-creator` "STUDY for awareness; CONTEXT scopes"):** (1) study the system independently → awareness; (2) lay the context against the study and **detect the tension** when they disagree; (3) **investigate the provided slice further AND validate the context — reject it if independent evidence proves it wrong** (context is not sacred); (4) use the context + the client's actual need as the **guiding principle for a limited subset of interest** — model THAT subset deeply, and record the broader nature the study found as **known-but-out-of-scope, with the reason** (`Integration.Configuration.OutOfScopeObjectFamilies`). The goal is a scope decision made **knowingly** — not "discover everything therefore build everything" (over-reach), not "the context is the whole system" (under-reach). Example: PropFuel is a rich bidirectional REST product, but MJ's clients consume its **file feed**, so the file-feed slice is the correct scope — built deeply, with the REST API documented as out-of-scope rather than silently unknown.
 
+**0c — Mode detection (deterministic pre-flight — picks `new` / `redo` / `additive`; the user confirms, never a guess). Full spec: `connector-builder-workshop/INTEGRATION_MODES.md`.**
+
+Run this classifier BEFORE the planner so the mode is a machine decision the user confirms:
+1. **No** `MJ: Integrations.Name=<vendor>` row (DB) AND no `metadata/integrations/<vendor>/.<vendor>.integration.json` → **mode = `new`** (births `1.0.0`; full Plan→Review→Execute). Default — no flag.
+2. **Exists** → run the structural floor gates over the existing metadata (`io-name-quality`, `zero-field-io`, `fk-lookup-qualifier`, `enumerate-catalog` declared-vs-universe, `iof-field-conformance`, `materializability`). **Any HARD gate fails, OR the user requested a breaking change → propose `redo`** (**major** `N.0.0`; a redo is a `new` build over a deprecated prior — full re-extract + re-test, PLUS a deprecation/migration record and a reseed-delete of the prior IO/IOF per `metadata-file-conventions.md`; the reviewer adds a regression-diff confirming every removed object/column is an *intentional* breaking change). Present the failing gate as evidence and WAIT — the arc NEVER silently picks major.
+3. **Exists + floor-clean** → run `DocDelta` (`enumerate-catalog` + `compute-source-diff` over the NEWEST vendor docs vs the existing universe):
+   - universe grew (new objects/fields) OR a code fix is requested → propose **`additive`** (**minor** for new metadata / **patch** for code-only, same shape): localized re-audit of the newest doc → motif-audit the new objects → `isDeltaRound` delta-extract → delta-test ONLY the touched cells + deploy-preflight → additive `mj sync push` (no prune). Unchanged objects' prior green STANDS (skip the full matrix + re-enumeration). The **scoped** reviewer VETOES the mode to `redo` if the delta is actually breaking (drops an object / changes identity).
+   - universe shrank / object removed / identity change → propose **`redo`** (breaking — major).
+   - universe identical AND no code fix → **`additive` re-prove** (no-op delta; pure `/test-connector`, the degenerate case — e.g. a credential arrived later → lift the read-only ceiling to live-verified, no metadata/code change).
+The classifier ONLY proposes; present the proposed mode + its evidence, WAIT for the user's confirm/override (`--mode new|redo|additive` forces it), then thread `mode` into the planner's `vendor_request`. Record `{ mode, priorVersion, newVersion, bumpReason }` in `SuperCoordinatorReport.json` so the version history is auditable. **Token + accuracy payoff:** `additive` makes the common case (vendor added a few fields, or a one-line code fix) a minutes-long scoped delta instead of a full multi-million-token rebuild; `redo` is the honest major-bump response to a structurally-wrong connector rather than papering a defect with a patch.
+
 **0b — Credential & sandbox.**
 
 1. **Detect the isolation posture:**
@@ -133,7 +144,7 @@ Non-zero exit = drift; halt and surface the drift evidence as an architecture fi
 ### Stage 1 — Plan (connector-creator)
 
 Dispatch `connector-creator` (the planner agent, Opus) via `Task` with:
-- `vendor_request` — `{ vendor_name, credentialReference?, budget?, max_tier? }`
+- `vendor_request` — `{ vendor_name, mode, credentialReference?, budget?, max_tier? }` (`mode` ∈ `new|redo|additive` from Step 0c; the planner emits the FULL Plan→Review→Execute skeleton for `new`/`redo`, and a localized `isDeltaRound`-scoped skeleton — re-audit-newest-doc → delta-extract → delta-test-touched-cells → deploy-reconcile — for `additive`)
 - `spec_digest` — the contents of `packages/Integration/connector-builder-workshop/planner/spec-digest.json` (regenerated up-front; see Pre-flight).
 - `corpus_lookup` — any matching entries from `packages/Integration/connector-builder-workshop/corpus/` keyed by vendor-shape tuple (Gap 6).
 

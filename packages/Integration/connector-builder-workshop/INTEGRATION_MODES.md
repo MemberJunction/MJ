@@ -1,8 +1,11 @@
 # INTEGRATION_MODES.md — the 3 build modes for the build-connector skill
 
-Today the arc has exactly **one** mode: *new*. Every `/build-connector` runs the full Plan→Review→Execute
-pipeline from scratch (`build-connector/SKILL.md`), even when the integration already exists and only a small
-delta is needed. The overnight run made the cost of this concrete: re-proving 20 existing connectors meant
+The build-connector skill supports **three modes** — `new` / `redo` / `additive` — selected by the deterministic
+mode-detection classifier at `build-connector/SKILL.md` **Step 0c** (wired 2026-06-27; `mode` threads into the
+planner's `vendor_request`, which emits the full skeleton for `new`/`redo` and a localized `isDeltaRound` skeleton
+for `additive`). Before this, the arc had exactly **one** mode (*new*): every `/build-connector` ran the full
+Plan→Review→Execute pipeline from scratch even when the integration already existed and only a small delta was
+needed. The overnight run made the cost of this concrete: re-proving 20 existing connectors meant
 re-running the full matrix on every one, and the *real* fixes were often a single metadata name-strip (cvent
 E15), one watermark-field add, or one connector-code honor-AccessToken change (E21). A full rebuild for a
 patch is the token-waste analog of the structural-green-over-broken-behavior accuracy waste.
