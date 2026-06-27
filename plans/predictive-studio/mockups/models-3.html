@@ -1,0 +1,210 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Model Detail</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .md-layout { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 1080px){ .md-layout { grid-template-columns: 1fr; } }
+
+  /* left list */
+  .mlist { position: sticky; top: 86px; }
+  .mlist .card-body { padding: 8px; }
+  .mrow { display: flex; align-items: center; gap: 10px; padding: 10px 11px; border-radius: var(--radius-sm); cursor: pointer; border: 1px solid transparent; }
+  .mrow:hover { background: var(--mj-bg-surface-hover); }
+  .mrow.sel { background: var(--mj-brand-soft); border-color: #cdddfb; box-shadow: inset 3px 0 0 var(--mj-brand-primary); }
+  .mrow .ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-size: 12px; flex: 0 0 auto; }
+  .mrow .ico.xgb { background: #2050c8; } .mrow .ico.lgbm { background: #d98213; } .mrow .ico.rf { background: #7a8aa0; }
+  .mrow .nm { font-weight: 650; font-size: 13px; line-height: 1.2; }
+  .mrow .ln2 { font-size: 11px; color: var(--mj-text-muted); margin-top: 1px; }
+  .mrow .auc { margin-left: auto; text-align: right; }
+  .mrow .auc .v { font-weight: 720; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .mrow .auc .st { font-size: 9.5px; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; }
+  .mrow .auc .st.pub { color: var(--mj-success-text); } .mrow .auc .st.val { color: var(--mj-info-text); }
+  .mrow .auc .st.dr { color: var(--mj-text-muted); } .mrow .auc .st.arc { color: var(--mj-text-disabled); }
+  .mrow.arc { opacity: .72; }
+
+  /* right detail */
+  .dh { display: flex; align-items: flex-start; gap: 14px; }
+  .dh .big-ico { width: 48px; height: 48px; border-radius: 12px; background: #2050c8; display: grid; place-items: center; color: #fff; font-size: 20px; flex: 0 0 auto; }
+  .dh h2 { font-size: 20px; } .dh .sub { color: var(--mj-text-muted); font-size: 12.5px; margin-top: 3px; }
+  .dh .acts { margin-left: auto; display: flex; gap: 8px; }
+
+  .metric-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .mtile { border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); padding: 13px 15px; }
+  .mtile .lbl { font-size: 11px; color: var(--mj-text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .mtile .v { font-size: 28px; font-weight: 720; letter-spacing: -.02em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .mtile .sub { font-size: 11px; color: var(--mj-text-muted); margin-top: 2px; }
+  .mtile.honest { border-color: var(--mj-brand-primary); background: var(--mj-brand-soft); }
+  .mtile.honest .v { color: var(--mj-brand-primary); }
+  .stat-bar { display: flex; gap: 10px; margin-top: 12px; }
+  .stat-bar .b { flex: 1; text-align: center; padding: 10px 6px; border: 1px solid var(--mj-border-default); border-radius: var(--radius-sm); }
+  .stat-bar .b .v { font-weight: 720; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .stat-bar .b .l { font-size: 10.5px; color: var(--mj-text-muted); font-weight: 600; margin-top: 1px; }
+
+  .lineage { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .ln-card { border: 1px solid var(--mj-border-default); border-radius: 8px; padding: 9px 12px; background: var(--mj-bg-surface); }
+  .ln-card .t { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); font-weight: 700; display: flex; align-items: center; gap: 5px; }
+  .ln-card .n { font-size: 12.5px; font-weight: 650; margin-top: 2px; }
+  .ln-card .x { font-size: 10.5px; color: var(--mj-text-muted); margin-top: 1px; }
+  .ln-card.cur { border-color: var(--mj-brand-primary); background: var(--mj-brand-soft); }
+  .ln-arrow { color: var(--mj-text-disabled); padding: 0 8px; font-size: 13px; }
+
+  .gate { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--mj-success); background: var(--mj-success-bg); border-radius: var(--radius); }
+  .gate .g-ico { width: 38px; height: 38px; border-radius: 10px; background: var(--mj-success); color: #fff; display: grid; place-items: center; font-size: 16px; flex: 0 0 auto; }
+  .gate .g-body { font-size: 12.5px; color: var(--mj-success-text); }
+  .gate .g-body b { color: #0e5d31; }
+  .gate .acts { margin-left: auto; display: flex; gap: 8px; }
+  .signoff { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--mj-text-secondary); margin-top: 10px; }
+  .signoff i { color: var(--mj-success); }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a><a><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a><a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div><a><i class="fa-solid fa-flask"></i> Experiments</a>
+  <a class="active"><i class="fa-solid fa-cubes"></i> Model Registry</a>
+  <a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main"><div class="ps-topbar">
+  <div><h1>Model Registry</h1><div class="crumb">Registry <i class="fa-solid fa-angle-right" style="font-size:10px"></i> Member Renewal Predictor v4</div></div>
+  <div class="spacer"></div>
+  <button class="btn ghost sm"><i class="fa-solid fa-code-compare"></i> Compare</button>
+  <button class="btn ghost sm"><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+  <button class="btn primary"><i class="fa-solid fa-cube"></i> Register Model</button>
+</div><div class="ps-content">
+ <div class="md-layout">
+
+  <!-- LEFT: model list -->
+  <div class="mlist card">
+   <div class="card-head"><h3>ML Models</h3><span class="badge gray">5</span></div>
+   <div class="card-body">
+     <div class="mrow sel">
+       <span class="ico xgb"><i class="fa-solid fa-cube"></i></span>
+       <div><div class="nm">Member Renewal Predictor</div><div class="ln2">v4 · XGBoost</div></div>
+       <div class="auc"><div class="v">0.864</div><div class="st pub">Published</div></div>
+     </div>
+     <div class="mrow arc">
+       <span class="ico xgb"><i class="fa-solid fa-cube"></i></span>
+       <div><div class="nm">Member Renewal Predictor</div><div class="ln2">v3 · XGBoost</div></div>
+       <div class="auc"><div class="v">0.851</div><div class="st arc">Archived</div></div>
+     </div>
+     <div class="mrow">
+       <span class="ico xgb"><i class="fa-solid fa-cube"></i></span>
+       <div><div class="nm">Event Return Predictor</div><div class="ln2">v1 · XGBoost</div></div>
+       <div class="auc"><div class="v">0.880</div><div class="st val">Validated</div></div>
+     </div>
+     <div class="mrow">
+       <span class="ico lgbm"><i class="fa-solid fa-cube"></i></span>
+       <div><div class="nm">Lapse Risk Scorer</div><div class="ln2">v2 · LightGBM</div></div>
+       <div class="auc"><div class="v">0.830</div><div class="st val">Validated</div></div>
+     </div>
+     <div class="mrow">
+       <span class="ico rf"><i class="fa-solid fa-cube"></i></span>
+       <div><div class="nm">Lead Score Model</div><div class="ln2">v1 · Random Forest</div></div>
+       <div class="auc"><div class="v">0.790</div><div class="st dr">Draft</div></div>
+     </div>
+   </div>
+  </div>
+
+  <!-- RIGHT: detail pane -->
+  <div class="col" style="gap:16px">
+
+   <!-- header -->
+   <div class="card"><div class="card-body">
+     <div class="dh">
+       <span class="big-ico"><i class="fa-solid fa-cube"></i></span>
+       <div>
+         <h2>Member Renewal Predictor <span class="tag mono" style="vertical-align:middle">v4</span></h2>
+         <div class="sub">XGBoost · model #MR-4f2a · renewal probability · immutable snapshot · registered 2h ago</div>
+       </div>
+       <div class="acts">
+         <span class="badge green" style="align-self:center"><i class="fa-solid fa-circle-check"></i> Published</span>
+       </div>
+     </div>
+   </div></div>
+
+   <!-- lifecycle stepper -->
+   <div class="card"><div class="card-body">
+     <div class="section-title">Lifecycle</div>
+     <div class="stepper" style="margin-top:6px">
+       <div class="step done"><span class="pip"><i class="fa-solid fa-check"></i></span>Draft</div><span class="ln"></span>
+       <div class="step done"><span class="pip"><i class="fa-solid fa-check"></i></span>Validated</div><span class="ln"></span>
+       <div class="step curr"><span class="pip"><i class="fa-solid fa-circle"></i></span>Published</div><span class="ln"></span>
+       <div class="step"><span class="pip"></span>Archived</div>
+     </div>
+     <p class="small muted" style="margin:12px 0 0">Promoted from <b>Validated → Published</b> by Amith N. · 2h ago. Models are immutable once registered; promotion only changes lifecycle state, never weights.</p>
+   </div></div>
+
+   <!-- metrics -->
+   <div class="card">
+    <div class="card-head"><h3>Performance</h3><div class="spacer"></div><span class="small muted">Holdout = held-out test fold, never seen in training</span></div>
+    <div class="card-body">
+     <div class="metric-pair">
+       <div class="mtile"><div class="lbl">Train AUC</div><div class="v">0.901</div><div class="sub">in-sample · optimistic</div></div>
+       <div class="mtile honest"><div class="lbl">Holdout AUC</div><div class="v">0.864</div><div class="sub">out-of-sample · the honest number</div></div>
+     </div>
+     <div class="stat-bar">
+       <div class="b"><div class="v">0.79</div><div class="l">Precision</div></div>
+       <div class="b"><div class="v">0.71</div><div class="l">Recall</div></div>
+       <div class="b"><div class="v">0.75</div><div class="l">F1</div></div>
+       <div class="b"><div class="v">0.247</div><div class="l">Log Loss</div></div>
+       <div class="b"><div class="v">0.118</div><div class="l">Brier</div></div>
+     </div>
+     <p class="small muted" style="margin:12px 0 0">Train–holdout gap of <b style="color:var(--mj-success-text)">0.037</b> is within the 0.05 tolerance — <b>no overfitting flag</b>. Holdout AUC is what we report and bind against; train AUC is shown only to expose the gap.</p>
+    </div>
+   </div>
+
+   <!-- feature importance -->
+   <div class="card">
+    <div class="card-head"><h3>Feature Importance</h3><div class="spacer"></div><span class="small muted">gain, normalized · top 6 of 41</span></div>
+    <div class="card-body">
+     <div class="fbar"><span class="small">tenure</span><div class="track"><span style="width:88%"></span></div><span class="mono">0.22</span></div>
+     <div class="fbar"><span class="small">days_since_last_activity</span><div class="track"><span style="width:76%"></span></div><span class="mono">0.19</span></div>
+     <div class="fbar"><span class="small">emb_aggregate</span><div class="track"><span style="width:72%"></span></div><span class="mono">0.18</span></div>
+     <div class="fbar"><span class="small">events_at_signup</span><div class="track"><span style="width:60%"></span></div><span class="mono">0.15</span></div>
+     <div class="fbar"><span class="small">engagement_score</span><div class="track"><span style="width:48%"></span></div><span class="mono">0.12</span></div>
+     <div class="fbar"><span class="small">city</span><div class="track"><span style="width:20%"></span></div><span class="mono">0.05</span></div>
+    </div>
+   </div>
+
+   <!-- leakage sign-off gate -->
+   <div class="gate">
+     <span class="g-ico"><i class="fa-solid fa-shield-halved"></i></span>
+     <div class="g-body">
+       <b>Leakage gate clear.</b> No single feature dominates — top importance is <b>tenure at 0.22</b>, well below the <b>0.60</b> dominance threshold that would flag a possible label proxy. Importance is spread across behavioral and embedding features.
+       <div class="signoff"><i class="fa-solid fa-circle-check"></i> Signed off by Amith N. · 2h ago — required before any Validated → Published promotion.</div>
+     </div>
+   </div>
+
+   <!-- lineage -->
+   <div class="card">
+    <div class="card-head"><h3>Lineage</h3><div class="spacer"></div><span class="small muted">fully reproducible · every artifact pinned</span></div>
+    <div class="card-body">
+     <div class="lineage">
+       <div class="ln-card"><div class="t"><i class="fa-solid fa-diagram-project"></i> Pipeline</div><div class="n">Renewal Train v4</div><div class="x">12 steps · git@a1f9c2</div></div>
+       <span class="ln-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+       <div class="ln-card"><div class="t"><i class="fa-solid fa-flask"></i> Training Run</div><div class="n">run-8821</div><div class="x">142k rows · 6m 14s</div></div>
+       <span class="ln-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+       <div class="ln-card cur"><div class="t"><i class="fa-solid fa-cube"></i> ML Model</div><div class="n">v4 · this</div><div class="x">#MR-4f2a</div></div>
+       <span class="ln-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+       <div class="ln-card"><div class="t"><i class="fa-solid fa-link"></i> Scoring Bindings</div><div class="n">2 active</div><div class="x">Renewal Dash · Outreach Job</div></div>
+     </div>
+    </div>
+   </div>
+
+   <!-- actions -->
+   <div class="card"><div class="card-body">
+     <div class="row" style="align-items:center;gap:10px">
+       <div class="small muted" style="flex:1">This model is live in production. Archiving will detach its 2 scoring bindings and supersede it with the next published version.</div>
+       <button class="btn ghost"><i class="fa-solid fa-code-compare"></i> Compare to v3</button>
+       <button class="btn"><i class="fa-solid fa-box-archive"></i> Archive</button>
+       <button class="btn primary" disabled style="opacity:.6;cursor:not-allowed"><i class="fa-solid fa-check"></i> Published</button>
+     </div>
+   </div></div>
+
+  </div>
+ </div>
+</div></main>
+</div></body></html>
