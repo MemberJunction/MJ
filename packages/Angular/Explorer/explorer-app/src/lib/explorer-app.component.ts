@@ -24,7 +24,7 @@ import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
-import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
@@ -477,6 +477,26 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       this.realtimeSession.RegisterAppClientTools(
         update.AgentClientTools.map(t => ({ Name: t.Name, Handler: t.Handler })),
       );
+
+      // Populate the LIVE capability manifest on the snapshot — names + schemas only (no handlers),
+      // so the streamed context note tells the co-agent exactly which tools are callable on the
+      // current surface RIGHT NOW. This is the "continually pass available client tools" half: as the
+      // user navigates and the surface re-registers its tools, the manifest (and the streamed note)
+      // updates with it.
+      if (this.AppContextSnapshot) {
+        const toolManifest: ClientToolMetadata[] = update.AgentClientTools.map(t => ({
+          Name: t.Name,
+          Description: t.Description,
+          InputSchema: t.ParameterSchema,
+        }));
+        this.AppContextSnapshot = {
+          ...this.AppContextSnapshot,
+          Capabilities: { ...this.AppContextSnapshot.Capabilities, Tools: toolManifest },
+        };
+        this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+        this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
+        this.cdr.detectChanges();
+      }
     }
   }
 

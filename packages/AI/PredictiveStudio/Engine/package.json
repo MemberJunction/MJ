@@ -28,6 +28,7 @@
     "@memberjunction/global": "5.43.0",
     "@memberjunction/predictive-studio-core": "5.43.0",
     "@memberjunction/predictive-studio-sidecar": "5.43.0",
+    "@memberjunction/record-set-processor": "5.43.0",
     "@memberjunction/record-set-processor-base": "5.43.0"
   },
   "devDependencies": {

@@ -1,6 +1,21 @@
 # Realtime Client-Context Co-Agent — Plan Index
 
-**Status:** Draft for review · **Created:** 2026-06-27 · **Branch:** current (omnibus PR) · **CodeGen DB:** `MJ_5_43_0_Predictive` (dedicated)
+**Status:** ✅ **IMPLEMENTED** (Moves 1–4 + the `ClientContextChannel` streaming layer) · **Created:** 2026-06-27 · **Branch:** current (omnibus PR) · **CodeGen DB:** `MJ_5_43_0_Predictive` (dedicated)
+
+> ## Implementation status (2026-06-27)
+>
+> **Shipped & tested** — all four Moves + the streaming channel:
+> - **Move 1** — `Application.AgentSettings` (migration + `IAgentSettings` + CodeGen) wired into `DefaultAgentResolver` (5-step chain).
+> - **Move 2** — `ResolveClientTools` (`ai-core-plus`); `BaseAgent` async path rewired (static-wins → override-wins, documented).
+> - **Move 3** — `ApplicationID`/`AppContext` threaded through both realtime mint paths + the client-direct GraphQL resolver; mint-time app-context injection; **`ClientContextChannel`** server + Angular client + `ContextTool` proxy + continuous streaming (`AppContext$`/`ExecuteClientTool` on `RealtimeChannelContext`, fed by the Explorer `MJExplorerAppComponent` → `RealtimeSessionService`); channel row active.
+> - **Move 4** — `disclosure` + union-accumulated `allowedAgents` + app cascade layer + colleagues framing + multi-target delegation routing (`resolveDelegationTarget`).
+> - **Phase 5** — governance done (dashboards `CLAUDE.md` baseline, `scaffold-mj-dashboard` Step 5b); `NavigationService` convergence (one `SetAgentContext`/`SetAgentClientTools` feeds async **and** realtime); live `Capabilities.Tools` manifest populated.
+> - **Metadata** synced: realtime agent-type `ConfigSchema`/`DefaultConfiguration`; `ClientContextChannel` row; demo `Application.AgentSettings` on **Data Explorer** (Sage lead + Research / Database Research colleagues).
+> - **Tests** (~70 new): `ai-core-plus`, `ai-agents`, `conversations-runtime`, `MJServer` (incl. a headless integration test), `ng-conversations` (channel + session-service app-context). All touched suites green.
+>
+> **Not done — incremental Phase-5 rollout (content, not a build gap):** per-surface Tier-2/3 adoption (Form Builder canvas-edit tools, Predictive Studio per-panel tools, long-tail apps). New surfaces inherit the pattern via the scaffold skill. The optional CI enforcement check (G3) and the `hand-voice` disclosure mode are deferred by design.
+>
+> **Awaiting the user:** live voice-loop verification (the only thing unit/integration tests can't cover).
 
 ## What this is
 
