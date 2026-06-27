@@ -1,7 +1,9 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest } from "@memberjunction/ai-core-plus";
+import { ArtifactToolCall } from "../ArtifactToolManager";
+import { MemoryWriteRequest } from "../MemoryWriteManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall, MemoryWriteRequest };
 
 /**
  * Response structure for Loop Agent Type
@@ -52,6 +54,25 @@ export interface LoopAgentResponse<P = any> {
     scratchpad?: AgentScratchpad;
 
     /**
+     * Artifact tool invocations — explore input artifacts without
+     * dumping full content into context. Processed inline on the same
+     * turn as other response fields (zero turn cost). Results are
+     * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
+     */
+    artifactToolCalls?: ArtifactToolCall[];
+
+    /**
+     * Durable memory writes — record facts/preferences that persist across
+     * runs. Processed inline on the same turn as other response fields (zero
+     * turn cost). Each write lands as a Provisional agent note — immediately
+     * injectable into future runs, later hardened or pruned by the Memory
+     * Manager. Only honored when the agent has AllowMemoryWrite enabled; the
+     * framework enforces type restriction, scope clamping, deduplication,
+     * and per-run caps.
+     */
+    memoryWrites?: MemoryWriteRequest[];
+
+    /**
      * Internal reasoning for debugging
      */
     reasoning?: string;
@@ -66,9 +87,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline'
          */
-        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline';
 
         /**
          * Actions to execute (when type='Actions')
@@ -77,6 +98,16 @@ export interface LoopAgentResponse<P = any> {
             name: string;
             params: Record<string, unknown>;
         }>;
+
+        /**
+         * Tool pipeline to run server-side (when type='Pipeline'). Like client tools, it is a
+         * yield/await action: the agent cannot know the result until it executes, so the loop runs
+         * the pipeline inline, injects the final output, and forces one more turn. Only the final
+         * step's output enters the context window. Modeling it as a `nextStep.type` (rather than a
+         * top-level field) makes it structurally mutually exclusive with Actions/Chat/etc. — the LLM
+         * cannot accidentally request a pipeline AND another step in the same turn.
+         */
+        pipeline?: AgentPipelineRequest;
 
         /**
          * Index of a compacted message to expand (when type='Retry').
@@ -112,6 +143,16 @@ export interface LoopAgentResponse<P = any> {
              */
             terminateAfter: boolean;
         };
+
+        /**
+         * Multiple sub-agents to run in parallel (when type='Sub-Agent')
+         */
+        subAgents?: Array<{
+            name: string;
+            message: string;
+            templateParameters?: Record<string, any>;
+            terminateAfter: boolean;
+        }>;
 
         /**
          * Client tools to invoke (when type='ClientTools').

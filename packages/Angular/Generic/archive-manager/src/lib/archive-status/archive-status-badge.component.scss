@@ -1,0 +1,56 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: 12px;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.badge-warning {
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-warning-text);
+  border: 1px solid var(--mj-status-warning-border);
+}
+
+.badge-pill {
+  border-radius: 50px;
+}
+
+.badge-icon i {
+  font-size: 0.7rem;
+}
+
+.badge-clickable {
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: color-mix(in srgb, var(--mj-status-warning) 25%, var(--mj-bg-surface));
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-status-warning) 20%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mj-border-focus);
+    outline-offset: 2px;
+  }
+
+  &:active {
+    background: color-mix(in srgb, var(--mj-status-warning) 35%, var(--mj-bg-surface));
+  }
+}
+
+.badge-text {
+  letter-spacing: 0.02em;
+}

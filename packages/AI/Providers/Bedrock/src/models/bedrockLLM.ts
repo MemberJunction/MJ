@@ -140,38 +140,52 @@ export class BedrockLLM extends BaseLLM {
       const response = await this._client.send(command);
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
       
-      // Parse response body based on model provider
+      // Parse response body based on model provider.
+      // cacheReadTokens / cacheWriteTokens default to 0; only Anthropic-on-Bedrock reports caching.
       let content = '';
-      let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-      
+      let tokenUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+
       if (modelId.startsWith('anthropic.')) {
         content = responseBody.content?.[0]?.text || '';
+        // Anthropic-style usage: input_tokens EXCLUDES cached tokens, so it is already the net-new
+        // (uncached) prompt count — assign through. Cache reads/writes are reported separately and
+        // are DISJOINT from input_tokens.
         tokenUsage = {
           promptTokens: responseBody.usage?.input_tokens || 0,
           completionTokens: responseBody.usage?.output_tokens || 0,
-          totalTokens: (responseBody.usage?.input_tokens || 0) + (responseBody.usage?.output_tokens || 0)
+          totalTokens: (responseBody.usage?.input_tokens || 0) + (responseBody.usage?.output_tokens || 0),
+          cacheReadTokens: responseBody.usage?.cache_read_input_tokens || 0,
+          cacheWriteTokens: responseBody.usage?.cache_creation_input_tokens || 0
         };
       } else if (modelId.startsWith('ai21.')) {
         content = responseBody.completions?.[0]?.data?.text || '';
+        // AI21 via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.prompt_tokens || 0,
           completionTokens: responseBody.completion_tokens || 0,
-          totalTokens: (responseBody.prompt_tokens || 0) + (responseBody.completion_tokens || 0)
+          totalTokens: (responseBody.prompt_tokens || 0) + (responseBody.completion_tokens || 0),
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       } else if (modelId.startsWith('amazon.titan-')) {
         content = responseBody.results?.[0]?.outputText || '';
+        // Titan via Bedrock has no prompt-cache reporting — promptTokens is already net-new.
         tokenUsage = {
           promptTokens: responseBody.inputTextTokenCount || 0,
           completionTokens: responseBody.outputTextTokenCount || 0,
-          totalTokens: (responseBody.inputTextTokenCount || 0) + (responseBody.outputTextTokenCount || 0)
+          totalTokens: (responseBody.inputTextTokenCount || 0) + (responseBody.outputTextTokenCount || 0),
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       } else if (modelId.startsWith('meta.')) {
         content = responseBody.generation || '';
-        // Llama models via Bedrock may not provide token counts
+        // Llama models via Bedrock may not provide token counts, and report no cache info.
         tokenUsage = {
           promptTokens: 0,
           completionTokens: 0,
-          totalTokens: 0
+          totalTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0
         };
       }
       
@@ -187,6 +201,10 @@ export class BedrockLLM extends BaseLLM {
         index: 0
       }];
       
+      const usage = new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens);
+      usage.cacheReadTokens = tokenUsage.cacheReadTokens;
+      usage.cacheWriteTokens = tokenUsage.cacheWriteTokens;
+
       return {
         success: true,
         statusText: "OK",
@@ -195,8 +213,9 @@ export class BedrockLLM extends BaseLLM {
         timeElapsed: endTime.getTime() - startTime.getTime(),
         data: {
           choices: choices,
-          usage: new ModelUsage(tokenUsage.promptTokens, tokenUsage.completionTokens)
+          usage
         },
+        cacheInfo: { cacheHit: tokenUsage.cacheReadTokens > 0, cachedTokenCount: tokenUsage.cacheReadTokens },
         errorMessage: "",
         exception: null,
       };
@@ -330,10 +349,14 @@ export class BedrockLLM extends BaseLLM {
       }
       
       if (chunkData.usage) {
+        // Anthropic-style: input_tokens already EXCLUDES cached tokens (net-new). Cache
+        // reads/writes are reported separately and are DISJOINT from input_tokens.
         usage = new ModelUsage(
           chunkData.usage.input_tokens || 0,
           chunkData.usage.output_tokens || 0
         );
+        usage.cacheReadTokens = chunkData.usage.cache_read_input_tokens || 0;
+        usage.cacheWriteTokens = chunkData.usage.cache_creation_input_tokens || 0;
       }
     }
     
@@ -359,6 +382,7 @@ export class BedrockLLM extends BaseLLM {
     const result = new ChatResult(true, now, now);
     
     // Set all properties
+    const finalUsage: ModelUsage = usage || new ModelUsage(0, 0);
     result.data = {
       choices: [{
         message: {
@@ -368,9 +392,12 @@ export class BedrockLLM extends BaseLLM {
         finish_reason: lastChunk?.finishReason || 'stop',
         index: 0
       }],
-      usage: usage || new ModelUsage(0, 0)
+      usage: finalUsage
     };
-    
+
+    const cacheRead = finalUsage.cacheReadTokens ?? 0;
+    result.cacheInfo = { cacheHit: cacheRead > 0, cachedTokenCount: cacheRead };
+
     result.statusText = 'success';
     result.errorMessage = null;
     result.exception = null;
@@ -437,8 +464,14 @@ export class BedrockLLM extends BaseLLM {
           if (imageBlock) {
             bedrockContent.push(imageBlock);
           }
+        } else if (block.type === 'file_url') {
+          // Convert document to Bedrock/Claude format
+          const docBlock = this.formatDocumentForBedrock(block);
+          if (docBlock) {
+            bedrockContent.push(docBlock);
+          }
         }
-        // Note: audio_url, video_url, file_url not yet supported by Bedrock Claude
+        // Note: audio_url, video_url not yet supported by Bedrock Claude
       }
 
       return {
@@ -496,6 +529,69 @@ export class BedrockLLM extends BaseLLM {
         data: content
       }
     };
+  }
+
+  /**
+   * Format a file content block as a Bedrock Claude document block.
+   * Bedrock Converse API supports documents in the format:
+   * { type: "document", source: { type: "base64", media_type: "application/pdf", data: "..." } }
+   *
+   * Same format as direct Anthropic API — Bedrock mirrors the Claude content block types.
+   */
+  private formatDocumentForBedrock(block: ChatMessageContentBlock): any | null {
+    const content = block.content;
+
+    // Determine the MIME type
+    const mimeType = block.mimeType || this.inferDocumentMimeType(block.fileName) || 'application/octet-stream';
+
+    // Check if it's a data URL (data:application/pdf;base64,...)
+    const parsed = parseBase64DataUrl(content);
+    if (parsed) {
+      return {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: parsed.mediaType,
+          data: parsed.data
+        }
+      };
+    }
+
+    // Raw base64 with mimeType
+    if (mimeType && !content.startsWith('http')) {
+      return {
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: mimeType,
+          data: content
+        }
+      };
+    }
+
+    // Bedrock doesn't support URL-based documents — must be base64
+    if (content.startsWith('http://') || content.startsWith('https://')) {
+      console.warn('Bedrock Claude does not support document URLs, only base64. Skipping document.');
+      return null;
+    }
+
+    console.warn(`Document content block has unknown format (mime: ${mimeType}), skipping`);
+    return null;
+  }
+
+  /** Infer MIME type from file extension when mimeType is not provided */
+  private inferDocumentMimeType(fileName?: string): string | null {
+    if (!fileName) return null;
+    const ext = fileName.split('.').pop()?.toLowerCase();
+    switch (ext) {
+      case 'pdf': return 'application/pdf';
+      case 'csv': return 'text/csv';
+      case 'txt': return 'text/plain';
+      case 'html': case 'htm': return 'text/html';
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      default: return null;
+    }
   }
 
   /**

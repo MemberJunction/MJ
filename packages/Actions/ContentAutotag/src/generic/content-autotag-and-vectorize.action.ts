@@ -2,7 +2,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { AutotagBase, AutotagBaseEngine, AutotagProgressCallback, VectorizeResult } from '@memberjunction/content-autotagging';
 import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import {
     MJContentItemEntity,
     MJContentProcessRunDetailEntity,
@@ -195,10 +195,18 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         params: RunActionParams,
         contentProcessRunID?: string
     ): Promise<void> {
+        // Resolve the per-request provider once and thread it down the call stack so
+        // every BaseEntity / RunView operation in this action runs against the caller's
+        // connection (multi-tenant correctness; do not fall through to the global default).
+        // Use Metadata.Provider (the global ProviderBase which implements IRunViewProvider)
+        // as the fallback — NOT `new Metadata()` which is just a wrapper and doesn't
+        // implement RunView.
+        const provider = (params.Provider ?? Metadata.Provider) as unknown as IMetadataProvider;
+
         // Load all content items, then exclude Entity-sourced items.
         // Entity sources get their vectors via EntityVectorSyncer (Phase 2b),
         // not through content item vectorization.
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJContentItemEntity>({
             EntityName: 'MJ: Content Items',
             ResultType: 'entity_object'
@@ -238,7 +246,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
 
         for (const [sourceID, sourceItems] of sourceGroups) {
             await this.vectorizeSourceWithTracking(
-                sourceID, sourceItems, contentProcessRunID, params.ContextUser
+                sourceID, sourceItems, contentProcessRunID, params.ContextUser, provider
             );
         }
     }
@@ -272,9 +280,10 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         sourceID: string,
         items: MJContentItemEntity[],
         contentProcessRunID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<void> {
-        const detail = await this.createRunDetail(sourceID, contentProcessRunID, contextUser);
+        const detail = await this.createRunDetail(sourceID, contentProcessRunID, contextUser, provider);
         if (!detail) {
             // Fall back to untracked vectorization
             LogError(`[AutotagAction] Failed to create detail record for source ${sourceID}, proceeding without tracking`);
@@ -287,7 +296,7 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
             await this.completeRunDetail(detail, stats, contextUser);
 
             // Link AIPromptRun records to this detail via junction table
-            await this.linkPromptRuns(detail.ID, stats.promptRunIDs, 'Embed', contextUser);
+            await this.linkPromptRuns(detail.ID, stats.promptRunIDs, 'Embed', contextUser, provider);
 
             LogStatus(`[AutotagAction] Source ${sourceID}: ${stats.vectorized} vectorized, ${stats.skipped} skipped, ${stats.promptRunIDs.length} prompt runs linked`);
         } catch (error) {
@@ -306,11 +315,11 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
     private async createRunDetail(
         sourceID: string,
         contentProcessRunID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<MJContentProcessRunDetailEntity | null> {
         try {
-            const md = new Metadata();
-            const detail = await md.GetEntityObject<MJContentProcessRunDetailEntity>(
+            const detail = await provider.GetEntityObject<MJContentProcessRunDetailEntity>(
                 'MJ: Content Process Run Details', contextUser
             );
             detail.NewRecord();
@@ -415,14 +424,14 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         detailID: string,
         promptRunIDs: string[],
         runType: 'Tag' | 'Embed',
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<void> {
         if (promptRunIDs.length === 0) return;
 
-        const md = new Metadata();
         for (const promptRunID of promptRunIDs) {
             try {
-                const junction = await md.GetEntityObject<MJContentProcessRunPromptRunEntity>(
+                const junction = await provider.GetEntityObject<MJContentProcessRunPromptRunEntity>(
                     'MJ: Content Process Run Prompt Runs', contextUser
                 );
                 junction.NewRecord();

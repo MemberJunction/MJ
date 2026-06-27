@@ -38,7 +38,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
 
         // In constructor we must use new Metadata() since entity isn't fully initialized yet
         // This is an acceptable exception as it only checks provider type at construction time
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: constructor runs before entity provider is wired
         if (md.ProviderType !== 'Database')
             throw new Error('This class is only supported for server-side/database providers. Remove this package from your application.');
     }
@@ -55,7 +55,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
         await ActionEngineBase.Instance.Config(false, this.ContextCurrentUser);
         await DocumentationEngine.Instance.Config(false, this.ContextCurrentUser);
 
-        const provider = Metadata.Provider as DatabaseProviderBase;
+        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
         
         // Start a database transaction
         await provider.BeginTransaction();

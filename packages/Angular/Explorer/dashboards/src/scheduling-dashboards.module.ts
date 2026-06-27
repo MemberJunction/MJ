@@ -1,7 +1,20 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageBodyComponent,
+  MJTabNavComponent,
+  MJPageSearchComponent,
+  MJFilterChipComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent,
+  MJEmptyStateComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -36,6 +49,17 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     FormsModule,
     ReactiveFormsModule,
     MJButtonDirective,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJTabNavComponent,
+    MJPageSearchComponent,
+    MJFilterChipComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
+    MJEmptyStateComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,

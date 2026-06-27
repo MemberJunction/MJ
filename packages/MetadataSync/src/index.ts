@@ -4,7 +4,10 @@ import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
 // Core library exports
 export { FileBackupManager } from './lib/file-backup-manager';
 export { SyncEngine, DeferrableLookupError } from './lib/sync-engine';
-export type { RecordData } from './lib/sync-engine';
+export { SyncMetadataEngine } from './lib/sync-metadata-engine';
+export type { RecordData, BatchContext } from './lib/sync-engine';
+export { BatchContextIndex } from './lib/batch-context-index';
+export type { BatchContextStub } from './lib/batch-context-index';
 export { ConfigManager, configManager } from './lib/config-manager';
 export { getSyncEngine, resetSyncEngine } from './lib/singleton-manager';
 export { SQLLogger } from './lib/sql-logger';
@@ -13,6 +16,8 @@ export { JsonWriteHelper } from './lib/json-write-helper';
 export { FileWriteBatch } from './lib/file-write-batch';
 export { JsonPreprocessor } from './lib/json-preprocessor';
 export type { IncludeDirective } from './lib/json-preprocessor';
+export { SyncStateManager } from './lib/sync-state-manager';
+export type { SyncState } from './lib/sync-state-manager';
 
 // Deletion audit exports
 export { RecordDependencyAnalyzer } from './lib/record-dependency-analyzer';
@@ -61,6 +66,7 @@ export {
 // Provider utilities
 export {
   initializeProvider,
+  cleanupProvider,
   getSystemUser,
   findEntityDirectories,
   getDataProvider

@@ -22,6 +22,18 @@
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
     "strictInjectionParameters": true,
-    "strictInputAccessModifiers": true
+    "strictInputAccessModifiers": true,
+    // MJExplorer compiles CodeGen-generated entity forms from
+    // src/app/generated/. For supertype entities with many inbound FKs
+    // (Salesforce User, Account, Contact frequently exceed 1000), the
+    // generated template emits one <mj-collapsible-panel> per related
+    // entity in a single template — at ~150+ panels Angular's Type
+    // Check Block (TCB) for that template exceeds TypeScript's
+    // expression-complexity limit (TS2563 "Excessive complexity in
+    // this expression"), failing the build. Type safety on these
+    // generated forms is guaranteed by CodeGen construction, so we
+    // disable strictTemplates here to remove the form generator's
+    // hard scale ceiling. Same rationale as @memberjunction/ng-core-entity-forms.
+    "strictTemplates": false
   }
 }

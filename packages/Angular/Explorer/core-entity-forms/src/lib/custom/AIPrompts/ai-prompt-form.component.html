@@ -1,9 +1,15 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-  <!-- Dialog container -->
-  <div></div>
-  @if (record) {
+<!-- Dialog container -->
+<div></div>
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Main Content Area - Template Editor and Configuration -->
       <div class="prompt-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
         <!-- Header Section -->
@@ -156,14 +162,12 @@
                   Loading template...
                 </div>
               } @else if (!record.TemplateID) {
-                <div class="no-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: var(--mj-text-muted);">
-                  <i class="fa-solid fa-code" style="font-size: 64px; margin-bottom: 20px; opacity: 0.3;"></i>
-                  <h5 style="margin-bottom: 12px; color: var(--mj-text-secondary);">No Template Associated</h5>
-                  <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
-                    This AI prompt needs a template to define its structure and parameters.
-                    Create a new template or link to an existing one.
-                  </p>
-                  <div style="display: flex; gap: 12px;">
+                <mj-empty-state class="no-template-state"
+                  Size="large"
+                  Icon="fa-solid fa-code"
+                  Title="No Template Associated"
+                  Message="This AI prompt needs a template to define its structure and parameters. Create a new template or link to an existing one.">
+                  <div ngProjectAs="[actions]" style="display: flex; gap: 12px;">
                     @if (UserCanCreateTemplates) {
                       <button mjButton variant="primary" (click)="createNewTemplate()">
                         <i class="fa-solid fa-plus"></i> Create New Template
@@ -175,17 +179,15 @@
                       </button>
                     }
                   </div>
-                </div>
+                </mj-empty-state>
               } @else if (templateNotFoundInDatabase) {
-                <div class="invalid-template-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; color: #dc3545;">
-                  <i class="fa-solid fa-exclamation-triangle" style="font-size: 64px; margin-bottom: 20px; opacity: 0.7;"></i>
-                  <h5 style="margin-bottom: 12px;">Template Not Found</h5>
-                  <p style="margin-bottom: 24px; text-align: center; max-width: 400px;">
-                    The referenced template could not be loaded. It may have been deleted or moved.
-                  </p>
-                  <div style="display: flex; gap: 12px;">
+                <mj-empty-state class="invalid-template-state"
+                  Variant="warning"
+                  Title="Template Not Found"
+                  Message="The referenced template could not be loaded. It may have been deleted or moved.">
+                  <div ngProjectAs="[actions]" style="display: flex; gap: 12px;">
                     <button mjButton variant="outline" (click)="loadTemplate()">
-                      <i class="fa-solid fa-refresh"></i> Retry Loading
+                      <i class="fa-solid fa-arrows-rotate"></i> Retry Loading
                     </button>
                     @if (UserCanCreateTemplates) {
                       <button mjButton variant="primary" (click)="createNewTemplate()">
@@ -193,7 +195,7 @@
                       </button>
                     }
                   </div>
-                </div>
+                </mj-empty-state>
               } @else {
                 <!-- Active Template Editor -->
                 <div class="template-editor-container" style="flex: 1; display: flex; flex-direction: column; min-height: 350px;">
@@ -265,17 +267,17 @@
                     </div>
                   } @else {
                     @if (promptModels.length === 0) {
-                      <div class="empty-state" style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
-                        <i class="fa-solid fa-info-circle"></i> No models configured
+                      <mj-empty-state
+                        Size="compact"
+                        Icon="fa-solid fa-circle-info"
+                        Title="No models configured">
                         @if (EditMode && UserCanCreatePromptModels) {
-                          <div style="margin-top: 10px;">
-                            <button mjButton variant="outline" size="sm"
-                              (click)="addNewModel()">
-                              <i class="fa-solid fa-plus"></i> Add Model
-                            </button>
-                          </div>
+                          <button ngProjectAs="[actions]" mjButton variant="outline" size="sm"
+                            (click)="addNewModel()">
+                            <i class="fa-solid fa-plus"></i> Add Model
+                          </button>
                         }
-                      </div>
+                      </mj-empty-state>
                     } @else {
                       <!-- Priority explanation for multiple models -->
                       @if (promptModels.length > 1) {
@@ -704,9 +706,10 @@
                     <i class="fa-solid fa-spinner fa-spin"></i> Loading template parameters...
                   </div>
                 } @else if (templateParams.length === 0) {
-                  <div class="empty-state" style="padding: 20px; text-align: center; color: var(--mj-text-muted);">
-                    <i class="fa-solid fa-info-circle"></i> This template has no parameters defined
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-circle-info"
+                    Title="This template has no parameters defined" />
                 } @else {
                   <!-- Parameters Grid -->
                   <div style="display: grid; gap: 12px;">
@@ -866,11 +869,11 @@
                     <p>Loading execution history...</p>
                   </div>
                 } @else if (executionHistory.length === 0) {
-                  <div style="text-align: center; padding: 40px; color: var(--mj-text-muted);">
-                    <i class="fa-solid fa-history" style="font-size: 3em; margin-bottom: 12px; opacity: 0.3;"></i>
-                    <p>No execution history yet</p>
-                    <p style="font-size: 0.9em;">Run this prompt to see execution history here</p>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-clock-rotate-left"
+                    Title="No execution history yet"
+                    Message="Run this prompt to see execution history here" />
                 } @else {
                   <!-- Sort Controls -->
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -1059,27 +1062,27 @@
         </div>
       </div>
     </form>
-  }
+</mj-record-form-container>
+}
 
 
-  <!-- AI Prompt Test Harness -->
-  @if (showTestHarness) {
-    <mj-window
-      [Width]="1200"
-      [Height]="800"
-      [MinWidth]="800"
-      [MinHeight]="600"
-      [Draggable]="true"
-      [Resizable]="true"
-      [Visible]="true"
-      (Close)="onTestHarnessVisibilityChanged(false)"
-      [Title]="'Run AI Prompt - ' + (record.Name || 'Untitled')">
-      <mj-ai-test-harness
-        [entity]="record"
-        [mode]="'prompt'"
-        [isVisible]="showTestHarness"
-        (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-      </mj-ai-test-harness>
-    </mj-window>
-  }
-</div>
+<!-- AI Prompt Test Harness -->
+@if (showTestHarness) {
+  <mj-window
+    [Width]="1200"
+    [Height]="800"
+    [MinWidth]="800"
+    [MinHeight]="600"
+    [Draggable]="true"
+    [Resizable]="true"
+    [Visible]="true"
+    (Close)="onTestHarnessVisibilityChanged(false)"
+    [Title]="'Run AI Prompt - ' + (record.Name || 'Untitled')">
+    <mj-ai-test-harness
+      [entity]="record"
+      [mode]="'prompt'"
+      [isVisible]="showTestHarness"
+      (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+    </mj-ai-test-harness>
+  </mj-window>
+}

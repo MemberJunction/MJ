@@ -5,6 +5,7 @@ import { RunView, Metadata } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
 
 interface UserStats {
@@ -28,7 +29,7 @@ interface FilterOptions {
 })
 @RegisterClass(BaseDashboard, 'UserManagement')
 export class UserManagementComponent extends BaseDashboard implements OnDestroy {
-  
+
   // State management
   public users: MJUserEntity[] = [];
   public filteredUsers: MJUserEntity[] = [];
@@ -69,7 +70,6 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
-  public showMobileFilters = false;
 
   // Mobile expansion state
   private expandedUserIds = new Set<string>();
@@ -85,8 +85,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   };
   
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
@@ -142,7 +141,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async loadUsers(): Promise<MJUserEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJUserEntity>({
       EntityName: 'MJ: Users',
       ResultType: 'entity_object'
@@ -152,7 +151,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   private async loadRoles(): Promise<MJRoleEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJRoleEntity>({
       EntityName: 'MJ: Roles',
       ResultType: 'entity_object',
@@ -163,7 +162,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async loadUserRoles(): Promise<MJUserRoleEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJUserRoleEntity>({
       EntityName: 'MJ: User Roles',
       ResultType: 'entity_object'
@@ -242,24 +241,22 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ search: value });
-  }
-  
   public onStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
     this.updateFilter({ status });
   }
-  
-  public onRoleFilterChange(role: string): void {
-    this.updateFilter({ role });
-  }
-  
+
   public updateFilter(partial: Partial<FilterOptions>): void {
     this.filters$.next({
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips, popover dropdowns) apply immediately. Text search
+    // still goes through the 300ms debounce in setupFilterSubscription so we
+    // don't re-filter on every keystroke.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
   }
   
   public selectUser(user: MJUserEntity): void {
@@ -465,7 +462,90 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       status: 'all',
       role: ''
     });
-    this.showMobileFilters = false;
+    this.applyFilters();
+    this.cdr.markForCheck();
+  }
+
+  // -- Filter panel binding (mj-filter-panel inside the popover) -------------
+  //
+  // Only Role lives inside the popover — Status is exposed as visible chips
+  // in the filter card alongside search (the standardized "quick toggle"
+  // pattern used by Scheduling's exterior chrome). The popover badge counts
+  // only popover-resident filters (Role), so Status changes don't ghost
+  // the badge.
+
+  /**
+   * FilterFieldConfig[] describing the popover's Role field. Driven off
+   * `roles[]` so the dropdown stays in sync as roles load.
+   */
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'status',
+        type: 'chips',
+        label: 'Status',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'Active', value: 'active' },
+          { text: 'Inactive', value: 'inactive' },
+        ],
+      },
+      {
+        key: 'role',
+        type: 'dropdown',
+        label: 'Role',
+        icon: 'fa-solid fa-user-shield',
+        placeholder: 'All Roles',
+        filterable: this.roles.length > 10,
+        options: [
+          { text: 'All Roles', value: '' },
+          ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+        ]
+      }
+    ];
+  }
+
+  /** Current popover field values keyed by FilterFieldConfig.key. */
+  public get filterValues(): Record<string, unknown> {
+    return { status: this.filters$.value.status, role: this.filters$.value.role };
+  }
+
+  /** Total active filters (Status + Role) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    const f = this.filters$.value;
+    return (f.status !== 'all' ? 1 : 0) + (f.role !== '' ? 1 : 0);
+  }
+
+  /** Apply a value change from <mj-filter-panel>. */
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    const partial: Partial<FilterOptions> = {};
+    if ('status' in values) {
+      partial.status = (values['status'] as FilterOptions['status']) || 'all';
+    }
+    if ('role' in values) {
+      partial.role = (values['role'] as string) ?? '';
+    }
+    this.updateFilter(partial);
+  }
+
+  /** Clear all filters (Status + Role); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ status: 'all', role: '' });
+  }
+
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Status + Role) and refresh
+   *  immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ status: 'all', role: '', search: '' });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
 
   public toggleSelectAll(): void {
@@ -547,21 +627,35 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async bulkSetUserStatus(users: MJUserEntity[], isActive: boolean): Promise<void> {
+    if (users.length === 0) return;
+
+    const md = this.ProviderToUse;
+    const tg = await md.CreateTransactionGroup();
     for (const user of users) {
       user.IsActive = isActive;
-      const result = await user.Save();
-      if (!result) {
-        throw new Error(`Failed to update user ${user.Name}: ${user.LatestResult?.Message}`);
+      user.TransactionGroup = tg;
+      await user.Save();
+    }
+    if (!await tg.Submit()) {
+      // Server rolled back — restore in-memory flags to their prior state
+      for (const user of users) {
+        user.IsActive = !isActive;
       }
+      throw new Error('Failed to update users — all changes have been rolled back');
     }
   }
 
   private async bulkDeleteUsers(users: MJUserEntity[]): Promise<void> {
+    if (users.length === 0) return;
+
+    const md = this.ProviderToUse;
+    const tg = await md.CreateTransactionGroup();
     for (const user of users) {
-      const result = await user.Delete();
-      if (!result) {
-        throw new Error(`Failed to delete user ${user.Name}: ${user.LatestResult?.Message}`);
-      }
+      user.TransactionGroup = tg;
+      await user.Delete();
+    }
+    if (!await tg.Submit()) {
+      throw new Error('Failed to delete users — all changes have been rolled back');
     }
   }
 
@@ -584,19 +678,25 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       this.isLoading = true;
       const selectedUserIds = Array.from(this.selectedUserIds);
 
-      for (const userId of selectedUserIds) {
-        // Check if user already has this role
+      // Collect only the users that don't already have the role
+      const usersNeedingRole = selectedUserIds.filter(userId => {
         const existingRoles = this.userRoleMap.get(userId) || [];
-        if (!existingRoles.includes(this.bulkRoleId)) {
+        return !existingRoles.includes(this.bulkRoleId);
+      });
+
+      if (usersNeedingRole.length > 0) {
+        const tg = await this.metadata.CreateTransactionGroup();
+        for (const userId of usersNeedingRole) {
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = this.bulkRoleId;
+          userRole.TransactionGroup = tg;
+          await userRole.Save();
+        }
 
-          const result = await userRole.Save();
-          if (!result) {
-            console.warn(`Failed to assign role to user ${userId}:`, userRole.LatestResult?.Message);
-          }
+        if (!await tg.Submit()) {
+          throw new Error('Failed to assign roles — all changes have been rolled back');
         }
       }
 

@@ -195,7 +195,48 @@ The tool is intended for managing business-level metadata such as:
 - Permissions and security settings
 - Any other data that is not reflected **up** from the underlying system database catalogs
 
-For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGen/README.md).
+For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGenLib/README.md).
+
+## Performance: Preloading and Caching During Push
+
+The `push` command preloads existing records and caches files/lookups so the
+per-record sync work avoids redundant DB round-trips and disk I/O.
+
+### 1. Upfront bulk preload (batched `RunViews`)
+
+Before processing records, the push scans every JSON file in the target
+directories (in parallel, with a concurrency cap), collects primary keys
+from records and nested `relatedEntities`, groups them by entity, and
+issues a single filtered `RunView` per entity. This replaces the
+prior per-record existence check with one batched read per entity at
+push start.
+
+### 2. Event-driven in-memory cache (`SyncMetadataEngine` extends `BaseEngine`)
+
+`SyncMetadataEngine` plugs into MJ's `BaseEntity` event bus via `BaseEngine`.
+Saves and deletes performed during the push update the in-memory cache in
+place, so subsequent lookups inside the same run see the new state without
+a re-fetch. The engine overrides `canUseImmediateMutation` to allow this
+in-place update for its own preload configs — the filter is built from
+the preloaded PKs, so updates and deletes stay safe, and newly-created
+records are deliberately added to the cache so later lookups can find them
+within the same push.
+
+### 3. File and lookup caches
+
+- **File cache**: parsed JSON and resolved `@include` output are cached on
+  first read so the validation and sync passes don't reparse. The cache
+  entry for a file is invalidated whenever the push writes that file back
+  to disk.
+- **Lookup cache**: resolved `@lookup` (and `@parent` / `@root`) values are
+  memoized per `(entity, lookup-fields)` key. The cache is indexed by
+  entity so deleting a record invalidates only the affected entries
+  instead of clearing the whole cache. Keys are URI-encoded to prevent
+  collisions when user data contains `=` / `&` / `|`.
+
+> Real-world reductions vary with the size and shape of your metadata
+> tree; expect the biggest wins on syncs that read many records of the
+> same entity (which is the common case).
 
 ## File Structure
 
@@ -994,7 +1035,54 @@ mj sync push --no-validate
 
 # Reset file checksums
 mj sync file-reset
+
+# Incremental push (skip unchanged files and records)
+mj sync push --incremental
+mj sync push --dir ./metadata --incremental --verbose
+
+# Incremental pull (only records updated since last pull)
+mj sync pull --incremental
+
+# Pull records updated after a specific timestamp
+mj sync pull --entity "MJ: AI Prompts" --since "2026-04-07T10:00:00Z"
 ```
+
+### Incremental Push (`--incremental`)
+
+Skips unchanged files and records using stored checksums, significantly speeding up repeated pushes when only a few files have changed.
+
+- The first run with `--incremental` establishes baseline checksums (runs at normal speed)
+- Subsequent runs skip files whose content hash has not changed since the last push
+- Also skips individual records within multi-record files when only some records changed (uses the per-record `sync.checksum` already present in metadata files)
+- Unchanged files and records are skipped without any database calls
+- State is stored in `~/.mj/sync-state/` (machine-local, not committed to version control)
+- Combine freely with other flags: `mj sync push --dir ./metadata --incremental --verbose`
+
+### Incremental Pull (`--incremental`)
+
+Only pulls records updated since the last successful pull, avoiding a full re-pull of every record.
+
+- Filters by the `__mj_UpdatedAt` column (maintained by database triggers on all tracked entities)
+- Detects soft-deleted records (`__mj_DeletedAt`) and removes their local files
+- State is stored in `~/.mj/sync-state/`
+
+### Pull Since Timestamp (`--since`)
+
+Explicit alternative to `--incremental` -- pulls only records updated after a given ISO timestamp.
+
+```bash
+mj sync pull --entity "MJ: AI Prompts" --since "2026-04-07T10:00:00Z"
+```
+
+### Performance Improvements
+
+The following improvements apply automatically with no flags required:
+
+**Lazy embedding model loading** -- The AIEngine no longer loads the embedding model (~50 MB `Xenova/all-mpnet-base-v2`) at startup. The model loads on the first semantic search call (`FindSimilarAgents`, etc.). CLI commands that never use semantic search (sync, codegen) skip the ~8 s model load entirely. API server behavior is unchanged -- embeddings generate on the first search request.
+
+**Indexed batch context lookups** -- Push operations resolve `@lookup` references using an indexed data structure instead of a linear scan, reducing lookup cost from O(N) to O(1).
+
+**Batched pull queries** -- Pull operations pre-fetch related entities with a single `IN` query per type, replacing the previous N+1 query pattern (one query per parent record per related type).
 
 ## Configuration
 
@@ -1802,8 +1890,8 @@ Processing AI Prompts in demo/ai-prompts
 ## Dependencies
 
 This package depends on:
-- [@memberjunction/core](../MJCore/README.md) -- Core MemberJunction framework (Metadata, RunView, BaseEntity)
-- [@memberjunction/core-entities](../MJCoreEntities/README.md) -- Generated entity subclasses
+- [@memberjunction/core](../MJCore/readme.md) -- Core MemberJunction framework (Metadata, RunView, BaseEntity)
+- [@memberjunction/core-entities](../MJCoreEntities/readme.md) -- Generated entity subclasses
 - [@memberjunction/global](../MJGlobal/README.md) -- Global utilities and class factory
 - [@memberjunction/config](../Config/README.md) -- Configuration management
 - [@memberjunction/sqlserver-dataprovider](../SQLServerDataProvider/README.md) -- SQL Server data access
@@ -1840,3 +1928,104 @@ If you were previously using the standalone `mj-sync` command:
 ## Contributing
 
 See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md) for development setup and guidelines.
+
+---
+
+## Notes — Push Performance Optimizations (v5.38.x)
+
+The `push` path was substantially reworked to eliminate per-record DB
+round-trips on metadata trees with thousands of records. End-to-end
+measurements on a representative ~36,500-record `metadata/` tree (mostly
+idempotent, including a `metadata/integrations/` dir with 23,789 records):
+
+| Scenario | Pre-optimization | Post-optimization | Speedup |
+|---|---:|---:|---:|
+| Full sync (incl. integrations) | ~6m 49s | **~1m 4s** | **~6.5×** |
+| Partial sync (excluding integrations) | ~1m 37s | **~30.5s** | **~3.2×** |
+
+The changes sit entirely inside the `push` flow; behaviour, configuration,
+and on-disk formats are unchanged.
+
+### What changed
+
+1. **Upfront preloading via `SyncMetadataEngine`** (extends `BaseEngine`).
+   Before processing any file the engine scans every JSON file under each
+   configured entity directory once, collects the set of entity names
+   referenced (including nested `relatedEntities`), and issues a single
+   unfiltered `RunView` per entity through `BaseEngine.Load`. The
+   resulting `BaseEntity` instances live on dynamic per-entity property
+   slots that the sync path consults instead of round-tripping the DB
+   per record.
+
+   Why unfiltered: metadata entities (Actions, Prompts, Agents,
+   Templates, …) are bounded by design. Loading all rows once is faster
+   than computing a giant `WHERE … IN (…)` clause, and it lets
+   `@lookup:` resolution hit the cache even for records that are not
+   directly mentioned in local files. An oversize warning fires if any
+   single entity comes back with more than 100,000 rows so operators
+   notice when something non-metadata-scale slips into a sync workflow.
+
+2. **O(1) PK index on the preload cache.** Each preloaded slot is also
+   indexed into a per-entity `Map<serializedPK, BaseEntity>`. The
+   sync's `loadEntity` path uses this for O(1) hash lookups instead of
+   the previous `Array.find(... serializePrimaryKey(GetAll()))` scan.
+
+   This was the single biggest fix. The naïve `Array.find` was O(N×K)
+   where N = cached rows and K = records being processed. For
+   `MJ: Integration Object Fields` (~100K+ DB rows, ~23,789 records
+   processed) that was ~1.2B comparisons → ~38 minutes. After the Map
+   index the integrations dir alone dropped from 38 minutes to seconds.
+   The index has a self-healing array-scan fallback for entries
+   introduced by `BaseEngine`'s event-driven slot mutations.
+
+3. **Resolved-lookup cache + cached file reads.** Resolved `@lookup:`
+   keys are memoized in a per-engine `Map<lookupKey, ID>`, indexed by
+   entity so the cache invalidates only the affected entries on delete
+   instead of clearing wholesale. The parsed + `@include`-preprocessed
+   contents of every file are also cached, so validation and sync
+   passes don't re-read or re-parse the same file twice. File-cache
+   entries are invalidated at every write site (immediate and deferred
+   writes) so later passes within the same push see fresh contents.
+
+4. **Skip preload for unresolved PK references.** Records whose
+   `primaryKey` still carries an unresolved `@lookup:` / `@parent:` /
+   `@root:` / `@file:` / `@env:` / `@template:` reference are skipped
+   at the preload step — `SyncEngine`'s per-record path resolves them
+   later. Without this guard the preload would inline literal
+   `@lookup:…` strings into a `WHERE ID = '…'` filter and SQL Server
+   would (correctly) reject the cast to uniqueidentifier.
+
+5. **Provider plumbing.** The push flow no longer reaches for
+   `Metadata.Provider` directly during cache and lookup writes —
+   `SyncEngine.getProvider()` is the single entry point. Single-process
+   today; ready for multi-provider scenarios without further surgery.
+
+### Related core fix shipped at the same time
+
+Fixed-width / space-padded character types (`nchar`/`char` on SQL Server;
+`char`/`character`/`bpchar` on PostgreSQL) used to surface their storage
+padding through `BaseEntity.Get`, causing dirty-check to compare e.g.
+`"Input     "` against `"Input"` and false-positive every record as
+dirty. Once preload populated the in-memory comparison this manifested
+as thousands of spurious "updates" per sync (~4,279 on `MJ: Action
+Params` alone).
+
+The fix is in `@memberjunction/core`:
+
+- New `EntityFieldInfo.FixedWidthColumn` getter, delegating to a new
+  `IsFixedWidthStringSQLType` predicate in `@memberjunction/sql-dialect`
+  so the list of fixed-width type names stays in one place per dialect.
+- `EntityField.Value` setter and `BaseEntity.Get` raw fast-path now
+  rtrim string values when `FixedWidthColumn` is true, memoizing back
+  into `_raw` so the trim runs once per field per record.
+
+This is independent of MetadataSync but was exposed by the preload work
+and is required for the "Unchanged" counts to be accurate.
+
+### Observability
+
+`SyncMetadataEngine.drainWarnings()` exposes non-fatal warnings
+collected during preload (malformed `relatedEntities` shapes, oversized
+entities). `PushService` surfaces them through `callbacks.onWarn` so
+they appear in the CLI's standard warning channel alongside everything
+else.

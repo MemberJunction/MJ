@@ -2,7 +2,7 @@
 
 This directory contains all provider-specific implementations of the MemberJunction AI framework interfaces. Each provider package implements the abstract base classes defined in `@memberjunction/ai` to integrate with a specific AI service, translating MJ's common interfaces into provider-specific API calls.
 
-There are 23 packages in total, grouped by category below.
+There are 24 packages in total, grouped by category below.
 
 ## Packages
 
@@ -12,11 +12,11 @@ Direct integrations with large language model APIs.
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Anthropic](./Anthropic/README.md) | `@memberjunction/ai-anthropic` | Wrapper for Anthropic AI Models (Claude) |
-| [Gemini](./Gemini/README.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models |
-| [Groq](./Groq/README.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
-| [Mistral](./Mistral/README.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
-| [OpenAI](./OpenAI/README.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
+| [Anthropic](./Anthropic/readme.md) | `@memberjunction/ai-anthropic` | Wrapper for Anthropic AI Models (Claude) |
+| [Gemini](./Gemini/readme.md) | `@memberjunction/ai-gemini` | Wrapper for Google Gemini AI Models |
+| [Groq](./Groq/readme.md) | `@memberjunction/ai-groq` | Wrapper for Groq AI LPU inference engine |
+| [Mistral](./Mistral/readme.md) | `@memberjunction/ai-mistral` | Wrapper for Mistral AI Models |
+| [OpenAI](./OpenAI/readme.md) | `@memberjunction/ai-openai` | Wrapper for OpenAI AI Models (GPT-4, etc.) |
 | [xAI](./xAI/README.md) | `@memberjunction/ai-xai` | Wrapper for xAI models (Grok) |
 
 ### Cloud Platform Providers
@@ -26,7 +26,7 @@ Managed AI services offered through major cloud platforms.
 | Package | npm | Description |
 |---------|-----|-------------|
 | [Azure](./Azure/README.md) | `@memberjunction/ai-azure` | Azure AI Provider for MemberJunction |
-| [Bedrock](./Bedrock/README.md) | `@memberjunction/ai-bedrock` | Wrapper for Amazon Bedrock AI Models |
+| [Bedrock](./Bedrock/readme.md) | `@memberjunction/ai-bedrock` | Wrapper for Amazon Bedrock AI Models |
 | [Vertex](./Vertex/README.md) | `@memberjunction/ai-vertex` | Wrapper for Google Vertex AI Models |
 
 ### Inference Routers and Aggregators
@@ -44,6 +44,7 @@ Run models locally without external API calls.
 
 | Package | npm | Description |
 |---------|-----|-------------|
+| [LlamaCpp](./LlamaCpp/README.md) | `@memberjunction/ai-llamacpp` | Wrapper for llama.cpp - Local Inference via `llama-server` |
 | [LMStudio](./LMStudio/README.md) | `@memberjunction/ai-lmstudio` | Wrapper for LM Studio AI - Local Inference Engine |
 | [Ollama](./Ollama/README.md) | `@memberjunction/ai-ollama` | Wrapper for Ollama - Local Inference |
 
@@ -65,7 +66,7 @@ Providers focused on specific AI capabilities beyond general-purpose LLMs.
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [Vectors-Pinecone](./Vectors-Pinecone/README.md) | `@memberjunction/ai-vectors-pinecone` | Pinecone Implementation for AI Vectors |
+| [Vectors-Pinecone](../Vectors/Providers/Pinecone/README.md) | `@memberjunction/ai-vectors-pinecone` | Pinecone Implementation for AI Vectors |
 
 ### Recommendation Providers
 

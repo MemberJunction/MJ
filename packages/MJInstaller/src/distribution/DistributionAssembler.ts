@@ -1,0 +1,474 @@
+/**
+ * Assembles a MemberJunction **distribution layout** from a source checkout (a
+ * git sparse-checkout or a local working tree) — the typed replacement for the
+ * legacy root `CreateMJDistribution.js`.
+ *
+ * The output is byte-compatible with the bootstrap zip it replaces, so every
+ * downstream installer phase (configure/platform/dependencies/migrate/codegen)
+ * sees the same on-disk shape it always has:
+ *
+ * - `packages/MJAPI` → `apps/MJAPI`, `packages/MJExplorer` → `apps/MJExplorer`
+ * - `packages/GeneratedEntities` / `packages/GeneratedActions` kept in place
+ * - `SQL Scripts` kept (minus `generated/`, `internal_only/`, `install/`), with an
+ *   empty `generated/` directory marker so CodeGen has somewhere to write
+ * - package tsconfigs flattened (no `extends`); `tsc-alias` / `--port` stripped
+ * - root `distribution.*` files mapped to `package.json` / `turbo.json` /
+ *   `mj.config.cjs` / `README.md`, plus `install.config.json` and the update script
+ *
+ * Environment files are intentionally NOT shipped — the installer's
+ * `ConfigurePhase` generates them from resolved config.
+ *
+ * The assembler first builds a pure-data {@link WriteOp}[] plan, then applies it
+ * either to a directory (install) or to a zip via adm-zip (`mj bundle`).
+ *
+ * @module distribution/DistributionAssembler
+ */
+
+import path from 'node:path';
+import { readdir, readFile, mkdir, writeFile, copyFile, stat } from 'node:fs/promises';
+import { minimatch } from 'minimatch';
+import AdmZip from 'adm-zip';
+import { transformServerTsconfig, transformAngularTsconfig, stripTscAliasFromPackageJson, removePortFlagsFromPackageJson } from './transforms.js';
+
+/**
+ * A single entry to materialize in the distribution, relative to the distribution root.
+ * `emptyDir` represents a directory that must exist even when it has no files (e.g. the
+ * CodeGen output folder) — stored as a directory entry in a zip, `mkdir` on disk.
+ */
+export type WriteOp = { Dest: string; Kind: 'copy'; SourceAbs: string } | { Dest: string; Kind: 'content'; Text: string } | { Dest: string; Kind: 'emptyDir' };
+
+/** Database platform whose migration tree maps to a source directory. */
+export type DbPlatform = 'sqlserver' | 'postgresql';
+
+/** Inputs for building a distribution plan. */
+export interface AssembleOptions {
+  /** Root of the source checkout / working tree. */
+  SourceDir: string;
+  /** When true, include the migration tree(s) (offline bundles). Install omits them. */
+  IncludeMigrations?: boolean;
+  /**
+   * Which platform's migration tree to include when `IncludeMigrations` is set.
+   * Omitted = both `migrations/` (SQL Server) and `migrations-pg/` (PostgreSQL),
+   * silently skipping whichever is absent at the source (e.g. an older tag that
+   * predates one tree). Set explicitly to ship exactly one — a missing tree then
+   * fails loudly because you asked for it by name.
+   */
+  MigrationPlatform?: DbPlatform;
+  /**
+   * Include the Claude Code pack (`templates/claude-pack/dist/v{N}/`) at the target root.
+   * Default (`undefined` / `true`): include if present at the source, silently skip if
+   * not (handles installs from older MJ tags that predate the pack). Pass `false` to
+   * explicitly opt out (`--no-claude-pack` on `mj install` / `mj bundle`).
+   *
+   * The pack is laid down byte-for-byte from the pre-built `dist/v{N}/` directory —
+   * the same content the post-install `mj install:claude` command would land. Honors
+   * Goal #1 of `plans/claude-install-pack.md`: every new install gets a working
+   * Claude Code experience without a second command.
+   */
+  IncludeClaudePack?: boolean;
+}
+
+/** Per-package transform style applied to a directory mapping. */
+type MappingKind = 'server' | 'angular' | 'sqlscripts' | 'migrations' | 'claudePack';
+
+/** One source→dest directory mapping with its transform style. */
+interface DirMapping {
+  SourceRel: string;
+  DestRel: string;
+  Kind: MappingKind;
+}
+
+/** One source→dest single-file mapping copied verbatim into the distribution root. */
+interface RootFile {
+  SourceRel: string;
+  DestRel: string;
+}
+
+/** Ignore patterns shared by every package/app directory (gitignored artifacts + secrets). */
+const COMMON_IGNORE: readonly string[] = [
+  'node_modules/**',
+  'dist/**',
+  '.turbo/**',
+  '.vscode/**',
+  '.angular/**',
+  'internal_only/**',
+  'package-lock.json',
+  '.env',
+  'mj.config.js',
+  '*.output.txt',
+  '*.log',
+  '.*',
+];
+
+/** Server packages re-emit a flattened tsconfig + tsc-alias-stripped package.json, so those are excluded from the raw copy. */
+const SERVER_IGNORE: readonly string[] = [...COMMON_IGNORE, 'src/generated/**', 'tsconfig.json', 'package.json'];
+
+/** MJExplorer re-emits a flattened tsconfig + port-stripped package.json; environment files come from ConfigurePhase. */
+const ANGULAR_IGNORE: readonly string[] = [
+  ...COMMON_IGNORE,
+  'src/app/generated/**',
+  'src/environments/**',
+  'kendo-ui-license.txt',
+  'tsconfig.json',
+  'package.json',
+];
+
+/** SQL Scripts uses its own exclusion list (generated SQL is regenerated by CodeGen). */
+const SQLSCRIPTS_IGNORE: readonly string[] = ['_all_entities.sql', '_all_entities.permissions.sql', 'install/**', 'internal_only/**', 'generated/**'];
+
+/** Migrations bundle excludes documentation and backup files. */
+const MIGRATIONS_IGNORE: readonly string[] = [...COMMON_IGNORE, '**/*.md', '**/*.backup'];
+
+/**
+ * The Claude pack is a pre-built dist directory — every file in it is intentional
+ * (CLAUDE.md at root, the dotfile-prefixed `.claude/` tree, the SessionStart hook
+ * helper, etc.). Notably, `COMMON_IGNORE`'s `.*` pattern would block `.claude/`
+ * entirely, so this kind uses an empty ignore set. The build step (`build-pack.mjs`)
+ * already filters anything that shouldn't ship.
+ */
+const CLAUDE_PACK_IGNORE: readonly string[] = [];
+
+/** Repo-relative path to the pack source tree (one subdirectory per MJ major). */
+const CLAUDE_PACK_DIST_ROOT = 'templates/claude-pack/dist';
+
+/** Directory mappings always included in a distribution. */
+const BASE_MAPPINGS: readonly DirMapping[] = [
+  { SourceRel: 'SQL Scripts', DestRel: 'SQL Scripts', Kind: 'sqlscripts' },
+  { SourceRel: 'packages/MJAPI', DestRel: 'apps/MJAPI', Kind: 'server' },
+  { SourceRel: 'packages/MJExplorer', DestRel: 'apps/MJExplorer', Kind: 'angular' },
+  { SourceRel: 'packages/GeneratedEntities', DestRel: 'packages/GeneratedEntities', Kind: 'server' },
+  { SourceRel: 'packages/GeneratedActions', DestRel: 'packages/GeneratedActions', Kind: 'server' },
+];
+
+/** Single-file root mappings (source → distribution root). */
+const ROOT_FILES: readonly RootFile[] = [
+  { SourceRel: 'distribution.package.json', DestRel: 'package.json' },
+  { SourceRel: 'distribution.turbo.json', DestRel: 'turbo.json' },
+  { SourceRel: 'distribution.config.cjs', DestRel: 'mj.config.cjs' },
+  { SourceRel: 'distribution.README.md', DestRel: 'README.md' },
+  { SourceRel: 'install.config.json', DestRel: 'install.config.json' },
+  { SourceRel: 'packages/Update_MemberJunction_Packages_To_Latest.ps1', DestRel: 'Update_MemberJunction_Packages_To_Latest.ps1' },
+];
+
+/** Base tsconfig filenames the package configs `extends`, read once and inlined. */
+const SERVER_BASE_TSCONFIG = 'tsconfig.server.json';
+const ANGULAR_BASE_TSCONFIG = 'tsconfig.angular.json';
+
+/** Source directory holding each DB platform's migration tree. */
+const MIGRATION_DIRS: Record<DbPlatform, string> = {
+  sqlserver: 'migrations',
+  postgresql: 'migrations-pg',
+};
+
+/** Migration source dirs for a platform selection; an omitted platform = both trees. */
+function migrationDirsFor(platform?: DbPlatform): string[] {
+  return platform ? [MIGRATION_DIRS[platform]] : [MIGRATION_DIRS.sqlserver, MIGRATION_DIRS.postgresql];
+}
+
+/**
+ * The repo-relative source paths a sparse fetch must check out so that
+ * {@link DistributionAssembler.Plan} has everything it needs: the mapped code
+ * directories, the base tsconfigs inlined during flattening, and the root
+ * `distribution.*` template files.
+ *
+ * @param includeMigrations - Add the migration tree(s) (offline bundles).
+ * @param migrationPlatform - Narrow to one platform's tree; omitted = both
+ *   (a sparse fetch tolerates a path that doesn't exist at the ref).
+ * @param includeClaudePack - Add the pre-built Claude pack source. Default `true`
+ *   matches the assembler's auto-include behavior; pass `false` to skip the fetch
+ *   entirely when `IncludeClaudePack: false` was set on the assemble options.
+ *   A sparse fetch tolerates a path that doesn't exist at the ref, so the older-tag
+ *   case (no pack present) is fine either way.
+ */
+export function distributionSourcePaths(
+  includeMigrations = false,
+  migrationPlatform?: DbPlatform,
+  includeClaudePack = true,
+): string[] {
+  const dirs = BASE_MAPPINGS.map((mapping) => mapping.SourceRel);
+  if (includeMigrations) {
+    dirs.push(...migrationDirsFor(migrationPlatform));
+  }
+  if (includeClaudePack) {
+    dirs.push(CLAUDE_PACK_DIST_ROOT);
+  }
+  return [...dirs, SERVER_BASE_TSCONFIG, ANGULAR_BASE_TSCONFIG, ...ROOT_FILES.map((file) => file.SourceRel)];
+}
+
+/**
+ * Builds and applies the distribution layout plan.
+ */
+export class DistributionAssembler {
+  /**
+   * Build the ordered list of {@link WriteOp}s for a distribution. Reads source
+   * files for the transform steps but performs no writes.
+   *
+   * @throws If a required source directory or root file is missing.
+   */
+  async Plan(opts: AssembleOptions): Promise<WriteOp[]> {
+    const mappings = await this.mappingsFor(opts);
+    await this.assertSourcesPresent(opts.SourceDir, mappings);
+
+    const ops: WriteOp[] = [];
+    for (const mapping of mappings) {
+      ops.push(...(await this.planMapping(opts.SourceDir, mapping)));
+    }
+    ops.push(...this.planRootFiles(opts.SourceDir));
+    return ops;
+  }
+
+  /** Build the plan and write every op into `destDir`. Returns the plan that was applied. */
+  async AssembleToDir(opts: AssembleOptions, destDir: string): Promise<WriteOp[]> {
+    const ops = await this.Plan(opts);
+    await this.WriteToDir(ops, destDir);
+    return ops;
+  }
+
+  /** Build the plan and write every op into a zip at `zipPath`. Returns the plan that was applied. */
+  async AssembleToZip(opts: AssembleOptions, zipPath: string): Promise<WriteOp[]> {
+    const ops = await this.Plan(opts);
+    await this.WriteToZip(ops, zipPath);
+    return ops;
+  }
+
+  /** Materialize every op into `destDir`, creating parent directories as needed. */
+  async WriteToDir(ops: readonly WriteOp[], destDir: string): Promise<void> {
+    for (const op of ops) {
+      const dest = path.join(destDir, ...op.Dest.split('/'));
+      if (op.Kind === 'emptyDir') {
+        await mkdir(dest, { recursive: true });
+        continue;
+      }
+      await mkdir(path.dirname(dest), { recursive: true });
+      if (op.Kind === 'copy') {
+        await copyFile(op.SourceAbs, dest);
+      } else {
+        await writeFile(dest, op.Text, 'utf-8');
+      }
+    }
+  }
+
+  /** Materialize every op into a zip at `zipPath`. */
+  async WriteToZip(ops: readonly WriteOp[], zipPath: string): Promise<void> {
+    const zip = new AdmZip();
+    for (const op of ops) {
+      if (op.Kind === 'emptyDir') {
+        zip.addFile(`${op.Dest}/`, Buffer.alloc(0)); // trailing slash → directory entry
+        continue;
+      }
+      const slash = op.Dest.lastIndexOf('/');
+      const folder = slash >= 0 ? op.Dest.slice(0, slash) : '';
+      const name = slash >= 0 ? op.Dest.slice(slash + 1) : op.Dest;
+      if (op.Kind === 'copy') {
+        zip.addLocalFile(op.SourceAbs, folder, name);
+      } else {
+        zip.addFile(op.Dest, Buffer.from(op.Text, 'utf-8'));
+      }
+    }
+    await mkdir(path.dirname(path.resolve(zipPath)), { recursive: true });
+    zip.writeZip(zipPath);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Plan construction
+  // ---------------------------------------------------------------------------
+
+  /**
+   * The mappings to include for this assembly. Migrations are conditional: an
+   * explicitly-selected platform is always added (and validated downstream by
+   * {@link assertSourcesPresent}), while the default "both" selection includes only
+   * the trees that actually exist at the source — so bundling a ref that predates
+   * one platform's tree doesn't fail.
+   *
+   * The Claude pack is auto-included when `IncludeClaudePack !== false` AND a
+   * `templates/claude-pack/dist/v{N}/` directory exists at the source. Missing
+   * pack source is silently skipped (e.g. installing an older MJ tag that predates
+   * the pack) — pass `IncludeClaudePack: false` to suppress even when present.
+   */
+  private async mappingsFor(opts: AssembleOptions): Promise<DirMapping[]> {
+    const mappings = [...BASE_MAPPINGS];
+
+    if (opts.IncludeMigrations ?? false) {
+      const explicit = opts.MigrationPlatform != null;
+      for (const dir of migrationDirsFor(opts.MigrationPlatform)) {
+        if (explicit || (await this.pathExists(path.join(opts.SourceDir, dir)))) {
+          mappings.push({ SourceRel: dir, DestRel: dir, Kind: 'migrations' });
+        }
+      }
+    }
+
+    if (opts.IncludeClaudePack !== false) {
+      const packDir = await this.discoverClaudePackDir(opts.SourceDir);
+      if (packDir != null) {
+        mappings.push({ SourceRel: packDir, DestRel: '', Kind: 'claudePack' });
+      }
+    }
+
+    return mappings;
+  }
+
+  /**
+   * Find the highest-major `templates/claude-pack/dist/v{N}/` directory at the
+   * source. Returns the repo-relative path (e.g. `templates/claude-pack/dist/v5`)
+   * or `null` if no pack source is present. Matches the design doc §6.1 dynamic-
+   * discovery convention: pick the highest available major rather than coupling
+   * to root `package.json`'s workspace semver (which is 1.x, not user-facing 5.x).
+   */
+  private async discoverClaudePackDir(sourceDir: string): Promise<string | null> {
+    const absRoot = path.join(sourceDir, CLAUDE_PACK_DIST_ROOT);
+    let entries: string[];
+    try {
+      const dirents = await readdir(absRoot, { withFileTypes: true });
+      entries = dirents.filter((d) => d.isDirectory() && /^v\d+$/.test(d.name)).map((d) => d.name);
+    } catch {
+      return null; // dist root absent — older MJ tags or non-MJ source
+    }
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => parseInt(b.slice(1), 10) - parseInt(a.slice(1), 10));
+    return `${CLAUDE_PACK_DIST_ROOT}/${entries[0]}`;
+  }
+
+  /** Build the write ops for one directory mapping (raw copies + per-kind transforms). */
+  private async planMapping(sourceDir: string, mapping: DirMapping): Promise<WriteOp[]> {
+    const absSource = path.join(sourceDir, mapping.SourceRel);
+    const files = await this.collectFiles(absSource, this.ignoreFor(mapping.Kind));
+    const ops: WriteOp[] = files.map((rel) => ({
+      Dest: this.joinPosix(mapping.DestRel, rel),
+      Kind: 'copy',
+      SourceAbs: path.join(absSource, ...rel.split('/')),
+    }));
+    ops.push(...(await this.transformedFilesFor(sourceDir, absSource, mapping)));
+    return ops;
+  }
+
+  /** Re-emit the files that each mapping kind transforms instead of copying verbatim. */
+  private async transformedFilesFor(sourceDir: string, absSource: string, mapping: DirMapping): Promise<WriteOp[]> {
+    if (mapping.Kind === 'server') {
+      return this.serverTransforms(sourceDir, absSource, mapping.DestRel);
+    }
+    if (mapping.Kind === 'angular') {
+      return this.angularTransforms(sourceDir, absSource, mapping.DestRel);
+    }
+    if (mapping.Kind === 'sqlscripts') {
+      return [{ Dest: this.joinPosix(mapping.DestRel, 'generated'), Kind: 'emptyDir' }];
+    }
+    return [];
+  }
+
+  /** Flattened tsconfig + tsc-alias-stripped package.json for a server package. */
+  private async serverTransforms(sourceDir: string, absSource: string, destRel: string): Promise<WriteOp[]> {
+    const base = await readFile(path.join(sourceDir, SERVER_BASE_TSCONFIG), 'utf-8');
+    const tsconfig = await readFile(path.join(absSource, 'tsconfig.json'), 'utf-8');
+    const pkg = await readFile(path.join(absSource, 'package.json'), 'utf-8');
+    return [
+      { Dest: this.joinPosix(destRel, 'tsconfig.json'), Kind: 'content', Text: transformServerTsconfig(tsconfig, base) },
+      { Dest: this.joinPosix(destRel, 'package.json'), Kind: 'content', Text: stripTscAliasFromPackageJson(pkg) },
+    ];
+  }
+
+  /** Flattened Angular tsconfig + port-stripped package.json for MJExplorer. */
+  private async angularTransforms(sourceDir: string, absSource: string, destRel: string): Promise<WriteOp[]> {
+    const base = await readFile(path.join(sourceDir, ANGULAR_BASE_TSCONFIG), 'utf-8');
+    const tsconfig = await readFile(path.join(absSource, 'tsconfig.json'), 'utf-8');
+    const pkg = await readFile(path.join(absSource, 'package.json'), 'utf-8');
+    return [
+      { Dest: this.joinPosix(destRel, 'tsconfig.json'), Kind: 'content', Text: transformAngularTsconfig(tsconfig, base) },
+      { Dest: this.joinPosix(destRel, 'package.json'), Kind: 'content', Text: removePortFlagsFromPackageJson(pkg) },
+    ];
+  }
+
+  /** Copy ops for the single-file root mappings. */
+  private planRootFiles(sourceDir: string): WriteOp[] {
+    return ROOT_FILES.map((file) => ({
+      Dest: file.DestRel,
+      Kind: 'copy',
+      SourceAbs: path.join(sourceDir, ...file.SourceRel.split('/')),
+    }));
+  }
+
+  /** The ignore set for a mapping kind. */
+  private ignoreFor(kind: MappingKind): readonly string[] {
+    switch (kind) {
+      case 'server':
+        return SERVER_IGNORE;
+      case 'angular':
+        return ANGULAR_IGNORE;
+      case 'sqlscripts':
+        return SQLSCRIPTS_IGNORE;
+      case 'migrations':
+        return MIGRATIONS_IGNORE;
+      case 'claudePack':
+        return CLAUDE_PACK_IGNORE;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Filesystem helpers
+  // ---------------------------------------------------------------------------
+
+  /** Recursively list non-ignored files under `absDir`, returning posix relative paths. */
+  private async collectFiles(absDir: string, ignore: readonly string[]): Promise<string[]> {
+    const out: string[] = [];
+    await this.walk(absDir, absDir, ignore, out);
+    return out.sort();
+  }
+
+  /** Depth-first walk that skips ignored files and prunes ignored directories. */
+  private async walk(root: string, current: string, ignore: readonly string[], out: string[]): Promise<void> {
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const abs = path.join(current, entry.name);
+      const rel = path.relative(root, abs).split(path.sep).join('/');
+      if (entry.isDirectory()) {
+        if (!this.isIgnored(rel, ignore, true)) {
+          await this.walk(root, abs, ignore, out);
+        }
+      } else if (entry.isFile() && !this.isIgnored(rel, ignore, false)) {
+        out.push(rel);
+      }
+    }
+  }
+
+  /** True when `rel` matches an ignore pattern (directories also match a `X/**` prefix). */
+  private isIgnored(rel: string, ignore: readonly string[], isDir: boolean): boolean {
+    for (const pattern of ignore) {
+      if (minimatch(rel, pattern, { dot: true })) return true;
+      if (isDir && pattern.endsWith('/**') && minimatch(rel, pattern.slice(0, -3), { dot: true })) return true;
+    }
+    return false;
+  }
+
+  /** Verify every mapping's source directory exists (clear failure if the fetch was incomplete). */
+  private async assertSourcesPresent(sourceDir: string, mappings: readonly DirMapping[]): Promise<void> {
+    const missing: string[] = [];
+    for (const mapping of mappings) {
+      if (!(await this.pathExists(path.join(sourceDir, mapping.SourceRel)))) {
+        missing.push(mapping.SourceRel);
+      }
+    }
+    for (const file of ROOT_FILES) {
+      if (!(await this.pathExists(path.join(sourceDir, ...file.SourceRel.split('/'))))) {
+        missing.push(file.SourceRel);
+      }
+    }
+    if (missing.length > 0) {
+      throw new Error(`Distribution source is missing required path(s): ${missing.join(', ')}`);
+    }
+  }
+
+  /** True if a file or directory exists at `target`. */
+  private async pathExists(target: string): Promise<boolean> {
+    try {
+      await stat(target);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Join a dest prefix and a posix relative path with a single forward slash. */
+  private joinPosix(prefix: string, rel: string): string {
+    if (prefix === '') return rel;
+    return `${prefix}/${rel}`;
+  }
+}

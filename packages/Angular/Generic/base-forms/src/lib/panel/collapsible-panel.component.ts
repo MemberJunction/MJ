@@ -8,9 +8,11 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormContext, PanelVariant, PanelDragStartEvent, PanelDropEvent } from '../types/form-types';
+import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
 import { CompositeKey } from '@memberjunction/core';
+import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 
 /**
  * Reusable collapsible panel for form sections.
@@ -94,6 +96,28 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
    */
   @Input() InheritedRecordPrimaryKey?: CompositeKey;
 
+  /**
+   * Container-driven hard hide. When true the panel is removed from view
+   * regardless of search state — used by the record-form container to honor
+   * `EntityFormConfig.showRelatedEntities` / `hiddenSectionKeys` /
+   * `visibleSectionKeys`. Composes with (overrides) search visibility so all
+   * existing `IsVisible`-based section counts stay correct.
+   */
+  @Input()
+  set Hidden(value: boolean) {
+    if (value !== this._hidden) {
+      this._hidden = value;
+      // Recompute visibility if content has initialized (FieldComponents present).
+      if (this.FieldComponents) {
+        this.UpdateVisibilityAndHighlighting();
+      }
+    }
+  }
+  get Hidden(): boolean {
+    return this._hidden;
+  }
+  private _hidden = false;
+
   // ---- Deprecated camelCase aliases (backward compat) ----
 
   /** @deprecated Use [SectionKey] instead */
@@ -156,6 +180,8 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   @ViewChild('panelContent') private panelContentRef?: ElementRef<HTMLElement>;
   private resizeObserver?: ResizeObserver;
   private resizeDebounceTimer?: ReturnType<typeof setTimeout>;
+  /** ResizeObserver fires once synchronously on observe(); that initial measurement is not a user resize. */
+  private resizeObserverPrimed = false;
 
   /**
    * Persisted panel height for related-entity panels.
@@ -172,8 +198,19 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return this.FormContext?.allowSectionReorder !== false;
   }
 
-  /** Whether the panel is expanded (delegates to form state) */
+  /**
+   * Whether this panel's header may collapse/expand. Driven by
+   * `FormContext.collapsibleSections`; when false the panel renders
+   * always-expanded with no toggle chevron (used by dialog/slide-in surfaces
+   * that lock sections open). Undefined / true means collapsible.
+   */
+  get Collapsible(): boolean {
+    return this.FormContext?.collapsibleSections !== false;
+  }
+
+  /** Whether the panel is expanded (delegates to form state; always true when not collapsible) */
   get Expanded(): boolean {
+    if (!this.Collapsible) return true;
     const formRef = this.Form as { IsSectionExpanded?: (key: string, defaultExpanded?: boolean) => boolean };
     return formRef?.IsSectionExpanded ? formRef.IsSectionExpanded(this.SectionKey, this.DefaultExpanded) : true;
   }
@@ -223,6 +260,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   // ---- Actions ----
 
   Toggle(): void {
+    if (!this.Collapsible) return;
     const formRef = this.Form as { SetSectionExpanded?: (key: string, expanded: boolean) => void };
     if (formRef?.SetSectionExpanded) {
       formRef.SetSectionExpanded(this.SectionKey, !this.Expanded);
@@ -360,6 +398,16 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     // Run outside Angular zone to avoid triggering change detection on every resize frame
     this.ngZone.runOutsideAngular(() => {
       this.resizeObserver = new ResizeObserver((entries) => {
+        // Skip the synchronous initial fire emitted when observe() is called — it's the
+        // panel's own first measurement on load, not a user-initiated resize. Persisting
+        // it would write a spurious panelHeight for every panel on form open.
+        if (!this.resizeObserverPrimed) {
+          this.resizeObserverPrimed = true;
+          return;
+        }
+        // Only a height change while the panel is expanded reflects a genuine user drag of
+        // the resize handle. Ignore reflows while collapsed (e.g. content settling on load).
+        if (!this.Expanded) return;
         const entry = entries[0];
         if (!entry) return;
         const newHeight = Math.round(entry.contentRect.height);
@@ -383,6 +431,17 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   private UpdateVisibilityAndHighlighting(): void {
+    // Hard hide takes precedence over search state. Driven by an explicit
+    // `Hidden` input OR the form config's section-visibility rules carried on
+    // FormContext (which also reach slot-injected BaseFormPanels, since every
+    // panel receives FormContext).
+    if (this._hidden || IsFormSectionHidden(this.FormContext, this.SectionKey, this.Variant)) {
+      this.IsVisible = false;
+      this.DisplayName = EscapeHTML(this.SectionName);
+      this.cdr.markForCheck();
+      return;
+    }
+
     const searchTerm = (this.FormContext?.sectionFilter || '').toLowerCase().trim();
 
     if (!searchTerm) {
@@ -396,13 +455,11 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     const fieldsMatch = this.FieldNames.includes(searchTerm);
     this.IsVisible = sectionMatches || fieldsMatch;
 
-    if (this.IsVisible && sectionMatches) {
-      const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escaped, 'gi');
-      this.DisplayName = this.SectionName.replace(regex, '<mark class="mj-forms-search-highlight">$&</mark>');
-    } else {
-      this.DisplayName = this.SectionName;
-    }
+    // DisplayName is bound to `[innerHTML]` in the template — must always be HTML-safe.
+    this.DisplayName =
+      this.IsVisible && sectionMatches
+        ? HighlightSearchMatches(this.SectionName, searchTerm, 'mj-forms-search-highlight')
+        : EscapeHTML(this.SectionName);
 
     this.cdr.markForCheck();
   }

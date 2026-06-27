@@ -1,224 +1,77 @@
-import { AfterViewInit, ChangeDetectorRef, Component, ComponentRef, EventEmitter, inject, Input, OnDestroy, OnInit, Output, ViewChild } from '@angular/core';
-import { ActivatedRoute } from '@angular/router'
-import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
-import { Subscription } from 'rxjs';
-import { MJGlobal } from '@memberjunction/global';
-import { Container } from '@memberjunction/ng-container-directives';
-import { BaseFormComponent, FormNavigationEvent, FormNotificationEvent } from '@memberjunction/ng-base-forms';
+import { Component, EventEmitter, inject, Input, Output } from '@angular/core';
+import { CompositeKey, BaseEntity } from '@memberjunction/core';
+import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService } from '@memberjunction/ng-base-forms';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
-
+/**
+ * Explorer-side host for a single entity record in the main tab area.
+ *
+ * This is now a **thin wrapper** around the Generic `<mj-entity-form-host>`
+ * (in `@memberjunction/ng-base-forms`), which owns all the mechanics: resolving
+ * the form (class / custom / interactive override + variants), loading the
+ * record, dynamically creating the form, binding it, and tearing it down.
+ *
+ * SingleRecordComponent's only remaining job is the **Explorer mapping**:
+ * translating the host's framework-agnostic events into Explorer services —
+ * `Navigate` → {@link NavigationService}, `Notification` → {@link SharedService},
+ * record loads → {@link RecentAccessService} — none of which belong in a Generic
+ * component.
+ */
 @Component({
   standalone: false,
   selector: 'mj-single-record',
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
-export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
-  @ViewChild(Container, {static: true}) formContainer!: Container;
+export class SingleRecordComponent extends BaseAngularComponent {
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
   @Input() public newRecordValues: string | Record<string, unknown> | null = '';
 
-  @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
+  @Output() public loadComplete: EventEmitter<void> = new EventEmitter<void>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
+  /** Emitted when the hosted form asks to be dismissed (e.g. Discard on a new record). */
+  @Output() public recordDismissed: EventEmitter<void> = new EventEmitter<void>();
 
-  private recentAccessService: RecentAccessService;
   private navigationService = inject(NavigationService);
   private sharedService = inject(SharedService);
-  private cdr = inject(ChangeDetectorRef);
+  private formPresenter = inject(MJFormPresenterService);
+  private recentAccessService = new RecentAccessService();
 
-  constructor (private route: ActivatedRoute) {
-    this.recentAccessService = new RecentAccessService();
+  /** Unblock the shell's first-resource-load gate (success or error). */
+  onLoadComplete(): void {
+    this.loadComplete.emit();
   }
 
-  public appDescription: string = ''
-  public useGenericForm: boolean = false;
-  public loading: boolean = true;
-
-  // Track dynamically created components and entities for cleanup
-  private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
-  private _currentRecord: BaseEntity | null = null;
-  private _eventHandlerSubscription: Subscription | null = null;
-  private _formEventSubscriptions: Subscription[] = [];
-
-  ngOnInit(): void {
-  }
-
-  ngAfterViewInit() {
-    this.LoadForm(this.PrimaryKey, <string>this.entityName)
-  }
-
-  public async LoadForm(primaryKey: CompositeKey, entityName: string) {
-    
-    // Perform any necessary actions with the ViewID, such as fetching data
-    if (!entityName || entityName.trim().length === 0) {
-      return; // not ready to load
-    }
-
-    this.entityName = entityName;
-    if (primaryKey.HasValue) {
-      // we have an existing record to load up
-      this.PrimaryKey = primaryKey;
-    }
-    else {
-      // new record, no existing primary key
-      this.PrimaryKey = new CompositeKey();
-    }
-
-    const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
-    
-    const md = new Metadata();
-    const entity = md.Entities.find(e => {
-      return e.Name === entityName
-    });
-    const permissions = entity?.GetUserPermisions(md.CurrentUser);
-
-    if (formReg) {
-      const record = await md.GetEntityObject<BaseEntity>(entityName);
-      if (record) {
-        if (primaryKey.HasValue) {
-          await record.InnerLoad(primaryKey);
-          // Log access to existing record (fire-and-forget, don't await)
-          this.recentAccessService.logAccess(entityName, primaryKey, 'record');
-        }
-        else {
-          record.NewRecord();
-          this.SetNewRecordValues(record);
-        }
-
-        // CRITICAL: Track the event handler subscription for cleanup
-        this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
-          if (eventType.type === 'save')
-            this.recordSaved.emit(record);
-        });
-        
-        const viewContainerRef = this.formContainer.viewContainerRef;
-        viewContainerRef.clear();
-
-        const componentRef = viewContainerRef.createComponent<typeof formReg.SubClass>(formReg.SubClass);
-        
-        // Track component and record for cleanup
-        this._formComponentRef = componentRef;
-        this._currentRecord = record;
-        
-        componentRef.instance.record = record
-        componentRef.instance.userPermissions = permissions
-        componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
-
-        // Subscribe to form @Output events and map them to Explorer services
-        this.subscribeToFormEvents(componentRef.instance);
-
-        this.useGenericForm = false;
-        this.loadComplete.emit();
-      }
-      else
-        throw new Error(`Unable to load entity ${entityName} with primary key values: ${primaryKey.ToString()}`);
-    }
-
-    this.loading = false;
-    this.cdr.detectChanges();
-  }
-
-  protected SetNewRecordValues(record: BaseEntity) {
-    if (!this.newRecordValues) {
-      return;
-    }
-
-    // Handle both object and string (URL segment) formats
-    if (typeof this.newRecordValues === 'string') {
-      if (this.newRecordValues.length === 0) {
-        return;
-      }
-      // we have a URL segment string format: "field1|value1||field2|value2"
-      const fv = new FieldValueCollection();
-      fv.SimpleLoadFromURLSegment(this.newRecordValues);
-      // now apply the values to the record
-      fv.KeyValuePairs.filter(kvp => kvp.Value !== null && kvp.Value !== undefined).forEach(kvp => {
-        const f = record.Fields.find(f => f.Name.trim().toLowerCase() === kvp.FieldName.trim().toLowerCase());
-        if (f) {
-          // make sure we set the value to the right type based on the f.TSType property
-          switch (f.EntityFieldInfo.TSType) {
-            case EntityFieldTSType.String:
-              record.Set(kvp.FieldName, kvp.Value);
-              break;
-            case EntityFieldTSType.Number:
-              record.Set(kvp.FieldName, parseFloat(kvp.Value));
-              break;
-            case EntityFieldTSType.Boolean:
-              if (kvp.Value === 'false' || kvp.Value === '0' || kvp.Value.toString().trim().length === 0 )
-                record.Set(kvp.FieldName, false);
-              else
-                record.Set(kvp.FieldName, true);
-              break;
-            case EntityFieldTSType.Date:
-              record.Set(kvp.FieldName, new Date(kvp.Value));
-              break;
-          }
-        }
-      });
-    }
-    else {
-      // we have a plain object format: { field1: value1, field2: value2 }
-      const recordValues = this.newRecordValues as Record<string, unknown>;
-      Object.keys(recordValues)
-        .filter(key => recordValues[key] !== null && recordValues[key] !== undefined)
-        .forEach(key => {
-          const f = record.Fields.find(f => f.Name.trim().toLowerCase() === key.trim().toLowerCase());
-          if (f) {
-            const value = recordValues[key];
-            // Set the value with proper type conversion
-            switch (f.EntityFieldInfo.TSType) {
-              case EntityFieldTSType.String:
-                record.Set(key, value?.toString() || '');
-                break;
-              case EntityFieldTSType.Number:
-                record.Set(key, typeof value === 'number' ? value : parseFloat(value?.toString() || '0'));
-                break;
-              case EntityFieldTSType.Boolean:
-                if (typeof value === 'boolean') {
-                  record.Set(key, value);
-                }
-                else if (typeof value === 'string') {
-                  record.Set(key, value !== 'false' && value !== '0' && value.trim().length > 0);
-                }
-                else {
-                  record.Set(key, !!value);
-                }
-                break;
-              case EntityFieldTSType.Date:
-                record.Set(key, value instanceof Date ? value : new Date(value?.toString() || ''));
-                break;
-              default:
-                record.Set(key, value);
-                break;
-            }
-          }
-        });
+  /** Log access for existing records once the form's record is ready. */
+  onRecordReady(record: BaseEntity): void {
+    if (record?.IsSaved) {
+      this.recentAccessService.logAccess(record.EntityInfo.Name, record.PrimaryKey, 'record');
     }
   }
 
-  /**
-   * Subscribe to BaseFormComponent @Output events and map them to Explorer services.
-   */
-  private subscribeToFormEvents(form: BaseFormComponent): void {
-    this.cleanupFormSubscriptions();
-
-    this._formEventSubscriptions.push(
-      form.Navigate.subscribe((event: FormNavigationEvent) => this.handleNavigation(event)),
-      form.Notification.subscribe((event: FormNotificationEvent) => {
-        this.sharedService.CreateSimpleNotification(event.Message, event.Type, event.Duration);
-      })
-    );
+  onSaved(record: BaseEntity): void {
+    this.recordSaved.emit(record);
   }
 
-  private handleNavigation(event: FormNavigationEvent): void {
+  onNotification(event: FormNotificationEvent): void {
+    this.sharedService.CreateSimpleNotification(event.Message, event.Type, event.Duration);
+  }
+
+  /** Map the form's navigation requests onto Explorer's NavigationService. */
+  handleNavigation(event: FormNavigationEvent): void {
     switch (event.Kind) {
       case 'record':
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
         break;
       case 'new-record':
-        this.navigationService.OpenNewEntityRecord(event.EntityName, { newRecordValues: event.DefaultValues });
+        // Creating a related record from inside an open form: force a new tab so the
+        // parent record stays intact in single-resource mode.
+        this.navigationService.OpenNewEntityRecord(event.EntityName, {
+          newRecordValues: event.DefaultValues,
+          forceNewTab: true,
+        });
         break;
       case 'entity-hierarchy':
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey);
@@ -229,44 +82,22 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
       case 'email':
         window.open(`mailto:${event.EmailAddress}`, '_self');
         break;
+      case 'dismiss':
+        this.recordDismissed.emit();
+        break;
+      case 'create-related': {
+        // A FK field wants a new related record created. Open the related entity's form
+        // as a dialog/slide-in (prefilled), then hand the saved record back so the field
+        // can select it.
+        const ref = this.formPresenter.Open({
+          EntityName: event.EntityName,
+          Presentation: event.Presentation ?? 'dialog',
+          NewRecordValues: event.NewRecordValues,
+          Provider: event.Provider,
+        });
+        ref.AfterSaved().then(created => event.Complete(created));
+        break;
+      }
     }
-  }
-
-  private cleanupFormSubscriptions(): void {
-    for (const sub of this._formEventSubscriptions) {
-      sub.unsubscribe();
-    }
-    this._formEventSubscriptions = [];
-  }
-
-  ngOnDestroy(): void {
-    // CRITICAL: Clean up form event subscriptions first
-    this.cleanupFormSubscriptions();
-
-    // CRITICAL: Clean up dynamically created form component to prevent zombie components
-    if (this._formComponentRef) {
-      this._formComponentRef.destroy();
-      this._formComponentRef = null;
-    }
-
-    // CRITICAL: Unsubscribe from event handler to prevent memory leaks
-    if (this._eventHandlerSubscription) {
-      this._eventHandlerSubscription.unsubscribe();
-      this._eventHandlerSubscription = null;
-    }
-    
-    // Clean up record reference
-    if (this._currentRecord) {
-      this._currentRecord = null;
-    }
-    
-    // Clear the view container to ensure no lingering references
-    if (this.formContainer?.viewContainerRef) {
-      this.formContainer.viewContainerRef.clear();
-    }
-    
-    // Reset state
-    this.loading = true;
-    this.useGenericForm = false;
   }
 }

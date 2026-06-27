@@ -12,6 +12,7 @@ import {
 } from '../../../services/ai-instrumentation.service';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { TimeSeriesConfig } from '../../charts/time-series-chart.component';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 // ─── Local Interfaces ──────────────────────────────────────────────
 
@@ -45,20 +46,6 @@ interface ErrorHotspot {
   standalone: false,
   selector: 'app-analytics-executive-summary',
   template: `
-    <!-- Filter Bar -->
-    <app-analytics-filter-bar
-      [TimeRange]="TimeRange"
-      [Filters]="Filters"
-      [ShowCompareToggle]="true"
-      [ShowModelFilter]="false"
-      [ShowAgentFilter]="false"
-      [ShowPromptFilter]="false"
-      [ShowStatusFilter]="false"
-      (TimeRangeChange)="OnTimeRangeChange($event)"
-      (FiltersChange)="OnFiltersChange($event)"
-      (CompareToggled)="OnCompareToggled($event)"
-    ></app-analytics-filter-bar>
-
     @if (IsLoading && KpiCards.length === 0) {
       <div class="loading-container">
         <mj-loading text="Loading executive summary..." size="medium"></mj-loading>
@@ -113,7 +100,8 @@ interface ErrorHotspot {
         </div>
         <div class="panel-body">
           @if (TopConsumers.length === 0) {
-            <div class="panel-empty">No data for selected period</div>
+            <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-ranking-star"
+              Title="No data for selected period" />
           }
           @for (item of TopConsumers; track item.Name) {
             <div
@@ -157,7 +145,8 @@ interface ErrorHotspot {
         </div>
         <div class="panel-body">
           @if (ErrorHotspots.length === 0) {
-            <div class="panel-empty">No errors in selected period</div>
+            <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check"
+              Title="No errors in selected period" />
           }
           @for (item of ErrorHotspots; track item.Source) {
             <div class="error-item">
@@ -321,12 +310,6 @@ interface ErrorHotspot {
     .panel-body {
       padding: 8px 0;
     }
-    .panel-empty {
-      padding: 24px 18px;
-      text-align: center;
-      font-size: 13px;
-      color: var(--mj-text-disabled);
-    }
 
     /* ─── Consumer Item ───────────────────────────────────────── */
     .consumer-item {
@@ -478,7 +461,7 @@ interface ErrorHotspot {
     }
   `]
 })
-export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
+export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   // ─── Inputs / Outputs ────────────────────────────────────────────
 
   private _timeRange = '24h';
@@ -530,6 +513,7 @@ export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
   // ─── Lifecycle ───────────────────────────────────────────────────
 
   ngOnInit(): void {
+    this.instrumentationService.Provider = this.ProviderToUse;
     this.subscribeToStreams();
     this.applyDateRange();
     this.isInitialized = true;
@@ -677,6 +661,7 @@ export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
 
     // Temporarily set date range to previous period, capture KPIs, then restore
     const previousService = new AIInstrumentationService();
+    previousService.Provider = this.ProviderToUse;
     previousService.setDateRange(prevStart, prevEnd);
 
     // We subscribe to the previousService's kpis$ once
@@ -735,6 +720,12 @@ export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
         this.extractSparkline(trends, 'errors'),
         kpis.errorRate, this.previousKpis?.errorRate ?? null,
         'down-is-good', 'var(--mj-status-error)'
+      ),
+      this.buildKpiCard(
+        'Cache Hit Rate', (kpis.cacheHitRate * 100).toFixed(1) + '%',
+        this.extractSparkline(trends, 'tokens'),
+        kpis.cacheHitRate, this.previousKpis?.cacheHitRate ?? null,
+        'up-is-good', 'var(--mj-status-info)'
       )
     ];
   }

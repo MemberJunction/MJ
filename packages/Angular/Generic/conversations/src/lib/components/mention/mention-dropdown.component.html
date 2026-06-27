@@ -37,6 +37,18 @@
                   class="fa-solid fa-user"
                 ></i>
               }
+              <!-- Entity icon -->
+              @if (suggestion.type === 'entity') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-table')"
+                ></i>
+              }
+              <!-- Query icon (generic, from 'MJ: Queries' entity) -->
+              @if (suggestion.type === 'query') {
+                <i
+                  [ngClass]="getIconClasses(suggestion.icon || 'fa-solid fa-database')"
+                ></i>
+              }
             </div>
             <div class="suggestion-content">
               <div class="suggestion-name">
@@ -45,6 +57,12 @@
                 }
                 @if (suggestion.type === 'user') {
                   <span class="suggestion-type-badge user">User</span>
+                }
+                @if (suggestion.type === 'entity') {
+                  <span class="suggestion-type-badge entity">Entity</span>
+                }
+                @if (suggestion.type === 'query') {
+                  <span class="suggestion-type-badge query">Query</span>
                 }
                 {{ suggestion.displayName }}
               </div>
@@ -60,10 +78,11 @@
     }
     <!-- Empty State -->
     @if (suggestions.length === 0) {
-      <div class="mention-empty-state">
-        <i class="fa-solid fa-robot"></i>
-        <p>No agents or users available</p>
-      </div>
+      <mj-empty-state
+        Variant="no-results"
+        Size="compact"
+        Icon="fa-solid fa-robot"
+        Title="No matches found" />
     }
   </div>
 }

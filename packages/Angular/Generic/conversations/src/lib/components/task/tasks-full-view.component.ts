@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
@@ -134,7 +135,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
   `]
 })
-export class TasksFullViewComponent implements OnInit, OnChanges {
+export class TasksFullViewComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Input() baseFilter: string = '1=1'; // SQL filter for tasks (default: show all)
@@ -182,7 +183,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         this.aiEngineConfigured = true;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       console.log('📝 Tasks filter SQL:', this.baseFilter);
 
@@ -246,7 +247,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
   private async loadTaskHierarchy(task: MJTaskEntity): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Use RootParentID to load all tasks in this hierarchy
       // If task has no RootParentID, it's the root itself, so use its ID
@@ -294,7 +295,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
   private async loadTaskDependencies(rootId: string): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load task dependencies where either TaskID or DependsOnTaskID is in this hierarchy
       // Use subquery to find all tasks with this RootParentID
@@ -341,7 +342,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         return;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const schema = '__mj';
 
       // Build filter to find agent runs for these conversation details

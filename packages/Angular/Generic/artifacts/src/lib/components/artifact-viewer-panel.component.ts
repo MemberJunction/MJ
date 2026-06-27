@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
 import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -17,7 +18,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
   templateUrl: './artifact-viewer-panel.component.html',
   styleUrls: ['./artifact-viewer-panel.component.css']
 })
-export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestroy {
+export class ArtifactViewerPanelComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
   @Input() artifactId!: string;
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
@@ -40,6 +41,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
+  @Output() analyzeRequested = new EventEmitter<{ artifactId: string; snapshot: DataSnapshot }>();
+  /**
+   * "Apply to my form" — bubbled from the form-aware component-artifact-viewer
+   * branch. Carries the spec + entity. Consumer (chat message card, etc.)
+   * confirms and invokes the Create-or-Modify Interactive Form action.
+   */
+  @Output() applyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -206,6 +214,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     private sanitizer: DomSanitizer,
     private artifactIconService: ArtifactIconService
   ) {
+    super();
     this.recentAccessService = new RecentAccessService();
   }
 
@@ -220,15 +229,22 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       });
     }
 
-    // Load artifact with specified version if provided
-    await this.loadArtifact(this.versionNumber);
+    // Defer the initial load past Angular's first stable CD cycle so that the inner
+    // awaits in loadArtifact can't mutate `this.artifact`/`this.artifactVersion` between
+    // the main CD pass and dev-mode's verifyNoChanges pass (the classic NG0100
+    // "ExpressionChangedAfterItHasBeenCheckedError" we used to hit on the title).
+    // Using setTimeout(0) instead of Promise.resolve() because we need a fresh
+    // macrotask boundary — microtasks can still drain inside Angular's CD cycle.
+    setTimeout(async () => {
+      await this.loadArtifact(this.versionNumber);
 
-    // Track that user viewed this artifact
-    if (this.artifactVersion?.ID && this.currentUser) {
-      this.trackArtifactUsage('Viewed');
-      // Also log to User Record Logs for recents feature (fire-and-forget)
-      this.recentAccessService.logAccess('MJ: Artifacts', this.artifactId, 'artifact');
-    }
+      // Track that user viewed this artifact (deferred so it runs after the load)
+      if (this.artifactVersion?.ID && this.currentUser) {
+        this.trackArtifactUsage('Viewed');
+        // Also log to User Record Logs for recents feature (fire-and-forget)
+        this.recentAccessService.logAccess('MJ: Artifacts', this.artifactId, 'artifact');
+      }
+    }, 0);
   }
 
   async ngOnChanges(changes: SimpleChanges) {
@@ -282,7 +298,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       // Clear links data from previous artifact to prevent stale Links tab
       this.clearLinksData();
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Load artifact — assign to local first to avoid mid-cycle icon flicker
       const artifactEntity = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
@@ -296,7 +312,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
       // PERF: Batch load version metadata, collection associations, and conversation links
       // in a single RunViews call. Content is excluded here — loaded on-demand for the selected version.
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const batchResults = await rv.RunViews([
         {
           // [0] Version metadata (lightweight — no Content field)
@@ -386,7 +402,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   private async loadVersionContent(versionId: string): Promise<MJArtifactVersionEntity | null> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const versionEntity = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
       const loaded = await versionEntity.Load(versionId);
       return loaded ? versionEntity : null;
@@ -434,7 +450,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (!this.artifactVersion) return;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
@@ -627,7 +643,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       if (collectionsResult?.Success && collectionsResult.Results) {
         collectionRows = collectionsResult.Results;
       } else {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string; CollectionID: string; ArtifactVersionID: string; Sequence: number }>({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
@@ -659,7 +675,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         const collectionId = (collectionRows[0] as Record<string, unknown>).CollectionID as string ||
                              (this.artifactCollections[0] as unknown as Record<string, unknown>).CollectionID as string;
         if (collectionId) {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           this.primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
           await this.primaryCollection.Load(collectionId);
         }
@@ -804,8 +820,18 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   /**
-   * Called by parent component after user selects collections in the picker.
-   * Saves the artifact to the selected collections.
+   * Reload the cached set of collections that contain the *current version* of this artifact.
+   * Called by the chat-area after the collection picker reports successful saves so the bookmark
+   * icon and "already saved" exclusion list refresh without a full artifact reload.
+   */
+  public async ReloadCollectionAssociations(): Promise<void> {
+    await this.loadCollectionAssociations();
+  }
+
+  /**
+   * @deprecated Writes are now owned by the picker modal so the dialog can render per-collection
+   * progress and partial-failure UI. Kept for any external consumer that still calls it; new code
+   * should pass `artifactVersionId` to the picker and listen for its `completed` event.
    */
   async saveToCollections(collectionIds: string[]): Promise<boolean> {
     if (!this.artifactId || collectionIds.length === 0) {
@@ -813,7 +839,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let successCount = 0;
 
       // Get current version ID - save the version being viewed
@@ -830,7 +856,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       // Save artifact version to each selected collection
       for (const collectionId of collectionIds) {
         // Double check this exact version doesn't already exist in the collection
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const existingResult = await rv.RunView<MJCollectionArtifactEntity>({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${currentVersionId}'`,
@@ -897,8 +923,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     this.clearLinksData();
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Use pre-fetched collection data or fetch if not provided
       let collectionRows: Record<string, unknown>[] = [];
@@ -1115,7 +1141,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   private async getArtifactTypeById(id: string): Promise<MJArtifactTypeEntity | null> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types', this.currentUser);
       const loaded = await artifactType.Load(id);
 
@@ -1205,7 +1231,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         return;
       }
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const usage = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses');
 
       usage.ArtifactVersionID = this.artifactVersion.ID;
@@ -1239,5 +1265,33 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     this.artifactIcon = this.artifact
       ? this.artifactIconService.getArtifactIcon(this.artifact)
       : 'fa-file';
+  }
+
+  /**
+   * Capture the current snapshot and emit an analyze event.
+   * The parent component handles routing this to an agent conversation.
+   */
+  public OnAnalyze(): void {
+    const snapshot = this.GetCurrentStateSnapshot();
+    if (snapshot && this.artifact) {
+      this.analyzeRequested.emit({
+        artifactId: this.artifact.ID,
+        snapshot
+      });
+    } else {
+      this.notificationService.CreateSimpleNotification(
+        'No data available to analyze',
+        'warning',
+        3000
+      );
+    }
+  }
+
+  /**
+   * Passthrough to the active plugin's GetCurrentStateSnapshot().
+   * Returns null if no plugin is loaded or the plugin has no snapshot.
+   */
+  public GetCurrentStateSnapshot(): DataSnapshot | null {
+    return this.pluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
   }
 }

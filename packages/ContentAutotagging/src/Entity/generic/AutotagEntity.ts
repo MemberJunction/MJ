@@ -1,7 +1,7 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { UserInfo, Metadata, RunView, LogStatus, LogError } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
@@ -15,7 +15,10 @@ import {
 type IContentSourceConfiguration = MJContentSourceEntity_IContentSourceConfiguration;
 import { EntityDocumentTemplateParser } from "@memberjunction/ai-vector-sync";
 import { TemplateEngineServer } from "@memberjunction/templates";
-import { TagEngine } from "@memberjunction/tag-engine";
+import { TagEngine, TaxonomyMode } from "@memberjunction/tag-engine";
+import { TagScopeContext } from "@memberjunction/tag-engine-base";
+import { ScopeContextResolver } from "../../Engine/generic/ScopeContextResolver";
+import { RunBudget } from "../../Engine/generic/RunBudget";
 
 /**
  * Autotag provider for MJ entity records. Uses the EntityDocument template pipeline
@@ -35,8 +38,13 @@ export class AutotagEntity extends AutotagBase {
     private sourceConfigMap = new Map<string, IContentSourceConfiguration>();
     /** Cached content source entities keyed by normalized source ID for ERD lookups */
     private contentSourceMap = new Map<string, MJContentSourceEntity>();
+    /** Per-source scope context derived from TagRootID, keyed by normalized source ID */
+    private sourceScopeContextMap = new Map<string, TagScopeContext | null>();
+    /** Per-source budget tracker, keyed by normalized source ID */
+    private sourceBudgetMap = new Map<string, RunBudget>();
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<number> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
+        if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.engine = AutotagBaseEngine.Instance;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Entity');
@@ -111,6 +119,24 @@ export class AutotagEntity extends AutotagBase {
             return;
         }
 
+        // Derive scope context + budgets per source — used by the bridge callback.
+        let unionScope: TagScopeContext | null = null;
+        for (const source of contentSources) {
+            const normalizedID = NormalizeUUID(source.ID);
+            const ctx = ScopeContextResolver.deriveScopeContext(source);
+            this.sourceScopeContextMap.set(normalizedID, ctx);
+            unionScope = ScopeContextResolver.union(unionScope, ctx);
+
+            const cfg = source.ConfigurationObject;
+            this.sourceBudgetMap.set(normalizedID, new RunBudget({
+                MaxItemsPerRun: cfg?.MaxItemsPerRun ?? null,
+                MaxNewTagsPerRun: cfg?.MaxNewTagsPerRun ?? null,
+                MaxNewTagsPerItem: cfg?.MaxNewTagsPerItem ?? null,
+                MaxTokensPerRun: cfg?.MaxTokensPerRun ?? null,
+                MaxCostPerRun: cfg?.MaxCostPerRun ?? null,
+            }));
+        }
+
         // Inject taxonomy context into the prompt (if any source has ShareTaxonomyWithLLM enabled)
         const shouldShareTaxonomy = Array.from(this.sourceConfigMap.values()).some(
             c => c.ShareTaxonomyWithLLM !== false // default true
@@ -121,10 +147,14 @@ export class AutotagEntity extends AutotagBase {
                 .map(c => c.TagRootID)
                 .filter((id): id is string => id != null);
             const taxonomyRoot = rootIDs.length === 1 ? rootIDs[0] : undefined;
-            const tree = TagEngine.Instance.GetTaxonomyTree(taxonomyRoot);
+            // Apply union of per-source scope contexts so the LLM only sees
+            // tags visible in at least one of the running tenants.
+            const tree = TagEngine.Instance.GetTaxonomyTree(taxonomyRoot, unionScope ?? undefined);
             // Strip IDs from the tree before injecting into the LLM prompt.
             // The LLM occasionally returns UUIDs as tag names when it sees them.
             this.engine.TaxonomyContext = JSON.stringify(tree, (key, value) => key === 'ID' ? undefined : value, 2);
+            const tagsShared = this.countTreeNodes(tree);
+            LogStatus(`AutotagEntity: shared ${tagsShared} taxonomy node(s) with the LLM (scope=${unionScope ? 'narrowed' : 'global'}).`);
         }
 
         // Set up the bridge callback for tag taxonomy linking
@@ -134,6 +164,27 @@ export class AutotagEntity extends AutotagBase {
             ctxUser: UserInfo
         ) => {
             await this.BridgeContentItemTagToTaxonomy(contentItemTag, parentTagName, ctxUser);
+        };
+
+        // Per-batch budget gate — pause the run when any source's budget is exceeded.
+        // Tally items per source first so MaxItemsPerRun ticks; then check all budgets.
+        this.engine.OnAfterBatch = async (batch, _totalProcessed) => {
+            const perSourceCounts = new Map<string, number>();
+            for (const item of batch) {
+                if (!item.ContentSourceID) continue;
+                const id = NormalizeUUID(item.ContentSourceID);
+                perSourceCounts.set(id, (perSourceCounts.get(id) ?? 0) + 1);
+            }
+            for (const [id, count] of perSourceCounts) {
+                const budget = this.sourceBudgetMap.get(id);
+                if (!budget) continue;
+                budget.recordItemsProcessed(count);
+                const verdict = budget.checkBudgets();
+                if (!verdict.ok) {
+                    return { continue: false, reason: `${verdict.reason}: ${verdict.details ?? ''}` };
+                }
+            }
+            return { continue: true };
         };
     }
 
@@ -163,31 +214,70 @@ export class AutotagEntity extends AutotagBase {
         if (!erdID) return; // not entity-sourced
 
         const sourceID = ci.ContentSourceID;
-        const config = this.sourceConfigMap.get(NormalizeUUID(sourceID));
-        const mode = config?.TagTaxonomyMode ?? 'auto-grow';
+        const normalizedSourceID = NormalizeUUID(sourceID);
+        const config = this.sourceConfigMap.get(normalizedSourceID);
+        const mode = (config?.TagTaxonomyMode ?? 'auto-grow') as TaxonomyMode;
         const rootID = config?.TagRootID ?? null;
         const threshold = config?.TagMatchThreshold ?? 0.9;
+        const suggestThreshold = config?.SuggestThreshold;
+        const scopeContext = this.sourceScopeContextMap.get(normalizedSourceID) ?? null;
+        const budget = this.sourceBudgetMap.get(normalizedSourceID);
 
-        // If parent tag is suggested by LLM, resolve it through the mutex too
-        // to prevent duplicate parent tags from concurrent batch processing.
-        // ResolveTag handles find-or-create atomically.
-        if (parentTagName && mode !== 'constrained') {
-            await TagEngine.Instance.ResolveTag(
-                parentTagName, 0, mode, rootID, threshold, contextUser
+        // Per-item budget — when exhausted, route remaining new tags from
+        // this item to the suggestion queue with reason 'MaxItemTagsExceeded'
+        // instead of creating them.
+        const itemBudgetExhausted = budget?.itemTagBudgetExhausted() ?? false;
+        const effectiveMode: TaxonomyMode = itemBudgetExhausted && (mode === 'auto-grow' || mode === 'free-flow')
+            ? 'hybrid'
+            : mode;
+
+        // If the LLM suggested a parent tag, resolve it first (through the mutex,
+        // find-or-create atomically) and CAPTURE its ID so the child can be nested
+        // under it. Without this the child was created flat (or only under the
+        // source's TagRootID), which is why entity-source taxonomies came out as a
+        // flat list of near-duplicates with no parent/child nesting.
+        let parentTagID: string | null = null;
+        if (parentTagName && effectiveMode !== 'constrained') {
+            // Parent tags are broad CATEGORIES — consolidate near-duplicates more
+            // aggressively (e.g. "Research Analysis" → "Research and Analysis") with
+            // a lower match threshold than child tags, which we keep distinct. This
+            // curbs top-level category proliferation without over-merging leaves.
+            const categoryThreshold = Math.min(threshold, 0.82);
+            const parentTag = await TagEngine.Instance.ResolveTag(
+                parentTagName, 0, effectiveMode, rootID, categoryThreshold, contextUser, {
+                    scopeContext,
+                    suggestThreshold,
+                    sourceContentItemID: contentItemTag.ItemID,
+                    sourceContentSourceID: sourceID,
+                    onTagCreated: () => budget?.recordTagCreated(),
+                }
             );
+            parentTagID = parentTag?.ID ?? null;
         }
 
-        // Resolve the tag to a formal Tag record
+        // Resolve the tag to a formal Tag record. parentIDForNew nests a NEWLY
+        // created tag under the LLM-suggested parent and is governance-checked via
+        // ValidateAutoGrow (MaxChildren / depth / AllowAutoGrow). When no parent was
+        // suggested it falls back to the source's TagRootID (legacy behavior).
         const formalTag = await TagEngine.Instance.ResolveTag(
             contentItemTag.Tag,
             contentItemTag.Weight,
-            mode,
+            effectiveMode,
             rootID,
             threshold,
-            contextUser
+            contextUser,
+            {
+                scopeContext,
+                suggestThreshold,
+                sourceContentItemID: contentItemTag.ItemID,
+                sourceContentSourceID: sourceID,
+                sourceText: contentItemTag.Tag,
+                onTagCreated: () => budget?.recordTagCreated(),
+                parentIDForNew: parentTagID ?? undefined,
+            }
         );
 
-        if (!formalTag) return; // constrained mode, no match
+        if (!formalTag) return; // constrained / hybrid / governance-blocked / suggestion enqueued
 
         // Link ContentItemTag to formal Tag
         contentItemTag.TagID = formalTag.ID;
@@ -213,6 +303,41 @@ export class AutotagEntity extends AutotagBase {
             contentItemTag.Weight,
             contextUser
         );
+    }
+
+    /**
+     * Count nodes in a TagTreeNode forest (recursive). Used for telemetry on
+     * how much taxonomy was shared with the LLM after scope filtering.
+     */
+    private countTreeNodes(forest: { Children?: unknown[] }[]): number {
+        let count = 0;
+        const stack: Array<{ Children?: unknown[] }> = [...forest];
+        while (stack.length > 0) {
+            const node = stack.pop()!;
+            count++;
+            if (Array.isArray(node.Children)) {
+                for (const child of node.Children as Array<{ Children?: unknown[] }>) {
+                    stack.push(child);
+                }
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Public accessor used by the autotag engine's per-batch pause loop —
+     * returns the budget for the supplied source if known.
+     */
+    public GetRunBudget(sourceID: string): RunBudget | undefined {
+        return this.sourceBudgetMap.get(NormalizeUUID(sourceID));
+    }
+
+    /**
+     * Mark the start of processing a new ContentItem so per-item budget
+     * counters reset. Called by the engine's per-item loop.
+     */
+    public StartContentItem(sourceID: string): void {
+        this.sourceBudgetMap.get(NormalizeUUID(sourceID))?.startItem();
     }
 
     /**
@@ -279,8 +404,8 @@ export class AutotagEntity extends AutotagBase {
         }
 
         // Resolve the entity name from metadata
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByID(entityID);
         if (!entityInfo) {
             LogError(`AutotagEntity: entity with ID ${entityID} not found in metadata`);
             return [];
@@ -311,8 +436,9 @@ export class AutotagEntity extends AutotagBase {
         for (const record of modifiedRecords) {
             const recordID = String(record[pkFieldName] ?? '');
             try {
+                const recordName = this.buildContentItemName(entityInfo, record);
                 const contentItem = await this.ProcessSingleRecord(
-                    record, recordID, contentSource, entityDocument,
+                    record, recordID, recordName, contentSource, entityDocument,
                     templateText, parser, existingERDs, existingContentItems
                 );
                 if (contentItem) {
@@ -325,6 +451,35 @@ export class AutotagEntity extends AutotagBase {
         }
 
         return contentItems;
+    }
+
+    /**
+     * Build the Content Item name for an entity record from the entity's name
+     * field(s). Uses every `IsNameField` in Sequence order (e.g. FirstName +
+     * LastName → "Sarah Chen"), falling back to the single `NameField`, then a
+     * literal `Name` column, then empty. Prevents Content Items from inheriting a
+     * generic/LLM-derived title when the source entity has a real name field.
+     */
+    private buildContentItemName(entityInfo: EntityInfo, record: Record<string, unknown>): string {
+        const val = (fieldName: string | undefined): string => {
+            if (!fieldName) return '';
+            const v = record[fieldName];
+            return v == null ? '' : String(v).trim();
+        };
+
+        // Combine all IsNameField fields in Sequence order.
+        const nameFields = entityInfo.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+        if (nameFields.length > 0) {
+            const parts = nameFields.map(f => val(f.Name)).filter(p => p.length > 0);
+            if (parts.length > 0) return parts.join(' ');
+        }
+
+        // Single NameField fallback, then a literal Name column.
+        const single = val(entityInfo.NameField?.Name);
+        if (single) return single;
+        return val('Name');
     }
 
     /**
@@ -436,6 +591,7 @@ export class AutotagEntity extends AutotagBase {
     private async ProcessSingleRecord(
         record: Record<string, unknown>,
         recordID: string,
+        recordName: string,
         contentSource: MJContentSourceEntity,
         entityDocument: MJEntityDocumentEntity,
         templateText: string,
@@ -463,7 +619,7 @@ export class AutotagEntity extends AutotagBase {
 
         // 4. Create or update ContentItem linked to ERD
         const contentItem = await this.UpsertContentItem(
-            contentSource, erd, renderedText, checksum, record, existingContentItems
+            contentSource, erd, renderedText, checksum, record, recordName, existingContentItems
         );
 
         return contentItem;
@@ -479,7 +635,7 @@ export class AutotagEntity extends AutotagBase {
         documentText: string,
         existingERDs: Map<string, MJEntityRecordDocumentEntity>
     ): Promise<MJEntityRecordDocumentEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let erd = existingERDs.get(recordID);
 
         if (erd) {
@@ -519,9 +675,10 @@ export class AutotagEntity extends AutotagBase {
         text: string,
         checksum: string,
         record: Record<string, unknown>,
+        recordName: string,
         existingContentItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const erdNormalizedID = NormalizeUUID(erd.ID);
         const existing = existingContentItems.get(erdNormalizedID);
 
@@ -554,8 +711,11 @@ export class AutotagEntity extends AutotagBase {
             contentItem.URL = contentSourceParams.URL;
         }
 
-        // Set/update fields
-        contentItem.Name = (record['Name'] as string) ?? contentSourceParams.name;
+        // Set/update fields. Prefer the entity's name-field value(s) (computed by
+        // buildContentItemName); fall back to the content source name only when the
+        // record has no usable name. This keeps Content Item names like "GPT-4"
+        // instead of inheriting a generic/LLM-derived title.
+        contentItem.Name = recordName && recordName.length > 0 ? recordName : contentSourceParams.name;
         contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams);
         contentItem.Text = text;
         contentItem.Checksum = checksum;

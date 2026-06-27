@@ -3,10 +3,13 @@
  * @description In-memory vector similarity search service for MemberJunction
  */
 
-export { 
+export {
   SimpleVectorService,
   VectorEntry,
   VectorSearchResult,
   DistanceMetric,
   ClusterResult
 } from './models/SimpleVectorService';
+
+export { SimpleVectorDatabase, LoadSimpleVectorDatabase } from './models/SimpleVectorDatabase';
+export { SimpleVectorServiceProvider, SimpleVectorIndexCache, LoadSimpleVectorServiceProvider } from './models/SimpleVectorServiceProvider';

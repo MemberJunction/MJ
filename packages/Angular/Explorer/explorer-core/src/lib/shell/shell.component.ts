@@ -13,15 +13,18 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
+import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
-import { SettingsDialogService } from './services/settings-dialog.service';
+import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
+import { AboutDialogService } from './services/about-dialog.service';
+import { ProfileDialogService } from './services/profile-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -29,7 +32,10 @@ import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMen
 import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
+import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -44,7 +50,7 @@ import { FileOpenService } from '@memberjunction/ng-file-storage';
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
-export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+export class ShellComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
   private initialNavigationComplete = false; // Track if initial navigation has completed
@@ -57,6 +63,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
+
+  // Global Activity indicator (P3)
+  activityItems: ActivityItem[] = [];
+  activityRunningCount = 0;
+  activityOpen = false;
   isViewingSystemTab = false; // True when viewing a resource tab (not associated with a registered app)
   loadingAppId: string | null = null; // ID of app currently being loaded (for app switcher loading indicator)
 
@@ -77,6 +88,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
   // Loading recovery reset
   ShowResetOption = false;
+
+  /** MemberJunction framework version, shown in the loading screen and About dialog. */
+  public readonly MJVersion: string = PACKAGE_VERSION;
   private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
@@ -108,7 +122,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   // Universal search bar
-  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
+  @ViewChild('shellSearchComposite') shellSearchComposite: {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
@@ -126,20 +144,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private pendingAppPath: string | null = null; // Store the app path we tried to access
 
   /**
-   * Get Nav Bar apps positioned to the left of the app switcher
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the app switcher.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}) — NOT on every change-detection cycle, since
+   * this is bound directly in the shell nav template's @for/@if. Filters out apps
+   * that have HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfSwitcherApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
-  }
+  public leftOfSwitcherApps: BaseApplication[] = [];
 
   /**
-   * Get Nav Bar apps positioned to the left of the user menu
-   * Filters out apps that have HideNavBarIconWhenActive=true and are currently active
+   * Nav Bar apps positioned to the left of the user menu.
+   * Backing field recomputed only when the active app or nav-app list changes
+   * (see {@link recomputeNavBarApps}). Filters out apps that have
+   * HideNavBarIconWhenActive=true and are currently active.
    */
-  get leftOfUserMenuApps(): BaseApplication[] {
-    return this.appManager.GetNavBarApps('Left of User Menu')
+  public leftOfUserMenuApps: BaseApplication[] = [];
+
+  /**
+   * Recompute the precomputed nav-bar app arrays. Called only when the active app
+   * changes or the underlying nav-app list (re)loads — keeping the filtered arrays
+   * (and their per-app UUIDsEqual checks) out of the per-CD-cycle hot path.
+   */
+  private recomputeNavBarApps(): void {
+    this.leftOfSwitcherApps = this.appManager.GetNavBarApps('Left of App Switcher')
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
+    this.leftOfUserMenuApps = this.appManager.GetNavBarApps('Left of User Menu')
       .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
@@ -154,15 +183,34 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private authBase: MJAuthBase,
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
-    private settingsDialogService: SettingsDialogService,
+    private userSharingCenterDialogService: UserSharingCenterDialogService,
+    private aboutDialogService: AboutDialogService,
+    private profileDialogService: ProfileDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
+    private startupValidationService: StartupValidationService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
     private homePinService: HomeAppPinService,
-    private fileOpenService: FileOpenService
+    private fileOpenService: FileOpenService,
+    private feedbackDialogService: FeedbackDialogService,
+    private feedbackService: FeedbackService,
+    private activityService: ActivityService
   ) {
+    super();
+
+    // Thread the active provider into the bootstrap services that need provider
+    // context. They each fall back to Metadata.Provider when no explicit provider
+    // is set, so this is a no-op for single-provider apps but enables correct
+    // behavior in multi-provider setups.
+    const providerForServices = this.ProviderToUse;
+    this.appManager.Provider = providerForServices;
+    this.workspaceManager.Provider = providerForServices;
+    this.developerModeService.Provider = providerForServices;
+    this.startupValidationService.Provider = providerForServices;
+    if (SharedService.Instance) SharedService.Instance.Provider = providerForServices;
+
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
 
@@ -232,7 +280,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     // Get current user
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user) {
       throw new Error('No current user found');
@@ -252,6 +300,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       })
     );
 
+    // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
+    this.subscriptions.push(
+      this.activityService.Activities$.subscribe(items => {
+        this.activityItems = items;
+        this.activityRunningCount = items.filter(i => i.Status === 'running').length;
+        if (items.length === 0) this.activityOpen = false;
+        this.cdr.detectChanges();
+      })
+    );
+
     // Subscribe to unread notification count changes
     this.subscriptions.push(
       MJNotificationService.UnreadCount$.subscribe(count => {
@@ -264,6 +322,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       this.appManager.ActiveApp.subscribe(async app => {
         this.activeApp = app;
+        this.recomputeNavBarApps();
         this.cdr.detectChanges();
 
         // Create default tab when app is activated ONLY if:
@@ -299,10 +358,34 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           return;
         }
 
+        // Nav-app list is now populated/changed — refresh the precomputed arrays
+        // bound in the header template.
+        this.recomputeNavBarApps();
+
         // Handle the case where user has no apps at all (only after loading is complete)
         if (apps.length === 0) {
           await this.handleNoAppsAvailable();
           return;
+        }
+
+        // App-locked session (e.g. magic-link): ignore whatever app the URL names
+        // (including a pasted /app/home) and keep the user on their scoped app.
+        const lockedId = this.authBase.GetSessionScope()?.restrictedToApplicationId;
+        if (lockedId) {
+          const scopedApp = this.appManager.GetAppById(lockedId);
+          if (scopedApp) {
+            // Resolve the app the URL currently names and compare by ID — never
+            // string-match a hand-rolled name slug, which diverges from a custom
+            // Path and would loop the redirect. (navigateToApp uses app.Path.)
+            const path = (this.router.url || '').split('#')[0].split('?')[0];
+            const urlAppPath = path.match(/\/app\/([^\/?#]+)/)?.[1];
+            const currentApp = urlAppPath ? this.appManager.GetAppByPath(decodeURIComponent(urlAppPath)) : undefined;
+            if (!currentApp || !UUIDsEqual(currentApp.ID, lockedId)) {
+              await this.navigateToApp(scopedApp);
+              return;
+            }
+            // already on the scoped app — fall through to normal handling below
+          }
         }
 
         // Check if URL specifies an app by parsing the browser URL
@@ -407,11 +490,34 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       MJGlobal.Instance.GetEventListener(false).subscribe(async (updateEvent) => {
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const currentUserInfo = md.CurrentUser;
           const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
           this.applyUserAvatar(userEntity);
+        }
+      })
+    );
+
+    // Listen for tenant context changes (e.g., BCSaaS org switching).
+    // Two phases:
+    //   'start' (eventCode TenantChanging) — show loading screen immediately
+    //   'complete' (eventCode TenantChanged) — reload tabs and hide loading screen
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener(false).subscribe(async event => {
+        if (event.event === MJEventType.TenantChanged) {
+          if (event.eventCode === 'TenantChanging') {
+            this.currentLoadingText = 'Switching organization...';
+            this.loading = true;
+            this.cdr.detectChanges();
+          } else if (event.eventCode === 'TenantChanged' && this.tabContainerRef) {
+            try {
+              await this.tabContainerRef.ReloadAllTabs();
+            } finally {
+              this.loading = false;
+              this.cdr.detectChanges();
+            }
+          }
         }
       })
     );
@@ -1354,6 +1460,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * a race condition in components we DO NOT control, so while the naming
    * is intended to imply the goal it doesn't "hurt" to have this work this way
    */
+  /**
+   * True when the auth session is locked to a single application (e.g. a
+   * magic-link session). The header hides app-switching chrome so the external
+   * user stays within their scoped app. Data access is still enforced
+   * server-side by the user's role; this is the UI-confinement layer.
+   */
+  public get appSwitchingLocked(): boolean {
+    return !!this.authBase.GetSessionScope()?.restrictedToApplicationId;
+  }
+
   onFirstResourceLoadComplete(): void {
     this.waitingForFirstResource = false;
     this.loading = false;
@@ -1444,19 +1560,30 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Nuclear recovery: clear all browser-side cached data and reload the page.
-   * This clears localStorage, sessionStorage, and IndexedDB to recover
-   * from stuck loading states caused by corrupted or stale cached data.
+   * Nuclear recovery: reset server-side workspace, clear all browser-side
+   * cached data, and reload the page. This recovers from stuck loading states
+   * caused by corrupted, stale, or incompatible workspace/tab data (e.g., after
+   * a version upgrade that changes the workspace configuration schema).
    */
-  ResetApplication(): void {
+  async ResetApplication(): Promise<void> {
     try {
-      // 1. Clear localStorage
+      // 1. Reset server-side workspace to a clean default configuration.
+      //    This is the most common cause of stuck loading: stale tab configs
+      //    from a previous version reference resources/driver classes that
+      //    no longer exist or have changed format.
+      await this.workspaceManager.ResetConfiguration();
+    } catch (e) {
+      console.warn('Error resetting workspace configuration:', e);
+    }
+
+    try {
+      // 2. Clear localStorage
       localStorage.clear();
 
-      // 2. Clear sessionStorage
+      // 3. Clear sessionStorage
       sessionStorage.clear();
 
-      // 3. Delete all IndexedDB databases
+      // 4. Delete all IndexedDB databases
       if (window.indexedDB?.databases) {
         window.indexedDB.databases().then(databases => {
           for (const db of databases) {
@@ -1915,9 +2042,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.developerModeService.Initialize(this.userEntity);
     }
 
+    // Check org-level feedback kill switch (defaults to enabled on error)
+    const feedbackEnabled = await this.feedbackService.IsEnabled();
+
     // Build context for the menu
     const context: UserMenuContext = {
-      user: new Metadata().CurrentUser,
+      user: this.ProviderToUse.CurrentUser,
       userEntity: this.userEntity!,
       shell: this as unknown as Record<string, unknown>,
       viewContainerRef: this.viewContainerRef,
@@ -1927,10 +2057,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
       pinService: this.homePinService,
-      openSettings: () => this.openSettingsDialog(),
+      // Legacy hook retained for plugin compatibility — no-op now that the
+      // multi-tab Settings dialog has been replaced by the Identity Card flow.
+      openSettings: () => { /* deprecated; profile menu item now emits 'profile' */ },
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
-      appliedTheme: this.themeService.AppliedTheme
+      appliedTheme: this.themeService.AppliedTheme,
+      feedbackEnabled
     };
 
     // Initialize menu
@@ -1987,12 +2120,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const result = await this.userMenu.HandleItemClick(itemId);
 
     // Handle special signals from menu handlers
-    if (result.message === 'toggle-dev-mode') {
-      await this.developerModeService.Toggle();
-      // Menu will refresh via the subscription above
-      return;
-    }
-
     if (result.message?.startsWith('select-theme-')) {
       const themeId = result.message.substring('select-theme-'.length);
       await this.themeService.SetTheme(themeId);
@@ -2021,8 +2148,45 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.showPinProgress('Pinning...');
       // Let the UI render the overlay before starting the work
       await new Promise<void>(resolve => setTimeout(resolve, 0));
-      await this.handlePinToHome();
-      this.hidePinProgress();
+      try {
+        await this.handlePinToHome();
+      } catch (err) {
+        LogError(err);
+      } finally {
+        // Always clear the overlay — otherwise a failure (or a slow thumbnail
+        // capture) would leave the "Pinning..." spinner stuck on screen.
+        this.hidePinProgress();
+      }
+      return;
+    }
+
+    if (result.message === 'sharing-center') {
+      this.userMenuVisible = false;
+      this.userSharingCenterDialogService.open(this.viewContainerRef);
+      return;
+    }
+
+    if (result.message === 'submit-feedback') {
+      this.userMenuVisible = false;
+      this.ShowFeedbackDialog();
+      return;
+    }
+
+    if (result.message === 'about') {
+      this.userMenuVisible = false;
+      this.aboutDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
+      return;
+    }
+
+    if (result.message === 'profile') {
+      this.userMenuVisible = false;
+      this.profileDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
       return;
     }
 
@@ -2072,20 +2236,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     return element as UserMenuItem;
   }
 
-  /**
-   * Open the settings dialog
-   */
-  private openSettingsDialog(): void {
-    this.settingsDialogService.open(this.viewContainerRef);
-  }
-
-  /**
-   * Open Settings in a full-screen modal dialog
-   */
-  onSettings(): void {
-    this.userMenuVisible = false;
-    this.openSettingsDialog();
-  }
 
   /**
    * Pin the currently active resource to the Home dashboard
@@ -2137,8 +2287,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     if (added) {
-      this.showPinProgress(`Capturing preview for "${displayName}"...`);
-      await this.captureAndAttachThumbnail(activeTab, resourceType);
+      // Capture the preview in the BACKGROUND — do not block pin completion (and the
+      // "Pinning..." overlay) on it. The thumbnail is purely decorative, and capture can
+      // be expensive for heavy resources (e.g. the Data Explorer's large grid/map DOM,
+      // where html-to-image clones the whole tree synchronously). The pin already exists
+      // the moment AddPin() returns, so let the overlay clear immediately.
+      void this.captureAndAttachThumbnail(activeTab, resourceType);
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${activeTab.title}" is already pinned to Home`, 'info', 3000
@@ -2174,7 +2328,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const recordId = config['recordId'] as string;
       if (!entityName || !recordId) return null;
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) return null;
 
@@ -2327,7 +2481,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string; Email?: string }): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
       this.userEmail = currentUserInfo.Email || '';
 
@@ -2425,7 +2579,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Load searchable entities from metadata
    */
   private async loadSearchableEntities(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.searchableEntities.length > 0) {
       this.selectedEntity = this.searchableEntities[0];
@@ -2524,7 +2678,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
           const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
-          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
+          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
+          const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
+          if (minRelevance) opts.minRelevance = minRelevance;
+          if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
+          this.navigationService.OpenSearch(query, Object.keys(opts).length > 0 ? opts : undefined);
       }
   }
 
@@ -2539,6 +2697,27 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Show notifications page as a tab
    */
+  /** Toggle the global Activity drawer. */
+  toggleActivity(event: MouseEvent): void {
+    event.stopPropagation();
+    this.activityOpen = !this.activityOpen;
+    this.cdr.detectChanges();
+  }
+
+  /** Clear finished activities from the tracker. */
+  clearFinishedActivity(): void {
+    this.activityService.ClearFinished();
+  }
+
+  /** Close the Activity drawer when clicking anywhere outside it. */
+  @HostListener('document:click')
+  onDocumentClickCloseActivity(): void {
+    if (this.activityOpen) {
+      this.activityOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   showNotifications(): void {
     MJGlobal.Instance.RaiseEvent({
       event: MJEventType.ComponentEvent,
@@ -2559,6 +2738,56 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       IsPinned: false
     });
+  }
+
+  /**
+   * Open the feedback dialog with current workspace context.
+   * Captures a screenshot in the background and attaches it once ready.
+   */
+  async ShowFeedbackDialog(): Promise<void> {
+    // Check if feedback is enabled for this org
+    const enabled = await this.feedbackService.IsEnabled();
+    if (!enabled) {
+      return;
+    }
+
+    const config = this.workspaceManager.GetConfiguration();
+    const currentPage = config?.tabs
+      ?.map(t => t.title)
+      .filter(Boolean)
+      .join(' \u2192 ') || undefined;
+
+    // Open dialog immediately — screenshot loads in background
+    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
+
+    // Capture screenshot in background and attach when ready
+    this.captureAndAttachFeedbackScreenshot();
+  }
+
+  /**
+   * Capture a screenshot in the background and attach it to the open feedback dialog.
+   */
+  private async captureAndAttachFeedbackScreenshot(): Promise<void> {
+    try {
+      let screenshot: string | undefined;
+      if (this.tabContainerRef) {
+        screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
+      }
+      if (!screenshot) {
+        const contentEl = document.querySelector('.shell-content') as HTMLElement
+          || document.querySelector('mj-tab-container') as HTMLElement;
+        if (contentEl) {
+          screenshot = await this.homePinService.CaptureThumbnail(contentEl);
+        }
+      }
+      if (screenshot) {
+        this.feedbackDialogService.AttachScreenshot(screenshot);
+      } else {
+        this.feedbackDialogService.StopScreenshotLoading();
+      }
+    } catch {
+      this.feedbackDialogService.StopScreenshotLoading();
+    }
   }
 
   // ========================================
@@ -2813,8 +3042,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Update URL to reflect the new app
-    const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
+    this.router.navigateByUrl(this.appManager.GetAppUrl(app));
   }
 
   /**

@@ -1,14 +1,28 @@
 {
-  "source:string:!empty": "query",
   "title:string:!empty": "Descriptive title",
-  "plan:string?": "Optional markdown plan",
-  "columns:[0+]": [
+  "plan:string:!empty": "Markdown plan — required on every payload (plan-only and results)",
+  "source:string?": "query",
+  "columns:[0+]?": [
     {
       "field:string:!empty": "ColumnName",
-      "headerName?": "Display Name"
+      "displayName?": "Display Name",
+      "headerName?": "Display Name (legacy)"
     }
   ],
-  "rows:[0+]": [],
+  "rows:[0+]?": [],
+  "tables:[0+]?": [
+    {
+      "name:string:!empty": "table_name",
+      "columns:[0+]": [
+        {
+          "field:string:!empty": "ColumnName"
+        }
+      ],
+      "rows:[0+]": []
+    }
+  ],
+  "interpretation:string?": "Optional narrative summary",
+  "computations:[0+]?": [],
   "metadata?": {
     "sql:string?": "SELECT ...",
     "rowCount:number?": 0,

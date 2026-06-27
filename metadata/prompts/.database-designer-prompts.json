@@ -1,0 +1,293 @@
+[
+  {
+    "fields": {
+      "Name": "Database Designer - Main Prompt",
+      "Description": "System prompt for the Database Designer agent. Orchestrates Requirements Analyst, Schema Designer, Validator, and Builder sub-agents to create or modify MJ entities conversationally.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/database-designer/database-designer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
+      "EffortLevel": 1,
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/database-designer/database-designer.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Database Design?create&Description=Prompts for the Database Designer Agent system"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "78ECB333-F300-43FC-BA84-719830D1ABBE"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:05.558Z",
+            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "E62FAFB1-BD29-411C-88EC-E8BFF1B3A515"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:30.555Z",
+            "checksum": "c383e1e5d16a6fca8ae4f2d96d5f4b8626eff2c0a24a4f44e801accb9289560a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "384E4C21-D4E3-498F-BDE8-CA10941DA8A6"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:30.564Z",
+            "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "86D7B649-B382-47D3-AB99-FEFD480B1707"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:05.575Z",
+            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "897F53E7-61DB-420F-8969-5D441A4838AA"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:49:05.488Z",
+      "checksum": "bfe4ae196fa3e4a8edd188e2a828f0294cebf5437238aa8abd54c0776bb7d3a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Database Requirements Analyst - Main Prompt",
+      "Description": "System prompt for the Database Requirements Analyst sub-agent. Gathers data model requirements through conversation and writes them to FunctionalRequirements.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/database-designer/database-requirements-analyst.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
+      "EffortLevel": 1,
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Balanced",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/database-designer/database-requirements-analyst.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Database Design?create&Description=Prompts for the Database Designer Agent system"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "9D71DE90-9560-4954-AA81-7076A0B1E146"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:05.593Z",
+            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "6A4AC8CC-0C12-43F1-BA12-2B3D191A01FF"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:30.588Z",
+            "checksum": "c383e1e5d16a6fca8ae4f2d96d5f4b8626eff2c0a24a4f44e801accb9289560a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "A5C072BB-2DB1-4274-94FA-CD56A639FD66"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:30.601Z",
+            "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "A6DCF8FF-C481-4F7A-A18F-5F5096A3D54C"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:05.608Z",
+            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E831D8BA-91D7-4D4B-8B92-9D2A10306271"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:49:05.457Z",
+      "checksum": "389ff4c37709f9f54d38485879c9208bb96152e60cb50238df00dfc117648f8b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Database Schema Designer - Main Prompt",
+      "Description": "System prompt for the Database Schema Designer sub-agent. Converts functional requirements into a precise TableDefinition JSON for SchemaEngine.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/database-designer/database-schema-designer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
+      "EffortLevel": 1,
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/database-designer/database-schema-designer.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 3,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=Database Design?create&Description=Prompts for the Database Designer Agent system"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "F73F1E51-D5C1-40B8-AA92-17911762435D"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:05.623Z",
+            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "944F6442-E706-49EC-8C97-7F8C4A7BC1C6"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:30.622Z",
+            "checksum": "c383e1e5d16a6fca8ae4f2d96d5f4b8626eff2c0a24a4f44e801accb9289560a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "6376E961-CA7D-49D1-A8A7-C6959BFA31D3"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T06:12:30.632Z",
+            "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "BF35E13D-D14B-494E-984E-C750AFB0DA85"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:05.650Z",
+            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4A8438F3-1DC9-4A04-8A10-79BBD61DE785"
+    },
+    "sync": {
+      "lastModified": "2026-05-29T19:49:05.512Z",
+      "checksum": "be803e6f92354d01e05424107da5781b8577891fdcfc63ddfbeca75bb1172c68"
+    }
+  }
+]

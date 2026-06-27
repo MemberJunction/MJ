@@ -35,6 +35,13 @@ export interface CommonFlags {
     format?: OutputFormat;
     output?: string;
     verbose?: boolean;
+    /**
+     * Path to a CommonJS or ESM module that exports custom `IOracle` classes
+     * or instances. Each exported oracle is registered on the engine before
+     * the test/suite runs — used by non-MJ adopters (Mode C) to plug their
+     * own oracle types without modifying TestingFramework.
+     */
+    oraclesModule?: string;
 }
 
 /**
@@ -69,6 +76,21 @@ export interface SuiteFlags extends CommonFlags {
      * Can be specified multiple times for multiple variables
      */
     var?: string[];
+    /**
+     * Maximum number of parallel workers (default 4).
+     */
+    maxParallel?: number;
+    /**
+     * Delay in milliseconds between test executions.
+     * Useful for avoiding rate limits (e.g., Auth0 brute-force protection).
+     */
+    delay?: number;
+    /**
+     * Run each test N times to detect flakiness via score variance.
+     * Tests with score variance > 0.3 across iterations are flagged [FLAKY].
+     * Recommended: 3 (statistical minimum), 5 (more reliable detection).
+     */
+    flakyCheck?: number;
 }
 
 /**
@@ -123,4 +145,16 @@ export interface CompareFlags extends CommonFlags {
     version?: string[];
     commit?: string[];
     diffOnly?: boolean;
+    /** Compare the two most recent completed suite runs */
+    latest?: boolean;
+    /** Compare two results.json files directly (no DB needed). Takes two file paths. */
+    fromJson?: string[];
+    /**
+     * Filter suite runs by a single tag. Matches against `MJTestSuiteRunEntity.Tags`,
+     * which is a JSON array string (e.g., `["staging-nightly","sonnet-4.6"]`).
+     * Used to isolate runs from a specific source environment when an archive MJ
+     * holds multiple sources side-by-side. DB mode only — `--from-json` ignores it
+     * because `results.json` does not currently emit the Tags field.
+     */
+    tag?: string;
 }

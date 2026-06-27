@@ -1,0 +1,305 @@
+<div class="feedback-container">
+
+  @if (isInitializing) {
+    <div class="loading-overlay"><div class="spinner"></div> Loading...</div>
+  }
+
+  @if (!isInitializing) {
+
+    <div class="sticky-header">
+      <div class="page-header">
+        <div class="page-title-area">
+          <div class="page-icon"><i class="fa-solid fa-comment-dots"></i></div>
+          <div>
+            <h1 class="page-title">Agent Feedback</h1>
+            <p class="page-subtitle">User ratings and comments on AI messages</p>
+          </div>
+        </div>
+        <div class="page-actions">
+          <button class="btn-action" (click)="loadFeedback()" [disabled]="loading">
+            <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="loading"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      @if (error) {
+        <div class="error-banner">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          {{ error }}
+          <button (click)="error = null" aria-label="Dismiss error">×</button>
+        </div>
+      }
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-total"><i class="fa-solid fa-comment-dots"></i></div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.total }}</div>
+            <div class="stat-label">Total Ratings</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-avg"><i class="fa-solid fa-star"></i></div>
+          <div class="stat-content">
+            <div class="stat-value">{{ stats.avgRating }}<span class="stat-unit">/10</span></div>
+            <div class="stat-label">Avg Rating</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-positive"><i class="fa-solid fa-thumbs-up"></i></div>
+          <div class="stat-content">
+            <div class="stat-value rating-high-text">{{ stats.percentPositive }}%</div>
+            <div class="stat-label">Positive (8-10)</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon stat-icon-negative"><i class="fa-solid fa-thumbs-down"></i></div>
+          <div class="stat-content">
+            <div class="stat-value rating-low-text">{{ stats.percentNegative }}%</div>
+            <div class="stat-label">Negative (1-3)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-row">
+          <div class="filter-group">
+            <span class="filter-label">Date Range</span>
+            <div class="btn-group">
+              <button class="btn-filter" [class.active]="dateRange === '1d'"  (click)="setDateRange('1d')">1d</button>
+              <button class="btn-filter" [class.active]="dateRange === '7d'"  (click)="setDateRange('7d')">7d</button>
+              <button class="btn-filter" [class.active]="dateRange === '30d'" (click)="setDateRange('30d')">30d</button>
+              <button class="btn-filter" [class.active]="dateRange === '90d'" (click)="setDateRange('90d')">90d</button>
+              <button class="btn-filter" [class.active]="dateRange === 'all'" (click)="setDateRange('all')">All</button>
+            </div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Rating Band</span>
+            <div class="btn-group">
+              <button class="btn-filter" [class.active]="ratingBand === 'all'"  (click)="setBand('all')">All</button>
+              <button class="btn-filter band-high" [class.active]="ratingBand === 'high'" (click)="setBand('high')">High 8-10</button>
+              <button class="btn-filter band-mid"  [class.active]="ratingBand === 'mid'"  (click)="setBand('mid')">Mid 4-7</button>
+              <button class="btn-filter band-low"  [class.active]="ratingBand === 'low'"  (click)="setBand('low')">Low 1-3</button>
+            </div>
+          </div>
+          <div class="filter-group filter-search">
+            <span class="filter-label">Search</span>
+            <input
+              type="text"
+              class="input-search"
+              [(ngModel)]="searchTerm"
+              (input)="onSearchChange()"
+              placeholder="Search comments, message, agent, rater..." />
+          </div>
+        </div>
+        <div class="diagnostic-line">
+          {{ totalRowCount }} {{ totalRowCount === 1 ? 'rating' : 'ratings' }} match the current filters
+        </div>
+      </div>
+    </div>
+
+    <div class="scrollable-content">
+      @if (loading) {
+        <div class="loading-overlay"><div class="spinner"></div> Loading feedback...</div>
+      }
+
+      @if (!loading) {
+        @if (rows.length === 0) {
+          <mj-empty-state
+            class="feedback-empty-state"
+            Variant="no-results"
+            Icon="fa-solid fa-comment-slash"
+            Title="No feedback matches the current filters." />
+        } @else {
+          <div class="feedback-table-wrapper">
+            <table class="feedback-table">
+              <thead>
+                <tr>
+                  <th class="col-rating">Rating</th>
+                  <th class="col-comment">Comments</th>
+                  <th class="col-agent">Agent</th>
+                  <th class="col-message">Message</th>
+                  <th class="col-rater">Rater</th>
+                  <th class="col-when">When</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows; track trackByRatingID($index, row)) {
+                  <tr
+                    class="feedback-row"
+                    [class.expanded]="selectedRow?.ratingID === row.ratingID"
+                    (click)="openDrawer(row)">
+                    <td class="col-rating">
+                      <span class="rating-badge" [ngClass]="bandClassFor(row.rating)">
+                        {{ row.rating }}<small>/10</small>
+                      </span>
+                    </td>
+                    <td class="col-comment">
+                      @if (row.comments) {
+                        <div class="comment-text clamped">{{ row.comments }}</div>
+                      } @else {
+                        <span class="muted">(no comment)</span>
+                      }
+                    </td>
+                    <td class="col-agent">
+                      <span class="agent-name">{{ row.agentName || '—' }}</span>
+                    </td>
+                    <td class="col-message">
+                      @if (row.messageSnippet) {
+                        <span class="message-snippet">{{ row.messageSnippet }}</span>
+                      } @else {
+                        <span class="muted">—</span>
+                      }
+                    </td>
+                    <td class="col-rater">
+                      <div class="rater-name">{{ row.raterName || row.raterEmail || '—' }}</div>
+                      @if (row.raterEmail && row.raterName) {
+                        <div class="rater-email">{{ row.raterEmail }}</div>
+                      }
+                    </td>
+                    <td class="col-when">
+                      <span class="when">{{ row.createdAt | date:'short' }}</span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <!--
+            Bottom bar. When the filtered set spans multiple pages mj-pagination
+            renders its own full-width `1-N of M | controls` row. When it fits
+            on a single page mj-pagination self-hides, so the footer renders
+            a single fallback summary line in its place.
+          -->
+          <!--
+            Bottom bar: mj-pagination on the left (it has its own internal
+            `1-N of M | nav controls` layout) + page-size selector hugging the
+            right edge. The selector lives outside mj-pagination because the
+            shared component doesn't expose a size-change output; the parent
+            owns PageSize.
+          -->
+          <div class="pagination-bar">
+            @if (isSinglePage) {
+              <span class="pagination-summary">
+                {{ rangeStart | number }}-{{ rangeEnd | number }} of {{ totalRowCount | number }}
+                {{ totalRowCount === 1 ? 'rating' : 'ratings' }}
+              </span>
+            } @else {
+              <mj-pagination
+                class="feedback-pagination"
+                [TotalRowCount]="totalRowCount"
+                [PageNumber]="currentPage"
+                [PageSize]="pageSize"
+                [IsLoading]="loading"
+                (PageChange)="onPageChange($event)">
+              </mj-pagination>
+            }
+
+            <label class="page-size-control">
+              <span class="page-size-label">Rows</span>
+              <select
+                class="page-size-select"
+                [ngModel]="pageSize"
+                (ngModelChange)="onPageSizeChange($event)">
+                @for (size of pageSizeOptions; track size) {
+                  <option [ngValue]="size">{{ size }}</option>
+                }
+              </select>
+            </label>
+          </div>
+        }
+      }
+    </div>
+  }
+
+  <!-- ===== Detail slide-out panel ===== -->
+  @if (selectedRow) {
+    <div class="slideout-backdrop" (click)="closeDrawer()"></div>
+  }
+
+  <aside class="slideout-panel"
+         [class.open]="!!selectedRow"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="slideout-title">
+    @if (selectedRow; as r) {
+      <div class="slideout-header">
+        <div class="slideout-title">
+          <i class="fa-solid fa-comment-dots"></i>
+          <div class="slideout-title-text">
+            <h2 id="slideout-title" class="slideout-title-line">
+              Feedback on {{ r.agentName || 'AI message' }}
+            </h2>
+            <div class="slideout-subtitle">
+              <span class="rating-badge" [ngClass]="bandClassFor(r.rating)">
+                {{ r.rating }}<small>/10</small>
+              </span>
+              <span>
+                Rated by <strong>{{ r.raterName || r.raterEmail || 'Unknown user' }}</strong>
+                · {{ r.createdAt | date:'medium' }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <button class="slideout-close" (click)="closeDrawer()" title="Close (Esc)" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="slideout-content">
+        <div class="slideout-section">
+          <div class="section-label">Reviewer Comment</div>
+          @if (r.comments) {
+            <div class="comment-body">{{ r.comments }}</div>
+          } @else {
+            <div class="comment-body muted">(no comment was provided)</div>
+          }
+        </div>
+
+        <div class="slideout-section">
+          <div class="meta-grid">
+            <div class="meta-card">
+              <div class="meta-label">Agent</div>
+              <div class="meta-value">{{ r.agentName || '—' }}</div>
+            </div>
+            <div class="meta-card">
+              <div class="meta-label">Conversation</div>
+              <div class="meta-value">{{ r.conversationName || '—' }}</div>
+            </div>
+            <div class="meta-card">
+              <div class="meta-label">Message Role</div>
+              <div class="meta-value">{{ r.messageRole || '—' }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slideout-section">
+          <div class="message-card">
+            <div class="message-card-header">
+              <i class="fa-solid fa-message"></i> Rated Message
+            </div>
+            <div class="message-card-body">
+              @if (r.messageText) {
+                {{ r.messageText }}
+              } @else {
+                <span class="muted">(message text unavailable)</span>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="slideout-footer">
+        <button mjButton variant="flat" size="lg" (click)="closeDrawer()">Close</button>
+        <button mjButton variant="primary" size="lg"
+                (click)="openConversation()"
+                [disabled]="!r.conversationID"
+                [title]="r.conversationID ? 'Open the source conversation' : 'No conversation linked'">
+          <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          Open Conversation
+        </button>
+      </div>
+    }
+  </aside>
+</div>

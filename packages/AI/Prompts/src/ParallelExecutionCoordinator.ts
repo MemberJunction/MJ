@@ -1,6 +1,6 @@
-import { LogError, LogStatus, Metadata } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
+import { LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual, RegisterClass } from '@memberjunction/global';
+import { ChatResult, ChatMessageRole, ChatMessage } from '@memberjunction/ai';
 import { MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import {
   ExecutionTask,
@@ -11,22 +11,12 @@ import {
   ResultSelectionConfig,
   ParallelExecutionProgress,
   TokenUsageUpdate,
+  ProgressCallbacksInterface,
+  IParallelExecutionCoordinator,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
-
-/**
- * Interface for progress callbacks to avoid circular dependency issues
- */
-interface ProgressCallbacksInterface {
-  getStreamingConfig?: () => {
-    enabled?: boolean;
-    callbacks?: {
-      OnTaskComplete?: (taskResult: ExecutionTaskResult, progress: ParallelExecutionProgress) => void;
-      OnParallelProgress?: (progress: ParallelExecutionProgress) => void;
-    };
-  };
-}
+import { AIPromptRunner } from './AIPromptRunner';
 
 /**
  * Helper class for tracking parallel execution progress
@@ -131,15 +121,28 @@ class ParallelProgressTracker {
  * - Performance monitoring and metrics collection
  * - Real-time progress tracking and streaming updates
  */
-export class ParallelExecutionCoordinator {
+/**
+ * Coordinates parallel multi-model prompt execution.
+ *
+ * SUBCLASSES {@link AIPromptRunner} purely to REUSE its execution primitives — most importantly the
+ * `protected executeModel`, which owns credential resolution, driver selection, ChatParams
+ * construction, prefill, media handling, and streaming. Each parallel task delegates to that ONE
+ * method (see {@link executeSingleTask}) instead of re-implementing it, so the parallel and
+ * single-model paths can never drift. The coordinator only adds task fan-out, grouping, timeouts,
+ * result selection, and child-run tracking on top.
+ *
+ * Registered under the base class with a dedicated key so {@link AIPromptRunner.ParallelCoordinator}
+ * can instantiate it via the ClassFactory without a static (circular) import.
+ */
+@RegisterClass(AIPromptRunner, 'ParallelExecutionCoordinator')
+export class ParallelExecutionCoordinator extends AIPromptRunner implements IParallelExecutionCoordinator {
   private readonly _defaultConfig: ParallelExecutionConfig;
-  private _metadata: Metadata;
 
   /**
    * Creates a new parallel execution coordinator with default configuration.
    */
   constructor() {
-    this._metadata = new Metadata();
+    super();
     this._defaultConfig = {
       maxConcurrentExecutions: 5,
       taskTimeoutMS: 30000, // 30 seconds
@@ -544,73 +547,45 @@ export class ParallelExecutionCoordinator {
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
   private async executeSingleTask(params: AIPromptParams, task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number, agentRunId?: string): Promise<ExecutionTaskResult> {
-    // TODO: This will need to integrate with AIPromptRunner's execution logic
-    // For now, implementing a simplified version
-
     const startTime = new Date();
     let childPromptRun: MJAIPromptRunEntityExtended | null = null;
+
+    // Task-level streaming callbacks (LLM lifecycle). OnContent is bridged into executeModel via
+    // params.onStreaming (see buildPerTaskParams); OnComplete/OnError are fired here since the
+    // coordinator owns the task's success/failure transition.
+    const streamCbs = task.streamingConfig?.enabled ? task.streamingConfig.callbacks : undefined;
 
     try {
       // Create child prompt run log if parent ID is provided
       if (parentPromptRunId) {
         childPromptRun = await this.createChildPromptRun(task, startTime, parentPromptRunId, executionOrder, agentRunId);
       }
-      // Create LLM instance using vendor-specific driver class if available
-      const driverClass = task.vendorDriverClass || task.model.DriverClass;
-      const apiName = task.vendorApiName || task.model.APIName;
-      
-      if (!driverClass) {
-        throw new Error(`No driver class available for model ${task.model.Name}. Vendor selection may have failed.`);
+
+      // Delegate the actual model call to the inherited base executeModel — the SINGLE source of truth
+      // for credential resolution (full hierarchical chain, not just legacy env keys), driver/vendor
+      // selection, ChatParams construction (temperature/topP/effort/stop/response-format/prefill),
+      // media handling, and streaming. The coordinator only layers the per-task timeout on top;
+      // cancellation is handled inside executeModel via the task's cancellation token.
+      const perTaskParams = this.buildPerTaskParams(params, task);
+      const modelResult = (await Promise.race([
+        this.executeModel(
+          task.model,
+          task.renderedPrompt,
+          task.prompt,
+          perTaskParams,
+          task.vendorId ?? null,
+          task.conversationMessages,
+          task.templateMessageRole || 'system',
+          task.cancellationToken,
+          task.vendorDriverClass,
+          task.vendorApiName,
+        ),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Task execution timeout')), timeoutMS)),
+      ])) as ChatResult;
+
+      if (streamCbs?.OnComplete) {
+        streamCbs.OnComplete(modelResult);
       }
-      
-      const apiKey = GetAIAPIKey(driverClass, params.apiKeys, params.verbose);
-      const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
-
-      // Prepare chat parameters
-      const innerParams = new ChatParams();
-      innerParams.model = apiName;
-      innerParams.cancellationToken = task.cancellationToken;
-
-      // Configure streaming if enabled in task
-      if (task.streamingConfig?.enabled && task.streamingConfig.callbacks?.OnContent) {
-        innerParams.streaming = true;
-        innerParams.streamingCallbacks = {
-          OnContent: task.streamingConfig.callbacks.OnContent,
-          OnComplete: task.streamingConfig.callbacks.OnComplete,
-          OnError: task.streamingConfig.callbacks.OnError,
-        };
-      }
-
-      // Build message array with rendered prompt and conversation messages
-      innerParams.messages = this.buildMessageArray(task.renderedPrompt, task.conversationMessages, task.templateMessageRole || 'system');
-
-      // Apply model-specific parameters if available
-      if (task.modelParameters) {
-        Object.assign(params, task.modelParameters);
-      }
-
-      // Execute with timeout and cancellation support
-      const racePromises: Promise<ChatResult | never>[] = [llm.ChatCompletion(innerParams)];
-
-      // Add timeout promise
-      racePromises.push(new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Task execution timeout')), timeoutMS)));
-
-      // Add cancellation promise if cancellation token is available
-      if (task.cancellationToken) {
-        racePromises.push(
-          new Promise<never>((_, reject) => {
-            if (task.cancellationToken!.aborted) {
-              reject(new Error('Task execution cancelled'));
-            } else {
-              task.cancellationToken!.addEventListener('abort', () => {
-                reject(new Error('Task execution cancelled'));
-              });
-            }
-          }),
-        );
-      }
-
-      const modelResult = (await Promise.race(racePromises)) as ChatResult;
 
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
@@ -635,6 +610,10 @@ export class ParallelExecutionCoordinator {
       const endTime = new Date();
       const executionTimeMS = endTime.getTime() - startTime.getTime();
 
+      if (streamCbs?.OnError) {
+        streamCbs.OnError(error);
+      }
+
       // Check if this was a cancellation error
       const isCancelled = error.message.includes('cancelled');
 
@@ -643,6 +622,10 @@ export class ParallelExecutionCoordinator {
         childPromptRun.CompletedAt = endTime;
         childPromptRun.ExecutionTimeMS = executionTimeMS;
         childPromptRun.Success = false;
+        childPromptRun.Status = isCancelled ? 'Cancelled' : 'Failed';
+        if (isCancelled) {
+          childPromptRun.Cancelled = true;
+        }
         childPromptRun.ErrorMessage = error.message;
         childPromptRun.Result = `ERROR: ${error.message}`;
         await childPromptRun.Save();
@@ -753,8 +736,8 @@ export class ParallelExecutionCoordinator {
     _cancellationToken?: AbortSignal,
   ): Promise<ExecutionTaskResult> {
     try {
-      // Import AIPromptRunner here to avoid circular dependency
-      const { AIPromptRunner } = await import('./AIPromptRunner');
+      // AIPromptRunner is statically imported (this class extends it); the prior dynamic import was
+      // only needed before the subclass relationship existed.
 
       // Load the judge prompt from AIEngine
       await AIEngine.Instance.Config(false);
@@ -810,6 +793,7 @@ export class ParallelExecutionCoordinator {
         resultSelectorPromptRun.CompletedAt = new Date(judgeEndTime);
         resultSelectorPromptRun.ExecutionTimeMS = judgeExecutionTimeMS;
         resultSelectorPromptRun.Success = judgeResult.success;
+        resultSelectorPromptRun.Status = judgeResult.success ? 'Completed' : 'Failed';
         resultSelectorPromptRun.Result = judgeResult.rawResult || '';
         if (judgeResult.tokensUsed) {
           resultSelectorPromptRun.TokensUsed = judgeResult.tokensUsed;
@@ -955,47 +939,29 @@ export class ParallelExecutionCoordinator {
   }
 
   /**
-   * Builds the message array combining rendered prompt with conversation messages
+   * Builds a per-task copy of the shared prompt params for delegation to the inherited executeModel.
+   *
+   * - Clones (preserving prototype) so concurrently-running tasks never mutate each other's params —
+   *   fixing the old `Object.assign(params, task.modelParameters)` that mutated the SHARED object.
+   * - Merges the task's per-model parameters into additionalParameters so executeModel's scalar-param
+   *   resolution (temperature/topP/etc.) actually applies them (the old manual ChatParams path
+   *   silently ignored them).
+   * - Bridges the task's incremental streaming callback (OnContent) into params.onStreaming so the
+   *   base's single streaming path drives it. (OnComplete/OnError are fired by executeSingleTask.)
    */
-  private buildMessageArray(
-    renderedPrompt: string,
-    conversationMessages?: ChatMessage[],
-    templateMessageRole: 'system' | 'user' | 'none' = 'system',
-  ): ChatMessage[] {
-    const messages: ChatMessage[] = [];
+  private buildPerTaskParams(params: AIPromptParams, task: ExecutionTask): AIPromptParams {
+    const perTaskParams: AIPromptParams = Object.assign(Object.create(Object.getPrototypeOf(params)), params);
 
-    // Add rendered template as system or user message if not 'none'
-    if (renderedPrompt && templateMessageRole !== 'none') {
-      messages.push({
-        role: templateMessageRole === 'system' ? ChatMessageRole.system : ChatMessageRole.user,
-        content: renderedPrompt,
-      });
+    if (task.modelParameters) {
+      perTaskParams.additionalParameters = { ...(params.additionalParameters ?? {}), ...task.modelParameters };
     }
 
-    // Add conversation messages if provided
-    if (conversationMessages && conversationMessages.length > 0) {
-      messages.push(...conversationMessages);
+    const onContent = task.streamingConfig?.enabled ? task.streamingConfig.callbacks?.OnContent : undefined;
+    if (onContent) {
+      perTaskParams.onStreaming = (chunk) => onContent(chunk.content, chunk.isComplete);
     }
 
-    // If no conversation messages and no rendered prompt as user message,
-    // add a default user message to ensure we have at least one user message
-    if ((!conversationMessages || conversationMessages.length === 0) && templateMessageRole !== 'user' && renderedPrompt) {
-      // If we only have a system message, we need a user message too
-      if (templateMessageRole === 'system') {
-        messages.push({
-          role: ChatMessageRole.user,
-          content: 'Please proceed with the above instructions.',
-        });
-      }
-    } else if ((!conversationMessages || conversationMessages.length === 0) && !renderedPrompt) {
-      // Fallback: if no conversation and no rendered prompt, add a basic user message
-      messages.push({
-        role: ChatMessageRole.user,
-        content: 'Hello',
-      });
-    }
-
-    return messages;
+    return perTaskParams;
   }
 
   /**
@@ -1010,7 +976,7 @@ export class ParallelExecutionCoordinator {
    */
   private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<MJAIPromptRunEntityExtended> {
     try {
-      const promptRun = await this._metadata.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
+      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
       promptRun.NewRecord();
 
       promptRun.PromptID = task.prompt.ID;
@@ -1076,6 +1042,7 @@ export class ParallelExecutionCoordinator {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Success = modelResult.success;
+      promptRun.Status = modelResult.success ? 'Completed' : 'Failed';
 
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';
@@ -1116,7 +1083,7 @@ export class ParallelExecutionCoordinator {
     executionOrder: number,
   ): Promise<MJAIPromptRunEntityExtended> {
     try {
-      const promptRun = await this._metadata.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
       promptRun.NewRecord();
 
       promptRun.PromptID = judgePrompt.ID;

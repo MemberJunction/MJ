@@ -158,6 +158,13 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'PostgresQL';
     }
 
+    /**
+     * PostgreSQL has no in-row row-size limit (TOAST stores oversized variable-length values
+     * out-of-line), so {@link MaxInRowSizeBytes} stays `null` (inherited). It does enforce a
+     * hard 1600-column-per-table cap.
+     */
+    override get MaxColumnCount(): number { return 1600; }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
@@ -166,6 +173,27 @@ export class PostgreSQLDialect extends SQLDialect {
 
     QuoteSchema(schema: string, object: string): string {
         return `${schema}."${object}"`;
+    }
+
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, which would turn
+     * `AS EntityName` into the result column `entityname`. Quoting the
+     * alias preserves the requested casing for callers that key off the
+     * column name (e.g. when consuming results into a TypeScript object
+     * with a PascalCase property).
+     */
+    QuoteColumnAlias(aliasName: string): string {
+        return `"${aliasName}"`;
+    }
+
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, so the physical schema an
+     * unquoted `CREATE SCHEMA __mj_BizAppsCommon` produces is `__mj_bizappscommon`.
+     * Canonicalize to that lowercase form so the engine's quoted operations target the
+     * same physical schema as the app's (typically unquoted) migration DDL.
+     */
+    CanonicalSchemaName(name: string): string {
+        return name.toLowerCase();
     }
 
     // ─── Pagination ──────────────────────────────────────────────────
@@ -184,9 +212,90 @@ export class PostgreSQLDialect extends SQLDialect {
         return value ? 'true' : 'false';
     }
 
+    BooleanParameterType(): string {
+        return 'boolean';
+    }
+
+    /**
+     * PostgreSQL has no `ISNULL` keyword; the standard is `COALESCE` (which
+     * SQL Server also supports). PG generated SPs/functions emit COALESCE
+     * everywhere a null-coalescing wrap is needed.
+     */
+    IsNull(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
+    /**
+     * PostgreSQL's n-ary null-coalescing is also `COALESCE`. Same form as
+     * the two-arg `IsNull` since PG has no `ISNULL` to differentiate from.
+     */
+    Coalesce(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
+    /**
+     * PostgreSQL function parameters use a `p_<flat lowercase>` convention
+     * (no `@`-prefix syntax in PG). This matches the baseline-ported SP names
+     * (which lowercased SQL Server's PascalCase parameter names without
+     * separators — e.g. `@CompanyID` → `p_companyid`) and the runtime
+     * PostgreSQLDataProvider, which calls procs with `p_${field.Name.toLowerCase()}`.
+     *
+     * Earlier this used a snake_case transform (`p_company_id`), which
+     * produced functions the runtime could never invoke. Underscores already
+     * in the input (e.g. the `_Clear` companion suffix) are preserved.
+     */
+    ParameterRef(name: string): string {
+        return `p_${name.toLowerCase()}`;
+    }
+
+    /**
+     * PostgreSQL functions use the `DEFAULT <value>` clause for parameter defaults.
+     */
+    ParameterDefault(value: string): string {
+        return ` DEFAULT ${value}`;
+    }
+
     CurrentTimestampUTC(): string {
         return "(NOW() AT TIME ZONE 'UTC')";
     }
+
+    // ─── Type-Name Sets ──────────────────────────────────────────────
+    // PostgreSQL's column-type names as they appear in `pg_catalog` /
+    // `information_schema` / `EntityField.Type` for entities backed by PG.
+    // Includes both the formal name (`character varying`) and the internal
+    // / short alias (`varchar`, `bpchar`) since both surface depending on
+    // the metadata source.
+
+    private static readonly _BooleanTypeNames = ['bool', 'boolean'] as const;
+    private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    /**
+     * PG fixed-width / space-padded char types. `character` (without `varying`)
+     * and `bpchar` are the formal/internal names; `char` is the short alias.
+     * Note: `character varying` is NOT included — it's variable-width.
+     */
+    private static readonly _FixedWidthStringTypeNames = ['char', 'character', 'bpchar'] as const;
+    private static readonly _DateTypeNames = ['date', 'time', 'time without time zone', 'time with time zone', 'timestamp', 'timestamptz', 'timestamp with time zone', 'timestamp without time zone'] as const;
+    private static readonly _IntegerTypeNames = ['int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'smallserial', 'oid'] as const;
+    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'real', 'double precision', 'float4', 'float8'] as const;
+    private static readonly _UuidTypeNames = ['uuid'] as const;
+    private static readonly _BinaryTypeNames = ['bytea'] as const;
+    private static readonly _JsonTypeNames = ['json', 'jsonb', 'xml'] as const;
+    private static readonly _CurrencyTypeNames = ['money'] as const;
+    private static readonly _IntervalTypeNames = ['interval'] as const;
+    private static readonly _NetworkTypeNames = ['inet', 'cidr', 'macaddr', 'macaddr8'] as const;
+
+    get BooleanTypeNames(): readonly string[]  { return PostgreSQLDialect._BooleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return PostgreSQLDialect._StringTypeNames; }
+    get FixedWidthStringTypeNames(): readonly string[] { return PostgreSQLDialect._FixedWidthStringTypeNames; }
+    get DateTypeNames(): readonly string[]     { return PostgreSQLDialect._DateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return PostgreSQLDialect._IntegerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return PostgreSQLDialect._FloatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return PostgreSQLDialect._UuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return PostgreSQLDialect._BinaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return PostgreSQLDialect._JsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return PostgreSQLDialect._CurrencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return PostgreSQLDialect._IntervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return PostgreSQLDialect._NetworkTypeNames; }
 
     NewUUID(): string {
         return 'gen_random_uuid()';
@@ -196,8 +305,29 @@ export class PostgreSQLDialect extends SQLDialect {
         return `CAST(${expr} AS TEXT)`;
     }
 
+    /**
+     * PostgreSQL-specific Flyway escape. PostgreSQL string concatenation uses
+     * `||` (not `+`), and TEXT has no length cap — so a simple split with `||`
+     * suffices and no cast-to-MAX dance is needed (unlike SQL Server, which
+     * silently truncates `NVARCHAR(N) + NVARCHAR(M)` past 4,000 chars).
+     * PostgreSQL string literals don't take an `N` prefix either; everything
+     * is already Unicode.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'||'{");
+    }
+
     CastToUUID(expr: string): string {
         return `CAST(${expr} AS UUID)`;
+    }
+
+    /**
+     * PostgreSQL strict typing requires an explicit `::UUID` cast when
+     * comparing the empty-GUID sentinel against a UUID-typed column.
+     * Without it, PG raises "operator does not exist: uuid = text".
+     */
+    EmptyUUIDLiteral(): string {
+        return `${super.EmptyUUIDLiteral()}::UUID`;
     }
 
     // ─── INSERT/UPDATE Return Patterns ───────────────────────────────
@@ -231,6 +361,56 @@ export class PostgreSQLDialect extends SQLDialect {
 
     BatchSeparator(): string {
         return ''; // PostgreSQL does not need batch separators
+    }
+
+    /**
+     * Splits an oversized SQL batch into individual statements on `;`+EOL
+     * boundaries — but NEVER inside a PostgreSQL dollar-quoted block
+     * (`$$ … $$` or `$tag$ … $tag$`), whose body legitimately contains
+     * `;`+newline (DO blocks, PL/pgSQL function bodies, the integration
+     * view-drop guard `$mj_dropviews$`). A naive `split(/;\s*\n/g)` tears
+     * those apart. Outside dollar blocks the boundary semantics mirror the
+     * base `split(/;\s*\n/g)` (a `;` then optional inline whitespace then a
+     * newline). Each returned statement ends with `;`.
+     */
+    SplitStatements(batch: string): string[] {
+        const statements: string[] = [];
+        let current = '';
+        let dollarTag: string | null = null;   // active dollar-quote tag (e.g. '$$' or '$fn$'), or null
+        const isTagChar = (c: string) => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c === '_';
+        for (let i = 0; i < batch.length; i++) {
+            const ch = batch[i];
+            if (ch === '$') {
+                // Scan a dollar-quote tag: `$` [A-Za-z0-9_]* `$`.
+                let j = i + 1;
+                while (j < batch.length && isTagChar(batch[j])) j++;
+                if (batch[j] === '$') {
+                    const tag = batch.slice(i, j + 1);
+                    if (dollarTag === null) dollarTag = tag;          // entering a dollar-quoted block
+                    else if (dollarTag === tag) dollarTag = null;     // matching close → exiting
+                    current += tag;
+                    i = j;
+                    continue;
+                }
+            }
+            if (ch === ';' && dollarTag === null) {
+                // Boundary = `;` then optional spaces/tabs/CR then a newline — only OUTSIDE a dollar block.
+                let j = i + 1;
+                while (j < batch.length && (batch[j] === ' ' || batch[j] === '\t' || batch[j] === '\r')) j++;
+                if (j < batch.length && batch[j] === '\n') {
+                    current += ';';
+                    const trimmed = current.trim();
+                    if (trimmed.length > 0) statements.push(trimmed);
+                    current = '';
+                    i = j;   // skip the inline whitespace; the loop's i++ steps past the newline
+                    continue;
+                }
+            }
+            current += ch;
+        }
+        const tail = current.trim();
+        if (tail.length > 0) statements.push(tail);
+        return statements.map((s) => (s.endsWith(';') ? s : s + ';'));
     }
 
     ExistenceCheckSQL(objectType: string, schema: string, name: string): string {
@@ -302,6 +482,10 @@ export class PostgreSQLDialect extends SQLDialect {
 
     get AllowsOrderByInCTE(): boolean {
         return true;
+    }
+
+    get DefaultPagingOrderBy(): string {
+        return '1';
     }
 
     // ─── Data Types ──────────────────────────────────────────────────
@@ -389,10 +573,18 @@ export class PostgreSQLDialect extends SQLDialect {
     }
 
     AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        const col = `"${options.columnName}"`;
+        // PostgreSQL refuses to change a column's type when the old type cannot be
+        // *implicitly* cast to the new one (e.g. text → boolean, text → integer):
+        //   "column ... cannot be cast automatically to type boolean".
+        // A `USING <col>::<newtype>` expression makes the conversion explicit. It is
+        // valid for every type change (a no-op cast when the types already match), so
+        // we always emit it. SQL Server has no such requirement (handled in its own
+        // dialect), so this is PG-only.
         return (
             `ALTER TABLE ${quotedTable}\n` +
-            `    ALTER COLUMN "${options.columnName}" TYPE ${options.newType},\n` +
-            `    ALTER COLUMN "${options.columnName}" ${options.newNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`
+            `    ALTER COLUMN ${col} TYPE ${options.newType} USING ${col}::${options.newType},\n` +
+            `    ALTER COLUMN ${col} ${options.newNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`
         );
     }
 
@@ -562,6 +754,28 @@ export class PostgreSQLDialect extends SQLDialect {
             return `VARCHAR(${maxLength})`;
         }
         return 'VARCHAR(255)';
+    }
+
+    // ─── Error Classification ────────────────────────────────────────
+
+    IsConnectionError(e: unknown): boolean {
+        if (!(e instanceof Error)) return false;
+
+        // pg driver throws plain Error with Node.js network error codes for
+        // connection failures. DatabaseError (from pg-protocol) is for
+        // server-side SQL errors, which are NOT connection errors.
+        if (e.name === 'DatabaseError') return false;
+
+        const code = (e as { code?: string }).code ?? '';
+        return (
+            code === 'ECONNREFUSED' ||
+            code === 'ECONNRESET' ||
+            code === 'ETIMEDOUT' ||
+            code === 'ENOTFOUND' ||
+            code === 'EPIPE' ||
+            e.message.includes('Connection terminated') ||
+            e.message.includes('connection is insecure')
+        );
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────

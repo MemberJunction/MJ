@@ -2,8 +2,8 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
+import { AnalyzeArtifactService, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { DataSnapshot, UserInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
 /**
@@ -25,19 +25,23 @@ import { Subject } from 'rxjs';
         
           <!-- Error state -->
           @if (ErrorMessage && !IsLoading) {
-            <div class="error-state">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>{{ ErrorMessage }}</span>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Variant="error"
+              Icon="fa-solid fa-triangle-exclamation"
+              Title="Couldn't load artifact"
+              [Message]="ErrorMessage"
+              Size="compact" />
           }
-        
+
           <!-- No artifact configured -->
           @if (!IsLoading && !ErrorMessage && !hasArtifact) {
-            <div class="empty-state">
-              <i class="fa-solid fa-palette"></i>
-              <h4>No Artifact Selected</h4>
-              <p>Click the configure button to select an artifact for this part.</p>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Icon="fa-solid fa-palette"
+              Title="No Artifact Selected"
+              Message="Click the configure button to select an artifact for this part."
+              Size="compact" />
           }
         
           <!-- Artifact Viewer Panel -->
@@ -59,7 +63,8 @@ import { Subject } from 'rxjs';
               [refreshTrigger]="refreshTrigger"
               (navigateToLink)="onNavigateToLink($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
-              (navigationRequest)="onNavigationRequest($event)">
+              (navigationRequest)="onNavigationRequest($event)"
+              (analyzeRequested)="onAnalyzeRequested($event)">
             </mj-artifact-viewer-panel>
           }
         </div>
@@ -79,9 +84,7 @@ import { Subject } from 'rxjs';
             background: var(--mj-bg-surface);
         }
 
-        .loading-state,
-        .error-state,
-        .empty-state {
+        .loading-state {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -92,25 +95,8 @@ import { Subject } from 'rxjs';
             padding: 24px;
         }
 
-        .error-state i,
-        .empty-state i {
-            font-size: 48px;
-            color: var(--mj-text-muted);
-            margin-bottom: 16px;
-        }
-
-        .error-state i {
-            color: var(--mj-status-error);
-        }
-
-        .empty-state h4 {
-            margin: 0 0 8px 0;
-            color: var(--mj-text-primary);
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 13px;
+        .part-placeholder {
+            height: 100%;
         }
 
         mj-artifact-viewer-panel {
@@ -145,7 +131,7 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     public get currentUser(): UserInfo {
         // Use provided CurrentUser, or fall back to Metadata.CurrentUser
         // In client-side Angular context, Metadata.CurrentUser should always be available
-        const user = this.CurrentUser || new Metadata().CurrentUser;
+        const user = this.CurrentUser || this.ProviderToUse.CurrentUser;
         if (!user) {
             throw new Error('No current user available - user must be logged in to view artifacts');
         }
@@ -156,7 +142,13 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         return this.EnvironmentId || '';
     }
 
-    constructor(cdr: ChangeDetectorRef) {
+    constructor(cdr: ChangeDetectorRef, private analyzeService: AnalyzeArtifactService) {
+        // Note: this component is instantiated twice — once via bare `new` by
+        // ClassFactory.CreateInstanceAsync (just to extract the constructor
+        // reference), then properly via createComponent() with a full injector.
+        // Constructor parameters are undefined on the bare path but Angular DI
+        // populates them on the real path. Field initializers calling inject()
+        // would throw on the bare path, so we use constructor injection.
         super(cdr);
     }
 
@@ -255,6 +247,31 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
             event.queryParams,
             false
         );
+    }
+
+    /**
+     * Handler for the Analyze button on the embedded artifact viewer.
+     * Captures the live DataSnapshot, creates an analysis conversation with
+     * the snapshot attached as input, and emits a navigation request to open
+     * the new conversation in the host application.
+     */
+    public async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+        try {
+            const result = await this.analyzeService.StartAnalysisConversation({
+                snapshot: event.snapshot,
+                currentUser: this.currentUser,
+                environmentId: this.environmentId,
+            });
+
+            this.RequestOpenNavItem(
+                'Conversations',
+                undefined,
+                { conversationId: result.conversationId },
+                false,
+            );
+        } catch (error) {
+            this.setError(error instanceof Error ? error.message : 'Failed to start analysis conversation');
+        }
     }
 
     protected override cleanup(): void {

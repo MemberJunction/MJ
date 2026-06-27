@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJVersionLabelRestoreEntityType } from '@memberjunction/core-entities';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface VersionRestorePreferences {
     StatusFilter: string;
@@ -68,7 +69,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             this.IsLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJVersionLabelRestoreEntityType>({
                 EntityName: 'MJ: Version Label Restores',
                 OrderBy: '__mj_CreatedAt DESC',
@@ -107,6 +108,42 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
 
     public OnStatusFilterChange(status: string): void {
         this.StatusFilter = this.StatusFilter === status ? '' : status;
+        this.applyFilters();
+        this.persistPreferences();
+    }
+
+    // -- Concise chrome: Status lives behind the one Filter popover ------------
+
+    public get statusFilterFields(): FilterFieldConfig[] {
+        return [{
+            key: 'status',
+            type: 'chips',
+            label: 'Status',
+            chipOptions: [
+                { text: 'All', value: '' },
+                { text: 'Complete', value: 'Complete', icon: 'fa-solid fa-circle-check' },
+                { text: 'Error', value: 'Error', icon: 'fa-solid fa-circle-xmark' },
+                { text: 'Partial', value: 'Partial', icon: 'fa-solid fa-circle-half-stroke' },
+            ],
+        }];
+    }
+
+    public get statusFilterValues(): Record<string, unknown> {
+        return { status: this.StatusFilter };
+    }
+
+    public get ActiveFilterCount(): number {
+        return this.StatusFilter ? 1 : 0;
+    }
+
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        this.StatusFilter = (values['status'] as string) ?? '';
+        this.applyFilters();
+        this.persistPreferences();
+    }
+
+    public resetStatusFilter(): void {
+        this.StatusFilter = '';
         this.applyFilters();
         this.persistPreferences();
     }

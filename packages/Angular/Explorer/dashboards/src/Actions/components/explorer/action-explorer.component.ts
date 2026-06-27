@@ -7,19 +7,28 @@ import {
   ViewChild
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, combineLatestWith } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged, combineLatestWith } from 'rxjs/operators';
 import { CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity, MJActionParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { ActionEngineBase, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import {
   ActionExplorerStateService,
   ActionViewMode,
   SortConfig,
+  SortField,
+  SortDirection,
   ActionFilters
 } from '../../services/action-explorer-state.service';
 import { ActionTreePanelComponent } from './action-tree-panel.component';
+
+interface SortOption {
+  field: SortField;
+  label: string;
+  icon: string;
+}
 @RegisterClass(BaseResourceComponent, 'ActionExplorerResource')
 @Component({
   standalone: false,
@@ -39,6 +48,16 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   public CategoriesMap = new Map<string, MJActionCategoryEntity>();
 
   public ViewMode: ActionViewMode = 'card';
+  public SortField: SortField = 'name';
+  public SortDirection: SortDirection = 'asc';
+  public Filters: ActionFilters = {
+    searchTerm: '',
+    statuses: [],
+    types: [],
+    approvalStatuses: [],
+    hasExecutions: null
+  };
+
   public SelectedCategoryId = 'all';
   public NewCategoryParentId: string | null = null;
 
@@ -47,7 +66,35 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   public SelectedActionForRun: MJActionEntity | null = null;
   public SelectedActionParams: MJActionParamEntity[] = [];
 
+  // ───── Toolbar option arrays + helpers (consolidated from former mj-action-toolbar) ─────
+
+  public readonly ViewToggleOptions: ViewToggleOption[] = [
+    { key: 'card',    icon: 'fa-solid fa-grip', title: 'Card view' },
+    { key: 'list',    icon: 'fa-solid fa-list', title: 'List view' },
+    { key: 'compact', icon: 'fa-solid fa-bars', title: 'Compact view' }
+  ];
+
+  public readonly SortOptions: SortOption[] = [
+    { field: 'name',     label: 'Name',         icon: 'fa-solid fa-font' },
+    { field: 'updated',  label: 'Last Updated', icon: 'fa-solid fa-clock' },
+    { field: 'status',   label: 'Status',       icon: 'fa-solid fa-circle-check' },
+    { field: 'type',     label: 'Type',         icon: 'fa-solid fa-tag' },
+    { field: 'category', label: 'Category',     icon: 'fa-solid fa-folder' }
+  ];
+
+  public readonly StatusOptions = [
+    { value: 'Active',   label: 'Active' },
+    { value: 'Pending',  label: 'Pending' },
+    { value: 'Disabled', label: 'Disabled' }
+  ];
+
+  public readonly TypeOptions = [
+    { value: 'Generated', label: 'AI Generated', icon: 'fa-solid fa-robot' },
+    { value: 'Custom',    label: 'Custom',       icon: 'fa-solid fa-code' }
+  ];
+
   protected override destroy$ = new Subject<void>();
+  private searchInput$ = new Subject<string>();
 
   constructor(
     public StateService: ActionExplorerStateService,
@@ -59,9 +106,20 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   ngOnInit(): void {
     super.ngOnInit();
     this.subscribeToState();
+    this.setupSearchDebounce();
     this.applyQueryParams(this.GetQueryParams());
     this.StateService.loadSavedState();
     this.loadData();
+  }
+
+  private setupSearchDebounce(): void {
+    this.searchInput$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(term => {
+      this.StateService.setSearchTerm(term);
+    });
   }
 
   ngOnDestroy(): void {
@@ -94,7 +152,10 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       combineLatestWith(this.StateService.SortConfig$),
       debounceTime(50),
       takeUntil(this.destroy$)
-    ).subscribe(() => {
+    ).subscribe(([filters, sort]) => {
+      this.Filters = filters;
+      this.SortField = sort.field;
+      this.SortDirection = sort.direction;
       this.applyFilters();
       this.UpdateQueryParams(this.StateService.buildQueryParams());
       this.cdr.markForCheck();
@@ -279,6 +340,21 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.StateService.openNewActionPanel();
   }
 
+  /** True when search/filters or a category selection narrow the list. */
+  public get IsListNarrowed(): boolean {
+    return this.StateService.hasActiveFilters() || this.SelectedCategoryId !== 'all';
+  }
+
+  /** Empty-state CTA: reset filters when narrowed, otherwise create. */
+  public onEmptyStateAction(): void {
+    if (this.IsListNarrowed) {
+      this.StateService.clearFilters();
+      this.StateService.setSelectedCategoryId('all');
+    } else {
+      this.onNewAction();
+    }
+  }
+
   public onActionClick(action: MJActionEntityExtended): void {
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);
@@ -295,7 +371,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
 
     try {
       // Load action params
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJActionParamEntity>({
         EntityName: 'MJ: Action Params',
         ExtraFilter: `ActionID='${action.ID}'`,
@@ -335,6 +411,58 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
   public async onActionCreated(): Promise<void> {
     // Refresh data to include new action
     await this.loadData();
+  }
+
+  // ───── Toolbar handlers (consolidated from former mj-action-toolbar) ─────
+
+  public onSearchInput(term: string): void {
+    this.searchInput$.next(term);
+  }
+
+  public clearSearch(): void {
+    this.StateService.setSearchTerm('');
+  }
+
+  public setViewMode(mode: ActionViewMode): void {
+    this.StateService.setViewMode(mode);
+  }
+
+  public setSortField(field: SortField): void {
+    this.StateService.setSortField(field);
+  }
+
+  public toggleStatus(status: string): void {
+    const current = [...this.Filters.statuses];
+    const i = current.indexOf(status);
+    if (i >= 0) current.splice(i, 1);
+    else current.push(status);
+    this.StateService.setStatusFilter(current);
+  }
+
+  public toggleType(type: string): void {
+    const current = [...this.Filters.types];
+    const i = current.indexOf(type);
+    if (i >= 0) current.splice(i, 1);
+    else current.push(type);
+    this.StateService.setTypeFilter(current);
+  }
+
+  public isStatusSelected(status: string): boolean {
+    return this.Filters.statuses.includes(status);
+  }
+
+  public isTypeSelected(type: string): boolean {
+    return this.Filters.types.includes(type);
+  }
+
+  public clearFilters(): void {
+    this.StateService.clearFilters();
+  }
+
+  /** Active filter count for the popover badge — counts only Status + Type
+   *  (searchTerm has its own search input, not part of the popover). */
+  public get StatusTypeFilterCount(): number {
+    return this.Filters.statuses.length + this.Filters.types.length;
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

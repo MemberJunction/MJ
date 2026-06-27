@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJDialogRef } from '@memberjunction/ng-ui-components';
 import { MJProjectEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata } from '@memberjunction/core';
@@ -61,28 +62,36 @@ const DEFAULT_PROJECT_ICONS = [
   selector: 'mj-project-form-modal',
   template: `
     <mj-dialog
-      [Title]="isEditMode ? 'Edit Project' : 'New Project'"
-      [Width]="600"
+      [Title]="isEditMode ? 'Edit Folder' : 'New Folder'"
+      [Width]="560"
       [MinWidth]="400"
       [Visible]="true"
       (Close)="onCancel()">
 
       <div class="project-form">
+        <!-- Live preview chip -->
+        <div class="folder-preview">
+          <span class="folder-preview-chip" [style.backgroundColor]="chipBackground" [style.color]="formData.color">
+            <i class="fa-solid {{ formData.icon }}"></i>
+          </span>
+          <span class="folder-preview-name">{{ formData.name.trim() || 'Untitled folder' }}</span>
+        </div>
+
         <!-- Name Input -->
         <div class="form-field">
           <label for="projectName" class="required">
-            Project Name
+            Folder Name
           </label>
           <input
             id="projectName"
             type="text"
             [(ngModel)]="formData.name"
-            placeholder="Enter project name"
-            class="mj-textbox full-width"
+            placeholder="e.g. Client work, Research, Ideas"
+            class="mj-input full-width"
             (keydown.enter)="onSave()"
             autofocus />
           @if (showNameError) {
-            <div class="error-message">Project name is required</div>
+            <div class="error-message">Folder name is required</div>
           }
         </div>
 
@@ -94,9 +103,9 @@ const DEFAULT_PROJECT_ICONS = [
           <textarea
             id="projectDescription"
             [(ngModel)]="formData.description"
-            placeholder="Enter project description (optional)"
+            placeholder="What goes in this folder? (optional)"
             class="mj-textarea full-width"
-            rows="3"></textarea>
+            rows="2"></textarea>
         </div>
 
         <!-- Color Picker -->
@@ -130,74 +139,100 @@ const DEFAULT_PROJECT_ICONS = [
         <!-- Icon Selector -->
         <div class="form-field">
           <label>Icon</label>
-          <div class="icon-selector-section">
-            <div class="selected-icon-preview">
-              <i class="fa-solid {{ formData.icon }}" [style.color]="formData.color"></i>
-              <span>{{ formData.icon }}</span>
-            </div>
-            <div class="icon-grid">
-              @for (icon of availableIcons; track icon) {
-                <button
-                  type="button"
-                  class="icon-option"
-                  [class.selected]="formData.icon === icon"
-                  (click)="selectIcon(icon)"
-                  [title]="icon">
-                  <i class="fa-solid {{ icon }}"></i>
-                </button>
-              }
-            </div>
+          <div class="icon-grid">
+            @for (icon of availableIcons; track icon) {
+              <button
+                type="button"
+                class="icon-option"
+                [class.selected]="formData.icon === icon"
+                [style.color]="formData.icon === icon ? formData.color : null"
+                (click)="selectIcon(icon)"
+                [title]="icon">
+                <i class="fa-solid {{ icon }}"></i>
+              </button>
+            }
           </div>
         </div>
       </div>
 
       <mj-dialog-actions>
-        <button mjButton (click)="onCancel()">Cancel</button>
         <button mjButton variant="primary" (click)="onSave()">
-          {{ isEditMode ? 'Save' : 'Create' }}
+          {{ isEditMode ? 'Save Changes' : 'Create Folder' }}
         </button>
+        <button mjButton (click)="onCancel()">Cancel</button>
       </mj-dialog-actions>
     </mj-dialog>
   `,
   styles: [`
     .project-form {
-      padding: 16px;
+      padding: 20px 24px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+    }
+
+    /* Live preview chip */
+    .folder-preview {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-subtle);
+    }
+    .folder-preview-chip {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      transition: background-color 150ms ease, color 150ms ease;
+    }
+    .folder-preview-name {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .form-field {
-      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     .form-field label {
-      display: block;
-      margin-bottom: 8px;
-      font-weight: 500;
-      font-size: 14px;
-      color: #333;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.01em;
+      color: var(--mj-text-secondary);
     }
 
     .form-field label.required::after {
       content: '*';
-      color: #F44336;
+      color: var(--mj-status-error);
       margin-left: 4px;
     }
 
-    .full-width {
-      width: 100%;
-    }
+    .full-width { width: 100%; }
 
     .error-message {
-      color: #F44336;
+      color: var(--mj-status-error);
       font-size: 12px;
-      margin-top: 4px;
     }
 
-    /* Color Picker Styles */
+    /* Color Picker */
     .color-picker-section {
-      border: 1px solid #D9D9D9;
-      border-radius: 4px;
-      padding: 12px;
-      background: #F9F9F9;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 12px;
+      padding: 14px;
+      background: var(--mj-bg-surface);
     }
 
     .color-palette {
@@ -210,86 +245,65 @@ const DEFAULT_PROJECT_ICONS = [
     .color-swatch {
       width: 100%;
       aspect-ratio: 1;
-      border: 2px solid transparent;
-      border-radius: 4px;
+      border: none;
+      border-radius: 8px;
       cursor: pointer;
-      transition: all 150ms ease;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      padding: 0;
+      transition: transform 120ms ease, box-shadow 120ms ease;
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
     }
 
     .color-swatch:hover {
-      transform: scale(1.1);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      transform: scale(1.12);
     }
 
     .color-swatch.selected {
-      border-color: #0076B6;
-      box-shadow: 0 0 0 2px #fff, 0 0 0 4px #0076B6;
+      box-shadow: 0 0 0 2px var(--mj-bg-surface), 0 0 0 4px var(--mj-brand-primary);
     }
 
     .custom-color-input {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding-top: 12px;
-      border-top: 1px solid #D9D9D9;
+      gap: 10px;
+      padding-top: 14px;
+      border-top: 1px solid var(--mj-border-subtle);
     }
 
     .custom-color-input label {
       margin: 0;
       font-size: 13px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
     }
 
     .custom-color-picker {
-      width: 50px;
-      height: 32px;
-      border: 1px solid #D9D9D9;
-      border-radius: 4px;
+      width: 44px;
+      height: 30px;
+      padding: 2px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
       cursor: pointer;
+      background: var(--mj-bg-surface);
     }
 
     .color-value {
-      font-family: monospace;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-muted);
+      text-transform: uppercase;
     }
 
-    /* Icon Selector Styles */
-    .icon-selector-section {
-      border: 1px solid #D9D9D9;
-      border-radius: 4px;
-      padding: 12px;
-      background: #F9F9F9;
-    }
-
-    .selected-icon-preview {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px;
-      background: white;
-      border: 1px solid #D9D9D9;
-      border-radius: 4px;
-      margin-bottom: 12px;
-    }
-
-    .selected-icon-preview i {
-      font-size: 24px;
-    }
-
-    .selected-icon-preview span {
-      font-family: monospace;
-      font-size: 13px;
-      color: #666;
-    }
-
+    /* Icon Selector */
     .icon-grid {
       display: grid;
       grid-template-columns: repeat(10, 1fr);
-      gap: 6px;
-      max-height: 200px;
+      gap: 8px;
+      max-height: 184px;
       overflow-y: auto;
-      padding: 4px;
+      padding: 14px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 12px;
+      background: var(--mj-bg-surface);
     }
 
     .icon-option {
@@ -297,55 +311,49 @@ const DEFAULT_PROJECT_ICONS = [
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 1px solid #D9D9D9;
-      background: white;
-      border-radius: 4px;
+      border: 1px solid var(--mj-border-subtle);
+      background: var(--mj-bg-surface-card);
+      border-radius: 8px;
       cursor: pointer;
-      transition: all 150ms ease;
+      color: var(--mj-text-secondary);
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
     }
 
     .icon-option:hover {
-      background: #F0F0F0;
-      border-color: #0076B6;
-      transform: scale(1.05);
+      background: var(--mj-bg-surface-hover);
+      border-color: var(--mj-border-strong);
+      transform: translateY(-1px);
     }
 
     .icon-option.selected {
-      background: #E3F2FD;
-      border-color: #0076B6;
-      border-width: 2px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 1px var(--mj-brand-primary);
     }
 
-    .icon-option i {
-      font-size: 18px;
-      color: #333;
-    }
+    .icon-option i { font-size: 17px; }
 
-    /* Scrollbar Styles */
-    .icon-grid::-webkit-scrollbar {
-      width: 8px;
-    }
-
+    /* Scrollbar */
+    .icon-grid::-webkit-scrollbar { width: 8px; }
     .icon-grid::-webkit-scrollbar-track {
-      background: #F0F0F0;
-      border-radius: 4px;
+      background: transparent;
     }
-
     .icon-grid::-webkit-scrollbar-thumb {
-      background: #D9D9D9;
+      background: var(--mj-border-strong);
       border-radius: 4px;
     }
-
     .icon-grid::-webkit-scrollbar-thumb:hover {
-      background: #BFBFBF;
+      background: var(--mj-text-disabled);
     }
   `]
 })
-export class ProjectFormModalComponent implements OnInit {
+export class ProjectFormModalComponent extends BaseAngularComponent implements OnInit  {
   @Input() dialogRef!: MJDialogRef;
   @Input() project: MJProjectEntity | null = null;
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  /** When creating a new folder, the parent folder ID for nesting (null = top level). */
+  @Input() parentId: string | null = null;
 
   @Output() projectSaved = new EventEmitter<MJProjectEntity>();
 
@@ -361,7 +369,15 @@ export class ProjectFormModalComponent implements OnInit {
   public availableColors = DEFAULT_PROJECT_COLORS;
   public availableIcons = DEFAULT_PROJECT_ICONS;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  /** Translucent tint of the selected color, used behind the preview/icon glyph. */
+  public get chipBackground(): string {
+    const hex = this.formData.color || '#0076B6';
+    // 8-digit hex (#RRGGBBAA) — ~14% alpha tint of the chosen color
+    return /^#[0-9a-fA-F]{6}$/.test(hex) ? `${hex}24` : hex;
+  }
+
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   ngOnInit(): void {
     this.isEditMode = this.project != null;
@@ -403,7 +419,7 @@ export class ProjectFormModalComponent implements OnInit {
     this.showNameError = false;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const project = this.project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
 
       project.Name = this.formData.name.trim();
@@ -414,6 +430,9 @@ export class ProjectFormModalComponent implements OnInit {
       if (!this.isEditMode) {
         project.EnvironmentID = this.environmentId;
         project.IsArchived = false;
+        if (this.parentId) {
+          project.ParentID = this.parentId;
+        }
       }
 
       const saved = await project.Save();

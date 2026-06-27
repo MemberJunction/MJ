@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock Angular
 vi.mock('@angular/core', () => ({
   Component: () => (target: Function) => target,
+  Directive: () => (target: Function) => target,
   Injectable: () => (target: Function) => target,
   Input: () => () => {},
   Output: () => () => {},
@@ -17,6 +18,14 @@ vi.mock('@angular/core', () => ({
   OnInit: class {},
   NgZone: class { run(fn: Function) { return fn(); } },
 }));
+
+vi.mock('@memberjunction/ng-base-types', () => {
+  class MockBaseAngularComponent {
+    Provider: unknown = null;
+    get ProviderToUse() { return this.Provider; }
+  }
+  return { BaseAngularComponent: MockBaseAngularComponent };
+});
 
 vi.mock('@angular/platform-browser', () => ({
   DomSanitizer: class {
@@ -277,6 +286,74 @@ describe('RecordChangesComponent utility methods', () => {
     it('should return "Record deleted" for Delete type', () => {
       const change = { Type: 'Delete', ChangesJSON: '{}', ChangesDescription: '' };
       expect(component.getChangeSummary(change as never)).toBe('Record deleted');
+    });
+  });
+
+  // PR #2841 precompute: viewDataById is rebuilt on each data load so the lineage
+  // chip's source lookup is an O(1) NormalizeUUID-keyed Map read instead of an
+  // O(N) scan per CD pass. These tests pin the rebuild trigger + the case-variant
+  // (SQL upper vs Postgres lower) UUID resolution that NormalizeUUID guarantees.
+  describe('viewDataById / getRestoredFromSourceChange (lineage lookup precompute)', () => {
+    type Change = { ID: string; RestoredFromID?: string | null; Source?: string };
+
+    /** Call the private rebuild — the real component invokes it inside LoadRecordChanges. */
+    function rebuild(): void {
+      (component as unknown as { rebuildViewDataIndex: () => void }).rebuildViewDataIndex();
+    }
+
+    function setData(rows: Change[]): void {
+      component.viewData = rows as never;
+      rebuild();
+    }
+
+    it('resolves a restore row to its source change (O(1) Map read)', () => {
+      const source: Change = { ID: 'AAAAAAAA-1111-2222-3333-444444444444' };
+      const restore: Change = { ID: 'BBBBBBBB-0000-0000-0000-000000000000', RestoredFromID: source.ID };
+      setData([source, restore]);
+
+      expect(component.getRestoredFromSourceChange(restore as never)).toBe(source as never);
+    });
+
+    it('returns null when this row is NOT a restore (no RestoredFromID)', () => {
+      const plain: Change = { ID: 'CCCCCCCC-1111-2222-3333-444444444444' };
+      setData([plain]);
+      expect(component.getRestoredFromSourceChange(plain as never)).toBeNull();
+    });
+
+    it('returns null when the source change is not in the loaded history (pruned)', () => {
+      const restore: Change = { ID: 'DDDDDDDD-0000-0000-0000-000000000000', RestoredFromID: 'EEEEEEEE-9999-9999-9999-999999999999' };
+      setData([restore]); // the referenced source row is absent
+      expect(component.getRestoredFromSourceChange(restore as never)).toBeNull();
+    });
+
+    it('resolves across UUID case variance (SQL upper RestoredFromID → Postgres lower stored ID)', () => {
+      // Source stored lowercase (Postgres style); restore references it uppercase (SQL style).
+      const source: Change = { ID: 'ff112233-aabb-ccdd-eeff-001122334455' };
+      const restore: Change = { ID: 'AB000000-0000-0000-0000-000000000001', RestoredFromID: 'FF112233-AABB-CCDD-EEFF-001122334455' };
+      setData([source, restore]);
+
+      // Without NormalizeUUID keying this would miss; with it, the case difference is erased.
+      expect(component.getRestoredFromSourceChange(restore as never)).toBe(source as never);
+    });
+
+    it('rebuilds the index on each data load — a stale source from a prior load does not leak', () => {
+      const oldSource: Change = { ID: '11111111-1111-1111-1111-111111111111' };
+      const restore: Change = { ID: '22222222-2222-2222-2222-222222222222', RestoredFromID: oldSource.ID };
+      setData([oldSource, restore]);
+      expect(component.getRestoredFromSourceChange(restore as never)).toBe(oldSource as never);
+
+      // New load WITHOUT the old source row — the rebuilt index must forget it.
+      setData([restore]);
+      expect(component.getRestoredFromSourceChange(restore as never)).toBeNull();
+    });
+
+    it('last-writer-wins on duplicate IDs in the loaded set (Map semantics)', () => {
+      const first: Change = { ID: 'DEAD0000-0000-0000-0000-000000000000', Source: 'A' };
+      const second: Change = { ID: 'dead0000-0000-0000-0000-000000000000', Source: 'B' };
+      const restore: Change = { ID: '99999999-9999-9999-9999-999999999999', RestoredFromID: 'DEAD0000-0000-0000-0000-000000000000' };
+      setData([first, second, restore]);
+      // both normalize to the same key — the later insertion wins
+      expect(component.getRestoredFromSourceChange(restore as never)).toBe(second as never);
     });
   });
 });

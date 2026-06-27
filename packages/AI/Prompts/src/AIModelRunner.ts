@@ -1,4 +1,4 @@
-import { Metadata, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { BaseEntitySaveQueue, Metadata, UserInfo, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -67,6 +67,29 @@ export interface EmbeddingRunParams {
  * ```
  */
 export class AIModelRunner {
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Fire-and-forget AIPromptRun persistence via the shared {@link BaseEntitySaveQueue}. The
+     * embedding/model run record is observability — the caller gets its vectors regardless of whether
+     * the tracking row persists — so saves are queued, not awaited, and the embedding call is never
+     * blocked on a DB round-trip. The queue sequences saves per entity (the initial 'Running' INSERT
+     * always completes before the 'Completed'/'Failed' UPDATE). `PromptRunID` is returned immediately
+     * because `NewRecord()` client-generates the UUID.
+     */
+    private _promptRunQueue = new BaseEntitySaveQueue();
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking run methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
 
     /**
      * Execute an embedding call with full AIPromptRun tracking.
@@ -255,7 +278,7 @@ export class AIModelRunner {
         startTime: number
     ): Promise<MJAIPromptRunEntityExtended | null> {
         try {
-            const md = new Metadata();
+            const md = this.Provider;
             const promptRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>(
                 'MJ: AI Prompt Runs', params.ContextUser
             );
@@ -285,17 +308,22 @@ export class AIModelRunner {
                 });
             }
 
-            const saved = await promptRun.Save();
-            if (!saved) {
-                LogError('AIModelRunner: Failed to save AIPromptRun record');
-                return null;
-            }
-
+            // Fire-and-forget the initial 'Running' INSERT — ID is already assigned by NewRecord()
+            // so the returned PromptRunID is valid immediately; the UPDATE chains after this.
+            this._promptRunQueue.Insert(promptRun);
             return promptRun;
         } catch (error) {
             LogError(`AIModelRunner: Error creating AIPromptRun: ${error}`);
             return null;
         }
+    }
+
+    /**
+     * Awaits all in-flight prompt-run saves queued by this runner. The normal path does NOT
+     * call this — persistence is intentionally fire-and-forget. For tests / durability needs.
+     */
+    public async WaitForPendingPromptRunSaves(): Promise<void> {
+        await this._promptRunQueue.Flush();
     }
 
     private async completeRunRecord(
@@ -312,9 +340,15 @@ export class AIModelRunner {
 
             // Store token/cost from ModelUsage
             if (embedResult.ModelUsage) {
+                // TokensPrompt = UNCACHED ("net-new") input; cache reads/writes tracked separately.
+                // TokensUsed = totalTokens = promptTokens + completionTokens (EXCLUDES cache), to
+                // satisfy the AIPromptRun invariant TokensUsed === TokensPrompt + TokensCompletion.
+                // (Embeddings don't cache, so cache buckets are 0 here regardless.)
                 promptRun.TokensPrompt = embedResult.ModelUsage.promptTokens ?? 0;
                 promptRun.TokensCompletion = embedResult.ModelUsage.completionTokens ?? 0;
                 promptRun.TokensUsed = embedResult.ModelUsage.totalTokens ?? 0;
+                promptRun.TokensCacheRead = embedResult.ModelUsage.cacheReadTokens ?? 0;
+                promptRun.TokensCacheWrite = embedResult.ModelUsage.cacheWriteTokens ?? 0;
                 promptRun.Cost = embedResult.ModelUsage.cost ?? 0;
                 promptRun.CostCurrency = embedResult.ModelUsage.costCurrency ?? 'USD';
                 promptRun.QueueTime = embedResult.ModelUsage.queueTime ?? 0;
@@ -328,7 +362,7 @@ export class AIModelRunner {
                 dimensions: embedResult.vectors?.[0]?.length ?? 0,
             });
 
-            await promptRun.Save();
+            this._promptRunQueue.Update(promptRun); // fire-and-forget UPDATE; the INSERT landed during the embedding call
         } catch (error) {
             LogError(`AIModelRunner: Error completing AIPromptRun: ${error}`);
         }
@@ -346,7 +380,7 @@ export class AIModelRunner {
             promptRun.ErrorMessage = errorMessage;
             promptRun.CompletedAt = new Date();
             promptRun.ExecutionTimeMS = Date.now() - startTime;
-            await promptRun.Save();
+            this._promptRunQueue.Update(promptRun); // fire-and-forget UPDATE; the INSERT landed during the embedding call
         } catch (error) {
             LogError(`AIModelRunner: Error failing AIPromptRun: ${error}`);
         }

@@ -6,11 +6,12 @@
 
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { RunView, CompositeKey } from '@memberjunction/core';
 import { MJMCPServerConnectionEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { MCPConnectionData, MCPServerData } from '../mcp-dashboard.component';
 import { CredentialDialogComponent, CredentialDialogResult } from '@memberjunction/ng-credentials';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Dialog result interface
@@ -29,7 +30,7 @@ export interface ConnectionDialogResult {
     templateUrl: './mcp-connection-dialog.component.html',
     styleUrls: ['./mcp-connection-dialog.component.css']
 })
-export class MCPConnectionDialogComponent implements OnInit, OnChanges {
+export class MCPConnectionDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
 
     @ViewChild('credentialDialog') credentialDialog!: CredentialDialogComponent;
 
@@ -63,6 +64,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
         private fb: FormBuilder,
         private cdr: ChangeDetectorRef
     ) {
+        super();
         this.connectionForm = this.createForm();
     }
 
@@ -103,7 +105,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
                 Name: this.connection.Name,
                 Description: this.connection.Description ?? '',
                 CompanyID: this.connection.CompanyID ?? '',
-                CredentialID: '',  // Would need to load from entity
+                CredentialID: this.connection.CredentialID ?? '',
                 AutoSyncTools: this.connection.AutoSyncTools,
                 LogToolCalls: this.connection.LogToolCalls,
                 LogInputParameters: true,
@@ -137,7 +139,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
     private async loadDropdownData(): Promise<void> {
         this.IsLoadingDropdowns = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             // Load credentials, credential types, and companies in parallel
             const [credResult, typeResult, companyResult] = await rv.RunViews([
                 {
@@ -229,7 +231,7 @@ export class MCPConnectionDialogComponent implements OnInit, OnChanges {
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
 
             if (this.IsEditMode && this.connection) {

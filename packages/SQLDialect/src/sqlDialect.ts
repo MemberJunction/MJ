@@ -1,8 +1,14 @@
 import { DataTypeMap, MappedType } from './dataTypeMap.js';
 
 /**
- * Supported database platforms.
- * Extensible — add new platforms as support is implemented.
+ * Canonical database-platform value used across MJ. Single source of truth —
+ * config validation, env-var parsing, and runtime branching all compare
+ * against these literals. Aliases (`mssql`, `postgres`, `pg`) are not
+ * recognized.
+ *
+ * Lives in `@memberjunction/sql-dialect` (not `core` or `global`) because
+ * this is the package that owns SQL dialect semantics; every other package
+ * imports it from here (or from core, which re-exports for back-compat).
  */
 export type DatabasePlatform = 'sqlserver' | 'postgresql';
 
@@ -130,13 +136,35 @@ export interface IndexOptions {
 }
 
 /**
+ * Minimal dialect interface consumed by `@memberjunction/sql-parser`.
+ *
+ * SQLParser needs only these properties to be dialect-aware. The full
+ * {@link SQLDialect} class implements this interface plus 80+ additional
+ * methods for DDL/DML generation, data type mapping, etc.
+ *
+ * When adding a new database platform, implement at minimum this interface
+ * for parser support. Implement the full `SQLDialect` for complete MJ support.
+ */
+export interface SQLParserDialect {
+    /** node-sql-parser dialect string (e.g., 'TransactSQL', 'PostgresQL', 'MySQL') */
+    ParserDialect: string;
+    /** Quotes a database identifier. SQL Server: [name], PostgreSQL: "name", MySQL: `name` */
+    QuoteIdentifier(name: string): string;
+    /** Whether ORDER BY is legal inside CTE definitions on this platform */
+    AllowsOrderByInCTE: boolean;
+    /** Default ORDER BY expression for paging when no ORDER BY exists.
+     *  SQL Server: '(SELECT NULL)', PostgreSQL: '1' */
+    DefaultPagingOrderBy: string;
+}
+
+/**
  * Abstract base class for SQL dialect implementations.
  *
  * Encapsulates ALL database-specific SQL syntax patterns into a single,
  * testable abstraction. This is a pure string/logic layer with zero
  * database driver dependencies.
  */
-export abstract class SQLDialect {
+export abstract class SQLDialect implements SQLParserDialect {
     /**
      * The platform key identifying this dialect.
      */
@@ -162,6 +190,37 @@ export abstract class SQLDialect {
      */
     abstract QuoteSchema(schema: string, object: string): string;
 
+    /**
+     * Quotes a column alias used in `SELECT ... AS <alias>`. SQL Server is
+     * case-insensitive and accepts a bare identifier; PostgreSQL folds
+     * unquoted identifiers to lowercase, so we must quote the alias when the
+     * caller cares about preserving case (e.g. matching a TypeScript property
+     * name in the result row).
+     */
+    abstract QuoteColumnAlias(aliasName: string): string;
+
+    /**
+     * Canonicalizes a SCHEMA name to the form the platform actually stores when
+     * the name appears UNQUOTED in DDL. PostgreSQL folds unquoted identifiers to
+     * lowercase, so `__mj_BizAppsCommon` physically becomes `__mj_bizappscommon`;
+     * SQL Server is case-insensitive and stores the name as-given. Routing every
+     * schema CREATE/DROP/USE through this keeps the engine's (quoted) operations
+     * aligned with what unquoted migration DDL produces — so a mixed-case schema
+     * name can't split into two physical schemas (one quoted-mixed, one folded-lowercase).
+     */
+    abstract CanonicalSchemaName(name: string): string;
+
+    /**
+     * Quotes a value as a SQL string literal. Both SQL Server and PostgreSQL
+     * use single quotes with `''` doubling to escape internal apostrophes —
+     * this is concrete in the base class so callers don't reinvent the
+     * `value.replace(/'/g, "''")` pattern. Subclasses may override if a
+     * future dialect needs a different escape rule.
+     */
+    QuoteStringLiteral(value: string): string {
+        return `'${value.replace(/'/g, "''")}'`;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     /**
@@ -180,10 +239,143 @@ export abstract class SQLDialect {
     abstract BooleanLiteral(value: boolean): string;
 
     /**
+     * Returns the SQL type token for a boolean parameter in a stored-procedure /
+     * function signature. Used by codegen when emitting tolerant-SP `_Clear`
+     * companion parameters and other boolean-typed params.
+     *
+     * SQL Server: `bit` (BIT type, 0/1)
+     * PostgreSQL: `boolean` (BOOLEAN type, TRUE/FALSE)
+     *
+     * Hardcoding `bit` everywhere worked on SQL Server but produced sprocs
+     * that PG rejected as `operator does not exist: boolean = integer` when
+     * the generated CASE compared a `bit`-declared parameter with `= 1`.
+     */
+    abstract BooleanParameterType(): string;
+
+    /**
      * Returns the current UTC timestamp expression.
      * SQL Server: GETUTCDATE(), PostgreSQL: NOW() AT TIME ZONE 'UTC'
      */
     abstract CurrentTimestampUTC(): string;
+
+    /**
+     * Wraps an expression in the dialect's lowercase function — used for
+     * case-insensitive comparison when authoring filters that must work on
+     * both SS (default case-insensitive collation) and PG (case-sensitive).
+     *
+     * Both SQL Server and PostgreSQL implement `LOWER()` per the ANSI SQL
+     * standard, so the default returns `LOWER(${expr})`. A subclass would
+     * override only for an exotic dialect (e.g. one that exposes `lc()` or
+     * needs a CAST first).
+     *
+     * Use this instead of hardcoding `LOWER(...)` in callers — keeps the
+     * dialect-aware SQL surface in one place per the SQLDialect contract.
+     */
+    LowerCase(expr: string): string {
+        return `LOWER(${expr})`;
+    }
+
+    // ─── Type-Name Sets (single source of truth for SQL ↔ category mapping) ──
+    //
+    // Each dialect declares the SQL type names it uses for each conceptual
+    // category. Cross-dialect predicates (`IsBooleanSQLType`, `IsStringSQLType`,
+    // etc. — see ./typeClassification.ts) union these lists so callers can
+    // classify any type name without knowing which platform produced it.
+    //
+    // Adding a new dialect = implementing these getters + registering with the
+    // classification module. NEVER hardcode lists of SQL type names in
+    // call sites — use the predicates.
+    //
+    // Returned names MUST be lowercase, trimmed, and match the strings that
+    // appear in `EntityField.Type` for that platform (i.e. what the platform's
+    // `information_schema` / `sys.columns` reports).
+
+    /** SQL type names this dialect uses for boolean columns. */
+    abstract get BooleanTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for variable-length character / text columns. */
+    abstract get StringTypeNames(): readonly string[];
+
+    /**
+     * Subset of {@link StringTypeNames} that represents **fixed-width** /
+     * space-padded character types. SQL Server `char`/`nchar` and PostgreSQL
+     * `char`/`bpchar`/`character` (without `varying`) all right-pad stored
+     * values with spaces up to the declared length and return that padding
+     * in result sets. Variable-width types (`varchar`, `nvarchar`, `text`,
+     * etc.) do not.
+     *
+     * Used by `BaseEntity` to rtrim padding on load so dirty-checks and
+     * downstream consumers see the logical value, not the storage form.
+     */
+    abstract get FixedWidthStringTypeNames(): readonly string[];
+
+    /**
+     * Maximum string length usable in an INDEX KEY column (PRIMARY KEY / UNIQUE constraint) on this
+     * dialect. A PK string column wider than this can't be indexed, so callers (e.g. the integration
+     * schema builder) cap PK string columns at this value. Default: no practical declare-time cap — a
+     * dialect overrides it where one exists. SQL Server's 900-byte index-key limit = 450 NVARCHAR chars;
+     * PostgreSQL enforces its (larger) btree limit on the stored value at write time, not the declared
+     * length, so it keeps the no-cap default.
+     */
+    get MaxKeyStringLength(): number {
+        return Number.MAX_SAFE_INTEGER;
+    }
+
+    /**
+     * Maximum bytes that can be stored in-row for a single row, or `null` when the dialect has no
+     * in-row size limit. SQL Server enforces a hard ~8060-byte in-row limit; PostgreSQL has none
+     * (TOAST stores oversized variable-length values out-of-line). Consumed by schema materialization
+     * to avoid emitting a table whose minimum in-row footprint can never satisfy an INSERT.
+     * Default: `null` (no in-row size limit).
+     */
+    get MaxInRowSizeBytes(): number | null {
+        return null;
+    }
+
+    /**
+     * Hard maximum number of columns per table, or `null` when effectively unbounded for our purposes.
+     * SQL Server: 1024. PostgreSQL: 1600. Default: `null`.
+     */
+    get MaxColumnCount(): number | null {
+        return null;
+    }
+
+    /**
+     * Minimum in-row byte footprint of a column of the given raw SQL type. Off-row-capable
+     * variable-length / LOB types contribute only their in-row pointer; fixed-length types contribute
+     * their full size. Only meaningful for dialects that report a {@link MaxInRowSizeBytes}.
+     * Default: 24 (a conservative off-row-pointer floor).
+     */
+    EstimateInRowBytes(_rawSqlType: string): number {
+        return 24;
+    }
+
+    /** SQL type names this dialect uses for date / time / timestamp columns. */
+    abstract get DateTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for integer columns (int, bigint, smallint, …). */
+    abstract get IntegerTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for floating-point / decimal columns. */
+    abstract get FloatTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for UUID / uniqueidentifier columns. */
+    abstract get UuidTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for binary blob columns (image, bytea, varbinary). */
+    abstract get BinaryTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for JSON / XML structured columns. */
+    abstract get JsonTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for fixed-precision currency columns. */
+    abstract get CurrencyTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for interval / duration columns. */
+    abstract get IntervalTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for network address columns (inet, cidr, …). */
+    abstract get NetworkTypeNames(): readonly string[];
 
     /**
      * Returns a new UUID generation expression.
@@ -192,11 +384,50 @@ export abstract class SQLDialect {
     abstract NewUUID(): string;
 
     /**
-     * Returns the COALESCE expression wrapper.
+     * Returns the platform's n-ary null-coalescing expression. SQL Server and
+     * PostgreSQL both spell this `COALESCE(...)`, but a future dialect could
+     * use a different keyword — abstract on purpose so each dialect must
+     * declare its own form rather than inheriting an opinionated default.
      */
-    Coalesce(expr: string, fallback: string): string {
-        return `COALESCE(${expr}, ${fallback})`;
+    abstract Coalesce(expr: string, fallback: string): string;
+
+    /**
+     * Returns the dialect's literal representation of NULL as it would
+     * appear in generated SQL (e.g. as the result of a default-value
+     * formatter). Both SQL Server and PostgreSQL use the bare keyword
+     * `NULL`, but a future dialect could differ — codegen comparisons
+     * should route through this rather than hard-coding the string.
+     */
+    get NullLiteral(): string {
+        return 'NULL';
     }
+
+    /**
+     * Returns true if `value` is the dialect's representation of a NULL
+     * literal in generated SQL. Comparison is case-insensitive after
+     * trimming whitespace. Subclasses may override if a dialect uses a
+     * non-keyword form (none currently do).
+     */
+    IsNullLiteral(value: string): boolean {
+        if (value == null) return false;
+        return value.trim().toUpperCase() === this.NullLiteral.toUpperCase();
+    }
+
+    /**
+     * Returns the parameter-reference syntax used by this dialect's
+     * stored-procedure / function bodies.
+     * SQL Server: `@MyName`, PostgreSQL functions: `p_my_name`.
+     * Codegen should call this rather than hard-coding `'@' + name`.
+     */
+    abstract ParameterRef(name: string): string;
+
+    /**
+     * Returns the default-value clause appended to a parameter declaration.
+     * SQL Server: ` = NULL` (or ` = 0`, etc.), PostgreSQL: ` DEFAULT NULL`.
+     * `value` should be a SQL literal already formatted by the caller (e.g.
+     * the dialect's NullLiteral, a quoted string, a numeric literal).
+     */
+    abstract ParameterDefault(value: string): string;
 
     /**
      * Returns a CAST-to-text expression.
@@ -205,10 +436,38 @@ export abstract class SQLDialect {
     abstract CastToText(expr: string): string;
 
     /**
+     * Returns a CAST to a bounded-width string type. Used when the result
+     * needs to be comparable against an indexed column (SQL Server cannot
+     * compare/index `NVARCHAR(MAX)`) or against a fixed-width text column
+     * such as MJ's `RecordID` (NVARCHAR(450) on SQL Server).
+     *
+     * Implemented by composing `ResolveAbstractType({ type: 'string', maxLength })`,
+     * which dialects already supply — SQL Server emits `NVARCHAR(N)` and
+     * PostgreSQL emits `VARCHAR(N)`. Defaults to MJ's standard 450-char
+     * width to match the cap on indexable string columns in SQL Server.
+     */
+    CastToBoundedString(expr: string, maxLength: number = 450): string {
+        const sqlType = this.ResolveAbstractType({ type: 'string', maxLength });
+        return `CAST(${expr} AS ${sqlType})`;
+    }
+
+    /**
      * Returns a CAST-to-UUID expression.
      * SQL Server: CAST(expr AS UNIQUEIDENTIFIER), PostgreSQL: CAST(expr AS UUID)
      */
     abstract CastToUUID(expr: string): string;
+
+    /**
+     * Returns the empty-GUID sentinel literal
+     * (`00000000-0000-0000-0000-000000000000`) formatted for use in a
+     * CASE-comparison expression. The base class returns the literal as a
+     * plain quoted string — SQL Server's implicit conversion accepts that
+     * directly. Dialects with strict typing (PostgreSQL) override to add
+     * the explicit cast their grammar requires.
+     */
+    EmptyUUIDLiteral(): string {
+        return `'00000000-0000-0000-0000-000000000000'`;
+    }
 
     // ─── INSERT/UPDATE Return Patterns ───────────────────────────────
 
@@ -250,6 +509,28 @@ export abstract class SQLDialect {
      * SQL Server: "GO", PostgreSQL: "" (none needed)
      */
     abstract BatchSeparator(): string;
+
+    /**
+     * Splits an oversized SQL batch into individual statements on `;`+EOL
+     * boundaries so a caller (e.g. the RSU migration executor) can re-group
+     * them into smaller chunks that each fit under a client request timeout.
+     *
+     * Base implementation = the naive `split(/;\s*\n/g)` semantics: split on a
+     * `;` followed by optional inline whitespace and a newline, trim each
+     * fragment, drop empties, and ensure each returned statement ends with `;`.
+     * This is correct for SQL Server (no dollar-quoted blocks).
+     *
+     * PostgreSQL overrides this with a dollar-quote-aware split that never
+     * tears apart `DO $$ … $$` / `$tag$ … $tag$` blocks whose bodies
+     * legitimately contain `;`+newline.
+     */
+    SplitStatements(batch: string): string[] {
+        return batch
+            .split(/;\s*\n/g)
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0)
+            .map((s) => (s.endsWith(';') ? s : s + ';'));
+    }
 
     /**
      * Returns SQL to check if a database object exists.
@@ -296,6 +577,12 @@ export abstract class SQLDialect {
      * PostgreSQL: true (ORDER BY in CTEs is always legal)
      */
     abstract get AllowsOrderByInCTE(): boolean;
+
+    /**
+     * Default ORDER BY expression for paging when no user-specified ORDER BY exists.
+     * SQL Server: '(SELECT NULL)', PostgreSQL: '1'
+     */
+    abstract get DefaultPagingOrderBy(): string;
 
     // ─── Data Types ──────────────────────────────────────────────────
 
@@ -347,6 +634,17 @@ export abstract class SQLDialect {
      * PostgreSQL: column->>'path' or jsonb_extract_path_text
      */
     abstract JsonExtract(column: string, path: string): string;
+
+    // ─── Migration Emission ──────────────────────────────────────────
+
+    /**
+     * Splits `${...}` inside SQL string literals so Flyway doesn't treat
+     * them as placeholders. Each `${name}` becomes a concat-split that
+     * round-trips back to `${name}` at execution but contains no adjacent
+     * `${` in the file text. Form is platform-specific (concat operator,
+     * truncation rules) — see each dialect's implementation.
+     */
+    abstract EscapeFlywayStringInterpolation(sql: string): string;
 
     // ─── Procedure / Function Calls ──────────────────────────────────
 
@@ -486,6 +784,46 @@ export abstract class SQLDialect {
      */
     abstract CommentOnObject(objectType: string, schema: string, name: string, comment: string): string;
 
+    // ─── DDL Generation (Idempotent, single-statement) ──────────────
+    //
+    // "Create only if absent" variants that are SAFE for callers which split a migration
+    // into statements on ';' boundaries (e.g. the RSU migration executor chunks oversized
+    // batches that way). Unlike CreateTableIfNotExistsDDL — which wraps the CREATE in a
+    // BEGIN...END block that such chunking would tear apart — each method below returns a
+    // SINGLE statement. Defaults are idempotent-friendly; SQL Server overrides where its
+    // syntax differs. External dialects inherit working defaults (non-breaking).
+
+    /**
+     * A full CREATE TABLE that runs only if the table is absent, as a SINGLE statement.
+     * Default (PostgreSQL et al.): `CREATE TABLE IF NOT EXISTS <fullTable> (...);`
+     * SQL Server overrides with an `IF OBJECT_ID(...) IS NULL` guard (it has no native
+     * CREATE TABLE IF NOT EXISTS).
+     * @param fullTable - Already-quoted `schema.table` identifier
+     * @param columnsBody - The column/constraint lines that go between the parentheses
+     */
+    CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
+        return `CREATE TABLE IF NOT EXISTS ${fullTable} (\n${columnsBody}\n);`;
+    }
+
+    /**
+     * CommentOnObject that is safe to re-run (no error if the description already exists).
+     * Default returns the standard statement terminated with ';' — adequate where the
+     * comment statement is inherently idempotent (PostgreSQL COMMENT ON replaces in place).
+     * SQL Server overrides to guard sp_addextendedproperty with a fn_listextendedproperty check.
+     */
+    CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
+        return this.CommentOnObject(objectType, schema, name, comment) + ';';
+    }
+
+    /**
+     * CommentOnColumn that is safe to re-run. Default returns the standard statement
+     * (PostgreSQL COMMENT ON COLUMN already includes its terminator and is idempotent).
+     * SQL Server overrides to guard sp_addextendedproperty.
+     */
+    CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
+        return this.CommentOnColumn(schema, table, column, comment);
+    }
+
     // ─── Schema Introspection ────────────────────────────────────────
 
     /**
@@ -496,13 +834,30 @@ export abstract class SQLDialect {
     // ─── Null Handling ───────────────────────────────────────────────
 
     /**
-     * Returns the platform's ISNULL/COALESCE equivalent.
-     * SQL Server: ISNULL(expr, fallback), PostgreSQL: COALESCE(expr, fallback)
-     * Note: COALESCE works on both, but ISNULL is SQL Server-specific.
+     * Returns the platform's two-argument null-coalescing expression.
+     * SQL Server: `ISNULL(expr, fallback)`, PostgreSQL: `COALESCE(expr, fallback)`.
+     * Abstract because each dialect must declare its own keyword — there is no
+     * safe default. A future dialect that has neither `ISNULL` nor `COALESCE`
+     * would silently emit invalid SQL if this fell through to a base
+     * implementation.
      */
-    IsNull(expr: string, fallback: string): string {
-        return this.Coalesce(expr, fallback);
-    }
+    abstract IsNull(expr: string, fallback: string): string;
+
+    // ─── Error Classification ───────────────────────────────────────
+
+    /**
+     * Returns true if the given error represents an infrastructure-level
+     * connection failure (timeout, refused, pool closed, etc.) as opposed to
+     * a query-level error (bad SQL, constraint violation).
+     *
+     * Each dialect implements this using its driver's structured error types:
+     * - SQL Server (mssql): `error.name === 'ConnectionError'`
+     * - PostgreSQL (pg): Node.js network error codes on plain `Error`
+     *
+     * Used by GenericDatabaseProvider to re-throw connection errors from
+     * RunView/RunQuery instead of swallowing them into `{ Success: false }`.
+     */
+    abstract IsConnectionError(e: unknown): boolean;
 
     /**
      * Returns an IIF/CASE equivalent expression.

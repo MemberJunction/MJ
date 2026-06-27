@@ -9,7 +9,7 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Lowest",
       "ParallelizationMode": "None",
@@ -58,7 +58,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -66,8 +66,8 @@
             "ID": "62B4A73E-C327-433D-9849-E8C454C423FA"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:49:10.822Z",
-            "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
+            "lastModified": "2026-05-29T19:49:20.717Z",
+            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
           }
         }
       ]
@@ -76,8 +76,8 @@
       "ID": "278E47C4-7D0C-46A7-B178-7C68D1DD9756"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:05:17.860Z",
-      "checksum": "c6e1889b1df916cd3a008ef262fa6c3564e2f93c812ecb5437695f826d0195df"
+      "lastModified": "2026-04-20T23:56:03.857Z",
+      "checksum": "b1218acb99bcd6bcec0f93e9cd68dd8e5b8f829994bf5d85a0e05a837d758616"
     }
   }
 ]

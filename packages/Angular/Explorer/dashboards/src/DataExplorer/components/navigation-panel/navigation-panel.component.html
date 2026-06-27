@@ -20,19 +20,18 @@
         @if (favoritesSectionExpanded) {
           <div class="section-content scrollable-section">
             @if (favoriteRecords.length + favoriteEntities.length === 0) {
-              <div class="empty-section">
-                <span>No favorites yet</span>
-              </div>
+              <mj-empty-state class="empty-section" Size="compact"
+                Icon="" Title="No favorites yet" />
             } @else {
               <div class="scrollable-list">
                 <div class="scrollable-list-inner">
-                  @for (favorite of favoriteEntities; track favorite.displayName) {
+                  @for (favorite of favoriteEntities; track favorite.entityName) {
                     <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
                       <i [class]="getFavoriteIcon(favorite)"></i>
                       <span class="nav-item-label">{{ favorite.displayName }}</span>
                     </div>
                   }
-                  @for (favorite of favoriteRecords; track favorite.displayName) {
+                  @for (favorite of favoriteRecords; track favorite.entityName + '|' + favorite.compositeKeyString) {
                     <div class="nav-item" (click)="onFavoriteClick(favorite)" [title]="favorite.entityName ? favorite.entityName + ' - ' + favorite.displayName : favorite.displayName">
                       <i [class]="getFavoriteIcon(favorite)"></i>
                       <span class="nav-item-label">{{ favorite.displayName }}</span>
@@ -59,13 +58,12 @@
         @if (recentSectionExpanded) {
           <div class="section-content scrollable-section">
             @if (filteredRecentItems.length === 0) {
-              <div class="empty-section">
-                <span>No recent items</span>
-              </div>
+              <mj-empty-state class="empty-section" Size="compact"
+                Icon="" Title="No recent items" />
             } @else {
               <div class="scrollable-list">
                 <div class="scrollable-list-inner">
-                  @for (item of filteredRecentItems; track item.compositeKeyString) {
+                  @for (item of filteredRecentItems; track item.entityName + '|' + item.compositeKeyString) {
                     <div class="nav-item" (click)="onRecentClick(item)" [title]="item.entityName + ' - ' + item.displayName">
                       <i [class]="getRecentItemIcon(item)"></i>
                       <div class="nav-item-content">

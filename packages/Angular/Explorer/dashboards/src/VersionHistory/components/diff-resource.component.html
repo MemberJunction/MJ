@@ -1,16 +1,16 @@
-<div class="diff-container">
+<mj-page-layout>
+  <mj-page-header
+    Title="Diff Viewer"
+    Icon="fa-solid fa-code-compare"
+    Subtitle="Compare states between version labels or against current data">
+  </mj-page-header>
+
+  <mj-page-body>
   @if (IsLoading) {
     <mj-loading text="Loading diff viewer..."></mj-loading>
   }
 
   @if (!IsLoading) {
-    <!-- Header -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">Diff Viewer</h2>
-        <p class="page-subtitle">Compare states between version labels or against current data</p>
-      </div>
-    </div>
     <!-- Diff Configuration Panel -->
     <div class="config-panel">
       <!-- Mode Selector -->
@@ -234,9 +234,8 @@
                             }
                           }
                           @if (!item.IsLoadingFields && item.FieldsLoaded && item.FieldChanges.length === 0) {
-                            <div class="diff-fields-empty">
-                              <span>No field-level changes available</span>
-                            </div>
+                            <mj-empty-state class="diff-fields-empty" Size="compact"
+                              Icon="" Title="No field-level changes available" />
                           }
                         </div>
                       }
@@ -250,20 +249,17 @@
       }
       <!-- No changes -->
       @if (FilteredEntityGroups.length === 0 && TotalChanges === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-check-circle empty-icon" style="color: #10b981;"></i>
-          <h3>No differences found</h3>
-          <p>The compared states are identical.</p>
-        </div>
+        <mj-empty-state Variant="success"
+          Title="No differences found"
+          Message="The compared states are identical." />
       }
     }
     <!-- No results yet -->
     @if (!HasDiffResult && !IsDiffLoading) {
-      <div class="empty-state">
-        <i class="fa-solid fa-code-compare empty-icon"></i>
-        <h3>Select labels to compare</h3>
-        <p>Choose a diff mode and select labels above, then click Compare.</p>
-      </div>
+      <mj-empty-state Icon="fa-solid fa-code-compare"
+        Title="Select labels to compare"
+        Message="Choose a diff mode and select labels above, then click Compare." />
     }
   }
-</div>
+  </mj-page-body>
+</mj-page-layout>

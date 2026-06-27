@@ -1,17 +1,19 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, Metadata } from '@memberjunction/core';
 import { QueryCompositionEngine } from '@memberjunction/generic-database-provider';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
+import { NoLog } from '../logging/NoLog.js';
 import { v4 as uuidv4 } from 'uuid';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { getDbType } from '../index.js';
 import { getSystemUser } from '../auth/index.js';
 import sql from 'mssql';
  
-@InputType() 
+@InputType()
 export class GetDataInputType {
     @Field(() => String)
+    @NoLog
     Token: string;
 
     @Field(() => [String])
@@ -116,9 +118,11 @@ export class GetDataResolver {
     @Ctx() context: AppContext
     ): Promise<GetDataOutputType> {
         try { 
-            LogStatus(`GetDataResolver.GetData() ---- IMPORTANT - temporarily using the same connection as rest of the server, we need to separately create a READ ONLY CONNECTION and pass that in 
-                       the AppContext so we can use that special connection here to ensure we are using a lower privileged connection for this operation to prevent mutation from being possible.`);
-            LogStatus(`${JSON.stringify(input)}`);
+            LogStatusEx({
+                message: `GetDataResolver.GetData() ---- IMPORTANT - temporarily using the same connection as rest of the server, we need to separately create a READ ONLY CONNECTION and pass that in the AppContext so we can use that special connection here to ensure we are using a lower privileged connection for this operation to prevent mutation from being possible.`,
+                verboseOnly: true,
+            });
+            LogStatus(`GetData invoked: ${input.Queries.length} queries`);
 
             // validate the token
             if (!isTokenValid(input.Token)) {
@@ -216,8 +220,12 @@ export class GetDataResolver {
     async GetAllEntities(
     @Ctx() context: AppContext
     ): Promise<SimpleEntityResultType> {
-        try { 
-            const md = GetReadOnlyProvider(context.providers);
+        try {
+            // System-key contexts often only have a read-write provider configured;
+            // without the fallback, GetReadOnlyProvider returns null and `md.Entities`
+            // throws TypeError. Every other resolver passes this option — adding it
+            // here brings the call into line with the rest of the codebase.
+            const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
             const result = md.Entities.map((e) => {
                 return { 
                     ID: e.ID, 

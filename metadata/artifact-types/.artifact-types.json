@@ -58,6 +58,7 @@
       "ParentID": null,
       "ContentType": "application/json",
       "DriverClass": "JsonArtifactViewerPlugin",
+      "ToolLibraryClass": "JSONToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-solid fa-brackets-curly"
     },
@@ -65,8 +66,8 @@
       "ID": "AE674C7E-EA0D-49EA-89E4-0649F5EB20D4"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.068Z",
-      "checksum": "87fceb45ecff1546283bee889edcafaeceb0d7157e8df4896b9f51e64111888c"
+      "lastModified": "2026-04-22T21:08:13.520Z",
+      "checksum": "78a8f24102836fb7e6261ae4fa5a6796379f59394f0d8205f92f60a071731e45"
     }
   },
   {
@@ -275,6 +276,7 @@
       "ParentID": null,
       "ContentType": "text/markdown",
       "DriverClass": "MarkdownArtifactViewerPlugin",
+      "ToolLibraryClass": "TextToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-brands fa-markdown"
     },
@@ -282,8 +284,8 @@
       "ID": "5E5883C2-0185-4E1E-8A1C-F514DBF52DB7"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:46.166Z",
-      "checksum": "b1d34a4978d255c81efddf3acf653b6cfa9a0c2e8d24014e696d57dedc9296f2"
+      "lastModified": "2026-04-22T21:08:13.615Z",
+      "checksum": "0e36ff1c9eab065ac76d09b68b9c48026c021e26506baace990c82286f879924"
     }
   },
   {
@@ -294,6 +296,7 @@
       "ContentType": "application/pdf",
       "ContentCategory": "File",
       "DriverClass": "PdfArtifactViewerPlugin",
+      "ToolLibraryClass": "PDFToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-pdf"
     },
@@ -301,8 +304,8 @@
       "ID": "95B9A870-76A8-47FF-A44E-06784380490B"
     },
     "sync": {
-      "lastModified": "2026-04-06T22:35:44.296Z",
-      "checksum": "d97d2721b43a27556c2690d6b407f8dea340bd6f8021fa0e6603e7b3e377a35f"
+      "lastModified": "2026-04-22T21:08:13.631Z",
+      "checksum": "e8a15a2bf676ce68298679613fc0607f6262e8c3159ab53d205dd70a2be52eda"
     }
   },
   {
@@ -313,6 +316,7 @@
       "ContentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "ContentCategory": "File",
       "DriverClass": "XlsxArtifactViewerPlugin",
+      "ToolLibraryClass": "ExcelToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-excel"
     },
@@ -320,8 +324,8 @@
       "ID": "E197541F-484B-4462-8160-70993E18CEF6"
     },
     "sync": {
-      "lastModified": "2026-04-06T22:35:44.313Z",
-      "checksum": "73959d32da058c06c3bc93df597651da9defd003c09e3923b77e8456eb71e3c6"
+      "lastModified": "2026-04-22T21:08:13.647Z",
+      "checksum": "9fd246c12453c6a4dde992ece729a1df8567376ae1d64fa0cd1be379893ac103"
     }
   },
   {
@@ -332,6 +336,7 @@
       "ContentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       "ContentCategory": "File",
       "DriverClass": "DocxArtifactViewerPlugin",
+      "ToolLibraryClass": "DocxToolLibrary",
       "IsEnabled": true,
       "Icon": "fa-file-word"
     },
@@ -339,8 +344,46 @@
       "ID": "CDF6218A-8250-437E-9074-EC1900D093A2"
     },
     "sync": {
-      "lastModified": "2026-04-06T22:35:44.329Z",
-      "checksum": "b6fb6be302c15f5a8e23584c600622290b02f35bc3fa626b291db454a9593f8c"
+      "lastModified": "2026-04-22T21:08:13.659Z",
+      "checksum": "49fa6d211b6734bdb91f53912f888db7b799ead37dd09dbea946483861f0b858"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Search Result Set",
+      "Description": "Persisted ranked search results produced by a scoped search (pre-execution RAG or agent-invoked). Re-parented onto Data Snapshot in Phase 2B so it inherits Data Snapshot's tabular tools (filter, sort, paginate, get-row, project-columns) plus the search-specific tools (filterByScore, groupBySourceProvider, getMatchingChunks, followSourceLink, rerankInline) supplied by SearchResultSetToolLibrary. Query, scope list, search context, and provider breakdown are stored alongside the tabular data in the artifact spec.",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=Data Snapshot",
+      "ContentType": "application/vnd.mj.search-result-set",
+      "ContentCategory": "Text",
+      "DriverClass": "DataArtifactViewerPlugin",
+      "ToolLibraryClass": "SearchResultSetToolLibrary",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-magnifying-glass-plus"
+    },
+    "primaryKey": {
+      "ID": "249B4A72-7A7A-4CBC-BAAE-91DC66853795"
+    },
+    "sync": {
+      "lastModified": "2026-04-28T13:30:08.532Z",
+      "checksum": "02d9f97ae3797cc6f48845fbf7f7b5b4ceeec7f1e4a8866f2cf5f44a14b43879"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Whiteboard",
+      "Description": "Realtime whiteboard board-state snapshot. Stores the serialized board JSON (shapes, notes, connectors, layout) captured from a voice session's whiteboard channel so the board can be reopened, shared, and versioned after the call ends.",
+      "ParentID": null,
+      "ContentType": "application/json",
+      "DriverClass": "WhiteboardArtifactViewerPlugin",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-chalkboard"
+    },
+    "primaryKey": {
+      "ID": "D37C0785-C5FD-42B4-9442-D48B076E2BA4"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:11.152Z",
+      "checksum": "6d58bfe5c82547da9713a939ac8612ad37ee0e8729fac20bdda891e0ad2eecc5"
     }
   }
 ]

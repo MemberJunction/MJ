@@ -19,8 +19,13 @@ import {
     MJAIAgentEntity,
     MJAIModelEntity,
     MJConversationDetailAttachmentEntity,
-    MJAIModalityEntity
+    MJAIModalityEntity,
+    MJArtifactEntity,
+    MJArtifactVersionEntity,
+    MJConversationDetailArtifactEntity,
+    ArtifactMetadataEngine
 } from '@memberjunction/core-entities';
+import { LogError, LogStatus } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 import {
@@ -85,16 +90,26 @@ interface ModalityCache {
  * Handles validation, storage, thumbnails, and CRUD operations.
  */
 export class ConversationAttachmentService {
-    private _defaultProvider: IMetadataProvider;
+    private _defaultProvider: IMetadataProvider | null = null;
     private modalityCache: ModalityCache = { byName: new Map(), loaded: false };
 
-    constructor() {
-        this._defaultProvider = Metadata.Provider;
+    constructor() {}
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking service methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._defaultProvider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._defaultProvider = value;
     }
 
     /** Resolves the provider to use: caller-supplied or the default captured at construction. */
     private resolveProvider(provider?: IMetadataProvider): IMetadataProvider {
-        return provider ?? this._defaultProvider;
+        return provider ?? this.Provider;
     }
 
 
@@ -106,7 +121,7 @@ export class ConversationAttachmentService {
             return;
         }
 
-        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJAIModalityEntity>({
             EntityName: 'MJ: AI Modalities',
             ResultType: 'entity_object'
@@ -263,10 +278,111 @@ export class ConversationAttachmentService {
             };
         }
 
+        // Storage unification (plan §1): for every attachment, also create a
+        // ConversationArtifactVersion + junction link so uploads automatically
+        // participate in the artifact tool dispatch path. The attachment's
+        // ArtifactVersionID is set so the resolver can dedupe between the
+        // attachment row and its artifact counterpart. Failures here are logged
+        // but never fail the upload — the attachment row is the source of
+        // truth and the resolver can read from either path.
+        try {
+            const versionId = await this.createArtifactForAttachment(
+                attachment,
+                conversationDetailId,
+                base64Data,
+                fileId,
+                mimeType,
+                input.fileName ?? null,
+                sizeBytes,
+                contextUser,
+                provider
+            );
+            if (versionId) {
+                attachment.ArtifactVersionID = versionId;
+                if (!(await attachment.Save())) {
+                    LogError(`ConversationAttachmentService: failed to backlink attachment ${attachment.ID} to artifact version ${versionId}: ${attachment.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            }
+        } catch (err) {
+            LogError(`ConversationAttachmentService: failed to create artifact for attachment ${attachment.ID}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+
         return {
             success: true,
             attachment
         };
+    }
+
+    /**
+     * Creates a `MJ: Artifact` header + `MJ: Artifact Version` (v1) + the
+     * `MJ: Conversation Detail Artifact` junction row linking the artifact to
+     * the conversation detail. Sized files are referenced via `FileID`; inline
+     * data goes onto `Content` as a base64 data URL.
+     *
+     * Resolves the artifact type via the wildcard-aware MIME resolver. If no
+     * type matches, logs a warning and skips creation — uploads of unregistered
+     * MIMEs are blocked at the agent-execution layer (AgentRunner with
+     * AcceptUnregisteredFiles), not here, to keep the attachment write succeed.
+     */
+    private async createArtifactForAttachment(
+        attachment: MJConversationDetailAttachmentEntity,
+        conversationDetailId: string,
+        base64Data: string,
+        fileId: string | null,
+        mimeType: string,
+        fileName: string | null,
+        sizeBytes: number,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<string | null> {
+        const md = this.resolveProvider(provider);
+        await ArtifactMetadataEngine.Instance.Config(false, contextUser, provider);
+
+        const ext = fileName?.includes('.') ? fileName.split('.').pop() : undefined;
+        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType, ext);
+        if (!artifactType) {
+            LogStatus(`ConversationAttachmentService: no Artifact Type registered for MIME "${mimeType}"; skipping artifact creation for attachment ${attachment.ID}.`);
+            return null;
+        }
+
+        const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+        artifact.Name = fileName || `attachment_${attachment.ID}`;
+        artifact.TypeID = artifactType.ID;
+        artifact.UserID = contextUser.ID;
+        artifact.Visibility = 'Always';
+        if (!(await artifact.Save())) {
+            LogError(`ConversationAttachmentService: failed to save artifact for attachment ${attachment.ID}: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return null;
+        }
+
+        const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', contextUser);
+        version.ArtifactID = artifact.ID;
+        version.VersionNumber = 1;
+        version.MimeType = mimeType;
+        version.FileName = fileName ?? null;
+        version.ContentSizeBytes = sizeBytes;
+        version.UserID = contextUser.ID;
+        if (fileId) {
+            version.ContentMode = 'File';
+            version.FileID = fileId;
+        } else {
+            version.ContentMode = 'Text';
+            version.Content = `data:${mimeType};base64,${base64Data}`;
+        }
+        if (!(await version.Save())) {
+            LogError(`ConversationAttachmentService: failed to save artifact version for attachment ${attachment.ID}: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return null;
+        }
+
+        const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>('MJ: Conversation Detail Artifacts', contextUser);
+        junction.ConversationDetailID = conversationDetailId;
+        junction.ArtifactVersionID = version.ID;
+        junction.Direction = 'Input';
+        if (!(await junction.Save())) {
+            LogError(`ConversationAttachmentService: failed to link artifact ${artifact.ID} to conversation detail ${conversationDetailId}: ${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+
+        return version.ID;
     }
 
     /**
@@ -402,7 +518,7 @@ export class ConversationAttachmentService {
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Promise<MJConversationDetailAttachmentEntity[]> {
-        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID='${conversationDetailId}'`,
@@ -435,7 +551,7 @@ export class ConversationAttachmentService {
 
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID IN (${idList})`,

@@ -1,8 +1,10 @@
+import { UserInfo } from '@memberjunction/core';
 import { BaseRequestParams, BaseResponse, CreateIndexParams,
         EditIndexParams, IndexList, ListVectorIDsParams, ListVectorIDsResult, UpdateOptions,
         VectorRecord } from "./record";
 import { HybridQueryOptions, QueryOptions } from './query.types';
 import { SharedIndexFilterOptions, VectorMetadataFilter } from './MetadataFilter';
+import { ColocatedQueryOptions, ColocatedQueryResult, IColocatedVectorHost, IsColocatedVectorHost } from './colocated.types';
 
 export abstract class VectorDBBase {
     private _apiKey: string;
@@ -20,13 +22,39 @@ export abstract class VectorDBBase {
         this._apiKey = apiKey;
     }
 
+    /**
+     * True when this driver does not accept ingestion via `CreateRecord(s)` /
+     * `UpdateRecord(s)` — implies vectors are managed out-of-band (e.g.
+     * `SimpleVectorServiceProvider` reads embeddings directly from
+     * `MJ: Entity Record Documents.VectorJSON`). Pipelines that would
+     * otherwise call ingestion APIs should short-circuit when this is true
+     * to avoid spurious "unsupported" error logs.
+     *
+     * Subclasses that genuinely support ingestion leave the default `false`.
+     */
+    public get IsReadOnly(): boolean {
+        return false;
+    }
+
     //Union types to allow the sub class implementing the functions to mark them as async or not
     abstract ListIndexes(): IndexList | Promise<IndexList>;
     abstract GetIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
     abstract CreateIndex(params: CreateIndexParams): BaseResponse | Promise<BaseResponse>;
     abstract DeleteIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
     abstract EditIndex(params: EditIndexParams): BaseResponse  | Promise<BaseResponse>;
-    abstract QueryIndex(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
+    /**
+     * Query an index for nearest neighbours.
+     *
+     * @param params - Query parameters (vector or record id, topK, filter, etc.)
+     * @param contextUser - Optional caller identity. Remote drivers (Pinecone,
+     *   Qdrant, pgvector) authenticate via their own credentials and ignore
+     *   this parameter. In-process drivers that need to honor server-side
+     *   row-level security (e.g. SimpleVectorDatabase, which calls RunView
+     *   to load entity vectors) require it. Pattern matches MJ's
+     *   `RunView(params, contextUser)` and `GetEntityObject(name, contextUser)`
+     *   conventions.
+     */
+    abstract QueryIndex(params: QueryOptions, contextUser?: UserInfo): BaseResponse | Promise<BaseResponse>;
 
     abstract CreateRecord(record: VectorRecord, indexName?: string): BaseResponse | Promise<BaseResponse>;
     abstract CreateRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
@@ -67,9 +95,9 @@ export abstract class VectorDBBase {
      * Only available on providers where SupportsHybridSearch is true.
      * Default implementation falls back to a standard vector QueryIndex call.
      */
-    public HybridQuery(params: HybridQueryOptions): BaseResponse | Promise<BaseResponse> {
+    public HybridQuery(params: HybridQueryOptions, contextUser?: UserInfo): BaseResponse | Promise<BaseResponse> {
         // Default: fall back to pure vector search, ignoring keyword params
-        return this.QueryIndex({ vector: params.vector, topK: params.topK, includeMetadata: params.includeMetadata, includeValues: params.includeValues, filter: params.filter });
+        return this.QueryIndex({ vector: params.vector, topK: params.topK, includeMetadata: params.includeMetadata, includeValues: params.includeValues, filter: params.filter }, contextUser);
     }
 
     /**
@@ -83,7 +111,8 @@ export abstract class VectorDBBase {
      * @returns The query response from the vector database
      */
     public MetadataFilteredQuery(
-        params: QueryOptions & { metadataFilter: SharedIndexFilterOptions }
+        params: QueryOptions & { metadataFilter: SharedIndexFilterOptions },
+        contextUser?: UserInfo,
     ): BaseResponse | Promise<BaseResponse> {
         const nativeFilter = this.BuildMetadataFilter(params.metadataFilter);
         const queryParams: QueryOptions = {
@@ -92,7 +121,7 @@ export abstract class VectorDBBase {
         };
         // Remove the metadataFilter before passing to QueryIndex
         delete (queryParams as Record<string, unknown>)['metadataFilter'];
-        return this.QueryIndex(queryParams);
+        return this.QueryIndex(queryParams, contextUser);
     }
 
     /**
@@ -106,5 +135,106 @@ export abstract class VectorDBBase {
      */
     public BuildMetadataFilter(options: SharedIndexFilterOptions): object | undefined {
         return VectorMetadataFilter.FromOptions(options);
+    }
+
+    // ----------------------------------------------------------------
+    //  Colocated (in-database) vector support
+    // ----------------------------------------------------------------
+
+    /**
+     * The host relational connection a colocated provider borrows to store and query
+     * vectors in the same database as the application's entity data. `undefined` until
+     * {@link SetColocatedHost} (or {@link TryWireColocatedHost}) is called.
+     */
+    protected ColocatedHost: IColocatedVectorHost | undefined;
+
+    /**
+     * Whether this provider stores vectors inside the application's relational database and
+     * can resolve query results to entity records without an external mapping hop. Override
+     * and return `true` in colocated providers (e.g. `PgVectorColocated`, `SQLServerVectorDatabase`).
+     */
+    public get SupportsColocatedQuery(): boolean {
+        return false;
+    }
+
+    /**
+     * Whether this provider requires an API key / credential to operate. Defaults to `true`
+     * for external, cloud-hosted vector services (Pinecone, Qdrant, …). Override and return
+     * `false` for in-process / local providers that authenticate via the host process or the
+     * application's own database rather than a remote credential — e.g. the in-memory
+     * `SimpleVectorServiceProvider`, which reads vectors out of `MJ: Entity Record
+     * Documents.VectorJSON` and never calls an external service.
+     *
+     * Callers that gate on a missing key (e.g. the Entity Vector Sync pipeline and the
+     * duplicate-record detector) consult this so a keyless local provider isn't rejected
+     * with a spurious "No API Key found" error.
+     */
+    public get RequiresAPIKey(): boolean {
+        return true;
+    }
+
+    /**
+     * Wire in the host relational connection so this provider reuses it for colocated
+     * storage and queries instead of opening its own pool. No-op semantics for providers
+     * that ignore it; colocated providers require it before any operation.
+     */
+    public SetColocatedHost(host: IColocatedVectorHost): void {
+        this.ColocatedHost = host;
+    }
+
+    /**
+     * Convenience used by callers that hold an opaque provider reference (the active MJ data
+     * provider). If `host` implements {@link IColocatedVectorHost} *and* this provider supports
+     * colocated queries, wire it in.
+     *
+     * @returns `true` if the host was wired in, `false` otherwise.
+     */
+    public TryWireColocatedHost(host: unknown): boolean {
+        if (this.SupportsColocatedQuery && IsColocatedVectorHost(host)) {
+            this.SetColocatedHost(host);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Run a colocated query that fuses a vector component with an optional keyword component
+     * in a single server-side statement, applying an optional metadata filter. Only meaningful
+     * when {@link SupportsColocatedQuery} is `true`; the default implementation throws to surface
+     * misuse on providers that don't support it.
+     */
+    public ColocatedQuery(_params: ColocatedQueryOptions, _contextUser?: UserInfo): Promise<ColocatedQueryResult> {
+        return Promise.reject(new Error('ColocatedQuery is not supported by this provider (SupportsColocatedQuery is false)'));
+    }
+
+    /**
+     * Build a standard SUCCESS {@link BaseResponse}. Shared across all drivers so every
+     * provider reports results in a uniform shape.
+     *
+     * @param data - The provider-specific payload to attach to the response.
+     */
+    protected wrapSuccessResponse(data: unknown): BaseResponse {
+        return {
+            success: true,
+            message: '',
+            data,
+        };
+    }
+
+    /**
+     * Build a standard FAILURE {@link BaseResponse}.
+     *
+     * **Always** return this (never a success response) from a `catch` block — returning a
+     * success response on error silently swallows real failures and makes callers, and the
+     * vectorization pipeline, believe an operation worked when it did not.
+     *
+     * @param message - Optional human-readable error detail; falls back to a generic message.
+     */
+    protected wrapFailureResponse(message?: string): BaseResponse {
+        return {
+            success: false,
+            message: message || 'An error occurred',
+            data: null,
+        };
     }
 }

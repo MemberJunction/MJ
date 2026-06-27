@@ -3,9 +3,14 @@ import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { CodeGenDatabaseProvider, CodeGenConnection } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
+// Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
+// under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
+// `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
+// and the SS code path silently fails.
+import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
+import { FindTrueCycles } from "./entity-level-tree-cycles";
 import { MJGlobal } from "@memberjunction/global";
 import { SQLCodeGenBase } from './sql_codegen';
 
@@ -23,25 +28,28 @@ private _dbProvider: CodeGenDatabaseProvider | null = null;
 /**
  * Lazy-initialized database provider. Uses the same factory pattern as ManageMetadataBase
  * and SQLCodeGenBase to resolve the correct provider for the configured database platform.
+ *
+ * Lookup goes through `MJGlobal.ClassFactory` keyed by the platform string,
+ * which matches the `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+ * decorators on the concrete providers (`'sqlserver'`, `'postgresql'`).
+ * Mismatched keys silently fall back to the abstract base class — fail loud
+ * with an explicit error so a misconfigured platform doesn't ship as a
+ * runtime breakage in dialect-specific methods.
  */
 protected get dbProvider(): CodeGenDatabaseProvider {
    if (!this._dbProvider) {
-      const platform = configInfo.dbType;
-      if (platform === 'postgresql') {
-         const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-            CodeGenDatabaseProvider, 'PostgreSQLCodeGenProvider'
+      const platform = configInfo.dbPlatform;
+      const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+         CodeGenDatabaseProvider,
+         platform
+      );
+      if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+         throw new Error(
+            `CodeGen provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+            `provider package is installed and registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`
          );
-         if (pgProvider) {
-            this._dbProvider = pgProvider;
-         } else {
-            throw new Error(
-               'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-               'is installed and its CodeGen provider is registered before running CodeGen.'
-            );
-         }
-      } else {
-         this._dbProvider = new SQLServerCodeGenProvider();
       }
+      this._dbProvider = provider;
    }
    return this._dbProvider;
 }
@@ -112,15 +120,11 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
      }
 
      if (currentLevel.length === 0) {
-      // We have a cyclical dependency at this level, so we can't continue. Instead of bombing completely, throw a warning and include in the final level
-      // all of the remaining entities in the dependency map.
-      const circularDeps: string[] = [];
-      for (const [entityName, dependencies] of dependencyMap.entries()) {
-        circularDeps.push(`${entityName} depends on ${Array.from(dependencies).join(', ')}`);
-      }
-      console.warn(`      > Cyclical Dependency Detected (non-fatal), including remaining entities in final level. Details:`);
-      circularDeps.forEach(dep => console.warn(`        * ${dep}`));
-      
+      // We have a cyclical dependency at this level, so we can't continue. Instead of bombing completely, emit a focused
+      // diagnostic — the true cycles (strongly connected components) and the FK fields creating their edges — then
+      // include ALL remaining entities in the final level.
+      this.logCyclicalDependencyDiagnostics(dependencyMap, entityMap);
+
       for (const item of dependencyMap) {
         const entityName = item[0];
         currentLevel.push(entityMap.get(entityName)!);
@@ -146,9 +150,52 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
    return entityLevelTree;
  }
 
+/**
+ * Emits the cyclical-dependency warning for buildEntityLevelsTree's stuck branch. Rather than dumping every
+ * remaining entity's dependency list (most of which are merely downstream of a cycle), this computes the true
+ * cycles (strongly connected components) and prints, for each one, its members plus the specific FK fields
+ * creating the edges between them, followed by a single summary line for the downstream entities.
+ */
+private logCyclicalDependencyDiagnostics(dependencyMap: Map<string, Set<string>>, entityMap: Map<string, EntityInfo>): void {
+   const cycles = FindTrueCycles(dependencyMap);
+   const cycleMemberCount = cycles.reduce((sum, cycle) => sum + cycle.length, 0);
+   const downstreamCount = dependencyMap.size - cycleMemberCount;
+
+   console.warn(`      ⚠️  Cyclical Dependency Detected (non-fatal), including remaining entities in final level. Details:`);
+   cycles.forEach((cycle, index) => {
+      console.warn(`        * Cycle ${index + 1}: ${cycle.join(' ↔ ')}`);
+      this.describeCycleEdges(cycle, entityMap).forEach(edge => console.warn(`            - ${edge}`));
+   });
+   if (downstreamCount > 0) {
+      console.warn(`        * ${downstreamCount} other entities are downstream of these cycles and were included in the final level (recompile order within a level is not dependency-safe, but base-view recompilation only requires referenced views to exist, so this is non-fatal).`);
+   }
+}
+
+/**
+ * Returns one human-readable line per FK edge between members of the same cycle,
+ * e.g. `MJ: AI Agents.TypeID → MJ: AI Agent Types`. Self-referencing FKs are skipped
+ * (they are also excluded from the dependency map upstream).
+ */
+private describeCycleEdges(cycle: string[], entityMap: Map<string, EntityInfo>): string[] {
+   const members = new Set(cycle);
+   const edges: string[] = [];
+   for (const entityName of cycle) {
+      const entity = entityMap.get(entityName);
+      if (!entity) {
+         continue;
+      }
+      for (const field of entity.Fields) {
+         if (field.RelatedEntity && field.RelatedEntity !== entityName && members.has(field.RelatedEntity)) {
+            edges.push(`${entityName}.${field.Name} → ${field.RelatedEntity}`);
+         }
+      }
+   }
+   return edges;
+}
+
 public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
    let bSuccess: boolean = true; // start off true
-   const md: Metadata = new Metadata();
+   const md: Metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
    // Build the dependency order tree, provide ALL entities for this process
    const entityLevelTree = this.buildEntityLevelsTree(md.Entities);
@@ -282,34 +329,71 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
  }
  
  /**
-  * Regenerates base views for entities that failed the refresh process using the full CodeGen approach
+  * Regenerates base views for entities that failed the refresh process using the full CodeGen approach.
+  *
+  * Every entity is attempted so the caller sees the full scope of failures in a single pass
+  * rather than bisecting one at a time. At the end, a batch summary is logged listing every
+  * entity that failed and the corresponding error. When `MJ_CODEGEN_STRICT_VIEW_REGEN=true`
+  * is set in the environment, a non-empty failure list becomes a thrown error, halting the
+  * install pipeline loudly rather than reporting success while views are missing.
+  *
   * @param ds DataSource for database operations
   * @param entities List of entities whose views need to be regenerated
   * @returns True if all regenerations succeeded, false otherwise
+  * @throws Error when `MJ_CODEGEN_STRICT_VIEW_REGEN=true` and any regeneration failed
   */
  private async regenerateFailedBaseViews(ds: CodeGenConnection, entities: EntityInfo[]): Promise<boolean> {
-   let bSuccess = true;
-   
    const sqlCodeGen = new SQLCodeGenBase();
-   
+   const failures: Array<{ entity: EntityInfo; error: unknown }> = [];
+
+   // Build the will-regenerate set once for the whole batch. Dialect-specific
+   // regeneration paths (like the PG 42P16 fallback) use this to avoid
+   // restoring dependents that CodeGen is about to rebuild with a fresh
+   // definition — the stale captured definition could otherwise be
+   // incompatible with the newly-regenerated target.
+   const willRegenerate = new Set(entities.map(e => `${e.SchemaName}.${e.BaseView}`));
+
    for (const entity of entities) {
      try {
        logMessage(`Regenerating base view for ${entity.Name}...`, 'Info');
-       
+
        // Generate the new view definition using the CodeGen approach
        const viewSQL = await sqlCodeGen.generateBaseView(ds, entity);
-       
-       // Execute the new view definition
-       await this.executeSQLScript(ds, viewSQL, false);
-       
+
+       // Route through the provider's dialect-specific fast path when present
+       // (PG overrides with capture/drop/recreate/restore recovery); fall back
+       // to the generic executeSQLScript path for dialects that don't override.
+       if (this.dbProvider.regenerateBaseView) {
+         await this.dbProvider.regenerateBaseView(entity, viewSQL, willRegenerate);
+       } else {
+         await this.executeSQLScript(ds, viewSQL, false);
+       }
+
        logMessage(`Successfully regenerated base view for ${entity.Name}`, 'Info');
      } catch (e) {
        logError(`Failed to regenerate base view for ${entity.Name}: ${e}`);
-       bSuccess = false;
+       failures.push({ entity, error: e });
      }
    }
-   
-   return bSuccess;
+
+   if (failures.length > 0) {
+     const summary = failures
+       .map(f => {
+         const msg = f.error instanceof Error ? f.error.message : String(f.error);
+         return `  - ${f.entity.SchemaName}.${f.entity.Name}: ${msg}`;
+       })
+       .join('\n');
+     logError(`Base view regeneration failed for ${failures.length} of ${entities.length} entity(ies):\n${summary}`);
+
+     if (process.env.MJ_CODEGEN_STRICT_VIEW_REGEN === 'true') {
+       throw new Error(
+         `Base view regeneration failed for ${failures.length} entity(ies) with MJ_CODEGEN_STRICT_VIEW_REGEN=true. ` +
+         `See the log above for per-entity errors.`
+       );
+     }
+   }
+
+   return failures.length === 0;
  }
  
  public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {

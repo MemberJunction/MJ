@@ -185,8 +185,17 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   // Create Tables panel state
   ShowCreateTablesPanel = false;
-  CreateTablesObjects: Array<{ ID: string; Name: string; Label: string; Selected: boolean }> = [];
+  CreateTablesObjects: Array<{
+    /** IntegrationObject.ID when AlreadyPersisted; undefined for freshly-discovered objects. */
+    ID?: string;
+    Name: string;
+    Label: string;
+    Selected: boolean;
+    AlreadyPersisted: boolean;
+    IsCustom: boolean;
+  }> = [];
   IsLoadingCreateTablesObjects = false;
+  CreateTablesSearch = '';
   CreateTablesSchema = '';
   IsCreatingTables = false;
   CreateTablesResult: { Success: boolean; Message: string } | null = null;
@@ -205,6 +214,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private documentClickHandler: ((e: Event) => void) | null = null;
 
   async ngOnInit(): Promise<void> {
+    this.dataService.Provider = this.ProviderToUse;
     this.documentClickHandler = (e: Event) => this.onDocumentClick(e);
     document.addEventListener('click', this.documentClickHandler);
     await this.LoadData();
@@ -348,7 +358,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(summary.Integration.ID);
       this.EditEntity = ci;
@@ -449,7 +459,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(integrationID);
       const deleted = await ci.Delete();
@@ -666,7 +676,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   private async loadScheduledJobForIntegration(companyIntegrationID: string): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(companyIntegrationID);
       const scheduledJobID = ci.Get('ScheduledJobID') as string | null;
@@ -674,7 +684,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
       // Also look up the Integration Sync job type ID for pre-populating new schedules
       if (!this.integrationSyncJobTypeID) {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const typeResult = await rv.RunView<{ ID: string }>({
           EntityName: 'MJ: Scheduled Job Types',
           ExtraFilter: `Name='Integration Sync'`,
@@ -1089,7 +1099,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.IsLoadingCredentials = true;
     this.cdr.detectChanges();
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const filter = this.IntegrationCredentialTypeID
       ? `CredentialTypeID='${this.IntegrationCredentialTypeID}' AND IsActive=1`
       : 'IsActive=1';
@@ -1184,7 +1194,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(this.SavedIntegrationID);
       ci.IsActive = true;
@@ -1286,7 +1296,9 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   ToggleAllCreateTablesObjects(selected: boolean): void {
-    for (const obj of this.CreateTablesObjects) {
+    // Only toggle what the user can currently see — otherwise hidden items
+    // silently get swept into the selection when they change filters.
+    for (const obj of this.FilteredCreateTablesObjects) {
       obj.Selected = selected;
     }
   }
@@ -1308,9 +1320,18 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     try {
       const selected = this.CreateTablesObjects.filter(o => o.Selected);
 
+      // Send Name for every selection; include ID when the object was already
+      // persisted so the server can skip the lookup. The server's SF branch
+      // describes just these N objects and hydrates IntegrationObject/Field
+      // rows for any that don't have them yet.
+      const selections = selected.map(o => ({
+        SourceObjectID: o.ID,
+        SourceObjectName: o.Name,
+      }));
+
       const result = await this.dataService.ApplyAllBatch(
         this.SelectedSummary.Integration.ID,
-        selected.map(o => o.ID)
+        selections
       );
       this.CreateTablesResult = { Success: result.Success, Message: result.Message ?? '' };
 
@@ -1329,28 +1350,128 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     }
   }
 
+  /**
+   * One-click "find new tables": discovers every source object the connector now exposes that has
+   * NO entity map yet, and provisions them all (table + entity map + field maps) in a single
+   * ApplyAllBatch — no manual picker. This is the "find custom tables" affordance: a layer on top of
+   * entity-map selection that surfaces whole new objects the source started exposing after setup
+   * (distinct from custom COLUMNS, which the post-sync promoter handles automatically).
+   *
+   * Low-overhead by design: the only cost beyond a normal create is ONE DiscoverObjects call to
+   * learn what's new; the apply itself is identical to provisioning known tables. A no-op when the
+   * source exposes nothing new.
+   */
+  async FindAndAddNewTables(): Promise<void> {
+    if (!this.SelectedSummary || this.IsCreatingTables) return;
+    // CRITICAL: ApplyAllBatch runs RSU + CodeGen + an MJAPI restart. Doing that mid-sync would kill
+    // the running sync, so block until no sync is active (see feedback: never restart mid-sync).
+    if (this.SyncingIntegrationID) {
+      this.CreateTablesResult = {
+        Success: false,
+        Message: 'A sync is in progress — wait for it to finish before adding new tables (adding tables restarts the API).',
+      };
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.IsCreatingTables = true;
+    this.CreateTablesResult = null;
+    this.cdr.detectChanges();
+
+    try {
+      const integrationID = this.SelectedSummary.Integration.ID;
+      // 1. One live DiscoverObjects call → keep only objects that aren't already mapped.
+      const listed = await this.dataService.ListSourceObjects(integrationID);
+      if (!listed.Success) {
+        this.CreateTablesResult = { Success: false, Message: listed.Message ?? 'Discovery failed' };
+        return;
+      }
+      const mappedNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
+      const newObjects = (listed.Data ?? []).filter(o => !mappedNames.has(o.Name));
+      if (newObjects.length === 0) {
+        this.CreateTablesResult = {
+          Success: true,
+          Message: 'No new tables found — everything the source currently exposes is already mapped.',
+        };
+        return;
+      }
+
+      // 2. Provision all the new objects in a single batch (same path as the manual picker).
+      const selections = newObjects.map(o => ({
+        SourceObjectID: o.IntegrationObjectID ?? undefined,
+        SourceObjectName: o.Name,
+      }));
+      const result = await this.dataService.ApplyAllBatch(integrationID, selections);
+      this.CreateTablesResult = {
+        Success: result.Success,
+        Message: result.Success
+          ? `Added ${newObjects.length} new table${newObjects.length === 1 ? '' : 's'}: ${newObjects.map(o => o.Name).join(', ')}.`
+          : (result.Message ?? 'Apply failed'),
+      };
+
+      if (result.Success) {
+        this.DetailEntityMaps = await this.loadEntityMapsForIntegration(integrationID);
+        this.DetailFilteredMaps = this.applyDetailFilter();
+        this.EntityMapCounts = this.countMapsByIntegration(await this.loadAllEntityMaps());
+      }
+    } catch (err) {
+      this.CreateTablesResult = { Success: false, Message: err instanceof Error ? err.message : String(err) };
+    } finally {
+      this.IsCreatingTables = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Search-only filter for the picker. Standard/Custom/Registered state
+   * shows up as badges — never hides anything — so Select All covers
+   * everything the user can see.
+   */
+  get FilteredCreateTablesObjects(): Array<{
+    ID?: string;
+    Name: string;
+    Label: string;
+    Selected: boolean;
+    AlreadyPersisted: boolean;
+    IsCustom: boolean;
+  }> {
+    const term = this.CreateTablesSearch.trim().toLowerCase();
+    if (!term) return this.CreateTablesObjects;
+    return this.CreateTablesObjects.filter(o =>
+      o.Name.toLowerCase().includes(term) || o.Label.toLowerCase().includes(term)
+    );
+  }
+
   private async loadCreateTablesObjects(): Promise<void> {
     if (!this.SelectedSummary) return;
     this.IsLoadingCreateTablesObjects = true;
     this.cdr.detectChanges();
 
     try {
-      const engine = IntegrationEngineBase.Instance;
-      const integration = engine.GetIntegrationForCompanyIntegration(this.SelectedSummary.Integration.ID);
-      if (integration) {
-        const objects = engine.GetActiveIntegrationObjects(integration.ID);
-        const existingNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
-        this.CreateTablesObjects = objects
-          .filter(o => !existingNames.has(o.Name))
+      // Pull the full live catalog from the connector (e.g. all ~1,800 SF
+      // sobjects), not just the curated IntegrationObject subset. Objects
+      // that already have entity maps are filtered out — those are sync
+      // targets, not candidates for "create table".
+      const result = await this.dataService.ListSourceObjects(this.SelectedSummary.Integration.ID);
+      const mappedNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
+      if (result.Success) {
+        this.CreateTablesObjects = (result.Data ?? [])
+          .filter(o => !mappedNames.has(o.Name))
           .map(o => ({
-            ID: o.ID,
+            ID: o.IntegrationObjectID ?? undefined,
             Name: o.Name,
-            Label: o.DisplayName || o.Name,
-            Selected: false
+            Label: o.Label || o.Name,
+            Selected: false,
+            AlreadyPersisted: o.AlreadyPersisted,
+            IsCustom: o.IsCustom,
           }));
+      } else {
+        console.error('[IntegrationConnections] ListSourceObjects failed:', result.Message);
+        this.CreateTablesObjects = [];
       }
     } catch (err) {
       console.error('[IntegrationConnections] Failed to load source objects for Create Tables:', err);
+      this.CreateTablesObjects = [];
     } finally {
       this.IsLoadingCreateTablesObjects = false;
       this.cdr.detectChanges();
@@ -1388,7 +1509,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private async saveCompanyIntegration(): Promise<string | null> {
     if (!this.SelectedCompanyID || !this.SelectedIntegration) return null;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
 
     if (this.SavedIntegrationID) {
@@ -1444,7 +1565,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async toggleConnectionActive(summary: IntegrationSummary): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
     await ci.Load(summary.Integration.ID);
     ci.IsActive = !summary.Integration.IsActive;
@@ -1455,7 +1576,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async loadEditCredentials(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJCredentialEntity>({
       EntityName: 'MJ: Credentials',
       ExtraFilter: 'IsActive=1',

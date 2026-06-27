@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 // ── Interfaces ──
 
@@ -21,6 +22,9 @@ interface PromptRunRecord {
     Success: boolean;
     Cost: number | null;
     TokensUsed: number | null;
+    TokensPrompt: number | null;
+    TokensCacheRead: number | null;
+    TokensCacheWrite: number | null;
     ExecutionTimeMS: number | null;
 }
 
@@ -43,6 +47,7 @@ interface PeakSummary {
     Value: string;
     Count: number;
     Icon: string;
+    CountUnit?: string; // defaults to 'runs' in the template
 }
 
 interface HourlyBar {
@@ -56,34 +61,22 @@ const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 const FIELDS: string[] = [
-    'ID', 'RunAt', 'Success', 'Cost', 'TokensUsed', 'ExecutionTimeMS'
+    'ID', 'RunAt', 'Success', 'Cost', 'TokensUsed', 'TokensPrompt', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS'
 ];
 
 @Component({
     standalone: false,
     selector: 'app-analytics-usage-patterns',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [ShowModelFilter]="false"
-            [ShowAgentFilter]="false"
-            [ShowPromptFilter]="false"
-            [ShowStatusFilter]="false"
-            [ShowCompareToggle]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">
                 <mj-loading text="Analyzing usage patterns..."></mj-loading>
             </div>
         } @else if (TotalRuns === 0) {
-            <div class="empty-state">
-                <i class="fa-solid fa-chart-line empty-state__icon"></i>
-                <div class="empty-state__title">No Data Available</div>
-                <div class="empty-state__subtitle">No prompt runs found in the last 30 days.</div>
-            </div>
+            <mj-empty-state Icon="fa-solid fa-chart-line"
+                Title="No Data Available"
+                Message="No prompt runs found in the last 30 days." />
         } @else {
             <!-- Heatmap -->
             <div class="panel">
@@ -155,7 +148,7 @@ const FIELDS: string[] = [
                                 <div class="peak-card__content">
                                     <div class="peak-card__label">{{ peak.Label }}</div>
                                     <div class="peak-card__value">{{ peak.Value }}</div>
-                                    <div class="peak-card__count">{{ peak.Count | number }} runs</div>
+                                    <div class="peak-card__count">{{ peak.Count | number }} {{ peak.CountUnit || 'runs' }}</div>
                                 </div>
                             </div>
                         }
@@ -233,33 +226,6 @@ const FIELDS: string[] = [
             justify-content: center;
             align-items: center;
             min-height: 300px;
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 60px 24px;
-            text-align: center;
-        }
-
-        .empty-state__icon {
-            font-size: 36px;
-            color: var(--mj-text-muted);
-            margin-bottom: 12px;
-        }
-
-        .empty-state__title {
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--mj-text-primary);
-            margin-bottom: 4px;
-        }
-
-        .empty-state__subtitle {
-            font-size: 13px;
-            color: var(--mj-text-muted);
         }
 
         /* ── Panels ── */
@@ -531,7 +497,7 @@ const FIELDS: string[] = [
         }
     `]
 })
-export class AnalyticsUsagePatternsComponent implements OnInit, OnDestroy {
+export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
     private _timeRange = '30d';
     private isInitialized = false;
@@ -611,7 +577,7 @@ export class AnalyticsUsagePatternsComponent implements OnInit, OnDestroy {
                 this.HeatmapCells = this.buildHeatmap(dayCounts);
                 this.DayDistributions = this.buildDayDistributions(dayCounts);
                 this.HourlyBars = this.buildHourlyBars(dayCounts);
-                this.PeakSummaries = this.buildPeakSummaries(dayCounts);
+                this.PeakSummaries = this.buildPeakSummaries(dayCounts, runs);
             }
         } catch (err) {
             console.error('Usage patterns data load failed:', err);
@@ -622,7 +588,7 @@ export class AnalyticsUsagePatternsComponent implements OnInit, OnDestroy {
     }
 
     private async fetchPromptRuns(): Promise<PromptRunRecord[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const since = new Date();
         switch (this.TimeRange) {
             case '1h': since.setHours(since.getHours() - 1); break;
@@ -705,7 +671,7 @@ export class AnalyticsUsagePatternsComponent implements OnInit, OnDestroy {
         }));
     }
 
-    private buildPeakSummaries(dayCounts: number[][]): PeakSummary[] {
+    private buildPeakSummaries(dayCounts: number[][], runs: PromptRunRecord[]): PeakSummary[] {
         const hourSums = HOURS.map(h =>
             dayCounts.reduce((sum, dayHours) => sum + dayHours[h], 0)
         );
@@ -750,7 +716,22 @@ export class AnalyticsUsagePatternsComponent implements OnInit, OnDestroy {
             Icon: 'fa-solid fa-moon'
         };
 
-        return [busiestHour, busiestDay, quietest];
+        // Overall prompt-cache hit rate for the period (cache reads / total input processed)
+        let cacheRead = 0, inputForHit = 0;
+        for (const r of runs) {
+            const read = r.TokensCacheRead ?? 0;
+            cacheRead += read;
+            inputForHit += (r.TokensPrompt ?? 0) + read + (r.TokensCacheWrite ?? 0);
+        }
+        const cacheHitRate: PeakSummary = {
+            Label: 'Cache Hit Rate',
+            Value: inputForHit > 0 ? `${Math.round((cacheRead / inputForHit) * 100)}%` : '—',
+            Count: cacheRead,
+            Icon: 'fa-solid fa-bolt',
+            CountUnit: 'cached tokens'
+        };
+
+        return [busiestHour, busiestDay, quietest, cacheHitRate];
     }
 
     // ── Utility helpers ──

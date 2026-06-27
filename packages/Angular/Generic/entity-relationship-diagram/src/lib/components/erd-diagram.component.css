@@ -1,330 +1,489 @@
 /**
- * ERD Diagram Component - MJ Design Tokens
- * MJ theming for the Entity Relationship Diagram visualization
+ * ERD Diagram Component — MJ Design Tokens.
+ *
+ * Uses MJ semantic tokens for all colors so the diagram adapts automatically
+ * to light/dark mode via the app's global theme.  Per-schema accent colors
+ * are OKLCH computed from a hash of the schema name (categorical chart
+ * colors, one of the few intentional exceptions to the token rule).
+ *
+ * Typography: MJ's default UI font inherits; entity/field names use a
+ * platform monospace stack so they read as technical identifiers.
  */
 
+/* !important on display + direction keeps consumer classes (e.g. a host
+   `.something { display: block }`) from collapsing the flex layout — without
+   this the chrome + canvas-wrap stop being flex items and .erd-canvas-wrap's
+   `flex: 1` has no effect, causing the SVG to shrink to its min-height. */
 :host {
-  display: block;
+  display: flex !important;
+  flex-direction: column !important;
   height: 100%;
   width: 100%;
+  overflow: hidden;
+  background: var(--mj-bg-page);
+  color: var(--mj-text-primary);
+  --erd-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-.erd-section {
-  background: var(--mj-bg-page);
-  overflow: hidden;
-  height: 100%;
+/* ═══ CHROME ══════════════════════════════════════════════════════════ */
+
+.erd-chrome {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  flex-shrink: 0;
+  min-height: 64px;
+}
+
+.erd-title-group {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  background: var(--mj-bg-surface-sunken);
-  border-bottom: 1px solid var(--mj-border-default);
+  gap: 2px;
   flex-shrink: 0;
 }
 
-.section-header h3 {
-  margin: 0;
+.erd-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--mj-text-primary);
 }
 
-.erd-controls {
+.erd-subtitle {
   display: flex;
+  align-items: center;
   gap: 8px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
 }
 
-.control-btn {
-  display: inline-flex;
+.erd-count-pill {
+  font-family: var(--erd-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  line-height: 1.3;
+}
+
+.erd-count-label { color: var(--mj-text-secondary); }
+.erd-dot { color: var(--mj-text-muted); }
+
+.erd-search {
+  flex: 1;
+  max-width: 440px;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--mj-bg-page);
-  color: var(--mj-text-secondary);
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--mj-border-default);
   border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  background: var(--mj-bg-surface-card);
+  transition: border-color .12s, background .12s, box-shadow .12s;
 }
 
-.control-btn:hover:not(:disabled) {
-  background: var(--mj-bg-surface-sunken);
-  border-color: var(--mj-border-strong);
+.erd-search:focus-within {
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.erd-search > i {
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.erd-search input {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
   color: var(--mj-text-primary);
 }
 
-.control-btn:disabled {
-  opacity: 0.38;
-  cursor: not-allowed;
+.erd-search input::placeholder { color: var(--mj-text-muted); }
+
+.erd-search-clear {
+  border: 0;
+  background: transparent;
+  color: var(--mj-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
 }
 
-.erd-container {
+.erd-search-clear:hover { color: var(--mj-text-primary); }
+
+.erd-chrome-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+/* Schema chips */
+.erd-schema-chips {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+}
+
+.erd-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: 7px;
+  font-family: var(--erd-mono);
+  font-size: 11px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: background .1s, color .1s;
+}
+
+.erd-chip:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.erd-chip.active {
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.erd-chip-count {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mj-bg-surface-card) 80%, transparent);
+  color: var(--mj-text-muted);
+}
+
+/* Toolbar */
+.erd-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+}
+
+.erd-toolbar button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: background .1s, color .1s;
+}
+
+.erd-toolbar button:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.erd-toolbar button.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.erd-zoom-val {
+  padding: 0 8px;
+  font-family: var(--erd-mono);
+  font-size: 10px;
+  color: var(--mj-text-secondary);
+  min-width: 42px;
+  text-align: right;
+}
+
+/* ═══ CANVAS ══════════════════════════════════════════════════════════ */
+
+.erd-canvas-wrap {
   flex: 1;
   position: relative;
-  background: var(--mj-bg-surface-sunken);
   overflow: hidden;
+  background: var(--mj-bg-surface-sunken);
+  min-height: 300px;
+}
+
+.erd-canvas {
   width: 100%;
-  min-height: 400px;
+  height: 100%;
+  user-select: none;
+  cursor: grab;
+  display: block;
+}
+
+.erd-canvas[data-panning="true"] { cursor: grabbing; }
+
+.erd-canvas text { pointer-events: none; }
+
+/* Schema band — subtle neutral grouping (no per-schema color) */
+.erd-band-rect {
+  fill: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
+  stroke: var(--mj-border-default);
+  stroke-width: 1;
+}
+
+.erd-band-title {
+  font-family: var(--erd-mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  fill: var(--mj-text-muted);
+}
+
+/* Edges */
+.erd-edge {
+  stroke: var(--mj-border-strong);
+  stroke-width: 1.2;
+  transition: stroke-width .15s, opacity .15s;
+}
+
+.erd-edge-active {
+  stroke: var(--mj-brand-primary);
+  stroke-width: 1.8;
+}
+
+.erd-edge-dimmed { opacity: 0.18; }
+
+/* Edge labels — FK field name on a small chip along the edge.
+   Background uses surface so the text is legible over crossings. */
+.erd-edge-label {
+  pointer-events: none;
+  transition: opacity .15s;
+}
+
+.erd-edge-label-bg {
+  fill: var(--mj-bg-surface);
+  stroke: var(--mj-border-default);
+  stroke-width: 0.75;
+}
+
+.erd-edge-label-text {
+  font-family: var(--erd-mono);
+  font-size: 11px;
+  fill: var(--mj-text-secondary);
+}
+
+.erd-edge-label-active .erd-edge-label-bg {
+  stroke: var(--mj-brand-primary);
+}
+
+.erd-edge-label-active .erd-edge-label-text {
+  fill: var(--mj-brand-primary);
+}
+
+.erd-edge-label-dimmed { opacity: 0.18; }
+
+/* Edge markers (crow's-foot and arrow) */
+.erd-marker { fill: var(--mj-border-strong); }
+.erd-marker-active,
+.erd-marker-active.erd-marker,
+.erd-marker-active.erd-marker-stroke { fill: var(--mj-brand-primary); stroke: var(--mj-brand-primary); }
+.erd-marker-stroke { stroke: var(--mj-border-strong); stroke-width: 1.4; fill: none; stroke-linecap: round; }
+
+/* Node card */
+.erd-node {
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.erd-node-dimmed { opacity: 0.22; }
+
+.erd-node-shadow {
+  fill: color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
+}
+
+.erd-node-body {
+  fill: var(--mj-bg-surface);
+}
+
+/* Outline rendered as a separate rect on top of the header so the focus
+   stroke is visible all the way around the card (otherwise the header
+   fill clips the top edge of the body's stroke). */
+.erd-node-frame {
+  fill: none;
+  stroke: var(--mj-border-default);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.erd-node-focus .erd-node-frame {
+  stroke: var(--mj-brand-primary);
+  stroke-width: 2;
+}
+
+.erd-node-neighbour .erd-node-frame {
+  stroke-width: 1.5;
+}
+
+.erd-node-header {
+  fill: var(--mj-bg-surface-card);
+}
+
+.erd-node-separator {
+  stroke: var(--mj-border-default);
+  stroke-width: 1;
+}
+
+/* Header content (foreignObject) — entity name + row count on one line */
+.erd-node-header-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--erd-mono);
+  line-height: 22px;
+  height: 22px;
+  color: var(--mj-text-primary);
+}
+
+.erd-node-name {
+  font-size: 13px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.erd-node-rows {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  flex-shrink: 0;
+}
+
+/* Field row (foreignObject) — chip + name + type, all on one line */
+.erd-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  padding: 0 12px 0 8px;
+  font-family: var(--erd-mono);
+  line-height: 22px;
   box-sizing: border-box;
 }
 
-.erd-container svg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100% !important;
-  height: 100% !important;
-  box-sizing: border-box;
+.erd-field-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 14px;
+  border-radius: 3px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1;
 }
 
-/* Loading overlay - using mj-loading component styling */
-.loading-overlay {
+.erd-field-chip-pk {
+  background: color-mix(in srgb, var(--mj-status-warning) 20%, var(--mj-bg-surface));
+  color: var(--mj-status-warning-text, var(--mj-status-warning));
+}
+
+.erd-field-chip-fk {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.erd-field-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.erd-field-type {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  /* Cap very long type strings so the field name still has room */
+  max-width: 45%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* +N more toggle (foreignObject) */
+.erd-field-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 14px;
+  border-radius: 3px;
+  background: var(--mj-bg-surface-card);
+  opacity: 0.7;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: opacity .1s;
+}
+
+.erd-field-more:hover { opacity: 1; }
+
+/* ═══ EMPTY + LOADING ═════════════════════════════════════════════════ */
+
+/* Overlay the canvas; mj-empty-state owns the centered icon/title/message. */
+.erd-empty {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: var(--mj-bg-page);
-  opacity: 0.95;
+  inset: 0;
+  pointer-events: none;
+}
+
+.erd-loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--mj-bg-page) 90%, transparent);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.3s ease-in-out;
+  z-index: 100;
 }
 
-.loading-content {
+.erd-loading-content {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 16px;
-}
-
-.loading-spinner {
-  position: relative;
-  width: 60px;
-  height: 60px;
-}
-
-.spinner-ring {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border: 3px solid transparent;
-  border-radius: 50%;
-  animation: spin 1.5s linear infinite;
-}
-
-.spinner-ring:nth-child(1) {
-  border-top-color: var(--mj-brand-primary);
-  animation-delay: 0s;
-}
-
-.spinner-ring:nth-child(2) {
-  border-top-color: var(--mj-status-warning);
-  animation-delay: 0.3s;
-  transform: scale(0.8);
-}
-
-.spinner-ring:nth-child(3) {
-  border-top-color: var(--mj-status-success);
-  animation-delay: 0.6s;
-  transform: scale(0.6);
-}
-
-.loading-text {
+  gap: 10px;
   color: var(--mj-text-secondary);
-  font-weight: 500;
-  text-align: center;
+  font-size: 13px;
 }
 
-/* Animations */
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
-  }
-  100% {
-    transform: rotate(360deg);
-  }
+.erd-loading-content i {
+  color: var(--mj-brand-primary);
+  font-size: 20px;
 }
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-/* ── Base node colors (override D3 presentation attributes) ── */
-:host ::ng-deep .erd-container svg .node .entity-rect {
-  fill: var(--mj-bg-surface-card);
-  stroke: var(--mj-text-primary);
-}
-
-:host ::ng-deep .erd-container svg .node .entity-header,
-:host ::ng-deep .erd-container svg .node .entity-header-bottom {
-  fill: var(--mj-brand-primary);
-}
-
-:host ::ng-deep .erd-container svg .node .entity-name {
-  fill: var(--mj-text-inverse);
-}
-
-/* Field backgrounds and text */
-:host ::ng-deep .erd-container svg .field-group.primary-key .field-bg {
-  fill: color-mix(in srgb, var(--mj-status-warning) 20%, var(--mj-bg-surface-card));
-}
-
-:host ::ng-deep .erd-container svg .field-group.primary-key .field-name,
-:host ::ng-deep .erd-container svg .field-group.primary-key .field-icon {
-  fill: var(--mj-text-primary);
-}
-
-:host ::ng-deep .erd-container svg .field-group.foreign-key .field-bg {
-  fill: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface-card));
-}
-
-:host ::ng-deep .erd-container svg .field-group.foreign-key .field-name,
-:host ::ng-deep .erd-container svg .field-group.foreign-key .field-icon {
-  fill: var(--mj-text-primary);
-}
-
-/* ── Link colors ── */
-:host ::ng-deep .erd-container svg .link-group .link-label-bg {
-  fill: var(--mj-bg-surface-card);
-  stroke: var(--mj-text-muted);
-}
-
-:host ::ng-deep .erd-container svg .link-group .link-label {
-  fill: var(--mj-text-muted);
-}
-
-:host ::ng-deep .erd-container svg .link-group .link {
-  stroke: var(--mj-text-muted);
-}
-
-:host ::ng-deep .erd-container svg #end-arrow path {
-  fill: var(--mj-text-muted);
-}
-
-/* ── Node highlighting styles ── */
-:host ::ng-deep .erd-container svg .node .entity-rect.highlighted {
-  stroke: var(--mj-status-warning) !important;
-  stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-warning) 50%, transparent));
-}
-
-:host ::ng-deep .erd-container svg .node.selected .entity-rect {
-  stroke: var(--mj-status-success) !important;
-  stroke-width: 4px !important;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mj-status-success) 50%, transparent));
-}
-
-:host ::ng-deep .erd-container svg .node.selected .entity-header {
-  fill: color-mix(in srgb, var(--mj-status-success) 85%, black) !important;
-}
-
-:host ::ng-deep .erd-container svg .node.selected .entity-header-bottom {
-  fill: color-mix(in srgb, var(--mj-status-success) 85%, black) !important;
-}
-
-:host ::ng-deep .erd-container svg .node.selected .entity-name {
-  fill: var(--mj-text-inverse) !important;
-  font-weight: bold !important;
-}
-
-/* Related/connected nodes - using tertiary accent */
-:host ::ng-deep .erd-container svg .node.relationship-connected .entity-rect.relationship-highlighted {
-  stroke: var(--mj-status-success) !important;
-  stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-success) 50%, transparent));
-}
-
-:host ::ng-deep .erd-container svg .node.relationship-connected .entity-header {
-  fill: var(--mj-status-success) !important;
-}
-
-:host ::ng-deep .erd-container svg .node.relationship-connected .entity-header-bottom {
-  fill: var(--mj-status-success) !important;
-}
-
-:host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-rect.connection-highlighted {
-  stroke: var(--mj-status-warning) !important;
-  stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-warning) 50%, transparent));
-  opacity: 0.9;
-}
-
-:host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header {
-  fill: var(--mj-status-warning) !important;
-  opacity: 0.8;
-}
-
-:host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header-bottom {
-  fill: var(--mj-status-warning) !important;
-  opacity: 0.8;
-}
-
-/* Self-referencing links — distinct green accent */
-:host ::ng-deep .erd-container svg .link-group.self-reference .link-label-bg {
-  fill: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface-card));
-  stroke: var(--mj-status-success);
-}
-
-:host ::ng-deep .erd-container svg .link-group.self-reference .link-label {
-  fill: color-mix(in srgb, var(--mj-status-success) 80%, var(--mj-text-primary));
-}
-
-/* Link styles */
-:host ::ng-deep .erd-container svg .link-group .link {
-  stroke-width: 2px;
-  transition: all 0.2s ease;
-  cursor: pointer;
-}
-
-:host ::ng-deep .erd-container svg .link-group .link:hover {
-  stroke-width: 3px;
-  stroke: var(--mj-status-success);
-  opacity: 1;
-}
-
-:host ::ng-deep .erd-container svg .link-group .link.highlighted {
-  stroke: var(--mj-status-success) !important;
-  stroke-width: 4px !important;
-  opacity: 1 !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-success) 60%, transparent));
-}
-
-:host ::ng-deep .erd-container svg .link-group .link-label {
-  font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  opacity: 0.8;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-:host ::ng-deep .erd-container svg .link-group .link-label.highlighted {
-  opacity: 1;
-  font-weight: bold;
-  fill: var(--mj-status-success);
-}
-
-:host ::ng-deep .erd-container svg .link-group.highlighted {
-  z-index: 10;
-}
-
-/* Field hover */
-:host ::ng-deep .erd-container svg .field-group .field-bg {
-  transition: fill 0.2s;
-}
-
-:host ::ng-deep .erd-container svg .field-group:hover .field-bg {
-  fill: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface-card)) !important;
-}
-

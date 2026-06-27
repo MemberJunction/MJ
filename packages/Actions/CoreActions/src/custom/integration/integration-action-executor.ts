@@ -12,6 +12,7 @@ import type {
     ListResult,
     CreateRecordContext,
     UpdateRecordContext,
+    UpsertRecordContext,
     DeleteRecordContext,
     GetRecordContext,
     SearchContext,
@@ -23,7 +24,7 @@ import type { MJIntegrationEntity, MJCompanyIntegrationEntity } from '@memberjun
 // ─── Config Types ────────────────────────────────────────────────────
 
 /** CRUD verb that an integration action can dispatch to */
-type IntegrationActionVerb = 'Get' | 'Create' | 'Update' | 'Delete' | 'Search' | 'List';
+type IntegrationActionVerb = 'Get' | 'Create' | 'Update' | 'Upsert' | 'Delete' | 'Search' | 'List';
 
 /**
  * JSON structure stored in Action.Config_ for integration-backed actions.
@@ -43,11 +44,13 @@ interface IntegrationActionConfig {
 /**
  * Single shared DriverClass for all auto-generated integration actions.
  *
- * Every integration action uses `DriverClass='IntegrationActionExecutor'` and
- * stores its routing info in the Action.Config_ JSON field. At runtime this
- * executor:
+ * Every pre-generated integration action uses `DriverClass='IntegrationActionExecutor'`
+ * and stores its routing info in the Action.Config_ JSON field. The executor also
+ * supports a **generic catch-all** mode: when Action.Config_ is empty, it reads
+ * IntegrationName/ObjectName/Verb from ActionParams instead, so a single generic
+ * action can do CRUD on ANY object without pre-generation. At runtime this executor:
  *
- *   1. Parses Config JSON from the Action entity
+ *   1. Parses Config JSON from the Action entity (or, when absent, from ActionParams)
  *   2. Resolves the correct connector via ConnectorFactory
  *   3. Resolves the CompanyIntegration for the current user/company
  *   4. Maps ActionParams → connector CRUD context (field attributes)
@@ -89,12 +92,27 @@ export class IntegrationActionExecutor extends BaseAction {
 
     // ─── Config Parsing ──────────────────────────────────────────────
 
+    /**
+     * Resolves the routing config (IntegrationName/ObjectName/Verb) for this run.
+     *
+     * Two modes, in priority order:
+     *   1. **Config_ mode** (pre-generated actions): when Action.Config_ holds JSON,
+     *      it is parsed and validated. Missing required fields are an error here —
+     *      a populated Config_ is treated as authoritative and never falls through.
+     *   2. **Generic catch-all mode**: when Action.Config_ is absent/empty, the same
+     *      three values are read (case-insensitive) from the ActionParams. This lets a
+     *      single generic action do CRUD on ANY object without pre-generation.
+     */
     private ParseConfig(params: RunActionParams): IntegrationActionConfig {
         const configJson = params.Action?.Config_;
-        if (!configJson) {
-            throw new Error('Action.Config_ is required for IntegrationActionExecutor');
+        if (configJson && configJson.trim().length > 0) {
+            return this.ParseConfigFromJson(configJson);
         }
+        return this.ParseConfigFromParams(params);
+    }
 
+    /** Parse + validate the JSON stored in Action.Config_ (pre-generated actions). */
+    private ParseConfigFromJson(configJson: string): IntegrationActionConfig {
         const parsed = JSON.parse(configJson) as Record<string, unknown>;
         const integrationName = parsed['IntegrationName'] as string | undefined;
         const objectName = parsed['ObjectName'] as string | undefined;
@@ -104,6 +122,27 @@ export class IntegrationActionExecutor extends BaseAction {
             throw new Error(
                 `Invalid Action.Config_ — required fields: IntegrationName, ObjectName, Verb. ` +
                 `Got: ${configJson}`
+            );
+        }
+
+        return { IntegrationName: integrationName, ObjectName: objectName, Verb: verb };
+    }
+
+    /**
+     * Read IntegrationName/ObjectName/Verb from ActionParams (case-insensitive),
+     * the generic catch-all path used when no Config_ is present. The error message
+     * still references Action.Config_ so existing pre-generated callers get a
+     * familiar diagnostic when nothing at all was provided.
+     */
+    private ParseConfigFromParams(params: RunActionParams): IntegrationActionConfig {
+        const integrationName = this.GetParamValue(params.Params, 'IntegrationName');
+        const objectName = this.GetParamValue(params.Params, 'ObjectName');
+        const verb = this.GetParamValue(params.Params, 'Verb') as IntegrationActionVerb | null;
+
+        if (!integrationName || !objectName || !verb) {
+            throw new Error(
+                'Action.Config_ is required for IntegrationActionExecutor, or pass ' +
+                'IntegrationName, ObjectName and Verb as ActionParams for generic invocation'
             );
         }
 
@@ -126,7 +165,7 @@ export class IntegrationActionExecutor extends BaseAction {
     ): Promise<MJIntegrationEntity> {
         const rv = new RunView();
         const result = await rv.RunView<MJIntegrationEntity>({
-            EntityName: 'Integrations',
+            EntityName: 'MJ: Integrations',
             ExtraFilter: `Name='${integrationName.replace(/'/g, "''")}'`,
             MaxRows: 1,
             ResultType: 'entity_object',
@@ -154,7 +193,7 @@ export class IntegrationActionExecutor extends BaseAction {
         // Otherwise look up the first active CompanyIntegration for this integration name
         const rv = new RunView();
         const result = await rv.RunView<MJCompanyIntegrationEntity>({
-            EntityName: 'Company Integrations',
+            EntityName: 'MJ: Company Integrations',
             ExtraFilter: `Integration='${integrationName.replace(/'/g, "''")}'`,
             MaxRows: 1,
             ResultType: 'entity_object',
@@ -174,9 +213,9 @@ export class IntegrationActionExecutor extends BaseAction {
         id: string,
         params: RunActionParams
     ): Promise<MJCompanyIntegrationEntity> {
-        const md = new Metadata();
+        const md = params.Provider ?? new Metadata();
         const entity = await md.GetEntityObject<MJCompanyIntegrationEntity>(
-            'Company Integrations', params.ContextUser
+            'MJ: Company Integrations', params.ContextUser
         );
         const loaded = await entity.Load(id);
         if (!loaded) {
@@ -200,6 +239,8 @@ export class IntegrationActionExecutor extends BaseAction {
                 return this.HandleCreate(config, connector, companyIntegration, params);
             case 'Update':
                 return this.HandleUpdate(config, connector, companyIntegration, params);
+            case 'Upsert':
+                return this.HandleUpsert(config, connector, companyIntegration, params);
             case 'Delete':
                 return this.HandleDelete(config, connector, companyIntegration, params);
             case 'Search':
@@ -286,6 +327,32 @@ export class IntegrationActionExecutor extends BaseAction {
 
         const result = await connector.UpdateRecord(ctx);
         return this.CRUDResultToActionResult(result, 'Update', config.ObjectName, params.Params);
+    }
+
+    // ─── Upsert ──────────────────────────────────────────────────────
+
+    private async HandleUpsert(
+        config: IntegrationActionConfig,
+        connector: BaseIntegrationConnector,
+        companyIntegration: MJCompanyIntegrationEntity,
+        params: RunActionParams
+    ): Promise<ActionResultSimple> {
+        if (!connector.SupportsUpsert) {
+            return this.BuildResult(false, 'NOT_SUPPORTED', `Upsert not supported for ${config.IntegrationName}`, params.Params);
+        }
+
+        const attributes = this.CollectInputAttributes(params.Params);
+        const idProperty = this.GetParamValue(params.Params, 'IDProperty');
+        const ctx: UpsertRecordContext = {
+            CompanyIntegration: companyIntegration,
+            ObjectName: config.ObjectName,
+            ContextUser: params.ContextUser,
+            Attributes: attributes,
+            IDProperty: idProperty ?? undefined,
+        };
+
+        const result = await connector.Upsert(ctx);
+        return this.CRUDResultToActionResult(result, 'Upsert', config.ObjectName, params.Params);
     }
 
     // ─── Delete ──────────────────────────────────────────────────────
@@ -421,11 +488,13 @@ export class IntegrationActionExecutor extends BaseAction {
 
     /**
      * Collects all Input parameters (excluding system params like ExternalID, CompanyIntegrationID,
-     * PageSize, Page, Cursor, Sort) into a key-value object suitable for CRUD Attributes.
+     * PageSize, Page, Cursor, Sort, IDProperty) into a key-value object suitable for CRUD Attributes.
      */
     private CollectInputAttributes(actionParams: ActionParam[]): Record<string, unknown> {
         const systemParams = new Set([
-            'externalid', 'companyintegrationid', 'pagesize', 'page', 'cursor', 'sort',
+            'externalid', 'companyintegrationid', 'pagesize', 'page', 'cursor', 'sort', 'idproperty',
+            // Generic catch-all routing params — never treated as record attributes.
+            'integrationname', 'objectname', 'verb',
         ]);
 
         const attributes: Record<string, unknown> = {};

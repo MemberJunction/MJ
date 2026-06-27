@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
+import { DataSnapshot } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 
@@ -19,11 +20,12 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
   template: `
     <div class="docx-viewer">
       <mj-file-artifact-toolbar
-        [fileName]="artifactVersion?.FileName || 'document.docx'"
+        [fileName]="artifactVersion.FileName || 'document.docx'"
         [isDownloading]="isDownloading"
         [showPrint]="true"
         (download)="onDownload()"
-        (print)="onPrint()">
+        (print)="onPrint()"
+      >
       </mj-file-artifact-toolbar>
 
       <div class="docx-viewer__body">
@@ -43,80 +45,81 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
       </div>
     </div>
   `,
-  styles: [`
-    .docx-viewer {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface);
-    }
+  styles: [
+    `
+      .docx-viewer {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: var(--mj-bg-surface);
+      }
 
-    .docx-viewer__body {
-      flex: 1;
-      min-height: 0;
-      overflow: auto;
-    }
+      .docx-viewer__body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
 
-    .docx-viewer__state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      height: 100%;
-      color: var(--mj-text-muted);
-      font-size: 14px;
-    }
+      .docx-viewer__state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        height: 100%;
+        color: var(--mj-text-muted);
+        font-size: 14px;
+      }
 
-    .docx-viewer__state--error {
-      color: var(--mj-status-error-text);
-    }
+      .docx-viewer__state--error {
+        color: var(--mj-status-error-text);
+      }
 
-    .docx-viewer__content {
-      padding: 32px 48px;
-      max-width: 900px;
-      margin: 0 auto;
-      color: var(--mj-text-primary);
-      font-size: 14px;
-      line-height: 1.7;
-    }
+      .docx-viewer__content {
+        padding: 32px 48px;
+        max-width: 900px;
+        margin: 0 auto;
+        color: var(--mj-text-primary);
+        font-size: 14px;
+        line-height: 1.7;
+      }
 
-    /* Normalize headings produced by mammoth */
-    .docx-viewer__content :is(h1, h2, h3, h4, h5, h6) {
-      color: var(--mj-text-primary);
-      margin-top: 1.5em;
-      margin-bottom: 0.5em;
-    }
+      /* Normalize headings produced by mammoth */
+      .docx-viewer__content :is(h1, h2, h3, h4, h5, h6) {
+        color: var(--mj-text-primary);
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
+      }
 
-    .docx-viewer__content table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 1em 0;
-    }
+      .docx-viewer__content table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 1em 0;
+      }
 
-    .docx-viewer__content :is(td, th) {
-      border: 1px solid var(--mj-border-default);
-      padding: 6px 10px;
-    }
+      .docx-viewer__content :is(td, th) {
+        border: 1px solid var(--mj-border-default);
+        padding: 6px 10px;
+      }
 
-    .docx-viewer__content th {
-      background: var(--mj-bg-surface-card);
-      font-weight: 600;
-    }
+      .docx-viewer__content th {
+        background: var(--mj-bg-surface-card);
+        font-weight: 600;
+      }
 
-    .docx-viewer__content a {
-      color: var(--mj-text-link);
-    }
+      .docx-viewer__content a {
+        color: var(--mj-text-link);
+      }
 
-    .docx-viewer__content img {
-      max-width: 100%;
-      height: auto;
-    }
-  `]
+      .docx-viewer__content img {
+        max-width: 100%;
+        height: auto;
+      }
+    `,
+  ],
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'DocxArtifactViewerPlugin')
 export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
-
   public isLoading = true;
   public isDownloading = false;
   public errorMessage = '';
@@ -134,7 +137,9 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     super();
   }
 
-  public override get hasDisplayContent(): boolean { return true; }
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
 
   async ngOnInit(): Promise<void> {
     await this.loadDocument();
@@ -147,10 +152,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.isDownloading = true;
     this.cdr.markForCheck();
     try {
-      await this.triggerBrowserDownload(
-        this.downloadUrl,
-        this.artifactVersion?.FileName || 'document.docx',
-      );
+      await this.triggerBrowserDownload(this.downloadUrl, this.artifactVersion?.FileName || 'document.docx');
     } finally {
       this.isDownloading = false;
       this.cdr.markForCheck();
@@ -190,7 +192,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Create an object URL for download support
         this.downloadUrl = this.fileService.dataUrlToObjectUrl(
           content,
-          this.artifactVersion.MimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          this.artifactVersion.MimeType || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         );
       }
 
@@ -210,7 +212,7 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     const result = await mammoth.convertToHtml({ arrayBuffer });
     if (result.messages?.length) {
       // Log warnings from mammoth (e.g. unsupported features) without breaking display
-      result.messages.forEach(m => console.warn('[DocxViewer] mammoth:', m.message));
+      result.messages.forEach((m) => console.warn('[DocxViewer] mammoth:', m.message));
     }
     return result.value;
   }
@@ -259,5 +261,15 @@ export class DocxArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.cdr.markForCheck();
   }
 
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    const snap = new DataSnapshot();
+    snap.title = this.getDisplayTitle() ?? undefined;
+    snap.interpretation = 'Word document (.docx).';
+    snap.custom = {
+      fileName: this.artifactVersion.FileName ?? undefined,
+      mimeType: this.artifactVersion.MimeType ?? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      contentMode: this.artifactVersion.ContentMode,
+    };
+    return snap;
+  }
 }
-

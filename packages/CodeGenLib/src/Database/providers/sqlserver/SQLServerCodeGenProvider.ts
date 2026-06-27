@@ -5,12 +5,21 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { dbDatabase } from '../../../Config/config';
-import { MSSQLConnection } from '../../../Config/db-connection';
-import { logError, logWarning } from '../../../Misc/status_logging';
+import { dbDatabase, mj_core_schema } from '../../../Config/config';
+import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
+import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import {
+    SQLServerDataProvider,
+    SQLServerProviderConfigData,
+    UserCache,
+    setupSQLServerClient,
+} from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerCodeGenConnection } from './SQLServerCodeGenConnection';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -21,9 +30,13 @@ const ssDialect = new SQLServerDialect();
  * Generates SQL Server-native DDL for views, stored procedures, triggers, indexes,
  * full-text search, permissions, and other database objects.
  *
- * This provider extracts the SQL Server-specific generation logic that was previously
- * hardcoded in SQLCodeGenBase, enabling the orchestrator to be database-agnostic.
+ * Registered with `MJGlobal.ClassFactory` against the canonical `'sqlserver'`
+ * platform key — `SQLCodeGenBase` resolves this provider via
+ * `ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)`.
+ * Downstream packages can subclass and re-register with higher priority to
+ * override codegen behavior — same extension hook every other MJ class uses.
  */
+@RegisterClass(CodeGenDatabaseProvider, 'sqlserver')
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get Dialect(): SQLDialect {
@@ -33,6 +46,42 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
+    }
+
+    /**
+     * SQL Server implementation of {@link CodeGenDatabaseProvider.SetupDataSource}.
+     *
+     * Opens (or reuses) the module-cached mssql pool via `MSSQLConnection()`,
+     * wires up the SQL Server metadata provider, builds the dialect-aware
+     * connection, and resolves the audit user via `UserCache.Refresh()` —
+     * the canonical pattern that has lived in `runCodeGen.setupSQLServerDataSource()`
+     * since the multi-provider work started. It now sits behind the
+     * `CodeGenDatabaseProvider` factory so adding a third platform doesn't
+     * mean touching the orchestrator.
+     */
+    async SetupDataSource(): Promise<DataSourceResult> {
+        startSpinner('Initializing database connection...');
+        const pool = await MSSQLConnection();
+        const config = new SQLServerProviderConfigData(pool, mj_core_schema());
+        const provider: SQLServerDataProvider = await setupSQLServerClient(config);
+        const conn = new SQLServerCodeGenConnection(pool);
+
+        // `getSqlConfig()` returns the config that was built lazily by
+        // MSSQLConnection() above. The non-null assertion is safe because the
+        // call to MSSQLConnection on the line above is what guarantees the
+        // accessor has a value to return.
+        const cfg = getSqlConfig()!;
+        let connectionInfo = cfg.server;
+        if (cfg.port) connectionInfo += ':' + cfg.port;
+        if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
+        connectionInfo += '/' + cfg.database;
+
+        await UserCache.Instance.Refresh(pool);
+        const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');
+        const currentUser = userMatch ?? UserCache.Users[0];
+
+        succeedSpinner('SQL Server connection initialized: ' + connectionInfo);
+        return { provider, connection: conn, currentUser, connectionInfo };
     }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
@@ -129,21 +178,28 @@ ${whereClause}GO`;
             const hasDefaultValue = firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0;
 
             if (hasDefaultValue) {
+                // UUID with DB default (e.g. NEWSEQUENTIALID()): two-branch INSERT —
+                // one with caller-supplied PK, one letting the DB fill it in.
+                // When there are no non-PK writable columns, omit the comma after the PK.
+                const nonPkCols = this.generateInsertFieldString(entity, entity.Fields, '', true);
+                const nonPkVals = this.generateInsertFieldString(entity, entity.Fields, '@', true);
+                const hasNonPkFields = nonPkCols.trim().length > 0;
+                const colSeparator = hasNonPkFields ? ',\n                ' : '';
+                const valSeparator = hasNonPkFields ? ',\n                ' : '';
+
                 preInsertCode = `DECLARE @InsertedRow TABLE ([${firstKey.Name}] UNIQUEIDENTIFIER)
-    
+
     IF @${firstKey.Name} IS NOT NULL
     BEGIN
         -- User provided a value, use it
         INSERT INTO [${entity.SchemaName}].[${entity.BaseTable}]
             (
-                [${firstKey.Name}],
-                ${this.generateInsertFieldString(entity, entity.Fields, '', true)}
+                [${firstKey.Name}]${colSeparator}${nonPkCols}
             )
         OUTPUT INSERTED.[${firstKey.Name}] INTO @InsertedRow
         VALUES
             (
-                @${firstKey.Name},
-                ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}
+                @${firstKey.Name}${valSeparator}${nonPkVals}
             )
     END
     ELSE
@@ -151,12 +207,12 @@ ${whereClause}GO`;
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
         INSERT INTO [${entity.SchemaName}].[${entity.BaseTable}]
             (
-                ${this.generateInsertFieldString(entity, entity.Fields, '', true)}
+                ${hasNonPkFields ? nonPkCols : `[${firstKey.Name}]`}
             )
         OUTPUT INSERTED.[${firstKey.Name}] INTO @InsertedRow
         VALUES
             (
-                ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}
+                ${hasNonPkFields ? nonPkVals : `DEFAULT`}
             )
     END`;
 
@@ -165,13 +221,31 @@ ${whereClause}GO`;
                 outputCode = '';
                 selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = (SELECT [${firstKey.Name}] FROM @InsertedRow)`;
             } else {
+                // UUID without DB default: generate via ISNULL(@PK, NEWID()).
+                // PK is added via additionalFieldList; no leading comma — the
+                // insertBlock logic below handles the separator.
                 preInsertCode = `DECLARE @ActualID UNIQUEIDENTIFIER = ISNULL(@${firstKey.Name}, NEWID())`;
-                additionalFieldList = ',\n                [' + firstKey.Name + ']';
-                additionalValueList = ',\n                @ActualID';
+                additionalFieldList = '[' + firstKey.Name + ']';
+                additionalValueList = '@ActualID';
                 outputCode = '';
                 selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
             }
         } else {
+            // Composite PKs or single non-UUID PKs (e.g. string `Code` keys): the caller MUST
+            // supply the PK on INSERT (no IDENTITY, no UUID-with-default). Add ALL PKs to the
+            // additionalFieldList so they appear in the INSERT, and call generateInsertFieldString
+            // below with excludePrimaryKey=true so it does NOT also emit them — otherwise the
+            // INSERT would list the PK columns twice and SQL Server raises "The column name 'X'
+            // is specified more than once". This pairs with the excludePrimaryKey=true argument
+            // at the call sites at the bottom of this method.
+            const pkColumns: string[] = [];
+            const pkValues: string[] = [];
+            for (const k of entity.PrimaryKeys) {
+                pkColumns.push('[' + k.Name + ']');
+                pkValues.push('@' + k.CodeName);
+            }
+            additionalFieldList = pkColumns.join(',\n                ');
+            additionalValueList = pkValues.join(',\n                ');
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
             for (const k of entity.PrimaryKeys) {
@@ -179,6 +253,42 @@ ${whereClause}GO`;
                 selectInsertedRecord += `[${k.Name}] = @${k.CodeName}`;
                 isFirst = false;
             }
+        }
+
+        // Build the INSERT column and value lists. For the non-hasDefaultValue branches,
+        // additionalFieldList holds PK columns (without leading commas) and
+        // generateInsertFieldString (with excludePrimaryKey=true) holds non-PK columns.
+        // When the non-PK list is empty (PK-only entities), we must not emit a stray comma.
+        let insertBlock = '';
+        if (!preInsertCode.includes('INSERT INTO')) {
+            const nonPkColumns = this.generateInsertFieldString(entity, entity.Fields, '', true);
+            const nonPkValues = this.generateInsertFieldString(entity, entity.Fields, '@', true);
+            const hasNonPkFields = nonPkColumns.trim().length > 0;
+            const hasAdditionalFields = additionalFieldList.trim().length > 0;
+
+            let columnList: string;
+            let valueList: string;
+            if (hasNonPkFields && hasAdditionalFields) {
+                columnList = `${nonPkColumns},\n                ${additionalFieldList}`;
+                valueList = `${nonPkValues},\n                ${additionalValueList}`;
+            } else if (hasAdditionalFields) {
+                columnList = additionalFieldList;
+                valueList = additionalValueList;
+            } else {
+                columnList = nonPkColumns;
+                valueList = nonPkValues;
+            }
+
+            insertBlock = `
+    INSERT INTO
+    [${entity.SchemaName}].[${entity.BaseTable}]
+        (
+            ${columnList}
+        )
+    ${outputCode}VALUES
+        (
+            ${valueList}
+        )`;
         }
 
         return `
@@ -194,16 +304,7 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    ${preInsertCode}${preInsertCode.includes('INSERT INTO') ? '' : `
-    INSERT INTO
-    [${entity.SchemaName}].[${entity.BaseTable}]
-        (
-            ${this.generateInsertFieldString(entity, entity.Fields, '')}${additionalFieldList}
-        )
-    ${outputCode}VALUES
-        (
-            ${this.generateInsertFieldString(entity, entity.Fields, '@')}${additionalValueList}
-        )`}
+    ${preInsertCode}${insertBlock}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
 END
@@ -225,6 +326,7 @@ GO${permissions}
         const permissions = this.generateCRUDPermissions(entity, spName, 'Update');
         const hasUpdatedAtField = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
         const updatedAtTrigger = hasUpdatedAtField ? this.generateTimestampTrigger(entity) : '';
+        const updateFields = this.generateUpdateFieldString(entity.Fields);
         const selectUpdatedRecord = `SELECT
                                         *
                                     FROM
@@ -232,6 +334,29 @@ GO${permissions}
                                     WHERE
                                         ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
                                     `;
+
+        // PK-only entities (e.g. junction tables with only PK + __mj timestamp columns)
+        // have no updatable fields. Generate a no-op SP that just returns the existing row
+        // rather than emitting an invalid UPDATE with an empty SET clause.
+        const hasUpdatableFields = updateFields.trim().length > 0;
+
+        const spBody = hasUpdatableFields
+            ? `    UPDATE
+        [${entity.SchemaName}].[${entity.BaseTable}]
+    SET
+        ${updateFields}
+    WHERE
+        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        ${selectUpdatedRecord}`
+            : `    -- No updatable fields (PK-only entity, e.g. junction table). Return the existing row.
+    ${selectUpdatedRecord}`;
 
         return `
 ------------------------------------------------------------
@@ -246,20 +371,7 @@ CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE
-        [${entity.SchemaName}].[${entity.BaseTable}]
-    SET
-        ${this.generateUpdateFieldString(entity.Fields)}
-    WHERE
-        ${entity.PrimaryKeys.map(k => `[${k.Name}] = @${k.CodeName}`).join(' AND ')}
-
-    -- Check if the update was successful
-    IF @@ROWCOUNT = 0
-        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE 1=0
-    ELSE
-        -- Return the updated record so the caller can see the updated values and any calculated fields
-        ${selectUpdatedRecord}
+${spBody}
 END
 GO
 ${permissions}
@@ -716,7 +828,7 @@ GO
      * Includes primary key fields and all updateable fields, with proper
      * DECLARE statements, SELECT fields, FETCH INTO variables, and SP parameters.
      */
-    private buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo, prefix: string = ''): {
+    private buildUpdateCursorParameters(entity: EntityInfo, fkField: EntityFieldInfo, prefix: string = ''): {
         declarations: string,
         selectFields: string,
         fetchInto: string,
@@ -759,8 +871,14 @@ GO
 
                 if (allParams !== '')
                     allParams += ', ';
-                // Use named parameters: @ParamName = @VariableValue
-                allParams += `@${ef.CodeName} = @${varPrefix}_${ef.CodeName}`;
+
+                // Use the centralized buildExecParamForField() to generate EXEC
+                // params. For the FK field being cleared, pass clearValue=true so
+                // the tolerant update SP receives @FK_Clear = 1 and actually sets
+                // the column to NULL (instead of treating NULL as "leave unchanged").
+                const isFkBeingCleared = ef.Name === fkField.Name;
+                const paramParts = this.buildExecParamForField(ef, `@${varPrefix}_${ef.CodeName}`, isFkBeingCleared);
+                allParams += paramParts.join(', ');
             }
         }
 
@@ -790,120 +908,6 @@ GO
     }
 
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
-
-    /**
-     * Builds the SQL Server parameter declaration list for a CRUD stored procedure.
-     * Produces `@ParamName TYPE` entries separated by commas. Filters fields based on
-     * update/create context: includes primary keys only on updates (or non-auto-increment
-     * creates), excludes virtual and special date fields, and adds `= NULL` default values
-     * for optional primary keys on create and for non-nullable fields with database defaults.
-     */
-    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
-        let sOutput = '';
-        let isFirst = true;
-        for (const ef of entityFields) {
-            const autoGeneratedPrimaryKey = ef.AutoIncrement;
-            if (
-                (ef.AllowUpdateAPI || (ef.IsPrimaryKey && isUpdate) || (ef.IsPrimaryKey && !autoGeneratedPrimaryKey && !isUpdate)) &&
-                !ef.IsVirtual &&
-                (!ef.IsPrimaryKey || !autoGeneratedPrimaryKey || isUpdate) &&
-                !ef.IsSpecialDateField
-            ) {
-                if (!isFirst) sOutput += ',\n    ';
-                else isFirst = false;
-
-                let defaultParamValue = '';
-                if (!isUpdate && ef.IsPrimaryKey && !ef.AutoIncrement) {
-                    defaultParamValue = ' = NULL';
-                } else if (!isUpdate && ef.HasDefaultValue && !ef.AllowsNull) {
-                    defaultParamValue = ' = NULL';
-                }
-                sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;
-            }
-        }
-        return sOutput;
-    }
-
-    /**
-     * Generates either the column-name list or the value-expression list for an INSERT
-     * statement, depending on the `prefix` parameter:
-     *
-     * - **Empty prefix** (`''`): Produces bracketed column names (e.g., `[Name], [Email]`).
-     * - **`'@'` prefix**: Produces parameter references with smart default handling:
-     *   - Special date fields emit `GETUTCDATE()` for created/updated-at, `NULL` for deleted-at.
-     *   - UNIQUEIDENTIFIER fields with defaults use a `CASE` expression that detects the
-     *     empty GUID sentinel (`00000000-...`) and falls back to the database default.
-     *   - Other non-nullable fields with defaults are wrapped in `ISNULL(@Param, default)`.
-     *
-     * Skips auto-increment, virtual, and non-updatable fields. Optionally excludes the
-     * primary key column (used by the two-branch GUID insert pattern in `generateCRUDCreate`).
-     */
-    generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
-        const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement;
-        let sOutput = '';
-        let isFirst = true;
-        for (const ef of entityFields) {
-            if (
-                (excludePrimaryKey && ef.IsPrimaryKey) ||
-                (ef.IsPrimaryKey && autoGeneratedPrimaryKey) ||
-                ef.IsVirtual ||
-                !ef.AllowUpdateAPI ||
-                ef.AutoIncrement
-            ) {
-                continue;
-            }
-
-            if (!isFirst) sOutput += ',\n                ';
-            else isFirst = false;
-
-            if (prefix !== '' && ef.IsSpecialDateField) {
-                if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
-                    sOutput += `GETUTCDATE()`;
-                else
-                    sOutput += `NULL`;
-            } else if (prefix && prefix !== '' && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue && !ef.AllowsNull) {
-                const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-                sOutput += `CASE @${ef.CodeName} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(@${ef.CodeName}, ${formattedDefault}) END`;
-            } else {
-                let sVal = '';
-                if (!prefix || prefix.length === 0) {
-                    sVal = '[' + ef.Name + ']';
-                } else {
-                    sVal = prefix + ef.CodeName;
-                    if (ef.HasDefaultValue && !ef.AllowsNull) {
-                        const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-                        if (ef.IsUniqueIdentifier) {
-                            sVal = `CASE ${sVal} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(${sVal}, ${formattedDefault}) END`;
-                        } else {
-                            sVal = `ISNULL(${sVal}, ${formattedDefault})`;
-                        }
-                    }
-                }
-                sOutput += sVal;
-            }
-        }
-        return sOutput;
-    }
-
-    /** @inheritdoc */
-    generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
-        let sOutput = '';
-        let isFirst = true;
-        for (const ef of entityFields) {
-            if (
-                !ef.IsPrimaryKey &&
-                !ef.IsVirtual &&
-                ef.AllowUpdateAPI &&
-                !ef.AutoIncrement &&
-                !ef.IsSpecialDateField
-            ) {
-                if (!isFirst) sOutput += ',\n        ';
-                else isFirst = false;
-                sOutput += `[${ef.Name}] = @${ef.CodeName}`;
-            }
-        }
-        return sOutput;
-    }
 
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
 
@@ -1360,9 +1364,9 @@ ORDER BY
      *    PK, and unique key detection.
      * 3. **Cleanup**: Drops the temp tables.
      */
-    getPendingEntityFieldsSQL(mjCoreSchema: string): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
-            this.buildPendingFieldsMainQuery(mjCoreSchema) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs) +
             this.buildPendingFieldsCleanup();
     }
 
@@ -1398,7 +1402,13 @@ FROM [${schema}].[vwTableUniqueKeys];
      * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
      * CTE to deduplicate results.
      */
-    private buildPendingFieldsMainQuery(schema: string): string {
+    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[]): string {
+        // When scoped, narrow the scan to specific entities. SQL injection isn't a concern
+        // here — entityIDs are MJ-internal UUIDs from the metadata cache, not user input —
+        // but we quote each ID anyway for SQL Server's UUID literal syntax.
+        const scopeFilter = entityIDs && entityIDs.length > 0
+            ? `AND sf.EntityID IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
         return `WITH MaxSequences AS (
    SELECT
       EntityID,
@@ -1426,6 +1436,7 @@ NumberedRows AS (
                                    sf.FieldName = '${EntityInfo.DeletedAtFieldName}' OR
                                    pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
+      sf.IsComputed,
       e.RelationshipDefaultDisplayType,
       e.Name EntityName,
       re.ID RelatedEntityID,
@@ -1457,6 +1468,7 @@ NumberedRows AS (
       ON e.BaseTable = uk.TableName AND sf.FieldName = uk.ColumnName AND e.SchemaName = uk.SchemaName
    WHERE
       EntityFieldID IS NULL
+      ${scopeFilter}
    )
    SELECT *
    FROM NumberedRows

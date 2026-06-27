@@ -134,5 +134,28 @@
       "lastModified": "2025-12-30T23:07:33.547Z",
       "checksum": "a76eb179f00dcf192c1a97ce2de365403f7e47a77b90a1ef7c475ae83f27d8b2"
     }
+  },
+  {
+    "fields": {
+      "Name": "Realtime",
+      "Description": "Real-time agent type — a first-class peer of Loop and Flow that drives a streaming, full-duplex BaseRealtimeModel session (voice today, video later) instead of an iterative reasoning loop. The model owns the listen-reason-speak loop; the agent delegates real work back to async (Loop/Flow) agents via tool calls. The first agent of this type is the Voice Co-Agent, which voices on behalf of any target agent. The system prompt is per-agent (assembled at session start), so there is no type-level SystemPromptID.",
+      "SystemPromptID": null,
+      "IsActive": true,
+      "AgentPromptPlaceholder": null,
+      "DriverClass": "RealtimeAgentType",
+      "UIFormSectionKey": null,
+      "UIFormKey": null,
+      "UIFormSectionExpandedByDefault": false,
+      "ConfigSchema": "@file:schemas/realtime-type-config.schema.json",
+      "DefaultConfiguration": "@file:schemas/realtime-type-default-config.json"
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "29CA70B4-A097-474F-A5CE-3522ADD6407F"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:06.205Z",
+      "checksum": "7fcc033cec23bffa4fec86c66a960d676475d8a76a19fab238fe2be7595eb8ee"
+    }
   }
 ]

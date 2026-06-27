@@ -11,8 +11,10 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, RunQueryResult, Metadata, QueryInfo } from '@memberjunction/core';
+import { RunQuery, RunQueryParams, RunQueryResult } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -56,7 +58,7 @@ import {
     styleUrls: ['./query-viewer.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class QueryViewerComponent implements OnInit, OnDestroy {
+export class QueryViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -167,7 +169,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     // Internal State
     // ========================================
 
-    public QueryInfo: QueryInfo | null = null;
+    public QueryInfo: MJQueryEntityExtended | null = null;
     public QueryData: Record<string, unknown>[] = [];
     public IsLoading: boolean = false;
     public ShowParamsPanel: boolean = false;
@@ -183,11 +185,10 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     public QueryTotalRowCount: number = 0;
     public CurrentPageNumber: number = 1;
 
-    private metadata = new Metadata();
     private destroy$ = new Subject<void>();
     private userInfoEngine = UserInfoEngine.Instance;
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnInit(): void {}
 
@@ -219,7 +220,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         }
 
         // Load query info from metadata
-        this.QueryInfo = this.metadata.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
+        this.QueryInfo = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
 
         if (!this.QueryInfo) {
             this.LastError = `Query with ID ${this._queryId} not found`;
@@ -231,8 +232,8 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         await this.loadSavedState();
 
         // Determine if we should show params or auto-run
-        const hasParams = this.QueryInfo.Parameters && this.QueryInfo.Parameters.length > 0;
-        const hasRequiredParams = hasParams && this.QueryInfo.Parameters.some(p => p.IsRequired);
+        const hasParams = this.QueryInfo.QueryParameters && this.QueryInfo.QueryParameters.length > 0;
+        const hasRequiredParams = hasParams && this.QueryInfo.QueryParameters.some(p => p.IsRequired);
 
         if (hasParams) {
             // Check if all required params have saved values
@@ -256,7 +257,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     private canAutoRunWithSavedParams(): boolean {
         if (!this.QueryInfo) return false;
 
-        const requiredParams = this.QueryInfo.Parameters?.filter(p => p.IsRequired) || [];
+        const requiredParams = this.QueryInfo.QueryParameters?.filter(p => p.IsRequired) || [];
 
         for (const param of requiredParams) {
             const savedValue = this.SavedParams[param.Name];
@@ -442,7 +443,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     public OnRefreshRequest(): void {
         if (this.HasRun) {
             this.RunQuery(this.SavedParams, this.CurrentPageNumber);
-        } else if (this.QueryInfo?.Parameters?.length) {
+        } else if (this.QueryInfo?.QueryParameters?.length) {
             this.ShowParamsPanel = true;
             this.cdr.markForCheck();
         } else {
@@ -482,7 +483,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     }
 
     public get HasParameters(): boolean {
-        return (this.QueryInfo?.Parameters?.length || 0) > 0;
+        return (this.QueryInfo?.QueryParameters?.length || 0) > 0;
     }
 
     /**
@@ -492,10 +493,10 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
      * array syntax, and parses cleanly.
      */
     private normalizeArrayParams(params: QueryParameterValues): QueryParameterValues {
-        if (!this.QueryInfo?.Parameters?.length) return params;
+        if (!this.QueryInfo?.QueryParameters?.length) return params;
 
         const result = { ...params };
-        for (const paramDef of this.QueryInfo.Parameters) {
+        for (const paramDef of this.QueryInfo.QueryParameters) {
             if (paramDef.Type !== 'array' || !(paramDef.Name in result)) continue;
 
             const value = result[paramDef.Name];

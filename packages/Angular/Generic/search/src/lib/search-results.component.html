@@ -3,10 +3,9 @@
         <mj-loading text="Searching..." size="medium"></mj-loading>
     </div>
 } @else if ((DisplayMode === 'flat' ? FlatResults.length : ResultGroups.length) === 0 && TotalCount === 0) {
-    <div class="results-empty">
-        <i class="fa-solid fa-search results-empty-icon"></i>
-        <p class="results-empty-text">No results to display</p>
-    </div>
+    <mj-empty-state
+        Variant="no-results"
+        Title="No results to display" />
 } @else {
     <!-- Results summary -->
     @if (ShowSummary) {
@@ -30,7 +29,7 @@
         @if (TotalPages > 1) {
             <div class="results-pager">
                 <button class="pager-btn pager-prev" [disabled]="CurrentPage === 1"
-                        (click)="GoToPage(CurrentPage - 1)">
+                        (click)="GoToPage(CurrentPage - 1)" aria-label="Previous page">
                     <i class="fa-solid fa-chevron-left"></i>
                 </button>
                 @for (p of PageNumbers; track $index) {
@@ -42,7 +41,7 @@
                     }
                 }
                 <button class="pager-btn pager-next" [disabled]="CurrentPage === TotalPages"
-                        (click)="GoToPage(CurrentPage + 1)">
+                        (click)="GoToPage(CurrentPage + 1)" aria-label="Next page">
                     <i class="fa-solid fa-chevron-right"></i>
                 </button>
             </div>
@@ -108,10 +107,11 @@
             }
             <div class="result-card-actions">
                 <button class="result-open-btn" (click)="OnOpenRecord(result, $event)"
-                        [title]="result.ResultType === 'storage-file' ? 'Open file' : 'Open record'">
+                        [title]="result.ResultType === 'storage-file' ? 'Open file' : 'Open record'"
+                        [attr.aria-label]="result.ResultType === 'storage-file' ? 'Open file' : 'Open record'">
                     <i [class]="result.ResultType === 'storage-file' ? 'fa-solid fa-external-link' : 'fa-solid fa-arrow-up-right-from-square'"></i>
                 </button>
-                <button class="result-expand-btn" (click)="ToggleExpand(result, $event)" title="Expand details">
+                <button class="result-expand-btn" (click)="ToggleExpand(result, $event)" title="Expand details" aria-label="Expand details">
                     <i class="fa-solid" [class.fa-chevron-down]="!IsExpanded(result.ID)"
                        [class.fa-chevron-up]="IsExpanded(result.ID)"></i>
                 </button>

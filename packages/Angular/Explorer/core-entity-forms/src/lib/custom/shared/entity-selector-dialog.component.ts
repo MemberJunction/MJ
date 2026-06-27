@@ -3,6 +3,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface EntitySelectorConfig {
     entityName: string;
     title: string;
@@ -40,15 +41,14 @@ export interface EntitySelectorConfig {
                 <p>Loading {{ config.entityName }}...</p>
               </div>
             }
-        
+
             <!-- Entity List -->
             @if (!isLoading) {
               <div class="entity-list-container">
                 @if (filteredEntities.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-inbox"></i>
-                    <p>No {{ config.entityName }} found</p>
-                  </div>
+                  <mj-empty-state class="empty-state"
+                    [Variant]="searchText ? 'no-results' : 'empty'"
+                    [Title]="EmptyStateTitle" />
                 } @else {
                   <div class="entity-list">
                     @for (entity of filteredEntities; track entity.ID) {
@@ -148,8 +148,7 @@ export interface EntitySelectorConfig {
             padding-left: 32px;
         }
 
-        .loading-state,
-        .empty-state {
+        .loading-state {
             flex: 1;
             display: flex;
             flex-direction: column;
@@ -159,10 +158,13 @@ export interface EntitySelectorConfig {
             gap: 12px;
         }
 
-        .loading-state i,
-        .empty-state i {
+        .loading-state i {
             font-size: 48px;
             color: var(--mj-border-default);
+        }
+
+        mj-empty-state.empty-state {
+            flex: 1;
         }
 
         .entity-list-container {
@@ -192,7 +194,7 @@ export interface EntitySelectorConfig {
 
         .entity-item:hover {
             border-color: var(--mj-brand-primary);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: var(--mj-shadow-md);
         }
 
         .entity-item.selected {
@@ -251,12 +253,12 @@ export interface EntitySelectorConfig {
         }
 
         .status-badge.active {
-            background: #d4edda;
-            color: #28a745;
+            background: var(--mj-status-success-bg);
+            color: var(--mj-status-success-text);
         }
     `]
 })
-export class EntitySelectorDialogComponent implements OnInit {
+export class EntitySelectorDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() config!: EntitySelectorConfig;
 
     public entities: any[] = [];
@@ -269,7 +271,15 @@ export class EntitySelectorDialogComponent implements OnInit {
 
     constructor(
         private sharedService: SharedService
-    ) {}
+    ) {
+    super();}
+
+    /** Title for the empty/no-results placeholder, echoing the active search term when narrowed. */
+    public get EmptyStateTitle(): string {
+        return this.searchText
+            ? `No ${this.config.entityName} match "${this.searchText}"`
+            : `No ${this.config.entityName} found`;
+    }
 
     async ngOnInit() {
         await this.loadEntities();
@@ -278,7 +288,7 @@ export class EntitySelectorDialogComponent implements OnInit {
     async loadEntities() {
         this.isLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
                 EntityName: this.config.entityName,
                 ExtraFilter: this.config.filters,

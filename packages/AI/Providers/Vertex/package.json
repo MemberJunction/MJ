@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-vertex",
   "type": "module",
-  "version": "5.27.1",
+  "version": "5.43.0",
   "description": "MemberJunction Wrapper for Google Vertex AI Models",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,10 +23,10 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@google/genai": "^1.40.0",
-    "@memberjunction/ai": "5.27.1",
-    "@memberjunction/ai-gemini": "5.27.1",
-    "@memberjunction/global": "5.27.1"
+    "@google/genai": "^2.8.0",
+    "@memberjunction/ai": "5.43.0",
+    "@memberjunction/ai-gemini": "5.43.0",
+    "@memberjunction/global": "5.43.0"
   },
   "repository": {
     "type": "git",

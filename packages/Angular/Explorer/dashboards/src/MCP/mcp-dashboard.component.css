@@ -1,224 +1,17 @@
-/* MCP Dashboard - Header + Filter Panel Layout */
-.mcp-dashboard {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: var(--mj-bg-page);
-    overflow: hidden;
-}
+/* MCP Dashboard - Header + Filter Panel Layout (outer shell now provided by <mj-page-layout>) */
+
+/* Tab navigation now provided by <mj-tab-nav>. */
 
 /* ========================================
-   Dashboard Header
+   Main Content Area
    ======================================== */
-.dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 20px;
-    background: var(--mj-bg-surface);
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-    gap: 16px;
-}
-
-.header-info {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.dashboard-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.dashboard-title i {
-    color: var(--mj-brand-primary);
-    font-size: 20px;
-}
-
-.filter-toggle-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-    transition: all 0.2s ease;
-}
-
-.filter-toggle-btn:hover {
-    background: var(--mj-bg-surface-sunken);
-    border-color: var(--mj-border-strong);
-    color: var(--mj-text-primary);
-}
-
-.filter-toggle-btn i {
-    font-size: 12px;
-}
-
-.item-count {
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-    padding: 4px 10px;
-    background: var(--mj-bg-surface-card);
-    border-radius: 4px;
-}
-
-.header-controls {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-/* Tab Navigation */
-.tab-nav {
-    display: flex;
-    gap: 4px;
-    background: var(--mj-bg-surface-card);
-    padding: 4px;
-    border-radius: 8px;
-}
-
-.tab-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    transition: all 0.2s ease;
-}
-
-.tab-btn:hover {
-    background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
-    color: var(--mj-text-primary);
-}
-
-.tab-btn.active {
-    background: var(--mj-bg-surface);
-    color: var(--mj-brand-primary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.tab-btn i {
-    font-size: 14px;
-}
-
-.tab-label {
-    font-weight: 500;
-}
-
-.tab-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 18px;
-    padding: 0 6px;
-    background: var(--mj-border-default);
-    border-radius: 9px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-}
-
-.tab-btn.active .tab-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    color: var(--mj-brand-primary);
-}
-
-.tab-badge.has-errors {
-    background: var(--mj-status-error);
-    color: var(--mj-text-inverse);
-}
-
-/* ========================================
-   Main Content Area (with Filter Panel)
-   ======================================== */
-.main-content {
-    display: flex;
-    flex-direction: row;
-    flex: 1;
-    overflow: hidden;
-    min-width: 0;
-}
-
-/* Filter Panel Container */
-.filter-panel-container {
-    display: flex;
-    flex-shrink: 0;
-    width: 280px;
-    min-width: 200px;
-    max-width: 400px;
-    background: var(--mj-bg-surface);
-    border-right: 1px solid var(--mj-border-default);
-    position: relative;
-    transition: width 0.2s ease, margin 0.2s ease;
-}
-
-.filter-panel-container.hidden {
-    width: 0;
-    min-width: 0;
-    margin-left: -1px;
-    overflow: hidden;
-}
-
-/* Resize Handle */
-.resize-handle {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 4px;
-    height: 100%;
-    cursor: col-resize;
-    background: transparent;
-    transition: background 0.2s ease;
-    z-index: 10;
-}
-
-.resize-handle:hover,
-.resize-handle:active {
-    background: var(--mj-brand-primary);
-}
-
-/* Content Area */
-.content-area {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-    min-width: 0;
-}
-
-/* Content Body */
-.content-body {
-    flex: 1;
-    padding: 20px 24px;
-    overflow: auto;
-}
-
 /* Error Banner */
 .error-banner {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    margin: 16px 24px 0 24px;
+    margin: 0 0 16px 0;
     background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
     border: 1px solid var(--mj-status-error);
     border-radius: 8px;
@@ -243,6 +36,12 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
     gap: 16px;
+}
+
+/* Empty-state placeholder spans the full grid so it centers instead of
+   sitting in a single 350px column. */
+.data-grid > mj-empty-state {
+    grid-column: 1 / -1;
 }
 
 .data-card {
@@ -532,57 +331,9 @@
     font-size: 12px;
 }
 
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 60px 20px;
-    text-align: center;
-    background: var(--mj-bg-surface);
-    border-radius: 8px;
-    border: 1px solid var(--mj-border-default);
-}
-
-.empty-state i {
-    font-size: 48px;
-    color: var(--mj-border-default);
-    margin-bottom: 16px;
-}
-
-.empty-state p {
-    margin: 0 0 8px 0;
-    font-size: 16px;
-    color: var(--mj-text-primary);
-}
-
-.empty-state .hint {
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-    margin-bottom: 16px;
-}
-
 /* ========================================
-   View Mode Toggle
+   View mode toggle now provided by <mj-view-toggle>.
    ======================================== */
-.view-toggle {
-    display: flex;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    overflow: hidden;
-}
-
-.view-toggle button {
-    border-radius: 0;
-    border: none;
-    padding: 6px 10px;
-}
-
-.view-toggle button.active {
-    background: var(--mj-brand-primary);
-    color: var(--mj-color-neutral-0);
-}
 
 /* ========================================
    Tools Tab - Server Groups

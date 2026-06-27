@@ -18,11 +18,11 @@ export class MJRecordChangeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'recordContext', sectionName: 'Record Context', isExpanded: true },
             { sectionKey: 'changeSummary', sectionName: 'Change Summary', isExpanded: true },
-            { sectionKey: 'changeContent', sectionName: 'Change Content', isExpanded: false },
-            { sectionKey: 'auditLineage', sectionName: 'Audit Lineage', isExpanded: false },
+            { sectionKey: 'changeContent', sectionName: 'Change Content', isExpanded: true },
+            { sectionKey: 'auditLineage', sectionName: 'Audit Lineage', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJVersionLabelItems', sectionName: 'Version Label Items', isExpanded: false },
-            { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false }
+            { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false },
+            { sectionKey: 'mJVersionLabelItems', sectionName: 'Version Label Items', isExpanded: false }
         ]);
     }
 }

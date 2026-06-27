@@ -1,0 +1,58 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Schema Management",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "38F0AF4E-4DD2-4FFC-9E65-A81101E7CA42"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T21:13:28.934Z",
+      "checksum": "9fec693a0cd121760f30d2f713a2e772ed340012ad9d03ab93acaef8276290b1"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Schema Management",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "D700E497-9578-44FB-89A8-498B249B7C5B"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T21:13:28.943Z",
+      "checksum": "a21d04a535f4180bbfc16d9947a59644c726537128b130a4061e28171dae60d1"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Realtime: Advanced Session Controls",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "E083C425-4BFF-47EB-99F4-EAF774BB6E4E"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:11.242Z",
+      "checksum": "91e6e8b251b41863468e9641ba018a4276339903dc2be7b992c44d65c32fb32d"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=Realtime: Advanced Bridge Controls",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "61A1FB89-9643-4FB5-828B-89EE6E68E683"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:11.257Z",
+      "checksum": "eab488741b67126efea252dd672a8cc31fa55350588380860d4a2b10fc803ed1"
+    }
+  }
+]

@@ -1,0 +1,140 @@
+<div class="view-workspace">
+  <!-- Toolbar: view selector + view-type switcher (single row) -->
+  <div class="workspace-toolbar">
+    <mj-view-selector
+      [Provider]="Provider"
+      [Entity]="Entity"
+      [SelectedViewID]="selectedViewId"
+      [ViewModified]="viewModified"
+      (ViewSelected)="onViewSelected($event)"
+      (SaveViewRequested)="onSaveViewRequested($event)"
+      (OpenInTabRequested)="onOpenInTabRequested($event)"
+      (ConfigureViewRequested)="onConfigureViewRequested()"
+      (CreateNewRecordRequested)="onCreateNewRecordRequested()"
+      (DuplicateViewRequested)="onDuplicateViewRequested($event)"
+      (QuickSaveRequested)="onQuickSaveRequested($event)"
+      (RevertRequested)="onRevertView()">
+    </mj-view-selector>
+
+    <span class="workspace-toolbar-spacer"></span>
+
+    <!-- View-type switcher lifted into the top toolbar (same row as the selector). The inner
+         entity-viewer's own header switcher is suppressed via innerViewerConfig so it appears
+         exactly once. Switching routes to the viewer via SelectViewTypeById. -->
+    <mj-view-type-switcher
+      [Provider]="Provider"
+      [Entity]="Entity"
+      [ActiveViewTypeID]="activeViewTypeId"
+      (ViewTypeSelected)="onToolbarViewTypeSelected($event)">
+    </mj-view-type-switcher>
+  </div>
+
+  <!-- Data renderer -->
+  <div class="workspace-body">
+    @if (Entity) {
+      <mj-entity-viewer
+        [Provider]="Provider"
+        [Entity]="Entity"
+        [ViewEntity]="currentViewEntity"
+        [FilterText]="filterText"
+        [SelectedRecordID]="selectedRecordId"
+        [GridState]="currentGridState"
+        [AutoSaveView]="AutoSaveView"
+        [Config]="innerViewerConfig"
+        (FilterTextChange)="onFilterTextChanged($event)"
+        (RecordSelected)="onRecordSelected($event)"
+        (RecordOpened)="onRecordOpened($event)"
+        (DataLoaded)="onDataLoaded($event)"
+        (FilteredCountChanged)="onFilteredCountChanged($event)"
+        (OpenRelatedRecordRequested)="onOpenRelatedRecordRequested($event)"
+        (CreateRecordRequested)="onCreateRecordRequested()">
+      </mj-entity-viewer>
+    }
+  </div>
+
+  <!-- View configuration panel (slide-in) -->
+  <mj-view-config-panel
+    [Provider]="Provider"
+    [Entity]="Entity"
+    [ViewEntity]="currentViewEntity"
+    [IsOpen]="isConfigPanelOpen"
+    [CurrentGridState]="currentGridState"
+    [SampleData]="loadedRecords"
+    [ExternalFilterState]="filterDialogState"
+    [IsSaving]="isSavingView"
+    [DefaultSaveAsNew]="defaultSaveAsNew"
+    [PendingNewViewName]="pendingNewViewName"
+    [PendingNewViewDescription]="pendingNewViewDescription"
+    [PendingNewViewIsShared]="pendingNewViewIsShared"
+    (Close)="onCloseConfigPanel()"
+    (Save)="onSaveView($event)"
+    (SaveDefaults)="onSaveDefaultViewSettings($event)"
+    (Delete)="onDeleteView()"
+    (Duplicate)="onDuplicateFromPanel()"
+    (OpenFilterDialogRequest)="onOpenFilterDialogRequest($event)">
+  </mj-view-config-panel>
+
+  <!-- Full-width filter dialog -->
+  @if (isFilterDialogOpen) {
+    <div class="filter-dialog-backdrop" (click)="onCloseFilterDialog()"></div>
+    <div class="filter-dialog" role="dialog" aria-modal="true">
+      <div class="filter-dialog-header">
+        <div class="filter-dialog-title">
+          <i class="fa-solid fa-filter"></i>
+          <span>Edit Filters</span>
+        </div>
+        <button class="filter-dialog-close" type="button" (click)="onCloseFilterDialog()" title="Close">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      </div>
+      <div class="filter-dialog-content">
+        <mj-filter-builder
+          [fields]="filterDialogFields"
+          [filter]="filterDialogState"
+          [showSummary]="true"
+          (apply)="onFilterApplied($event)"
+          (filterChange)="filterDialogState = $event">
+        </mj-filter-builder>
+      </div>
+      <div class="filter-dialog-footer">
+        <button mjButton variant="primary" size="sm" type="button"
+          (click)="filterDialogState && onFilterApplied(filterDialogState)">
+          <i class="fa-solid fa-check"></i> Apply Filters
+        </button>
+        <button mjButton variant="flat" size="sm" type="button" (click)="onCloseFilterDialog()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Quick save dialog -->
+  <mj-quick-save-dialog
+    [IsOpen]="showQuickSaveDialog"
+    [ViewEntity]="currentViewEntity"
+    [EntityName]="Entity?.DisplayNameOrName ?? ''"
+    [Summary]="quickSaveSummary"
+    [IsSaving]="isSavingView"
+    [DefaultSaveAsNew]="defaultSaveAsNew"
+    (Save)="onQuickSave($event)"
+    (Close)="onQuickSaveClose()"
+    (OpenAdvanced)="onQuickSaveOpenAdvanced($event)">
+  </mj-quick-save-dialog>
+
+  <!-- Duplicate view dialog -->
+  <mj-duplicate-view-dialog
+    [IsOpen]="showDuplicateDialog"
+    [SourceViewName]="duplicateSourceViewName"
+    [Summary]="duplicateSummary"
+    (Duplicate)="onDuplicateConfirmed($event)"
+    (Cancel)="onDuplicateCancel()">
+  </mj-duplicate-view-dialog>
+
+  <!-- Shared view warning dialog -->
+  <mj-shared-view-warning-dialog
+    [IsOpen]="showSharedViewWarning"
+    [ViewName]="currentViewEntity?.Name ?? ''"
+    (Action)="onSharedViewAction($event)"
+    (Cancel)="onSharedViewWarningCancel()">
+  </mj-shared-view-warning-dialog>
+</div>

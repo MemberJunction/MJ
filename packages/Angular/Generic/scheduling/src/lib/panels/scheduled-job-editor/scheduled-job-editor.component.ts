@@ -8,9 +8,9 @@ import {
     OnInit,
     inject,
 } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ScheduledJobService } from '../../services/scheduled-job.service';
 
 /** IANA timezone list subset for the dropdown */
@@ -39,7 +39,7 @@ const COMMON_TIMEZONES = [
     styleUrls: ['./scheduled-job-editor.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ScheduledJobEditorComponent implements OnInit {
+export class ScheduledJobEditorComponent extends BaseAngularComponent implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     private scheduledJobService = inject(ScheduledJobService);
 
@@ -89,6 +89,10 @@ export class ScheduledJobEditorComponent implements OnInit {
     public Configuration = '';
     public NotifyOnSuccess = false;
     public NotifyOnFailure = true;
+    /** When true AND the job has never run, the scheduler queues it for immediate
+     *  execution on the next poll instead of waiting for the next cron tick.
+     *  Useful for newly-seeded jobs that should not wait up to a full cron interval. */
+    public RunImmediatelyIfNeverRun = false;
 
     // Stats (edit mode)
     public TotalRuns = 0;
@@ -223,6 +227,7 @@ export class ScheduledJobEditorComponent implements OnInit {
         this.Configuration = this.DefaultConfiguration ?? '';
         this.NotifyOnSuccess = false;
         this.NotifyOnFailure = true;
+        this.RunImmediatelyIfNeverRun = false;
         this.TotalRuns = 0;
         this.SuccessRuns = 0;
         this.FailedRuns = 0;
@@ -240,6 +245,7 @@ export class ScheduledJobEditorComponent implements OnInit {
         this.Configuration = job.Configuration ?? '';
         this.NotifyOnSuccess = job.Get('NotifyOnSuccess') as boolean ?? false;
         this.NotifyOnFailure = job.Get('NotifyOnFailure') as boolean ?? true;
+        this.RunImmediatelyIfNeverRun = job.RunImmediatelyIfNeverRun ?? false;
     }
 
     private applyFormToEntity(job: MJScheduledJobEntity): void {
@@ -249,18 +255,19 @@ export class ScheduledJobEditorComponent implements OnInit {
         job.CronExpression = this.CronExpression.trim();
         job.Timezone = this.Timezone;
         job.Status = this.Status;
-        job.Set('ConcurrencyMode', this.ConcurrencyMode);
+        job.ConcurrencyMode = this.ConcurrencyMode as 'Skip' | 'Queue' | 'Concurrent';
         job.Configuration = this.Configuration;
-        job.Set('NotifyOnSuccess', this.NotifyOnSuccess);
-        job.Set('NotifyOnFailure', this.NotifyOnFailure);
+        job.NotifyOnSuccess = this.NotifyOnSuccess;
+        job.NotifyOnFailure = this.NotifyOnFailure;
+        job.RunImmediatelyIfNeverRun = this.RunImmediatelyIfNeverRun;
     }
 
     private async getOrCreateEntity(): Promise<MJScheduledJobEntity> {
         if (this.Job && !this.IsNew) {
             return this.Job;
         }
-        const md = new Metadata();
-        const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+        const md = this.ProviderToUse;
+        const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', md.CurrentUser);
         job.NewRecord();
         return job;
     }

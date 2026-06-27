@@ -29,6 +29,35 @@
 
         <!-- Results area -->
         <div class="search-results-area">
+            @if (EnableStreaming && (IsSearching || StreamingProviders.length > 0)) {
+                <!-- Streaming status strip — one chip per provider that has reported -->
+                <div class="streaming-status-strip" aria-live="polite">
+                    @if (StreamingProviders.length === 0 && IsSearching) {
+                        <span class="streaming-chip streaming-chip-pending">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                            <span>Searching…</span>
+                        </span>
+                    }
+                    @for (p of StreamingProviders; track p.Name) {
+                        <span class="streaming-chip"
+                              [class.streaming-chip-error]="p.State === 'Error'"
+                              [class.streaming-chip-completed]="p.State === 'Completed'">
+                            @if (p.State === 'Completed') {
+                                <i class="fa-solid fa-check"></i>
+                            } @else {
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            }
+                            <span class="streaming-chip-name">{{ p.Name }}</span>
+                            @if (p.State === 'Completed') {
+                                <span class="streaming-chip-count">{{ p.Count }}</span>
+                                <span class="streaming-chip-time">{{ FormatElapsedTime(p.ElapsedMs) }}</span>
+                            } @else if (p.ErrorMessage) {
+                                <span class="streaming-chip-time">{{ p.ErrorMessage }}</span>
+                            }
+                        </span>
+                    }
+                </div>
+            }
             @if (ShowFilters && Filters.length > 0) {
                 <!-- Filter chips -->
                 <div class="search-filter-bar">
@@ -57,17 +86,17 @@
 
             @if (HasSearched && AllResults.length === 0 && !IsSearching) {
                 <!-- No results -->
-                <div class="search-empty-state">
-                    <i class="fa-solid fa-search search-empty-icon"></i>
-                    <p class="search-empty-title">No results found</p>
-                    <p class="search-empty-text">Try different keywords or remove some filters</p>
+                <mj-empty-state
+                    Variant="no-results"
+                    Title="No results found"
+                    Message="Try different keywords or remove some filters">
                     @if (ShowAgentCta) {
-                        <button class="agent-cta-btn" (click)="OnAgentCtaClick()">
+                        <button ngProjectAs="[actions]" class="agent-cta-btn" (click)="OnAgentCtaClick()">
                             <i class="fa-solid fa-robot"></i>
                             {{ AgentCtaText }}
                         </button>
                     }
-                </div>
+                </mj-empty-state>
             }
 
             @if (!HasSearched && !IsSearching) {
@@ -87,10 +116,10 @@
                             }
                         }
                     } @else {
-                        <div class="search-empty-state search-empty-state-compact">
-                            <i class="fa-solid fa-magnifying-glass search-empty-icon"></i>
-                            <p class="search-empty-text">Start typing to search across all your knowledge</p>
-                        </div>
+                        <mj-empty-state
+                            Variant="no-results"
+                            Title="Start typing to search across all your knowledge"
+                            Size="compact" />
                     }
                 </div>
             }

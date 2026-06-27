@@ -66,6 +66,20 @@ CodeGen scans the MemberJunction database schema and produces:
 
 There are currently **272 generated entity classes** covering approximately 78,000 lines of code in a single `entity_subclasses.ts` file.
 
+#### AIAgentNote Consolidation Schema (v5.30.x+)
+
+Migration `V202604260056__v5.30.x__Memory_Consolidation_Schema.sql` adds five columns to `AIAgentNote` to support the Memory Manager consolidation pipeline. The generated `MJAIAgentNoteEntity` getters/setters reflect these in `entity_subclasses.ts`:
+
+| Column | Type | Purpose |
+|---|---|---|
+| `ConsolidatedIntoNoteID` | uniqueidentifier (FK → AIAgentNote.ID, nullable) | When this note has been folded into a successor consolidation, points at the successor — preserves provenance after revocation |
+| `ConsolidationCount` | int | Number of times this note has itself absorbed clusters; capped at `maxConsolidationCount=3` for drift prevention |
+| `DerivedFromNoteIDs` | nvarchar(max) JSON array of UUIDs, nullable | For consolidated notes, the list of original sources the LLM merged into this one — enables anchored-mode drilling when a cluster reaches the cap |
+| `ProtectionTier` | nvarchar (Immutable / Protected / Standard / Ephemeral) | Modulates decay rate and consolidation eligibility |
+| `ImportanceScore` | float | Composite score driving Ebbinghaus decay and outlier auto-promotion |
+
+Server-side persistence and vector-store invariant maintenance for these fields lives in [`@memberjunction/core-entities-server`](../MJCoreEntitiesServer/README.md#mjaiagentnoteentityserver-v530x). The pipeline that produces them is documented in [`@memberjunction/ai-agents`](../AI/Agents/README.md#consolidation-pipeline) and [`specs/001-memory-consolidation/spec.md`](../../specs/001-memory-consolidation/spec.md).
+
 ### Extended Entity Classes
 
 Several entities require custom business logic beyond what CodeGen can generate. Extended classes use `@RegisterClass` to override the generated base class in MJ's class factory:
@@ -540,15 +554,15 @@ This package's `src/generated/entity_subclasses.ts` file is **entirely auto-gene
 
 ## Dependencies
 
-- [@memberjunction/core](../MJCore/README.md) -- Base entity classes, metadata system, RunView, BaseEngine
+- [@memberjunction/core](../MJCore/readme.md) -- Base entity classes, metadata system, RunView, BaseEngine
 - [@memberjunction/global](../MJGlobal/README.md) -- `@RegisterClass` decorator, global utilities
 - [@memberjunction/ai](../AI/README.md) -- AI integration types (used by some engine classes)
-- [@memberjunction/interactive-component-types](../InteractiveComponentTypes/README.md) -- ComponentSpec type for component entity extensions
+- [@memberjunction/interactive-component-types](../InteractiveComponents/README.md) -- ComponentSpec type for component entity extensions
 - [zod](https://zod.dev/) -- Runtime schema validation
 
 ## Related Packages
 
-- [@memberjunction/core](../MJCore/README.md) -- Framework foundation this package builds on
+- [@memberjunction/core](../MJCore/readme.md) -- Framework foundation this package builds on
 - [@memberjunction/core-entities-server](../MJCoreEntitiesServer/README.md) -- Server-side extensions of entities defined here (e.g., smart filter AI implementation)
 - [@memberjunction/server](../MJServer/README.md) -- Server that uses these entities for API operations
 

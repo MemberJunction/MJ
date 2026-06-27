@@ -13,9 +13,9 @@ import {
   EntityFieldInfo,
   EntityFieldTSType,
   EntityInfo,
-  Metadata,
 } from '@memberjunction/core';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Mode controls how the preview is rendered and how the restore is interpreted.
@@ -156,14 +156,28 @@ export interface RestoreCommitEvent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RestorePreviewPanelComponent implements OnInit {
+export class RestorePreviewPanelComponent extends BaseAngularComponent implements OnInit {
   // ─── Inputs ─────────────────────────────────────────────────────
 
   /**
    * Controls panel visibility. Setting to true opens the slide-in;
-   * setting to false closes it.
+   * setting to false closes it. On every closed→open transition the
+   * panel auto-resets its transient state (`IsRestoring`, `Reason`,
+   * `ShowUnchanged`, row checks) so the host doesn't have to remember
+   * to call `Reset()` after a restore completes.
    */
-  @Input() Visible = false;
+  private _visible = false;
+  @Input()
+  set Visible(value: boolean) {
+    const prev = this._visible;
+    this._visible = value;
+    if (!prev && value && this.isInitialized) {
+      this.Reset();
+    }
+  }
+  get Visible(): boolean {
+    return this._visible;
+  }
 
   /**
    * Operating mode — `'live'` for restoring an existing record from a
@@ -259,11 +273,18 @@ export class RestorePreviewPanelComponent implements OnInit {
   private isInitialized = false;
   private resolvedEntityInfo: EntityInfo | null = null;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) { super(); }
 
   ngOnInit(): void {
     this.isInitialized = true;
-    this.rebuildRows();
+    // If the panel was opened synchronously during host bootstrap, the
+    // Visible setter ran before `isInitialized` was true and skipped the
+    // auto-reset. Do it here once so the first open is always clean.
+    if (this._visible) {
+      this.Reset();
+    } else {
+      this.rebuildRows();
+    }
   }
 
   // ─── Public methods ─────────────────────────────────────────────
@@ -516,7 +537,7 @@ export class RestorePreviewPanelComponent implements OnInit {
       return this.resolvedEntityInfo;
     }
     if (this.EntityName) {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ei = md.Entities.find(
         e => e.Name.trim().toLowerCase() === this.EntityName!.trim().toLowerCase(),
       );

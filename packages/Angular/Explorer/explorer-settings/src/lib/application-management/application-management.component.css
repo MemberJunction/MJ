@@ -3,17 +3,16 @@
    Shared patterns are in ../shared/styles/_admin-patterns.css
    ============================================================================= */
 
-/* -----------------------------------------------------------------------------
-   Container
-   ----------------------------------------------------------------------------- */
-.application-management-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-  width: 100%;
-  background: var(--mj-bg-page);
+/* :host already provides flex column / 100% height / overflow hidden via
+   _admin-patterns.css. No bespoke container wrapper — see Section 10 of
+   explorer-chrome-conventions. */
+
+/* Status chip group inside <mj-page-header-interior>'s [toolbar] slot. */
+.status-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  flex-shrink: 0;
 }
 
 /* -----------------------------------------------------------------------------
@@ -27,56 +26,6 @@
 .stat-icon-public {
   background: var(--mj-color-success-100);
   color: var(--mj-status-success);
-}
-
-/* -----------------------------------------------------------------------------
-   Filters Section Override - smaller border-radius and padding
-   ----------------------------------------------------------------------------- */
-.filters-section {
-  border-radius: var(--mj-radius-md);
-}
-
-@media (min-width: 768px) {
-  .filters-section {
-    padding: 0.875rem 1rem;
-  }
-}
-
-/* Filter Button Group Overrides */
-.mj-filter-group .mj-filter-label {
-  font-size: 0.8125rem;
-}
-
-.mj-filter-buttons .mj-btn-ghost {
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  background: transparent;
-  color: var(--mj-text-secondary);
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mj-filter-buttons .mj-btn-ghost:hover:not(:disabled):not(.mj-btn-primary) {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-}
-
-/* Search Input Override - box-shadow at 1024px */
-@media (min-width: 1024px) {
-  .mj-search .mj-search-input {
-    box-shadow: var(--mj-shadow-sm);
-  }
-
-  .mj-search .mj-search-input:focus {
-    box-shadow: var(--mj-shadow-md), 0 0 0 3px rgba(0, 118, 182, 0.2);
-  }
-}
-
-/* Search Icon Override - missing pointer-events: none */
-.mj-search .mj-search-icon {
-  pointer-events: none;
 }
 
 /* -----------------------------------------------------------------------------
@@ -351,22 +300,9 @@
     margin: 0 auto;
   }
 
-  .action-buttons {
-    padding: 1rem 2rem;
-  }
-
   .mj-grid-4 {
     padding: 0 2rem 1rem 2rem;
     gap: 1.25rem;
-  }
-
-  .filters-section {
-    margin: 0 2rem 1rem 2rem;
-    padding: 1rem 1.25rem;
-  }
-
-  .content-area {
-    padding: 2rem;
   }
 }
 
@@ -374,105 +310,14 @@
    Mobile-specific adjustments (< 640px)
    ----------------------------------------------------------------------------- */
 @media (max-width: 639px) {
-  /* Compact sticky header for mobile */
-  .sticky-header {
-    padding: 0;
-  }
-
-  /* Compact action buttons row */
-  .action-buttons {
-    padding: 0.5rem 0.75rem;
-    gap: 0.5rem;
-    justify-content: flex-end;
-  }
-
   /* Hide stats cards on mobile to save space */
   .mj-grid-4 {
     display: none !important;
   }
 
-  /* Compact filters section */
-  .filters-section {
-    margin: 0 0.5rem 0.5rem 0.5rem;
-    padding: 0.5rem;
-    border-radius: var(--mj-radius-md);
-  }
-
-  .filters-row {
-    gap: 0.5rem;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  /* Full-width compact search on mobile */
-  .mj-search {
-    min-width: 100%;
-  }
-
-  .mj-search .mj-search-input {
-    padding: 0.625rem 1rem 0.625rem 2.5rem;
-    min-height: 40px;
-    font-size: 0.9375rem;
-    border-width: 2px;
-    border-radius: var(--mj-radius-full);
-  }
-
-  .mj-search .mj-search-icon {
-    left: 0.75rem;
-    font-size: 0.875rem;
-  }
-
-  /* Horizontal scrollable filter buttons */
-  .mj-filter-group {
-    width: 100%;
-  }
-
-  .mj-filter-group .mj-filter-label {
-    display: none;
-  }
-
-  .mj-filter-group .mj-filter-buttons {
-    display: flex;
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .mj-filter-buttons .mj-btn {
-    flex: 1;
-    padding: 0.375rem 0.75rem;
-    min-height: 36px;
-    font-size: 0.75rem;
-    font-weight: 500;
-    border-radius: var(--mj-radius-full);
-    background: transparent;
-    color: var(--mj-text-secondary);
-    border: none;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  /* Hover state for filter buttons on mobile */
-  .mj-filter-buttons .mj-btn:hover:not(:disabled):not(.mj-btn-primary) {
-    background: var(--mj-brand-primary);
-    color: var(--mj-brand-on-primary);
-  }
-
-  /* Active/selected state for filter buttons on mobile */
-  .mj-filter-buttons .mj-btn.mj-btn-primary {
-    background: var(--mj-brand-primary) !important;
-    color: var(--mj-brand-on-primary) !important;
-    box-shadow: var(--mj-shadow-sm);
-  }
-
   /* More compact scrollable content */
   .scrollable-content {
     padding: 0.5rem;
-  }
-
-  /* Compact content area */
-  .content-area {
-    padding: 0.5rem;
-    border-radius: var(--mj-radius-md);
   }
 
   /* Modal styles */
@@ -631,15 +476,6 @@
     word-break: break-word;
   }
 
-  /* Empty state compact */
-  .empty-state {
-    padding: 2rem 1rem;
-  }
-
-  .empty-state .empty-icon {
-    font-size: 2.5rem;
-  }
-
   /* Loading container compact */
   .loading-container {
     padding: 2rem 1rem;
@@ -648,20 +484,7 @@
 
 /* Small mobile (< 375px) - Extra compact */
 @media (max-width: 374px) {
-  .action-buttons {
-    padding: 0.375rem 0.5rem;
-  }
-
-  .filters-section {
-    margin: 0 0.375rem 0.375rem 0.375rem;
-    padding: 0.375rem;
-  }
-
   .scrollable-content {
-    padding: 0.375rem;
-  }
-
-  .content-area {
     padding: 0.375rem;
   }
 

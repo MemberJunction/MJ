@@ -1,5 +1,6 @@
-import { CompositeKey } from "@memberjunction/core";
-import { SimpleAITools, SimpleDataContext, SimpleMetadata, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
+import { CompositeKey, DataSnapshot } from "@memberjunction/core";
+import { BaseEventArgs } from "./component-events";
+import { SimpleAITools, SimpleDataContext, SimpleGeoDataEngine, SimpleMetadata, SimpleRunQuery, SimpleRunView, SimpleSearch } from "./shared";
 
 /**
  * Callbacks a component can use.
@@ -27,6 +28,13 @@ export interface ComponentCallbacks {
      * @param handler - The method implementation
      */
     RegisterMethod: (methodName: string, handler: Function) => void;
+
+    /**
+     * Notify the container of a component event.
+     * For cancelable events, the container can set args.cancel = true
+     * before the await resolves.
+     */
+    NotifyEvent?: (eventName: string, args: BaseEventArgs) => Promise<void>;
 }
  
 /**
@@ -201,14 +209,15 @@ export interface ComponentObject {
     /**
      * Gets the current data state of the component.
      * Used by AI agents to understand what data is currently displayed.
+     * Returns undefined if the component has no data to report.
      */
-    getCurrentDataState?: () => any;
-    
+    getCurrentDataState?: () => DataSnapshot | undefined;
+
     /**
-     * Gets the history of data state changes in the component.
-     * Returns an array of timestamped state snapshots.
+     * Restores or applies a data state snapshot to the component.
+     * Returns true if the snapshot was successfully applied, false otherwise.
      */
-    getDataStateHistory?: () => Array<{ timestamp: Date; state: any }>;
+    setDataState?: (snapshot: DataSnapshot) => boolean;
     
     /**
      * Validates the current state of the component.
@@ -272,5 +281,11 @@ export interface ComponentUtilities {
      * This will not always be available in all environments — ensure component code
      * has fallbacks when this property is undefined.
      */
-    search?: SimpleSearch
+    search?: SimpleSearch,
+    /**
+     * Access to GeoDataEngine for coordinate-based geographic resolution.
+     * Used by map components to resolve lat/lng to country/state via point-in-polygon.
+     * This will not always be available — ensure component code has fallbacks when undefined.
+     */
+    geoDataEngine?: SimpleGeoDataEngine
 }

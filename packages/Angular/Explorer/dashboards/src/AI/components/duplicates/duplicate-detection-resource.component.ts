@@ -21,7 +21,7 @@ import {
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -112,6 +112,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
     }
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
+    /** Activity-tracker id for the currently running detection (P3). */
+    private detectionActivityID: string | null = null;
     protected override navigationService = inject(NavigationService);
     protected override destroy$ = new Subject<void>();
     private filterSubject = new Subject<void>();
@@ -206,8 +209,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
     }
 
-    /** Whether this component is embedded inside the Knowledge Hub shell */
-    @Input() EmbeddedMode = false;
+    /**
+     * When true, renders only the body content (no chrome). Set by parent shells
+     * that embed this resource. See plans/explorer-chrome-conventions.md Section 5.
+     */
+    @Input() HideToolbar = false;
 
     /** View mode: 'kanban' (card board) or 'table' (paged grid) */
     public DisplayMode: 'kanban' | 'table' = 'kanban';
@@ -377,7 +383,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     /** Phase 2: Load runs, details, and matches via RunViews batch. */
     private async loadRunData(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Duplicate Runs',
@@ -453,7 +459,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const dupeRun = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
             dupeRun.NewRecord();
 
@@ -475,7 +481,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
             dupeRun.EntityID = entityInfo.ID;
 
-            dupeRun.StartedByUserID = new Metadata().CurrentUser.ID;
+            dupeRun.StartedByUserID = this.ProviderToUse.CurrentUser.ID;
             dupeRun.StartedAt = new Date();
             dupeRun.ProcessingStatus = 'In Progress';
             dupeRun.ApprovalStatus = 'Pending';
@@ -493,6 +499,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 return;
             }
 
+            this.detectionActivityID = this.activityService.Start('Duplicate detection', {
+                icon: 'fa-solid fa-clone',
+                detail: selectedDoc.EntityName,
+                progress: 0,
+            });
             // Subscribe to progress using the run ID as PipelineRunID
             this.subscribeToPipelineProgress(dupeRun.ID);
         } catch (error) {
@@ -769,7 +780,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     private subscribeToPipelineProgress(pipelineRunID: string): void {
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         const subscriptionQuery = `
             subscription PipelineProgress($pipelineRunID: String!) {
                 PipelineProgress(pipelineRunID: $pipelineRunID) {
@@ -794,6 +805,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 this.IsDetecting = false;
                 this.DetectionStage = success ? 'Complete' : 'Error';
                 this.DetectionProgress = success ? 100 : 0;
+                if (this.detectionActivityID) {
+                    this.activityService.Complete(this.detectionActivityID, success ? 'success' : 'error');
+                    this.detectionActivityID = null;
+                }
 
                 if (success) {
                     await this.LoadData();
@@ -1168,8 +1183,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             if (!parentKeyValue) return;
 
             // Query the related entity for records pointing at this parent via the FK field
-            const rv = new RunView();
-            const md = new Metadata();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const md = this.ProviderToUse;
             const relatedEntityInfo = md.Entities.find(e => e.Name === relatedEntityName);
             const nameField = relatedEntityInfo?.NameField;
             const pkFieldName = relatedEntityInfo?.FirstPrimaryKey?.Name || 'ID';
@@ -1341,7 +1356,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 }));
             }
 
-            const result = await Metadata.Provider.MergeRecords(request);
+            const result = await this.ProviderToUse.MergeRecords(request);
 
             if (result.Success) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -1454,7 +1469,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (whereClauses.length === 0) return;
 
         // Single RunView with all records OR'd together
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: group.EntityName,
             ExtraFilter: whereClauses.join(' OR '),
@@ -1463,7 +1478,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
         if (result.Success && result.Results) {
             // Get entity info to know primary key field name
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === group.EntityName);
             const pkFieldName = entityInfo?.FirstPrimaryKey?.Name || 'ID';
 
@@ -1481,7 +1496,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      * Each record's deps are stored in ComparisonDependencies keyed by composite key string.
      */
     private async loadComparisonDependencies(group: DuplicateGroup): Promise<void> {
-        const provider = Metadata.Provider;
+        const provider = this.ProviderToUse;
         const keyStrings: string[] = [group.RecordId];
         for (const m of group.Matches) {
             if (m.MatchRecordID) {
@@ -1552,7 +1567,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             });
 
         // Get entity field info for display names and ordering
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.Entities.find(e => e.Name === this.ComparisonGroup!.EntityName);
         const entityFields = entityInfo?.Fields ?? [];
 
@@ -1616,7 +1631,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         matches: MJDuplicateRunDetailMatchEntity[],
         limit: number
     ): Array<{ Name: string; Score: number }> {
-        return matches
+        return [...matches]
+            .sort((a, b) => b.MatchProbability - a.MatchProbability)
             .slice(0, limit)
             .map(m => {
                 const meta = this.parseRecordMetadata(m.RecordMetadata);
@@ -1633,7 +1649,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      */
     private resolveMatchName(entityName: string, matchRecordID: string, meta: RecordMetadataInfo): string {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
             if (entityInfo) {
                 const nameFields = entityInfo.Fields
@@ -1667,7 +1683,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      */
     private resolveRecordName(metadata: RecordMetadataInfo, entityName: string, recordID: string): string {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
             if (entityInfo) {
                 const nameFields = entityInfo.Fields
@@ -1761,6 +1777,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             filtered = filtered.filter(g => new Date(g.MatchedAt) <= to);
         }
 
+        // Highest-confidence matches first; break ties by record name for stable ordering.
+        filtered.sort((a, b) =>
+            (b.HighestScore - a.HighestScore) || a.RecordName.localeCompare(b.RecordName)
+        );
+
         this.PendingGroups = filtered.filter(g => g.ApprovalStatus === 'Pending');
         this.ApprovedGroups = filtered.filter(g => g.ApprovalStatus === 'Approved');
         this.RejectedGroups = filtered.filter(g => g.ApprovalStatus === 'Rejected');
@@ -1776,9 +1797,17 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
+            const md = this.ProviderToUse;
+            const tg = await md.CreateTransactionGroup();
             for (const match of group.Matches) {
                 match.ApprovalStatus = status;
+                match.TransactionGroup = tg;
                 await match.Save();
+            }
+            const success = await tg.Submit();
+            if (!success) {
+                console.error(`Failed to update match approval statuses to ${status}`);
+                return;
             }
 
             // Update the local group state

@@ -18,9 +18,10 @@ export class MJMCPServerToolFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'toolOverview', sectionName: 'Tool Overview', isExpanded: true },
             { sectionKey: 'schemasAnnotations', sectionName: 'Schemas & Annotations', isExpanded: true },
-            { sectionKey: 'automation', sectionName: 'Automation', isExpanded: false },
+            { sectionKey: 'automation', sectionName: 'Automation', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJMCPServerConnectionTools', sectionName: 'MCP Server Connection Tools', isExpanded: false },
+            { sectionKey: 'mJMCPToolFavorites', sectionName: 'MCP Tool Favorites', isExpanded: false },
             { sectionKey: 'mJMCPToolExecutionLogs', sectionName: 'MCP Tool Execution Logs', isExpanded: false }
         ]);
     }

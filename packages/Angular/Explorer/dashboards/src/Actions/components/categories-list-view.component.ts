@@ -4,6 +4,7 @@ import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-ent
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface CategoryWithStats extends MJActionCategoryEntity {
   actionCount?: number;
@@ -73,11 +74,9 @@ interface CategoryWithStats extends MJActionCategoryEntity {
             </div>
           }
         } @else if (!isLoading) {
-          <div class="empty-state">
-            <i class="fa-solid fa-sitemap"></i>
-            <h3>No categories found</h3>
-            <p>Try adjusting your search criteria</p>
-          </div>
+          <mj-empty-state Variant="no-results" Icon="fa-solid fa-sitemap"
+            Title="No categories found"
+            Message="Try adjusting your search criteria" />
         }
       </div>
 
@@ -237,33 +236,6 @@ interface CategoryWithStats extends MJActionCategoryEntity {
         }
       }
 
-      .empty-state {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 4rem;
-        text-align: center;
-        color: var(--mj-text-muted);
-
-        i {
-          font-size: 3rem;
-          margin-bottom: 1rem;
-          opacity: 0.5;
-        }
-
-        h3 {
-          margin: 0 0 0.5rem 0;
-          font-size: 1.25rem;
-          font-weight: 600;
-        }
-
-        p {
-          margin: 0;
-          font-size: 0.875rem;
-        }
-      }
-
       .loading-overlay {
         position: absolute;
         top: 0;
@@ -299,7 +271,7 @@ interface CategoryWithStats extends MJActionCategoryEntity {
     }
   `]
 })
-export class CategoriesListViewComponent implements OnInit, OnDestroy {
+export class CategoriesListViewComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
 
   public isLoading = true;
@@ -309,7 +281,7 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor() {}
+  constructor() { super(); }
 
   ngOnInit(): void {
     this.setupSearch();
@@ -336,7 +308,7 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       console.log('Loading categories data...');
       
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const [categoriesResult, actionsResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Action Categories', 

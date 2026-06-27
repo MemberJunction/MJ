@@ -1,5 +1,134 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 5.43.0
+
+### Patch Changes
+
+- 54183aa: Add the Angular DOM unit-testing foundation: a new `@memberjunction/ng-test-utils` package providing `renderComponentFixture` (standalone/leaf components) and `renderTemplate` (compound / module-declared components) helpers, the Vitest + jsdom DOM-testing harness, coverage reporting in the DOM preset, a `scaffold-tests.mjs --dom` flag (with a spaces-in-path fix), and DOM specs across `ng-ui-components`, `ng-pagination`, `ng-tabstrip`, and `ng-livekit-room`.
+
+  `ng-livekit-room` is the headline pilot (now that PR #2860 is on `next`): DOM specs for the media-free leaf components (`control-bar`, `agent-state`, `connection-overlay`, `chat-panel`, `device-menu`) plus `participant-tile` as the §7 media-split worked example — the media-free surface is tested while `track.attach()` and the audio-meter `requestAnimationFrame` loop are left to live tests — on a dual node+dom preset that preserves the package's existing logic specs. The `LiveKitRoomComponent` injectable-controller refactor (the one production-code change) is deferred to the Phase 2 component rollout; the injected-fake-container pattern it would prove is already demonstrated via the `providers` seam.
+
+  Also hardens the harness wiring flagged in review: correct `@memberjunction/ng-test-utils` devDependency declarations (`ng-tabstrip`, `ng-livekit-room`) and Turbo cache inputs covering `tsconfig.spec.json` + the root shared-harness files. Code-only, no schema changes.
+  - @memberjunction/ng-container-directives@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+  - @memberjunction/ng-container-directives@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ng-container-directives@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

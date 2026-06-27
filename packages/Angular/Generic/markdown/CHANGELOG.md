@@ -1,5 +1,62 @@
 # @memberjunction/ng-markdown
 
+## 5.43.0
+
+## 5.42.0
+
+## 5.41.0
+
+## 5.40.2
+
+## 5.40.1
+
+## 5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- 5b4102c: Fix raw HTML blocks split by a blank line rendering as an escaped code block.
+
+  Embedded raw HTML in markdown (e.g. a Skip PRD `## Mockup` section) is meant to be a single HTML block, but CommonMark ends an HTML block at the first blank line; the following indented (4+ space) markup is then tokenized as an indented code block and shown as escaped text — a "black box" of raw markup (often a leading `<!-- ... -->` comment) instead of the intended HTML.
+
+  `MarkdownService` now applies a `marked` `processAllTokens` hook (`createHtmlBlockRepairExtension`) that reclassifies the misparsed `code` token back to an `html` token. It only fires when the token is an indented code block (no language — fenced ` ``` ` examples are untouched), starts with an HTML tag/comment, and is adjacent to an `html` token (the signature of a split HTML block), so prose, fenced code examples, and standalone indented code render unchanged.
+
+## 5.38.0
+
+## 5.37.0
+
+## 5.36.0
+
+## 5.35.0
+
+## 5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- b03bfb4: Replace hardcoded colors with semantic design tokens across Angular components and shared styles, restoring correct dark-mode behavior and enabling white-labeling. Also maps the System Diagnostics PerfMon chrome (background, borders, text, controls) to MJ semantic tokens so the panel adapts to the active theme; series colors stay categorical.
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+
+## 5.33.0
+
+## 5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+
+## 5.30.1
+
+## 5.30.0
+
+## 5.29.0
+
+## 5.28.0
+
 ## 5.27.1
 
 ## 5.27.0

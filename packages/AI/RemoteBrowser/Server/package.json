@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/remote-browser-server",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "MemberJunction: Server-tier coordination + execution for the Remote Browser channel — live CDP-connected browser sessions, control-mode arbitration (AgentOnly / ViewOnly / Collaborative), the viewport→screen-track seam, and the realtime BaseRealtimeChannelServer that gives a voice co-agent a browser. Composes RemoteBrowserEngineBase exactly as AIBridgeEngine composes AIBridgeEngineBase.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/ai": "5.43.0",
+    "@memberjunction/remote-browser-base": "5.43.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

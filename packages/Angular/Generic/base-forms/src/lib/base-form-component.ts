@@ -29,6 +29,7 @@ import {
   ValidationFailedEvent
 } from './types/form-types';
 import { FormStateService } from './form-state.service';
+import { EntityFormConfig } from './types/entity-form-config';
 
 /**
  * Abstract base class for all entity record forms in MemberJunction.
@@ -50,6 +51,45 @@ import { FormStateService } from './form-state.service';
 export abstract class BaseFormComponent extends BaseRecordComponent implements AfterViewInit, OnInit, OnDestroy {
   public EditMode: boolean = false;
   public FavoriteInitDone: boolean = false;
+
+  /**
+   * Per-instance presentation config (toolbar visibility, related-entity
+   * sections, collapsibility, width, in-form navigation). Set by the form host
+   * (`MjEntityFormHostComponent`) or any consumer that instantiates the form
+   * directly. Read back by `MjRecordFormContainerComponent` and the collapsible
+   * panels through the `FormComponent` reference, so it takes effect WITHOUT
+   * regenerating the CodeGen-produced template. Null means "use the container's
+   * own defaults" (the classic full-page tab behavior).
+   */
+  public Config: EntityFormConfig | null = null;
+
+  /**
+   * Variants applicable to the current (entity, user) tuple, supplied by the
+   * Explorer-level form resolver. When more than one entry is present, the
+   * record-form-container shows a picker that lets the user switch between
+   * variants. Empty / single-entry arrays hide the picker.
+   *
+   * The container reads this via its `EffectiveVariants` accessor — generated
+   * form templates do NOT need to bind it explicitly.
+   */
+  public Variants: { ID: string; Label: string; Scope: 'User' | 'Role' | 'Global'; Status: 'Active' | 'Pending' | 'Inactive' }[] = [];
+
+  /**
+   * ID of the currently-rendered variant (null when no override is active and
+   * the form is the CodeGen / @RegisterClass default).
+   */
+  public CurrentVariantID: string | null = null;
+
+  /**
+   * Hook called when the user picks a different variant from the picker.
+   * Default is a no-op; the Explorer-level single-record component replaces
+   * this on the form instance to wire `FormResolverService.SetSelectedVariant`
+   * and reload the record. Kept as a method (not an EventEmitter) so the host
+   * doesn't need to subscribe — assignment is enough.
+   */
+  public OnVariantChanged: (variantID: string | null) => void = (_id) => {
+    // host installs the real handler post-construction
+  };
   public isHistoryDialogOpen: boolean = false;
   public IsTagsPanelOpen: boolean = false;
   public TagCount: number = 0;
@@ -134,7 +174,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (!this.record.IsSaved) {
         this.StartEditMode();
       }
-      const md = new Metadata();
+      const md = this.ProviderToUse;
+      // Bind FormStateService to the same provider this form is using.
+      this.formStateService.Provider = md;
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
 
@@ -344,6 +386,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public CancelEdit() {
     if (this.record) {
       const r = <BaseEntity>this.record;
+      // Capture BEFORE any mutation — Revert() can clear the "new" flag on some
+      // entities. We need to know whether this record was ever persisted so we
+      // can tell the host to dismiss the form (there's nothing to view).
+      const wasNeverSaved = !r.IsSaved;
+
       if (r.Dirty || this.PendingRecordsDirty()) {
         // Revert is safe here — the toolbar's discard dialog already confirmed with the user
         r.Revert();
@@ -358,13 +405,22 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         this.RaiseEvent(BaseFormComponentEventCodes.REVERT_PENDING_CHANGES);
       }
       this.EndEditMode();
+
+      // For never-saved records, ask the host to dismiss the form — leaving it
+      // in view mode shows an empty record (there IS no record) and any
+      // subsequent "Create New" click for the same entity would silently
+      // reuse this abandoned form. Hosts that don't have a meaningful close
+      // semantic can ignore this event.
+      if (wasNeverSaved) {
+        this.Navigate.emit({ Kind: 'dismiss', Reason: 'new-record-discarded' });
+      }
     }
   }
 
   protected async InternalSaveRecord(): Promise<boolean> {
     if (this.record) {
       if (this._pendingRecords.length > 0) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const tg = await md.CreateTransactionGroup();
         this.record.TransactionGroup = tg;
         await this.record.Save();
@@ -459,8 +515,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async SetFavoriteStatus(isFavorite: boolean) {
-    const md = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite);
+    const md = this.ProviderToUse;
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite, md.CurrentUser);
     this._isFavorite = isFavorite;
   }
 
@@ -605,7 +661,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async ShowDependencies() {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
     console.log(dep);
@@ -630,8 +686,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return [];
     }
 
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     const rvResult: RunViewResult<MJListEntity> = await rv.RunView({
       EntityName: 'MJ: Lists',
@@ -648,7 +704,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async GetRecordDependencies(): Promise<RecordDependency[]> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     return dependencies;
   }
@@ -673,8 +729,26 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       sectionFilter: this.searchFilter,
       showEmptyFields: this.showEmptyFields,
       showValidation: this._showValidation,
-      validationErrors: this._validationErrors
+      validationErrors: this._validationErrors,
+      collapsibleSections: this.Config?.CollapsibleSections,
+      enableRecordLinks: this.Config?.EnableRecordLinks,
+      showRelatedEntities: this.Config?.ShowRelatedEntities,
+      hiddenSectionKeys: this.Config?.HiddenSectionKeys,
+      visibleSectionKeys: this.Config?.VisibleSectionKeys,
+      allowSectionReorder: this.resolveAllowSectionReorder()
     };
+  }
+
+  /**
+   * Resolves whether section drag-reorder is allowed for the current Config.
+   * When no toolbar is rendered (dialog/slide-in, `Config.Toolbar === null`)
+   * reorder is disabled; otherwise we honor the toolbar config's flag, defaulting
+   * to allowed when unspecified (classic tab behavior).
+   */
+  private resolveAllowSectionReorder(): boolean {
+    if (!this.Config) return true;
+    if (this.Config.Toolbar === null) return false;
+    return this.Config.Toolbar?.AllowSectionReorder ?? true;
   }
 
   /** Clears all validation display state (called on save success, cancel, end edit) */
@@ -703,11 +777,24 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
+    const section = this.sectionMap.get(sectionKey);
+    // When the caller doesn't pass an explicit default, fall back to the value seeded by
+    // initSections() — related-entity and System Metadata panels are seeded collapsed there.
+    // Without this, FormStateService falls back to its global DEFAULT_SECTION_STATE (isExpanded=true),
+    // which reports a never-before-visited related-entity panel as expanded and causes its data grid
+    // (bound [AllowLoad]="IsSectionExpanded(key)") to fetch on form open even while the panel is collapsed.
+    // When the caller passes no explicit default, fall back to the value seeded by initSections().
+    // If the section isn't in sectionMap yet — which happens during the window before the form's
+    // async ngOnInit calls initSections(), e.g. when a record is opened already-loaded via an
+    // in-app double-click so the grids render in the first change-detection pass — coalesce to
+    // FALSE rather than letting FormStateService fall through to its global expanded default. A
+    // missing section must NOT report as expanded, or its data grid (bound [AllowLoad]="IsSectionExpanded(key)")
+    // fires a RunView on open before the seeded collapsed default is applied.
+    const resolvedDefault = defaultExpanded !== undefined ? defaultExpanded : (section?.isExpanded ?? false);
     const entityName = this.getEntityName();
     if (entityName) {
-      return this.formStateService.isSectionExpanded(entityName, sectionKey, defaultExpanded);
+      return this.formStateService.isSectionExpanded(entityName, sectionKey, resolvedDefault);
     }
-    const section = this.sectionMap.get(sectionKey);
     return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
   }
 
@@ -823,12 +910,27 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this.record?.EntityInfo?.Name || '';
   }
 
+  /**
+   * Component-level default width mode, used when the user has NOT
+   * explicitly chosen a width for this entity yet (first visit, nothing
+   * persisted in User Settings). Subclasses can override this — for
+   * example, custom forms with full-bleed layouts should return
+   * `'full-width'` here and the container will respect it on first open.
+   *
+   * Once the user toggles the width via the toolbar, their choice
+   * persists via `setFormWidthMode()` and takes priority over this
+   * default on subsequent opens.
+   */
+  public getDefaultFormWidthMode(): 'centered' | 'full-width' {
+    return this.Config?.WidthMode ?? 'centered';
+  }
+
   public getFormWidthMode(): 'centered' | 'full-width' {
     const entityName = this.getEntityName();
-    if (entityName) {
+    if (entityName && this.formStateService.hasExplicitWidthMode(entityName)) {
       return this.formStateService.getWidthMode(entityName);
     }
-    return 'centered';
+    return this.getDefaultFormWidthMode();
   }
 
   public setFormWidthMode(widthMode: 'centered' | 'full-width'): void {

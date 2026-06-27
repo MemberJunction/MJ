@@ -20,6 +20,12 @@ export * from './components/requests/agent-requests-resource.component';
 // Autotagging Pipeline
 export * from './components/autotagging/autotagging-pipeline-resource.component';
 
+// Tags — canonical Knowledge Hub dashboard for everything tag-related
+// (Library + Taxonomy moved from Classify, plus Suggestions + Health).
+// Re-exported explicitly because the file is a clone of the autotag pipeline
+// and shares cron-helper module-level exports we don't want to re-export twice.
+export { TagsResourceComponent, LoadTagsResource } from './components/tags/tags-resource.component';
+
 // Vector Management
 export * from './components/vectors/vector-management-resource.component';
 
@@ -37,6 +43,19 @@ export * from './components/analytics/model-performance/model-performance.compon
 export * from './components/analytics/cost-budget/cost-budget.component';
 export * from './components/analytics/error-analysis/error-analysis.component';
 export * from './components/analytics/usage-patterns/usage-patterns.component';
+
+// Realtime Voice (agent sessions)
+export * from './components/analytics/realtime/realtime-session-data';
+export * from './components/analytics/realtime/realtime-overview.component';
+export * from './components/analytics/realtime/realtime-sessions.component';
+
+// Realtime management (bridges, providers, identities, channels, co-agents)
+export * from './components/analytics/realtime/realtime-management-data';
+export * from './components/analytics/realtime/realtime-management.component';
+
+// Realtime voice transcripts (diarized per-room meeting transcript browser)
+export * from './components/analytics/realtime/realtime-transcripts-data';
+export * from './components/analytics/realtime/realtime-transcripts.component';
 
 // Overview Hub
 export * from './components/overview/ai-overview-hub.component';

@@ -19,10 +19,12 @@ export class ActionSubClassGeneratorBase {
         // get all of the libraries from the combination of distinct libraries from all of the actions we have here
         const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
-            action.Libraries.forEach(lib => {
+            // Libraries can be undefined if the engine cache hasn't populated it
+            // (e.g. accessed before/around Config); guard rather than crash codegen.
+            action.Libraries?.forEach(lib => {
                 if (!allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID))) {
                     allActionLibraries.push({
-                        Library: lib.Library,
+                        Library: lib.Library ?? '',
                         LibraryID: lib.LibraryID,
                         ItemsUsedArray: lib.ItemsUsed && lib.ItemsUsed.length > 0 ? lib.ItemsUsed.split(',').map(item => item.trim()) : []
                     });

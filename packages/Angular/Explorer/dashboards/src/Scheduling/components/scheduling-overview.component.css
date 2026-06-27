@@ -237,15 +237,6 @@
     color: var(--mj-status-success);
 }
 
-.all-clear i {
-    color: var(--mj-status-success) !important;
-}
-
-.all-clear span {
-    color: var(--mj-status-success);
-    font-weight: 500;
-}
-
 .panel-title {
     font-size: 0.95rem;
     font-weight: 700;
@@ -442,25 +433,6 @@
 
 .upcoming-countdown.soon {
     color: var(--mj-status-warning);
-}
-
-/* ── Empty State ─────────────────────────────────────────── */
-.empty-state-small {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 32px 16px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state-small i {
-    font-size: 2rem;
-    color: var(--mj-border-strong);
-}
-
-.empty-state-small span {
-    font-size: 0.85rem;
 }
 
 /* ── Data Table ──────────────────────────────────────────── */

@@ -8,6 +8,11 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parser';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+
+const tsqlDialect = new SQLServerDialect();
+const extractSelectColumns = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractSelectColumns(sql, dialect);
+const extractTableRefs = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractTableRefs(sql, dialect);
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser
@@ -192,7 +197,7 @@ AND YEAR(s.[Date]) >= {{ StartYear | sqlNumber }}`;
 )
 SELECT * FROM ChapterMembers`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(1);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('vwChapters');
@@ -204,12 +209,12 @@ FROM [AssociationDemo].[vwMembers] m
 LEFT JOIN [AssociationDemo].[vwMemberships] ms ON ms.MemberID = m.ID
 INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID`;
 
-            const tables = SQLParser.ExtractTableRefs(sql);
+            const tables = extractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(3);
         });
 
         it('should extract schema names correctly', () => {
-            const tables = SQLParser.ExtractTableRefs('SELECT * FROM nams.vwAccounts a');
+            const tables = extractTableRefs('SELECT * FROM nams.vwAccounts a');
             expect(tables.length).toBe(1);
             expect(tables[0].SchemaName).toBe('nams');
             expect(tables[0].TableName).toBe('vwAccounts');
@@ -1425,7 +1430,7 @@ describe('Field Type Enrichment from Composition References', () => {
 describe('Field Type Enrichment from Entity Metadata', () => {
     it('should resolve direct column from entity metadata via SQLParser', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
@@ -1448,7 +1453,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should resolve AS alias to source column from entity metadata', () => {
         const sql = 'SELECT u.__mj_CreatedAt AS CreatedAt FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'CreatedAt', description: 'Creation timestamp', type: 'date', optional: false,
@@ -1471,7 +1476,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should disambiguate multiple tables by alias', () => {
         const sql = 'SELECT u.Name, e.Name AS EntityName FROM __mj.vwUsers u JOIN __mj.vwEntities e ON u.ID = e.ID';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [
             { name: 'Name', description: 'User name', type: 'string', optional: false },
@@ -1504,7 +1509,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should skip fields that already have sqlBaseType and sqlFullType', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'Already resolved', type: 'string', optional: false,
@@ -1525,7 +1530,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should fall back to flat lookup when no SELECT column matches', () => {
         // Field "Email" is not in the SELECT clause but exists in the entity
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Email', description: 'User email', type: 'string', optional: false,
@@ -1546,7 +1551,7 @@ describe('Field Type Enrichment from Entity Metadata', () => {
 
     it('should not overwrite existing sourceEntity on the field', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
@@ -1681,5 +1686,41 @@ WHERE a.IsPersonAccount = 1
         expect(params[0].name).toBe('TargetYear');
         expect(params[0].type).toBe('string'); // sqlString filter
         expect(params[0].isRequired).toBe(true);
+    });
+});
+
+// ═══════════════════════════════════════════════════
+// NormalizeDefaultForType (enrich.ts)
+// Ensures array-typed parameter defaults are valid JSON arrays.
+// ═══════════════════════════════════════════════════
+
+import { NormalizeDefaultForType } from '../custom/query-extraction/enrich';
+
+describe('NormalizeDefaultForType', () => {
+    it('should pass through non-array types unchanged', () => {
+        expect(NormalizeDefaultForType('hello', 'string')).toBe('hello');
+        expect(NormalizeDefaultForType('42', 'number')).toBe('42');
+        expect(NormalizeDefaultForType('true', 'boolean')).toBe('true');
+    });
+
+    it('should pass through valid JSON array strings for array type', () => {
+        expect(NormalizeDefaultForType('["a","b"]', 'array')).toBe('["a","b"]');
+        expect(NormalizeDefaultForType('[1,2,3]', 'array')).toBe('[1,2,3]');
+    });
+
+    it('should wrap plain string in JSON array for array type', () => {
+        expect(NormalizeDefaultForType('Attended', 'array')).toBe('["Attended"]');
+        expect(NormalizeDefaultForType('Active', 'array')).toBe('["Active"]');
+    });
+
+    it('should wrap non-array JSON value in array for array type', () => {
+        expect(NormalizeDefaultForType('42', 'array')).toBe('[42]');
+        expect(NormalizeDefaultForType('"hello"', 'array')).toBe('["hello"]');
+    });
+
+    it('should handle JSON object default by wrapping in array', () => {
+        const obj = '{"key":"value"}';
+        const result = NormalizeDefaultForType(obj, 'array');
+        expect(JSON.parse(result)).toEqual([{ key: 'value' }]);
     });
 });

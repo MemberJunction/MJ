@@ -1,0 +1,585 @@
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Scope Definition Section -->
+    <mj-collapsible-panel
+        SectionKey="scopeDefinition"
+        SectionName="Scope Definition"
+        Icon="fa fa-info-circle"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Icon"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Scope Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="scopeConfiguration"
+        SectionName="Scope Configuration"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsGlobal"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsDefault"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Access Control Section -->
+    <mj-collapsible-panel
+        SectionKey="accessControl"
+        SectionName="Access Control"
+        Icon="fa fa-lock"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="OwnerUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Lifecycle Management Section -->
+    <mj-collapsible-panel
+        SectionKey="lifecycleManagement"
+        SectionName="Lifecycle Management"
+        Icon="fa fa-clock"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="StartAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EndAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Technical Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="technicalConfiguration"
+        SectionName="Technical Configuration"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ScopeConfig"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SearchContextConfig"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Fusion Weights Section (custom — P4.2).
+         Sliders for each canonical SearchEngine source type, backed by
+         SearchScope.ScopeConfig.fusionWeights JSON. Weights >1 amplify a
+         provider's contribution; weights <1 dampen it. Default 1 = engine
+         default (no override). Plan-doc estimated SearchScopeProvider.Weight
+         but that column doesn't exist; the JSON path is the actual contract
+         the SearchEngine reads. -->
+    <mj-collapsible-panel
+        SectionKey="fusionWeights"
+        SectionName="Fusion Weights"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
+        <div class="fusion-weights">
+            @for (row of FusionWeights; track row.Key) {
+                <div class="fusion-weight-row">
+                    <span class="fusion-weight-label">{{ row.Label }}</span>
+                    <input
+                        class="fusion-weight-slider"
+                        type="range"
+                        min="0"
+                        max="5"
+                        step="0.1"
+                        [disabled]="!EditMode"
+                        [value]="row.Weight"
+                        (change)="OnFusionWeightChanged(row, $any($event.target).valueAsNumber)" />
+                    <span class="fusion-weight-value">{{ row.Weight | number:'1.1-1' }}</span>
+                </div>
+            }
+            <p class="fusion-weights-help">
+                Drag a slider to update <code>ScopeConfig.fusionWeights</code>. Default 1.0 means "use engine default";
+                values are persisted on form save.
+            </p>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Reranker Section (custom — P2D.7 Angular half).
+         Dropdown writes the choice into ScopeConfig JSON's reRanker.driverClass —
+         the same path SearchEngine reads at runtime via pickReRankerConfig().
+         RerankerBudgetCents is rendered here too so the cost-cap input lives
+         right next to the cost-incurring choice. -->
+    <mj-collapsible-panel
+        SectionKey="reranker"
+        SectionName="Reranker"
+        Icon="fa fa-sort-amount-down"
+        [Form]="this"
+        [FormContext]="formContext">
+        <div class="reranker-config">
+            <label class="reranker-config-label">Reranker driver class</label>
+            <select
+                class="mj-input reranker-driver-select"
+                [disabled]="!EditMode"
+                [ngModel]="SelectedRerankerDriverClass"
+                (ngModelChange)="SelectedRerankerDriverClass = $event">
+                <option value="">— None (use NoopReRanker) —</option>
+                @for (option of AvailableRerankers; track option.DriverClass) {
+                    <option [value]="option.DriverClass">
+                        {{ option.Name }}{{ option.HasCost ? ' — paid' : ' — free' }}
+                    </option>
+                }
+            </select>
+            @if (SelectedRerankerHasCost) {
+                <p class="reranker-cost-hint">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    This reranker incurs API cost per search. Set
+                    <strong>RerankerBudgetCents</strong> below to cap spend per invocation.
+                </p>
+            }
+            <p class="reranker-help-hint">
+                Stored on <code>ScopeConfig.reRanker.driverClass</code> — the SearchEngine reads this at runtime.
+                Leave blank to use the pass-through default.
+            </p>
+
+            <mj-form-field
+                [Record]="record"
+                [ShowLabel]="true"
+                FieldName="RerankerBudgetCents"
+                Type="number"
+                [EditMode]="EditMode"
+                [FormContext]="formContext"
+            ></mj-form-field>
+
+            <!-- P3.4 — per-scope tuning CSV export.
+                 Pulls the last 500 rows from MJ: Search Execution Logs filtered
+                 to this scope's ID and downloads as CSV for offline analysis. -->
+            <div class="reranker-export-row">
+                <button class="reranker-export-btn"
+                        type="button"
+                        [disabled]="!record?.ID || IsExportingTuningCsv"
+                        (click)="ExportTuningCsv()">
+                    @if (IsExportingTuningCsv) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        <span>Exporting…</span>
+                    } @else {
+                        <i class="fa-solid fa-download"></i>
+                        <span>Export tuning data (CSV)</span>
+                    }
+                </button>
+                <span class="reranker-export-hint">Last 500 search invocations against this scope.</span>
+            </div>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Live Preview Section (custom — P4.1).
+         Streaming search against this scope, rendered with chip-strip + result
+         list so authors can see how each tuning change (reranker, fusion
+         weights, scope template) affects the actual ranked output. -->
+    <mj-collapsible-panel
+        SectionKey="livePreview"
+        SectionName="Live Preview"
+        Icon="fa fa-flask"
+        [Form]="this"
+        [FormContext]="formContext">
+        <div class="live-preview">
+            <div class="live-preview-input-row">
+                <input
+                    class="mj-input live-preview-input"
+                    type="text"
+                    placeholder="Type a sample query and press Run…"
+                    [disabled]="!record?.ID || PreviewIsRunning"
+                    [value]="PreviewQuery"
+                    (input)="PreviewQuery = $any($event.target).value"
+                    (keydown.enter)="RunPreview()" />
+                @if (!PreviewIsRunning) {
+                    <button class="live-preview-btn"
+                            type="button"
+                            [disabled]="!record?.ID || !PreviewQuery.trim()"
+                            (click)="RunPreview()">
+                        <i class="fa-solid fa-play"></i> Run
+                    </button>
+                } @else {
+                    <button class="live-preview-btn live-preview-btn-cancel"
+                            type="button"
+                            (click)="CancelPreview()">
+                        <i class="fa-solid fa-stop"></i> Cancel
+                    </button>
+                }
+            </div>
+
+            @if (PreviewError) {
+                <p class="live-preview-error">
+                    <i class="fa-solid fa-circle-exclamation"></i> {{ PreviewError }}
+                </p>
+            }
+
+            @if (PreviewIsRunning || PreviewProviders.length > 0) {
+                <div class="live-preview-chips">
+                    @if (PreviewIsRunning && PreviewProviders.length === 0) {
+                        <span class="live-preview-chip live-preview-chip-pending">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i> Streaming…
+                        </span>
+                    }
+                    @for (p of PreviewProviders; track p.Name) {
+                        <span class="live-preview-chip live-preview-chip-completed">
+                            <i class="fa-solid fa-check"></i>
+                            <strong>{{ p.Name }}</strong>
+                            <span class="live-preview-chip-count">{{ p.Count }}</span>
+                            <span class="live-preview-chip-time">{{ p.ElapsedMs }}ms</span>
+                        </span>
+                    }
+                </div>
+            }
+
+            @if (PreviewResults.length > 0) {
+                <div class="live-preview-results">
+                    <div class="live-preview-results-header">
+                        {{ PreviewResults.length }} result(s)
+                        @if (PreviewElapsedMs !== null) { in {{ PreviewElapsedMs }}ms }
+                        @if (LastRunSimilarityPercent !== null) {
+                            <span class="live-preview-similarity"
+                                  [class.live-preview-similarity-low]="LastRunSimilarityPercent < 70"
+                                  title="Kendall-tau rank correlation against the previous run, mapped to [0%, 100%].">
+                                · {{ LastRunSimilarityPercent }}% similar to last run
+                            </span>
+                        }
+                    </div>
+                    @for (r of PreviewResults; track r.ID; let i = $index) {
+                        @if (i < 10) {
+                            <div class="live-preview-result">
+                                <span class="live-preview-result-score">{{ (r.Score * 100) | number:'1.0-0' }}%</span>
+                                <span class="live-preview-result-title">{{ r.Title }}</span>
+                                <span class="live-preview-result-entity">{{ r.EntityName }}</span>
+                            </div>
+                        }
+                    }
+                    @if (PreviewResults.length > 10) {
+                        <p class="live-preview-truncated">…and {{ PreviewResults.length - 10 }} more (preview shows top 10).</p>
+                    }
+                </div>
+            }
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Details Section (kept empty — RerankerBudgetCents now lives in the
+         Reranker section above where it semantically belongs) -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- Search Scope Test Queries Section (P4.4) — canonical test queries for
+         offline tuning. Authors save representative queries here, re-run them
+         after a config change, and compare results. -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeTestQueries"
+        SectionName="Search Scope Test Queries"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Storage Accounts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeStorageAccounts"
+        SectionName="Search Scope Storage Accounts"
+        Icon="fa fa-folder-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeStorageAccounts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Storage Accounts','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeStorageAccounts')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Entities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeEntities"
+        SectionName="Search Scope Entities"
+        Icon="fa fa-search"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeEntities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Entities','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Entities')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeEntities')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeEntities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope External Indexes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeExternalIndexes"
+        SectionName="Search Scope External Indexes"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeExternalIndexes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope External Indexes','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope External Indexes')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeExternalIndexes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeExternalIndexes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Providers Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeProviders"
+        SectionName="Search Scope Providers"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeProviders')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Providers','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeProviders')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeProviders', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Search Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSearchScopes"
+        SectionName="AI Agent Search Scopes"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSearchScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Search Scopes','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Search Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSearchScopes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSearchScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopePermissions"
+        SectionName="Search Scope Permissions"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopePermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Permissions','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopePermissions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopePermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Execution Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchExecutionLogs"
+        SectionName="Search Execution Logs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchExecutionLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Execution Logs','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Execution Logs')"
+                [AllowLoad]="IsSectionExpanded('mJSearchExecutionLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchExecutionLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+</mj-record-form-container>
+        

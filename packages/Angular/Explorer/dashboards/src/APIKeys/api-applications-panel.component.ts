@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, EventEmitter, Output, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { MJAPIApplicationEntity, MJAPIApplicationScopeEntity, MJAPIScopeEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -47,10 +47,10 @@ interface ScopeCategory {
     templateUrl: './api-applications-panel.component.html',
     styleUrls: ['./api-applications-panel.component.css']
 })
-export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
+export class APIApplicationsPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Output() ApplicationUpdated = new EventEmitter<void>();
 
-    private md = new Metadata();
+    private get md() { return this.ProviderToUse; }
     private cdr: ChangeDetectorRef;
 
     // Loading states
@@ -99,6 +99,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
     };
 
     constructor(cdr: ChangeDetectorRef) {
+        super();
         this.cdr = cdr;
     }
 
@@ -529,7 +530,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Internal method to save scope assignments
+     * Internal method to save scope assignments atomically — any failure rolls back every change
      */
     private async saveScopeAssignmentsInternal(): Promise<void> {
         if (!this.SelectedApplication) return;
@@ -538,6 +539,9 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
         const existingScopes = new Map(
             this.SelectedApplication.scopes.map(s => [s.ScopeID, s])
         );
+
+        const tg = await this.md.CreateTransactionGroup();
+        let pendingOps = 0;
 
         for (const selection of this.ScopeSelections) {
             const existing = existingScopes.get(selection.scope.ID);
@@ -552,9 +556,11 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
                 appScope.PatternType = selection.patternType;
                 appScope.IsDeny = selection.isDeny;
                 appScope.Priority = selection.priority;
+                appScope.TransactionGroup = tg;
                 await appScope.Save();
+                pendingOps++;
             } else if (selection.selected && existing) {
-                // Update existing
+                // Update existing (only if something actually changed)
                 if (existing.ResourcePattern !== selection.pattern ||
                     existing.PatternType !== selection.patternType ||
                     existing.IsDeny !== selection.isDeny ||
@@ -563,12 +569,22 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
                     existing.PatternType = selection.patternType;
                     existing.IsDeny = selection.isDeny;
                     existing.Priority = selection.priority;
+                    existing.TransactionGroup = tg;
                     await existing.Save();
+                    pendingOps++;
                 }
             } else if (!selection.selected && existing) {
                 // Delete assignment
+                existing.TransactionGroup = tg;
                 await existing.Delete();
+                pendingOps++;
             }
+        }
+
+        if (pendingOps === 0) return;
+
+        if (!await tg.Submit()) {
+            throw new Error('Failed to save scope assignments — all changes have been rolled back');
         }
     }
 

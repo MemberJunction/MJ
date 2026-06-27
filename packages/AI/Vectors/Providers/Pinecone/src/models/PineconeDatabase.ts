@@ -3,7 +3,7 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, ListVectorIDsParams, ListVectorIDsResult, QueryResponse, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 
 
 export type BaseMetadata = {
@@ -123,7 +123,10 @@ export class PineconeDatabase extends VectorDBBase {
        throw new error("Method not implemented");
     }
 
-    public async QueryIndex(params: QueryOptions): Promise<BaseResponse> {
+    // Pinecone authenticates via its own API key, so contextUser is unused here.
+    // Accepting the parameter keeps the override compatible with the abstract
+    // signature added in @memberjunction/ai-vectordb v5.30+.
+    public async QueryIndex(params: QueryOptions, _contextUser?: UserInfo): Promise<BaseResponse> {
         try{
             // Use index name from params.id if available (for multi-index support)
             // But strip 'id' before passing to Pinecone query() since Pinecone treats
@@ -162,8 +165,11 @@ export class PineconeDatabase extends VectorDBBase {
             return this.wrapSuccessResponse(result);
         }
         catch(ex){
-            console.log(ex);
-            return this.wrapSuccessResponse(null);
+            // Return a FAILURE response — never a success with null data. Reporting success here
+            // silently swallows real upsert errors (e.g. "Vector dimension 1536 does not match the
+            // dimension of the index 512"), making the whole vectorization pipeline claim it worked.
+            LogError("Error creating records", undefined, ex);
+            return this.wrapFailureResponse(ex instanceof Error ? ex.message : String(ex));
         }
     }
 
@@ -185,8 +191,10 @@ export class PineconeDatabase extends VectorDBBase {
             return this.wrapSuccessResponse(fetchResult);
         }
         catch(ex){
+            // Failure must report failure — returning a success response with null data swallows
+            // the fetch error and makes callers believe the records were retrieved.
             LogError("Error getting records", undefined, ex);
-            return this.wrapSuccessResponse(null);
+            return this.wrapFailureResponse(ex instanceof Error ? ex.message : String(ex));
         }
     }
 
@@ -274,19 +282,4 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    private wrapSuccessResponse(data: any): BaseResponse {
-        return {
-            success: true,
-            message: null,
-            data: data
-        }
-    };
-
-    private wrapFailureResponse(message?: string): BaseResponse {
-        return {
-            success: false,
-            message: message || "An error occurred",
-            data: null
-        }
-    }
 }

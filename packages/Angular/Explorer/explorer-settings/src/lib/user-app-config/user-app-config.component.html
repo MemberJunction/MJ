@@ -64,10 +64,10 @@
 
               <div class="panel-content">
                 @if (AvailableApps.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-check-double" aria-hidden="true"></i>
-                    <p>All applications added!</p>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-check-double"
+                    Title="All applications added!" />
                 }
 
                 @for (item of AvailableApps; track item.app.ID) {
@@ -87,6 +87,7 @@
                       mjButton variant="outline" size="sm"
                       (click)="AddApp(item)"
                       title="Add to your apps"
+                      [attr.aria-label]="'Add ' + item.app.Name"
                     >
                       <i class="fa-solid fa-plus" aria-hidden="true"></i>
                       Add
@@ -112,11 +113,11 @@
 
               <div class="panel-content">
                 @if (ActiveApps.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-inbox" aria-hidden="true"></i>
-                    <p>No applications selected</p>
-                    <p class="hint">Add apps from the available list</p>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-inbox"
+                    Title="No applications selected"
+                    Message="Add apps from the available list" />
                 }
 
                 @if (ActiveApps.length > 0) {
@@ -157,6 +158,7 @@
                               [disabled]="i === 0"
                               (click)="MoveUp(item); $event.stopPropagation()"
                               title="Move up"
+                              [attr.aria-label]="'Move ' + item.app.Name + ' up'"
                             >
                               <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
                             </button>
@@ -165,6 +167,7 @@
                               [disabled]="i === ActiveApps.length - 1"
                               (click)="MoveDown(item); $event.stopPropagation()"
                               title="Move down"
+                              [attr.aria-label]="'Move ' + item.app.Name + ' down'"
                             >
                               <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                             </button>
@@ -172,6 +175,7 @@
                               mjButton variant="danger" size="sm"
                               (click)="RemoveApp(item); $event.stopPropagation()"
                               title="Remove from your apps"
+                              [attr.aria-label]="'Remove ' + item.app.Name"
                             >
                               <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                             </button>

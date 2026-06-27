@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { TestEngineBase, TestVariableDefinition, TestTypeVariablesSchema, TestVariablesConfig } from '@memberjunction/testing-engine-base';
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { TestingExecutionService, TestExecutionResult } from '../services/testing-execution.service';
 
@@ -324,10 +324,7 @@ interface ProgressUpdate {
                     </div>
                   }
                   @empty {
-                    <div class="no-items">
-                      <i class="fa-solid fa-inbox"></i>
-                      <p>No tests found</p>
-                    </div>
+                    <mj-empty-state Icon="fa-solid fa-inbox" Title="No tests found" Size="compact" />
                   }
                 </div>
               </div>
@@ -372,10 +369,7 @@ interface ProgressUpdate {
                     </div>
                   }
                   @empty {
-                    <div class="no-items">
-                      <i class="fa-solid fa-inbox"></i>
-                      <p>No test suites found</p>
-                    </div>
+                    <mj-empty-state Icon="fa-solid fa-inbox" Title="No test suites found" Size="compact" />
                   }
                 </div>
               </div>
@@ -987,26 +981,8 @@ interface ProgressUpdate {
       font-size: 20px;
     }
 
-    .no-items {
+    .items-list mj-empty-state {
       flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: var(--mj-text-disabled);
-      padding: 40px;
-      text-align: center;
-    }
-
-    .no-items i {
-      font-size: 48px;
-      margin-bottom: 12px;
-      opacity: 0.3;
-    }
-
-    .no-items p {
-      margin: 0;
-      font-size: 14px;
     }
 
     .options-panel {
@@ -1968,7 +1944,7 @@ interface ProgressUpdate {
     }
   `]
 })
-export class TestRunDialogComponent implements OnInit, OnDestroy {
+export class TestRunDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private testingClient!: GraphQLTestingClient;
   private engine!: TestEngineBase;
@@ -2038,13 +2014,12 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   constructor(
     private cdr: ChangeDetectorRef,
     private executionService: TestingExecutionService
-  ) {
-    // Get GraphQLDataProvider from Metadata.Provider (it's already configured in the Angular app)
-    const dataProvider = Metadata.Provider as GraphQLDataProvider;
-    this.testingClient = new GraphQLTestingClient(dataProvider);
-  }
+  ) { super(); }
 
   async ngOnInit(): Promise<void> {
+    // Initialize the GraphQL testing client using the active provider (multi-provider safe).
+    const dataProvider = this.ProviderToUse as unknown as GraphQLDataProvider;
+    this.testingClient = new GraphQLTestingClient(dataProvider);
     // Get engine instance and ensure it's configured
     this.engine = TestEngineBase.Instance;
 

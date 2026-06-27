@@ -14,6 +14,7 @@ import {
 } from '../types/markdown.types';
 import { createCollapsibleHeadingsExtension } from '../extensions/collapsible-headings.extension';
 import { createSvgRendererExtension } from '../extensions/svg-renderer.extension';
+import { createHtmlBlockRepairExtension } from '../extensions/html-block-repair.extension';
 
 // Import common Prism language components
 // Additional languages can be imported by the consuming application
@@ -72,6 +73,11 @@ export class MarkdownService {
 
     // Apply extensions based on config
     const extensions: any[] = [];
+
+    // Repair HTML blocks split by a blank line (e.g. PRD mockups) so embedded
+    // raw HTML renders instead of showing as an escaped code block. Always on -
+    // precisely scoped to misparsed HTML, leaves prose and fenced code untouched.
+    extensions.push(createHtmlBlockRepairExtension());
 
     // SVG code block renderer - MUST be before syntax highlighting
     // so it can intercept svg blocks before Prism processes them

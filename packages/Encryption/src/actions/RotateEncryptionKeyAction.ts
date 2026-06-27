@@ -35,7 +35,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '../EncryptionEngine';
 import { RotateKeyParams, RotateKeyResult } from '../interfaces';
@@ -107,7 +107,7 @@ export class RotateEncryptionKeyAction {
                 encryptionKeyId,
                 newKeyLookupValue,
                 batchSize
-            }, ContextUser);
+            }, ContextUser, params.Provider);
 
             // Update output parameters
             const outputParams = [...Params];
@@ -151,13 +151,14 @@ export class RotateEncryptionKeyAction {
      */
     private async rotateKey(
         params: RotateKeyParams,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        callerProvider?: IMetadataProvider
     ): Promise<RotateKeyResult> {
         const { encryptionKeyId, newKeyLookupValue, batchSize = 100 } = params;
         const engine = EncryptionEngine.Instance;
         await engine.Config(false, contextUser);
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = (callerProvider ?? new Metadata()) as unknown as IMetadataProvider;
+        const rv = callerProvider ? RunView.FromMetadataProvider(callerProvider) : new RunView();
 
         // Track progress
         const fieldsProcessed: string[] = [];
@@ -232,7 +233,7 @@ export class RotateEncryptionKeyAction {
 
                 try {
                     // Get entity info for schema/view name
-                    const entityInfo = md.Entities.find(e => e.Name === entityName);
+                    const entityInfo = md.EntityByName(entityName);
                     if (!entityInfo) {
                         LogError(`Entity not found: ${entityName}`);
                         continue;
@@ -241,6 +242,8 @@ export class RotateEncryptionKeyAction {
                     // Load records in batches
                     let offset = 0;
                     let hasMore = true;
+
+                    const provider = (callerProvider ?? Metadata.Provider) as DatabaseProviderBase;
 
                     while (hasMore) {
                         // Load a batch of records
@@ -260,19 +263,21 @@ export class RotateEncryptionKeyAction {
                         const records = batchResult.Results;
                         hasMore = records.length === batchSize;
 
-                        // Process each record in the batch
-                        for (const record of records) {
-                            const encryptedValue = record.Get(fieldName);
+                        // Re-encrypt and save the whole batch inside one transaction. If any record
+                        // fails to save, roll the batch back and abort the entire rotation — a
+                        // mixed old/new key state can leave rows unreadable until rotation completes.
+                        await provider.BeginTransaction();
+                        let batchProcessed = 0;
+                        try {
+                            for (const record of records) {
+                                const encryptedValue = record.Get(fieldName);
 
-                            if (!encryptedValue || !engine.IsEncrypted(encryptedValue)) {
-                                continue;
-                            }
+                                if (!encryptedValue || !engine.IsEncrypted(encryptedValue)) {
+                                    continue;
+                                }
 
-                            try {
-                                // Decrypt with old key
+                                // Decrypt with old key and re-encrypt with new key using the new lookup value
                                 const decrypted = await engine.Decrypt(encryptedValue, contextUser);
-
-                                // Re-encrypt with new key using the new lookup value
                                 const reEncrypted = await engine.EncryptWithLookup(
                                     decrypted,
                                     encryptionKeyId,
@@ -280,21 +285,19 @@ export class RotateEncryptionKeyAction {
                                     contextUser
                                 );
 
-                                // Update the record
                                 record.Set(fieldName, reEncrypted);
-                                const recordSaveResult = await record.Save();
-
-                                if (recordSaveResult) {
-                                    totalRecordsProcessed++;
-                                } else {
-                                    // If any record fails, we should consider the rotation failed
-                                    // But we continue to try other records to get a complete picture
-                                    LogError(`Failed to save re-encrypted record in ${fullFieldName}`);
+                                if (!await record.Save()) {
+                                    throw new Error(`Failed to save re-encrypted record in ${fullFieldName}: ${record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                                 }
-                            } catch (recordError) {
-                                const msg = recordError instanceof Error ? recordError.message : String(recordError);
-                                LogError(`Failed to rotate record in ${fullFieldName}: ${msg}`);
+                                batchProcessed++;
                             }
+                            await provider.CommitTransaction();
+                            totalRecordsProcessed += batchProcessed;
+                        } catch (batchError) {
+                            await provider.RollbackTransaction();
+                            const msg = batchError instanceof Error ? batchError.message : String(batchError);
+                            LogError(`Batch rollback in ${fullFieldName} — aborting rotation: ${msg}`);
+                            throw batchError;
                         }
 
                         offset += batchSize;

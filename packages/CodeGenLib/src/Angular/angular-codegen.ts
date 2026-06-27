@@ -490,10 +490,12 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             }
         });
 
-        // Generate plain objects for section initialization
-        const sectionInitEntries = allSections.map((s, index) => {
-            // First 2 sections expanded by default, metadata and related entities collapsed
-            const isExpanded = index < 2 && !s.Name.toLowerCase().includes('metadata') && !s.IsRelatedEntity;
+        // Generate plain objects for section initialization.
+        // Field panels are expanded by default so the record's data is visible on open;
+        // the System Metadata panel and related-entity grids stay collapsed (the grids defer
+        // their data fetch until expanded/scrolled into view — see ExplorerEntityDataGridComponent).
+        const sectionInitEntries = allSections.map((s) => {
+            const isExpanded = !s.IsRelatedEntity && !s.Name.toLowerCase().includes('metadata');
             return `            { sectionKey: '${s.UniqueKey}', sectionName: '${s.Name}', isExpanded: ${isExpanded} }`;
         });
 
@@ -819,7 +821,7 @@ ${indentedFormHTML}
         }
         else {
             // Use the entity's DisplayName (human-friendly) when available, falling back to the technical Name
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const re = md.EntityByID(relatedEntity.RelatedEntityID);
             let tabName = re ? re.DisplayNameOrName : relatedEntity.RelatedEntity;
 
@@ -850,7 +852,7 @@ ${indentedFormHTML}
        * @returns Promise resolving to array of related entity tab sections
        */
       protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         const tabs: AngularFormSectionInfo[] = [];
         // IS-A child entity IDs — these are shown in the toolbar breadcrumb and
         // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
@@ -954,7 +956,7 @@ ${componentCodeWithIndent}
        * @returns Array of organic key tab sections
        */
       protected generateOrganicKeyTabs(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         const tabs: AngularFormSectionInfo[] = [];
         const organicKeys = entity.OrganicKeys;
 
@@ -1260,7 +1262,19 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
         const beforePanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'Before Field Tabs');
         const afterPanels = relatedEntitySections.filter(s => s.RelatedEntityDisplayLocation === 'After Field Tabs');
 
+        // Slot markers — dynamic injection points for BaseFormPanel registrations.
+        // See @memberjunction/ng-base-forms PANELS.md for the authoring guide.
+        // Every generated form gets all four slots so registered panels can target
+        // any position WITHOUT requiring CodeGen to know about the panel ahead of
+        // time. Empty slots have zero rendering cost (anchor only).
+        const slot = (slotKey: string): string =>
+            `    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="${slotKey}" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>`;
+
         const parts: string[] = [];
+
+        // before-fields slot: rare placement, useful for status banners / warnings
+        // above the field stack (e.g., "this record has pending changes").
+        parts.push(slot('before-fields'));
 
         if (beforePanels.length > 0) {
             parts.push(beforePanels.map(s => s.TabCode).join('\n'));
@@ -1274,6 +1288,11 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
             parts.push(sectionsToRender.map(s => s.TabCode).join('\n'));
         }
 
+        // after-fields slot: THE most common slot. Add typed-config / settings
+        // panels that belong with the entity's data but aren't simple fields.
+        parts.push('');
+        parts.push(slot('after-fields'));
+
         if (afterPanels.length > 0) {
             if (parts.length > 0) parts.push('');
             parts.push('    <!-- ========================================');
@@ -1281,6 +1300,11 @@ ${this.innerCollapsiblePanelsHTML(additionalSections, relatedEntitySections)}
             parts.push('         ======================================== -->');
             parts.push(afterPanels.map(s => s.TabCode).join('\n'));
         }
+
+        // after-related slot: bottom-of-form addenda (audit, governance, anything
+        // that's secondary to both the fields and the related-entity grids).
+        parts.push('');
+        parts.push(slot('after-related'));
 
         return parts.join('\n');
       }

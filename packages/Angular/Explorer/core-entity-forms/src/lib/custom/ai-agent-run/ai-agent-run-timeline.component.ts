@@ -1,12 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
-import { Subject, Observable, combineLatest, interval, of, from, Subscription } from 'rxjs';
-import { takeUntil, map, shareReplay, switchMap, filter } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
+import { Subject, Observable, combineLatest } from 'rxjs';
+import { takeUntil, map, shareReplay, filter } from 'rxjs/operators';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TimelineItem {
   id: string;
   type: 'step' | 'subrun' | 'action' | 'prompt';
@@ -35,14 +35,11 @@ export interface TimelineItem {
   styleUrls: ['./ai-agent-run-timeline.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
+export class AIAgentRunTimelineComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
-  @Input() autoRefresh = false;
-  @Input() refreshInterval = 30000; // Minimum 30 seconds
   @Input() dataHelper!: AIAgentRunDataHelper; // Data helper passed from parent
   @Output() itemSelected = new EventEmitter<TimelineItem>();
   @Output() navigateToEntity = new EventEmitter<{ entityName: string; recordId: string }>();
-  @Output() agentRunCompleted = new EventEmitter<string>();
 
   private destroy$ = new Subject<void>();
   
@@ -57,15 +54,17 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   loading = true;
   error: string | null = null;
   selectedItem: TimelineItem | null = null;
-  
-  private refreshTimer: any;
-  private refreshSubscription: Subscription | null = null;
-  
+
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
   
-  ngOnInit() {
+  async ngOnInit() {
+    // AIEngineBase is deferred at startup; ensure it's loaded before timeline
+    // items render — getStepIconInfo / sub-agent lookups read .Agents synchronously.
+    await AIEngineBase.Instance.EnsureLoaded();
+
     // Initialize observables from the data helper
     this.steps$ = this.dataHelper.steps$;
     this.subRuns$ = this.dataHelper.subRuns$;
@@ -105,69 +104,13 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       this.error = error;
       this.cdr.markForCheck();
     });
-    
-    // Auto-refresh logic
-    if (this.autoRefresh) {
-      this.startAutoRefresh();
-    }
   }
-  
+
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-    }
   }
-  
-  private startAutoRefresh() {
-    // Ensure minimum 30 second interval
-    const refreshIntervalMs = Math.max(30000, this.refreshInterval);
-    
-    // Don't create multiple subscriptions - subscribe once and use interval
-    this.refreshSubscription = interval(refreshIntervalMs)
-      .pipe(
-        takeUntil(this.destroy$),
-        // Get the latest agent run status
-        switchMap(() => {
-          if (!this.aiAgentRunId) return of(null);
-          
-          const rv = new RunView();
-          return from(rv.RunView({
-            EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ID = '${this.aiAgentRunId}'`,
-            ResultType: 'simple'
-          }));
-        }),
-        filter(result => result !== null && result.Success && result.Results?.length > 0),
-        map(result => result!.Results[0])
-      )
-      .subscribe(agentRun => {
-        // Check if the agent run is still running
-        if (agentRun.Status === 'Running') {
-          // Reload data
-          this.dataHelper.loadAgentRunData(this.aiAgentRunId);
-        } else {
-          // Agent run completed/failed - stop refresh
-          console.log(`Agent run ${agentRun.Status} - stopping auto-refresh`);
-          this.stopAutoRefresh();
-          // Emit event to parent to update status
-          this.agentRunCompleted.emit(agentRun.Status);
-        }
-      });
-  }
-  
-  private stopAutoRefresh() {
-    if (this.refreshSubscription) {
-      this.refreshSubscription.unsubscribe();
-      this.refreshSubscription = null;
-    }
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-  }
-  
+
   // This method is now just for compatibility - actual loading is done by parent
   async loadData() {
     if (!this.aiAgentRunId) return;

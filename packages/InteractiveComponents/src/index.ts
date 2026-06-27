@@ -8,3 +8,4 @@ export * from './util';
 export * from './component-spec';
 export * from './component-spec-runtime';
 export * from './library-dependency';
+export * from './component-events';

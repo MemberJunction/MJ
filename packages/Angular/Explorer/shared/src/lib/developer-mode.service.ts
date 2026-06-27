@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJUserEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
@@ -38,6 +38,21 @@ export class DeveloperModeService {
     private _isDeveloper$ = new BehaviorSubject<boolean>(false);
     private _initialized = false;
     private _currentUser: MJUserEntity | null = null;
+
+    /**
+     * Optional explicit metadata provider. Set via `setProvider()` from a
+     * caller with provider context. Falls back to `Metadata.Provider` when
+     * not set.
+     */
+    private _provider: IMetadataProvider | null = null;
+
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     // Role names that qualify as "developer"
     private static readonly DEVELOPER_ROLES = [
@@ -95,8 +110,8 @@ export class DeveloperModeService {
 
         this._currentUser = user;
 
-        // Check if user has a developer role
-        const hasDeveloperRole = await this.checkDeveloperRole(user);
+        // Check if user has a developer role (in-memory, no DB round-trip)
+        const hasDeveloperRole = this.checkDeveloperRole(user);
         this._isDeveloper$.next(hasDeveloperRole);
 
         // Load saved preference from User Settings (only if user is a developer)
@@ -184,46 +199,20 @@ export class DeveloperModeService {
     }
 
     /**
-     * Check if user has a developer role by querying User Roles entity
+     * Check if user has a developer role using the in-memory UserInfo.UserRoles
+     * already loaded by the provider. No DB round-trip required — role names
+     * are denormalized onto each UserRoleInfo as `Role`.
      */
-    private async checkDeveloperRole(user: MJUserEntity): Promise<boolean> {
-        try {
-            const rv = new RunView();
-
-            // Get user's roles via the User Roles junction table
-            const userRolesResult = await rv.RunView<{ RoleID: string }>({
-                EntityName: 'MJ: User Roles',
-                ExtraFilter: `UserID='${user.ID}'`,
-                ResultType: 'simple',
-                Fields: ['RoleID']
-            });
-
-            if (!userRolesResult.Success || !userRolesResult.Results?.length) {
-                return false;
-            }
-
-            const roleIds = userRolesResult.Results.map(ur => ur.RoleID);
-
-            // Get the role names
-            const rolesResult = await rv.RunView<{ Name: string }>({
-                EntityName: 'MJ: Roles',
-                ExtraFilter: `ID IN (${roleIds.map(id => `'${id}'`).join(',')})`,
-                ResultType: 'simple',
-                Fields: ['Name']
-            });
-
-            if (!rolesResult.Success || !rolesResult.Results?.length) {
-                return false;
-            }
-
-            // Check if any role matches our developer roles (case-insensitive)
-            const userRoleNames = rolesResult.Results.map(r => r.Name.toLowerCase());
-            return DeveloperModeService.DEVELOPER_ROLES.some(devRole =>
-                userRoleNames.includes(devRole.toLowerCase())
-            );
-        } catch (error) {
-            console.error('Error checking developer role:', error);
+    private checkDeveloperRole(user: MJUserEntity): boolean {
+        const currentUser = this.Provider.CurrentUser;
+        if (!currentUser?.UserRoles?.length) {
             return false;
         }
+        const developerRoleSet = new Set(
+            DeveloperModeService.DEVELOPER_ROLES.map(r => r.toLowerCase())
+        );
+        return currentUser.UserRoles.some(ur =>
+            ur.Role && developerRoleSet.has(ur.Role.toLowerCase())
+        );
     }
 }

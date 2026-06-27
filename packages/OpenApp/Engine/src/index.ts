@@ -24,7 +24,8 @@ export type {
     RemoveOptions,
     AppOperationResult,
     InstalledAppInfo,
-    ResolvedDependency
+    ResolvedDependency,
+    PassthroughInstallOptions
 } from './types/open-app-types.js';
 
 // Dependency resolution
@@ -35,6 +36,13 @@ export type {
     DependencyResolutionResult,
     InstalledAppMap
 } from './dependency/dependency-resolver.js';
+export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
+export type {
+    ManifestFetcher,
+    FetchedManifest,
+    RootApp,
+    GraphResolutionResult
+} from './dependency/dependency-graph-builder.js';
 export {
     CheckMJVersionCompatibility,
     CheckDependencyVersionCompatibility,
@@ -46,9 +54,12 @@ export type { VersionCheckResult } from './dependency/version-checker.js';
 export {
     FetchManifestFromGitHub,
     ListGitHubReleases,
+    ListGitHubTags,
+    ValidateGitHubTag,
     DownloadMigrations,
     GetLatestVersion,
-    ParseGitHubUrl
+    ParseGitHubUrl,
+    GitHubAccessError
 } from './github/github-client.js';
 export type {
     GitHubClientOptions,
@@ -64,18 +75,19 @@ export type { SchemaOperationResult } from './install/schema-manager.js';
 export { RunAppMigrations } from './install/migration-runner.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
-export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, detectPackageManager, hasPnpmCatalog } from './install/package-manager.js';
+export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, BumpPrefixedDependencies, detectPackageManager, hasPnpmCatalog } from './install/package-manager.js';
 export type { PackageManagerOptions, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
     AddServerDynamicPackages,
+    AddClientDynamicPackages,
     RemoveServerDynamicPackages,
     ToggleServerDynamicPackages
 } from './install/config-manager.js';
 export type { DynamicPackageEntry, ConfigOperationResult } from './install/config-manager.js';
 
-export { RegenerateClientBootstrap } from './install/client-bootstrap-gen.js';
-export type { ClientBootstrapEntry } from './install/client-bootstrap-gen.js';
+export { AngularConfigManager, DerivePrebundleExcludePatterns } from './install/angular-config-manager.js';
+export type { AngularConfigResult } from './install/angular-config-manager.js';
 
 export {
     RecordAppInstallation,

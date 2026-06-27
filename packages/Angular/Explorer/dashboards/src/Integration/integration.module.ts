@@ -1,7 +1,22 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJComboboxComponent,
+  MJDropdownComponent,
+  MJSwitchComponent,
+  MJPageLayoutComponent,
+  MJPageHeaderComponent,
+  MJPageBodyComponent,
+  MJPageSearchComponent,
+  MJFilterChipComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent,
+  MJEmptyStateComponent
+} from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
 import { NgTreesModule } from '@memberjunction/ng-trees';
@@ -37,6 +52,16 @@ import { IntegrationDataService } from './services/integration-data.service';
     MJComboboxComponent,
     MJDropdownComponent,
     MJSwitchComponent,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJFilterChipComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
+    MJEmptyStateComponent,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,

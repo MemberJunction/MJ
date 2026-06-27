@@ -1,0 +1,73 @@
+:host { display: block; height: 100%; }
+
+/*
+  Inspector shell — each Dev Tools sub-page wraps its body in .mj-inspector. The
+  chrome (title icon, title, subtitle, action buttons) was previously rendered
+  via .mj-inspector__header*, but that's been replaced by <mj-page-header-interior>
+  in every inspector template. Action buttons now use the mjButton directive
+  (variant="secondary" / "success") so they inherit global button styling. App
+  State + Layout inspectors used to carry an inner left rail (.mj-inspector__body
+  + __sidebar + __nav-item) for L2 sections; that rail was retired 2026-05-19 in
+  favor of <mj-tab-nav> projected into the chrome's [toolbar] slot, matching
+  SystemDiagnostics and the API Keys tab strip. All inspectors are now "solo"
+  mode (no sidebar).
+*/
+.mj-inspector {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    font-family: inherit;
+}
+
+/* Content area */
+.mj-inspector__content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--mj-bg-page);
+}
+.mj-inspector__content-head {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--mj-bg-surface-card);
+}
+.mj-inspector__content-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+.mj-inspector__content-meta {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+}
+.mj-inspector__editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.mj-inspector__editor mj-code-editor {
+    flex: 1;
+    min-height: 0;
+    display: block;
+}
+
+/* Empty state */
+.mj-inspector__empty {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mj-text-muted);
+    font-size: 13px;
+}
+

@@ -51,9 +51,13 @@ export interface MJEnvironmentConfig {
   GRAPHQL_WS_URI: string;
 
   /**
-   * Authentication provider type
+   * Authentication provider type — matches the key a provider registers with via
+   * `@RegisterClass(MJAuthBase, '<type>')`. Built-in providers are listed for
+   * autocomplete, but any string is valid so third parties can plug in their own
+   * provider without editing this union. Resolved at runtime by string key through
+   * `ClassFactory.GetRegistration(MJAuthBase, authType)`.
    */
-  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito';
+  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito' | 'magic-link' | (string & {});
 
   /**
    * MemberJunction core schema name in the database
@@ -81,6 +85,18 @@ export interface MJEnvironmentConfig {
    * Auth0 client ID (for Auth0 auth)
    */
   AUTH0_CLIENTID?: string;
+
+  /**
+   * Master kill switch for the Angular service worker app-shell pre-cache.
+   * Only effective when `production` is also true. When false (default),
+   * `MJExplorerAppModule.forRoot()` does not register the service worker
+   * and the update-notification toast is inert.
+   *
+   * Set to `true` only after you've also added the `serviceWorker` entry
+   * to your `angular.json` build configuration so a real `ngsw-worker.js`
+   * is generated. See `@memberjunction/ng-explorer-service-worker` README.
+   */
+  enableServiceWorker?: boolean;
 
   /**
    * Additional custom environment properties

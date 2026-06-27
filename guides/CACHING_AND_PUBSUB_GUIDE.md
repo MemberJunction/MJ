@@ -19,15 +19,16 @@ This guide covers the complete caching, pub/sub, and real-time data synchronizat
 9. [Storage Providers](#storage-providers)
 10. [BaseEngine Integration](#baseengine-integration)
 11. [Smart Cache Validation (RunViewsWithCacheCheck)](#smart-cache-validation-runviewswithcachecheck)
-12. [Server-Side Opportunistic Cache (All RunView/RunViews Calls)](#server-side-opportunistic-cache-all-runviewrunviews-calls)
-13. [Cross-Server Synchronization (Redis)](#cross-server-synchronization-redis)
-14. [Server-to-Browser Synchronization (GraphQL Subscriptions)](#server-to-browser-synchronization-graphql-subscriptions)
-15. [Deployment Topologies](#deployment-topologies)
-16. [PubSubManager](#pubsubmanager)
-17. [Cache Statistics and Monitoring](#cache-statistics-and-monitoring)
-18. [Configuration Reference](#configuration-reference)
-19. [Troubleshooting](#troubleshooting)
-20. [Server-Side Dataset Caching](#server-side-dataset-caching)
+12. [Client-Side Fast-Start & Pre-Validation](#client-side-fast-start--pre-validation)
+13. [Server-Side Opportunistic Cache (All RunView/RunViews Calls)](#server-side-opportunistic-cache-all-runviewrunviews-calls)
+14. [Cross-Server Synchronization (Redis)](#cross-server-synchronization-redis)
+15. [Server-to-Browser Synchronization (GraphQL Subscriptions)](#server-to-browser-synchronization-graphql-subscriptions)
+16. [Deployment Topologies](#deployment-topologies)
+17. [PubSubManager](#pubsubmanager)
+18. [Cache Statistics and Monitoring](#cache-statistics-and-monitoring)
+19. [Configuration Reference](#configuration-reference)
+20. [Troubleshooting](#troubleshooting)
+21. [Server-Side Dataset Caching](#server-side-dataset-caching)
 
 ---
 
@@ -546,6 +547,22 @@ protected async syncLocalCacheForConfig(
 
 When the cache exceeds `maxSizeBytes` or `maxEntries`, entries are evicted to make room.
 
+### Size Estimation (sampled, not exact)
+
+Entry `sizeBytes` is an **approximate** figure used only for eviction accounting — it is never
+exact and never affects correctness. Rather than `JSON.stringify` the entire result array on every
+cache write (which previously ran an O(rows × fields) serialization on the per-save/delete hot
+path), `estimateResultsSize()` samples a few random rows and scales:
+
+- sample count = `clamp(ceil(rowCount × 0.10), 3, 10)` distinct **random** row indexes
+- average `JSON.stringify(row).length` across the sample, multiply by `rowCount`, ×2 for UTF-16
+- `rowCount === 0` → 0; `rowCount ≤ 3` → measure every row (no sampling)
+
+Random (not first-N) sampling avoids systematic skew when rows are heterogeneous (e.g. a nullable
+large JSON/text column whose head rows happen to be null or oversized). Single-row cache mutations
+(`UpsertSingleEntity`/`RemoveSingleEntity`) likewise avoid per-row `CompositeKey` allocation by
+keying their internal dedup Map with a cheap delimiter-joined PK string.
+
 ### Eviction Trigger
 
 ```typescript
@@ -590,17 +607,61 @@ if (this._entityIndex.get(normalizedName)?.size === 0) {
 
 ## Storage Providers
 
-LocalCacheManager delegates actual storage to an `ILocalStorageProvider` implementation. The interface is simple but powerful:
+LocalCacheManager delegates actual storage to an `ILocalStorageProvider` implementation. The interface is **generic-typed** — `T` flows from caller through to the retrieved value:
 
 ```typescript
 interface ILocalStorageProvider {
-    GetItem(key: string, category?: string): Promise<string | null>;
-    SetItem(key: string, value: string, category?: string): Promise<void>;
+    GetItem<T = unknown>(key: string, category?: string): Promise<T | null>;
+    GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
+    SetItem<T>(key: string, value: T, category?: string): Promise<void>;
     Remove(key: string, category?: string): Promise<void>;
     ClearCategory?(category: string): Promise<void>;
     GetCategoryKeys?(category: string): Promise<string[]>;
 }
 ```
+
+### Native object storage vs. JSON serialization
+
+Each implementation handles serialization for its medium internally — callers see the same object-typed interface regardless of backend:
+
+| Provider | Storage format | Type fidelity |
+|---|---|---|
+| `BrowserIndexedDBStorageProvider` | **Native objects via structured clone** | Preserves `Date`, `Map`, `Set`, typed arrays, nested objects |
+| `BrowserLocalStorageProvider` | JSON-serialized internally | `Date` → ISO string; `Map`/`Set` → plain objects |
+| `RedisLocalStorageProvider` | JSON-serialized internally | Same JSON limitations as localStorage |
+| `InMemoryLocalStorageProvider` | Native references (no copy) | Full identity preserved |
+
+**Why this matters**: IndexedDB's structured clone is implemented in browser-native C++ — significantly faster than JS-level `JSON.parse`/`JSON.stringify`. For cache-heavy workloads (engine warm load, dashboard refreshes) this is a measurable win. The previous string-based interface forced a sandwich of `JSON.stringify` (write) + `JSON.parse` (read) that we no longer pay for IDB-backed cache hits.
+
+```typescript
+// Generic typing flows end-to-end — no manual JSON.parse, no casting
+interface CachedRunViewData { results: unknown[]; maxUpdatedAt: string; }
+
+await provider.SetItem<CachedRunViewData>(fp, { results, maxUpdatedAt }, 'RunViewCache');
+const cached = await provider.GetItem<CachedRunViewData>(fp, 'RunViewCache');
+// cached: CachedRunViewData | null
+```
+
+**Class instances lose their prototype on retrieval** across all providers. Store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`) — methods aren't preserved by structured clone or JSON.
+
+### Batched reads (`GetItems`)
+
+Hot paths that need many cached entries at once — most notably the smart-cache-check warm-load path that reads ~85 fingerprints per coalesced engine bundle — use `GetItems<T>(keys, category?)` to batch reads through the backend's native batching primitive:
+
+| Provider | Backing primitive | Cost saved |
+|---|---|---|
+| `BrowserIndexedDBStorageProvider` | Single read transaction with N parallel `get()` calls | ~3–10ms per per-key transaction overhead × N keys → one transaction's commit cost |
+| `RedisLocalStorageProvider` | Single `MGET` command | (N – 1) network round-trips |
+| `BrowserLocalStorageProvider` / `InMemoryLocalStorageProvider` | Tight loop | Negligible (synchronous backends) |
+
+`LocalCacheManager` exposes a typed wrapper, `GetRunViewResults(fingerprints: string[])`, that delegates to `GetItems` and threads the cache hit/miss accounting through. The smart-cache-check flow uses it in two passes:
+
+1. **Pre-network pass** in `prepareSmartCacheCheckParams`: read all per-fingerprint cache statuses in one batch to build the GraphQL request payload
+2. **Post-network pass** in `executeSmartCacheCheck`: read all 'current' fingerprints' actual cached data in one batch, distribute to per-param processors
+
+Before this, both passes did per-fingerprint reads inside `Promise.all` — looked parallel, but IDB serializes transactions on the same object store and Redis paid full RTT per `GET`. For an 8-engine warm-load bundle of ~85 fingerprints this dropped from ~170 IDB transactions / network round-trips to 2.
+
+The deserialization cost on retrieval is also avoided per pass — the batched implementation deserializes (or structured-clones) once per backend call instead of N times.
 
 ### Category Namespaces
 
@@ -642,12 +703,36 @@ graph TD
 
 **Location**: `packages/GraphQLDataProvider/src/storage-providers.ts`
 
-- **Database name**: `MJ_Metadata`, **Version**: 3
+- **Database name**: `MJ_Metadata`
+- **DB version**: auto-derived from package version as `major * 1000 + minor` (e.g. `5.30.x` → `5030`, `5.31.x` → `5031`, `6.0.x` → `6000`). See "Version-bumped wipe" below.
+- **Native object storage** via IndexedDB's structured clone algorithm — `Date`, `Map`, `Set`, typed arrays, and nested objects are preserved. No JSON.parse/JSON.stringify on the hot path.
 - **Dedicated object stores** for known categories: `mj:default`, `mj:Metadata`, `mj:RunViewCache`, `mj:RunQueryCache`, `mj:DatasetCache`
 - Unknown categories: prefixed keys stored in the default store
-- Automatic upgrade handling (v3 removes legacy `Metadata_KVPairs` store)
-- Graceful fallback to in-memory if IndexedDB fails (e.g., private browsing mode in some browsers)
-- **Key format**: `[mj]:[category]:[key]`
+- **Cross-tab handling**: when another tab triggers a DB upgrade, the local connection's `onversionchange` fires and we close gracefully so the upgrade isn't blocked
+- **This is what `GraphQLDataProvider.LocalStorageProvider` resolves to** in browser environments. The `LocalStorageProvider` / `_localStorageProvider` / `localStorageRootKey` names are historical — the actual backend is IndexedDB.
+
+#### Version-bumped wipe (zero-config schema migrations)
+
+Bumping any minor version of `@memberjunction/graphql-dataprovider` automatically increments the IDB `DB_VERSION`, which fires `onupgradeneeded` on the next page load. The handler drops every object store (cached data may be from any prior schema/format) and recreates them fresh — caches repopulate on first use after the upgrade.
+
+This is intentional design:
+
+- **Patch releases share the DB version** (5.30.0, 5.30.1, 5.30.2 all use DB version `5030`) — frequent patch deploys don't trigger cold-cache loads
+- **Minor releases get a clean cache** — sidesteps the entire "did this PR change cache format?" review burden
+- **Cost**: one slow page load per user per minor (~1s back to the cold-load path) — negligible for monthly LTS cadence
+- **Emergency override**: bump `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force a wipe within a single minor release
+
+The version number is generated at build time by `packages/GraphQLDataProvider/scripts/generate-version.mjs` (a `prebuild`/`pretest` script that reads `package.json` and writes `src/version.generated.ts`). No human action required when bumping versions through the normal changeset flow.
+
+#### Framework Metadata Blob: gzip-Compressed
+
+The framework metadata payload (`AllMetadata` — typically 6–10 MB of JSON) is gzip-compressed before being written to the `Metadata` object store. `SaveLocalMetadataToStorage` uses the native `CompressionStream('gzip')` API; the compressed bytes are base64-encoded for storage. `LoadLocalMetadataFromStorage` reverses the process via `DecompressionStream('gzip')`.
+
+The format used for the current write is recorded in a separate key (`localStorageFormatKey` — values: `'gzip'` or `'json'`) so the read path can dispatch to the right deserializer. An uncompressed fallback path runs when `CompressionStream` is unavailable.
+
+**Why compress?** The dominant cost of loading the metadata cache is `JSON.parse` on the main thread. Parsing ~1 MB is dramatically faster than parsing ~10 MB, and it's synchronous — directly affecting TTI on warm load. Secondary benefits: faster IndexedDB reads, better headroom on storage-constrained devices.
+
+After load, `_localMetadata` is held in memory on the provider instance for the session lifetime. Decompress + parse + `MetadataFromSimpleObject` only runs once per cold load (and again if `backgroundValidateAndRefresh` swaps in fresh data) — never per metadata access.
 
 ### BrowserLocalStorageProvider
 
@@ -657,7 +742,7 @@ graph TD
 - **Key format**: `[mj]:[category]:[key]`
 - Falls back to in-memory if localStorage is unavailable
 - Limited by browser storage quotas (~5-10 MB)
-- Use IndexedDB provider for better capacity and performance
+- **Not used by `GraphQLDataProvider` by default** — `LocalStorageProvider` resolves to `BrowserIndexedDBStorageProvider` whenever `indexedDB` is defined. Available for opt-in scenarios.
 
 ### RedisLocalStorageProvider
 
@@ -713,6 +798,47 @@ sequenceDiagram
 
 All MemberJunction engine singletons (AIEngineBase, DashboardEngine, UserInfoEngine, etc.) extend `BaseEngine<T>`, which provides automatic data loading, caching, and real-time refresh.
 
+### Reactive UI consumption — `ObserveProperty` (the API to know about)
+
+Engines expose every array property as a lazy RxJS observable. **This is the canonical way to keep an Angular UI in sync with cached entities** — no manual reload loops, no `loadX()` calls after every mutation, no race conditions with BaseEntity events.
+
+```typescript
+// From inside the engine — declare a Configs entry (BaseEngine wires the events):
+public async Config(forceRefresh = false, contextUser?, provider?) {
+    await this.Load([
+        { Type: 'entity', EntityName: 'MJ: My Things',
+          PropertyName: '_things',
+          CacheLocal: true },
+    ], provider, forceRefresh, contextUser);
+}
+public get Things(): MyThingEntity[] { return this._things ?? []; }
+public get Things$(): Observable<MyThingEntity[]> {
+    return this.ObserveProperty<MyThingEntity>('_things');
+}
+
+// From a consumer (Angular component, service, anywhere):
+await MyEngine.Instance.Config(false, user, provider);  // lazy — no-op if loaded
+MyEngine.Instance.Things$.subscribe(things => {
+    // Fires immediately with the current array (BehaviorSubject semantics),
+    // and again on every save / delete / remote-invalidate.
+    this.things = things;
+    this.cdr.markForCheck();
+});
+```
+
+Behind the scenes:
+
+- `ObserveProperty(propertyName)` is **lazy-created on first call** — engines whose properties are never observed pay zero runtime cost for the observable.
+- `BehaviorSubject` semantics: subscribers receive the current array immediately on subscribe, then re-receive the same array reference on every mutation.
+- The mutation triggers come from BaseEngine's built-in BaseEntity event handler — `DebounceIndividualBaseEntityEvent` → `ProcessEntityEvent` → either an in-place array mutation (when no `Filter`/`OrderBy`/`AdditionalLoading` are set, so MJ can safely splice) or a full refresh (when a filter is set so MJ can't determine whether the saved row still belongs). Either way, `emitPropertyChange(propertyName)` fires and the observable re-emits.
+- `DataChange$: Observable<EngineDataChangeEvent>` is the engine-wide complement — emits one event per refresh with the config + new data.
+
+**When to build a new engine vs. reuse an existing service**:
+
+- ✅ **Build an engine** when (a) the entity set is small (a few hundred rows max, or filter-narrowable to that), (b) more than one surface needs the same data, and (c) you want UIs / runtime resolvers to auto-update when the data changes. Examples in the repo: `ConversationEngine`, `InteractiveFormsEngine`, `UserInfoEngine`, `KnowledgeHubMetadataEngine`, `ComponentMetadataEngine`.
+- ❌ **Don't bulk-load** if the entity has a huge column (e.g., NVARCHAR(MAX) JSON, vector embeddings) AND no good filter exists to narrow the set — you'd poison `LocalCacheManager`'s memory budget. See `ComponentMetadataEngine`'s comment about deliberately omitting `MJ: Components` for that reason; `InteractiveFormsEngine` solves it by filtering to `Type='Form'` so only the form-role rows (small dataset) get cached.
+- ❌ **Don't add an engine for one-off ad-hoc queries** — that's what `RunView`/`RunViews` is for. Engines are for entities consumed in many places.
+
 ### Engine Configuration
 
 Each engine declares its data needs as `BaseEnginePropertyConfig` entries:
@@ -727,8 +853,31 @@ export class BaseEnginePropertyConfig extends BaseInfo {
     DebounceTime?: number;         // Override debounce (default 1.5s)
     CacheLocal?: boolean;          // Use LocalCacheManager
     CacheLocalTTL?: number;        // Per-config TTL override (ms)
+    ResultType?: 'simple' | 'entity_object'; // See note below — undefined → engine default
 }
 ```
+
+#### ResultType and EngineDefaultResultType
+
+The `ResultType` per-config and the engine-wide `EngineDefaultResultType` getter together control whether `BaseEngine.LoadSingleEntityConfig` / `LoadMultipleEntityConfigs` request `'entity_object'` (full BaseEntity instances — slower, supports `.Save()`/`.Delete()`/dirty-tracking) or `'simple'` (plain JS objects — much faster, read-only).
+
+Resolution order when `config.ResultType` is left undefined:
+
+1. The engine subclass's `EngineDefaultResultType` getter (override per engine for a blanket policy)
+2. The base getter, which returns `'entity_object'`
+
+In other words, the effective default is `'entity_object'` — leaving `ResultType` undefined preserves the historical behavior. Engines that load purely read-only configuration data (where no caller will mutate the rows via `.Save()` / `.Delete()`) can override `EngineDefaultResultType` to skip BaseEntity construction across all their configs:
+
+```typescript
+export class MyReadOnlyEngine extends BaseEngine<MyReadOnlyEngine> {
+    protected override get EngineDefaultResultType(): 'simple' | 'entity_object' {
+        return 'simple'; // every config loads plain objects unless individually overridden
+    }
+    // ...
+}
+```
+
+**Read-only contract for `'simple'`**: configs using `'simple'` should be considered read-only. The immediate-mutation path (`applyImmediateMutation`) operates on `BaseEntity[]` arrays — pushing or replacing with a real BaseEntity instance into a plain-object array would create a heterogeneous array. `canUseImmediateMutation` enforces this at runtime by returning `false` when the effective `ResultType` resolves to `'simple'`, forcing a full refresh on save/delete events instead. See [Immediate Mutation vs Debounced Refresh](#immediate-mutation-vs-debounced-refresh) below.
 
 ### Loading Flow with CacheLocal
 
@@ -844,7 +993,8 @@ this._eventListener.subscribe(async (event) => {
 - Conditions checked by `canUseImmediateMutation(config)`:
   1. Config has no `Filter` (can't verify new/updated records match the filter)
   2. Config has no `OrderBy` (can't maintain sort order without full data)
-  3. Engine doesn't override `AdditionalLoading` (no post-processing dependencies)
+  3. Effective `ResultType` is not `'simple'` (the in-memory array holds plain JS objects; pushing a BaseEntity instance from the event would create a heterogeneous array)
+  4. Engine doesn't override `AdditionalLoading` (no post-processing dependencies)
 - On `save` + `create`: push new entity to array
 - On `save` + `update`: replace entity in array by primary key match
 - On `delete`: splice entity from array by primary key match
@@ -927,6 +1077,81 @@ const targetKey = CompositeKey.FromKeyValuePairs(
 #### Fallback Path
 
 If direct apply fails (parse error, filtered config, etc.), the engine falls back to `LoadSingleConfig` which fetches fresh data from the server.
+
+### On-Demand Engine Loading (Opting Out of Startup)
+
+Most engines register with `@RegisterForStartup()` and load during the parallel startup batch managed by `StartupManager`. For engines whose data is large and only useful in narrow paths, that's wasted work — the dataset gets fetched, parsed, and cached even when nothing in the session will ever query it.
+
+**`GeoDataEngine` is the canonical on-demand example**: country/state-province reference data plus pre-parsed polygon geometry for point-in-polygon resolution. The dataset is ~3,000+ rows with `BoundaryGeoJSON` blobs, and parsing the polygons takes ~3–4 s synchronously on the main thread. Most tenants never use map choropleth or geocoding.
+
+The pattern:
+
+1. **Drop `@RegisterForStartup`** from the engine. It will not auto-load.
+2. **Document the caller contract** in the class JSDoc: callers must `await GeoDataEngine.Instance.Config(...)` before invoking sync lookup methods.
+3. **Optionally short-circuit `Config()`** based on metadata. `GeoDataEngine.Config` checks whether any `EntityInfo.SupportsGeoCoding` is `true` and returns early if not — making the call near-free for tenants where no entity opts into geocoding, even when callers invoke it repeatedly.
+4. **Update each caller** to await `Config()` once at its async entry point. `BaseEngine.Load` already dedups via `_loadingSubject` — concurrent callers share a single in-flight load, and post-load calls return immediately.
+
+```typescript
+// In GeoDataEngine.Config:
+const entities = (provider ?? Metadata.Provider)?.Entities;
+if (entities && !entities.some(e => e.SupportsGeoCoding)) {
+    LogStatus('GeoDataEngine: no entities have SupportsGeoCoding=1 — skipping load');
+    return;
+}
+// ... otherwise call super.Load(configs, ...)
+
+// At the caller — gate the sync API behind one await:
+public async SyncIfChanged(entity: BaseEntity, contextUser: UserInfo): Promise<GeocodeResult | null> {
+    if (resolvedMappings.length === 0) return null;
+    await GeoDataEngine.Instance.Config(false, contextUser); // idempotent + deduped
+    // ... now safe to use GeoDataEngine.Instance.ResolveCountry() etc.
+}
+```
+
+**Sync lookup methods stay sync** in this pattern — they're called *after* the awaited `Config()` returns. The empty-state behavior (maps not populated, all lookups return `undefined`) is the correct shape when no entity in the tenant has opted into the engine's domain — callers already handle the not-found case, so the empty engine is safe to leave in place.
+
+When to use this pattern instead of startup loading:
+- Dataset is large and most sessions don't need it
+- Loading has a measurable main-thread cost (parsing, indexing, geometry building)
+- A metadata flag (`SupportsGeoCoding`, `SupportsAuditLog`, etc.) cleanly indicates whether any caller will need it
+
+When startup loading is still right:
+- Dataset is small and lookups happen everywhere (e.g. `AIEngineBase`, `UserInfoEngine`)
+- The first lookup happens in a hot path that can't easily await an async load (e.g. a synchronous render loop with no setup hook)
+
+### Check the Registry Before You Query (MJ Convention)
+
+The flip side of engines caching eagerly: **other code should reuse those caches instead of re-querying.** In any process that bootstraps via `StartupManager` (MJAPI, MJCLI commands, mj-sync), every `@RegisterForStartup` engine has already loaded its entities into memory before your code runs. A consumer that issues its own unfiltered `RunView` for one of those entities doubles the DB round trips and the RAM, and trips the `REDUNDANT DATA LOADING` warning from `BaseEngineRegistry`'s load tracking.
+
+`BaseEngineRegistry` (in `@memberjunction/core`) provides the reverse lookup:
+
+```typescript
+import { BaseEngineRegistry } from '@memberjunction/core';
+
+// "Best cache or null" — the common one-liner
+const rows = BaseEngineRegistry.Instance.TryGetCachedRecords<UserInfo>('Users', { unfilteredOnly: true });
+if (rows) { /* serve from memory */ } else { /* RunView fallback */ }
+
+// Full matches — when you need to vet the donor's config before trusting it
+const matches = BaseEngineRegistry.Instance.FindCachedEntity('MJ: AI Prompts', { unfilteredOnly: true });
+```
+
+`FindCachedEntity` returns, per loaded engine that caches the entity: the engine instance, the full `BaseEnginePropertyConfig` that produced the cache, and a **live reference** to the cached array (unfiltered full-set caches sort first).
+
+**Vetting a donor.** Treat a match as the authoritative full set only when all of these hold:
+
+1. **`unfilteredOnly: true`** — a `Filter` means a subset, useless as a full cache.
+2. **No `OrderBy`** on the config — ordered configs fail `canUseImmediateMutation` (see [Immediate Mutation vs Debounced Refresh](#immediate-mutation-vs-debounced-refresh)), so the donor responds to entity events with a full refresh that **reassigns** the array property. If your usage outlives a single tick, resolve the array per-access via donor engine + `config.PropertyName` rather than capturing the reference.
+3. **`ResultType` is not `'simple'`** (and `records[0] instanceof BaseEntity` when rows exist) — required if you'll call `.Get()` / `.PrimaryKey` / `.Save()` on the rows.
+4. **Not yourself** — guard `match.engine === this` so an engine's own slot from a prior run can't masquerade as a donor.
+
+**The returned array is the donor's live array — read it, don't mutate it.** For unfiltered/unordered/`entity_object` configs the donor's BaseEntity event subscription keeps the array current on save/delete automatically (see [Real-Time Array Updates](#real-time-array-updates-event-handling)), so a live reference stays fresh for free. Writing into a donor's array requires understanding both sides' dedup semantics — `SyncMetadataEngine` in `@memberjunction/metadata-sync` is the correctly-engineered exception and the reference implementation: its `delegateEntityIfCached()` partitions a dynamic entity set into "delegate to a donor" vs. "self-load", resolves donor arrays per-access, and PK-dedups its writes against the donor's event handler.
+
+A simpler read-only example is `AIEngine.RefreshActions()` in `@memberjunction/aiengine`: `ActionEngineBase` and `ActionEngineServer` are separate singletons that each cache the same unfiltered `'MJ: Actions'` set, so on the server one of them is usually already loaded. `RefreshActions` does `BaseEngineRegistry.Instance.TryGetCachedRecords<MJActionEntity>('MJ: Actions', { unfilteredOnly: true })` and reuses whichever sibling already holds the set, falling back to loading `ActionEngineBase` only on a miss — eliminating a redundant 6-entity load (and the duplicate-RunView telemetry warning) at agent/job startup.
+
+**Why this is a convention, not a one-off optimization**: donors are discovered dynamically at runtime. Consumers get faster automatically as new engines ship — no version coupling, no hardcoded donor lists. When no engine caches the entity, the lookup returns empty and the consumer falls back to its own `RunView`/`Load`, so adoption is always graceful.
+
+The same convention is summarized in the repo root [CLAUDE.md](../CLAUDE.md) under "Check the Registry Before You Query".
 
 ### LocalCacheManager Independent Event Handling
 
@@ -1017,6 +1242,124 @@ This means:
 - **Second client connecting** with an empty cache gets all data from server cache — zero DB queries
 - **Returning client** with valid cache gets `status: 'current'` — zero DB queries and zero data transfer
 - Only genuinely new queries (never seen before) hit the database
+
+---
+
+## Client-Side Fast-Start & Pre-Validation
+
+Smart cache validation eliminates almost all data transfer on warm loads, but it still costs one round-trip per `RunViews` call. During app startup, dozens of engines fire in parallel — each making its own `RunViewsWithCacheCheck` request — which adds up to noticeable TTI on the warm path. **Fast-start** is a deterministic optimization that lets engines trust their local IndexedDB caches *without* per-view smart-cache-check round-trips, gated by a single pre-validation step before engines run.
+
+### The Two-Tier Cache for Client-Side Startup
+
+A client-side provider holds two distinct caches in browser storage:
+
+| Cache | What | Backend | Purpose |
+|---|---|---|---|
+| **Framework metadata** | `AllMetadata` (entity definitions, fields, applications, etc.) | IndexedDB (gzip-compressed) | Powers `Metadata.Provider.Entities`, `entity.Fields`, etc. — needed before any engine can resolve a view |
+| **Engine view results** | Per-`RunView` row sets, keyed by fingerprint | IndexedDB (uncompressed) | What each engine's `CacheLocal: true` config consumes |
+
+Both are loaded at the start of `provider.Config()`. The framework metadata cache is a single-blob round-trip; the engine view caches are loaded lazily by each engine's `RunViews` call. **Fast-start is the policy that decides whether to trust those engine view caches without a server round-trip during the initial load.**
+
+### The Fast-Start Window
+
+Fast-start is controlled by two flags on `ProviderBase`:
+
+```typescript
+public static FastStartupMode: boolean = true;       // master switch
+private static _fastStartupConsumed = false;          // closes the window after startup
+```
+
+While the window is open (`FastStartupMode === true && !_fastStartupConsumed`), `PreRunViews` short-circuits the smart-cache-check path: if **all** params have an entry in `LocalCacheManager`, the cached results are returned without contacting the server. If any param is missing, fast-start falls through to the normal smart-cache-check path for that batch.
+
+The window is closed by `ProviderBase.ConsumeFastStartupMode()`, which `StartupManager.Startup()` calls after every registered engine has reported in. After that point, all subsequent `RunViews` calls go through normal smart-cache-check.
+
+### Pre-Validation: Making Fast-Start Deterministic
+
+Trusting the cache without server validation is only safe if we know nothing has changed since this client last loaded. That's what `preValidateAndRefresh` does — one batched timestamp round-trip *before* engines fire:
+
+```mermaid
+sequenceDiagram
+    participant App as setupGraphQLClient
+    participant Provider as GraphQLDataProvider
+    participant Server as MJAPI
+    participant SM as StartupManager
+    participant Engines as Registered Engines
+
+    App->>Provider: Config(config)
+    Provider->>Provider: LoadLocalMetadataFromStorage<br/>(IndexedDB → decompress → parse)
+    Provider-->>App: Metadata loaded from cache
+
+    App->>Provider: preValidateAndRefresh()
+    Provider->>Server: GetLatestMetadataUpdates<br/>(timestamp + rowCount per entity)
+    Server-->>Provider: Latest timestamps
+
+    alt Local timestamps current
+        Provider-->>App: Fast-start engaged ⚡
+    else Local timestamps stale
+        Provider->>Server: GetAllMetadata (full refresh)
+        Server-->>Provider: Fresh metadata
+        Provider->>Provider: ConsumeFastStartupMode()<br/>(disable fast-start)
+        Provider-->>App: Engines will smart-cache-check
+    end
+
+    App->>SM: Startup()
+    SM->>Engines: Config() in parallel
+    Note over Engines: If fast-start engaged: trust IndexedDB caches<br/>If disabled: smart-cache-check per RunViews
+    SM->>Provider: ConsumeFastStartupMode() after all engines complete
+```
+
+**Cost on the warm-current path**: one batched timestamp fetch (~50–200 ms depending on RTT). Far less than the savings from skipping per-view smart-cache-checks across dozens of engines.
+
+**Cost on the warm-stale path**: pre-validation triggers a full metadata refresh (`GetAllMetadata`) and disables fast-start, so engines fall through to smart-cache-check. This is slower than the cached-current path but eliminates any window in which stale data could be served to the UI.
+
+**On pre-validation failure** (network error, server unreachable): fast-start is disabled defensively — engines fall through to smart-cache-check rather than trusting potentially-stale local caches against an unknown server state.
+
+### The Metadata Cache: gzip on IndexedDB
+
+The framework metadata blob is large — 6–10 MB of JSON for a typical tenant. `SaveLocalMetadataToStorage` compresses it via the native `CompressionStream('gzip')` API before writing to IndexedDB; the compressed blob is base64-encoded for storage and decompressed via `DecompressionStream('gzip')` on read. Compression takes ~50–150 ms on a modern desktop, decompression ~30–80 ms.
+
+**Why compress?** The savings come primarily from `JSON.parse` time on cold/warm load. Parsing a ~1 MB string is dramatically faster than parsing the raw 10 MB string — and `JSON.parse` is a synchronous main-thread operation, so this directly affects TTI. Secondary benefits include faster IndexedDB reads and better headroom on storage-constrained devices (iOS Safari, mobile).
+
+A fallback path serializes uncompressed (`'json'`) when `CompressionStream` is unavailable. The format is recorded in a separate IndexedDB key (`localStorageFormatKey`) so the load path can pick the right deserialization branch.
+
+> **Naming note**: The provider interface and storage keys use names like `LocalStorageProvider`, `_localStorageProvider`, and `localStorageRootKey`. **The actual backend in browsers is IndexedDB**, not browser localStorage — see `BrowserIndexedDBStorageProvider` in `GraphQLDataProvider`. The naming predates the IndexedDB switch and is kept for backwards compatibility.
+
+Every metadata access reads from the in-memory `_localMetadata` object (held on the provider instance for the session lifetime), so decompress/parse only run once per cold load — not per access.
+
+### Per-Item Failure Tolerance in Metadata Deserialization
+
+`MetadataFromSimpleObject` deserializes the cached metadata into typed `EntityInfo` / `ApplicationInfo` / etc. instances. A single corrupt or shape-incompatible row (from an old cache after a schema change, for example) used to throw and void the entire local cache. The deserializer now catches per-item errors, logs them, and continues — partial metadata is preferred over no metadata, since the next `backgroundValidateAndRefresh` will repair it.
+
+### Tying It Together: setupGraphQLClient
+
+```typescript
+export async function setupGraphQLClient(config: GraphQLProviderConfigData): Promise<GraphQLDataProvider> {
+    const provider = new GraphQLDataProvider();
+    SetProvider(provider);
+
+    await provider.Config(config);                  // loads IndexedDB metadata cache
+
+    await provider.preValidateAndRefresh();         // one timestamp round-trip;
+                                                    // refreshes + disables fast-start if stale
+
+    MJGlobal.Instance.RaiseEvent({ event: MJEventType.LoggedIn, ... });
+    await StartupManager.Instance.Startup();        // engines fire in parallel — fast-start
+                                                    // engaged or not based on pre-validation
+
+    return provider;
+}
+```
+
+`StartupManager.Startup` calls `ProviderBase.ConsumeFastStartupMode()` itself once every engine has reported in, closing the window.
+
+### When Fast-Start Helps vs. Doesn't
+
+| Scenario | Behavior | Outcome |
+|---|---|---|
+| Cold load (no IndexedDB cache) | All engines hit cache misses | Fast-start can't engage — normal smart-cache-check populates caches |
+| Warm load, framework metadata current | Pre-validation succeeds, fast-start engaged | Engines trust caches, ~zero round-trips during startup |
+| Warm load, framework metadata stale | Pre-validation refreshes + disables fast-start | Engines smart-cache-check per view, picking up any stale entries |
+| Pre-validation fails (network error) | Fast-start disabled defensively | Engines smart-cache-check; if those also fail, normal error handling kicks in |
 
 ---
 
@@ -1554,6 +1897,13 @@ const status = LocalCacheManager.Instance.GetRunViewCacheStatus(fingerprint);
 | `ServerAutoCacheMaxRows` | 250 | Max row count for auto-caching unfiltered RunView results (0 = disabled) |
 | `DedupLingerMs` | 5,000 ms | How long resolved RunViews results stay available for instant replay |
 
+### ProviderBase Client-Side Fast-Start
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `FastStartupMode` (static) | `true` | Master switch for the fast-start window. When false, engines always go through smart-cache-check on warm loads. |
+| `MinRefreshCheckIntervalMs` (static) | varies | Minimum gap between successive `CheckToSeeIfRefreshNeeded` calls — prevents the pre-validation timestamp fetch from being fired repeatedly within a short window. |
+
 ### Redis Configuration
 
 Set `REDIS_URL` environment variable on MJAPI:
@@ -1569,6 +1919,13 @@ REDIS_URL=redis://user:password@redis-host:6379
 |---------|---------|-------------|
 | `EntityEventDebounceTime` | 1,500 ms | Debounce for filtered/sorted config refresh |
 | `CacheLocalTTL` | 300,000 ms (5 min) | Per-config TTL override |
+
+### BaseEngine ResultType
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `BaseEnginePropertyConfig.ResultType` | `undefined` | Per-config override. `undefined` resolves to `EngineDefaultResultType` (engine-wide). |
+| `EngineDefaultResultType` (getter) | `'entity_object'` | Engine-wide default. Override in subclasses returning `'simple'` for read-only engines to skip BaseEntity construction. |
 
 ### GraphQL WebSocket
 

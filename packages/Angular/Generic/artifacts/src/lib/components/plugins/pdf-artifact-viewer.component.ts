@@ -1,5 +1,6 @@
 import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
+import { DataSnapshot } from '@memberjunction/core';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { ArtifactFileService } from '../../services/artifact-file.service';
 
@@ -21,7 +22,7 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
   template: `
     <div class="pdf-viewer">
       <mj-file-artifact-toolbar
-        [fileName]="artifactVersion?.FileName || 'document.pdf'"
+        [fileName]="artifactVersion.FileName || 'document.pdf'"
         [currentPage]="currentPage"
         [totalPages]="totalPages"
         [isDownloading]="isDownloading"
@@ -37,7 +38,8 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
         (pageChange)="onPageChange($event)"
         (zoomIn)="onZoomIn()"
         (zoomOut)="onZoomOut()"
-        (zoomReset)="onZoomReset()">
+        (zoomReset)="onZoomReset()"
+      >
       </mj-file-artifact-toolbar>
 
       <div class="pdf-viewer__body">
@@ -59,58 +61,59 @@ import { ArtifactFileService } from '../../services/artifact-file.service';
       </div>
     </div>
   `,
-  styles: [`
-    .pdf-viewer {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface-sunken);
-    }
+  styles: [
+    `
+      .pdf-viewer {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: var(--mj-bg-surface-sunken);
+      }
 
-    .pdf-viewer__body {
-      flex: 1;
-      min-height: 0;
-      overflow: auto;
-    }
+      .pdf-viewer__body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+      }
 
-    .pdf-viewer__state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 12px;
-      height: 100%;
-      color: var(--mj-text-muted);
-      font-size: 14px;
-    }
+      .pdf-viewer__state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        height: 100%;
+        color: var(--mj-text-muted);
+        font-size: 14px;
+      }
 
-    .pdf-viewer__state--error {
-      color: var(--mj-status-error-text);
-    }
+      .pdf-viewer__state--error {
+        color: var(--mj-status-error-text);
+      }
 
-    .pdf-viewer__canvas-wrap {
-      display: flex;
-      justify-content: center;
-      padding: 16px;
-      /* Prevent centered overflow from clipping the left side of zoomed pages.
+      .pdf-viewer__canvas-wrap {
+        display: flex;
+        justify-content: center;
+        padding: 16px;
+        /* Prevent centered overflow from clipping the left side of zoomed pages.
          min-width: fit-content makes the wrap grow to fit the canvas so the
          parent overflow:auto container can scroll to both edges. */
-      min-width: fit-content;
-    }
+        min-width: fit-content;
+      }
 
-    canvas {
-      display: block;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
-      /* Natural size — do NOT add max-width:100% here.
+      canvas {
+        display: block;
+        box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
+        /* Natural size — do NOT add max-width:100% here.
          renderPage sets width/aspect-ratio/height inline so the canvas renders at
          exactly the zoomed logical size. The scroll area (overflow:auto on the body)
          handles pages wider than the panel, which is the correct UX for zoom. */
-    }
-  `]
+      }
+    `,
+  ],
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'PdfArtifactViewerPlugin')
 export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
-
   @ViewChild('pdfCanvas') canvasRef?: ElementRef<HTMLCanvasElement>;
 
   public isLoading = true;
@@ -137,10 +140,14 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     super();
   }
 
-  public override get hasDisplayContent(): boolean { return true; }
+  public override get hasDisplayContent(): boolean {
+    return true;
+  }
 
   /** Current zoom as an integer percentage for toolbar display. */
-  public get zoomPercent(): number { return Math.round(this.zoomLevel * 100); }
+  public get zoomPercent(): number {
+    return Math.round(this.zoomLevel * 100);
+  }
 
   public get canZoomIn(): boolean {
     return this.zoomLevel < this.ZOOM_STEPS[this.ZOOM_STEPS.length - 1];
@@ -181,7 +188,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
   // ─── Zoom ────────────────────────────────────────────────────────────────────
 
   public async onZoomIn(): Promise<void> {
-    const next = this.ZOOM_STEPS.find(z => z > this.zoomLevel);
+    const next = this.ZOOM_STEPS.find((z) => z > this.zoomLevel);
     if (next !== undefined) {
       this.zoomLevel = next;
       await this.renderPage(this.currentPage);
@@ -255,10 +262,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
         const arrayBuffer = this.fileService.dataUrlToArrayBuffer(content);
         pdfDoc = await this.loadPdfFromData(new Uint8Array(arrayBuffer));
         // Create an object URL for download/print support
-        this.downloadUrl = this.fileService.dataUrlToObjectUrl(
-          content,
-          this.artifactVersion.MimeType || 'application/pdf'
-        );
+        this.downloadUrl = this.fileService.dataUrlToObjectUrl(content, this.artifactVersion.MimeType || 'application/pdf');
       }
 
       this.pdfDoc = pdfDoc;
@@ -284,23 +288,20 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     if (!this.pdfDoc || !this.canvasRef?.nativeElement) {
       return;
     }
-    const page = await this.pdfDoc.getPage(1) as PdfPageProxy;
+    const page = (await this.pdfDoc.getPage(1)) as PdfPageProxy;
     // naturalViewport.width is the CSS pixel width of the page at zoom = 1.0
     const naturalViewport = page.getViewport({ scale: this.BASE_SCALE });
     const body = this.canvasRef.nativeElement.closest('.pdf-viewer__body') as HTMLElement | null;
     const availableWidth = (body?.clientWidth ?? 0) - 32; // 16px padding each side
     if (availableWidth > 0 && naturalViewport.width > 0) {
       const fitZoom = availableWidth / naturalViewport.width;
-      this.zoomLevel = Math.max(
-        this.ZOOM_STEPS[0],
-        Math.min(fitZoom, this.ZOOM_STEPS[this.ZOOM_STEPS.length - 1])
-      );
+      this.zoomLevel = Math.max(this.ZOOM_STEPS[0], Math.min(fitZoom, this.ZOOM_STEPS[this.ZOOM_STEPS.length - 1]));
     }
   }
 
   /** Dynamically import pdfjs-dist and point it at the bundled worker. */
   private async initPdfJs(): Promise<void> {
-    const pdfjsLib = await import('pdfjs-dist') as unknown as PdfJsLib;
+    const pdfjsLib = (await import('pdfjs-dist')) as unknown as PdfJsLib;
     // pdfjs-dist v4 requires an explicit workerSrc. The worker file is copied to
     // /assets/pdf.worker.min.mjs via the angular.json assets config in MJExplorer.
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/pdf.worker.min.mjs';
@@ -326,7 +327,7 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
 
     this.cancelCurrentRender();
 
-    const page = await this.pdfDoc.getPage(pageNum) as PdfPageProxy;
+    const page = (await this.pdfDoc.getPage(pageNum)) as PdfPageProxy;
     const canvas = this.canvasRef.nativeElement;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
@@ -372,8 +373,20 @@ export class PdfArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.cdr.markForCheck();
   }
 
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    const snap = new DataSnapshot();
+    snap.title = this.getDisplayTitle() ?? undefined;
+    snap.interpretation = `PDF document, ${this.totalPages} page${this.totalPages !== 1 ? 's' : ''}. Currently viewing page ${this.currentPage}.`;
+    snap.custom = {
+      pageCount: this.totalPages,
+      currentPage: this.currentPage,
+      fileName: this.artifactVersion.FileName ?? undefined,
+      mimeType: this.artifactVersion.MimeType ?? 'application/pdf',
+      contentMode: this.artifactVersion.ContentMode,
+    };
+    return snap;
+  }
 }
-
 
 // ─── Minimal type shims for pdfjs-dist dynamic import ─────────────────────────
 // We avoid a hard build-time dependency on pdfjs-dist types by declaring only

@@ -26,7 +26,16 @@ const ANTI_PATTERNS = [
     /\.includes\(\w+\.ID\b\)/,                                   // array.includes(x.ID) — uses === internally
 ];
 
-/** Files/directories to exclude from scanning */
+/**
+ * Files/directories to exclude from scanning.
+ *
+ * Each pattern is matched against the path with both `\` and `/` separators.
+ * On Windows, `path.join` and `fs.readdirSync` produce backslash-separated
+ * paths; the previous version of these patterns used `/dist/` and `/generated/`
+ * which silently never matched on Windows, producing false-positive flags for
+ * generated entity_subclasses.ts, etc. Each scan now normalizes the candidate
+ * path to forward slashes before testing.
+ */
 const EXCLUDE_PATTERNS = [
     /node_modules/,
     /\/dist\//,
@@ -41,16 +50,29 @@ const EXCLUDE_PATTERNS = [
     /package-lock\.json$/,
 ];
 
-/** Known exceptions — files where .ID === is comparing non-UUID values (e.g., numeric IDs, string enum values) */
+/** Known exceptions — files where .ID === is comparing non-UUID values (e.g., numeric IDs, string enum values).
+ *  Keys MUST use forward slashes; the test normalizes scanned paths to forward slashes before lookup so
+ *  the same exception list works on Windows and Unix. */
 const KNOWN_EXCEPTIONS: Record<string, string[]> = {
     // Add file paths (relative to packages/) and the reason they're excepted
     // Example: 'SomePackage/src/file.ts': ['Uses numeric IDs, not UUIDs'],
     'Angular/Explorer/dashboards/src/Integration/components/mapping-workspace/mapping-workspace.component.ts': ['LocalID is a local string identifier (e.g. "pending-1"), not a UUID'],
+    'Angular/Explorer/explorer-core/src/lib/resource-wrappers/livekit-room-resource.component.ts': ['Voice .ID is a provider-native voice slug (e.g. "echo"), not a UUID — RealtimeVoiceOption.ID'],
+    'Angular/Generic/mj-livekit-room/src/lib/mj-livekit-room.component.ts': ['Voice .ID is a provider-native voice slug (e.g. "echo"), not a UUID — RealtimeVoiceOption.ID'],
 };
+
+/** Normalize a path to forward slashes so EXCLUDE_PATTERNS and KNOWN_EXCEPTIONS lookups
+ *  work identically on Windows and Unix. Without this, `\generated\` on Windows
+ *  silently bypasses the `/generated/` filter and the test reports false positives
+ *  in auto-generated code. */
+function normalizePath(filePath: string): string {
+    return filePath.replace(/\\/g, '/');
+}
 
 function shouldScanFile(filePath: string): boolean {
     if (!filePath.endsWith('.ts')) return false;
-    return !EXCLUDE_PATTERNS.some(pattern => pattern.test(filePath));
+    const normalized = normalizePath(filePath);
+    return !EXCLUDE_PATTERNS.some(pattern => pattern.test(normalized));
 }
 
 function findTsFiles(dir: string): string[] {
@@ -85,8 +107,11 @@ function scanFileForViolations(filePath: string): Violation[] {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n');
 
-    // Check if file is in known exceptions
-    const relativePath = path.relative(SCAN_ROOT, filePath);
+    // Check if file is in known exceptions. Normalize to forward slashes —
+    // path.relative produces backslash-separated paths on Windows, but
+    // KNOWN_EXCEPTIONS keys are intentionally written with forward slashes
+    // for cross-platform readability.
+    const relativePath = normalizePath(path.relative(SCAN_ROOT, filePath));
     if (KNOWN_EXCEPTIONS[relativePath]) {
         return [];
     }

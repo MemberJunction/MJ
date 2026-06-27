@@ -3,7 +3,7 @@
   "type": "generic",
   "title": "DataGrid Query Field Typo - Broken Pattern",
   "description": "Tests linter detection of typo in DataGrid query field",
-  "code": "function DataGridQueryFieldTypoBroken({ utilities, components }) {\n  const [reportData, setReportData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Member Report',\n        CategoryPath: 'Membership/Reports'\n      });\n      if (result?.Success) {\n        setReportData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Member Report</h3>\n      {/* ❌ Typo: MemebrName should be MemberName */}\n      <DataGrid \n        data={reportData} \n        columns={[\n          {field: 'MemebrName', title: 'Name'},\n          {field: 'JoinDate', title: 'Joined'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "code": "function DataGridQueryFieldTypoBroken({ utilities, components }) {\n  const [reportData, setReportData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'Employee Report',\n        CategoryPath: 'HR/Reports'\n      });\n      if (result?.Success) {\n        setReportData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Employee Report</h3>\n      {/* ❌ Typo: FrstName should be FirstName */}\n      <DataGrid \n        data={reportData} \n        columns={[\n          {field: 'FrstName', title: 'Name'},\n          {field: 'Email', title: 'Email'}\n        ]} \n      />\n    </div>\n  );\n}",
   "location": "embedded",
   "namespace": "test/fixtures/type-rules",
   "version": "1.0.0",
@@ -11,9 +11,15 @@
   "status": "Active",
   "dataRequirements": {
     "queries": [{
-      "name": "Member Report",
-      "categoryPath": "Membership/Reports",
-      "fields": ["MemberID", "MemberName", "JoinDate", "Status"]
+      "name": "Employee Report",
+      "categoryPath": "HR/Reports",
+      "fields": [
+        {"name": "EmployeeID", "type": "uniqueidentifier"},
+        {"name": "FirstName", "type": "nvarchar"},
+        {"name": "LastName", "type": "nvarchar"},
+        {"name": "Email", "type": "nvarchar"},
+        {"name": "Title", "type": "nvarchar"}
+      ]
     }]
   }
 }

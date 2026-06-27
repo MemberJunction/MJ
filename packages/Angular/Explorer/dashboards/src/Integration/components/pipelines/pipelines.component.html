@@ -1,41 +1,36 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integration Pipelines"
+    Icon="fa-solid fa-diagram-project"
+    Subtitle="Data transformation and routing pipelines">
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         Pipelines count mirrored the visible list; entity-maps count was
+         cross-aggregate reference info that didn't drive action on this page. -->
+    <div actions>
+      <button mjButton variant="secondary" size="sm" (click)="ExpandAll()" title="Expand All">
+        <i class="fa-solid fa-angles-down"></i>
+      </button>
+      <button mjButton variant="secondary" size="sm" (click)="CollapseAll()" title="Collapse All">
+        <i class="fa-solid fa-angles-up"></i>
+      </button>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search integrations or entities..."
+        [Value]="GlobalSearch"
+        (ValueChange)="OnGlobalSearchValue($event)">
+      </mj-page-search>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 <div class="pipelines-container">
 
   <!-- ===================================================================== -->
   <!-- MAP LIST VIEW (hidden when editor is open)                            -->
   <!-- ===================================================================== -->
   @if (!VisualEditorOpen) {
-
-    <!-- Toolbar -->
-    <div class="pipelines-toolbar">
-      <div class="toolbar-left">
-        <h2 class="toolbar-title">
-          <i class="fa-solid fa-diagram-project"></i>
-          Pipelines
-        </h2>
-        <span class="toolbar-count-badge">{{ IntegrationCount }}</span>
-        <span class="toolbar-map-count">{{ TotalMapCount }} entity maps</span>
-      </div>
-      <div class="toolbar-right">
-        <div class="global-search">
-          <i class="fa-solid fa-search search-icon"></i>
-          <input type="text"
-                 class="search-input"
-                 placeholder="Search integrations or entities..."
-                 [value]="GlobalSearch"
-                 (input)="OnGlobalSearchChange($event)" />
-        </div>
-        <button class="toolbar-btn" (click)="ExpandAll()" title="Expand All">
-          <i class="fa-solid fa-angles-down"></i>
-        </button>
-        <button class="toolbar-btn" (click)="CollapseAll()" title="Collapse All">
-          <i class="fa-solid fa-angles-up"></i>
-        </button>
-        <div class="toolbar-divider"></div>
-        <button class="toolbar-btn" (click)="LoadData()" title="Refresh">
-          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i>
-        </button>
-      </div>
-    </div>
 
     <!-- Main content area -->
     <div class="pipelines-content">
@@ -45,11 +40,9 @@
           <span>Loading pipelines...</span>
         </div>
       } @else if (PipelineCards.length === 0) {
-        <div class="content-empty">
-          <i class="fa-solid fa-diagram-project empty-icon"></i>
-          <h3>No Integration Pipelines</h3>
-          <p>Configure integrations to see data flow pipelines here.</p>
-        </div>
+        <mj-empty-state Icon="fa-solid fa-diagram-project"
+          Title="No Integration Pipelines"
+          Message="Configure integrations to see data flow pipelines here." />
       } @else {
         <div class="cards-list">
           @for (card of FilteredCards; track card.IntegrationID) {
@@ -286,7 +279,7 @@
                   <i class="fa-solid fa-spinner fa-spin"></i> Loading...
                 </div>
               } @else if (PreviewSourceRows.length === 0) {
-                <div class="ve-preview-empty">No source data available</div>
+                <mj-empty-state class="ve-preview-empty" Size="compact" Icon="fa-solid fa-table" Title="No source data available" />
               } @else {
                 <div class="ve-preview-table-wrap">
                   <table class="ve-preview-table">
@@ -325,7 +318,7 @@
                   <i class="fa-solid fa-spinner fa-spin"></i> Loading...
                 </div>
               } @else if (PreviewDestRows.length === 0) {
-                <div class="ve-preview-empty">No destination data available</div>
+                <mj-empty-state class="ve-preview-empty" Size="compact" Icon="fa-solid fa-table" Title="No destination data available" />
               } @else {
                 <div class="ve-preview-table-wrap">
                   <table class="ve-preview-table">
@@ -454,7 +447,7 @@
                             </div>
                           }
                           @if (FilteredEditorSourceFields.length === 0) {
-                            <div class="ve-field-empty">No source fields found</div>
+                            <mj-empty-state class="ve-field-empty" Size="compact" Icon="fa-solid fa-list" Title="No source fields found" />
                           }
                         </div>
 
@@ -507,7 +500,7 @@
                             </div>
                           }
                           @if (FilteredEditorDestFields.length === 0) {
-                            <div class="ve-field-empty">No destination fields found</div>
+                            <mj-empty-state class="ve-field-empty" Size="compact" Icon="fa-solid fa-list" Title="No destination fields found" />
                           }
                         </div>
                       </div>
@@ -745,3 +738,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

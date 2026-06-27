@@ -8,6 +8,7 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
 import { ListSharingService } from '../../services/list-sharing.service';
@@ -35,11 +36,22 @@ import {
   templateUrl: './list-share-dialog.component.html',
   styleUrls: ['./list-share-dialog.component.css']
 })
-export class ListShareDialogComponent implements OnInit, OnDestroy {
+export class ListShareDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   /**
    * Configuration for the dialog
    */
   @Input() config!: ListShareDialogConfig;
+
+  /**
+   * Supporting message for the empty-state shown when a list has no shares.
+   * Appends a usage hint when the current user can manage shares.
+   */
+  public get EmptyShareMessage(): string {
+    const base = "This list hasn't been shared with anyone yet.";
+    return this.canModifyShares
+      ? `${base} Use the search above to find users or roles to share with.`
+      : base;
+  }
 
   /**
    * Controls dialog visibility
@@ -65,6 +77,26 @@ export class ListShareDialogComponent implements OnInit, OnDestroy {
    * Emitted when dialog is cancelled
    */
   @Output() cancel = new EventEmitter<void>();
+
+  /**
+   * Emitted when the user clicks "Manage Invitations" in the footer.
+   * Phase 2: opens the invitations management UI for this list.
+   */
+  @Output() manageInvitations = new EventEmitter<void>();
+
+  /**
+   * Emitted when the user clicks "View audit log" in the footer.
+   * Phase 2: opens the per-list audit log view.
+   */
+  @Output() viewAuditLog = new EventEmitter<void>();
+
+  /**
+   * When true (the default), newly-added shares fan out as notifications
+   * to the recipient (email + in-app, depending on user preferences).
+   * The state is captured on the dialog so consumers can read it back
+   * via `ListShareDialogResult.notifyByEmail`.
+   */
+  public notifyByEmail = true;
 
   // State
   loading = false;
@@ -98,7 +130,8 @@ export class ListShareDialogComponent implements OnInit, OnDestroy {
   constructor(
     private sharingService: ListSharingService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit(): void {
     this.setupSearchDebounce();
@@ -259,7 +292,7 @@ export class ListShareDialogComponent implements OnInit, OnDestroy {
     this.saving = true;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let result;
 
       if (this.selectedRecipient.type === 'User') {
@@ -390,7 +423,8 @@ export class ListShareDialogComponent implements OnInit, OnDestroy {
       action: 'apply',
       sharesAdded: this.sharesAdded,
       sharesUpdated: this.sharesUpdated,
-      sharesRemoved: this.sharesRemoved
+      sharesRemoved: this.sharesRemoved,
+      notifyByEmail: this.notifyByEmail
     };
 
     this._visible = false;

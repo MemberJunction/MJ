@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/cli",
   "type": "module",
-  "version": "5.27.1",
+  "version": "5.43.0",
   "description": "MemberJunction command line tools",
   "keywords": [
     "oclif"
@@ -24,10 +24,11 @@
   "files": [
     "/bin",
     "/dist",
-    "/oclif.manifest.json"
+    "/oclif.manifest.json",
+    "/regression-compose"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f && oclif manifest",
+    "build": "tsc && tsc-alias -f && oclif manifest && node scripts/copy-regression-assets.mjs",
     "prepack": "npm run build && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md",
@@ -38,7 +39,8 @@
     "commands": "./dist/commands",
     "hooks": {
       "init": "./dist/hooks/init",
-      "prerun": "./dist/hooks/prerun"
+      "prerun": "./dist/hooks/prerun",
+      "postrun": "./dist/hooks/postrun"
     },
     "dirname": "mj",
     "topicSeparator": " ",
@@ -53,19 +55,25 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
-    "@memberjunction/ai-cli": "5.27.1",
-    "@memberjunction/codegen-lib": "5.27.1",
-    "@memberjunction/config": "5.27.1",
-    "@memberjunction/core": "5.27.1",
-    "@memberjunction/installer": "5.27.1",
-    "@memberjunction/db-auto-doc": "5.27.1",
-    "@memberjunction/metadata-sync": "5.27.1",
-    "@memberjunction/query-gen": "5.27.1",
-    "@memberjunction/server-bootstrap-lite": "5.27.1",
-    "@memberjunction/skyway-core": "^0.5.3",
-    "@memberjunction/sql-converter": "5.27.1",
-    "@memberjunction/sqlserver-dataprovider": "5.27.1",
-    "@memberjunction/testing-cli": "5.27.1",
+    "@memberjunction/ai-cli": "5.43.0",
+    "@memberjunction/cli-core": "5.43.0",
+    "@memberjunction/codegen-lib": "5.43.0",
+    "@memberjunction/config": "5.43.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/generic-database-provider": "5.43.0",
+    "@memberjunction/installer": "5.43.0",
+    "@memberjunction/db-auto-doc": "5.43.0",
+    "@memberjunction/metadata-sync": "5.43.0",
+    "@memberjunction/open-app-engine": "5.43.0",
+    "@memberjunction/query-gen": "5.43.0",
+    "@memberjunction/server-bootstrap-lite": "5.43.0",
+    "@memberjunction/skyway-core": "^0.6.2",
+    "@memberjunction/skyway-postgres": "^0.6.2",
+    "@memberjunction/skyway-sqlserver": "^0.6.2",
+    "@memberjunction/sql-converter": "5.43.0",
+    "@memberjunction/sqlglot-ts": "5.43.0",
+    "@memberjunction/sqlserver-dataprovider": "5.43.0",
+    "@memberjunction/testing-cli": "5.43.0",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",
     "@oclif/plugin-version": "^2.2.36",
@@ -78,7 +86,10 @@
     "fast-glob": "^3.3.3",
     "figlet": "^1.10.0",
     "fs-extra": "^11.3.3",
+    "mssql": "^11.0.1",
     "ora-classic": "^5.4.2",
+    "pg": "^8.13.1",
+    "pg-query-stream": "~4.8.0",
     "recast": "^0.23.11",
     "simple-git": "^3.30.0",
     "zod": "~3.24.4"
@@ -87,6 +98,7 @@
     "@oclif/prettier-config": "^0.2.1",
     "@types/figlet": "^1.7.0",
     "@types/fs-extra": "^11.0.4",
+    "@types/pg": "^8.11.10",
     "oclif": "^4.22.73",
     "rimraf": "6.1.2",
     "tsx": "^4.21.0",

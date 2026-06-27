@@ -1,7 +1,7 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AgentSpec } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentSpecSync } from '../agent-spec-sync';
 import { TemplateEngineServer } from '@memberjunction/templates';
@@ -68,12 +68,14 @@ export class AgentBuilderAgent extends BaseAgent {
 
             console.log(`✅ Builder Agent: Successfully created agent with ID: ${result.agentId}`);
 
-            // Refresh metadata and template caches
+            // Refresh metadata and template caches via the per-request provider so the
+            // refresh hits the right server in multi-tenant deployments. ExecuteAgentParams
+            // carries `provider` from the GraphQL context (see agent-types.ts).
             console.log('🔄 Builder Agent: Refreshing metadata and template caches...');
-            const md = new Metadata();
+            const md = (params.provider ?? new Metadata()) as unknown as IMetadataProvider;
             await md.Refresh();
 
-            const templateEngine = new TemplateEngineServer();
+            const templateEngine = TemplateEngineServer.Instance;
             await templateEngine.Config(true, params.contextUser);
             console.log('✅ Builder Agent: Metadata and template caches refreshed');
 
@@ -124,9 +126,9 @@ export class AgentBuilderAgent extends BaseAgent {
         } catch (error: any) {
             console.error('❌ Builder Agent: Failed to create agent:', error);
 
-            // Create failed AI Agent Run Step
+            // Create failed AI Agent Run Step via the per-request provider.
             const agentRunId = params.parentRun?.ID || 'unknown';
-            const md = new Metadata();
+            const md = (params.provider ?? new Metadata()) as unknown as IMetadataProvider;
             const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
                 'MJ: AI Agent Run Steps',
                 params.contextUser

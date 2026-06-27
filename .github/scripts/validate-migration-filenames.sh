@@ -85,6 +85,85 @@ validate_filenames() {
     return 0
 }
 
+# Function to detect duplicate migration versions in the T-SQL migrations/ tree.
+# Two files sharing a version both get applied (the history table is keyed by
+# installed_rank, not version), writing duplicate history rows — and which one
+# "wins" a checksum/repair is decided only by filesystem read order.
+#
+# Only the migrations/ tree is checked: the PostgreSQL migrations-pg/ files are
+# generated from it during the build, so any duplicate originates here and
+# checking the generated tree is redundant.
+validate_no_duplicate_versions() {
+    local MIGRATION_DIRS=("$@")
+    local DUPLICATE_ERRORS=""
+
+    echo "::notice::Checking for duplicate migration versions..."
+
+    # Collect (version, filename) for every versioned migration in migrations/,
+    # then sort so duplicate versions are adjacent. Temp file + sort keeps this
+    # bash 3 (macOS) compatible — no associative arrays.
+    local tmpfile
+    tmpfile=$(mktemp)
+
+    for dir in "${MIGRATION_DIRS[@]}"; do
+        if [ ! -d "$dir" ]; then
+            continue
+        fi
+
+        # Only the source-of-truth T-SQL tree; skip generated trees (migrations-pg).
+        if [ "${dir%%/*}" != "migrations" ]; then
+            continue
+        fi
+
+        for file in "$dir"/*.sql; do
+            if [ ! -f "$file" ]; then
+                continue
+            fi
+
+            local filename=$(basename "$file")
+
+            # Only versioned migrations (skip baselines B..., repeatables R__...)
+            if [[ ! "$filename" =~ ^V[0-9]{12}__ ]]; then
+                continue
+            fi
+
+            local version="${filename:1:12}"
+            printf "%s|%s\n" "$version" "$filename" >> "$tmpfile"
+        done
+    done
+
+    if [ ! -s "$tmpfile" ]; then
+        rm -f "$tmpfile"
+        echo "::notice::No versioned migrations to check for duplicates"
+        return 0
+    fi
+
+    # Sort by version so duplicate versions are adjacent.
+    local sorted
+    sorted=$(sort -t'|' -k1,1 "$tmpfile")
+    rm -f "$tmpfile"
+
+    local prev_version=""
+    local prev_file=""
+    while IFS='|' read -r version fname; do
+        if [ "$version" = "$prev_version" ]; then
+            DUPLICATE_ERRORS="$DUPLICATE_ERRORS\n  - Version ${version} is used by more than one migration:"
+            DUPLICATE_ERRORS="$DUPLICATE_ERRORS\n      ${prev_file}"
+            DUPLICATE_ERRORS="$DUPLICATE_ERRORS\n      ${fname}"
+        fi
+        prev_version="$version"
+        prev_file="$fname"
+    done <<< "$sorted"
+
+    if [ -n "$DUPLICATE_ERRORS" ]; then
+        echo "::error::Duplicate migration versions found — both would be applied as separate history rows:$DUPLICATE_ERRORS"
+        return 1
+    fi
+
+    echo "::notice::No duplicate migration versions found!"
+    return 0
+}
+
 # Function to validate that migration timestamps are ordered consistently with
 # the MJ version embedded in the filename. Within a single migration directory,
 # every migration for version N must have a timestamp strictly greater than
@@ -208,7 +287,7 @@ main() {
         # The trailing /. trick ensures the glob expands to directory paths
         # without a trailing slash, producing cleaner error messages.
         MIGRATION_DIRS=()
-        for d in migrations/v*/; do
+        for d in migrations/v*/ migrations-pg/v*/; do
             [ -d "$d" ] && MIGRATION_DIRS+=("${d%/}")
         done
     fi
@@ -216,6 +295,11 @@ main() {
     local exit_code=0
 
     validate_filenames "${MIGRATION_DIRS[@]}"
+    if [ $? -ne 0 ]; then
+        exit_code=1
+    fi
+
+    validate_no_duplicate_versions "${MIGRATION_DIRS[@]}"
     if [ $? -ne 0 ]; then
         exit_code=1
     fi

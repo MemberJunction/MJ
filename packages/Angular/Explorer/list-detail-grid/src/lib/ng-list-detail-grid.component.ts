@@ -21,6 +21,7 @@ import {
   EntityDataGridComponent
 } from '@memberjunction/ng-entity-viewer';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Event emitted when a row is clicked in the list detail grid
  */
@@ -53,7 +54,7 @@ export interface ListGridRowClickedEvent {
   templateUrl: './ng-list-detail-grid.component.html',
   styleUrls: ['./ng-list-detail-grid.component.css']
 })
-export class ListDetailGridComponent implements OnInit, OnChanges {
+export class ListDetailGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
   /**
    * The List ID to display records for.
    * When set, the component loads the list entity and builds a filter
@@ -148,7 +149,8 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
   constructor(
     private sharedService: SharedService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit(): void {
     if (this.listId || this.listEntity) {
@@ -217,7 +219,7 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let list: MJListEntity | null = this.listEntity;
 
       // Load the list entity if not provided
@@ -252,11 +254,18 @@ export class ListDetailGridComponent implements OnInit, OnChanges {
       const schema = listDetailsEntityInfo.SchemaName;
       const extraFilter = this.buildListFilter(entityInfo, schema, list.ID);
 
-      // Create the RunViewParams for the grid
+      // The grid filter is a cross-entity subquery into `vwListDetails`
+      // (`ID IN (SELECT RecordID FROM vwListDetails WHERE ListID='…')`).
+      // The server's RunView cache fingerprints by the OUTER entity, so a
+      // mutation on `MJ: List Details` doesn't invalidate this query's
+      // cached result — the grid would otherwise serve stale rows until a
+      // server restart. `BypassCache: true` makes the server skip both
+      // the cache lookup and the write for this query.
       this.gridParams = {
         EntityName: entityInfo.Name,
         ExtraFilter: extraFilter,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
+        BypassCache: true
       };
 
       this.listLoaded = true;

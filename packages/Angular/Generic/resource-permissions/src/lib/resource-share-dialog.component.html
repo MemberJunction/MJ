@@ -1,0 +1,144 @@
+@if (Visible) {
+  <mj-window
+    [Visible]="true"
+    [Width]="560"
+    [MinHeight]="200"
+    [Resizable]="false"
+    [Draggable]="true"
+    (Close)="onCancel()"
+    class="mj-share-dialog-window">
+    <mj-window-titlebar>
+      <div class="share-dialog-header">
+        <i class="fa-solid fa-share-nodes"></i>
+        <span>Share "{{ Context?.ResourceName }}"</span>
+      </div>
+    </mj-window-titlebar>
+    <div class="share-dialog-body">
+      @if (Error) {
+        <div class="share-alert share-alert-error">
+          <i class="fa-solid fa-exclamation-triangle"></i>
+          <span>{{ Error }}</span>
+        </div>
+      }
+      <!-- Add Users Section -->
+      <div class="share-section">
+        <div class="share-search-box">
+          <i class="fa-solid fa-search"></i>
+          <input
+            type="text"
+            placeholder="Add people by name or email..."
+            [(ngModel)]="UserSearchFilter"
+            [disabled]="IsLoading">
+        </div>
+        @if (FilteredAvailableUsers.length > 0) {
+          <div class="share-user-dropdown">
+            @for (user of FilteredAvailableUsers; track user.ID) {
+              <button type="button" class="share-user-option" (click)="addUserShare(user)" [disabled]="IsLoading">
+                <span class="share-avatar">{{ getUserInitials(user) }}</span>
+                <span class="share-user-name">{{ user.Name }}</span>
+                @if (user.Email) {
+                  <span class="share-user-email">{{ user.Email }}</span>
+                }
+                <i class="fa-solid fa-plus"></i>
+              </button>
+            }
+          </div>
+        }
+        @if (UserSearchFilter && FilteredAvailableUsers.length === 0) {
+          <mj-empty-state
+            Variant="no-results"
+            Icon="fa-solid fa-user-slash"
+            [Title]="NoUsersFoundMessage"
+            Size="compact" />
+        }
+      </div>
+      <!-- People with Access -->
+      <div class="share-section">
+        <div class="share-section-label">People with access</div>
+        @if (Context?.OwnerDisplayName) {
+          <div class="share-person share-owner">
+            <span class="share-avatar share-avatar-owner">
+              <i class="fa-solid fa-crown"></i>
+            </span>
+            <div class="share-person-info">
+              <span class="share-person-name">{{ Context?.OwnerDisplayName }}</span>
+              <span class="share-person-role">Owner</span>
+            </div>
+          </div>
+        }
+        @for (share of ActiveShares; track share.User.ID) {
+          <div class="share-person" [class.share-person-new]="share.IsNew" [class.share-person-modified]="isModified(share)">
+            <span class="share-avatar">{{ getUserInitials(share.User) }}</span>
+            <div class="share-person-info">
+              <span class="share-person-name">
+                {{ share.User.Name }}
+                @if (share.IsNew) {
+                  <span class="share-badge-new">New</span>
+                }
+              </span>
+              @if (share.User.Email) {
+                <span class="share-person-email">{{ share.User.Email }}</span>
+              }
+            </div>
+            <div class="share-level-select" role="group" aria-label="Permission level">
+              @for (level of Levels; track level) {
+                <button type="button"
+                        class="share-level-btn"
+                        [class.active]="share.Level === level"
+                        (click)="setLevel(share, level)"
+                        [title]="level + ' access'">
+                  {{ level }}
+                </button>
+              }
+            </div>
+            <button type="button" class="share-remove-btn" (click)="removeUserShare(share)" title="Remove">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+        }
+        @if (ActiveShares.length === 0) {
+          <mj-empty-state
+            Icon="fa-solid fa-user-lock"
+            Title="Not shared with anyone yet"
+            Size="compact" />
+        }
+        @if (RemovedShares.length > 0) {
+          <div class="share-removed-section">
+            @for (share of RemovedShares; track share.User.ID) {
+              <div class="share-removed-item">
+                <span class="share-avatar share-avatar-removed">{{ getUserInitials(share.User) }}</span>
+                <span class="share-removed-name">{{ share.User.Name }}</span>
+                <button type="button" class="share-undo-btn" (click)="undoRemove(share)">
+                  <i class="fa-solid fa-undo"></i> Undo
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+      <div class="share-footer">
+        @if (HasChanges) {
+          <span class="share-changes-hint">
+            <i class="fa-solid fa-circle"></i> Unsaved changes
+          </span>
+        }
+        <div class="share-footer-actions">
+          <button type="button" class="share-btn share-btn-secondary" (click)="onCancel()">
+            Cancel
+          </button>
+          <button
+            type="button"
+            class="share-btn share-btn-primary"
+            (click)="onSave()"
+            [disabled]="!HasChanges || IsLoading">
+            @if (IsLoading) {
+              <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+            } @else {
+              Save
+            }
+          </button>
+        </div>
+      </div>
+    </div>
+  </mj-window>
+}

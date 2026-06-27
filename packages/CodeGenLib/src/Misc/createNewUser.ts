@@ -1,9 +1,10 @@
-import { ApplicationInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
-import { NewUserSetup } from "../Config/config";
+import { ApplicationInfo, DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
+import { configInfo, NewUserSetup } from "../Config/config";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityEntityType } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { logError, logStatus } from "./status_logging";
 import { RegisterClass } from "@memberjunction/global";
+import { GetDialect } from "@memberjunction/sql-dialect";
 
 /**
  * Base class for creating a new user in the system, you can sub-class this class to create your own user creation logic
@@ -28,7 +29,7 @@ export class CreateNewUserBase {
                 if (!existingNewUser) {
                     if (newUserSetup.Email && newUserSetup.Email.length > 0) {
                         logStatus("Attempting to create new user: " + newUserSetup.Email);
-                        const md = new Metadata();
+                        const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
                         const user = <MJUserEntity>await md.GetEntityObject('MJ: Users', currentUser);
                         user.NewRecord();
                         user.Name = newUserSetup.UserName ? newUserSetup.UserName : newUserSetup.Email;
@@ -37,8 +38,17 @@ export class CreateNewUserBase {
                         user.Email = newUserSetup.Email;
                         user.Type = 'Owner';
                         user.IsActive = true;
-                        if (await user.Save()) {
-                            // save was successful, so we can create the User Roles
+                        // Create the user and all of its role/application/app-entity records atomically.
+                        // If any Save fails partway through, the whole provisioning rolls back so we never
+                        // leave a half-created user with partial roles/applications behind.
+                        const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: CLI tool, single-provider context
+                        await provider.BeginTransaction();
+                        try {
+                            if (!await user.Save()) {
+                                throw new Error("Failed to save new user: " + newUserSetup.Email);
+                            }
+
+                            // User Roles
                             for (let i = 0; i < newUserSetup.Roles.length; i++) {
                                 const roleName = newUserSetup.Roles[i];
                                 const roleID = md.Roles.find(r => r.Name === roleName)?.ID;
@@ -50,15 +60,13 @@ export class CreateNewUserBase {
                                 userRole.NewRecord();
                                 userRole.UserID = user.ID;
                                 userRole.RoleID = roleID;
-                                if (await userRole.Save()) {
-                                    logStatus("   Created User Role: " + roleName);
+                                if (!await userRole.Save()) {
+                                    throw new Error(`Failed to create User Role '${roleName}': ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                                 }
-                                else {
-                                    logError("   Failed to create User Role: " + roleName);
-                                }
+                                logStatus("   Created User Role: " + roleName);
                             }
 
-                            // Create UserApplication records if specified in the config
+                            // User Applications + nested User Application Entities
                             if (newUserSetup.CreateUserApplicationRecords) {
                                 logStatus("Creating User Applications for new user: " + user.Name);
                                 for(const appName of newUserSetup.UserApplications){
@@ -75,58 +83,62 @@ export class CreateNewUserBase {
                                     userApplication.ApplicationID = application.ID;
                                     userApplication.IsActive = true;
 
-                                    const userApplicationSaveResult: boolean = await userApplication.Save();
-                                    if(userApplicationSaveResult){
-                                        logStatus(`Created User Application ${appName} for new user ${user.Name}`);
-                                        
-                                        //now create a MJUserApplicationEntity records for each entity in the application
-                                        const rv: RunView = new RunView();
-                                        const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
-                                            EntityName: 'MJ: Application Entities',
-                                            ExtraFilter: `ApplicationID = '${application.ID}' and DefaultForNewUser = 1`,
-                                        }, currentUser);
-
-                                        if(!rvResult.Success){
-                                            LogError(`Failed to load Application Entities for Application ${appName} for new user ${user.Name}:`, undefined, rvResult.ErrorMessage);
-                                            continue;
-                                        }
-
-                                        LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${appName} for new user ${user.Name}`);
-
-                                        for(const [index, appEntity] of rvResult.Results.entries()){
-                                            const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', currentUser);
-                                            userAppEntity.NewRecord();
-                                            userAppEntity.UserApplicationID = userApplication.ID;
-                                            userAppEntity.EntityID = appEntity.EntityID!;
-                                            userAppEntity.Sequence = index;
-
-                                            const userAppEntitySaveResult: boolean = await userAppEntity.Save();
-                                            if(userAppEntitySaveResult){
-                                                LogStatus(`Created User Application Entity ${appEntity.Entity} for new user ${user.Name}`);
-                                            }
-                                            else{
-                                                LogError(`Failed to create User Application Entity for new user ${user.Name}:`, undefined, userAppEntity.LatestResult);
-                                            }
-                                        }
+                                    if (!await userApplication.Save()) {
+                                        throw new Error(`Failed to create User Application ${appName} for new user ${user.Name}: ${userApplication.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                                     }
-                                    else{
-                                        logError(`Failed to create User Application ${appName} for new user ${user.Name}:`, undefined, userApplication.LatestResult);
+                                    logStatus(`Created User Application ${appName} for new user ${user.Name}`);
+
+                                    //now create MJUserApplicationEntity records for each entity in the application
+                                    const rv: RunView = new RunView();
+                                    // The boolean comparison goes through the active dialect:
+                                    //   - SQL Server emits `DefaultForNewUser = 1`
+                                    //   - PostgreSQL emits `DefaultForNewUser = TRUE`
+                                    // Using a hardcoded `= 1` worked on SS but failed on PG with
+                                    // `operator does not exist: boolean = integer`.
+                                    // SQLDialect.BooleanLiteral() is the single source of truth
+                                    // for boolean-literal SQL across the stack.
+                                    const dialect = GetDialect(configInfo.dbPlatform);
+                                    const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
+                                        EntityName: 'MJ: Application Entities',
+                                        ExtraFilter: `ApplicationID = '${application.ID}' AND DefaultForNewUser = ${dialect.BooleanLiteral(true)}`,
+                                    }, currentUser);
+
+                                    if(!rvResult.Success){
+                                        LogError(`Failed to load Application Entities for Application ${appName} for new user ${user.Name}:`, undefined, rvResult.ErrorMessage);
+                                        continue;
+                                    }
+
+                                    const defaultForNewUserEntities = rvResult.Results;
+
+                                    LogStatus(`Creating ${defaultForNewUserEntities.length} User Application Entities for User Application ${appName} for new user ${user.Name}`);
+
+                                    for(const [index, appEntity] of defaultForNewUserEntities.entries()){
+                                        const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', currentUser);
+                                        userAppEntity.NewRecord();
+                                        userAppEntity.UserApplicationID = userApplication.ID;
+                                        userAppEntity.EntityID = appEntity.EntityID!;
+                                        userAppEntity.Sequence = index;
+
+                                        if (!await userAppEntity.Save()) {
+                                            throw new Error(`Failed to create User Application Entity for new user ${user.Name}: ${userAppEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                                        }
+                                        LogStatus(`Created User Application Entity ${appEntity.Entity} for new user ${user.Name}`);
                                     }
                                 }
                             }
-    
+
+                            await provider.CommitTransaction();
                             logStatus("Finished creating new user: " + newUserSetup.Email);
                             return {
                                 Success: true,
                                 Message: "Successfully created new user: " + newUserSetup.Email,
                                 Severity: undefined
                             };
-                        }
-                        else {
-                            // saving the user failed, so we don't atempt to create User Roles, throw error
+                        } catch (txErr) {
+                            await provider.RollbackTransaction();
                             return {
                                 Success: false,
-                                Message: "Failed to save new user: " + newUserSetup.Email,
+                                Message: txErr instanceof Error ? txErr.message : String(txErr),
                                 Severity: 'error'
                             };
                         }

@@ -115,7 +115,7 @@ export interface ExecutionMonitoringState {
         </div>
       </div>
 
-      <!-- Main Dashboard with Kendo Splitter -->
+      <!-- Main Dashboard with Splitter -->
       <as-split direction="vertical" class="dashboard-splitter">
         <!-- Top Row: System Health and Trends Chart -->
         <as-split-area [size]="45">
@@ -277,10 +277,8 @@ export interface ExecutionMonitoringState {
                             }
                           </div>
                         } @else {
-                          <div class="no-data">
-                            <i class="fa-solid fa-inbox"></i>
-                            <p>No executions found for this time period</p>
-                          </div>
+                          <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                            Title="No executions found for this time period" />
                         }
                       </div>
                     }
@@ -1458,26 +1456,6 @@ export interface ExecutionMonitoringState {
       color: var(--mj-status-success);
     }
 
-    .no-data {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 60px 20px;
-      color: var(--mj-text-disabled);
-      gap: 16px;
-    }
-
-    .no-data i {
-      font-size: 48px;
-      color: var(--mj-border-default);
-    }
-
-    .no-data p {
-      margin: 0;
-      font-size: 14px;
-    }
-
     /* Model detail styles */
     .model-detail {
       padding: 20px;
@@ -1862,6 +1840,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   ngOnInit() {
     super.ngOnInit();
+    this.instrumentationService.Provider = this.ProviderToUse;
     // Load initial state if provided from resource configuration
     if (this.Data?.Configuration) {
       this.loadUserState(this.Data.Configuration);
@@ -2330,12 +2309,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
-        new RunView().RunView<MJAIPromptRunEntityExtended>({
+        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
           OrderBy: 'RunAt DESC' 
         }),
-        new RunView().RunView<MJAIAgentRunEntityExtended>({
+        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
           OrderBy: 'StartedAt DESC' 
@@ -2408,7 +2387,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     
     try {
       // Find model by name
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJAIModelEntityExtended>({
         EntityName: 'MJ: AI Models',
         ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 

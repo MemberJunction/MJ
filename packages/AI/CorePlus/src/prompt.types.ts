@@ -21,6 +21,29 @@ import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 export type MediaModality = 'Image' | 'Audio' | 'Video';
 
 /**
+ * A file artifact that may be attached natively to a prompt when the
+ * resolved LLM driver supports the MIME type.
+ */
+export interface NativeFileInput {
+  /** Display name of the artifact (used in logging) */
+  Name: string;
+  /** MIME type (e.g. 'application/pdf', 'image/png') */
+  MimeType: string;
+  /** Base64-encoded file content (or data-URL) */
+  Base64Content: string;
+  /** File size in bytes — used by the resolver for limit checks */
+  SizeBytes: number;
+  /**
+   * Pre-extracted text content for fallback when the driver doesn't support
+   * native file input. Populated eagerly by ArtifactToolManager so the
+   * Prompts package doesn't need binary parsing dependencies (pdfjs, etc.).
+   * When present and the driver rejects the file, this text is injected
+   * as a plain text block in the user message instead.
+   */
+  TextContent?: string;
+}
+
+/**
  * Represents a media item generated during prompt execution.
  * This is stored in AIPromptRunMedia for complete audit trail.
  */
@@ -551,6 +574,23 @@ export class AIPromptParams {
    */
   cleanValidationSyntax?: boolean;
 
+  /**
+   * Forces the model-selection step to evaluate credential availability for EVERY candidate
+   * model-vendor combination, even after a usable candidate has already been found.
+   *
+   * By default (false) the runner short-circuits: it stops probing candidates as soon as the
+   * highest-priority candidate with valid credentials is identified, and records the remaining
+   * candidates as "not-evaluated" in the `ModelSelection` telemetry. This avoids unnecessary
+   * credential/env-var lookups on every prompt run for fleets with many configured models.
+   *
+   * Set this to true when you need a complete availability report for ALL candidates (e.g. an
+   * admin "which of my models are actually configured?" diagnostic), at the cost of probing
+   * credentials for every candidate.
+   *
+   * Default: false
+   */
+  forceFullModelEvaluation?: boolean;
+
 
   /**
    * NOTE: Only applies when prompt.OutputType is 'object'
@@ -687,6 +727,17 @@ export class AIPromptParams {
    * When omitted, falls back to the global Metadata.Provider.
    */
   provider?: IMetadataProvider;
+
+  /**
+   * Optional file artifacts that may be attached as native content blocks
+   * when the resolved LLM driver supports the file's MIME type natively.
+   *
+   * The AIPromptRunner checks each entry against the driver's FileCapabilities
+   * after model selection. Files that pass the resolver are injected as
+   * content blocks in the last user message; others are left for artifact
+   * tool-based exploration.
+   */
+  nativeFileInputs?: NativeFileInput[];
 }
 
 

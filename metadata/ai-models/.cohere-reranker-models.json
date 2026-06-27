@@ -86,5 +86,93 @@
       "lastModified": "2026-02-13T21:08:31.458Z",
       "checksum": "9e41002d02f78716a1e15c6d1fa367b913503b2b65f8f40a509dab7e8d0747f4"
     }
+  },
+  {
+    "fields": {
+      "Name": "rerank-v4-pro",
+      "Description": "Cohere Rerank 4 Pro - Flagship semantic reranking model released December 16, 2025. 32K tokens per document, 100+ language support, and self-learning capabilities. Designed for maximum retrieval quality in demanding RAG workloads. Cohere standard pricing applies: $2.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 110,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v4-pro",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D58A6395-5193-42DC-8572-F5E734A919A9"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:34.180Z",
+            "checksum": "7881120785b213670bedb6f88f168aa6d2fdffda7df6ab2400993d5fac60cfd3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "EA6C9FC9-BF4E-4A33-8C4C-7413F54F8AF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:34.092Z",
+      "checksum": "2d8fb95c64135e46571b5b4d92805b8022596c5bb90e49ab0559f7e6cca6a478"
+    }
+  },
+  {
+    "fields": {
+      "Name": "rerank-v4-fast",
+      "Description": "Cohere Rerank 4 Fast - Distilled, cost-efficient reranking model released December 16, 2025. 16K tokens per document, 100+ language support. Optimized for lower latency and higher throughput RAG pipelines where Rerank 4 Pro quality is not required. Cohere standard pricing applies: $1.50 per 1,000 search units (not modeled here because rerank pricing does not map cleanly to Per-1M-Tokens unit types).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Reranker",
+      "PowerRank": 90,
+      "IsActive": true,
+      "SpeedRank": 0,
+      "CostRank": 0,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereReranker",
+            "APIName": "rerank-v4-fast",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C4202F21-E55B-4040-950F-F5D4CB20341A"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:34.194Z",
+            "checksum": "3ef23cd45621e6cb0822d581c659a8a2fe63f2a6a4d9df40980371333a8ed9e8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "46F56956-008A-4ED3-B880-6A88AD9941E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:34.107Z",
+      "checksum": "2c75e7592231eff71079891ea814987c3606b04c09ca85223f251e59d7e6446f"
+    }
   }
 ]

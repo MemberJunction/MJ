@@ -1,8 +1,9 @@
 import { Component, EventEmitter, Input, Output, ChangeDetectorRef, OnChanges, SimpleChanges } from '@angular/core';
-import { RunView, CompositeKey, EntityInfo, EntityFieldTSType, Metadata } from '@memberjunction/core';
+import { RunView, CompositeKey, EntityInfo } from '@memberjunction/core';
 import { NavigationService } from '@memberjunction/ng-shared';
-import { DataLoadedEvent, RecordOpenedEvent, EntityViewerConfig, EntityViewMode, GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
+import { DataLoadedEvent, RecordOpenedEvent, EntityViewerConfig, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 type SearchState = 'loading' | 'no-results' | 'single-result' | 'viewer';
 
 @Component({
@@ -11,7 +12,7 @@ type SearchState = 'loading' | 'no-results' | 'single-result' | 'viewer';
   templateUrl: './single-search-result.component.html',
   styleUrls: ['./single-search-result.component.css']
 })
-export class SingleSearchResultComponent implements OnChanges {
+export class SingleSearchResultComponent extends BaseAngularComponent implements OnChanges {
   @Input() public entity: string = '';
   @Input() public searchInput: string = '';
   @Output() public loadComplete = new EventEmitter<boolean>();
@@ -20,13 +21,6 @@ export class SingleSearchResultComponent implements OnChanges {
   public SearchState: SearchState = 'loading';
   public ResultCount = 0;
   public EntityInfo: EntityInfo | null = null;
-  public CurrentViewMode: EntityViewMode = 'grid';
-
-  /** Whether the current entity has date fields (enables timeline view toggle) */
-  public get HasDateFields(): boolean {
-    if (!this.EntityInfo) return false;
-    return this.EntityInfo.Fields.some(f => f.TSType === EntityFieldTSType.Date);
-  }
 
   /** Resolved icon class for the entity, matching Data Explorer's format */
   public get EntityIcon(): string {
@@ -47,22 +41,11 @@ export class SingleSearchResultComponent implements OnChanges {
     height: '100%'
   };
 
-  /** Grid toolbar config — minimal action bar (no search, no column chooser) */
-  public GridToolbarConfig: Partial<GridToolbarConfig> = {
-    showSearch: false,
-    showRefresh: true,
-    showAdd: true,
-    showExport: true,
-    showDelete: false,
-    showColumnChooser: false,
-    showRowCount: false,
-    showSelectionCount: false
-  };
-
   constructor(
     private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnChanges(changes: SimpleChanges): void {
     if ((changes['entity'] || changes['searchInput']) && this.entity && this.searchInput) {
@@ -77,7 +60,6 @@ export class SingleSearchResultComponent implements OnChanges {
   private async ExecuteSearch(): Promise<void> {
     this.SearchState = 'loading';
     this.ResultCount = 0;
-    this.CurrentViewMode = 'grid';
     this.loadStarted.emit(true);
 
     // Resolve EntityInfo early so the header can show icon + display name during loading
@@ -107,14 +89,14 @@ export class SingleSearchResultComponent implements OnChanges {
   }
 
   private findEntityInfo(): EntityInfo | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Entities.find(e =>
       e.Name.trim().toLowerCase() === this.entity.trim().toLowerCase()
     );
   }
 
   private async runPreQuery(entityInfo: EntityInfo) {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const pkFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
     return rv.RunView<Record<string, unknown>>({
       EntityName: this.entity,
@@ -146,16 +128,6 @@ export class SingleSearchResultComponent implements OnChanges {
 
   // ── Header action handlers ──
 
-  public SetViewMode(mode: EntityViewMode): void {
-    this.CurrentViewMode = mode;
-    this.cdr.detectChanges();
-  }
-
-  public OnViewModeChanged(mode: EntityViewMode): void {
-    this.CurrentViewMode = mode;
-    this.cdr.detectChanges();
-  }
-
   public OnCreateNewRecord(): void {
     if (this.EntityInfo) {
       this.navigationService.OpenNewEntityRecord(this.EntityInfo.Name);
@@ -172,6 +144,13 @@ export class SingleSearchResultComponent implements OnChanges {
 
   public OnRecordOpened(event: RecordOpenedEvent): void {
     this.navigationService.OpenEntityRecord(event.entity.Name, event.compositeKey);
+  }
+
+  /** Navigate to a related record requested from within a view-type renderer (e.g. a foreign-key cell). */
+  public OnOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
+    if (nav?.entityName && nav.recordKey != null) {
+      this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromID(String(nav.recordKey)));
+    }
   }
 
   /** Format entity icon to ensure proper Font Awesome class format */

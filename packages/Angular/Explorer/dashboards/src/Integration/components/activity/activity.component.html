@@ -1,76 +1,45 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integration Activity"
+    Icon="fa-solid fa-clock-rotate-left"
+    Subtitle="Sync run history and outcomes">
+    <!-- [meta] retains the succeeded/failed status pills (genuine variant
+         signal — error rate at a glance) and the records aggregate
+         (non-trivially derived: count of records across all runs).
+         "Total runs" dropped per chrome slot discipline audit Task B —
+         that count equals the visible list's row count. -->
+    @if (!IsLoading && AllRuns.length > 0) {
+      <div meta>
+        <mj-stat-badge [Count]="SuccessfulRuns" Label="succeeded" Variant="success"></mj-stat-badge>
+        <mj-stat-badge [Count]="FailedRuns" Label="failed" Variant="error"></mj-stat-badge>
+        <mj-stat-badge [Count]="TotalRecordsProcessed | number" Label="records"></mj-stat-badge>
+      </div>
+    }
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search integrations..."
+        [Value]="SearchQuery"
+        (ValueChange)="OnSearchValueChange($event)">
+      </mj-page-search>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="ResetIntegrationFilter()">
+        <mj-filter-panel
+          [Fields]="ActivityFilterFields"
+          [Values]="ActivityFilterValues"
+          (ValuesChange)="OnFilterValuesChange($event)"
+          (Reset)="ResetIntegrationFilter()">
+        </mj-filter-panel>
+      </mj-filter-popover>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true">
 <div class="activity-container">
-
-  <!-- Filter Bar -->
-  <div class="filter-bar">
-    <div class="filter-group filter-pills">
-      @for (status of StatusOptions; track status) {
-        <button class="pill-btn"
-                [class.active]="StatusFilter === status"
-                (click)="SetStatusFilter(status)">
-          {{ status }}
-        </button>
-      }
-    </div>
-
-    <div class="filter-group">
-      <select class="filter-select"
-              [ngModel]="IntegrationFilter ?? ''"
-              (ngModelChange)="SetIntegrationFilter($event || null)">
-        <option value="">All Integrations</option>
-        @for (opt of Integrations; track opt.ID) {
-          <option [value]="opt.ID">{{ opt.Name }}</option>
-        }
-      </select>
-    </div>
-
-    <div class="filter-group filter-pills">
-      @for (d of DateOptions; track d.Value) {
-        <button class="pill-btn"
-                [class.active]="DateFilter === d.Value"
-                (click)="SetDateFilter(d.Value)">
-          {{ d.Label }}
-        </button>
-      }
-    </div>
-
-    <div class="filter-group">
-      <input type="text"
-             class="search-input"
-             placeholder="Search integrations..."
-             [(ngModel)]="SearchQuery"
-             (input)="OnSearchChange()" />
-    </div>
-
-    <button class="refresh-btn" (click)="Refresh()" title="Refresh">
-      <i class="fa-solid fa-arrows-rotate"></i>
-    </button>
-  </div>
-
-  <!-- Summary Strip -->
-  @if (!IsLoading && AllRuns.length > 0) {
-    <div class="summary-strip">
-      <div class="summary-badge">
-        <span class="badge-dot dot-blue"></span>
-        <span class="badge-count">{{ TotalRuns }}</span>
-        <span class="badge-label">Total Runs</span>
-      </div>
-      <div class="summary-badge">
-        <span class="badge-dot dot-green"></span>
-        <span class="badge-count count-green">{{ SuccessfulRuns }}</span>
-        <span class="badge-label">Successful</span>
-      </div>
-      <div class="summary-badge">
-        <span class="badge-dot dot-red"></span>
-        <span class="badge-count count-red">{{ FailedRuns }}</span>
-        <span class="badge-label">Failed</span>
-      </div>
-      <div class="summary-badge">
-        <span class="badge-dot dot-blue"></span>
-        <span class="badge-count">{{ TotalRecordsProcessed | number }}</span>
-        <span class="badge-label">Records Processed</span>
-      </div>
-    </div>
-  }
 
   <!-- Loading state -->
   @if (IsLoading) {
@@ -81,10 +50,8 @@
 
   <!-- Empty state -->
   @if (!IsLoading && FilteredRuns.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-inbox"></i>
-      <p>No runs found for the selected filters.</p>
-    </div>
+    <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+      Title="No runs found for the selected filters." />
   }
 
   <!-- Split View: Run List + Detail Panel -->
@@ -158,10 +125,8 @@
                     <mj-loading text="Loading breakdown..." size="small"></mj-loading>
                   </div>
                 } @else if (GetExpandedDetails().length === 0) {
-                  <div class="expanded-empty">
-                    <i class="fa-solid fa-circle-info"></i>
-                    No entity details for this run.
-                  </div>
+                  <mj-empty-state class="expanded-empty" Size="compact" Icon="fa-solid fa-circle-info"
+                    Title="No entity details for this run." />
                 } @else {
                   <table class="entity-table">
                     <thead>
@@ -258,10 +223,8 @@
                   <mj-loading text="Loading details..." size="small"></mj-loading>
                 </div>
               } @else if (SelectedRunDetails.length === 0) {
-                <div class="detail-empty">
-                  <i class="fa-solid fa-circle-info"></i>
-                  <p>No entity detail records for this run.</p>
-                </div>
+                <mj-empty-state class="detail-empty" Size="compact" Icon="fa-solid fa-circle-info"
+                  Title="No entity detail records for this run." />
               } @else {
                 <table class="detail-table">
                   <thead>
@@ -309,10 +272,8 @@
                   <mj-loading text="Loading watermarks..." size="small"></mj-loading>
                 </div>
               } @else if (WatermarkData.length === 0) {
-                <div class="detail-empty">
-                  <i class="fa-solid fa-droplet-slash"></i>
-                  <p>No watermarks recorded for this integration.</p>
-                </div>
+                <mj-empty-state class="detail-empty" Size="compact" Icon="fa-solid fa-droplet-slash"
+                  Title="No watermarks recorded for this integration." />
               } @else {
                 <table class="detail-table">
                   <thead>
@@ -344,3 +305,5 @@
   }
 
 </div>
+  </mj-page-body>
+</mj-page-layout>

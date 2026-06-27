@@ -1,4 +1,5 @@
 import { Args, Command, Flags } from '@oclif/core';
+import { RemoveApp } from '@memberjunction/open-app-engine';
 import { confirm } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
@@ -31,6 +32,10 @@ export default class AppRemove extends Command {
     force: Flags.boolean({ description: 'Force removal even if other apps depend on this one' }),
     yes: Flags.boolean({ char: 'y', description: 'Skip confirmation prompt' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
+    'dangerously-ignore-dbl-underscore-schema-rule': Flags.boolean({
+      hidden: true,
+      default: false,
+    }),
   };
 
   async run(): Promise<void> {
@@ -50,11 +55,16 @@ export default class AppRemove extends Command {
     }
 
     try {
-      const { RemoveApp } = await import('@memberjunction/open-app-engine');
       const context = await buildOrchestratorContext(this, flags.verbose);
 
       const result = await RemoveApp(
-        { AppName: args.name, KeepData: flags['keep-data'], Force: flags.force, Verbose: flags.verbose },
+        {
+          AppName: args.name,
+          KeepData: flags['keep-data'],
+          Force: flags.force,
+          Verbose: flags.verbose,
+          AllowDoubleUnderscoreSchema: flags['dangerously-ignore-dbl-underscore-schema-rule'],
+        },
         context
       );
 

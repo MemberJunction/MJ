@@ -25,7 +25,7 @@
       "ID": "0F9C0499-17FA-46B4-820B-CBF4DE47F0D6"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:50:00.175Z",
+      "lastModified": "2026-04-20T23:56:14.811Z",
       "checksum": "8ad5606328ec6388a845aadaf736161bd49b7c9db476f242bbfe684107b66bf5"
     }
   },
@@ -70,7 +70,7 @@
       "ID": "7A6353E0-1A25-49FF-91EA-5EBA1262122F"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:50:00.191Z",
+      "lastModified": "2026-04-20T23:56:14.823Z",
       "checksum": "edd22a6f6ba722a3b532026f3388d6cd77d4a73396023403840f24c6b84d97c0"
     }
   },
@@ -115,7 +115,7 @@
       "ID": "73972EC5-10F8-40C7-90E4-039A51F25992"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:50:00.205Z",
+      "lastModified": "2026-04-20T23:56:14.833Z",
       "checksum": "cbe29efc5110227d043c54a6e8db2e636868534bbc6d382abb15b5f52d460016"
     }
   },
@@ -160,7 +160,7 @@
       "ID": "252A858A-989E-47E9-AFFC-B42DAE7F8FFF"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:50:00.242Z",
+      "lastModified": "2026-04-20T23:56:14.870Z",
       "checksum": "e47ccca5637db717b99782ba4b020fb8689d70082bc07c568e8b1809ea7400e3"
     }
   },
@@ -190,8 +190,68 @@
       "ID": "DEB066E1-4635-45D6-9593-CB6A7654870B"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:50:00.271Z",
+      "lastModified": "2026-04-20T23:56:14.909Z",
       "checksum": "7f89c17722dcc8f191026feb6ca8371edd06cfdec3ee2ff56153fd29e039c5ce"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "E3A60BED-C451-4369-A3C6-9D191BF87C50"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T00:51:50.193Z",
+      "checksum": "25494a9c488fb79dd3264984fbac0c45bdcae91528e8eedf6ff3c415fe90abe4"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "98CC6138-E264-4FFA-AA55-0442FF99E853"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T00:51:50.194Z",
+      "checksum": "aa821cad060f340abaec89734cffa0b1b2632d633633fbac1557b36e4c401da1"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Agent Feedback",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "B7E91F2C-4A38-4D5E-9C12-345678AABBCC"
+    },
+    "sync": {
+      "lastModified": "2026-05-24T13:07:49.269Z",
+      "checksum": "4870e117fc34ff876858f447298c3bdb8afacbc7c43ea88a03e6924cb8cce0cf"
+    }
+  },
+  {
+    "fields": {
+      "ApplicationID": "@lookup:MJ: Applications.Name=Agent Feedback",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "CanAccess": true,
+      "CanAdmin": true
+    },
+    "primaryKey": {
+      "ID": "C8F02E3D-5B49-4E6F-AD23-456789BBCCDD"
+    },
+    "sync": {
+      "lastModified": "2026-05-24T13:07:49.281Z",
+      "checksum": "5cf4c39b2e888a17f07b52f4c22c2ddbe19cba666b86dc8c7d9cf99acd3f900e"
     }
   }
 ]

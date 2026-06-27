@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView } from "@memberjunction/core";
+import { DatabaseProviderBase, Metadata, RunView } from "@memberjunction/core";
 import { MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
@@ -107,39 +107,35 @@ export class RemoveRecordsFromListAction extends BaseAction {
         };
       }
 
-      // Delete records
-      let removedCount = 0;
-      let failedCount = 0;
-      const errors: string[] = [];
-
-      for (const detail of details) {
-        try {
-          const deleteResult = await detail.Delete();
-          if (deleteResult) {
-            removedCount++;
-          } else {
-            failedCount++;
-            errors.push(`Failed to remove record '${detail.RecordID}'`);
+      // Delete all matching records atomically — any failure rolls back the whole batch
+      const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;
+      await provider.BeginTransaction();
+      try {
+        for (const detail of details) {
+          if (!await detail.Delete()) {
+            throw new Error(`Failed to remove record '${detail.RecordID}': ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
-        } catch (error) {
-          failedCount++;
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          errors.push(`Error removing record '${detail.RecordID}': ${errorMessage}`);
         }
+        await provider.CommitTransaction();
+      } catch (error) {
+        await provider.RollbackTransaction();
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.addOutputParam(params, 'Removed', 0);
+        this.addOutputParam(params, 'Failed', details.length);
+        return {
+          Success: false,
+          ResultCode: 'REMOVE_FAILED',
+          Message: `Failed to remove list items (all changes rolled back): ${errorMessage}`
+        };
       }
 
-      // Add output parameters
-      this.addOutputParam(params, 'Removed', removedCount);
-      this.addOutputParam(params, 'Failed', failedCount);
-      this.addOutputParam(params, 'Errors', errors);
+      this.addOutputParam(params, 'Removed', details.length);
+      this.addOutputParam(params, 'Failed', 0);
 
-      const success = failedCount === 0;
       return {
-        Success: success,
-        ResultCode: success ? 'SUCCESS' : 'PARTIAL_SUCCESS',
-        Message: success
-          ? `Successfully removed ${removedCount} record(s) from list`
-          : `Removed ${removedCount}, failed ${failedCount}. Errors: ${errors.join('; ')}`
+        Success: true,
+        ResultCode: 'SUCCESS',
+        Message: `Successfully removed ${details.length} record(s) from list`
       };
 
     } catch (error) {

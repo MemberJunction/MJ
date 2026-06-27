@@ -90,6 +90,38 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
   }).join('');
 }
 
+/**
+ * Emit a DO-block that drops every overload of a function in a given schema.
+ *
+ * PG dispatches functions by `(name, ordered-arg-type-list)`. `CREATE OR
+ * REPLACE FUNCTION` only replaces the body when the new signature exactly
+ * matches the prior signature; adding (or renaming, or retyping) any
+ * parameter creates a NEW overload alongside the old one. The result —
+ * silent duplicate overloads that pile up across migrations until a caller
+ * hits "function ... is not unique" at runtime.
+ *
+ * Emit this block immediately before any `CREATE OR REPLACE FUNCTION` in
+ * generated migrations so the next CREATE always either replaces (matching
+ * sig) or creates fresh (no prior overload). The block is idempotent — when
+ * no overload exists the FOR loop iterates zero times.
+ *
+ * Used by ProcedureToFunctionRule and FunctionRule. Keeps the wording
+ * identical across both so reviewers reading converter output recognize
+ * the pattern at a glance.
+ */
+export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
+  return (
+    `DO $$ DECLARE r record;\n` +
+    `BEGIN\n` +
+    `  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc\n` +
+    `           WHERE proname = '${funcName}'\n` +
+    `             AND pronamespace = '${schema}'::regnamespace\n` +
+    `  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';\n` +
+    `  END LOOP;\n` +
+    `END $$;\n`
+  );
+}
+
 /** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
  *  Also converts T-SQL temp table #name references to PostgreSQL equivalents.
  *  Skips content inside SQL string literals and comments. */
@@ -601,8 +633,26 @@ export function convertTopToLimit(sql: string): string {
 /**
  * Convert common T-SQL CAST patterns to PostgreSQL types.
  * Used in views, procedures, and expressions.
+ *
+ * Note on quoted type names: when input T-SQL uses bracket-wrapped types
+ * like `CAST(x AS [INT])`, the upstream `convertIdentifiers` pass turns
+ * `[INT]` into `"INT"`. PG then parses `"INT"` as a quoted identifier
+ * (column reference), not a type, and rejects with `type "INT" does not
+ * exist`. We strip quotes from known T-SQL type names first so the
+ * existing patterns below match.
  */
 export function convertCastTypes(sql: string): string {
+  // Strip quotes from quoted T-SQL type tokens produced by convertIdentifiers
+  // when the source SQL had bracket-wrapped types (e.g. CAST(x AS [INT])).
+  const quotedTypes = [
+    'UNIQUEIDENTIFIER', 'NVARCHAR', 'VARCHAR', 'BIT',
+    'DATETIMEOFFSET', 'DATETIME2', 'DATETIME', 'FLOAT',
+    'TINYINT', 'IMAGE', 'MONEY', 'INT', 'INTEGER',
+  ];
+  for (const t of quotedTypes) {
+    sql = sql.replace(new RegExp(`\\bAS\\s+"${t}"`, 'gi'), `AS ${t}`);
+  }
+
   sql = sql.replace(/\bAS\s+UNIQUEIDENTIFIER\b/gi, 'AS UUID');
   sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');
   sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*(\d+)\s*\)/gi, 'AS VARCHAR($1)');
@@ -649,10 +699,27 @@ function mapInlineType(tsqlType: string): string {
   return resolveInlineType(tsqlType);
 }
 
-/** Remove N' prefix from string literals, but only when preceded by non-alphanumeric */
+/**
+ * Remove T-SQL's N' unicode-string prefix.
+ *
+ * Tricky case: the original pattern `(?<![a-zA-Z])N'` strips any N'
+ * where N isn't preceded by a letter. That's correct for a leading
+ * unicode prefix (`... = N'text' ...`) but WRONG for trailing N inside
+ * a string ending with a digit, like `N'BD-3N'`:
+ *   1st match: prefix  N' → '       →  `'BD-3N'`
+ *   2nd match: string  N' → '       →  `'BD-3'`  (bug: stripped the trailing N!)
+ * That bug silently corrupted ISO codes in v5.25 Metadata_Sync and
+ * caused spCreateStateProvince to hit UQ_StateProvince_ISO3166_2.
+ *
+ * Fix: only strip N' in contexts where a string literal *starts* — i.e.
+ * after a non-quote boundary character (whitespace, punctuation, paren,
+ * operator, comma, equals, start of line). This leaves N' inside a
+ * string alone.
+ */
 export function removeNPrefix(sql: string): string {
-  // N' at start of string or after non-alpha character → '
-  return sql.replace(/(?<![a-zA-Z])N'/g, "'");
+  // Anchors: start of string, or after one of the "string-start" context chars.
+  // Whitespace, comma, paren, comparison operators, brackets, semicolon.
+  return sql.replace(/(^|[\s(,=<>!+\-*\/[;])N'/g, "$1'");
 }
 
 /** Remove COLLATE clauses */
@@ -670,6 +737,7 @@ const PASCAL_QUOTE_KEYWORDS = new Set([
   'IF', 'THEN', 'ELSE', 'EXISTS', 'CREATE', 'DROP', 'TRUE', 'FALSE',
   'VARCHAR', 'TEXT', 'UUID', 'BOOLEAN', 'INTEGER', 'BIGINT', 'SMALLINT',
   'TIMESTAMPTZ', 'BYTEA', 'REAL', 'NUMERIC', 'DECIMAL', 'DOUBLE', 'PRECISION', 'XML',
+  'JSON', 'JSONB',
   'CHAR', 'LIKE', 'SIMILAR', 'TO', 'WITH', 'NOCHECK', 'DEFERRABLE',
   'INITIALLY', 'DEFERRED', 'CASCADE', 'RESTRICT', 'VALID', 'GRANT',
   'EXECUTE', 'FUNCTION', 'PROCEDURE', 'VIEW', 'TRIGGER', 'SCHEMA',
@@ -719,4 +787,235 @@ export function convertCommonFunctions(sql: string): string {
   sql = sql.replace(/\bSUSER_NAME\s*\(\s*\)/gi, 'current_user');
   sql = sql.replace(/\bUSER_NAME\s*\(\s*\)/gi, 'current_user');
   return sql;
+}
+
+/**
+ * Convert SQL Server BIT comparisons (`"Col" = 1` / `= 0`) to PostgreSQL boolean
+ * literals (`"Col" = TRUE` / `= FALSE`) for columns known to be BOOLEAN.
+ *
+ * PG has no implicit boolean↔integer cast, so `bool_col = 1` raises
+ * "operator does not exist: boolean = integer" — and for VIEWs that error fires
+ * at CREATE time, blocking the migration.
+ *
+ * Boolean columns are identified by name from the accumulated CREATE TABLE type
+ * map. A name is treated as boolean only if it is BOOLEAN in at least one table
+ * AND never a non-boolean type in any other table, so an integer column that
+ * merely shares a name with a boolean column elsewhere is left untouched.
+ */
+export function collectBooleanColumnNames(
+  tableColumns: Map<string, Map<string, string>>,
+): Set<string> {
+  const boolNames = new Set<string>();
+  const nonBoolNames = new Set<string>();
+  for (const cols of tableColumns.values()) {
+    for (const [name, type] of cols) {
+      const lower = name.toLowerCase();
+      if (type.toUpperCase() === 'BOOLEAN') boolNames.add(lower);
+      else nonBoolNames.add(lower);
+    }
+  }
+  for (const n of nonBoolNames) boolNames.delete(n);
+  return boolNames;
+}
+
+export function convertBooleanLiteralComparisons(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  const boolNames = collectBooleanColumnNames(tableColumns);
+  if (boolNames.size === 0) return sql;
+
+  // `(?![\w.])` guards against matching inside a larger number/identifier
+  // (e.g. `= 10`, `= 1.5`).
+  return sql.replace(
+    /"(\w+)"\s*(=|<>|!=)\s*([01])(?![\w.])/g,
+    (match, col: string, op: string, val: string) =>
+      boolNames.has(col.toLowerCase())
+        ? `"${col}" ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
+        : match,
+  );
+}
+
+/**
+ * Find the index just past the matching close paren for the `(` at `openPos`.
+ * String-literal aware (single quotes, with '' escapes). Returns -1 if unbalanced.
+ */
+function matchParen(text: string, openPos: number): number {
+  let depth = 0, inStr = false;
+  for (let i = openPos; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (c === "'") { if (text[i + 1] === "'") i++; else inStr = false; }
+    } else if (c === "'") inStr = true;
+    else if (c === '(') depth++;
+    else if (c === ')') { depth--; if (depth === 0) return i + 1; }
+  }
+  return -1;
+}
+
+/** Split a paren-body string on top-level commas, respecting quotes and nested parens. */
+function splitArgs(body: string): string[] {
+  const out: string[] = [];
+  let cur = '', depth = 0, inStr = false;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (inStr) { cur += c; if (c === "'") { if (body[i + 1] === "'") cur += body[++i]; else inStr = false; } }
+    else if (c === "'") { inStr = true; cur += c; }
+    else if (c === '(') { depth++; cur += c; }
+    else if (c === ')') { depth--; cur += c; }
+    else if (c === ',' && depth === 0) { out.push(cur.trim()); cur = ''; }
+    else cur += c;
+  }
+  if (cur.trim().length) out.push(cur.trim());
+  return out;
+}
+
+/**
+ * Convert SQL Server JSON functions to PostgreSQL equivalents:
+ *   JSON_VALUE(expr, '$.a.b')  →  (expr)::jsonb #>> '{a,b}'   (->> for a single segment)
+ *   ISJSON(expr) = 1           →  (expr) IS JSON
+ *   ISJSON(expr) = 0           →  (expr) IS NOT JSON
+ *   ISJSON(expr)               →  (expr) IS JSON
+ * Accepts both bare (`JSON_VALUE(...)`) and already-quoted (`"JSON_VALUE"(...)`) forms,
+ * so it is order-independent relative to identifier quoting. PG 16+ provides the IS JSON
+ * predicate; JSON_VALUE's `$.`-rooted path is rewritten to jsonb path-extraction operators.
+ */
+export function convertJsonFunctions(sql: string): string {
+  sql = convertNamedJsonCall(sql, 'JSON_VALUE', (args, after) => {
+    if (args.length < 2) return null;
+    const expr = args[0];
+    const pathLit = args[1].trim();
+    const pm = pathLit.match(/^'(.*)'$/s);
+    if (!pm) return null;
+    // Strip leading '$.' / '$' and split into segments.
+    const segs = pm[1].replace(/^\$\.?/, '').split('.').filter(s => s.length > 0);
+    if (segs.length === 0) return null;
+    const replacement = segs.length === 1
+      ? `(${expr})::jsonb ->> '${segs[0]}'`
+      : `(${expr})::jsonb #>> '{${segs.join(',')}}'`;
+    return { replacement, consume: 0, after };
+  });
+
+  sql = convertNamedJsonCall(sql, 'ISJSON', (args, after) => {
+    if (args.length < 1) return null;
+    const expr = args[0];
+    // Look for a trailing `= 1` / `= 0` comparison to fold into IS [NOT] JSON.
+    const cmp = after.match(/^\s*=\s*([01])(?![\w.])/);
+    if (cmp) {
+      const isNot = cmp[1] === '0' ? ' NOT' : '';
+      return { replacement: `(${expr}) IS${isNot} JSON`, consume: cmp[0].length, after };
+    }
+    return { replacement: `(${expr}) IS JSON`, consume: 0, after };
+  });
+
+  return sql;
+}
+
+/**
+ * Locate every call to `name(` (bare or double-quoted), extract its balanced
+ * argument list, and let `build` produce the replacement text plus how many
+ * characters of the trailing context to also consume (for folding `= 1` etc.).
+ */
+function convertNamedJsonCall(
+  sql: string,
+  name: string,
+  build: (args: string[], after: string) => { replacement: string; consume: number; after: string } | null,
+): string {
+  const callRe = new RegExp(`"?${name}"?\\s*\\(`, 'gi');
+  let result = sql;
+  let searchFrom = 0;
+  while (true) {
+    callRe.lastIndex = searchFrom;
+    const m = callRe.exec(result);
+    if (!m) break;
+    const openParen = result.indexOf('(', m.index);
+    const close = matchParen(result, openParen);
+    if (close < 0) { searchFrom = m.index + m[0].length; continue; }
+    const args = splitArgs(result.slice(openParen + 1, close - 1));
+    const built = build(args, result.slice(close));
+    if (!built) { searchFrom = close; continue; }
+    result = result.slice(0, m.index) + built.replacement + result.slice(close + built.consume);
+    searchFrom = m.index + built.replacement.length;
+  }
+  return result;
+}
+
+/**
+ * Cast SQL Server BIT literals (0/1) to PG boolean (FALSE/TRUE) in `INSERT INTO
+ * table (...) VALUES (...)` for columns known to be BOOLEAN. PG has no implicit
+ * integer→boolean cast, so a literal `0`/`1` for a boolean column fails at apply
+ * time. Column types come from the accumulated CREATE TABLE map (plus the seeded
+ * core-metadata catalog); tuple values are tokenized string-aware so commas inside
+ * quoted JSON/text never split a value. Handles multi-row VALUES and INSERTs that
+ * appear inside a wrapping DO/IF block (only the INSERT...VALUES segment is rewritten).
+ */
+export function castBooleanInsertValues(
+  sql: string,
+  tableColumns: Map<string, Map<string, string>>,
+): string {
+  const m = sql.match(/INSERT\s+INTO\s+(?:\w+\.)?"?(\w+)"?\s*\(([^)]*)\)\s*VALUES/i);
+  if (!m) return sql;
+  const cols = tableColumns.get(m[1].toLowerCase());
+  if (!cols) return sql;
+
+  const colNames = m[2].split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+  const boolPos = new Set<number>();
+  colNames.forEach((c, i) => {
+    if ((cols.get(c.toLowerCase()) ?? '').toUpperCase() === 'BOOLEAN') boolPos.add(i);
+  });
+  if (boolPos.size === 0) return sql;
+
+  const headEnd = m.index! + m[0].length;
+  return sql.slice(0, headEnd) + rewriteValuesTuples(sql.slice(headEnd), boolPos);
+}
+
+/** Walk the post-VALUES text, rewriting boolean-position literals in each top-level tuple. */
+function rewriteValuesTuples(text: string, boolPos: Set<number>): string {
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== '(') { out += text[i++]; continue; }
+    // Capture a balanced, string-aware tuple starting at i.
+    let depth = 0, inStr = false, j = i;
+    for (; j < text.length; j++) {
+      const c = text[j];
+      if (inStr) {
+        if (c === "'") { if (text[j + 1] === "'") j++; else inStr = false; }
+      } else if (c === "'") inStr = true;
+      else if (c === '(') depth++;
+      else if (c === ')') { depth--; if (depth === 0) { j++; break; } }
+    }
+    out += rewriteTuple(text.slice(i, j), boolPos);
+    i = j;
+  }
+  return out;
+}
+
+/** Rewrite `0`/`1` → `FALSE`/`TRUE` at boolean positions within one `(...)` tuple. */
+function rewriteTuple(tuple: string, boolPos: Set<number>): string {
+  const vals = splitTopLevelValues(tuple.slice(1, -1));
+  for (let k = 0; k < vals.length; k++) {
+    if (!boolPos.has(k)) continue;
+    vals[k] = vals[k].replace(/^(\s*)0(\s*)$/, '$1FALSE$2').replace(/^(\s*)1(\s*)$/, '$1TRUE$2');
+  }
+  return '(' + vals.join(',') + ')';
+}
+
+/** Split a tuple body on top-level commas, respecting single-quoted strings and nested parens. */
+function splitTopLevelValues(s: string): string[] {
+  const out: string[] = [];
+  let cur = '', depth = 0, inStr = false;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      cur += c;
+      if (c === "'") { if (s[i + 1] === "'") cur += s[++i]; else inStr = false; }
+    } else if (c === "'") { inStr = true; cur += c; }
+    else if (c === '(') { depth++; cur += c; }
+    else if (c === ')') { depth--; cur += c; }
+    else if (c === ',' && depth === 0) { out.push(cur); cur = ''; }
+    else cur += c;
+  }
+  if (cur.length) out.push(cur);
+  return out;
 }

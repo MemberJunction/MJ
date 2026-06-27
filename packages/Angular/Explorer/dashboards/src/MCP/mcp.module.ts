@@ -8,6 +8,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { ScrollingModule } from '@angular/cdk/scrolling';
 
 // MJ UI Components
 import {
@@ -15,7 +16,19 @@ import {
     MJDialogComponent,
     MJDialogActionsComponent,
     MJDropdownComponent,
-    MJNumericInputComponent
+    MJNumericInputComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterFieldComponent,
+    MJPageSearchComponent,
+    MJTabNavComponent,
+    MJViewToggleComponent,
+    MJRefreshButtonComponent,
+    MJStatBadgeComponent,
+    MJEmptyStateComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
@@ -49,11 +62,24 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
+        ScrollingModule,
         MJButtonDirective,
         MJDialogComponent,
         MJDialogActionsComponent,
         MJDropdownComponent,
         MJNumericInputComponent,
+        MJPageHeaderComponent,
+        MJPageLayoutComponent,
+        MJPageBodyComponent,
+        MJFilterPopoverComponent,
+        MJFilterPanelComponent,
+        MJFilterFieldComponent,
+        MJPageSearchComponent,
+        MJTabNavComponent,
+        MJViewToggleComponent,
+        MJRefreshButtonComponent,
+    MJStatBadgeComponent,
+        MJEmptyStateComponent,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,

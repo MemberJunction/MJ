@@ -19,7 +19,7 @@ export class InstagramGetPostInsightsAction extends InstagramBaseAction {
             const period = this.getParamValue(params.Params, 'Period') || 'lifetime';
 
             // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 return {
                     Success: false,
                     Message: 'Failed to initialize Instagram authentication',

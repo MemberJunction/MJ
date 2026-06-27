@@ -1,42 +1,41 @@
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Scheduling Activity"
+      Icon="fa-solid fa-clock-rotate-left"
+      Subtitle="Execution history, trends, and job type statistics">
+      <div actions>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search executions..."
+          [Value]="SearchTerm"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
+        <mj-filter-popover
+          [ActiveCount]="ActiveFilterCount"
+          [ShowClearAll]="ActiveFilterCount > 0"
+          (ClearAllRequested)="ResetFilters()">
+          <mj-filter-panel
+            [Fields]="ActivityFilterFields"
+            [Values]="ActivityFilterValues"
+            (ValuesChange)="OnFilterValuesChange($event)"
+            (Reset)="ResetFilters()">
+          </mj-filter-panel>
+        </mj-filter-popover>
+      </div>
+    </mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
+
+<ng-template #content>
 <div class="activity-container">
-  <!-- Toolbar -->
-  <div class="activity-toolbar">
-    <div class="toolbar-left">
-      <div class="search-box">
-        <i class="fa-solid fa-search"></i>
-        <input type="text" placeholder="Search executions..."
-          [value]="SearchTerm"
-          (input)="OnSearchChange($any($event.target).value)" />
-      </div>
-      <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
-        <option value="">All Statuses</option>
-        @for (s of StatusOptions.slice(1); track s) {
-          <option [value]="s">{{s}}</option>
-        }
-      </select>
-      <select class="filter-select" [value]="JobNameFilter" (change)="OnJobNameFilterChange($any($event.target).value)">
-        <option value="">All Jobs</option>
-        @for (name of UniqueJobNames; track name) {
-          <option [value]="name">{{name}}</option>
-        }
-      </select>
-    </div>
-    <div class="toolbar-right">
-      <div class="time-range-group">
-        @for (range of TimeRanges; track range) {
-          <button
-            class="range-btn"
-            [class.active]="SelectedTimeRange === range.value"
-            (click)="OnTimeRangeChange(range.value)">
-            {{range.label}}
-          </button>
-        }
-      </div>
-      <button mjButton variant="secondary" (click)="Refresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
-    </div>
-  </div>
 
   <!-- Loading -->
   @if (IsLoading) {
@@ -123,10 +122,14 @@
         </div>
         <div class="panel-body table-container">
           @if (FilteredExecutions.length === 0) {
-            <div class="empty-state-small">
-              <i class="fa-solid fa-inbox"></i>
-              <span>No executions found for this time range</span>
-            </div>
+            <mj-empty-state Size="compact"
+              [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-inbox"
+              Title="No executions found"
+              Message="No executions match the selected time range and filters."
+              [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="ResetAllFiltersAndSearch()" />
           }
           @if (FilteredExecutions.length > 0) {
             <table class="data-table">
@@ -216,3 +219,4 @@
     </div>
   }
 </div>
+</ng-template>

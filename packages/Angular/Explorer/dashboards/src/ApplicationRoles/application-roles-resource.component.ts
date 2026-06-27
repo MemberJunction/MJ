@@ -83,8 +83,8 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load available roles from metadata
       this.AvailableRoles = md.Roles.map(r => ({ ID: r.ID, Name: r.Name }))
@@ -242,7 +242,7 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Process deletes
       for (const deleteId of this._pendingDeletes) {

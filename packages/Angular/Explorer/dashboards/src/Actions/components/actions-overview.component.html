@@ -1,49 +1,34 @@
-<div class="actions-overview" >
-  <!-- Header with search and filters -->
-  <div class="overview-header">
-    <div class="filters-row">
-      <div class="search-container">
-        <div class="search-input-wrapper">
-          <i class="fa-solid fa-search search-icon"></i>
-          <input type="text" class="mj-input"
-            placeholder="Search actions..."
-            [value]="searchTerm$.value"
-            (input)="onSearchChange($any($event.target).value)" />
-        </div>
-      </div>
-      
-      <div class="filter-container">
-        <mj-dropdown
-          [Data]="[
-            { text: 'All Statuses', value: 'all' },
-            { text: 'Active', value: 'Active' },
-            { text: 'Pending', value: 'Pending' },
-            { text: 'Disabled', value: 'Disabled' }
-          ]"
-          TextField="text"
-          ValueField="value"
-          [ValuePrimitive]="true"
-          [ngModel]="selectedStatus$.value"
-          (ValueChange)="onStatusFilterChange($any($event))">
-        </mj-dropdown>
-      </div>
-      
-      <div class="filter-container">
-        <mj-dropdown
-          [Data]="[
-            { text: 'All Types', value: 'all' },
-            { text: 'AI Generated', value: 'Generated' },
-            { text: 'Custom', value: 'Custom' }
-          ]"
-          TextField="text"
-          ValueField="value"
-          [ValuePrimitive]="true"
-          [ngModel]="selectedType$.value"
-          (ValueChange)="onTypeFilterChange($any($event))">
-        </mj-dropdown>
-      </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Actions Overview"
+    Icon="fa-solid fa-bolt"
+    Subtitle="Health and activity for all configured actions">
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         totalActions was a single inventory count; the body's KPI cards
+         surface this and other metrics in their proper place. -->
+    <!-- No [actions] — this page has no primary CTA; the control bar lives in [toolbar] per §3. -->
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search actions..."
+        [Value]="searchTerm$.value"
+        (ValueChange)="onSearchChange($event)">
+      </mj-page-search>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="resetFilters()">
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="resetFilters()">
+        </mj-filter-panel>
+      </mj-filter-popover>
     </div>
-  </div>
+  </mj-page-header>
+
+  <mj-page-body>
+  <div class="actions-overview" >
 
   <!-- Metrics Cards -->
   <div class="metrics-grid">
@@ -147,10 +132,8 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-chart-bar"></i>
-            <p>No category statistics available</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-chart-bar"
+            Title="No category statistics available" />
         }
       </div>
     </div>
@@ -181,10 +164,8 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-cogs"></i>
-            <p>No recent actions found</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-cogs"
+            Title="No recent actions found" />
         }
       </div>
     </div>
@@ -242,10 +223,8 @@
             }
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-history"></i>
-            <p>No recent executions found</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-history"
+            Title="No recent executions found" />
         }
       </div>
     </div>
@@ -257,3 +236,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

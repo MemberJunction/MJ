@@ -19,9 +19,10 @@
       (attachmentClicked)="onAttachmentClicked($event)">
     </mj-mention-editor>
 
-    <!-- Attach Buttons - Positioned over editor -->
-    @if (enableAttachments) {
+    <!-- Attach + voice buttons - Positioned over editor -->
+    @if (enableAttachments || enableVoice) {
       <div class="attach-buttons">
+        @if (enableAttachments) {
         <button
           class="attach-button-icon"
           [disabled]="disabled"
@@ -30,14 +31,58 @@
           >
           <i class="fa-solid fa-paperclip"></i>
         </button>
+        <!--
+          TODO: "Attach artifact from library" button is not yet wired.
+
+          Current state (2026-04-15): emits `artifactPickerRequested` but no
+          consumer handles the event (handler was removed by commit 0a4612abf1,
+          orphaned template cleaned up in 7a063fc12a). Button is intentionally
+          visible but disabled so it's obvious what's missing.
+
+          To finish: build a picker modal (suggested approach: wrap the
+          `<mj-tree-dropdown>` used in dashboard-viewer's artifact-config-panel)
+          and on selection, attach the artifact version as a Direction='Input'
+          MJConversationDetailArtifact junction on the outgoing message.
+          The infrastructure for agents reading input artifacts is already in
+          place via AgentRunner.gatherConversationArtifacts().
+
+          See also: packages/Angular/Generic/artifacts/src/lib/services/analyze-artifact.service.ts
+          which does the similar end-to-end flow for standalone Analyze — the
+          attach-to-draft path is a strict subset (no artifact creation, no
+          conversation creation, just the junction).
+        -->
         <button
           class="attach-button-icon attach-artifact-button"
-          [disabled]="disabled"
+          [disabled]="true"
           (click)="openArtifactPicker(); $event.stopPropagation()"
-          title="Attach artifact from library"
+          title="Attach artifact from library — not yet wired (see message-input-box.component.html TODO)"
           >
           <i class="fa-solid fa-cube"></i>
         </button>
+        }
+        @if (enableVoice) {
+        <button
+          class="attach-button-icon voice-button-icon"
+          [class.voice-button-icon--active]="voiceActive"
+          [disabled]="!canStartVoice"
+          (click)="onVoiceClick(); $event.stopPropagation()"
+          [title]="voiceActive ? 'Voice call active' : 'Start a voice call'"
+          aria-label="Start a voice call"
+          >
+          <i class="fa-solid fa-phone" aria-hidden="true"></i>
+        </button>
+        <!-- Caret beside the phone: opens the agent/model picker so call OPTIONS stay one
+             click away while the plain phone click keeps its instant-start behavior. -->
+        <button
+          class="attach-button-icon voice-options-button-icon"
+          [disabled]="!canStartVoice"
+          (click)="onVoiceOptionsClick(); $event.stopPropagation()"
+          title="Voice call options (choose agent and voice model)"
+          aria-label="Voice call options"
+          >
+          <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        }
       </div>
     }
 

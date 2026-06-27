@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core';
-import { RunView, Metadata, UserInfo } from '@memberjunction/core';
+import { RunView, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
   MJConversationDetailAttachmentEntity,
   MJConversationDetailArtifactEntity,
   MJArtifactVersionEntity,
-  MJAIModalityEntity
+  MJArtifactEntity,
+  MJAIModalityEntity,
+  ArtifactMetadataEngine
 } from '@memberjunction/core-entities';
 import {
   ConversationUtility,
@@ -24,7 +26,20 @@ import { UUIDsEqual } from '@memberjunction/global';
   providedIn: 'root'
 })
 export class ConversationAttachmentService {
+  private _provider: IMetadataProvider | null = null;
+
   constructor() {}
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   /**
    * Load all attachments for a list of conversation detail IDs.
@@ -41,30 +56,14 @@ export class ConversationAttachmentService {
     }
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
-        EntityName: 'MJ: Conversation Detail Attachments',
-        ExtraFilter: `ConversationDetailID IN (${idList})`,
-        OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
-        ResultType: 'entity_object'
-      }, contextUser);
-
-      if (attachmentResult.Success && attachmentResult.Results) {
-        for (const attachment of attachmentResult.Results) {
-          const detailId = attachment.ConversationDetailID;
-
-          if (!result.has(detailId)) {
-            result.set(detailId, []);
-          }
-
-          const messageAttachment = this.convertToMessageAttachment(attachment);
-          result.get(detailId)!.push(messageAttachment);
-        }
-      }
-
-      // Also load input artifacts (ConversationDetailArtifact with Direction='Input')
+      // Load input artifacts (ConversationDetailArtifact with Direction='Input').
+      // Since the backfill migration (V202605271400__Backfill_Attachment_Artifacts)
+      // converted all legacy ConversationDetailAttachment rows to artifact pairs,
+      // the artifact junction is the single source of truth — no separate attachment
+      // query needed.
       const artifactLinksResult = await rv.RunView<MJConversationDetailArtifactEntity>({
         EntityName: 'MJ: Conversation Detail Artifacts',
         ExtraFilter: `ConversationDetailID IN (${idList}) AND Direction = 'Input'`,
@@ -72,7 +71,8 @@ export class ConversationAttachmentService {
       }, contextUser);
 
       if (artifactLinksResult.Success && artifactLinksResult.Results && artifactLinksResult.Results.length > 0) {
-        // Load the referenced artifact versions
+        // Load the referenced artifact versions AND their parent artifacts in parallel
+        // so we can resolve the semantic artifact-type name for the tile badge.
         const versionIds = artifactLinksResult.Results.map(l => `'${l.ArtifactVersionID}'`).join(',');
         const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
@@ -86,9 +86,32 @@ export class ConversationAttachmentService {
             versionMap.set(v.ID, v);
           }
 
+          // Bulk-load parent artifacts to get TypeID, then resolve type names via cached engine.
+          const artifactIds = Array.from(new Set(versionsResult.Results.map(v => v.ArtifactID).filter(Boolean)));
+          const artifactMap = new Map<string, MJArtifactEntity>();
+          if (artifactIds.length > 0) {
+            const artifactIdList = artifactIds.map(id => `'${id}'`).join(',');
+            const artifactsResult = await rv.RunView<MJArtifactEntity>({
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `ID IN (${artifactIdList})`,
+              ResultType: 'entity_object'
+            }, contextUser);
+            if (artifactsResult.Success && artifactsResult.Results) {
+              for (const a of artifactsResult.Results) {
+                artifactMap.set(a.ID, a);
+              }
+            }
+            // Ensure the artifact-type cache is populated so FindArtifactTypeByID resolves.
+            await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+          }
+
           for (const link of artifactLinksResult.Results) {
             const version = versionMap.get(link.ArtifactVersionID);
             if (version) {
+              const parentArtifact = artifactMap.get(version.ArtifactID);
+              const artifactType = parentArtifact
+                ? ArtifactMetadataEngine.Instance.FindArtifactTypeByID(parentArtifact.TypeID)
+                : undefined;
               const detailId = link.ConversationDetailID;
               if (!result.has(detailId)) {
                 result.set(detailId, []);
@@ -99,7 +122,10 @@ export class ConversationAttachmentService {
                 mimeType: version.MimeType || 'text/plain',
                 fileName: version.FileName || version.Name || 'Artifact',
                 sizeBytes: version.ContentSizeBytes || 0,
-                source: 'artifact'
+                source: 'artifact',
+                artifactId: version.ArtifactID || undefined,
+                artifactVersionId: version.ID,
+                artifactTypeName: artifactType?.Name || undefined
               } as MessageAttachment);
             }
           }
@@ -137,7 +163,8 @@ export class ConversationAttachmentService {
     contextUser?: UserInfo
   ): Promise<MJConversationDetailAttachmentEntity[]> {
     const savedAttachments: MJConversationDetailAttachmentEntity[] = [];
-    const md = new Metadata();
+    const rejectionMessages: string[] = [];
+    const md = this.Provider;
 
     for (let i = 0; i < pendingAttachments.length; i++) {
       const pending = pendingAttachments[i];
@@ -189,11 +216,24 @@ export class ConversationAttachmentService {
         if (saved) {
           savedAttachments.push(attachment);
         } else {
+          const message = attachment.LatestResult?.CompleteMessage
+            ?? `Attachment "${pending.fileName}" was rejected by the server.`;
           console.error('Failed to save attachment:', attachment.LatestResult);
+          rejectionMessages.push(message);
         }
       } catch (error) {
         console.error('Error saving attachment:', error);
+        rejectionMessages.push(
+          `Attachment "${pending.fileName}" failed to upload: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
+    }
+
+    // Surface server-side rejections (e.g. unregistered MIME types) to the
+    // caller — throwing here lets the message-input toast pipeline display
+    // the actual server message rather than silently dropping the file.
+    if (rejectionMessages.length > 0) {
+      throw new Error(rejectionMessages.join('\n'));
     }
 
     return savedAttachments;

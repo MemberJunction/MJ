@@ -1,0 +1,112 @@
+<div class="user-sharing-center">
+    <div class="tabs">
+        <button
+            class="tab"
+            [class.active]="ActiveTab === 'shared-with-me'"
+            (click)="OnTabClick('shared-with-me')">
+            <i class="fa-solid fa-inbox"></i>
+            Shared with me
+        </button>
+        <button
+            class="tab"
+            [class.active]="ActiveTab === 'shared-by-me'"
+            (click)="OnTabClick('shared-by-me')">
+            <i class="fa-solid fa-paper-plane"></i>
+            Shared by me
+        </button>
+        <div class="spacer"></div>
+        @if (ShowCloseButton) {
+            <button class="close" (click)="OnClose()" title="Close">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        }
+    </div>
+
+    @if (ErrorMessage) {
+        <div class="error">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            {{ ErrorMessage }}
+        </div>
+    }
+
+    @if (ActiveTab === 'shared-with-me') {
+        @if (IsLoadingWithMe) {
+            <div class="loading">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Loading…
+            </div>
+        } @else if (SharedWithMe.length === 0) {
+            <mj-empty-state class="empty" Size="compact"
+                Icon="fa-solid fa-inbox"
+                Title="Nothing has been shared directly with you yet." />
+        } @else {
+            @for (group of SharedWithMe; track TrackByDomain($index, group)) {
+                <div class="group">
+                    <button class="group-header" (click)="ToggleGroup(group)">
+                        <i [class]="group.Icon"></i>
+                        <span class="group-name">{{ group.DomainName }}</span>
+                        <span class="count">{{ group.Rows.length }}</span>
+                        <i class="fa-solid chevron" [class.fa-chevron-down]="group.Expanded" [class.fa-chevron-right]="!group.Expanded"></i>
+                    </button>
+                    @if (group.Expanded) {
+                        <div class="rows">
+                            @for (row of group.Rows; track TrackByRow($index, row)) {
+                                <button class="row" (click)="OnRowClick(row)">
+                                    <span class="resource">{{ row.ResourceName || row.ResourceID }}</span>
+                                    <span class="resource-type">{{ row.ResourceType }}</span>
+                                    <span class="actions">{{ ActionsLabel(row.Actions) }}</span>
+                                    @if (row.ExpiresAt) {
+                                        <span class="expires">expires {{ row.ExpiresAt | date:'mediumDate' }}</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    } @else {
+        @if (IsLoadingByMe) {
+            <div class="loading">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Loading…
+            </div>
+        } @else if (SharedByMe.length === 0) {
+            <mj-empty-state class="empty" Size="compact"
+                Icon="fa-solid fa-paper-plane"
+                Title="You haven't shared anything with others yet." />
+        } @else {
+            @for (group of SharedByMe; track TrackByDomain($index, group)) {
+                <div class="group">
+                    <button class="group-header" (click)="ToggleGroup(group)">
+                        <i [class]="group.Icon"></i>
+                        <span class="group-name">{{ group.DomainName }}</span>
+                        <span class="count">{{ group.Rows.length }}</span>
+                        <i class="fa-solid chevron" [class.fa-chevron-down]="group.Expanded" [class.fa-chevron-right]="!group.Expanded"></i>
+                    </button>
+                    @if (group.Expanded) {
+                        <div class="rows">
+                            @for (row of group.Rows; track TrackByRow($index, row)) {
+                                <div class="row editable">
+                                    <span class="resource">{{ row.ResourceName || row.ResourceID }}</span>
+                                    <span class="resource-type">{{ row.ResourceType }}</span>
+                                    <span class="grantee">
+                                        <i class="fa-solid fa-user"></i>
+                                        {{ row.GranteeName || row.GranteeType }}
+                                    </span>
+                                    <span class="actions">{{ ActionsLabel(row.Actions) }}</span>
+                                    @if (row.ExpiresAt) {
+                                        <span class="expires">expires {{ row.ExpiresAt | date:'mediumDate' }}</span>
+                                    }
+                                    <button class="revoke" (click)="OnRevoke(row, $event)" title="Revoke access">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+    }
+</div>

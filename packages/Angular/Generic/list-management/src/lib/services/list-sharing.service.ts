@@ -1,24 +1,26 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
   MJListEntity,
   MJResourcePermissionEntity,
   MJResourceTypeEntity,
   MJUserEntity,
-  MJRoleEntity
+  MJRoleEntity,
+  ResourceTypeEngine,
 } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ListShareInfo, ListPermissionLevel, ShareRecipient, ListShareResult } from '../models/list-sharing.models';
 
-/**
- * Known List ResourceType ID from the database
- */
-const LIST_RESOURCE_TYPE_ID = 'E64D433E-F36B-1410-8560-0041FA62858A';
+/** Name of the row in `MJ: Resource Types` that scopes List shares. */
+const LIST_RESOURCE_TYPE_NAME = 'Lists';
 
 /**
  * Service for managing list sharing using the existing ResourcePermission system.
  * Lists are already registered as a ResourceType, so we use ResourcePermissions
  * to share lists with users and roles.
+ *
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
  */
 @Injectable({
   providedIn: 'root'
@@ -31,13 +33,35 @@ export class ListSharingService {
   private usersCache: MJUserEntity[] | null = null;
   private rolesCache: MJRoleEntity[] | null = null;
 
+  private _provider: IMetadataProvider | null = null;
+
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
+
   constructor() {}
 
   /**
-   * Get the ResourceType ID for Lists
+   * Resolve the `MJ: Resource Types.ID` for the row named "Lists" via the
+   * shared `ResourceTypeEngine`. Throws if missing — that indicates a
+   * misconfigured environment (seed data never pushed) and we'd rather fail
+   * loud than write `MJResourcePermission` rows with an undefined
+   * `ResourceTypeID`. `Engine.Config()` is idempotent (BaseEngine semantics)
+   * so calling this on every method that needs it is cheap.
    */
-  getListResourceTypeId(): string {
-    return LIST_RESOURCE_TYPE_ID;
+  private async resolveListResourceTypeId(): Promise<string> {
+    await ResourceTypeEngine.Instance.Config(false, undefined, this.Provider);
+    const rt = ResourceTypeEngine.Instance.ByName(LIST_RESOURCE_TYPE_NAME);
+    if (!rt) {
+      throw new Error(
+        `MJ: Resource Types row "${LIST_RESOURCE_TYPE_NAME}" not found. ` +
+          `Seed metadata/resource-types/ via 'mj sync push' before using ListSharingService.`,
+      );
+    }
+    return rt.ID;
   }
 
   /**
@@ -47,10 +71,11 @@ export class ListSharingService {
     this.loadingSubject.next(true);
 
     try {
-      const rv = new RunView();
+      const resourceTypeId = await this.resolveListResourceTypeId();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const result = await rv.RunView<MJResourcePermissionEntity>({
         EntityName: 'MJ: Resource Permissions',
-        ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}'`,
+        ExtraFilter: `ResourceTypeID = '${resourceTypeId}' AND ResourceRecordID = '${listId}'`,
         ResultType: 'entity_object'
       });
 
@@ -78,12 +103,13 @@ export class ListSharingService {
    * Get permission level for a specific user on a specific list
    */
   async getUserPermissionLevel(listId: string, userId: string): Promise<ListPermissionLevel | null> {
-    const rv = new RunView();
+    const resourceTypeId = await this.resolveListResourceTypeId();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Check direct user permission
     const userResult = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}' AND Type = 'User' AND UserID = '${userId}' AND Status = 'Approved'`,
+      ExtraFilter: `ResourceTypeID = '${resourceTypeId}' AND ResourceRecordID = '${listId}' AND Type = 'User' AND UserID = '${userId}' AND Status = 'Approved'`,
       ResultType: 'entity_object'
     });
 
@@ -106,7 +132,7 @@ export class ListSharingService {
     sharedByUserId: string
   ): Promise<ListShareResult> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
 
       // Check if share already exists
       const existing = await this.findExistingShare(listId, 'User', userId);
@@ -124,9 +150,10 @@ export class ListSharingService {
       }
 
       // Create new share
+      const resourceTypeId = await this.resolveListResourceTypeId();
       const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
       permission.NewRecord();
-      permission.ResourceTypeID = LIST_RESOURCE_TYPE_ID;
+      permission.ResourceTypeID = resourceTypeId;
       permission.ResourceRecordID = listId;
       permission.Type = 'User';
       permission.UserID = userId;
@@ -158,7 +185,7 @@ export class ListSharingService {
     sharedByUserId: string
   ): Promise<ListShareResult> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
 
       // Check if share already exists
       const existing = await this.findExistingShare(listId, 'Role', roleId);
@@ -176,9 +203,10 @@ export class ListSharingService {
       }
 
       // Create new share
+      const resourceTypeId = await this.resolveListResourceTypeId();
       const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
       permission.NewRecord();
-      permission.ResourceTypeID = LIST_RESOURCE_TYPE_ID;
+      permission.ResourceTypeID = resourceTypeId;
       permission.ResourceRecordID = listId;
       permission.Type = 'Role';
       permission.RoleID = roleId;
@@ -208,7 +236,7 @@ export class ListSharingService {
     newPermissionLevel: ListPermissionLevel
   ): Promise<ListShareResult> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       const loaded = await permission.Load(shareId);
@@ -241,7 +269,7 @@ export class ListSharingService {
    */
   async removeShare(shareId: string): Promise<ListShareResult> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const permission = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       const loaded = await permission.Load(shareId);
@@ -271,11 +299,12 @@ export class ListSharingService {
    * Get lists shared with the current user (that they don't own)
    */
   async getListsSharedWithUser(userId: string): Promise<string[]> {
-    const rv = new RunView();
+    const resourceTypeId = await this.resolveListResourceTypeId();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     const result = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND Type = 'User' AND UserID = '${userId}' AND Status = 'Approved'`,
+      ExtraFilter: `ResourceTypeID = '${resourceTypeId}' AND Type = 'User' AND UserID = '${userId}' AND Status = 'Approved'`,
       Fields: ['ResourceRecordID'],
       ResultType: 'simple'
     });
@@ -292,7 +321,7 @@ export class ListSharingService {
    */
   async getListsSharedByUser(userId: string): Promise<Map<string, number>> {
     // First get all lists owned by the user
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     const listsResult = await rv.RunView<MJListEntity>({
       EntityName: 'MJ: Lists',
@@ -309,9 +338,10 @@ export class ListSharingService {
     const listIdFilter = listIds.map((id: string) => `'${id}'`).join(',');
 
     // Get all shares for these lists
+    const resourceTypeId = await this.resolveListResourceTypeId();
     const sharesResult = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID IN (${listIdFilter}) AND Status = 'Approved'`,
+      ExtraFilter: `ResourceTypeID = '${resourceTypeId}' AND ResourceRecordID IN (${listIdFilter}) AND Status = 'Approved'`,
       Fields: ['ResourceRecordID'],
       ResultType: 'simple'
     });
@@ -333,7 +363,7 @@ export class ListSharingService {
    * Check if user can share a list (must be owner or have Owner permission)
    */
   async canUserShareList(listId: string, userId: string): Promise<boolean> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Check if user is the owner
     const listResult = await rv.RunView<MJListEntity>({
@@ -355,7 +385,7 @@ export class ListSharingService {
    * Search users for sharing autocomplete
    */
   async searchUsers(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     const result = await rv.RunView<MJUserEntity>({
       EntityName: 'MJ: Users',
@@ -381,7 +411,7 @@ export class ListSharingService {
    * Search roles for sharing autocomplete
    */
   async searchRoles(searchTerm: string, limit: number = 10): Promise<ShareRecipient[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     const result = await rv.RunView<MJRoleEntity>({
       EntityName: 'MJ: Roles',
@@ -410,7 +440,7 @@ export class ListSharingService {
       return this.usersCache;
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJUserEntity>({
       EntityName: 'MJ: Users',
       ExtraFilter: 'IsActive = 1',
@@ -434,7 +464,7 @@ export class ListSharingService {
       return this.rolesCache;
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJRoleEntity>({
       EntityName: 'MJ: Roles',
       OrderBy: 'Name',
@@ -457,12 +487,13 @@ export class ListSharingService {
     type: 'User' | 'Role',
     recipientId: string
   ): Promise<MJResourcePermissionEntity | null> {
-    const rv = new RunView();
+    const resourceTypeId = await this.resolveListResourceTypeId();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const idField = type === 'User' ? 'UserID' : 'RoleID';
 
     const result = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}' AND Type = '${type}' AND ${idField} = '${recipientId}'`,
+      ExtraFilter: `ResourceTypeID = '${resourceTypeId}' AND ResourceRecordID = '${listId}' AND Type = '${type}' AND ${idField} = '${recipientId}'`,
       ResultType: 'entity_object'
     });
 
@@ -477,7 +508,7 @@ export class ListSharingService {
    * Convert MJResourcePermissionEntity to ListShareInfo
    */
   private async convertToListShareInfo(permission: MJResourcePermissionEntity): Promise<ListShareInfo | null> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     if (permission.Type === 'User' && permission.UserID) {
       const userResult = await rv.RunView<MJUserEntity>({
@@ -531,11 +562,12 @@ export class ListSharingService {
    * Get sharing summary for a single list
    */
   async getListSharingSummary(listId: string): Promise<{ listId: string; totalShares: number; userShares: number; roleShares: number; isSharedWithMe: boolean; isSharedByMe: boolean }> {
-    const rv = new RunView();
+    const resourceTypeId = await this.resolveListResourceTypeId();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     const result = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID = '${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID = '${listId}' AND Status = 'Approved'`,
+      ExtraFilter: `ResourceTypeID = '${resourceTypeId}' AND ResourceRecordID = '${listId}' AND Status = 'Approved'`,
       Fields: ['ID', 'Type'],
       ResultType: 'simple'
     });

@@ -59,6 +59,11 @@ vi.mock('@memberjunction/ai', () => {
     constructor(apiKey: string) { this._apiKey = apiKey; }
     get apiKey() { return this._apiKey; }
   }
+  class MockBaseRealtimeModel {
+    protected _apiKey: string;
+    constructor(apiKey: string) { this._apiKey = apiKey; }
+    get apiKey() { return this._apiKey; }
+  }
   class MockGeneratedImage {
     data: Buffer | null = null;
     base64: string = '';
@@ -85,6 +90,8 @@ vi.mock('@memberjunction/ai', () => {
     ImageVariationParams: class {},
     ImageModelInfo: class {},
     GeneratedImage: MockGeneratedImage,
+    BaseRealtimeModel: MockBaseRealtimeModel,
+    BaseEmbeddings: class {},
   };
 });
 
@@ -146,8 +153,12 @@ describe('GeminiLLM', () => {
       expect(callGetThinkingBudget('abc', 'gemini-2.5-flash')).toBeUndefined();
     });
 
-    it('should return 0 for very low effort on Flash models', () => {
-      expect(callGetThinkingBudget(3, 'gemini-2.5-flash')).toBe(0);
+    it('should return 0 only for effort 1 on Flash models (minimal)', () => {
+      expect(callGetThinkingBudget(1, 'gemini-2.5-flash')).toBe(0);
+      // effort 2 falls into the LOW band (1024-4096) — no longer disabled
+      const lowBudget = callGetThinkingBudget(2, 'gemini-2.5-flash');
+      expect(lowBudget).toBeGreaterThanOrEqual(1024);
+      expect(lowBudget).toBeLessThanOrEqual(4096);
     });
 
     it('should return low budget for effort level 20', () => {
@@ -271,6 +282,70 @@ describe('GeminiLLM', () => {
       expect(parts).toHaveLength(1);
       expect(parts[0]).toHaveProperty('inlineData');
     });
+
+    it('should map a data-URL image alongside text into an inlineData part and a text part', () => {
+      // Regression: the bug was that an image_url block was sent as a TEXT string of its data URL,
+      // so vision models never received an actual image. The data URL must become inlineData with
+      // the base64 stripped of its "data:...;base64," prefix.
+      const content = [
+        { type: 'text', content: 'what is this?' },
+        { type: 'image_url', content: 'data:image/jpeg;base64,QUJD' },
+      ];
+      const parts = GeminiLLM.MapMJContentToGeminiParts(content as never);
+      expect(parts).toHaveLength(2);
+      expect(parts[0]).toEqual({ text: 'what is this?' });
+      expect(parts[1]).toEqual({ inlineData: { mimeType: 'image/jpeg', data: 'QUJD' } });
+    });
+
+    it('should map an http(s) image_url to a fileData part', () => {
+      const content = [
+        { type: 'image_url', content: 'https://example.com/cat.png' },
+      ];
+      const parts = GeminiLLM.MapMJContentToGeminiParts(content as never);
+      expect(parts).toHaveLength(1);
+      expect(parts[0]).toEqual({
+        fileData: { fileUri: 'https://example.com/cat.png', mimeType: 'image/png' },
+      });
+    });
+
+    it('should honor an explicit mimeType on an http(s) image_url fileData part', () => {
+      const content = [
+        { type: 'image_url', content: 'https://example.com/photo', mimeType: 'image/webp' },
+      ];
+      const parts = GeminiLLM.MapMJContentToGeminiParts(content as never);
+      expect(parts[0]).toEqual({
+        fileData: { fileUri: 'https://example.com/photo', mimeType: 'image/webp' },
+      });
+    });
+
+    it('should keep a plain-string content as a single text part (no behavior change)', () => {
+      const parts = GeminiLLM.MapMJContentToGeminiParts('just text');
+      expect(parts).toHaveLength(1);
+      expect(parts[0]).toEqual({ text: 'just text' });
+    });
+  });
+
+  /* ---- mjContentToSystemInstructionText (private, static) ---- */
+  describe('mjContentToSystemInstructionText', () => {
+    const callSysText = (content: unknown): string => {
+      const fn = (GeminiLLM as unknown as Record<string, (c: unknown) => string>)['mjContentToSystemInstructionText'];
+      return fn(content);
+    };
+
+    it('returns a plain string unchanged', () => {
+      expect(callSysText('Be a helpful assistant')).toBe('Be a helpful assistant');
+    });
+
+    it('joins only text blocks and skips media blocks (no base64 blob in the system instruction)', () => {
+      const content = [
+        { type: 'text', content: 'You are a vision agent.' },
+        { type: 'image_url', content: 'data:image/png;base64,QUJD' },
+        { type: 'text', content: 'Describe images carefully.' },
+      ];
+      const text = callSysText(content);
+      expect(text).toBe('You are a vision agent.\nDescribe images carefully.');
+      expect(text).not.toContain('QUJD');
+    });
   });
 
   /* ---- MapMJMessageToGeminiHistoryEntry (static) ---- */
@@ -308,6 +383,107 @@ describe('GeminiLLM', () => {
 
     it('ClassifyText should throw', () => {
       expect(() => llm.ClassifyText({} as never)).toThrow('Method not implemented.');
+    });
+  });
+
+  /* ---- processStreamingChunk (protected) ---- */
+  describe('processStreamingChunk', () => {
+    type StreamChunk = {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+        finishReason?: string;
+      }>;
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+    };
+    type StreamResult = { content: string; finishReason?: string; usage?: unknown };
+
+    const callProcessStreamingChunk = (chunk: StreamChunk): StreamResult => {
+      const fn = (llm as unknown as Record<string, (c: StreamChunk) => StreamResult>)['processStreamingChunk']
+        .bind(llm);
+      return fn(chunk);
+    };
+
+    const resetState = () => {
+      const reset = (llm as unknown as Record<string, () => void>)['resetStreamingState'].bind(llm);
+      reset();
+    };
+
+    beforeEach(() => {
+      resetState();
+    });
+
+    it('extracts text from new-SDK content.parts shape', () => {
+      // Regression: legacy code accessed content[0].parts (array shape from
+      // @google/generative-ai). New SDK exposes content as an object with parts[].
+      const result = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'hello world' }] } }],
+      });
+      expect(result.content).toBe('hello world');
+    });
+
+    it('returns empty content if chunk used the legacy content[0].parts shape', () => {
+      // Construct a chunk shaped like the OLD SDK to prove we don't accidentally
+      // succeed against the wrong shape. content[0] would imply content is an array.
+      const legacyChunk = {
+        candidates: [{
+          // @ts-expect-error -- intentionally legacy shape
+          content: [{ parts: [{ text: 'should-not-extract' }] }],
+        }],
+      } as unknown as StreamChunk;
+      const result = callProcessStreamingChunk(legacyChunk);
+      expect(result.content).toBe('');
+    });
+
+    it('separates thought parts from visible text parts', () => {
+      const result = callProcessStreamingChunk({
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'reasoning summary', thought: true },
+              { text: 'visible answer' },
+            ],
+          },
+        }],
+      });
+      expect(result.content).toBe('visible answer');
+      // Thinking is accumulated into streaming state, not emitted in `content`
+      const state = (llm as unknown as Record<string, { accumulatedThinking: string }>)['_streamingState'];
+      expect(state.accumulatedThinking).toBe('reasoning summary');
+    });
+
+    it('accumulates thinking across multiple chunks without emitting content', () => {
+      callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'step 1 ', thought: true }] } }],
+      });
+      const second = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'step 2', thought: true }] } }],
+      });
+      expect(second.content).toBe('');
+      const state = (llm as unknown as Record<string, { accumulatedThinking: string }>)['_streamingState'];
+      expect(state.accumulatedThinking).toBe('step 1 step 2');
+    });
+
+    it('returns finishReason when present on the candidate', () => {
+      const result = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'done' }] }, finishReason: 'STOP' }],
+      });
+      expect(result.finishReason).toBe('STOP');
+    });
+
+    it('returns usage when usageMetadata is on the chunk', () => {
+      const result = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'x' }] } }],
+        usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 34 },
+      });
+      expect(result.usage).toBeDefined();
+      expect((result.usage as { promptTokens: number }).promptTokens).toBe(12);
+      expect((result.usage as { completionTokens: number }).completionTokens).toBe(34);
+    });
+
+    it('handles chunks with no candidates without throwing', () => {
+      const result = callProcessStreamingChunk({});
+      expect(result.content).toBe('');
+      expect(result.finishReason).toBeUndefined();
     });
   });
 });

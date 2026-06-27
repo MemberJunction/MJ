@@ -15,7 +15,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryParams, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
+         SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -45,6 +46,22 @@ export type SocketConnectionState = 'connected' | 'disconnected' | 'unknown';
  * The client application should use this to notify the user and force re-authentication.
  */
 export type AuthenticationErrorCallback = (error: Error) => void;
+
+/**
+ * Shared, stateless FieldMapper instance. FieldMapper holds no per-call state (only static
+ * prefix constants), so a single shared instance is reused everywhere instead of allocating a
+ * new FieldMapper per row in the RunView(s) deserialization loops (ConvertBackToMJFields) and
+ * per query in the field-list builders.
+ */
+const SharedFieldMapper = new FieldMapper();
+
+/** RO-3 attached-progress subscription opened per-call (filtered by a client-generated channelId). */
+const REMOTE_OP_PROGRESS_SUBSCRIPTION = gql`subscription RemoteOperationProgress($channelId: ID!) {
+    RemoteOperationProgress(channelId: $channelId) {
+        ChannelId
+        ProgressJSON
+    }
+}`;
 
 /**
  * The GraphQLProviderConfigData class is used to configure the GraphQLDataProvider. It is passed to the Config method of the GraphQLDataProvider
@@ -147,6 +164,14 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
+    /**
+     * Opt-in verbose logging for the real-time cache-invalidation subscription. Off by default — these
+     * messages fire on every cross-server save/delete and flood the console. Set to `true` (e.g. from
+     * the console: `GraphQLDataProvider.VerboseCacheInvalidationLogging = true`) only when debugging
+     * cache-invalidation / cross-server sync behavior.
+     */
+    public static VerboseCacheInvalidationLogging = false;
+
     /**
      * Global Object Store key — follows BaseSingleton's naming convention so the
      * singleton is discoverable in the same way as BaseSingleton-derived classes.
@@ -256,7 +281,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const ls = this.LocalStorageProvider;
             if (ls) {
                 const key = this.LocalStoragePrefix + "sessionId";
-                const storedSession = await ls.GetItem(key);
+                // Session ID is a plain string — typed retrieval avoids the generic 'unknown' default.
+                const storedSession = await ls.GetItem<string>(key);
                 return storedSession;
             }
             return null;
@@ -476,7 +502,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
@@ -493,7 +519,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Executes an ad-hoc SQL query via the ExecuteAdhocQuery GraphQL resolver.
      * The server validates the SQL (SELECT/WITH only) and executes on a read-only connection.
      */
-    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number): Promise<RunQueryResult> {
+    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number, startRow?: number): Promise<RunQueryResult> {
         const query = gql`
             query ExecuteAdhocQuery($input: AdhocQueryInput!) {
                 ExecuteAdhocQuery(input: $input) {
@@ -502,9 +528,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         `;
 
-        const input: { SQL: string; TimeoutSeconds?: number } = { SQL: sql };
+        const input: { SQL: string; TimeoutSeconds?: number; MaxRows?: number; StartRow?: number } = { SQL: sql };
         if (timeoutSeconds !== undefined) {
             input.TimeoutSeconds = timeoutSeconds;
+        }
+        if (maxRows !== undefined) {
+            input.MaxRows = maxRows;
+        }
+        if (startRow !== undefined) {
+            input.StartRow = startRow;
         }
 
         const result = await this.ExecuteGQL(query, { input });
@@ -798,7 +830,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 }
 
                 // get entity metadata
-                const e = this.Entities.find(e => e.Name === entity);
+                const e = this.EntityByName(entity);
                 if (!e)
                     throw new Error(`Entity ${entity} not found in metadata`);
 
@@ -835,6 +867,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
                     innerParams.AuditLogDescription = params.AuditLogDescription;
+                // BypassCache instructs the server to skip its RunView cache layer for this
+                // query — used for cross-entity subqueries the cache invalidator can't follow
+                // (e.g. WHERE … IN (SELECT … FROM vwListDetails …)) or for maintenance reads
+                // that need true DB state. Only forward when explicitly set so default behavior
+                // (server caching enabled) is unchanged.
+                if (params.BypassCache !== undefined)
+                    innerParams.BypassCache = params.BypassCache;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -957,7 +996,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     }
 
                     // get entity metadata
-                    const e = this.Entities.find(e => e.Name === entity);
+                    const e = this.EntityByName(entity);
                     if (!e){
                         throw new Error(`Entity ${entity} not found in metadata`);
                     }
@@ -994,10 +1033,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.MaxRows = param.MaxRows;
                     if (param.StartRow !== undefined)
                         innerParam.StartRow = param.StartRow; // Add StartRow parameter
+                    if (param.AfterKey) {
+                        // Keyset (seek) pagination cursor. Server validates and throws
+                        // AfterKeyNotSupportedError on composite-PK / unsupported types.
+                        innerParam.AfterKey = { KeyValuePairs: param.AfterKey.KeyValuePairs };
+                    }
                     innerParam.ForceAuditLog = param.ForceAuditLog || false;
                     innerParam.ResultType = param.ResultType || 'simple';
                     if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
                         innerParam.AuditLogDescription = param.AuditLogDescription;
+                    }
+                    if (param.BypassCache !== undefined) {
+                        innerParam.BypassCache = param.BypassCache;
                     }
 
                     if (!dynamicView) {
@@ -1111,6 +1158,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     IgnoreMaxRows: item.params.IgnoreMaxRows || false,
                     MaxRows: item.params.MaxRows,
                     StartRow: item.params.StartRow,
+                    AfterKey: item.params.AfterKey ? { KeyValuePairs: item.params.AfterKey.KeyValuePairs } : null,
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || '',
                     ResultType: item.params.ResultType || 'simple',
@@ -1275,7 +1323,6 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     protected getViewRunTimeFieldList(e: EntityInfo, v: MJUserViewEntityExtended, params: RunViewParams, dynamicView: boolean): string[] {
         const fieldList = [];
-        const mapper = new FieldMapper();
         if (params.Fields) {
             for (const kv of e.PrimaryKeys) {
                 if (params.Fields.find(f => f.trim().toLowerCase() === kv.Name.toLowerCase()) === undefined)
@@ -1284,7 +1331,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // now add any other fields that were passed in
             params.Fields.forEach(f => {
-              fieldList.push(mapper.MapFieldName(f))
+              fieldList.push(SharedFieldMapper.MapFieldName(f))
             });
         }
         else {
@@ -1295,7 +1342,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // include all fields since no fields were passed in
                 e.Fields.forEach(f => {
                     if (!f.IsBinaryFieldType) {
-                      fieldList.push(mapper.MapFieldName(f.CodeName));
+                      fieldList.push(SharedFieldMapper.MapFieldName(f.CodeName));
                     }
                 });
             }
@@ -1318,7 +1365,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             // simply don't include it in the field list
                         }
                         else
-                            fieldList.push(mapper.MapFieldName(c.EntityField.CodeName));
+                            fieldList.push(SharedFieldMapper.MapFieldName(c.EntityField.CodeName));
                     }
                 });
             }
@@ -1454,6 +1501,181 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * Ranked search over many entities in one GraphQL round-trip.
+     *
+     * Both the singular {@link SearchEntity} and the batched `SearchEntities`
+     * forms on the client route through the same plural GQL endpoint — one
+     * request, one response, regardless of how many entities are in `params`.
+     * The full ranking (lexical + semantic + RRF blend + permission filter)
+     * runs server-side against the backing database provider; the client just
+     * unpacks the already-ranked, permission-filtered result groups and
+     * returns them aligned by input order.
+     *
+     * Overrides the inherited `Promise.all`-based fan-out on `ProviderBase`
+     * because the client has no embedder, no vector pool, and no business
+     * doing the work locally — N round-trips to N entities would be silly when
+     * one batched payload returns the same answer.
+     */
+    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
+        if (!params || params.length === 0) return [];
+        const valid = params.filter(p => p?.entityName && p?.searchText && p.searchText.trim());
+        if (valid.length === 0) return params.map(() => []);
+
+        const query = gql`query SearchEntitiesQuery($params: [SearchEntityInput!]!) {
+            SearchEntities(params: $params) {
+                Success
+                ErrorMessage
+                Groups {
+                    EntityName
+                    Results {
+                        EntityRecordDocumentID
+                        RecordID
+                        Score
+                        MatchType
+                        LexicalScore
+                        SemanticScore
+                    }
+                }
+            }
+        }`;
+
+        const gqlParams = params.map(p => ({
+            EntityName: p.entityName,
+            SearchText: p.searchText,
+            Mode: p.options?.mode ?? 'hybrid',
+            RrfK: p.options?.rrfK,
+            LexicalWeight: p.options?.weights?.lexical,
+            SemanticWeight: p.options?.weights?.semantic,
+            TopK: p.options?.topK,
+            MinScore: p.options?.minScore,
+            EntityDocumentID: p.options?.entityDocumentId,
+        }));
+
+        const data = await this.ExecuteGQL(query, { params: gqlParams });
+        if (!data?.SearchEntities?.Success) {
+            if (data?.SearchEntities?.ErrorMessage) {
+                LogError(`SearchEntities GraphQL error: ${data.SearchEntities.ErrorMessage}`);
+            }
+            return params.map(() => []);
+        }
+
+        // Groups arrive aligned by input order; we trust the server to preserve that.
+        const groups = data.SearchEntities.Groups as Array<{
+            EntityName: string;
+            Results: Array<{
+                EntityRecordDocumentID: string | null;
+                RecordID: string;
+                Score: number;
+                MatchType: EntitySearchResult['matchType'];
+                LexicalScore: number | null;
+                SemanticScore: number | null;
+            }>;
+        }>;
+
+        return groups.map(group => group.Results.map(r => ({
+            entityRecordDocumentId: r.EntityRecordDocumentID,
+            recordId: r.RecordID,
+            score: r.Score,
+            matchType: r.MatchType,
+            components: {
+                lexical: r.LexicalScore ?? undefined,
+                semantic: r.SemanticScore ?? undefined,
+            },
+        })));
+    }
+
+    /**
+     * Singular form — convenience wrapper that calls the batched
+     * {@link SearchEntities} with a single-element params list. Same one
+     * GraphQL round-trip; same server-side ranking. Returning `results[0]`
+     * is safe even for invalid inputs because `SearchEntities` returns an
+     * empty array per slot in that case.
+     */
+    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
+        const groups = await this.SearchEntities([params]);
+        return groups[0] ?? [];
+    }
+
+    /**
+     * Unreachable on the client — `SearchEntity` and `SearchEntities` are both
+     * overridden above to proxy through one batched GraphQL round-trip, so the
+     * inherited template-method orchestration never invokes this. Implementing
+     * the abstract method as a no-op is purely a type-system requirement.
+     */
+    protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
+        return [];
+    }
+
+    /**
+     * Client-side transport for a Remote Operation: marshals the operation key + JSON input over the
+     * generic `ExecuteRemoteOperation` GraphQL mutation, and parses the JSON output back. The server
+     * resolves and executes the operation in-process. Overrides the no-op default on `ProviderBase`;
+     * key validation still runs in `ProviderBase.RouteOperation` before this is called.
+     */
+    protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        const mutation = gql`mutation ExecuteRemoteOperation($operationKey: String!, $inputJSON: String!, $invokeMode: String!, $progressChannelId: String) {
+            ExecuteRemoteOperation(input: { operationKey: $operationKey, inputJSON: $inputJSON, invokeMode: $invokeMode, progressChannelId: $progressChannelId }) {
+                success
+                resultCode
+                outputJSON
+                handle
+                errorMessage
+            }
+        }`;
+
+        // RO-3 attached over-the-wire: when the caller wants progress, open a channel + subscribe to it BEFORE
+        // the mutation, forward each RemoteOpProgress to onProgress, and tear it down when the call ends.
+        // Progress is best-effort — a progress-channel error never fails the operation itself.
+        let progressChannelId: string | undefined;
+        let progressSub: { unsubscribe(): void } | undefined;
+        if (options.onProgress) {
+            progressChannelId = this.GenerateUUID();
+            progressSub = this.subscribe(REMOTE_OP_PROGRESS_SUBSCRIPTION, { channelId: progressChannelId }).subscribe({
+                next: (data: { RemoteOperationProgress?: { ProgressJSON?: string } }) => {
+                    const json = data?.RemoteOperationProgress?.ProgressJSON;
+                    if (json) {
+                        try {
+                            options.onProgress!(JSON.parse(json) as RemoteOpProgress);
+                        } catch {
+                            /* ignore a malformed progress envelope */
+                        }
+                    }
+                },
+                error: () => {
+                    /* best-effort: swallow progress-channel errors so they never fail the call */
+                },
+            });
+            // Give the subscription socket a moment to establish before the op runs, so a fast op's early
+            // progress isn't missed. Negligible for LongRunning ops (the only ones that emit progress).
+            await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+
+        try {
+            const data = await this.ExecuteGQL(mutation, {
+                operationKey,
+                inputJSON: JSON.stringify(input ?? null),
+                invokeMode: options.mode ?? 'attached',
+                progressChannelId: progressChannelId ?? null,
+            });
+            const r = data?.ExecuteRemoteOperation;
+            if (!r) {
+                return { Success: false, ResultCode: 'NO_RESPONSE', ErrorMessage: 'No response from ExecuteRemoteOperation' };
+            }
+            return {
+                Success: !!r.success,
+                ResultCode: r.resultCode ?? undefined,
+                Output: r.outputJSON != null ? (JSON.parse(r.outputJSON) as TOutput) : undefined,
+                Handle: r.handle ?? undefined,
+                ErrorMessage: r.errorMessage ?? undefined,
+            };
+        } catch (e) {
+            return { Success: false, ResultCode: 'TRANSPORT_ERROR', ErrorMessage: e instanceof Error ? e.message : String(e) };
+        } finally {
+            progressSub?.unsubscribe();
+        }
+    }
+
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
         const e = this.Entities.find(e=>e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
         if (!e || !e.AllowRecordMerge)
@@ -1524,7 +1746,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.Success = true;
             result.NewValues = entity.GetAll();
-            entity.ResultHistory.push(result);
+            entity.RegisterResultHistoryEntry(result);
             return result.NewValues;
         }
 
@@ -1538,7 +1760,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             // Create the query for the mutation first, we will provide the specific
             // input values later in the loop below. Here we are just setting up the mutation
@@ -1551,9 +1773,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             // only pass along writable fields, AND the PKEY value if this is an update
             const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
-            const mapper = new FieldMapper();
-            const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => mapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                const inner = `                ${mutationName}(input: $input) {
+                ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -1601,7 +1822,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                             val = '';
                     }
                 }
-                vars.input[mapper.MapFieldName(f.CodeName)] = val;
+                vars.input[SharedFieldMapper.MapFieldName(f.CodeName)] = val;
             }
 
             // Carry restore lineage across the network.
@@ -1636,7 +1857,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         else
                             val = f.OldValue;
                     }
-                    ov.push({Key: mapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
+                    ov.push({Key: SharedFieldMapper.MapFieldName(f.CodeName), Value: val }); // pass ALL old values to server, slightly inefficient but we want full record
                 });
                 vars.input['OldValues___'] = ov; // add the OldValues prop to the input property that is part of the vars already
             }
@@ -1736,8 +1957,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
-            const mapper = new FieldMapper();
-            const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
+                const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
                                     ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
                                       .map((f) => {
@@ -1774,8 +1994,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * @returns
      */
     protected ConvertBackToMJFields(ret: any): any {
-        const mapper = new FieldMapper();
-        mapper.ReverseMapFields(ret);
+        SharedFieldMapper.ReverseMapFields(ret);
         return ret; // clean object to pass back here
     }
 
@@ -1784,7 +2003,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         for (let i = 0; i < entityInfo.RelatedEntities.length; i++) {
             if (EntityRelationshipsToLoad.indexOf(entityInfo.RelatedEntities[i].RelatedEntity) >= 0) {
                 const r = entityInfo.RelatedEntities[i];
-                const re = this.Entities.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
+                const re = this.EntityByID(r.RelatedEntityID);
                 let uniqueCodeName: string = '';
                 if (r.Type.toLowerCase().trim() === 'many to many') {
                     uniqueCodeName = `${r.RelatedEntityCodeName}_${r.JoinEntityJoinField.replace(/\s/g, '')}`;
@@ -1810,7 +2029,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = 'delete';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             const vars = {};
             const mutationInputTypes = [];
@@ -2128,7 +2347,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if (!valResult.IsValid)
             return false;
 
-        const e = this.Entities.find(e => e.Name === entityName)
+        const e = this.EntityByName(entityName)
         if (!e)
             throw new Error(`Entity ${entityName} not found in metadata`);
 
@@ -2151,7 +2370,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo): Promise<void> {
-        const e = this.Entities.find(e => e.Name === entityName)
+        const e = this.EntityByName(entityName)
         if (!e){
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
@@ -2651,9 +2870,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._isDisposingSocketIntentionally = false;
             this._wsClient = createClient({
                 url: this.ConfigData.WSURL,
-                connectionParams: {
+                // Function form: re-evaluated on every connection attempt (including
+                // retries after 4403 "Token expired"). This lets the client pick up a
+                // freshly-refreshed token instead of reusing the stale one.
+                connectionParams: () => ({
                     Authorization: 'Bearer ' + this.ConfigData.Token,
-                },
+                    // Also carry the API keys (if configured) so API-key / MCP / Node clients can authenticate
+                    // the subscription socket — the server validates these the same way it does the HTTP headers.
+                    ...(this.ConfigData.MJAPIKey ? { 'x-mj-api-key': this.ConfigData.MJAPIKey } : {}),
+                    ...(this.ConfigData.UserAPIKey ? { 'x-mj-user-api-key': this.ConfigData.UserAPIKey } : {}),
+                }),
                 keepAlive: 30000, // Send keepalive ping every 30 seconds
                 retryAttempts: 3,
                 shouldRetry: () => true,
@@ -2664,7 +2890,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._wsClient.on('connected', () => {
                 this._socketStateSubject.next('connected');
             });
-            this._wsClient.on('closed', () => {
+            this._wsClient.on('closed', (event: unknown) => {
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -2672,6 +2898,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return;
                 }
                 this._socketStateSubject.next('disconnected');
+
+                // If the server closed with 4403 "Token expired", eagerly refresh
+                // the token so that graphql-ws retries use a fresh one. Without this,
+                // all retry attempts would reuse the stale token and fail.
+                const closeCode = (event as { code?: number })?.code;
+                if (closeCode === 4403 && this._configData.Data.RefreshTokenFunction) {
+                    this.RefreshToken().catch(() => {
+                        // RefreshToken failure is handled via notifyAuthenticationError
+                    });
+                }
             });
 
             // Start cleanup timer if not already running
@@ -3100,17 +3336,24 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 // Skip events that originated from this browser session — we already
                 // handled the cache update locally via the BaseEntity.Save()/Delete() event.
                 if (event.OriginSessionID && event.OriginSessionID === this.sessionId) {
-                    console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                        console.debug(`[GraphQLDataProvider] Skipping self-originated cache invalidation for "${event.EntityName}" (action: ${event.Action})`);
+                    }
                     return;
                 }
 
-                console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+                if (GraphQLDataProvider.VerboseCacheInvalidationLogging) {
+                    console.debug(`[GraphQLDataProvider] Cache invalidation received: ${event.Action} for "${event.EntityName}" from server ${event.SourceServerID?.substring(0, 8) || 'unknown'}`);
+                }
 
                 // Raise a MJGlobal event so BaseEngine instances can react
                 const baseEntityEvent: BaseEntityEvent = {
                     type: 'remote-invalidate',
                     entityName: event.EntityName,
                     baseEntity: null,
+                    // Attach the publishing provider so multi-provider client setups can resolve
+                    // entity metadata against the correct server (instead of the global default).
+                    provider: this,
                     payload: {
                         primaryKeyValues: event.PrimaryKeyValues,
                         action: event.Action,

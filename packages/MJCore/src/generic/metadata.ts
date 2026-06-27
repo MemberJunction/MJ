@@ -1,8 +1,8 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult, SearchEntityParams, EntitySearchResult } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo } from "./queryInfo";
@@ -66,19 +66,19 @@ export class Metadata {
      */
     public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
         this._entityMapPopulated = false;
-        return await Metadata.Provider.Refresh(providerToUse);
+        return await Metadata.Provider.Refresh(providerToUse);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     public get ProviderType(): ProviderType {
-        return Metadata.Provider.ProviderType;
+        return Metadata.Provider.ProviderType;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
     
     public get Applications(): ApplicationInfo[] {
-        return Metadata.Provider.Applications;
+        return Metadata.Provider.Applications;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     public get Entities(): EntityInfo[] {
-        return Metadata.Provider.Entities;
+        return Metadata.Provider.Entities;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -90,7 +90,7 @@ export class Metadata {
             throw new Error('EntityByName: entityName must be a non-empty string');
         }
         try {
-            const p = Metadata.Provider;
+            const p = Metadata.Provider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
             if (p?.EntityByName) {
                 return p.EntityByName(entityName);
             }
@@ -113,7 +113,7 @@ export class Metadata {
     public EntityByID(entityID: string): EntityInfo {
         if (!entityID) return undefined;
         try {
-            const p = Metadata.Provider;
+            const p = Metadata.Provider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
             if (p?.EntityByID) {
                 return p.EntityByID(entityID);
             }
@@ -129,57 +129,65 @@ export class Metadata {
         return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. */
     public get Queries(): QueryInfo[] {
-        return Metadata.Provider.Queries;
+        return Metadata.Provider.Queries;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. */
     public get QueryFields(): QueryFieldInfo[] {
-        return Metadata.Provider.QueryFields;
+        return Metadata.Provider.QueryFields;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. */
     public get QueryCategories(): QueryCategoryInfo[] {
-        return Metadata.Provider.QueryCategories;
+        return Metadata.Provider.QueryCategories;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. */
     public get QueryPermissions(): QueryPermissionInfo[] {
-        return Metadata.Provider.QueryPermissions;
+        return Metadata.Provider.QueryPermissions;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
      * Returns the current user, if known. In some execution environments, mainly on server tiers like in a node.js environment, there won't be a "current user" known to Metadata since the Metadata instance is shared across all requests. In this situation you should determine the current user from the server context where you get the user payload and find the user from the UserCache.
      */
     public get CurrentUser(): UserInfo {
-        return Metadata.Provider.CurrentUser;
+        return Metadata.Provider.CurrentUser;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     public get Roles(): RoleInfo[] {
-        return Metadata.Provider.Roles;
+        return Metadata.Provider.Roles;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     public get AuditLogTypes(): AuditLogTypeInfo[] {
-        return Metadata.Provider.AuditLogTypes;
+        return Metadata.Provider.AuditLogTypes;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     public get Authorizations(): AuthorizationInfo[] {
-        return Metadata.Provider.Authorizations;
+        return Metadata.Provider.Authorizations;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+    }
+
+    public get AuthorizationRoles(): AuthorizationRoleInfo[] {
+        return Metadata.Provider.AuthorizationRoles;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     public get Libraries(): LibraryInfo[] {
-        return Metadata.Provider.Libraries;
+        return Metadata.Provider.Libraries;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
      * Returns all of the ExplorerNavigationItems that are visible to the user, sorted by Sequence. Filtered by the IsActive bit.
      */
     public get VisibleExplorerNavigationItems(): ExplorerNavigationItem[] {
-        return Metadata.Provider.VisibleExplorerNavigationItems;
+        return Metadata.Provider.VisibleExplorerNavigationItems;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
      * Returns all of the ExplorerNavigationItems, including those that are not visible. This is useful for admin tools and other places where you need to see all of the navigation items, not just the ones that are visible to the user.
      */
     public get AllExplorerNavigationItems(): ExplorerNavigationItem[] {
-        return Metadata.Provider.AllExplorerNavigationItems;
+        return Metadata.Provider.AllExplorerNavigationItems;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -234,7 +242,7 @@ export class Metadata {
      * @returns 
      */
     public async GetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, contextUser?: UserInfo): Promise<boolean> {
-        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey, contextUser);
+        return await Metadata.Provider.GetRecordFavoriteStatus(userId, entityName, primaryKey, contextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -290,7 +298,7 @@ export class Metadata {
      * @param contextUser 
      */
     public async SetRecordFavoriteStatus(userId: string, entityName: string, primaryKey: CompositeKey, isFavorite: boolean, contextUser: UserInfo = null) {
-        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKey, isFavorite, contextUser);
+        await Metadata.Provider.SetRecordFavoriteStatus(userId, entityName, primaryKey, isFavorite, contextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -302,7 +310,7 @@ export class Metadata {
      * @param primaryKey the primary key value to check
      */
     public async GetRecordDependencies(entityName: string, primaryKey: CompositeKey): Promise<RecordDependency[]> { 
-        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKey);
+        return await Metadata.Provider.GetRecordDependencies(entityName, primaryKey);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -311,7 +319,7 @@ export class Metadata {
      * @param params object containing many properties used in fetching records and determining which ones to return
      */
     public async GetRecordDuplicates(params: PotentialDuplicateRequest, contextUser?: UserInfo): Promise<PotentialDuplicateResponse> {
-        return await Metadata.Provider.GetRecordDuplicates(params, contextUser);
+        return await Metadata.Provider.GetRecordDuplicates(params, contextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -320,7 +328,7 @@ export class Metadata {
      * @returns 
      */
     public async GetEntityDependencies(entityName: string): Promise<EntityDependency[]> {
-        return await Metadata.Provider.GetEntityDependencies(entityName);
+        return await Metadata.Provider.GetEntityDependencies(entityName);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -341,7 +349,7 @@ export class Metadata {
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
         const e = this.EntityByName(request.EntityName);
         if (e.AllowRecordMerge)
-            return await Metadata.Provider.MergeRecords(request, contextUser, options);
+            return await Metadata.Provider.MergeRecords(request, contextUser, options);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
         else
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
     }
@@ -437,7 +445,7 @@ export class Metadata {
                 const u = actualContextUser as any;
                 if (u && u.ID && u.Name && u.Email && u.UserRoles) {
                     // we have a UserInfo-like object, so we can use it
-                    actualContextUser = new UserInfo(Metadata.Provider, u);
+                    actualContextUser = new UserInfo(Metadata.Provider, u);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
                 }
                 else {
                     throw new Error('GetEntityObject: contextUser must be null/undefined, a UserInfo instance, or an object that has the same shape as UserInfo, notably having the following properties: ID, Name, Email, and UserRoles');
@@ -445,7 +453,7 @@ export class Metadata {
             }
         }
         
-        return await Metadata.Provider.GetEntityObject(entityName, actualLoadKey, actualContextUser);
+        return await Metadata.Provider.GetEntityObject(entityName, actualLoadKey, actualContextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -462,7 +470,7 @@ export class Metadata {
             throw new Error(result.ErrorMessage);
         }
 
-        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey, contextUser, forceRefresh);
+        return await Metadata.Provider.GetEntityRecordName(entityName, primaryKey, contextUser, forceRefresh);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -486,7 +494,7 @@ export class Metadata {
             }
 
         }
-        return await Metadata.Provider.GetEntityRecordNames(info, contextUser, forceRefresh);
+        return await Metadata.Provider.GetEntityRecordNames(info, contextUser, forceRefresh);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -494,14 +502,14 @@ export class Metadata {
      * @returns 
      */
     public async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        return await Metadata.Provider.CreateTransactionGroup();
+        return await Metadata.Provider.CreateTransactionGroup();  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
      * Saves all the in-memory metadata to be updated in the local persistent storage method (which varies by provider). This generally shouldn't need to be called externally but is available to force an update to local storage as desired.
      */
     public async SaveLocalMetadataToStorage() {
-        await Metadata.Provider.SaveLocalMetadataToStorage();
+        await Metadata.Provider.SaveLocalMetadataToStorage();  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -509,7 +517,7 @@ export class Metadata {
      * NOTE: this does not remove Datasets, for removing datasets, use ClearDatasetCache()
      */
     public async RemoveLocalMetadataFromStorage() {
-        await Metadata.Provider.RemoveLocalMetadataFromStorage();
+        await Metadata.Provider.RemoveLocalMetadataFromStorage();  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -518,7 +526,7 @@ export class Metadata {
      * @remarks - Use this for storing any type of data on the client. The Provider implements the storage mechanism which is persistent whenever possible, but in some cases purely in memory if local persistence is not available. Keep in mind that you must ensure that keys are unique so prefix all of your keys with something unique to avoid collisions.
      */
     public get LocalStorageProvider(): ILocalStorageProvider {
-        return Metadata.Provider.LocalStorageProvider;
+        return Metadata.Provider.LocalStorageProvider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -527,7 +535,7 @@ export class Metadata {
      * @param itemFilters 
      */
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetStatusResultType> {
-        return Metadata.Provider.GetDatasetStatusByName(datasetName, itemFilters, contextUser, providerToUse);
+        return Metadata.Provider.GetDatasetStatusByName(datasetName, itemFilters, contextUser, providerToUse);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
     /**
      * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
@@ -535,7 +543,7 @@ export class Metadata {
      * @param itemFilters 
      */
     public async GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
-        return Metadata.Provider.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
+        return Metadata.Provider.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -545,7 +553,7 @@ export class Metadata {
      * @param itemFilters 
      */
     public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo): Promise<DatasetResultType>  {
-        return Metadata.Provider.GetAndCacheDatasetByName(datasetName, itemFilters, contextUser);
+        return Metadata.Provider.GetAndCacheDatasetByName(datasetName, itemFilters, contextUser);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -555,7 +563,7 @@ export class Metadata {
      * @returns 
      */
     public async IsDatasetCacheUpToDate(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<boolean> {
-        return Metadata.Provider.IsDatasetCacheUpToDate(datasetName, itemFilters);
+        return Metadata.Provider.IsDatasetCacheUpToDate(datasetName, itemFilters);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -565,7 +573,7 @@ export class Metadata {
      * @returns 
      */
     public async GetCachedDataset(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetResultType> {
-        return Metadata.Provider.GetCachedDataset(datasetName, itemFilters);
+        return Metadata.Provider.GetCachedDataset(datasetName, itemFilters);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -575,7 +583,7 @@ export class Metadata {
      * @param dataset 
      */
     public async CacheDataset(datasetName: string, itemFilters: DatasetItemFilterType[], dataset: DatasetResultType): Promise<void> {
-        return Metadata.Provider.CacheDataset(datasetName, itemFilters, dataset);
+        return Metadata.Provider.CacheDataset(datasetName, itemFilters, dataset);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -585,7 +593,7 @@ export class Metadata {
      * @returns 
      */
     public async IsDatasetCached(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<boolean> {
-        return Metadata.Provider.IsDatasetCached(datasetName, itemFilters);
+        return Metadata.Provider.IsDatasetCached(datasetName, itemFilters);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -595,7 +603,7 @@ export class Metadata {
      * @returns 
      */
     public GetDatasetCacheKey(datasetName: string, itemFilters?: DatasetItemFilterType[]): string {
-        return Metadata.Provider.GetDatasetCacheKey(datasetName, itemFilters);
+        return Metadata.Provider.GetDatasetCacheKey(datasetName, itemFilters);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -604,14 +612,14 @@ export class Metadata {
      * @param itemFilters 
      */
     public async ClearDatasetCache(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<void> {
-        return Metadata.Provider.ClearDatasetCache(datasetName, itemFilters);
+        return Metadata.Provider.ClearDatasetCache(datasetName, itemFilters);  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
      * Provides access the configuration object that was initially provided to configure the provider
      */
     get ConfigData(): ProviderConfigDataBase {
-        return Metadata.Provider.ConfigData;
+        return Metadata.Provider.ConfigData;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     /**
@@ -645,11 +653,63 @@ export class Metadata {
      * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md
      */
     public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
-        const provider = Metadata.Provider as unknown as IRunViewProvider;
+        const provider = Metadata.Provider as unknown as IRunViewProvider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
         if (!provider.FullTextSearch) {
             return { Success: false, ErrorMessage: 'Provider does not support FullTextSearch', Results: [], TotalCount: 0, EntitiesSearched: 0, ElapsedMs: 0 };
         }
         return provider.FullTextSearch(params, contextUser);
     }
 
+
+
+    /**
+     * Ranked search over **one** entity's records, blending lexical name/text-field
+     * matching with semantic embedding cosine. Results are post-filtered by the
+     * caller's row-level read permissions on that entity.
+     *
+     * ## How this differs from the other lookups on `IMetadataProvider`
+     *
+     * | Method | Purpose |
+     * |---|---|
+     * | {@link EntityByName} / {@link EntityByID} | Look up an entity **definition** by name or ID. Deterministic, not ranked, returns `EntityInfo`. |
+     * | {@link FullTextSearch} | Server-side text search across one or many entities using each entity's `UserSearchString` rule (DB-level LIKE / FTS). Returns flat per-entity result groups, no semantic ranking. |
+     * | **`SearchEntity`** (this) | Hybrid lexical-plus-semantic ranking of records **inside one entity**, backed by an `EntityDocument`-driven vector index. Use when you need "the N most relevant records of this entity for the user's free-text request". |
+     * | {@link SearchEntities} | Batch form — runs `SearchEntity` over many entities in one round-trip. |
+     *
+     * Semantic ranking requires an Active `EntityDocument` of type `Search`
+     * registered for the target entity (see `/metadata/entity-documents/` for
+     * the seeded one against `MJ: Entities`); without it, `mode: 'semantic'`
+     * returns no rows and `mode: 'hybrid'` degrades to lexical-only.
+     *
+     * @param params Target entity name, search text, and optional ranking knobs.
+     * @returns Ranked `EntitySearchResult[]` — descending by score, sliced to `topK`.
+     */
+    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
+        const provider = Metadata.Provider as unknown as IRunViewProvider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+        return provider.SearchEntity(params);   
+    }
+
+    /**
+     * Batch form of {@link SearchEntity}. Runs the per-entity ranking against
+     * **many** entities in one call. Transports as a single JSON payload in both
+     * directions over GraphQL when invoked through `GraphQLDataProvider`, so
+     * N entity searches cost one round-trip instead of N.
+     *
+     * Server-side providers fan the call out via `Promise.all` to independent
+     * `SearchEntity` invocations — each entity's lexical pass, semantic pass,
+     * blending, and permission filter run independently, and the per-entity
+     * result arrays come back aligned by input order.
+     *
+     * Use this whenever an agent or workflow needs ranked results from more
+     * than one entity for the same user request (e.g., "find anything
+     * relevant to 'overdue payments'" across Invoices, Customers, and Notes).
+     *
+     * @param params One `SearchEntityParams` per target entity.
+     * @returns Array of result arrays, aligned by input order — `result[i]`
+     *          holds the ranked matches for `params[i]`.
+     */
+    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
+        const provider = Metadata.Provider as unknown as IRunViewProvider;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
+        return provider.SearchEntities(params);
+    }
 }

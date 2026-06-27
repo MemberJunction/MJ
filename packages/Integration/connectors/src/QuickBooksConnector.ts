@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -264,6 +264,22 @@ const QUICKBOOKS_OBJECTS: IntegrationObjectInfo[] = [
     },
 ];
 
+/**
+ * Provable foreign keys: <Sibling>Ref fields whose <Sibling> matches another
+ * object declared in QUICKBOOKS_OBJECTS above. Keyed by "<ObjectName>.<FieldName>",
+ * the value is the external name of the referenced sibling object.
+ *
+ * Derived purely from this connector's own declared object/field metadata
+ * (e.g. Invoice.CustomerRef → Customer is a declared object). Self/ambiguous
+ * refs (ParentRef on Department/Class) and refs with no sibling object
+ * (PaymentMethodRef) are intentionally excluded.
+ */
+const QUICKBOOKS_FOREIGN_KEYS: Record<string, string> = {
+    'Invoice.CustomerRef': 'Customer',
+    'Payment.CustomerRef': 'Customer',
+    'Bill.VendorRef': 'Vendor',
+};
+
 // ─── Connector Implementation ─────────────────────────────────────────
 
 /**
@@ -435,15 +451,20 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
         const obj = QUICKBOOKS_OBJECTS.find(o => o.Name === objectName);
         if (!obj) throw new Error(`Unknown QuickBooks object: ${objectName}`);
 
-        return obj.Fields.map(f => ({
-            Name: f.Name,
-            Label: f.DisplayName,
-            Description: f.Description,
-            DataType: f.Type,
-            IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsPrimaryKey,
-            IsReadOnly: f.IsReadOnly,
-        }));
+        return obj.Fields.map(f => {
+            const fkTarget = QUICKBOOKS_FOREIGN_KEYS[`${obj.Name}.${f.Name}`];
+            return {
+                Name: f.Name,
+                Label: f.DisplayName,
+                Description: f.Description,
+                DataType: f.Type,
+                IsRequired: f.IsRequired,
+                IsUniqueKey: f.IsPrimaryKey,
+                IsReadOnly: f.IsReadOnly,
+                IsForeignKey: fkTarget != null,
+                ForeignKeyTarget: fkTarget ?? null,
+            };
+        });
     }
 
     // ─── FetchChanges ────────────────────────────────────────────────
@@ -494,7 +515,7 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
             const body = response.Body as Record<string, Record<string, unknown>>;
             const created = body[ctx.ObjectName];
             const id = created ? String(created['Id'] ?? '') : '';
-            return { Success: true, ExternalID: id, StatusCode: response.Status };
+            return this.BuildCreatedResult(id, response.Status, ctx.ObjectName);
         } catch (err: unknown) {
             return this.BuildCRUDError(err, 'CreateRecord', ctx.ObjectName);
         }
@@ -713,9 +734,10 @@ export class QuickBooksConnector extends BaseIntegrationConnector {
 
     private async LoadFromCredentialEntity(
         credentialID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<QuickBooksConnectionConfig | null> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;

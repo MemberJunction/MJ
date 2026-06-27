@@ -16,7 +16,7 @@ import { WebSocketClientTransport } from '@modelcontextprotocol/sdk/client/webso
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
 
-import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { CredentialEngine } from '@memberjunction/credentials';
 import {
@@ -703,7 +703,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             let updated = 0;
             const seenToolNames = new Set<string>();
 
-            const md = new Metadata();
+            const md = options.provider ?? new Metadata();
 
             // Process each tool from server
             for (const tool of listResult.tools) {
@@ -814,10 +814,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      */
     public async syncActionsForServer(
         serverId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MCPSyncActionsResult> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(provider);
 
             // Load the server
             const serverResult = await rv.RunView<MJMCPServerEntity>({
@@ -841,7 +842,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             const server = serverResult.Results[0];
 
             // Get or create the server's category under System/MCP/{ServerName}
-            const serverCategoryId = await this.getOrCreateServerCategory(server.Name, contextUser);
+            const serverCategoryId = await this.getOrCreateServerCategory(server.Name, contextUser, provider);
             if (!serverCategoryId) {
                 return {
                     success: false,
@@ -881,7 +882,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
 
             // Process each tool
             for (const tool of toolsResult.Results) {
-                const result = await this.syncActionForTool(tool, serverCategoryId, contextUser);
+                const result = await this.syncActionForTool(tool, serverCategoryId, contextUser, provider);
                 if (result.created) {
                     actionsCreated++;
                 } else {
@@ -927,7 +928,8 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      */
     private async getOrCreateServerCategory(
         serverName: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string | null> {
         try {
             // Step 1: Find or create "System" category (root)
@@ -935,7 +937,8 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 'System',
                 null,
                 'Core system actions and utilities',
-                contextUser
+                contextUser,
+                provider
             );
             if (!systemCategoryId) {
                 LogError('Failed to find or create System category');
@@ -947,7 +950,8 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 'MCP',
                 systemCategoryId,
                 'Model Context Protocol (MCP) server tools exposed as Actions',
-                contextUser
+                contextUser,
+                provider
             );
             if (!mcpCategoryId) {
                 LogError('Failed to find or create MCP category');
@@ -959,7 +963,8 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 serverName,
                 mcpCategoryId,
                 `Tools from MCP Server: ${serverName}`,
-                contextUser
+                contextUser,
+                provider
             );
             if (!serverCategoryId) {
                 LogError(`Failed to find or create category for server: ${serverName}`);
@@ -987,10 +992,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         name: string,
         parentId: string | null,
         description: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string | null> {
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = provider ?? new Metadata();
+        const rv = RunView.FromMetadataProvider(provider);
 
         // Build filter based on parent
         const parentFilter = parentId
@@ -1037,10 +1043,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
     private async syncActionForTool(
         tool: MJMCPServerToolEntity,
         categoryId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ created: boolean; paramsCreated: number; paramsUpdated: number; paramsDeleted: number }> {
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = provider ?? new Metadata();
+        const rv = RunView.FromMetadataProvider(provider);
 
         let action: MJActionEntity;
         let created = false;
@@ -1053,7 +1060,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 action = actionEntity;
             } else {
                 // Action was deleted, create new one
-                action = await this.createActionForTool(tool, categoryId, contextUser);
+                action = await this.createActionForTool(tool, categoryId, contextUser, provider);
                 created = true;
             }
         } else {
@@ -1067,7 +1074,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             if (existingResult.Success && existingResult.Results.length > 0) {
                 action = existingResult.Results[0];
             } else {
-                action = await this.createActionForTool(tool, categoryId, contextUser);
+                action = await this.createActionForTool(tool, categoryId, contextUser, provider);
                 created = true;
             }
         }
@@ -1094,13 +1101,13 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         }
 
         // Sync action params from tool's InputSchema (input params)
-        const paramResult = await this.syncActionParamsFromSchema(action.ID, tool.InputSchema, contextUser);
+        const paramResult = await this.syncActionParamsFromSchema(action.ID, tool.InputSchema, contextUser, provider);
 
         // Sync standard output params for MCP tools
-        const outputParamResult = await this.syncMCPOutputParams(action.ID, contextUser);
+        const outputParamResult = await this.syncMCPOutputParams(action.ID, contextUser, provider);
 
         // Sync standard result codes for MCP tools
-        await this.syncMCPResultCodes(action.ID, contextUser);
+        await this.syncMCPResultCodes(action.ID, contextUser, provider);
 
         return {
             created,
@@ -1121,9 +1128,10 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
     private async createActionForTool(
         tool: MJMCPServerToolEntity,
         categoryId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJActionEntity> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
 
         const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions', contextUser);
         action.NewRecord();
@@ -1153,10 +1161,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
     private async syncActionParamsFromSchema(
         actionId: string,
         inputSchemaJson: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ created: number; updated: number; deleted: number }> {
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = provider ?? new Metadata();
+        const rv = RunView.FromMetadataProvider(provider);
 
         let created = 0;
         let updated = 0;
@@ -1293,10 +1302,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      */
     private async syncMCPOutputParams(
         actionId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ created: number; updated: number }> {
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = provider ?? new Metadata();
+        const rv = RunView.FromMetadataProvider(provider);
 
         let created = 0;
         let updated = 0;
@@ -1362,10 +1372,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      */
     private async syncMCPResultCodes(
         actionId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = provider ?? new Metadata();
+        const rv = RunView.FromMetadataProvider(provider);
 
         // Get existing result codes for this action
         const existingResult = await rv.RunView<MJActionResultCodeEntity>({
@@ -1674,7 +1685,13 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
      */
     private async getCredentials(credentialId: string, contextUser: UserInfo): Promise<MCPCredentialData> {
         try {
-            const credential = CredentialEngine.Instance.getCredentialById(credentialId);
+            let credential = CredentialEngine.Instance.getCredentialById(credentialId);
+            if (!credential) {
+                // Credential not in cache — it may have been created after server startup; force a refresh
+                LogStatus(`[MCPClient] Credential ${credentialId} not in cache, refreshing CredentialEngine...`);
+                await CredentialEngine.Instance.Config(true, contextUser);
+                credential = CredentialEngine.Instance.getCredentialById(credentialId);
+            }
             if (!credential) {
                 throw new Error(`Credential not found: ${credentialId}`);
             }
@@ -2068,7 +2085,8 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
     private async checkPermission(
         connectionId: string,
         contextUser: UserInfo,
-        permission: 'execute' | 'modify' | 'viewCredentials'
+        permission: 'execute' | 'modify' | 'viewCredentials',
+        provider?: IMetadataProvider
     ): Promise<boolean> {
         try {
             // Admins always have access
@@ -2079,7 +2097,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
                 return true;
             }
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(provider);
 
             // First, check if ANY permissions exist for this connection
             const allPermissions = await rv.RunView<MCPConnectionPermission>({
@@ -2094,7 +2112,7 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
             }
 
             // Permissions exist - check if user has explicit access
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const userRolesSchema = md.EntityByName("MJ: User Roles")?.SchemaName ?? '__mj';
             const userPermissions = await rv.RunView<MCPConnectionPermission>({
                 EntityName: MCPClientManager.ENTITY_MCP_PERMISSIONS,
@@ -2136,10 +2154,11 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
         connectionId: string,
         status: 'Active' | 'Inactive' | 'Error',
         contextUser: UserInfo,
-        error?: unknown
+        error?: unknown,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>(
                 MCPClientManager.ENTITY_MCP_CONNECTIONS,
                 contextUser
@@ -2163,9 +2182,9 @@ export class MCPClientManager extends BaseSingleton<MCPClientManager> {
     /**
      * Updates server LastSyncAt in database
      */
-    private async updateServerLastSync(serverId: string, contextUser: UserInfo): Promise<void> {
+    private async updateServerLastSync(serverId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const entity = await md.GetEntityObject<MJMCPServerEntity>(
                 MCPClientManager.ENTITY_MCP_SERVERS,
                 contextUser

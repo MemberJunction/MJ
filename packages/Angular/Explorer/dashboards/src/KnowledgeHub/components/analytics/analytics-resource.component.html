@@ -1,31 +1,30 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Analytics"
+    Icon="fa-solid fa-chart-line"
+    Subtitle="Pipeline health, trending tags, and content insights">
+    <div meta>
+      <mj-stat-badge
+        [Label]="PipelineStatusText"
+        [Variant]="PipelineStatusOk ? 'success' : 'error'">
+      </mj-stat-badge>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 @if (IsLoading) {
     <div class="analytics-loading">
         <mj-loading text="Loading analytics data..." size="medium"></mj-loading>
     </div>
 } @else {
     <div class="analytics-layout">
-        <!-- =============== LEFT SIDEBAR =============== -->
-        <aside class="analytics-sidebar">
-            <div class="sidebar-header">
-                <h2><i class="fa-solid fa-chart-line"></i> Analytics</h2>
-            </div>
-
-            <nav class="sidebar-nav">
-                @for (nav of NavItems; track nav.ID) {
-                    <button
-                        class="nav-item"
-                        [class.active]="ActiveTab === nav.ID"
-                        (click)="SelectTab(nav.ID)"
-                    >
-                        <i [class]="nav.Icon"></i> {{ nav.Label }}
-                    </button>
-                }
-            </nav>
-
-            <div class="sidebar-divider"></div>
-
-            <!-- Trending Tags Cloud -->
-            <div class="trending-section">
+        <mj-left-nav
+            MobileTitle="Analytics"
+            [Sections]="navSections"
+            [ActiveId]="ActiveTab"
+            (ItemClicked)="onNavItemClicked($event)">
+            <!-- Trending Tags Cloud projected into the rail's footer slot. -->
+            <div footer class="trending-section">
                 <h3><i class="fa-solid fa-arrow-trend-up"></i> Trending Tags</h3>
                 <div class="tag-cloud">
                     @for (tag of TrendingTags; track tag.Name) {
@@ -36,15 +35,9 @@
                     }
                 </div>
             </div>
+        </mj-left-nav>
 
-            <!-- Pipeline Status -->
-            <div class="pipeline-status">
-                <span class="status-dot" [class.status-dot-error]="!PipelineStatusOk"></span>
-                {{ PipelineStatusText }}
-            </div>
-        </aside>
-
-        <!-- =============== MAIN CONTENT =============== -->
+        <mj-left-nav-content>
         <div class="main-content">
 
             <!-- ====================================================== -->
@@ -111,7 +104,7 @@
                                             <i class="fa-solid fa-download"></i> CSV
                                         </button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()">
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()">
                                         <i class="fa-solid fa-times"></i>
                                     </button>
                                 </div>
@@ -152,7 +145,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No data available</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No data available" />
                             }
                         </div>
                     }
@@ -194,7 +187,7 @@
                                     </div>
                                 }
                                 @if (CoverageData.length === 0) {
-                                    <div class="widget-empty">No content types found</div>
+                                    <mj-empty-state class="widget-empty" Size="compact" Icon="fa-solid fa-shapes" Title="No content types found" />
                                 }
                             </div>
                         </div>
@@ -240,7 +233,7 @@
                                     </div>
                                 }
                                 @if (SourcePerfData.length === 0) {
-                                    <div class="widget-empty">No source data</div>
+                                    <mj-empty-state class="widget-empty" Size="compact" Icon="fa-solid fa-database" Title="No source data" />
                                 }
                             </div>
                             <div class="widget-footnote">Average tags per item</div>
@@ -298,7 +291,7 @@
                         <div class="drill-down-panel">
                             <div class="drill-down-header">
                                 <span class="drill-down-title"><i class="fa-solid fa-table"></i> {{ DrillDownTarget }} Detail</span>
-                                <button class="drill-down-close" (click)="CloseDrillDown()">
+                                <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()">
                                     <i class="fa-solid fa-times"></i>
                                 </button>
                             </div>
@@ -338,7 +331,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No data available</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No data available" />
                             }
                         </div>
                     }
@@ -402,10 +395,9 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-tags"></i>
-                                <p>No tag data available yet. Process content to generate tags.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-tags"
+                                Title="No tag data"
+                                Message="No tag data available yet. Process content to generate tags." />
                         }
                     </div>
 
@@ -420,7 +412,7 @@
                                             <i class="fa-solid fa-download"></i> CSV
                                         </button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -439,7 +431,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
@@ -449,7 +441,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No items found for this tag</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-tag" Title="No items found for this tag" />
                             }
                         </div>
                     }
@@ -544,10 +536,9 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-link"></i>
-                                <p>No co-occurrence data available yet. Process content and recompute to see which tags frequently appear together.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-link"
+                                Title="No co-occurrence data"
+                                Message="No co-occurrence data available yet. Process content and recompute to see which tags frequently appear together." />
                         }
                     </div>
                 </section>
@@ -598,10 +589,8 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-database"></i>
-                                <p>No content sources configured yet.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-database"
+                                Title="No content sources configured yet." />
                         }
                     </div>
 
@@ -614,7 +603,7 @@
                                     @if (DrillDownData.length > 0) {
                                         <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -633,7 +622,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
@@ -643,7 +632,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No run data for this source</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No run data for this source" />
                             }
                         </div>
                     }
@@ -749,7 +738,7 @@
                                     @if (DrillDownData.length > 0) {
                                         <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -768,7 +757,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
@@ -778,7 +767,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No runs for this day</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-calendar-day" Title="No runs for this day" />
                             }
                         </div>
                     }
@@ -936,7 +925,7 @@
                                     @if (DrillDownData.length > 0) {
                                         <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
                                     }
-                                    <button class="drill-down-close" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
                                 </div>
                             </div>
                             @if (IsDrillDownLoading) {
@@ -955,7 +944,7 @@
                                                     @if (DrillDownHasActions) {
                                                         <td class="drill-action-col">
                                                             @if (row['_RecordID']) {
-                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
                                                             }
                                                         </td>
                                                     }
@@ -965,7 +954,7 @@
                                     </table>
                                 </div>
                             } @else {
-                                <div class="drill-down-empty">No items in this confidence range</div>
+                                <mj-empty-state class="drill-down-empty" Size="compact" Icon="fa-solid fa-chart-simple" Title="No items in this confidence range" />
                             }
                         </div>
                     }
@@ -1172,16 +1161,17 @@
                                 </table>
                             </div>
                         } @else {
-                            <div class="empty-state">
-                                <i class="fa-solid fa-coins"></i>
-                                <p>No cost data available yet. Run the pipeline to generate cost and token usage metrics.</p>
-                                <p class="empty-state-hint">Cost data is aggregated from ContentProcessRunDetail records linked to AI Prompt Runs.</p>
-                            </div>
+                            <mj-empty-state Icon="fa-solid fa-coins"
+                                Title="No cost data"
+                                Message="No cost data available yet. Run the pipeline to generate cost and token usage metrics. Cost data is aggregated from ContentProcessRunDetail records linked to AI Prompt Runs." />
                         }
                     </div>
                 </section>
             }
 
         </div><!-- /main-content -->
+        </mj-left-nav-content>
     </div><!-- /analytics-layout -->
 }
+  </mj-page-body>
+</mj-page-layout>

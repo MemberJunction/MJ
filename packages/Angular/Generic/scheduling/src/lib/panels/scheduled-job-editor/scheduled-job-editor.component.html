@@ -72,6 +72,14 @@
                     }
                 </select>
             </div>
+
+            <div class="toggle-row">
+                <label class="toggle-label">
+                    <input type="checkbox" [(ngModel)]="RunImmediatelyIfNeverRun" />
+                    Run immediately on first poll if never run
+                </label>
+                <div class="hint">When checked, a job that has never run will execute on the next polling cycle instead of waiting for the next cron tick. Useful for newly-seeded jobs.</div>
+            </div>
         </div>
 
         <!-- Configuration Section -->

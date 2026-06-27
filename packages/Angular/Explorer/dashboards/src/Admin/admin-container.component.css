@@ -1,0 +1,11 @@
+:host { display: block; height: 100%; }
+
+/* Layout, rail styling, and content-area chrome all live in the shared
+   <mj-page-body> / <mj-left-nav> / <mj-left-nav-content> components. The
+   only thing this file owns is the responsive collapse of the parent flex
+   direction at narrow viewports. See Section 10 of explorer-chrome-conventions. */
+@media (max-width: 700px) {
+    :host ::ng-deep mj-page-body.mj-page-body--row {
+        flex-direction: column;
+    }
+}

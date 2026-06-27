@@ -1,6 +1,6 @@
 import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
@@ -20,7 +20,11 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 })
 export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: MJAIPromptRunEntityExtended;
-    
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout AI Prompt Run form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
     // Related entities
     public prompt: MJAIPromptEntityExtended | null = null;
     public model: MJAIModelEntity | null = null;
@@ -153,7 +157,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     private async loadRelatedData() {
         this.isLoadingRelatedData = true;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             
             // Load prompt
             if (this.record.PromptID) {
@@ -191,7 +195,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     private async loadChildRuns() {
         if (!this.record.ID) return;
         
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJAIPromptRunEntityExtended>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ParentID='${this.record.ID}'`,
@@ -323,43 +327,43 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     
     getStatusColor(): string {
         if (!this.record) return '#6c757d';
-        
-        if (this.record.Success === true) {
+
+        if (!this.record.CompletedAt) {
+            return '#ffc107'; // Yellow (still running — CompletedAt is the authority)
+        } else if (this.record.Success === true) {
             return '#28a745'; // Green
         } else if (this.record.Success === false) {
             return '#dc3545'; // Red
-        } else if (this.record.CompletedAt) {
-            return '#17a2b8'; // Blue (completed but no success flag)
         } else {
-            return '#ffc107'; // Yellow (running)
+            return '#17a2b8'; // Blue (completed but no success flag)
         }
     }
-    
+
     getStatusIcon(): string {
         if (!this.record) return 'fa-circle';
-        
-        if (this.record.Success === true) {
+
+        if (!this.record.CompletedAt) {
+            return 'fa-spinner fa-spin';
+        } else if (this.record.Success === true) {
             return 'fa-check-circle';
         } else if (this.record.Success === false) {
             return 'fa-times-circle';
-        } else if (this.record.CompletedAt) {
-            return 'fa-info-circle';
         } else {
-            return 'fa-spinner fa-spin';
+            return 'fa-info-circle';
         }
     }
-    
+
     getStatusText(): string {
         if (!this.record) return 'Unknown';
-        
-        if (this.record.Success === true) {
+
+        if (!this.record.CompletedAt) {
+            return 'Running';
+        } else if (this.record.Success === true) {
             return 'Success';
         } else if (this.record.Success === false) {
             return 'Failed';
-        } else if (this.record.CompletedAt) {
-            return 'Completed';
         } else {
-            return 'Running';
+            return 'Completed';
         }
     }
     
@@ -385,6 +389,44 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     formatTokens(tokens: number | null): string {
         if (!tokens) return '-';
         return tokens.toLocaleString();
+    }
+
+    /**
+     * Total tokens the provider actually processed = uncached (TokensUsed = prompt+completion) PLUS
+     * the cache buckets. TokensUsed alone excludes cache by design, so a heavily-cached run looks
+     * tiny; this is the real throughput figure for the headline. Equals TokensUsed when no caching.
+     */
+    get TotalTokensProcessed(): number {
+        const r = this.record;
+        if (!r) return 0;
+        return (r.TokensUsed ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
+    }
+
+    /** Sum of cache read + write tokens for this run (the cached portion of TotalTokensProcessed). */
+    get CachedTokens(): number {
+        const r = this.record;
+        if (!r) return 0;
+        return (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
+    }
+
+    /**
+     * Full prompt/input token count = uncached (net) prompt PLUS the cache buckets. TokensPrompt is
+     * stored net (cache-read subtracted out by the provider-normalization layer), so on a cached run
+     * the raw field understates the real input; this reconstructs the true input the headline should
+     * show, with {@link CachedTokens} surfaced as the cached subset. Equals TokensPrompt when no cache.
+     */
+    get FullPromptTokens(): number {
+        const r = this.record;
+        if (!r) return 0;
+        return (r.TokensPrompt ?? 0) + (r.TokensCacheRead ?? 0) + (r.TokensCacheWrite ?? 0);
+    }
+
+    /** Percentage of this run's input tokens served from the provider's prompt cache. */
+    get CacheHitRatePct(): number {
+        const read = this.record?.TokensCacheRead ?? 0;
+        const write = this.record?.TokensCacheWrite ?? 0;
+        const totalInput = (this.record?.TokensPrompt ?? 0) + read + write;
+        return totalInput > 0 ? (read / totalInput) * 100 : 0;
     }
     
     getRunTypeIcon(runType: string | null): string {

@@ -41,6 +41,7 @@ vi.mock('@memberjunction/core', () => ({
     LogStatus: vi.fn(),
     Metadata: class { Entities = []; CurrentUser = {}; },
     RunView: class { RunView = vi.fn().mockResolvedValue({ Success: true, Results: [] }); },
+    BaseEntity: class {},
     BaseEngine: class {
         static getInstance() { return new this(); }
         async Load() {}
@@ -70,6 +71,28 @@ vi.mock('@memberjunction/ai-prompts', () => ({
             return { Success: true, Vectors: vectors, PromptRunID: null, TokensUsed: 0, Cost: 0, ErrorMessage: null, ExecutionTimeMs: 0 };
         }
     },
+    AIPromptRunner: class {
+        async ExecutePrompt() {
+            return { success: true, result: { taxonomy: [] }, errorMessage: null };
+        }
+    },
+}));
+
+// SeedTaxonomy imports AIPromptParams (ai-core-plus) and the clustering engine.
+// Mock them so the real CorePlus module (which needs BaseEntity/MJAIPromptEntity) is
+// not pulled into the mocked import graph.
+vi.mock('@memberjunction/ai-core-plus', () => ({
+    AIPromptParams: class {},
+}));
+
+vi.mock('@memberjunction/clustering-engine', () => ({
+    ClusteringEngine: class {
+        SuggestK() { return 1; }
+        async RunPipeline() { return { Points: [], Clusters: [], Metrics: {}, Config: {} }; }
+    },
+    InMemoryVectorSource: class {
+        constructor(public vectors: unknown[]) {}
+    },
 }));
 
 // Mock tag data — also needs to be hoisted since it's used in vi.mock factories
@@ -88,6 +111,9 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
             Tags: mockTags,
             GetTagByID: vi.fn().mockImplementation((id: string) => mockTags.find(t => t.ID.toLowerCase() === id.toLowerCase())),
             GetTagByName: vi.fn().mockImplementation((name: string) => mockTags.find(t => t.Name.toLowerCase() === name.trim().toLowerCase())),
+            GetTagBySynonym: vi.fn().mockReturnValue(undefined),
+            GetVisibleTags: vi.fn().mockImplementation(() => mockTags.filter(t => (t as { Status?: string }).Status !== 'Merged')),
+            GetScopesForTag: vi.fn().mockReturnValue([]),
             GetChildTags: vi.fn().mockImplementation((pid: string) => mockTags.filter(t => t.ParentID?.toLowerCase() === pid.toLowerCase())),
             GetSubtree: vi.fn().mockImplementation((rootID: string) => {
                 const result: typeof mockTags = [];

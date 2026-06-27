@@ -5,7 +5,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import {
@@ -44,7 +44,9 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         // Load the agent entity
         const agent = await this.loadAgent(config.AgentID, context.ContextUser);
 
-        this.log(`Executing agent: ${agent.Name}`);
+        // Verbose-only: the engine's always-on "▶️ Starting / ✅ Completed" pair already frames this
+        // run. This per-agent detail is redundant noise on routine (often no-op) scheduled runs.
+        this.log(`Executing agent: ${agent.Name}`, true);
 
         // Execute the agent
         const runner = new AgentRunner();
@@ -58,7 +60,12 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
             agent: agent,
             conversationMessages: conversationMessages,
             payload: config.StartingPayload,
-            contextUser: context.ContextUser
+            contextUser: context.ContextUser,
+            // Heartbeat the lease on every agent step (prompt / action / sub-agent /
+            // decision) so a healthy long-running agent keeps its concurrency slot
+            // (GH #2749). Fire-and-forget is safe — context.heartbeat never throws
+            // and self-throttles to an effective beat at most every ~5 min.
+            onProgress: () => { void context.heartbeat?.(); }
         });
 
         // Link agent run back to scheduled job run
@@ -158,8 +165,8 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         };
     }
 
-    private async loadAgent(agentId: string, contextUser: UserInfo): Promise<MJAIAgentEntityExtended> {
-        const md = new Metadata();
+    private async loadAgent(agentId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<MJAIAgentEntityExtended> {
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
         const loaded = await agent.Load(agentId);
 

@@ -1,0 +1,48 @@
+<!--
+  Thin wrapper — the entity-list component owns the interior chrome card
+  (<mj-page-header-interior>) and the scrollable body. The dashboard's role is
+  to host the slide-over panels (create-wizard, modify) and route their lifecycle.
+-->
+<mj-database-entity-list
+  (NewEntity)="OnNewEntity()"
+  (EditEntity)="OnEditEntity($event)"
+  (ViewEntity)="OnViewEntity($event)">
+</mj-database-entity-list>
+
+  <!-- ── Create Wizard slide-over panel ────────────────────────────────── -->
+  @if (ShowCreateWizard) {
+    <mj-slide-panel
+      Mode="slide"
+      Title="New Entity"
+      [Visible]="ShowCreateWizard"
+      [Resizable]="true"
+      [WidthPx]="9999"
+      [MaxWidthRatio]="1"
+      [MinWidthPx]="960"
+      (Closed)="OnWizardClosed()">
+      <mj-database-create-wizard
+        (EntityCreated)="OnEntityCreated()"
+        (Cancelled)="OnWizardClosed()">
+      </mj-database-create-wizard>
+    </mj-slide-panel>
+  }
+
+  <!-- ── Modify slide-over panel ───────────────────────────────────────── -->
+  @if (ModifyEntityId) {
+    <mj-slide-panel
+      Mode="slide"
+      Title="Edit Entity"
+      [Visible]="!!ModifyEntityId"
+      [Resizable]="true"
+      [WidthPx]="9999"
+      [MaxWidthRatio]="1"
+      [MinWidthPx]="960"
+      [CanClose]="ModifyPanelCanClose"
+      (Closed)="OnModifyPanelClosed()">
+      <mj-database-modify
+        [EntityId]="ModifyEntityId!"
+        (EntityModified)="OnEntityModified()"
+        (Cancelled)="OnModifyPanelClosed()">
+      </mj-database-modify>
+    </mj-slide-panel>
+  }

@@ -77,14 +77,24 @@
           }
         </div>
 
+        <!-- messageExtra slot — per-message additive decoration projected by the
+             consumer via `mjChatSlot="messageExtra"`. Renders after the message
+             content, before attachments. Receives the message as $implicit. -->
+        @if (messageExtraTemplate) {
+          <ng-container *ngTemplateOutlet="messageExtraTemplate; context: {
+            $implicit: message,
+            message: message
+          }"></ng-container>
+        }
+
         <!-- Message Attachments -->
         @if (hasAttachments) {
           <div class="message-attachments">
             @for (attachment of attachments; track attachment.id) {
-              <div class="attachment-item"
-                [class.image-attachment]="attachment.type === 'Image'"
-                (click)="onAttachmentClick(attachment)">
-                @if (attachment.type === 'Image') {
+              @if (attachment.type === 'Image') {
+                <div class="attachment-item image-attachment"
+                  (click)="onAttachmentClick(attachment)"
+                  [title]="attachment.fileName || 'Image attachment'">
                   <img
                     [src]="attachment.thumbnailUrl || attachment.contentUrl"
                     [alt]="attachment.fileName || 'Image attachment'"
@@ -93,45 +103,34 @@
                   <div class="attachment-overlay">
                     <i class="fas fa-expand"></i>
                   </div>
-                } @else {
-                  <div class="attachment-file">
-                    <i class="fas"
-                       [ngClass]="{
-                         'fa-file-video': attachment.type === 'Video',
-                         'fa-file-audio': attachment.type === 'Audio',
-                         'fa-file': attachment.type === 'Document'
-                       }"></i>
+                </div>
+              } @else {
+                <div class="attachment-strip"
+                  [class.is-artifact]="!!attachment.artifactTypeName"
+                  (click)="onAttachmentClick(attachment)"
+                  [title]="attachment.fileName || 'File'">
+                  <div class="attachment-badge">{{ badgeTextFor(attachment) }}</div>
+                  <div class="attachment-meta">
                     <span class="file-name">{{ attachment.fileName || 'File' }}</span>
                     <span class="file-size">{{ formatFileSize(attachment.sizeBytes) }}</span>
                   </div>
-                }
-              </div>
+                </div>
+              }
             }
           </div>
         }
 
-        <!-- Artifact Message Card -->
-        @if (hasArtifact && artifact && artifactVersion) {
-          <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact">
+        <!-- Artifact Message Cards — one per distinct artifact on this message -->
+        @for (a of displayArtifacts; track a.artifact.ID) {
+          <div class="artifact-wrapper" [class.system-artifact]="a.artifact.Visibility === 'System Only'">
             <mj-artifact-message-card
-              [artifactId]="artifact.ID"
-              [artifact]="artifact"
-              [artifactVersion]="artifactVersion"
+              [artifactId]="a.artifact.ID"
+              [artifact]="a.artifact"
+              [artifactVersion]="a.version"
               [currentUser]="currentUser"
               (actionPerformed)="onArtifactActionPerformed($event)">
             </mj-artifact-message-card>
           </div>
-        }
-
-        <!-- Suggested Responses (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && suggestedResponses.length > 0) {
-          <mj-suggested-responses
-            [suggestedResponses]="suggestedResponses"
-            [disabled]="isProcessing"
-            [isLastMessage]="isLastMessageInConversation"
-            [isConversationOwner]="isConversationOwner"
-            (responseSelected)="onSuggestedResponseSelected($event)">
-          </mj-suggested-responses>
         }
 
         <!-- Agent Response Form (shown only for last message by owner) -->
@@ -195,7 +194,9 @@
             <mj-conversation-message-rating
               [conversationDetailId]="message.ID"
               [currentUser]="currentUser"
-              [ratingsData]="ratings">
+              [ratingEntityName]="message.EntityInfo.Name || 'MJ: Conversation Details'"
+              [ratingsData]="ratings"
+              [canEdit]="isConversationOwner">
             </mj-conversation-message-rating>
             <button
               class="action-bar-btn pin-btn"
@@ -285,7 +286,8 @@
                   <mj-conversation-message-rating
                     [conversationDetailId]="message.ID"
                     [currentUser]="currentUser"
-                    [ratingsData]="ratings">
+                    [ratingsData]="ratings"
+                    [canEdit]="isConversationOwner">
                   </mj-conversation-message-rating>
                   <button
                     class="action-bar-btn pin-btn"

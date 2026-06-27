@@ -1,0 +1,41 @@
+[
+  {
+    "fields": {
+      "Name": "GetArtifactVersionsByID",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Agents",
+      "UserQuestion": "What are the full artifact version records for a given set of artifact version IDs?",
+      "Description": "Returns artifact version fields (name, content mode, file ref, content, mime) joined with the parent artifact and artifact type (including ToolLibraryClass) for a supplied list of ArtifactVersionIDs.",
+      "SQL": "@file:SQL/get-artifact-versions-by-id.sql",
+      "TechnicalDescription": "Single-query replacement for AgentRunner.gatherConversationArtifacts per-junction loop that issued two Load() calls per row (MJ: Artifact Versions + MJ: Artifacts). Joins vwArtifactVersions → vwArtifacts → vwArtifactTypes so ToolLibraryClass is available without a third lookup. Accepts a JS array via {{ versionIds | sqlIn }}.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/get-artifact-versions-by-id.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "3659bd9a-71af-448e-8567-6e531ba58bba"
+          },
+          "sync": {
+            "lastModified": "2026-05-20T01:27:39.745Z",
+            "checksum": "d87fc250335951147df6394373c42cddeebeaca707338c356959aec71e529ba5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "34D2D4D2-C727-4366-996F-3AAF87FC103E"
+    },
+    "sync": {
+      "lastModified": "2026-05-20T01:27:39.707Z",
+      "checksum": "fe4aa6664e76d07aca180b6dae556f6687584e91cae49bd4625c3fa372f394bc"
+    }
+  }
+]

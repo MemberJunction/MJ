@@ -1,4 +1,4 @@
-import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJVersionLabelEntity } from '@memberjunction/core-entities';
 import { CreateLabelParams, LabelFilter, VersionLabelStatus } from './types';
 import {
@@ -14,6 +14,14 @@ import {
  * to SnapshotBuilder by the VersionHistoryEngine facade.
  */
 export class LabelManager {
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Create a new version label and persist it. Does not capture any snapshot
      * items — the caller (VersionHistoryEngine) handles that separately.
@@ -21,7 +29,7 @@ export class LabelManager {
     public async CreateLabel(params: CreateLabelParams, contextUser: UserInfo): Promise<MJVersionLabelEntity> {
         this.validateCreateParams(params);
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const label = await md.GetEntityObject<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, contextUser);
 
         label.Name = params.Name;
@@ -112,7 +120,7 @@ export class LabelManager {
         }
     }
 
-    private applyEntityScope(label: MJVersionLabelEntity, params: CreateLabelParams, md: Metadata): void {
+    private applyEntityScope(label: MJVersionLabelEntity, params: CreateLabelParams, md: IMetadataProvider): void {
         if (params.EntityName && (params.Scope === 'Entity' || params.Scope === 'Record')) {
             const entityInfo = md.EntityByName(params.EntityName);
             if (!entityInfo) {
@@ -158,7 +166,7 @@ export class LabelManager {
             clauses.push(sqlEquals('Status', filter.Status));
         }
         if (filter.EntityName) {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.EntityByName(filter.EntityName);
             if (entityInfo) {
                 clauses.push(sqlEquals('EntityID', entityInfo.ID));

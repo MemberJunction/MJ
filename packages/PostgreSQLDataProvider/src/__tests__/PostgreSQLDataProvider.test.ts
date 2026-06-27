@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
-import { CompositeKey, EntityInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
 
 /**
  * Helper: build a minimal EntityInfo-like object with the given field names.
@@ -12,10 +12,23 @@ function mockEntityInfo(fieldNames: string[]): EntityInfo {
     } as unknown as EntityInfo;
 }
 
+/**
+ * Helper: build a minimal EntityInfo with mixed-type fields. Each entry is
+ * `{name, tsType}` so callers can mark a field as Boolean for the bool-coercion
+ * tests without having to construct a full EntityFieldInfo.
+ */
+function mockEntityInfoTyped(fields: Array<{ name: string; tsType: EntityFieldTSType }>): EntityInfo {
+    return {
+        Fields: fields.map(f => ({ Name: f.name, TSType: f.tsType })),
+    } as unknown as EntityInfo;
+}
+
 /** Type alias for accessing private quoting methods in tests */
 type ProviderWithQuoting = {
     quoteIdentifiersInSQL(sql: string, entityInfo: EntityInfo): string;
     quoteFieldNamesInToken(token: string, fieldNames: Set<string>): string;
+    coerceBooleanLiteralsInSQL(sql: string, entityInfo: EntityInfo): string;
+    TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string;
 };
 
 // Mock pg module
@@ -113,6 +126,108 @@ describe('PostgreSQLDataProvider', () => {
             const group = await provider.CreateTransactionGroup();
             expect(group).toBeDefined();
             expect(group.Status).toBe('Pending');
+        });
+    });
+
+    describe('Transaction nesting (savepoint-based)', () => {
+        // Test wiring: replace the connection manager's AcquireClient so we can
+        // capture the queries the provider issues. This is the lightest-weight
+        // way to validate nesting semantics without spinning up real PG.
+        type CapturedClient = {
+            queries: string[];
+            query: (sql: string) => Promise<{ rows: unknown[] }>;
+            release: () => void;
+            released: boolean;
+        };
+
+        function installFakeClient(p: PostgreSQLDataProvider): CapturedClient {
+            const client: CapturedClient = {
+                queries: [],
+                released: false,
+                query: vi.fn(async (sql: string) => {
+                    client.queries.push(sql);
+                    return { rows: [] };
+                }) as unknown as (sql: string) => Promise<{ rows: unknown[] }>,
+                release: vi.fn(() => { client.released = true; }) as unknown as () => void,
+            };
+            // Replace the private connection manager's AcquireClient with a stub.
+            const cm = (p as unknown as { _connectionManager: { AcquireClient: () => Promise<unknown> } })._connectionManager;
+            cm.AcquireClient = vi.fn(async () => client) as unknown as typeof cm.AcquireClient;
+            return client;
+        }
+
+        it('depth==1: BeginTransaction issues BEGIN on the acquired client', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            expect(client.queries).toEqual(['BEGIN']);
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+        });
+
+        it('depth>1: nested Begin issues SAVEPOINT instead of new BEGIN', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            expect(client.queries).toEqual(['BEGIN', 'SAVEPOINT mj_sp_1', 'SAVEPOINT mj_sp_2']);
+            expect(provider.TransactionDepth).toBe(3);
+        });
+
+        it('Commit at depth>1 issues RELEASE SAVEPOINT, depth-1 issues COMMIT and releases client', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();    // depth 1
+            await provider.BeginTransaction();    // depth 2
+            await provider.CommitTransaction();   // releases sp, depth 1
+            expect(provider.TransactionDepth).toBe(1);
+            expect(client.queries.at(-1)).toBe('RELEASE SAVEPOINT mj_sp_1');
+            expect(client.released).toBe(false); // still in outer
+
+            await provider.CommitTransaction();   // commits outer
+            expect(client.queries.at(-1)).toBe('COMMIT');
+            expect(client.released).toBe(true);
+            expect(provider.TransactionDepth).toBe(0);
+            expect(provider.IsInTransaction).toBe(false);
+        });
+
+        it('Rollback at depth>1 rolls back to + releases savepoint without affecting outer', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(1);
+            // Last two queries should be the rollback-to + release of the savepoint
+            expect(client.queries.slice(-2)).toEqual(['ROLLBACK TO SAVEPOINT mj_sp_1', 'RELEASE SAVEPOINT mj_sp_1']);
+            expect(client.released).toBe(false); // outer transaction still active
+
+            await provider.CommitTransaction();   // outer commits successfully
+            expect(client.released).toBe(true);
+        });
+
+        it('Rollback at depth==1 issues ROLLBACK and releases client', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.RollbackTransaction();
+            expect(client.queries.at(-1)).toBe('ROLLBACK');
+            expect(client.released).toBe(true);
+            expect(provider.TransactionDepth).toBe(0);
+        });
+
+        it('Commit/Rollback without active transaction throws', async () => {
+            await expect(provider.CommitTransaction()).rejects.toThrow('No active transaction');
+            await expect(provider.RollbackTransaction()).rejects.toThrow('No active transaction');
+        });
+
+        it('Savepoint counter is fresh after the outer transaction commits', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();      // mj_sp_1
+            await provider.CommitTransaction();     // RELEASE mj_sp_1
+            await provider.CommitTransaction();     // outer COMMIT, resets counter
+            // Re-installing a client because the previous one was released
+            const client2 = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();      // should be mj_sp_1 again, not mj_sp_2
+            expect(client2.queries.at(-1)).toBe('SAVEPOINT mj_sp_1');
         });
     });
 
@@ -343,6 +458,310 @@ describe('PostgreSQLDataProvider', () => {
             const fields = new Set(['ID']);
             // "VALID" contains "ID" but not at a word boundary
             expect(quoter.quoteFieldNamesInToken('VALID', fields)).toBe('VALID');
+        });
+    });
+
+    /**
+     * Bool literals in user-provided SQL filters (`IsActive = 1`,
+     * `IsAutoGenerated = 0`) are widespread across MJ — engines, agents,
+     * dashboards all use SQL Server's bit-as-integer convention. PG rejects
+     * those with `operator does not exist: boolean = integer`. The provider's
+     * filter rewriter coerces them to `TRUE`/`FALSE` for boolean fields.
+     */
+    describe('coerceBooleanLiteralsInSQL (bit literal → bool coercion)', () => {
+        let provider: PostgreSQLDataProvider;
+        let coercer: ProviderWithQuoting;
+
+        beforeEach(() => {
+            provider = new PostgreSQLDataProvider();
+            coercer = provider as unknown as ProviderWithQuoting;
+        });
+
+        it('rewrites = 1 to = TRUE for boolean fields', () => {
+            const ei = mockEntityInfoTyped([{ name: 'IsActive', tsType: EntityFieldTSType.Boolean }]);
+            expect(coercer.coerceBooleanLiteralsInSQL('"IsActive" = 1', ei))
+                .toBe('"IsActive" = TRUE');
+        });
+
+        it('rewrites = 0 to = FALSE for boolean fields', () => {
+            const ei = mockEntityInfoTyped([{ name: 'IsActive', tsType: EntityFieldTSType.Boolean }]);
+            expect(coercer.coerceBooleanLiteralsInSQL('"IsActive" = 0', ei))
+                .toBe('"IsActive" = FALSE');
+        });
+
+        it('rewrites != 1 / <> 1 to != TRUE / <> TRUE for boolean fields', () => {
+            const ei = mockEntityInfoTyped([{ name: 'IsActive', tsType: EntityFieldTSType.Boolean }]);
+            expect(coercer.coerceBooleanLiteralsInSQL('"IsActive" != 1', ei))
+                .toBe('"IsActive" != TRUE');
+            expect(coercer.coerceBooleanLiteralsInSQL('"IsActive" <> 0', ei))
+                .toBe('"IsActive" <> FALSE');
+        });
+
+        it('handles quoted bit literals (\'1\' / \'0\')', () => {
+            const ei = mockEntityInfoTyped([{ name: 'IsActive', tsType: EntityFieldTSType.Boolean }]);
+            expect(coercer.coerceBooleanLiteralsInSQL("\"IsActive\" = '1'", ei))
+                .toBe('"IsActive" = TRUE');
+        });
+
+        it('does NOT rewrite non-boolean fields', () => {
+            // Status is a String field; the literal `1` is meaningful (could
+            // be a code/value comparison) and must not be coerced.
+            const ei = mockEntityInfoTyped([{ name: 'Status', tsType: EntityFieldTSType.String }]);
+            expect(coercer.coerceBooleanLiteralsInSQL('"Status" = 1', ei))
+                .toBe('"Status" = 1');
+        });
+
+        it('leaves TRUE / FALSE the caller already wrote alone', () => {
+            const ei = mockEntityInfoTyped([{ name: 'IsActive', tsType: EntityFieldTSType.Boolean }]);
+            expect(coercer.coerceBooleanLiteralsInSQL('"IsActive" = TRUE', ei))
+                .toBe('"IsActive" = TRUE');
+        });
+
+        it('rewrites multiple boolean fields in compound predicates', () => {
+            const ei = mockEntityInfoTyped([
+                { name: 'IsAutoGenerated', tsType: EntityFieldTSType.Boolean },
+                { name: 'Status', tsType: EntityFieldTSType.String },
+            ]);
+            const input = `"IsAutoGenerated" = 1 AND "Status" = 'Active'`;
+            expect(coercer.coerceBooleanLiteralsInSQL(input, ei))
+                .toBe(`"IsAutoGenerated" = TRUE AND "Status" = 'Active'`);
+        });
+
+        it('does NOT rewrite a 0/1 in a numeric column comparison even if a bool col with similar name exists', () => {
+            // No name collision to test here — coercer only touches columns
+            // that match a Boolean field's exact name. Non-bool stays literal.
+            const ei = mockEntityInfoTyped([
+                { name: 'Priority', tsType: EntityFieldTSType.Number },
+            ]);
+            expect(coercer.coerceBooleanLiteralsInSQL('"Priority" = 1', ei))
+                .toBe('"Priority" = 1');
+        });
+
+        it('TransformExternalSQLClause runs identifier-quote AND bool-coerce together', () => {
+            // End-to-end: bare identifier IsActive should get quoted AND its
+            // bit literal coerced in one pass. (quoteIdentifiersInSQL inserts
+            // spaces around tokens — we just check both transforms applied.)
+            const ei = mockEntityInfoTyped([{ name: 'IsActive', tsType: EntityFieldTSType.Boolean }]);
+            const transformer = provider as unknown as ProviderWithQuoting;
+            const out = transformer.TransformExternalSQLClause('IsActive=1', ei);
+            expect(out).toContain('"IsActive"');
+            expect(out).toContain('TRUE');
+            expect(out).not.toMatch(/=\s*1\b/); // no bare bit literal remains
+        });
+    });
+
+    describe('ValidateDeleteResult', () => {
+        // The override must accept both result shapes that PG sprocs use:
+        //   - Legacy `{ "_result_id": <uuid> }` from baseline migration sprocs
+        //   - Current `{ "<PKName>": <uuid> }` from latest codegen template
+        // and reject anything that doesn't match the expected primary key.
+
+        type Validator = {
+            ValidateDeleteResult(
+                entity: { PrimaryKeys: { Name: string; Value: unknown }[] },
+                rawResult: Record<string, unknown>[],
+                entityResult: { Message?: string },
+            ): boolean;
+        };
+
+        function buildEntity(pks: { Name: string; Value: unknown }[]) {
+            return { PrimaryKeys: pks } as unknown as Parameters<Validator['ValidateDeleteResult']>[0];
+        }
+
+        let validator: Validator;
+        beforeEach(() => {
+            validator = provider as unknown as Validator;
+        });
+
+        it('returns true when single-PK result matches via PK-named column (current codegen shape)', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            const result = { Message: '' };
+            expect(validator.ValidateDeleteResult(entity, [{ ID: 'abc' }], result)).toBe(true);
+        });
+
+        it('returns true when single-PK result matches via legacy _result_id column', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            const result = { Message: '' };
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: 'abc' }], result)).toBe(true);
+        });
+
+        it('returns false and sets message when single-PK result has wrong value', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'expected' }]);
+            const result: { Message?: string } = {};
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: 'wrong' }], result)).toBe(false);
+            expect(result.Message).toContain('ID=expected');
+        });
+
+        it('returns false when sproc reports zero rows (NULL result)', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            const result: { Message?: string } = {};
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: null }], result)).toBe(false);
+            expect(result.Message).toContain('ID=abc');
+        });
+
+        it('returns false on empty result', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            expect(validator.ValidateDeleteResult(entity, [], { Message: '' })).toBe(false);
+        });
+
+        it('compound PK requires every key matched by name (legacy _result_id is single-PK only)', () => {
+            const entity = buildEntity([
+                { Name: 'TagAID', Value: 'a1' },
+                { Name: 'TagBID', Value: 'b1' },
+            ]);
+            const result: { Message?: string } = {};
+            expect(validator.ValidateDeleteResult(entity, [{ TagAID: 'a1', TagBID: 'b1' }], result)).toBe(true);
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: 'a1' }], { Message: '' })).toBe(false);
+            expect(validator.ValidateDeleteResult(entity, [{ TagAID: 'a1', TagBID: 'wrong' }], result)).toBe(false);
+        });
+    });
+
+    describe('JSON-arg CRUD payload (wide entities)', () => {
+        // After the rev 4 refactor, the JSON-arg branch lives in
+        // `RenderSaveCallBinding`. We exercise it by forcing `UseJsonArgShape`
+        // to true via a spy and calling the protected hook directly. The
+        // dispatch through `UseJsonArgShape` thresholds is covered by codegen
+        // tests + the existing crudSprocFieldRules unit tests.
+        type WithSaveHook = {
+            RenderSaveCallBinding(
+                entity: { EntityInfo: { Name: string; Fields: unknown[] } },
+                fieldValueMap: Map<unknown, unknown>,
+                isUpdate: boolean,
+                spName: string,
+            ): { kind: string; callArgsSQL: string; values: unknown[] };
+            UseJsonArgShape(entityInfo: unknown, sprocType: string): boolean;
+        };
+
+        function field(name: string, type = 'nvarchar'): { Name: string; CodeName: string; Type: string; NeedsClearCompanion: boolean } {
+            return { Name: name, CodeName: name, Type: type, NeedsClearCompanion: false };
+        }
+
+        function mockEntity(): { EntityInfo: { Name: string; Fields: unknown[]; SchemaName: string } } {
+            return { EntityInfo: { Name: 'WideEntity', SchemaName: '__mj', Fields: [] } };
+        }
+
+        function callRenderJsonArg(provider: PostgreSQLDataProvider, map: Map<unknown, unknown>): { values: [string] } {
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => true;
+            try {
+                const binding = hook.RenderSaveCallBinding(mockEntity(), map, false, 'spCreateWideEntity');
+                expect(binding.kind).toBe('pg-json-arg');
+                expect(binding.callArgsSQL).toBe('p_data => $1::jsonb');
+                return binding as unknown as { values: [string] };
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
+        }
+
+        it('serializes a payload with all field values into a single JSONB placeholder', () => {
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc-123'],
+                [field('Name'), 'Test'],
+                [field('LockToken'), null],
+                [field('RetryCount', 'int'), 3],
+            ]);
+            const result = callRenderJsonArg(provider, map);
+            expect(result.values).toHaveLength(1);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
+            expect(parsed).toEqual({
+                ID: 'abc-123',
+                Name: 'Test',
+                LockToken: null,
+                RetryCount: 3,
+            });
+        });
+
+        it('preserves explicit nulls so key-presence semantics can clear columns', () => {
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc'],
+                [field('LockToken'), null],
+            ]);
+            const result = callRenderJsonArg(provider, map);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
+            expect(parsed).toHaveProperty('LockToken');
+            expect(parsed.LockToken).toBeNull();
+        });
+
+        it('encodes binary fields as base64', () => {
+            const buf = Buffer.from('hello world', 'utf8');
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc'],
+                [field('Blob', 'varbinary(max)'), buf],
+            ]);
+            const result = callRenderJsonArg(provider, map);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
+            expect(parsed.Blob).toBe(buf.toString('base64'));
+        });
+
+        it('leaves null binary fields as null (no base64 encoding)', () => {
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc'],
+                [field('Blob', 'varbinary'), null],
+            ]);
+            const result = callRenderJsonArg(provider, map);
+            const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
+            expect(parsed.Blob).toBeNull();
+        });
+
+        // Regression: the orchestrator (GenericDatabaseProvider.GenerateSaveSQL)
+        // skips PK fields on UPDATE and expects the binding renderer to
+        // tail-append them. Without this, JSON-arg sproc bodies raise
+        // `RAISE EXCEPTION 'sp*: p_data must include "ID"'` against every
+        // update on a wide entity. SQL Server's renderer already does this.
+        it('tail-appends primary keys to the JSON payload on UPDATE', () => {
+            const map = new Map<unknown, unknown>([
+                [field('Status'), 'Failed'],
+                [field('ErrorMessage'), 'boom'],
+            ]);
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => true;
+            try {
+                const entityWithPK = {
+                    EntityInfo: { Name: 'WideEntity', SchemaName: '__mj', Fields: [] },
+                    PrimaryKey: {
+                        KeyValuePairs: [{ FieldName: 'ID', Value: 'pk-uuid-here' }],
+                    },
+                };
+                const binding = hook.RenderSaveCallBinding(entityWithPK, map, true, 'spUpdateWideEntity');
+                expect(binding.kind).toBe('pg-json-arg');
+                const parsed = JSON.parse((binding.values as [string])[0]) as Record<string, unknown>;
+                expect(parsed).toMatchObject({
+                    Status: 'Failed',
+                    ErrorMessage: 'boom',
+                    ID: 'pk-uuid-here',
+                });
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
+        });
+
+        // Same regression on the positional path. PG sprocs use named-arg
+        // syntax (`p_id => $N`) — without tail-appending the PK arg, the
+        // SP's `WHERE "ID" = p_id` matches nothing on update (or errors on
+        // missing required arg, depending on default-clause shape).
+        it('tail-appends primary keys to positional named args on UPDATE', () => {
+            const map = new Map<unknown, unknown>([
+                [field('Status'), 'Failed'],
+            ]);
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => false;
+            try {
+                const entityWithPK = {
+                    EntityInfo: { Name: 'NarrowEntity', SchemaName: '__mj', Fields: [] },
+                    PrimaryKey: {
+                        KeyValuePairs: [{ FieldName: 'ID', Value: 'pk-uuid-here' }],
+                    },
+                };
+                const binding = hook.RenderSaveCallBinding(entityWithPK, map, true, 'spUpdateNarrowEntity');
+                expect(binding.kind).toBe('pg-positional');
+                expect(binding.callArgsSQL).toContain('p_id => $');
+                expect(binding.values).toContain('pk-uuid-here');
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
         });
     });
 });

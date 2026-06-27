@@ -1,0 +1,136 @@
+@if (TableDefinition) {
+  <div class="review-panel">
+
+    <!-- ── Entity header ─────────────────────────────────────────────────── -->
+    <div class="review-header">
+      <div class="entity-badge">
+        <i class="fa-solid fa-table-cells-large"></i>
+        <span class="entity-name">{{ TableDefinition.EntityName }}</span>
+        <span class="schema-path">
+          {{ TableDefinition.SchemaName }}.{{ TableDefinition.TableName }}
+        </span>
+        @if (ModificationType === 'create') {
+          <span class="mode-tag new">NEW</span>
+        } @else {
+          <span class="mode-tag alter">ALTER</span>
+        }
+      </div>
+      @if (TableDefinition.Description) {
+        <p class="entity-description">{{ TableDefinition.Description }}</p>
+      }
+    </div>
+
+    <!-- ── Column table ───────────────────────────────────────────────────── -->
+    <table class="review-table" aria-label="Column definitions">
+      <thead>
+        <tr>
+          <th scope="col">Column</th>
+          <th scope="col">SQL Type</th>
+          <th scope="col">Required</th>
+          <th scope="col">Default</th>
+          <th scope="col">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- ── Auto-managed columns — always injected, cannot be removed ── -->
+        <tr class="auto-col-row">
+          <td class="col-name">
+            <i class="fa-solid fa-lock-keyhole auto-lock" title="Auto-managed"></i>
+            <code>ID</code>
+            <span class="auto-badge">PK</span>
+          </td>
+          <td class="col-type"><code>UNIQUEIDENTIFIER</code></td>
+          <td class="col-req"><i class="fa-solid fa-check req-yes" title="Required"></i></td>
+          <td class="col-default"><code class="default-val">NEWSEQUENTIALID()</code></td>
+          <td class="col-desc"><span class="desc-text auto-desc">Primary key — always present</span></td>
+        </tr>
+        <tr class="auto-col-row">
+          <td class="col-name">
+            <i class="fa-solid fa-lock-keyhole auto-lock" title="Auto-managed"></i>
+            <code>__mj_CreatedAt</code>
+            <span class="auto-badge">AUTO</span>
+          </td>
+          <td class="col-type"><code>DATETIMEOFFSET</code></td>
+          <td class="col-req"><i class="fa-solid fa-check req-yes" title="Required"></i></td>
+          <td class="col-default"><code class="default-val">GETUTCDATE()</code></td>
+          <td class="col-desc"><span class="desc-text auto-desc">Record creation timestamp</span></td>
+        </tr>
+        <tr class="auto-col-row auto-col-divider">
+          <td class="col-name">
+            <i class="fa-solid fa-lock-keyhole auto-lock" title="Auto-managed"></i>
+            <code>__mj_UpdatedAt</code>
+            <span class="auto-badge">AUTO</span>
+          </td>
+          <td class="col-type"><code>DATETIMEOFFSET</code></td>
+          <td class="col-req"><i class="fa-solid fa-check req-yes" title="Required"></i></td>
+          <td class="col-default"><code class="default-val">GETUTCDATE()</code></td>
+          <td class="col-desc"><span class="desc-text auto-desc">Last update timestamp</span></td>
+        </tr>
+
+        <!-- ── User-defined columns ── -->
+        @for (row of Rows; track TrackByName($index, row)) {
+          <tr [class.row-new]="row.diffState === 'new'">
+            <td class="col-name">
+              <code>{{ row.column.Name }}</code>
+              @if (row.diffState === 'new') {
+                <span class="diff-badge new" title="New column">+NEW</span>
+              }
+            </td>
+            <td class="col-type">
+              <code>{{ row.sqlType }}</code>
+            </td>
+            <td class="col-req">
+              @if (!row.column.IsNullable) {
+                <i class="fa-solid fa-check req-yes" title="Required"></i>
+              } @else {
+                <span class="req-no">No</span>
+              }
+            </td>
+            <td class="col-default">
+              @if (row.column.DefaultValue) {
+                <code class="default-val">{{ row.column.DefaultValue }}</code>
+              } @else {
+                <span class="empty-val">—</span>
+              }
+            </td>
+            <td class="col-desc">
+              @if (row.column.Description) {
+                <span class="desc-text">{{ row.column.Description }}</span>
+              } @else {
+                <span class="empty-val">—</span>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+
+    <!-- ── Foreign key section ───────────────────────────────────────────── -->
+    @if (ForeignKeys.length > 0) {
+      <div class="fk-section">
+        <h4 class="fk-title">
+          <i class="fa-solid fa-link"></i>
+          Relationships
+        </h4>
+        <ul class="fk-list">
+          @for (fk of ForeignKeys; track fk.ColumnName) {
+            <li class="fk-item">
+              <code>{{ fk.ColumnName }}</code>
+              <span class="fk-arrow">→</span>
+              <code>{{ fk.ReferencedSchema }}.{{ fk.ReferencedTable }}.{{ fk.ReferencedColumn }}</code>
+              <span class="fk-type" [class.soft]="fk.IsSoft">
+                {{ fk.IsSoft ? 'soft FK' : 'hard FK' }}
+              </span>
+            </li>
+          }
+        </ul>
+      </div>
+    }
+
+  </div>
+} @else {
+  <mj-empty-state class="review-empty"
+    Icon="fa-regular fa-rectangle-list"
+    Title="No schema defined yet"
+    Message="Complete the previous steps to see a review." />
+}

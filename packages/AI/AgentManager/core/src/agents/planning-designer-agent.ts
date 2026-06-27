@@ -97,7 +97,7 @@ export class PlanningDesignerAgent extends BaseAgent {
                 violations.push(`❌ MISSING: "Database Research Agent" sub-agent has NOT been called (but your design mentions database/CRUD operations)
 
 **Purpose**: Provides actual entity names, field names, primary keys, data types, and relationships from the database schema
-**What it returns**: Complete entity schema information written to payload.TechnicalDesign.databaseSchema
+**What it returns**: Entity schema information (field names, types, primary keys) written to the payload's \`findings\` array — read the results from the sub-agent result message in your conversation history
 **Why critical**: NEVER guess entity or field names - they must come from Database Research Agent. CRUD actions require exact entity names and field names to work correctly.
 **What to do**: Call Database Research Agent with specific questions like "Is there an entity called [NAME] or related to [CONCEPT]? Give me all fields." Review the results and use ONLY those exact entity/field names in your CRUD action designs.`);
             }

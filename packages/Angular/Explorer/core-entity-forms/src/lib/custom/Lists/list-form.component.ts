@@ -110,6 +110,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public showAddFromViewLoader = false;
     public userViews: MJUserViewEntityExtended[] | null = null;
     public userViewsToAdd: MJUserViewEntityExtended[] = [];
+    /**
+     * Normalized-UUID set of the IDs in {@link userViewsToAdd}, kept in sync with that
+     * array. Lets {@link isViewSelected} (bound per-row in the dialog's @for, ~2x/row)
+     * do an O(1) lookup instead of scanning the array with UUIDsEqual on every check.
+     */
+    private userViewsToAddIds: Set<string> = new Set<string>();
     public addFromViewProgress = 0;
     public addFromViewTotal = 0;
     public fetchingRecordsToSave = false;
@@ -118,9 +124,12 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public showShareDialog = false;
     public shareDialogConfig: ListShareDialogConfig | null = null;
 
-    private destroy$ = new Subject<void>();
-    private metadata = new Metadata();
+    // Invitations / audit log dialogs — opened from the share dialog.
+    public showInvitationsDialog = false;
+    public showAuditLogDialog = false;
 
+    private destroy$ = new Subject<void>();
+    private get metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
 
@@ -168,7 +177,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     private async loadCategories(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJListCategoryEntity>({
             EntityName: 'MJ: List Categories',
             OrderBy: 'Name',
@@ -186,7 +195,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJListDetailEntity>({
                 EntityName: 'MJ: List Details',
                 ExtraFilter: `ListID = '${this.record.ID}'`,
@@ -215,7 +224,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     private async loadRecordNames(): Promise<void> {
         if (!this.entityInfo) return;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         // Get the name field - NameField is EntityFieldInfo or undefined
         const nameFieldInfo = this.entityInfo.NameField;
         const nameFieldName = nameFieldInfo ? nameFieldInfo.Name : 'ID';
@@ -249,7 +258,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.isLoadingStats = true;
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [itemsResult, sharesResult, invitationsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: List Details',
@@ -536,7 +545,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     private async loadExistingListDetailIds(): Promise<void> {
         if (!this.record) return;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ RecordID: string }>({
             EntityName: 'MJ: List Details',
             ExtraFilter: `ListID = '${this.record.ID}'`,
@@ -579,7 +588,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             filter = `${nameField.Name} LIKE '%${searchText}%'`;
         }
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result: RunViewResult = await rv.RunView({
             EntityName: this.record.Entity,
             ExtraFilter: filter,
@@ -671,6 +680,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public async openAddFromViewDialog(): Promise<void> {
         this.showAddFromViewDialog = true;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.cdr.markForCheck();
 
         if (!this.userViews) {
@@ -681,6 +691,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public closeAddFromViewDialog(): void {
         this.showAddFromViewDialog = false;
         this.userViewsToAdd = [];
+        this.userViewsToAddIds.clear();
         this.showAddFromViewLoader = false;
         this.addFromViewProgress = 0;
         this.addFromViewTotal = 0;
@@ -693,7 +704,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.showAddFromViewLoader = true;
         this.cdr.markForCheck();
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const runViewResult = await rv.RunView<MJUserViewEntityExtended>({
             EntityName: 'MJ: User Views',
             ExtraFilter: `UserID = '${this.metadata.CurrentUser.ID}' AND EntityID = '${this.record.EntityID}'`,
@@ -714,14 +725,16 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         const index = this.userViewsToAdd.findIndex(v => UUIDsEqual(v.ID, view.ID));
         if (index >= 0) {
             this.userViewsToAdd.splice(index, 1);
+            this.userViewsToAddIds.delete(NormalizeUUID(view.ID));
         } else {
             this.userViewsToAdd.push(view);
+            this.userViewsToAddIds.add(NormalizeUUID(view.ID));
         }
         this.cdr.markForCheck();
     }
 
     public isViewSelected(view: MJUserViewEntityExtended): boolean {
-        return this.userViewsToAdd.some(v => UUIDsEqual(v.ID, view.ID));
+        return this.userViewsToAddIds.has(NormalizeUUID(view.ID));
     }
 
     public async confirmAddFromView(): Promise<void> {
@@ -731,7 +744,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.fetchingRecordsToSave = true;
         this.cdr.markForCheck();
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
         // Collect all unique record IDs from selected views
         const recordIdSet = new Set<string>();
@@ -831,6 +844,35 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public onShareDialogCancel(): void {
         this.showShareDialog = false;
         this.shareDialogConfig = null;
+        this.cdr.markForCheck();
+    }
+
+    // ==========================================
+    // Invitations / Audit Log dialogs (mockups 16, 18)
+    // ==========================================
+
+    public openInvitationsDialog(): void {
+        // Closing share dialog so it doesn't stack visually. User can
+        // reopen via toolbar; the share dialog isn't stateful enough to
+        // need preservation across this transition.
+        this.showShareDialog = false;
+        this.showInvitationsDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    public closeInvitationsDialog(): void {
+        this.showInvitationsDialog = false;
+        this.cdr.markForCheck();
+    }
+
+    public openAuditLogDialog(): void {
+        this.showShareDialog = false;
+        this.showAuditLogDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    public closeAuditLogDialog(): void {
+        this.showAuditLogDialog = false;
         this.cdr.markForCheck();
     }
 }

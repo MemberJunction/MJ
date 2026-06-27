@@ -1,4 +1,6 @@
-import { Component, ChangeDetectorRef } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, OnInit } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { ComponentStudioStateService } from '../../services/component-studio-state.service';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -51,10 +53,8 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
             </mj-code-editor>
           </div>
         } @else {
-          <div class="empty-state">
-            <i class="fa-solid fa-database"></i>
-            <p>Select a component to edit its data requirements.</p>
-          </div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-database"
+            Title="Select a component to edit its data requirements." />
         }
       </div>
     </div>
@@ -125,31 +125,16 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       display: block;
       height: 100%;
     }
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 40px 20px;
-      color: var(--mj-text-secondary);
-      flex: 1;
-    }
-    .empty-state i {
-      font-size: 32px;
-      margin-bottom: 12px;
-    }
-    .empty-state p {
-      margin: 0;
-      font-size: 13px;
-      text-align: center;
-    }
+    /* Fill the flex-fill editor body so the placeholder centers. */
+    mj-empty-state { flex: 1; }
   `]
 })
-export class DataRequirementsEditorComponent {
+export class DataRequirementsEditorComponent implements OnInit, OnDestroy {
   EditableContent: string = '';
   IsEditing: boolean = false;
 
   private _parsedRequirements: Record<string, unknown> | null = null;
+  private destroy$ = new Subject<void>();
 
   constructor(
     public State: ComponentStudioStateService,
@@ -179,10 +164,15 @@ export class DataRequirementsEditorComponent {
 
   ngOnInit(): void {
     this.loadContent();
-    this.State.StateChanged.subscribe(() => {
+    this.State.StateChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.loadContent();
       this.cdr.detectChanges();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   OnContentChanged(): void {
@@ -195,8 +185,9 @@ export class DataRequirementsEditorComponent {
       const spec: ComponentSpec = JSON.parse(this.State.EditableSpec);
       const dataReq = JSON.parse(this.EditableContent);
       spec.dataRequirements = dataReq;
-      this.State.UpdateSpec(spec);
       this.IsEditing = false;
+      this.State.UpdateSpec(spec);
+      this.cdr.detectChanges();
     } catch (error) {
       console.error('Error applying data requirements changes:', error);
     }

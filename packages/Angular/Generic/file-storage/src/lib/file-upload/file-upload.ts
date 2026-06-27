@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { z } from 'zod';
 
@@ -35,8 +35,8 @@ const FileFieldsFragment = gql`
 
 const FileUploadMutation = gql`
   ${FileFieldsFragment}
-  mutation CreateMJFile($input: CreateMJFileInput!) {
-    CreateMJFile(input: $input) {
+  mutation CreateFile($input: CreateMJFileInput!) {
+    CreateFile(input: $input) {
       NameExists
       UploadUrl
       File {
@@ -47,14 +47,14 @@ const FileUploadMutation = gql`
 `;
 
 const FileUploadMutationSchema = z.object({
-  CreateMJFile: z.object({
+  CreateFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
     File: MJFileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
   }),
 });
 
-type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateMJFile']['File'];
+type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateFile']['File'];
 type UploadTuple = [FileSelectInfo, ApiFile, string];
 
 @Component({
@@ -63,17 +63,17 @@ type UploadTuple = [FileSelectInfo, ApiFile, string];
   templateUrl: './file-upload.html',
   styleUrls: ['./file-upload.css'],
 })
-export class FileUploadComponent implements OnInit {
+export class FileUploadComponent extends BaseAngularComponent implements OnInit {
   public ConfirmQueue: Array<UploadTuple> = [];
   public UploadQueue: Array<FileSelectInfo> = [];
   private defaultProviderID = '';
-  private md = new Metadata();
+  private get md() { return this.ProviderToUse; }
 
   get IsUploading(): boolean {
     return this.UploadQueue.length + this.ConfirmQueue.length > 0;
   }
 
-  constructor() {}
+  constructor() { super(); }
 
   @Input() disabled = false;
   @Input() CategoryID: string | undefined = undefined;
@@ -160,7 +160,7 @@ export class FileUploadComponent implements OnInit {
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
       if (parsedResult.success) {
-        const { File, UploadUrl, NameExists } = parsedResult.data.CreateMJFile;
+        const { File, UploadUrl, NameExists } = parsedResult.data.CreateFile;
         const uploadTuple: UploadTuple = [file, File, UploadUrl];
 
         // Confirm we want to overwrite

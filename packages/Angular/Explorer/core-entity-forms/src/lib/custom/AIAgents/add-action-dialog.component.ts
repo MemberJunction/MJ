@@ -5,6 +5,7 @@ import { RunView, Metadata } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CategoryTreeNode {
   id: string;
   name: string;
@@ -29,7 +30,7 @@ export interface ActionDisplayItem extends MJActionEntity {
   templateUrl: './add-action-dialog.component.html',
   styleUrls: ['./add-action-dialog.component.css']
 })
-export class AddActionDialogComponent implements OnInit, OnDestroy {
+export class AddActionDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   agentId: string = '';
@@ -71,7 +72,8 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeData();
@@ -98,7 +100,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   }
 
   private async loadActionsAndCategories() {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     const [actionsResult, categoriesResult] = await rv.RunViews([
       {
@@ -296,8 +298,12 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Backs the no-results empty-state "Clear Filters" CTA: resets every dimension
+  // the list narrows on — search AND the category filter — so the CTA actually
+  // returns results instead of appearing to do nothing.
   clearSearch() {
     this.searchControl.reset();
+    this.selectedCategoryId$.next('all');
   }
 
   getActionIcon(action: ActionDisplayItem): string {

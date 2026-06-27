@@ -1,0 +1,34 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on Action.RuntimeActionConfiguration so CodeGen emits",
+      "a typed RuntimeActionConfigurationObject accessor with IRuntimeActionConfiguration.",
+      "The interface is authored in JSONType-interfaces/IRuntimeActionConfiguration.ts",
+      "and inlined into the generated entity subclass by CodeGen."
+    ],
+    "fields": {
+      "Name": "MJ: Actions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IRuntimeActionConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IRuntimeActionConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&Name=RuntimeActionConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T14:07:06.438Z",
+            "checksum": "9d3219ba71edd0ec328f5c9ad12990c191e1f283b2ba7713475bf9978d9576df"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Actions"
+    }
+  }
+]

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
@@ -26,6 +26,7 @@ export interface UserAppConfig {
   providedIn: 'root'
 })
 export class ApplicationManager {
+  private static _recoveryAttempted = false;
   private applications$ = new BehaviorSubject<BaseApplication[]>([]);
   private allApplications$ = new BehaviorSubject<BaseApplication[]>([]);
   private userAppConfigs$ = new BehaviorSubject<UserAppConfig[]>([]);
@@ -117,6 +118,22 @@ export class ApplicationManager {
     return this.activeApp$.value;
   }
 
+  /**
+   * Optional explicit metadata provider. When set, all provider lookups
+   * use this instead of falling back to `Metadata.Provider`. This is the
+   * threading point for multi-provider Angular apps — the shell calls
+   * `setProvider(this.ProviderToUse)` after the manager is acquired from DI.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   constructor() {
     this.Initialize();
   }
@@ -144,12 +161,18 @@ export class ApplicationManager {
   /**
    * Subscribe to UserInfoEngine data changes to automatically sync our observables
    * when UserApplication records are modified.
+   *
+   * Match on EntityName (the stable public identifier) rather than PropertyName —
+   * PropertyName is the engine's internal backing-field name (e.g. `_UserApplications`
+   * with an underscore prefix), which is an implementation detail that has bitten
+   * consumers before. EntityName is the documented contract on every config and
+   * never changes shape.
    */
   private subscribeToEngineChanges(): void {
     const engine = UserInfoEngine.Instance;
     engine.DataChange$.subscribe(event => {
       // When UserApplications data changes in the engine, sync our observables
-      if (event.config.PropertyName === 'UserApplications') {
+      if (event.config.EntityName?.trim().toLowerCase() === 'mj: user applications') {
         this.syncFromEngine();
       }
     });
@@ -194,6 +217,12 @@ export class ApplicationManager {
   /**
    * Reload the user's application configuration.
    * Call this after changes to UserApplication records to refresh the app list.
+   *
+   * Reads engine.UserApplications and rebuilds our derived observables. The engine's
+   * own event-driven refresh (via subscribeToEngineChanges + the UserApplications
+   * config's short DebounceTime) keeps the underlying data fresh — we no longer need
+   * a synchronous force-refresh here, which previously triggered NG0100 in callers
+   * with `@if`/`@for` bindings whose values mutate during their save loop.
    */
   async ReloadUserApplications(): Promise<void> {
     this.loading$.next(true);
@@ -217,7 +246,7 @@ export class ApplicationManager {
     this.loading$.next(true);
 
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const appInfoList: ApplicationInfo[] = md.Applications;
 
       // First, create BaseApplication instances for ALL apps
@@ -261,7 +290,10 @@ export class ApplicationManager {
 
         if (app) {
           // should always get here unless failure to load registered sub-class but CreateInstance has
-          // fallback to base class anyway so should always get here 
+          // fallback to base class anyway so should always get here
+          if (this._provider) {
+            app.Provider = this._provider;
+          }
           allApps.push(app);
         }
       }
@@ -270,6 +302,24 @@ export class ApplicationManager {
 
       // Load and apply user's app configuration
       await this.loadUserApplicationConfig();
+
+      // Recovery check: if no active apps but metadata has Active applications,
+      // the engine may have failed to load UserApplications (e.g., cache corruption).
+      // Attempt one recovery by force-refreshing UserInfoEngine before giving up.
+      const activeApps = this.applications$.value;
+      const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
+      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
+        ApplicationManager._recoveryAttempted = true;
+        const activeAppCount = md.Applications.filter(a => a.Status === 'Active').length;
+        const engineHealthy = UserInfoEngine.Instance.AllPropertiesLoadedSuccessfully;
+        const userAppCount = UserInfoEngine.Instance.UserApplications?.length ?? 0;
+        LogStatus(
+          `ApplicationManager: Recovery triggered — ` +
+          `activeApps=0, metadataActiveApps=${activeAppCount}, ` +
+          `engineHealthy=${engineHealthy}, userAppRecords=${userAppCount}`
+        );
+        await this.attemptRecovery();
+      }
 
       this.initialized = true;
       this._readyResolve();
@@ -289,7 +339,7 @@ export class ApplicationManager {
    * This can be called to refresh after configuration changes.
    */
   private async loadUserApplicationConfig(): Promise<void> {
-    const md = new Metadata();
+    const md = this.Provider;
     const allApps = this.allApplications$.value;
 
     // Build a map for quick lookup
@@ -341,6 +391,30 @@ export class ApplicationManager {
   }
 
   /**
+   * One-shot recovery attempt when the initial load produces zero apps despite
+   * Active applications existing in metadata. Force-refreshes UserInfoEngine
+   * to bypass any corrupted cache, then re-runs the user app configuration
+   * (which includes the self-healing path for new users).
+   */
+  private async attemptRecovery(): Promise<void> {
+    try {
+      const engine = UserInfoEngine.Instance;
+      await engine.Config(true);
+      await this.loadUserApplicationConfig();
+
+      const recoveredCount = this.applications$.value.length;
+      const engineHealthy = engine.AllPropertiesLoadedSuccessfully;
+      if (recoveredCount > 0) {
+        LogStatus(`ApplicationManager: Recovery succeeded — ${recoveredCount} apps loaded, engineHealthy=${engineHealthy}`);
+      } else {
+        LogError(`ApplicationManager: Recovery completed but still 0 apps — engineHealthy=${engineHealthy}`);
+      }
+    } catch (error) {
+      LogError('ApplicationManager: Recovery attempt failed:', undefined, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
    * Set the active application by ID
    */
   async SetActiveApp(appId: string): Promise<void> {
@@ -370,6 +444,18 @@ export class ApplicationManager {
    */
   GetAppById(appId: string): BaseApplication | undefined {
     return this.applications$.value.find(a => UUIDsEqual(a.ID, appId));
+  }
+
+  /**
+   * Canonical `/app/:slug` URL for an application. Uses the app's `Path`
+   * (what {@link GetAppByPath} matches on), falling back to `Name`, and
+   * url-encodes the segment. This is the single source of truth for app URLs —
+   * never hand-roll a slug from `Name` (e.g. spaces→hyphens), because a custom
+   * `Path` would then diverge from the URL and `GetAppByPath` would fail to
+   * resolve it (broken navigation / redirect loops).
+   */
+  GetAppUrl(app: BaseApplication): string {
+    return `/app/${encodeURIComponent(app.Path || app.Name)}`;
   }
 
   /**

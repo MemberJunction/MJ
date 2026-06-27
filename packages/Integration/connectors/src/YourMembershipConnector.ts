@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -2706,6 +2706,51 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
+     * Priority-ordered list of YourMembership "last changed" timestamp field names, used
+     * to populate SourceObjectInfo.IncrementalWatermarkField. Every name here is a field
+     * the connector ALREADY declares on one or more objects in YM_ACTION_OBJECTS — e.g.
+     * MembersProfiles/EventIDs/ContentAreaVersions expose `LastModifiedDate`,
+     * MemberList/EngagementScores expose `LastUpdated`, Markup exposes `DateLastModified`,
+     * CampaignEmailLists exposes `DateLastUpdated`/`DateModified`, etc.
+     *
+     * Provable-only: the watermark is set on an object solely from that object's own
+     * declared field list, never invented. Ordering only matters when a single object
+     * declares more than one candidate (e.g. Markup has both `DateLastModified` and
+     * `AdminLastModified` — the record-level modify timestamp wins; CampaignEmailLists has
+     * both `DateLastUpdated` and `DateModified` — the explicit "last updated" wins).
+     * Creation-only dates (e.g. AllCampaigns' `DateCreated`) are intentionally excluded —
+     * they are not "last changed" timestamps and would miss updates to existing records.
+     */
+    private static readonly WATERMARK_FIELD_CANDIDATES: readonly string[] = [
+        'LastModifiedDate',
+        'DateLastModified',
+        'DateLastUpdated',
+        'LastUpdated',
+        'DateModified',
+        'DateUpdated',
+        'AdminLastModified',
+        'Modified',
+    ];
+
+    /**
+     * Promotes an object's own declared "last changed" timestamp field into the
+     * IncrementalWatermarkField slot. Returns the first candidate present in the supplied
+     * field-name set, or undefined when the object declares none — an honest gap rather
+     * than a fabricated watermark. Matching is case-insensitive so a live-discovered or
+     * DB-cached field list (which may differ in casing) still resolves, while the actual
+     * declared name (real casing) is returned.
+     */
+    private PickIncrementalWatermarkField(fieldNames: string[]): string | undefined {
+        const present = new Set(fieldNames.map(n => n.toLowerCase()));
+        for (const candidate of YourMembershipConnector.WATERMARK_FIELD_CANDIDATES) {
+            if (present.has(candidate.toLowerCase())) {
+                return fieldNames.find(n => n.toLowerCase() === candidate.toLowerCase());
+            }
+        }
+        return undefined;
+    }
+
+    /**
      * Override IntrospectSchema to use live field discovery (with static fallback).
      * Ensures DDL generation always reflects the actual API response shape.
      */
@@ -2740,6 +2785,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 Fields: sourceFields,
                 PrimaryKeyFields: sourceFields.filter(f => f.IsPrimaryKey).map(f => f.Name),
                 Relationships: [],
+                IncrementalWatermarkField: this.PickIncrementalWatermarkField(sourceFields.map(f => f.Name)),
             });
         }
 
@@ -3345,11 +3391,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
         if (response.Status >= 200 && response.Status < 300) {
             const created = response.Body as Record<string, unknown>;
-            return {
-                Success: true,
-                ExternalID: String(created['Id'] ?? created['ID'] ?? created['ProfileID'] ?? ''),
-                StatusCode: response.Status,
-            };
+            const externalID = String(created['Id'] ?? created['ID'] ?? created['ProfileID'] ?? '');
+            return this.BuildCreatedResult(externalID, response.Status, ctx.ObjectName);
         }
 
         return this.BuildYMCRUDErrorResult(response, 'CreateRecord', ctx.ObjectName);
@@ -3576,11 +3619,19 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         typeList: GroupTypeListItem[],
         objectType: string
     ): FetchBatchResult {
-        const records = typeList.map(gt => ({
-            ExternalID: String(gt.Id ?? ''),
-            ObjectType: objectType,
-            Fields: { Id: gt.Id, TypeName: gt.TypeName, SortIndex: gt.SortIndex } as Record<string, unknown>,
-        }));
+        const records = typeList.map(gt => {
+            // Full-record pass-through (§0 forward-compat contract): spread the WHOLE GroupType so any
+            // custom fields YM returns reach ExternalRecord.Fields for the custom-column capture — NOT a
+            // hand-picked subset (the prior {Id,TypeName,SortIndex} dropped customs). Exclude only the
+            // nested Groups child collection, which is emitted as separate group records (FlattenGroupRecords).
+            const fields: Record<string, unknown> = { ...gt };
+            delete fields.Groups;
+            return {
+                ExternalID: String(gt.Id ?? ''),
+                ObjectType: objectType,
+                Fields: fields,
+            };
+        });
         return { Records: records, HasMore: false };
     }
 
@@ -3745,8 +3796,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         throw new Error('No YM credentials found. Attach a credential with ClientID, APIKey, and APIPassword, or set Configuration JSON on the CompanyIntegration.');
     }
 
-    private async LoadFromCredential(credentialID: string, contextUser: UserInfo): Promise<YMConnectionConfig | null> {
-        const md = new Metadata();
+    private async LoadFromCredential(credentialID: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<YMConnectionConfig | null> {
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;

@@ -1,5 +1,170 @@
 # @memberjunction/ng-forms
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [9f6aa87]
+- Updated dependencies [54183aa]
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [313c1c5]
+- Updated dependencies [256ab06]
+- Updated dependencies [e7c2437]
+  - @memberjunction/ng-ui-components@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+
+## 5.41.0
+
+### Patch Changes
+
+- Updated dependencies [cc604aa]
+- Updated dependencies [15b743b]
+- Updated dependencies [a5f5472]
+- Updated dependencies [4b3fb9d]
+  - @memberjunction/ai-core-plus@5.41.0
+  - @memberjunction/ng-ui-components@5.41.0
+
+## 5.40.2
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.40.2
+- @memberjunction/ng-ui-components@5.40.2
+
+## 5.40.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.40.1
+- @memberjunction/ng-ui-components@5.40.1
+
+## 5.40.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.40.0
+- @memberjunction/ng-ui-components@5.40.0
+
+## 5.39.0
+
+### Patch Changes
+
+- Updated dependencies [bd95e83]
+- Updated dependencies [3b29882]
+- Updated dependencies [d1cc0ad]
+  - @memberjunction/ng-ui-components@5.39.0
+  - @memberjunction/ai-core-plus@5.39.0
+
+## 5.38.0
+
+### Patch Changes
+
+- Updated dependencies [6b6c321]
+- Updated dependencies [8bd97f3]
+  - @memberjunction/ai-core-plus@5.38.0
+  - @memberjunction/ng-ui-components@5.38.0
+
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [1c0fce9]
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [ee380f7]
+- Updated dependencies [32c4a02]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/ng-ui-components@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [5abf790]
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ng-ui-components@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/ng-ui-components@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.33.0
+- @memberjunction/ng-ui-components@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.32.0
+- @memberjunction/ng-ui-components@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/ng-ui-components@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- Updated dependencies [4729398]
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/ng-ui-components@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.29.0
+- @memberjunction/ng-ui-components@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.28.0
+- @memberjunction/ng-ui-components@5.28.0
+
 ## 5.27.1
 
 ### Patch Changes

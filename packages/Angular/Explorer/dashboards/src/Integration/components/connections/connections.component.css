@@ -10,6 +10,8 @@
   overflow: hidden;
 }
 
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
+
 .connections-container {
   padding: 24px;
   max-width: 1400px;
@@ -30,35 +32,6 @@
   overflow: hidden;
 }
 
-.connections-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.header-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-  color: var(--mj-text-primary);
-}
-
-.header-count {
-  font-size: 14px;
-  color: var(--mj-text-disabled);
-}
-
-.add-connection-btn i {
-  margin-right: 6px;
-}
-
 /* ---------------------------------------------------------------------------
    Loading & Empty States
    --------------------------------------------------------------------------- */
@@ -70,32 +43,9 @@
   min-height: 300px;
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+/* Give the onboarding placeholder vertical presence so it centers. */
+mj-empty-state {
   min-height: 400px;
-  text-align: center;
-  color: var(--mj-text-muted);
-}
-
-.empty-icon {
-  font-size: 48px;
-  color: var(--mj-text-disabled);
-  margin-bottom: 16px;
-}
-
-.empty-state h3 {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-secondary);
-  margin: 0 0 8px;
-}
-
-.empty-state p {
-  font-size: 14px;
-  margin: 0 0 24px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -659,7 +609,7 @@
 .search-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .search-input::placeholder {
@@ -785,7 +735,7 @@
 .form-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .form-input::placeholder {
@@ -2027,7 +1977,7 @@
 .new-entity-dialog-input:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .new-entity-dialog-dot {
@@ -2221,6 +2171,7 @@
   padding: 64px 24px;
   text-align: center;
   color: var(--mj-text-disabled);
+  width: 100%;
 }
 
 .detail-empty i {
@@ -2398,7 +2349,48 @@ button.direction-toggle:hover {
 .create-tables-name-hint {
   color: var(--mj-text-muted);
   font-size: 11px;
-  margin-left: auto;
+  margin-left: 8px;
+}
+.create-tables-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+.create-tables-search {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+.create-tables-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+.create-tables-toggle input[type="checkbox"] {
+  margin: 0;
+}
+.create-tables-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+}
+.create-tables-badge-custom {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+.create-tables-badge-registered {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
 }
 .add-map-input {
   width: 100%;

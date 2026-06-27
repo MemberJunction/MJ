@@ -1,0 +1,353 @@
+name: PostgreSQL migration parity
+
+# Validates that T-SQL migrations convert cleanly to PostgreSQL and apply
+# to a fresh PG database without errors. This is Phase C of the PG migration
+# architecture plan — the "continuous build process" ensuring PG stays in sync.
+
+on:
+  workflow_dispatch: # Manual trigger for testing
+  pull_request:
+    branches: [next]
+    paths:
+      - 'migrations/**'
+      - 'migrations-pg/**'
+      - 'packages/SQLConverter/**'
+      - 'packages/CodeGenLib/src/Database/providers/postgresql/**'
+      - '.github/workflows/pg-migrations.yml'
+  push:
+    branches: [next]
+    paths:
+      - 'migrations/**'
+      - 'migrations-pg/**'
+      - 'packages/SQLConverter/**'
+
+jobs:
+  pg-parity:
+    name: PG migration parity check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: mj_pg_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # ─── Step 1: Validate PG migration filenames ─────────────────────
+      - name: Validate PG migration filenames
+        run: ./.github/scripts/validate-migration-filenames.sh migrations-pg/v5
+
+      # ─── Step 2: Build MJCLI + SQLConverter ─────────────────────────
+      # MJCLI (`@memberjunction/cli`) is the production migration entry point —
+      # applying via `npx mj migrate` is what real users run, so CI runs the
+      # same path. Turbo builds MJCLI's full transitive dep graph, which also
+      # covers SQLConverter (so we don't need a second build step).
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build MJ CLI + SQLConverter
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/sql-converter
+
+      # ─── Step 3: Verify committed PG migration files exist ──────────
+      # Previously this step regenerated all V*.pg.sql from T-SQL via the
+      # converter. We've moved away from regenerate-on-CI for two reasons:
+      #
+      #   1. Real `mj migrate` (the install path) applies the COMMITTED
+      #      .pg.sql files as-is. Regenerating during CI tested something
+      #      different from what users actually run.
+      #   2. Some PG migrations have hand-fixes that the converter doesn't
+      #      produce natively (managed-PG boolean rewrites, the
+      #      vwEntityPermissions RoleName alias fix, the Scoped_EntityField_SPs
+      #      hand-port). Regenerating overwrites those fixes.
+      #
+      # Coverage of the converter is preserved by:
+      #   - packages/SQLConverter/src/__tests__/pg-migration-regression.test.ts
+      #     (107 conversion tests + sequence-dedup + TODO-marker check)
+      #   - The parity test in the same file (re-enabled) which enforces that
+      #     every T-SQL V-migration has a committed PG counterpart.
+      #
+      # If migrations-pg/v5/ is empty (e.g. on a tooling-only PR before the
+      # migrations PR has merged), this step skips the apply gracefully so the
+      # workflow doesn't block. The actual coverage gate is the parity test.
+      - name: Verify committed PG migration files
+        id: verify_committed
+        run: |
+          PG_FILES=$(ls migrations-pg/v5/*.pg.sql migrations-pg/v5/*.pg-only.sql 2>/dev/null | wc -l)
+          BASELINE=$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | head -1)
+          echo "Committed PG migration files: $PG_FILES"
+          echo "Baseline file: ${BASELINE:-(none)}"
+          if [ "$PG_FILES" -eq 0 ]; then
+            echo "::notice::No committed PG migration files — skipping apply step. Migration content lives in the companion PR."
+            echo "skip_apply=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip_apply=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ─── Step 4: Bootstrap PG roles ─────────────────────────────────
+      # Skyway creates `__mj.flyway_schema_history` itself at startup, so the
+      # only thing CI has to seed is the cdp_* roles that migration GRANT
+      # statements reference. Skipping this would surface as
+      # `role "cdp_UI" does not exist` on the first GRANT.
+      - name: Bootstrap PostgreSQL roles
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          psql <<'SQL'
+          DO $$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
+          SQL
+
+      # ─── Step 5: Apply PG migrations via mj migrate ─────────────────
+      # Real production installs invoke `mj migrate` which delegates to
+      # @memberjunction/skyway-postgres. CI now runs the same code path,
+      # so any regression in the production migrate flow (placeholder
+      # resolution, baseline auto-select, transaction semantics, schema-
+      # history checksum tracking) fails CI here. This replaced an
+      # earlier psql-based loop that hand-rolled Skyway's behavior and
+      # drifted from production over time.
+      - name: Apply PG migrations via mj migrate
+        id: apply
+        if: steps.verify_committed.outputs.skip_apply != 'true'
+        env:
+          DB_PLATFORM: postgresql
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_DATABASE: mj_pg_ci
+          # MJCLI reads credentials from CODEGEN_DB_USERNAME / CODEGEN_DB_PASSWORD
+          # (see packages/MJCLI/src/config.ts:27-28) — NOT the generic
+          # DB_USERNAME / DB_PASSWORD other parts of the stack use. Setting only
+          # DB_USERNAME / DB_PASSWORD would leave MJCLI seeing empty creds and
+          # failing with "Database credentials are missing or empty" before the
+          # migrate even starts.
+          CODEGEN_DB_USERNAME: postgres
+          CODEGEN_DB_PASSWORD: testpass
+          # PG* equivalents kept so the verification + report steps below
+          # can still use raw psql for read-only schema introspection.
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          npx mj migrate --dir=migrations-pg/v5 -v
+
+          # Read back the applied count from Skyway's history table for the
+          # parity report. `mj migrate` exits non-zero on any failure, so by
+          # the time we're here the apply has succeeded.
+          PG_APPLIED=$(psql -tA -c "SELECT COUNT(*) FROM __mj.flyway_schema_history WHERE success = TRUE" 2>/dev/null || echo "0")
+          echo "pg_applied=$PG_APPLIED" >> "$GITHUB_OUTPUT"
+          echo "Applied $PG_APPLIED migrations via mj migrate"
+
+      # ─── Step 5b: Idempotency check (re-apply each V-migration) ─────
+      # Skyway prevents re-runs at the framework level via flyway_schema_history,
+      # so this step uses raw psql to test a concern Skyway hides: a migration
+      # that gets re-applied after a partial-commit failure or a backup restored
+      # mid-migration. Idempotent migrations succeed; non-idempotent ones fail
+      # with errors like "column already exists", "relation already exists", or
+      # UNIQUE constraint violations on hardcoded INSERTs.
+      #
+      # Failure modes this catches that step 5 cannot:
+      #   - ALTER TABLE ADD COLUMN without IF NOT EXISTS
+      #   - CREATE INDEX without IF NOT EXISTS
+      #   - CREATE TABLE without IF NOT EXISTS
+      #   - INSERT without ON CONFLICT or IF-NOT-EXISTS guard
+      #   - CREATE TRIGGER without prior DROP TRIGGER IF EXISTS
+      #
+      # Migrations that are intentionally non-idempotent can opt out by
+      # including the marker `-- pg-test:non-idempotent <reason>` on a
+      # comment line anywhere in the file. This keeps the gate honest
+      # — if you opt out, the reason is right there in the file.
+      #
+      # Failures here are reported but do NOT fail the workflow yet
+      # (continue-on-error: true) — first we need to see how dirty the
+      # current PG migration set is. Once we triage existing migrations,
+      # remove continue-on-error to make the gate enforced.
+      - name: Verify migration idempotency (second-pass apply)
+        id: idempotency
+        if: steps.verify_committed.outputs.skip_apply != 'true'
+        continue-on-error: true
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          echo "=== Idempotency check: re-applying each V-migration ==="
+
+          # Source-of-truth for "which migrations did Skyway actually apply" is
+          # flyway_schema_history. Pre-baseline files are absent from it, so we
+          # iterate just the rows Skyway recorded as success.
+          mapfile -t APPLIED_VERSIONS < <(psql -tA -c "SELECT version FROM __mj.flyway_schema_history WHERE success = TRUE AND type = 'SQL' ORDER BY installed_rank")
+
+          # The flyway_schema_history table has no `script` column for the
+          # filename, so we resolve filename by matching version prefix.
+
+          # Resolve the same Flyway placeholder Skyway resolves at apply time.
+          # We use a tmp directory so we don't mutate the working tree.
+          TMPDIR=$(mktemp -d)
+          for f in migrations-pg/v5/V*.sql; do
+            sed 's/\${flyway:defaultSchema}/__mj/g' "$f" > "$TMPDIR/$(basename "$f")"
+          done
+
+          TOTAL=0
+          IDEMPOTENT=0
+          NOT_IDEMPOTENT=0
+          ALLOWLISTED=0
+          NON_IDEMPOTENT_FILES=""
+
+          for version in "${APPLIED_VERSIONS[@]}"; do
+            f=$(ls "$TMPDIR"/V"$version"__*.sql 2>/dev/null | head -1)
+            [ -z "$f" ] && continue
+            FILENAME=$(basename "$f")
+
+            # Skip files explicitly opted out via the allowlist marker
+            if grep -qE '^[[:space:]]*--[[:space:]]*pg-test:non-idempotent\b' "$f"; then
+              ALLOWLISTED=$((ALLOWLISTED + 1))
+              echo "::notice::$FILENAME — opted out via 'pg-test:non-idempotent' marker"
+              continue
+            fi
+
+            # Skip Metadata_Sync-pattern files (sproc-call-driven, expected to
+            # require CodeGen between runs)
+            if grep -q 'SELECT __mj\."fn_create_\|SELECT __mj\."fn_update_\|SELECT __mj\."spCreate\|PERFORM __mj\.' "$f" 2>/dev/null; then
+              ALLOWLISTED=$((ALLOWLISTED + 1))
+              echo "::notice::$FILENAME — skipped (Metadata_Sync: stored-proc-call file, idempotency depends on CodeGen state)"
+              continue
+            fi
+
+            TOTAL=$((TOTAL + 1))
+
+            if psql -v ON_ERROR_STOP=1 -f "$f" > /dev/null 2>&1; then
+              IDEMPOTENT=$((IDEMPOTENT + 1))
+            else
+              NOT_IDEMPOTENT=$((NOT_IDEMPOTENT + 1))
+              NON_IDEMPOTENT_FILES="$NON_IDEMPOTENT_FILES\n  $FILENAME"
+              echo "::warning::$FILENAME — NOT idempotent (failed on second apply)"
+              # Surface the actual error for triage
+              psql -v ON_ERROR_STOP=1 -f "$f" 2>&1 | tail -3 | sed 's/^/    /'
+            fi
+          done
+
+          echo ""
+          echo "=== Idempotency Results ==="
+          echo "  Checked:       $TOTAL"
+          echo "  Idempotent:    $IDEMPOTENT"
+          echo "  NOT idempotent: $NOT_IDEMPOTENT"
+          echo "  Allowlisted:   $ALLOWLISTED"
+
+          {
+            echo "## PG Migration Idempotency Report"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Migrations checked | $TOTAL |"
+            echo "| Idempotent | $IDEMPOTENT |"
+            echo "| **NOT idempotent** | **$NOT_IDEMPOTENT** |"
+            echo "| Allowlisted (Metadata_Sync or marker) | $ALLOWLISTED |"
+            if [ "$NOT_IDEMPOTENT" -gt 0 ]; then
+              echo ""
+              echo "### Non-idempotent migrations"
+              echo ""
+              printf '%s\n' "$NON_IDEMPOTENT_FILES" | sed 's/^/- /'
+              echo ""
+              echo "Each file above either needs defensive guards (\`IF NOT EXISTS\`, \`ON CONFLICT\`,"
+              echo "\`OR REPLACE\`, etc.) OR an opt-out marker \`-- pg-test:non-idempotent <reason>\`"
+              echo "if non-idempotency is intentional."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ $NOT_IDEMPOTENT -gt 0 ]; then
+            printf "::warning::%d migration(s) are NOT idempotent. See step summary for details.\n" "$NOT_IDEMPOTENT"
+            # Initially non-blocking via continue-on-error above. Once existing
+            # migrations are triaged, remove continue-on-error to enforce.
+          fi
+
+          echo "not_idempotent=$NOT_IDEMPOTENT" >> "$GITHUB_OUTPUT"
+
+      # ─── Step 6: Verify schema ──────────────────────────────────────
+      - name: Verify PG schema
+        if: steps.verify_committed.outputs.skip_apply != 'true'
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          echo "=== PG Schema Verification ==="
+
+          TABLES=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'BASE TABLE'")
+          VIEWS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = '__mj'")
+          FUNCTIONS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '__mj' AND routine_type = 'FUNCTION'")
+
+          echo "  Tables:    $TABLES"
+          echo "  Views:     $VIEWS"
+          echo "  Functions: $FUNCTIONS"
+
+          # Minimum thresholds — if the schema has fewer objects than expected,
+          # something went seriously wrong during migration
+          MIN_TABLES=250
+          MIN_VIEWS=200
+
+          if [ "$TABLES" -lt "$MIN_TABLES" ]; then
+            echo "::error::Expected at least $MIN_TABLES tables, got $TABLES"
+            exit 1
+          fi
+
+          if [ "$VIEWS" -lt "$MIN_VIEWS" ]; then
+            echo "::error::Expected at least $MIN_VIEWS views, got $VIEWS"
+            exit 1
+          fi
+
+          echo "::notice::Schema verification passed: $TABLES tables, $VIEWS views, $FUNCTIONS functions"
+
+      # ─── Step 7: Parity report ──────────────────────────────────────
+      - name: Generate parity report
+        if: always()
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          echo "## PostgreSQL Migration Parity Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+
+          TABLES=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'BASE TABLE'" 2>/dev/null || echo "N/A")
+          VIEWS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = '__mj'" 2>/dev/null || echo "N/A")
+          FUNCTIONS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '__mj' AND routine_type = 'FUNCTION'" 2>/dev/null || echo "N/A")
+          TRIGGERS=$(psql -tA -c "SELECT COUNT(DISTINCT trigger_name) FROM information_schema.triggers WHERE trigger_schema = '__mj'" 2>/dev/null || echo "N/A")
+
+          echo "| Tables | $TABLES |" >> $GITHUB_STEP_SUMMARY
+          echo "| Views | $VIEWS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Functions | $FUNCTIONS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggers | $TRIGGERS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Generated by \`pg-migrations.yml\` — Phase C of the PG migration architecture." >> $GITHUB_STEP_SUMMARY

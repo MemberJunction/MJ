@@ -1,19 +1,28 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
-import { UserInfo, Metadata, CompositeKey, LogStatusEx, RunView } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand } from "@memberjunction/ai-core-plus";
+import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
+import { MJResourcePermissionShareAdapter, ResourceShareContext } from '@memberjunction/ng-resource-permissions';
+
+/** `MJ: Resource Types.ID` for Conversations. */
+const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
@@ -21,7 +30,60 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
-import { UUIDsEqual } from '@memberjunction/global';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
+import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
+import { RealtimeSessionService } from '../../services/realtime-session.service';
+import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../services/realtime-session-review.service';
+import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
+import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
+import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+
+// PR 2c — Widget extension surface
+import { ChatSlotDirective, type MJChatSlotName } from '../../directives/chat-slot.directive';
+import type {
+  IMJChatAgentPresenceComponent,
+  MJChatAgentPresenceState,
+  IMJChatEmptyStateComponent,
+} from '../slots/slot-interfaces';
+import {
+  BeforeAgentTurnEventArgs,
+  AfterAgentTurnEventArgs,
+  BeforeToolInvokedEventArgs,
+  AfterToolInvokedEventArgs,
+  BeforeResponseFormSubmittedEventArgs,
+  AfterResponseFormSubmittedEventArgs,
+  SessionStartedEventArgs,
+  SessionChannelStateChangedEventArgs,
+  SessionEndedEventArgs,
+} from '../../events/chat-events';
+
+/**
+ * Configuration for the persona/character rendering in the `agentPresence` slot.
+ * Off by default — opt in via `showAgentCharacter`. Mirrors {@link IMJChatAgentPresenceComponent}.
+ */
+export interface AgentCharacterConfig {
+  /** Optional avatar URL. */
+  avatarUrl?: string;
+  /** Display name. */
+  characterName?: string;
+  /** Visual intensity. */
+  voiceStateMode?: 'subtle' | 'prominent';
+  /** Current voice state — drives state-colored styling on the default presence component. */
+  state?: MJChatAgentPresenceState;
+}
+
+/**
+ * Configuration payload for the `emptyState` slot's default component. When
+ * supplied, drives the empty-state's greeting / subtext / suggested prompts.
+ */
+export interface EmptyStateConfig {
+  greeting?: string;
+  subtext?: string;
+  suggestedPrompts?: string[];
+  /** Hide the default suggested prompts even if greeting/subtext are set. */
+  hideDefaultPrompts?: boolean;
+}
 
 /** Default width (percentage) for the artifact viewer pane */
 const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
@@ -32,7 +94,7 @@ const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
   templateUrl: `./conversation-chat-area.component.html`,
   styleUrls: ['./conversation-chat-area.component.css']
 })
-export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterViewChecked {
+export class ConversationChatAreaComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewChecked  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
@@ -42,6 +104,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   set conversationId(value: string | null) {
     if (value !== this._conversationId) {
       this._conversationId = value;
+      // SESSION-REVIEW lifecycle: changing the active conversation must NEVER leave a
+      // stale review overlay hosted over the new conversation. A LIVE call is untouched
+      // by this — the overlay's live mode renders off RealtimeSession.Active$, not
+      // RealtimeReview (and a review can't open while a call is live anyway).
+      this.ClearRealtimeSessionReview();
       // Trigger change handler after initialization is complete
       // Only skip during Angular's initial binding before ngOnInit completes
       if (this.isInitialized) {
@@ -55,6 +122,33 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Input() conversation: MJConversationEntity | null = null;
   @Input() threadId: string | null = null;
+
+  /**
+   * When true, render the normal message-list + message-input layout even
+   * before a conversation exists, instead of the centered empty-state
+   * welcome card. Lets host pages (e.g. Form Builder cockpit) put the chat
+   * header + mode picker front-and-center on first open and let the user
+   * pick a mode before typing. The first send still routes through
+   * MessageInputComponent and triggers conversationCreated as usual.
+   */
+  @Input() suppressNewConversationEmptyState = false;
+
+  /**
+   * Host-level cap for @-mention autocomplete (agents and users).
+   * Defaults true. Hosts addressing a single fixed agent (e.g. Form Builder
+   * cockpit pinned to the Form Builder agent) should set false so the user
+   * can't accidentally redirect a turn to a different agent.
+   */
+  @Input() allowMentions = true;
+
+  /**
+   * Host-level cap for attachments. Defaults true. When false, the host
+   * disables attachments regardless of agent modality support — useful for
+   * surfaces where attachments don't make sense (cockpit text-only flows).
+   * When true (default), attachment availability still depends on the
+   * agent's modality support, computed at runtime.
+   */
+  @Input() allowAttachments = true;
 
   private _isNewConversation: boolean = false;
   @Input()
@@ -111,14 +205,249 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   /** Application context snapshot for AI agent awareness. Included in agent execution data. */
   @Input() appContext: Record<string, unknown> | null = null;
 
+  /**
+   * Optional default agent ID for the conversation. Forwarded to
+   * `<mj-message-input>` as its `[defaultAgentId]` so the first message
+   * routes directly to this agent instead of Sage. See
+   * `MessageInputComponent.routeMessage` priority rules — explicit
+   * @mention and prior-agent continuity still take precedence.
+   *
+   * Embedded chat surfaces (Form Builder cockpit, future domain chats)
+   * set this to the specialist agent's ID; the main Chat app leaves it
+   * unset to preserve the Sage-fronted UX.
+   */
+  @Input() defaultAgentId: string | null = null;
+
+  /**
+   * Scope to apply when this surface CREATES a new conversation. Forwarded
+   * to `ConversationEngine.CreateConversation` so the new row's
+   * `ApplicationScope` column is stamped correctly. Embedded surfaces
+   * (e.g. the Form Builder cockpit) set this to `'Application'` so their
+   * conversations don't pollute the main Chat app list. Main Chat leaves
+   * it as the default `'Global'`. Has no effect on existing conversations.
+   */
+  @Input() applicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+
+  /**
+   * Application ID to bind a newly-created conversation to. REQUIRED when
+   * `applicationScope` is 'Application' or 'Both' (DB CHECK constraint
+   * enforces it). Used by embedded chat surfaces to scope their
+   * conversations to their owning Application.
+   */
+  @Input() applicationId: string | null = null;
+
+  /**
+   * "What is this conversation about?" — the Entity ID this conversation
+   * references. Forwarded to `ConversationEngine.CreateConversation` so
+   * the new row's `LinkedEntityID` is stamped at creation time. Paired
+   * with {@link linkedRecordId} (DB CHECK requires both populated or both
+   * null). Form Builder cockpit passes the MJ: Components entity ID;
+   * Component Studio's AI panel does the same. Surfaces use this to
+   * later list "prior conversations about THIS form/component."
+   * Has no effect on existing conversations.
+   */
+  @Input() linkedEntityId: string | null = null;
+
+  /**
+   * Primary key of the linked record, serialized as a string. Used with
+   * {@link linkedEntityId}. Form Builder cockpit passes the active
+   * form's ComponentID; Component Studio's AI panel passes the
+   * currently-selected component's ID.
+   */
+  @Input() linkedRecordId: string | null = null;
+
+  /**
+   * Whether the conversation header should render the per-conversation
+   * agent picker. Default true. The picker lets a user pin a default
+   * agent on the active conversation (saved to
+   * `MJConversationEntity.DefaultAgentID`), so non-mention messages route
+   * to that agent instead of through Sage. Surfaces with no meaningful
+   * agent-choice UX can set this to false to hide the widget.
+   */
+  @Input() showAgentPicker: boolean = true;
+
+  /**
+   * Whether the chat header should render the per-agent mode/quality
+   * picker (Draft / Standard / High, etc.). Default true. The picker
+   * auto-hides when the bound agent has fewer than 2 configured
+   * presets, so embedders rarely need to set this explicitly — turn
+   * off only when the surface should never expose model-tier choice
+   * (kiosks, specialty embeds).
+   */
+  @Input() showAgentModePicker: boolean = true;
+
+  /**
+   * The mode/preset picker's selected configuration ID, forwarded to
+   * `<mj-message-input>` so non-mention routes apply it on the next
+   * send. Past messages are NOT retroactively re-routed — the picker
+   * only affects subsequent requests. Updated when the user picks a
+   * row in the mode picker; the picker itself persists the choice
+   * per-user, per-agent via UserInfoEngine.
+   */
+  public ActiveAgentConfigurationPresetId: string | null = null;
+
+  /**
+   * Agent the mode picker should target. Mirrors the routing precedence
+   * minus message-history continuity (the picker is persistent UI; it
+   * shouldn't flip as the user scrolls history).
+   *
+   * Order: conversation-pinned default → embedder default → Sage.
+   */
+  /**
+   * True when the chat header should render even before a conversation
+   * row exists. Currently means: the embedder has enabled the mode
+   * picker AND we resolved a target agent for it (so there's actually
+   * something to put in the header). Lets surfaces like the Form
+   * Builder cockpit show the mode picker on top of the empty-state
+   * instead of waiting for the first message to create a conversation.
+   */
+  public get HasPreConversationHeader(): boolean {
+    return this.showAgentModePicker && !!this.ModePickerTargetAgentId;
+  }
+
+  public get ModePickerTargetAgentId(): string | null {
+    return this.conversation?.DefaultAgentID
+        ?? this.defaultAgentId
+        ?? this.conversationManagerAgent?.ID
+        ?? null;
+  }
+
+  /**
+   * Mode picker emitted a new selection. Store it; the next message's
+   * route picks it up via `<mj-message-input>`'s
+   * `[agentConfigurationPresetId]` binding. Past messages stay routed
+   * as they were — the change is forward-only.
+   */
+  public OnAgentModePresetChanged(presetId: string | null): void {
+    this.ActiveAgentConfigurationPresetId = presetId;
+    this.cdr.markForCheck();
+  }
+
   /** Greeting message shown in the empty state when no conversation is active */
   @Input() emptyStateGreeting: string = 'How can I help you?';
 
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
   @Input() showSidebarToggle: boolean = false;
 
+  // ────────────────────────────────────────────────────────────────────
+  // PR 2c — Widget extension surface (additive — no breaking changes)
+  // ────────────────────────────────────────────────────────────────────
+
+  /**
+   * When true, the `agentPresence` slot is allowed to render (using the
+   * supplied `agentCharacterConfig` for visualization data). Off by default
+   * so existing embeds (Form Builder, Component Studio AI Assistant, the
+   * corner overlay) see no UI change.
+   */
+  @Input() showAgentCharacter: boolean = false;
+
+  /**
+   * Visualization data forwarded to the `agentPresence` slot's default
+   * component (or to any consumer-projected template via slot context).
+   * Includes avatar URL, character name, voice state, and visual intensity.
+   */
+  @Input() agentCharacterConfig: AgentCharacterConfig | null = null;
+
+  /**
+   * Structured config for the `emptyState` slot's default component —
+   * greeting, subtext, and optional suggested prompts. Backwards-compatible
+   * with the existing `emptyStateGreeting` input (which still wins when
+   * `emptyStateConfig` is null).
+   */
+  @Input() emptyStateConfig: EmptyStateConfig | null = null;
+
+  /**
+   * Activate the `demonstrationSurface` slot layout-mode. Per Matt's 06-10
+   * placement design: when true AND a consumer has projected
+   * `mjChatSlot="demonstrationSurface"`, the chat-content-area restructures
+   * into [stage | conversation-rail] — the stage takes the main pane, the
+   * messages pane shrinks to a side rail (below the stage on mobile). When
+   * false (default), no layout change; the chat-area renders as normal.
+   *
+   * The consumer is expected to drive this from their own state (e.g., an
+   * agent emits a demonstration intent → host sets this true; user dismisses
+   * → host sets it false). The widget itself doesn't decide.
+   */
+  @Input() showDemonstrationSurface: boolean = false;
+
+  /**
+   * Content payload forwarded to the `demonstrationSurface` slot via
+   * `$implicit` + named `content` context. Shape is consumer-defined per the
+   * {@link IMJChatDemonstrationSurfaceComponent} interface — the widget
+   * doesn't introspect or render it directly, just hands it through.
+   */
+  @Input() demonstrationSurfaceContent: unknown = null;
+
+  /**
+   * True when the demonstrationSurface layout-mode is BOTH opted-in
+   * (`showDemonstrationSurface`) AND has a slot template projected to render
+   * into. Both conditions must hold for the layout restructure to kick in.
+   */
+  public get isDemonstrationActive(): boolean {
+    return this.showDemonstrationSurface && this.slotTemplate('demonstrationSurface') !== null;
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // PR 2c — Before/After cancelable @Output() events
+  // ────────────────────────────────────────────────────────────────────
+  //
+  // Listeners set `event.Cancel = true` on the `Before*` event to halt the
+  // default behavior; the matching `After*` event then does NOT fire.
+  // Informational events (progress, shown notifications, session lifecycle)
+  // stay as single emitters without a Before-pair.
+  //
+  // WIRING STATUS:
+  //   ✓ beforeAgentTurn / afterAgentTurn — wired in message-input.component
+  //     around `agentService.processMessage()` (re-emitted from chat-area).
+  //   ✓ beforeResponseFormSubmitted / afterResponseFormSubmitted — wired in
+  //     message-item.component's `onFormSubmitted()`, forwarded through
+  //     message-list to chat-area.
+  //   ✓ beforeToolInvoked / afterToolInvoked — wired AND cancel-enforced.
+  //     Subscribed to AgentClientService.ToolRequested$ / ToolExecuted$ in
+  //     ngOnInit. When a listener sets event.Cancel = true, the chat-area's
+  //     subscriber copies it back to the ClientToolRequestEvent and
+  //     AgentClientSession.handleToolRequest short-circuits dispatch (tool
+  //     handler NOT called, ToolExecuted$ NOT emitted, server receives a
+  //     failure response carrying any CancelReason).
+  //   ✓ sessionStarted / sessionChannelStateChanged / sessionEnded — subscribed
+  //     to ConversationsRuntime.Sessions.SessionLifecycle$ in ngOnInit. The
+  //     runtime's SessionsObserver consumes whichever ISessionsAdapter the host
+  //     registered at bootstrap; the Angular default is RealtimeSessionsAdapter,
+  //     which bridges RealtimeSessionService's SessionStarted$ / ActiveChannels$
+  //     (diffed for open/close) / SessionEnded$. Non-Angular hosts (React,
+  //     Vue, Node) register their own adapter — the chat-area code is unchanged.
+
+  /** Cancelable — fired BEFORE a user message is sent to the agent. */
+  @Output() beforeAgentTurn = new EventEmitter<BeforeAgentTurnEventArgs>();
+  /** Fired AFTER a successful agent turn completes. */
+  @Output() afterAgentTurn = new EventEmitter<AfterAgentTurnEventArgs>();
+
+  /** Cancelable — fired BEFORE a registered client tool is invoked by the agent. */
+  @Output() beforeToolInvoked = new EventEmitter<BeforeToolInvokedEventArgs>();
+  /** Fired AFTER a client tool invocation completes. */
+  @Output() afterToolInvoked = new EventEmitter<AfterToolInvokedEventArgs>();
+
+  /** Cancelable — fired BEFORE a response form's submitted values are sent. */
+  @Output() beforeResponseFormSubmitted = new EventEmitter<BeforeResponseFormSubmittedEventArgs>();
+  /** Fired AFTER a response form's values have been sent. */
+  @Output() afterResponseFormSubmitted = new EventEmitter<AfterResponseFormSubmittedEventArgs>();
+
+  /** Informational. */
+  @Output() sessionStarted = new EventEmitter<SessionStartedEventArgs>();
+  /** Informational. */
+  @Output() sessionChannelStateChanged = new EventEmitter<SessionChannelStateChangedEventArgs>();
+  /** Informational. */
+  @Output() sessionEnded = new EventEmitter<SessionEndedEventArgs>();
+
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * A realtime session that CREATED its own conversation has ended — the new
+   * conversation is named (background, shared helper) and ready. The workspace folds
+   * it into the cached list and selects it when the conversation list is visible.
+   */
+  @Output() realtimeConversationReady = new EventEmitter<{conversationId: string; select: boolean}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
@@ -143,6 +472,22 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
 
+  /**
+   * Slot-fill templates supplied by consumers via the `mjChatSlot` directive.
+   * Looked up by slot name with {@link slotTemplate}.
+   */
+  @ContentChildren(ChatSlotDirective) private chatSlotChildren!: QueryList<ChatSlotDirective>;
+
+  /**
+   * Public helper for the template + consumers — resolve a slot name to the
+   * consumer-supplied `TemplateRef`, or `null` if no consumer template was
+   * projected for that slot. When `null`, the template should render the
+   * slot's default standalone component.
+   */
+  public slotTemplate(name: MJChatSlotName): TemplateRef<unknown> | null {
+    return this.chatSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
+
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
   private scrollToBottom = false;
@@ -159,6 +504,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public artifactCountDisplay: number = 0;
   public isShared: boolean = false;
   public showExportModal: boolean = false;
+  public showShareModal: boolean = false;
+  public shareContext: ResourceShareContext | null = null;
+  public shareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
   public showAgentPanel: boolean = false;
   public showMembersModal: boolean = false;
   public showProjectSelector: boolean = false;
@@ -174,6 +522,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
   public collectionPickerExcludedIds: string[] = [];
+  public collectionPickerVersionId: string | null = null;
+  public collectionPickerArtifactName: string = '';
+  public collectionPickerVersionNumber: number | null = null;
 
   // Artifact permissions
   public canShareSelectedArtifact: boolean = false;
@@ -247,6 +598,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   private startX: number = 0;
   private startWidth: number = 0;
 
+  // Stored bound references so addEventListener and removeEventListener get the same function object.
+  private readonly boundOnResizeMove = this.onResizeMove.bind(this);
+  private readonly boundOnResizeEnd = this.onResizeEnd.bind(this);
+  private readonly boundOnResizeTouchMove = this.onResizeTouchMove.bind(this);
+  private readonly boundOnResizeTouchEnd = this.onResizeTouchEnd.bind(this);
+
   // LocalStorage key
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
@@ -272,15 +629,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public isUploadingAttachments: boolean = false;
   public uploadingMessage: string = '';
 
-  // Artifact picker state
-  public showArtifactPickerPanel: boolean = false;
-  public artifactPickerItems: Array<{
-    artifactId: string; artifactVersionId: string; name: string; description: string;
-    contentMode: string; fileID: string | null; mimeType: string | null;
-    fileName: string | null; sizeBytes: number; typeName: string; updatedAt: string;
-  }> = [];
-  public isLoadingArtifactPicker: boolean = false;
-
   // Attachment support based on agent modalities
   // Computed from conversation manager (Sage) and any previous agent in conversation
   public enableAttachments: boolean = false;
@@ -291,6 +639,40 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   private engine = ConversationEngine.Instance;
 
+  /**
+   * Voice session service — exposed to the template so the realtime "call mode"
+   * overlay can be hosted here (it fills this conversation panel in place while
+   * `Active$` is true). The trigger wiring lives in <mj-message-input>.
+   */
+  public readonly RealtimeSession = inject(RealtimeSessionService);
+
+  /** Stateless loader for the call overlay's SESSION REVIEW mode (past realtime sessions). */
+  private readonly realtimeReviewService = inject(RealtimeSessionReviewService);
+
+  /**
+   * The PAST realtime session currently under review, or null. While set (and no live
+   * call is active) the realtime overlay renders in SESSION REVIEW mode over this
+   * conversation panel. Populated via {@link OpenRealtimeSessionReview}; cleared when
+   * the user closes the review or resumes it as a new live call.
+   */
+  public RealtimeReview: RealtimeSessionReview | null = null;
+
+  /**
+   * Session-row enrichment for the timeline's realtime SESSION BLOCKS (details stamped
+   * with an `AgentSessionID` collapse to one card per session — see the message list's
+   * timeline pass). Keyed by `NormalizeUUID(sessionId)`; loaded with ONE batched
+   * `MJ: AI Agent Sessions` lookup per conversation, only when stamped rows exist.
+   * Tolerant: a failed lookup leaves the map empty and cards render their generic label.
+   */
+  public realtimeSessionMetaMap: Map<string, RealtimeSessionTimelineMeta> = new Map();
+
+  /** Agent name the overlay banner shows: the reviewed session's agent while reviewing, else the live call's. */
+  public get realtimeOverlayAgentName(): string {
+    if (this.RealtimeReview && !this.RealtimeSession.IsActive) {
+      return this.RealtimeReview.AgentName;
+    }
+    return this.RealtimeSession.CurrentAgentName;
+  }
 
   constructor(
     private agentStateService: AgentStateService,
@@ -302,10 +684,166 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private attachmentService: ConversationAttachmentService,
     private streamingService: ConversationStreamingService,
     private confirmDialog: ConversationsDialogService,
-    private bridge: ConversationBridgeService
-  ) {}
+    private bridge: ConversationBridgeService,
+    private analyzeArtifactService: AnalyzeArtifactService,
+    private uiCommandHandler: UICommandHandlerService,
+    private interactiveFormApplyService: InteractiveFormApplyService,
+    private agentClientService: AgentClientService
+  ) {
+  super();}
+
+  /**
+   * Apply a form-role artifact's spec as an EntityFormOverride for the
+   * current user. The service handles the Create-vs-Modify decision (based
+   * on whether an Active override already exists), confirms via dialog,
+   * and surfaces success/failure via notification.
+   */
+  async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    await this.interactiveFormApplyService.ConfirmAndApply(
+      event.spec as ComponentSpec,
+      event.entityName,
+      this.ProviderToUse,
+    );
+  }
 
   async ngOnInit() {
+    // Bind provider-aware services to this component's provider so multi-server
+    // browser apps don't silently fall back to the global Metadata.Provider.
+    const p = this.ProviderToUse;
+    this.agentStateService.Provider = p;
+    this.conversationAgentService.Provider = p;
+    this.activeTasks.Provider = p;
+    this.artifactPermissionService.Provider = p;
+    this.attachmentService.Provider = p;
+    this.analyzeArtifactService.Provider = p;
+
+    // Subscribe to actionable commands from UICommandHandlerService so we can
+    // intercept and locally handle commands that depend on the conversation
+    // surface (e.g. `client:capture-data-snapshot`, which needs access to the
+    // artifact viewer panel and the message input — both live in this chat-area).
+    // The workspace's existing subscription still fires and bubbles every command
+    // up to the host application; this is purely additive — host apps can still
+    // override or augment behavior by handling the bubbled event.
+    this.uiCommandHandler.actionableCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((command) => {
+        if (command.type === 'client:capture-data-snapshot') {
+          void this.handleCaptureDataSnapshotCommand(command);
+        }
+      });
+
+    // REALTIME-CREATED CONVERSATIONS — three-beat lifecycle so the UI feels live:
+    //  START: fold the server-created conversation into the cached list right away
+    //         (it shows as 'New Conversation' while the call runs; no selection yet).
+    //         Driven by SessionStarted$ — it fires AFTER mintSession resolves, so the
+    //         created conversation id is guaranteed present (Active$ races the mint).
+    //  FIRST UTTERANCE: auto-name it via the shared helper (background) — the list
+    //         updates reactively through ConversationEngine.Conversations$.
+    //  END:   select it (workspace gates on the list being visible).
+    let namedThisSession = false;
+    this.RealtimeSession.SessionStarted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        namedThisSession = false;
+        this.onVoiceSessionStarted();
+      });
+    let voiceWasActive = false;
+    this.RealtimeSession.Active$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((active) => {
+        if (voiceWasActive && !active) {
+          this.onVoiceSessionEnded();
+        }
+        voiceWasActive = active;
+      });
+    this.RealtimeSession.Captions$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((captions) => {
+        if (namedThisSession) {
+          return;
+        }
+        const created = this.RealtimeSession.SessionCreatedConversationId;
+        const seed = this.RealtimeSession.FirstUserTranscript;
+        if (created && seed && captions.some(c => c.Role === 'User')) {
+          namedThisSession = true;
+          void GenerateAndApplyConversationName({
+            ConversationId: created,
+            MessageText: seed,
+            Provider: this.ProviderToUse as GraphQLDataProvider,
+            CurrentUser: this.currentUser
+          });
+        }
+      });
+
+    // Bridge AgentClientService's tool-dispatch observables to chat-area's
+    // Before/After cancelable @Outputs. `ToolRequested$` fires synchronously
+    // BEFORE the tool runs; `ToolExecuted$` fires after a successful dispatch
+    // (suppressed when the host vetoes via Cancel).
+    //
+    // Cancel-enforcement: the `ClientToolRequestEvent` carries a mutable
+    // `Cancel: boolean` field. We emit the Angular `beforeToolInvoked` event
+    // synchronously inside the RxJS subscriber, listeners can flip
+    // `args.Cancel = true`, and we copy that decision back to `toolEvent.Cancel`
+    // before the subscriber returns. `AgentClientSession.handleToolRequest` then
+    // sees the veto, short-circuits dispatch, and reports the cancellation back
+    // to the server. `afterToolInvoked` does NOT fire in the canceled case.
+    this.agentClientService.ToolRequested$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((toolEvent) => {
+        const args = new BeforeToolInvokedEventArgs(
+          toolEvent.Request.ToolName,
+          toolEvent.Request.Params
+        );
+        this.beforeToolInvoked.emit(args);
+        if (args.Cancel) {
+          toolEvent.Cancel = true;
+          toolEvent.CancelReason = args.CancelReason;
+        }
+      });
+    this.agentClientService.ToolExecuted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((toolEvent) => {
+        this.afterToolInvoked.emit(
+          new AfterToolInvokedEventArgs(
+            toolEvent.Request.ToolName,
+            toolEvent.Request.Params,
+            toolEvent.Result
+          )
+        );
+      });
+
+    // Bridge ConversationsRuntime.Sessions.SessionLifecycle$ → chat-area's
+    // informational session* outputs. The runtime's SessionsObserver subscribes
+    // to whichever ISessionsAdapter the host registered at bootstrap (today:
+    // RealtimeSessionsAdapter from ConversationsRuntimeBootstrap, bridging
+    // RealtimeSessionService from PR #2787). Each event variant maps 1:1 to one
+    // of the three @Output() emitters declared above.
+    ConversationsRuntime.Instance.Sessions.SessionLifecycle$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((event) => {
+        switch (event.kind) {
+          case 'session-started':
+            this.sessionStarted.emit(
+              new SessionStartedEventArgs(event.sessionId, event.channelKinds)
+            );
+            return;
+          case 'session-channel':
+            this.sessionChannelStateChanged.emit(
+              new SessionChannelStateChangedEventArgs(
+                event.sessionId,
+                event.channelKind,
+                event.state
+              )
+            );
+            return;
+          case 'session-ended':
+            this.sessionEnded.emit(
+              new SessionEndedEventArgs(event.sessionId, event.reason)
+            );
+            return;
+        }
+      });
+
     // The workspace component initializes AI Engine and mention service before
     // any child components render, so we can safely skip duplicate initialization.
     // This prevents race conditions and ensures agents are fully loaded.
@@ -336,10 +874,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
 
     // Setup resize listeners
-    window.addEventListener('mousemove', this.onResizeMove.bind(this));
-    window.addEventListener('mouseup', this.onResizeEnd.bind(this));
-    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.addEventListener('mousemove', this.boundOnResizeMove);
+    window.addEventListener('mouseup', this.boundOnResizeEnd);
+    window.addEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.addEventListener('touchend', this.boundOnResizeTouchEnd);
 
     // Handle overlay→workspace handoffs: if the handed-off conversation is already
     // loaded, force a reload from the engine (which has the latest data).
@@ -507,10 +1045,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     this.destroy$.complete();
 
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.onResizeMove.bind(this));
-    window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
-    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
-    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
+    window.removeEventListener('mousemove', this.boundOnResizeMove);
+    window.removeEventListener('mouseup', this.boundOnResizeEnd);
+    window.removeEventListener('touchmove', this.boundOnResizeTouchMove);
+    window.removeEventListener('touchend', this.boundOnResizeTouchEnd);
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
@@ -752,6 +1290,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         }
       }
 
+      // Load session-row meta for any realtime SESSION BLOCKS in the timeline
+      // (agent name + status/close-reason chip on the collapsed session cards)
+      await this.loadRealtimeSessionMeta(cacheEntry.Details);
+
       // Create new Map references to trigger Angular change detection
       this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
       this.artifactsByDetailId = new Map(this.artifactsByDetailId);
@@ -773,6 +1315,65 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       console.error('Failed to process peripheral data:', error);
       this.lastLoadedConversationId = null;
     }
+  }
+
+  /**
+   * Loads the `MJ: AI Agent Sessions` rows referenced by the conversation's
+   * session-stamped details (one batched lookup, narrow fields, only when stamped rows
+   * exist) and rebuilds {@link realtimeSessionMetaMap} so the timeline's session cards
+   * can show the agent name and a status / close-reason chip. TOLERANT by design: any
+   * failure leaves the map empty — cards degrade to their generic label.
+   */
+  private async loadRealtimeSessionMeta(details: MJConversationDetailEntity[]): Promise<void> {
+    const sessionIds: string[] = [];
+    const seen = new Set<string>();
+    for (const detail of details) {
+      const raw = detail.AgentSessionID?.trim() ?? '';
+      if (raw.length === 0) {
+        continue;
+      }
+      const key = NormalizeUUID(raw);
+      if (!seen.has(key)) {
+        seen.add(key);
+        sessionIds.push(raw);
+      }
+    }
+
+    const metaMap = new Map<string, RealtimeSessionTimelineMeta>();
+    if (sessionIds.length > 0) {
+      try {
+        const idList = sessionIds.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const result = await rv.RunView<{
+          ID: string;
+          Agent: string | null;
+          Status: 'Active' | 'Closed' | 'Idle';
+          CloseReason: string | null;
+          ClosedAt: string | Date | null;
+        }>({
+          EntityName: 'MJ: AI Agent Sessions',
+          ExtraFilter: `ID IN (${idList})`,
+          Fields: ['ID', 'Agent', 'Status', 'CloseReason', 'ClosedAt'],
+          ResultType: 'simple'
+        });
+        if (result.Success) {
+          for (const row of result.Results ?? []) {
+            const closedAt = row.ClosedAt ? new Date(row.ClosedAt) : null;
+            metaMap.set(NormalizeUUID(row.ID), {
+              SessionID: row.ID,
+              AgentName: row.Agent ?? null,
+              Status: row.Status ?? null,
+              CloseReason: row.CloseReason ?? null,
+              ClosedAt: closedAt && !isNaN(closedAt.getTime()) ? closedAt : null
+            });
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load realtime session meta — session cards render without status chips:', error);
+      }
+    }
+    // New reference so the message list's ngOnChanges sees the update
+    this.realtimeSessionMetaMap = metaMap;
   }
 
   /**
@@ -882,7 +1483,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
 
     // Load the current user's avatar data
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userEntity = await md.GetEntityObject<any>('MJ: Users');
     await userEntity.Load(userId);
 
@@ -919,7 +1520,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       }
       else {
         // we do NOT have an existingAgentRun base entity, but rather a simple JSON object so we need to create an object here
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         newEntity.LoadFromData(existingAgentRun);
         // swap the map entry to have this object now
@@ -1172,7 +1773,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     try {
       // Always refresh if forced, or if not in map yet
       if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
@@ -1209,7 +1810,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
     LogStatusEx({message: `🔄 Reloading artifacts for message ${conversationDetailId}`, verboseOnly: true});
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Get the ConversationID for this detail
       const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
@@ -1484,8 +2085,60 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   shareConversation(): void {
-    // TODO: Implement share functionality
-    LogStatusEx({message: 'Share conversation', verboseOnly: true});
+    if (!this.conversation) return;
+    this.shareContext = {
+      ResourceID: this.conversation.ID,
+      ResourceName: this.conversation.Name ?? 'Conversation',
+      OwnerUserID: this.conversation.UserID ?? null,
+      OwnerDisplayName: this.conversation.User ?? 'You',
+      CurrentUserID: this.currentUser?.ID ?? null
+    };
+    this.showShareModal = true;
+  }
+
+  onShareDialogResult(_result: { Action: 'save' | 'cancel' }): void {
+    this.showShareModal = false;
+  }
+
+  /**
+   * Display info for the header "Shared by {email}" badge. Returns `null`
+   * when the current user owns the conversation or when the share has no
+   * recorded grantor (legacy share pre-dating `SharedByUserID`).
+   */
+  public get sharedByBadge(): { display: string; fullTooltip: string } | null {
+    if (!this.conversation) return null;
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    if (!info || !info.UserID) return null;
+    const display = info.Email ?? info.Name ?? 'another user';
+    const tooltip = info.Email && info.Name ? `${info.Name} <${info.Email}>` : display;
+    return { display, fullTooltip: `Shared by ${tooltip}` };
+  }
+
+  /**
+   * `true` when the current user only has `View` access to this conversation
+   * (i.e., it was shared with them read-only). Gates the message input and
+   * any other write-capable UI.
+   */
+  public get isReadOnlyView(): boolean {
+    if (!this.conversation) return false;
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    return info?.Level === 'View';
+  }
+
+  /**
+   * `true` when the current user is allowed to create new shares on this
+   * conversation. Only the conversation's owner — or a user with an existing
+   * Owner-level grant — may do so. Matches the server-side gate in
+   * {@link MJResourcePermissionEntityExtended.callerMayGrantShare}, so the UI
+   * doesn't offer an action the save would refuse.
+   */
+  public get canShareConversation(): boolean {
+    if (!this.conversation || !this.currentUser) return false;
+    if (this.conversation.UserID && this.conversation.UserID.toLowerCase() === this.currentUser.ID.toLowerCase()) {
+      return true;
+    }
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    return info?.Level === 'Owner';
   }
 
   onReplyInThread(message: MJConversationDetailEntity): void {
@@ -1636,7 +2289,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Load all entities in parallel, then delete in parallel.
     // entity.Delete() calls spDeleteConversationDetail which handles all FK children:
     // hard-deletes junction tables (Artifact/Attachment/Rating), nullifies FKs on AI* records.
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const loadResults = await Promise.all(
       toHide.map(async msg => {
         const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
@@ -1679,9 +2332,26 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.selectedImageAlt = attachment.fileName || 'Image attachment';
       this.selectedImageFileName = attachment.fileName || 'image';
       this.showImageViewer = true;
-    } else {
-      // For non-image attachments, could trigger download or other action
-      console.log('Non-image attachment clicked:', attachment);
+      return;
+    }
+
+    // Artifact-backed attachments open in the artifact viewer panel.
+    if (attachment.source === 'artifact' && attachment.artifactId) {
+      this.onArtifactClicked({
+        artifactId: attachment.artifactId,
+        versionId: attachment.artifactVersionId
+      });
+      return;
+    }
+
+    // Plain uploads: trigger a browser download if we have a usable content URL.
+    if (attachment.contentUrl) {
+      const a = document.createElement('a');
+      a.href = attachment.contentUrl;
+      a.download = attachment.fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   }
 
@@ -1794,28 +2464,43 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
     this.collectionPickerArtifactId = event.artifactId;
     this.collectionPickerExcludedIds = event.excludedCollectionIds;
+    // Snapshot version + name from the viewer so the picker's preview pane has real context
+    const viewer = this.artifactViewerComponent;
+    this.collectionPickerVersionId = viewer?.artifactVersion?.ID ?? null;
+    this.collectionPickerArtifactName = viewer?.displayName ?? '';
+    this.collectionPickerVersionNumber = viewer?.selectedVersionNumber ?? null;
     this.showCollectionPicker = true;
   }
 
-  async onCollectionPickerSaved(collectionIds: string[]): Promise<void> {
-    if (!this.collectionPickerArtifactId || !this.artifactViewerComponent) {
-      return;
+  async onCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
+    // Refresh the viewer's bookmark / "already saved" state if anything actually wrote
+    if (event.successIds.length > 0 && this.artifactViewerComponent) {
+      await this.artifactViewerComponent.ReloadCollectionAssociations();
     }
+    this.closeCollectionPicker();
 
-    // Call the artifact viewer's save method
-    const success = await this.artifactViewerComponent.saveToCollections(collectionIds);
-    if (success) {
-      this.showCollectionPicker = false;
-      this.collectionPickerArtifactId = null;
-      this.collectionPickerExcludedIds = [];
-      this.cdr.detectChanges();
+    if (event.failedIds.length === 0 && event.successIds.length > 0) {
+      const n = event.successIds.length;
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Saved to ${n} ${n === 1 ? 'collection' : 'collections'}`,
+        'success',
+        2500
+      );
     }
   }
 
   onCollectionPickerCancelled(): void {
+    this.closeCollectionPicker();
+  }
+
+  private closeCollectionPicker(): void {
     this.showCollectionPicker = false;
     this.collectionPickerArtifactId = null;
     this.collectionPickerExcludedIds = [];
+    this.collectionPickerVersionId = null;
+    this.collectionPickerArtifactName = '';
+    this.collectionPickerVersionNumber = null;
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1960,11 +2645,41 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     try {
       this.isProcessing = true;
 
-      // Create a new conversation using the engine
+      // Create a new conversation using the engine. applicationScope +
+      // applicationId let embedded surfaces (e.g. the Form Builder cockpit)
+      // stamp their conversations as 'Application'-scoped so they don't
+      // leak into the main chat list. defaultAgentId pins the routing
+      // target for the first message — it's the same value forwarded to
+      // <mj-message-input> as [defaultAgentId].
+      //
+      // Safety net: the DB CHECK constraint rejects ('Application' || 'Both')
+      // without an ApplicationID. If the embedder hasn't resolved its app
+      // ID yet (or it's missing from the Metadata cache), demote to
+      // 'Global' so the save doesn't blow up. The conversation lands in
+      // the main list — visible but not silently lost.
+      const effectiveScope: 'Global' | 'Application' | 'Both' =
+        (this.applicationScope !== 'Global' && !this.applicationId)
+          ? 'Global'
+          : this.applicationScope;
+      // Linked-record stamping — both columns must be populated together
+      // or both null (DB CHECK constraint CK_Conversation_LinkBinding).
+      // We only forward the pair when BOTH inputs are supplied; if the
+      // host bound one but not the other, treat as misconfiguration and
+      // skip the linkage rather than failing the save.
+      const hasLink = !!this.linkedEntityId && !!this.linkedRecordId;
       const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
         this.environmentId,
-        this.currentUser
+        this.currentUser,
+        undefined,
+        undefined,
+        {
+          applicationScope: effectiveScope,
+          applicationId: effectiveScope === 'Global' ? null : this.applicationId,
+          defaultAgentId: this.defaultAgentId,
+          linkedEntityId: hasLink ? this.linkedEntityId : null,
+          linkedRecordId: hasLink ? this.linkedRecordId : null,
+        }
       );
 
       if (!newConversation) {
@@ -2011,6 +2726,179 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       entityName: 'MJ: Test Runs',
       compositeKey
     });
+  }
+
+  /**
+   * A gear-gated developer link in the live call overlay asked to open a record
+   * (delegated agent run / agent session). The overlay has already minimized itself
+   * (the call stays live behind the floating "on call" pill); re-emit on the SAME
+   * `openEntityRecord` chain every other chat record-open uses, so the Explorer
+   * wrapper routes it through `NavigationService.OpenEntityRecord`.
+   */
+  onVoiceNavigateRequest(event: RealtimeNavigateRequest): void {
+    const compositeKey = new CompositeKey();
+    compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: event.RecordID });
+    this.openEntityRecord.emit({
+      entityName: event.EntityName,
+      compositeKey
+    });
+  }
+
+  /**
+   * Session-START hook for a realtime session that CREATED its own conversation (started
+   * without one). Folds that server-created conversation into the engine's reactive cache
+   * directly — ONE single-row load, only when it isn't already cached — so the sidebar list
+   * emits via `Conversations$` the moment the call starts, independent of the host's refresh
+   * round-trip. Also emits {@link realtimeConversationReady} so the host can react (it
+   * selects on close). No-op when the session joined an existing conversation. Fire-and-forget
+   * on the load: a failed load just leaves the host's emit to fold it in.
+   */
+  private onVoiceSessionStarted(): void {
+    const created = this.RealtimeSession.SessionCreatedConversationId;
+    if (!created) {
+      return;
+    }
+    void this.engine.EnsureConversationLoaded(created, this.currentUser);
+    this.realtimeConversationReady.emit({ conversationId: created, select: false });
+  }
+
+  /**
+   * Post-call hook. Two responsibilities:
+   *  1. Reload the ACTIVE conversation's timeline so the session that just ended — whose
+   *     session-stamped `MJ: Conversation Details` were persisted server-side during the
+   *     call — surfaces as a reviewable past-session block WITHOUT a manual refresh.
+   *  2. For a session that CREATED its own conversation, kick the shared auto-naming
+   *     helper (covered elsewhere on first utterance; this covers a silent call) and
+   *     emit {@link realtimeConversationReady} so the host can refresh the list + select.
+   */
+  private onVoiceSessionEnded(): void {
+    // (1) Refresh the active conversation's timeline (cheap — single conversation).
+    void this.reloadActiveConversationTimeline();
+
+    // (2) New-conversation case: let the host fold + select it.
+    const conversationId = this.RealtimeSession.SessionCreatedConversationId;
+    if (!conversationId) {
+      return;
+    }
+    // Naming normally fired at the first utterance; this covers a silent call's default.
+    this.realtimeConversationReady.emit({ conversationId, select: true });
+  }
+
+  /**
+   * Surgically reloads the CURRENTLY-OPEN conversation's details so newly-persisted rows
+   * (e.g. a just-ended realtime session's session-stamped caption turns) appear in the
+   * timeline — and therefore in the "review past sessions" affordances — without a manual
+   * browser refresh. Re-queries ONLY the active conversation (no broad reload), mirrors the
+   * agent-completion refresh path, and no-ops when no conversation is open.
+   */
+  private async reloadActiveConversationTimeline(): Promise<void> {
+    const conversationId = this.conversationId;
+    if (!conversationId) {
+      return;
+    }
+    try {
+      await this.engine.RefreshConversationDetails(conversationId, this.currentUser);
+
+      // Re-read messages from the surgically updated engine cache
+      const freshDetails = this.engine.GetCachedDetails(conversationId);
+      if (freshDetails) {
+        this.messages = freshDetails;
+      }
+
+      // Reprocess peripheral data + realtime session meta (drives the timeline's session cards)
+      this.lastLoadedConversationId = null;
+      await this.loadPeripheralData(conversationId);
+
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Failed to reload conversation timeline after the session ended:', error);
+    }
+  }
+
+  /**
+   * ENTRY API for SESSION REVIEW: opens the realtime overlay in review mode over this
+   * conversation panel, rendering what went down in a PAST agent session (caption turns,
+   * delegated-run cards, the saved read-only whiteboard). Intended for conversation
+   * timeline affordances that reopen historical realtime sessions.
+   *
+   * @param agentSessionId The `MJ: AI Agent Sessions.ID` to review.
+   * @returns `true` when the session loaded and the review opened; `false` when it
+   *   couldn't be loaded (missing/unreadable session) or a live call is already active.
+   */
+  public async OpenRealtimeSessionReview(agentSessionId: string): Promise<boolean> {
+    if (this.RealtimeSession.IsActive) {
+      return false; // a live call owns the overlay — don't fight it with a review
+    }
+    const conversationAtRequest = this._conversationId;
+    const review = await this.realtimeReviewService.LoadSessionReview(agentSessionId, this.ProviderToUse);
+    if (!review) {
+      return false;
+    }
+    if (this.RealtimeSession.IsActive) {
+      return false; // a live call started while the review was loading — it wins
+    }
+    if (!this.canHostLoadedReview(conversationAtRequest, review.ConversationID)) {
+      return false; // the active conversation changed mid-load and the review isn't its own — discard, don't go stale
+    }
+    this.RealtimeReview = review;
+    this.cdr.detectChanges();
+    return true;
+  }
+
+  /**
+   * STALENESS GUARD for the async review load: hosting is allowed when the active
+   * conversation hasn't changed since the request started, OR when it HAS changed but
+   * the loaded review belongs to the now-active conversation (the deep-link case where
+   * the conversation selection and the review open race each other). Anything else is
+   * a stale review for a conversation the user already left — never host it.
+   */
+  private canHostLoadedReview(conversationAtRequest: string | null, reviewConversationId: string | null): boolean {
+    const current = this._conversationId;
+    if (conversationAtRequest === current) {
+      return true;
+    }
+    return !!reviewConversationId && !!current && UUIDsEqual(reviewConversationId, current);
+  }
+
+  /**
+   * Drops any hosted SESSION REVIEW so the overlay unhosts itself. Safe to call at any
+   * time: a LIVE call's overlay is unaffected (it renders off `RealtimeSession.Active$`).
+   * Called on every conversation change, on the overlay's Close, and available to hosts
+   * that need to programmatically dismiss a review.
+   */
+  public ClearRealtimeSessionReview(): void {
+    if (this.RealtimeReview) {
+      this.RealtimeReview = null;
+    }
+  }
+
+  /**
+   * Review mode's "Start live session": RESUMES the reviewed session as a new live call
+   * through the SAME start path the composer's mic uses, chaining `lastSessionId` so the
+   * server restores saved channel states (e.g. the whiteboard) via `PriorChannelStatesJson`.
+   * The start flips `Active$` synchronously, so clearing the review immediately after
+   * never unhosts the overlay mid-transition.
+   */
+  public async onReviewStartLive(request: RealtimeStartLiveRequest): Promise<void> {
+    const agentName = this.RealtimeReview?.AgentName ?? null;
+    try {
+      const start = this.RealtimeSession.StartVoiceSession(
+        request.TargetAgentId,
+        request.ConversationId ?? this.conversationId,
+        request.LastSessionId,
+        agentName
+      );
+      this.RealtimeReview = null;
+      await start;
+    } catch (error) {
+      console.error('Failed to resume the reviewed session as a live call:', error);
+      MJNotificationService.Instance.CreateSimpleNotification('Could not start the live session.', 'error', 3000);
+    }
+  }
+
+  /** Review mode's Close: drop the review state (the overlay unhosts itself). */
+  public onReviewClosed(): void {
+    this.ClearRealtimeSessionReview();
   }
 
   /**
@@ -2110,96 +2998,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Handle artifact picker request from message input
-   */
-  async onArtifactPickerRequested(): Promise<void> {
-    this.showArtifactPickerPanel = true;
-    this.isLoadingArtifactPicker = true;
-    this.cdr.detectChanges();
-
-    try {
-      // Load user's recent artifact versions (both text and file-backed)
-      const rv = new RunView();
-      const result = await rv.RunView<{
-        ID: string; ArtifactID: string; VersionNumber: number;
-        Name: string; Description: string; ContentMode: string;
-        FileID: string | null; MimeType: string | null;
-        FileName: string | null; ContentSizeBytes: number;
-        Artifact: string; __mj_UpdatedAt: string;
-      }>({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID IN (SELECT ID FROM __mj.Artifact WHERE Visibility <> 'System Only')`,
-        OrderBy: '__mj_UpdatedAt DESC',
-        MaxRows: 50,
-        ResultType: 'simple'
-      });
-
-      if (result.Success && result.Results) {
-        this.artifactPickerItems = result.Results.map(r => ({
-          artifactId: r.ArtifactID,
-          artifactVersionId: r.ID,
-          name: r.Name || r.Artifact || 'Untitled',
-          description: r.Description || '',
-          contentMode: r.ContentMode || 'Text',
-          fileID: r.FileID,
-          mimeType: r.MimeType,
-          fileName: r.FileName,
-          sizeBytes: r.ContentSizeBytes || 0,
-          typeName: r.ContentMode === 'File' ? (r.MimeType || 'File') : 'Text',
-          updatedAt: r.__mj_UpdatedAt
-        }));
-      } else {
-        this.artifactPickerItems = [];
-      }
-    } catch (error) {
-      console.error('Failed to load artifacts for picker:', error);
-      this.artifactPickerItems = [];
-    } finally {
-      this.isLoadingArtifactPicker = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  /**
-   * Handle artifact selection from the picker panel.
-   * Adds the artifact as a pending attachment so it appears in the message input.
-   * The ConversationDetailArtifact with Direction='Input' is created when the message is sent.
-   */
-  OnArtifactSelected(item: {
-    artifactId: string; artifactVersionId: string; name: string;
-    contentMode: string; fileID: string | null; mimeType: string | null;
-    fileName: string | null; sizeBytes: number;
-  }): void {
-    const activeInput = this.messageInputComponents?.find(
-      (input: MessageInputComponent) => input.conversationId === this.conversationId
-    );
-    if (activeInput?.inputBox) {
-      activeInput.inputBox.AddArtifactAttachment({
-        fileID: item.fileID || item.artifactVersionId,
-        fileName: item.fileName || item.name,
-        mimeType: item.mimeType || 'text/plain',
-        sizeBytes: item.sizeBytes,
-        artifactVersionId: item.artifactVersionId
-      });
-    }
-    this.showArtifactPickerPanel = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Close artifact picker panel
-   */
-  CloseArtifactPicker(): void {
-    this.showArtifactPickerPanel = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
    * Handle share request from artifact viewer
    */
   async onArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
@@ -2207,6 +3010,366 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.artifactToShare = artifact;
       this.isArtifactShareModalOpen = true;
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle Analyze button click from the artifact viewer panel.
+   * Creates a user message with the artifact attached as an input,
+   * then routes through the normal agent flow so the agent can
+   * explore the artifact via artifact tools.
+   */
+  /**
+   * Handle Analyze button click from the artifact viewer panel.
+   *
+   * Persists the captured snapshot as a new Data Snapshot artifact and attaches
+   * it to the user's in-progress message as a pending attachment chip (same UX
+   * as image/file uploads). On send, the existing attachment pipeline creates
+   * a `ConversationDetailArtifact` with Direction='Input'; AgentRunner then
+   * picks it up via `gatherConversationArtifacts` and resolves the
+   * DataSnapshotToolLibrary for tool calls.
+   *
+   * Falls back to plain message prefill if snapshot persistence fails — the
+   * user can still ask questions about the artifact that's already attached
+   * to the prior conversation turn.
+   */
+  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<PendingAttachment | null> {
+    if (!this.conversationId || !this.currentUser) return null;
+
+    const messageInput = this.getActiveMessageInputComponent();
+    const snapshotTitle = event.snapshot.title || 'Untitled Snapshot';
+
+    try {
+      const result = await this.analyzeArtifactService.CreateSnapshotArtifact({
+        snapshot: event.snapshot,
+        currentUser: this.currentUser,
+        environmentId: this.environmentId,
+      });
+
+      if (messageInput) {
+        const rowCount = (event.snapshot.tables ?? []).reduce(
+          (sum, t) => sum + (t.rows?.length ?? 0),
+          0,
+        );
+        const serialized = JSON.stringify(event.snapshot);
+        const created = messageInput.inputBox?.mentionEditor?.AddArtifactAttachment({
+          fileID: '',
+          fileName: rowCount > 0
+            ? `📸 ${result.title} · ${rowCount.toLocaleString()} rows`
+            : `📸 ${result.title}`,
+          mimeType: 'application/json',
+          sizeBytes: serialized.length,
+          artifactVersionId: result.artifactVersionId,
+        });
+        messageInput.messageText = `Analyze "${result.title}" — `;
+        messageInput.inputBox?.focus();
+        return created ?? null;
+      }
+    } catch (error) {
+      LogStatusEx({
+        message: `[OnAnalyzeArtifact] CreateSnapshotArtifact failed: ${error instanceof Error ? error.message : String(error)}`,
+        verboseOnly: false,
+      });
+      if (messageInput) {
+        messageInput.messageText = `Analyze "${snapshotTitle}" — `;
+        messageInput.inputBox?.focus();
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Handle a `client:capture-data-snapshot` actionable command emitted by an
+   * analysis-class agent that needs the user's current view of an artifact to
+   * answer accurately but has no Data Snapshot artifact attached.
+   *
+   * Flow:
+   *  1. Resolve the target artifact — `command.artifactId` if provided,
+   *     otherwise the most-recent output artifact on the conversation.
+   *  2. Open the artifact viewer panel for it (mounts the viewer plugin if not
+   *     already mounted).
+   *  3. Poll until the viewer can produce a snapshot via
+   *     `GetCurrentStateSnapshot()`, with a short timeout.
+   *  4. Reuse the existing `OnAnalyzeArtifact` flow to persist the snapshot
+   *     as a Data Snapshot artifact + attach it as a chip on the message input.
+   *  5. If `command.followupMessage` is provided, replace the prefill and
+   *     auto-send so the agent immediately re-runs with the snapshot attached.
+   *     Otherwise, leave the chip + prefill in place for the user to send manually.
+   *
+   * Soft-fails — logs a warning and stops on any unrecoverable error rather
+   * than throwing. The user's conversation state isn't disrupted.
+   */
+  private async handleCaptureDataSnapshotCommand(command: CaptureDataSnapshotCommand): Promise<void> {
+    console.log('[client:capture-data-snapshot] Handler invoked', { command, conversationId: this.conversationId });
+    if (!this.conversationId || !this.currentUser) {
+      console.warn('[client:capture-data-snapshot] No active conversation/user; ignoring');
+      return;
+    }
+
+    let artifactId = command.artifactId;
+    if (!artifactId) {
+      artifactId = (await this.findMostRecentComponentArtifactId()) ?? undefined;
+      console.log('[client:capture-data-snapshot] Resolved artifactId via lookup:', artifactId);
+    } else {
+      console.log('[client:capture-data-snapshot] Using artifactId from command:', artifactId);
+    }
+    if (!artifactId) {
+      console.warn('[client:capture-data-snapshot] No artifact found on this conversation; cannot capture');
+      return;
+    }
+
+    const panelAlreadyOpen = this.selectedArtifactId === artifactId && this.showArtifactPanel;
+    console.log(
+      '[client:capture-data-snapshot] Panel state — currentSelectedId=' +
+        this.selectedArtifactId +
+        ' showPanel=' +
+        this.showArtifactPanel +
+        ' panelAlreadyOpen=' +
+        panelAlreadyOpen,
+    );
+
+    // Open the artifact panel so the viewer mounts (if it isn't already).
+    if (!panelAlreadyOpen) {
+      this.selectedArtifactId = artifactId;
+      this.selectedVersionNumber = undefined;
+      this.showArtifactPanel = true;
+      try {
+        await this.loadArtifactPermissions(artifactId);
+      } catch {
+        // Non-fatal — permissions are for UI affordances, not capture
+      }
+      this.cdr.detectChanges();
+      console.log('[client:capture-data-snapshot] Opened artifact panel; waiting for viewer mount + data load');
+    }
+
+    // Poll for the snapshot — interactive components need a few render cycles
+    // before `getCurrentDataState()` registers via callbacks.RegisterMethod,
+    // and query-backed / server-paged components need additional time to load
+    // their rows (we now wait for rows, not just a registered table).
+    const snapshot = await this.waitForViewerSnapshot(15000);
+    if (!snapshot) {
+      console.warn('[client:capture-data-snapshot] Artifact viewer did not produce a snapshot within timeout');
+      return;
+    }
+
+    // Persist + attach via the existing Analyze flow. Capture the created
+    // PendingAttachment so we can pass it directly into sendMessageWithText
+    // below — the mention-editor → message-input-box → message-input event
+    // chain that normally syncs `pendingAttachments` is async (next-tick) and
+    // hasn't propagated by the time we auto-send.
+    const capturedAttachment = await this.OnAnalyzeArtifact({ artifactId, snapshot });
+
+    // Auto-send the followup so the agent re-runs immediately with the
+    // captured snapshot now attached. Resolution order:
+    //   1. command.followupMessage   — if the agent provided one
+    //   2. most-recent User message  — re-sends the question that triggered
+    //      this capture exchange (typical: "Looking at this dashboard, …")
+    //      so the agent sees the same question with the artifact attached
+    //   3. a generic re-prompt        — last resort if no user message found
+    // OnAnalyzeArtifact prefilled messageText with 'Analyze "..." — '; we
+    // overwrite that with the resolved followup before sending.
+    const messageInput = this.getActiveMessageInputComponent();
+    if (messageInput) {
+      let followup = command.followupMessage?.trim();
+      if (!followup) {
+        const lastUserMsg = [...this.messages]
+          .reverse()
+          .find((m) => m.Role === 'User' && m.Message && m.Message.trim().length > 0);
+        followup = lastUserMsg?.Message?.trim();
+      }
+      if (!followup) {
+        followup = 'Please answer my previous question using the captured snapshot.';
+      }
+      messageInput.messageText = '';
+      try {
+        await messageInput.sendMessageWithText(
+          followup,
+          capturedAttachment ? [capturedAttachment] : undefined,
+        );
+      } catch (error) {
+        console.error('[client:capture-data-snapshot] Auto-send failed:', error);
+      }
+    }
+  }
+
+  /**
+   * Poll `artifactViewerComponent.GetCurrentStateSnapshot()` for the LIVE
+   * data snapshot. The React component inside the viewer plugin needs several
+   * render cycles after `selectedArtifactId` changes before its inner data
+   * fetches run and its `getCurrentDataState()` becomes callable via
+   * `callbacks.RegisterMethod('getCurrentDataState', ...)`.
+   *
+   * `GetCurrentStateSnapshot()` returns three distinct shapes:
+   *   - **Live**: a populated DataSnapshot with `tables[]` whose rows are filled.
+   *   - **Fallback**: an empty placeholder with only `title` + `interpretation`
+   *     ("No live data was captured — the component either has no data-fetching
+   *     hooks or has not yet run its queries"). This fires when the React
+   *     component hasn't yet registered `getCurrentDataState()`.
+   *   - **Schema-only**: a structured snapshot with real `tables`/`columns` and
+   *     metadata (e.g. `totalAvailableRowCount`) but `rows: []`. This is common
+   *     for query-backed / server-paged components whose data load hasn't
+   *     completed (or whose visible page is empty) at the moment of capture.
+   *
+   * We must accept ONLY a snapshot that actually carries rows — a schema-only
+   * or placeholder snapshot defeats the point of the pipeline (the analysis
+   * agent receives an empty table). So we key "live" on `rows.length`, not just
+   * `tables.length`, and keep polling so async/paged data has time to load.
+   * Only after timeout do we return the last available row-less snapshot (any
+   * structure is better than nothing, but the user will see an empty table in
+   * the resulting artifact).
+   */
+  private async waitForViewerSnapshot(timeoutMs: number): Promise<DataSnapshot | null> {
+    const intervalMs = 200;
+    const deadline = Date.now() + timeoutMs;
+    let lastFallback: DataSnapshot | null = null;
+    let tick = 0;
+    const startTime = Date.now();
+    console.log('[client:capture-data-snapshot] Polling for live snapshot, timeout=' + timeoutMs + 'ms');
+    while (Date.now() < deadline) {
+      tick++;
+      const viewer = this.artifactViewerComponent;
+      const snap = viewer?.GetCurrentStateSnapshot?.();
+      if (snap) {
+        const hasLiveData = Array.isArray(snap.tables) && snap.tables.some((t) => Array.isArray(t.rows) && t.rows.length > 0);
+        const tableShape = Array.isArray(snap.tables)
+          ? snap.tables.map((t) => `${t.name}:${(t.rows ?? []).length}rows`).join(', ')
+          : 'no-tables';
+        const elapsed = Date.now() - startTime;
+        // Log every 5th tick to avoid spamming
+        if (tick % 5 === 1 || hasLiveData) {
+          console.log(
+            `[client:capture-data-snapshot] tick=${tick} elapsed=${elapsed}ms viewer=${!!viewer} ` +
+              `snap=${!!snap} hasLiveData=${hasLiveData} shape=[${tableShape}] ` +
+              `keys=[${Object.keys(snap).join(',')}]`,
+          );
+        }
+        if (hasLiveData) {
+          return snap; // real snapshot — done
+        }
+        lastFallback = snap; // remember for timeout case
+      } else if (tick % 5 === 1) {
+        console.log(
+          `[client:capture-data-snapshot] tick=${tick} viewer=${!!viewer} snap=null (viewer hasn't returned a snapshot yet)`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    if (lastFallback) {
+      console.warn(
+        '[client:capture-data-snapshot] Timed out waiting for live data after ' +
+          timeoutMs +
+          'ms; falling back to placeholder snapshot. The component may not have registered ' +
+          'getCurrentDataState() via callbacks.RegisterMethod, OR its data has not finished loading.',
+      );
+    } else {
+      console.warn(
+        '[client:capture-data-snapshot] Timed out after ' +
+          timeoutMs +
+          'ms — viewer never returned even a fallback snapshot. Artifact viewer may not have mounted.',
+      );
+    }
+    return lastFallback;
+  }
+
+  /**
+   * Find the most-recent Component artifact attached as `Output` to this
+   * conversation. Used when a `client:capture-data-snapshot` command arrives
+   * without an explicit `artifactId`.
+   *
+   * Filtering to Component-typed artifacts is intentional even though the
+   * command type itself is artifact-generic: the downstream
+   * `waitForViewerSnapshot` polling waits for `tables[]` to populate (the
+   * shape Components produce via React `getCurrentDataState()`). Falling back
+   * to a non-Component artifact would 10s-timeout to a placeholder snapshot.
+   * When other artifact types need a usable fallback, generalize the polling
+   * first, then drop the filter here.
+   */
+  private async findMostRecentComponentArtifactId(): Promise<string | null> {
+    if (!this.conversationId || !this.currentUser) return null;
+    try {
+      const rv = new RunView();
+      // Get all conversation detail IDs for this conversation, newest first.
+      const detailsResult = await rv.RunView<MJConversationDetailEntity>(
+        {
+          EntityName: 'MJ: Conversation Details',
+          ExtraFilter: `ConversationID='${this.conversationId}'`,
+          Fields: ['ID'],
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!detailsResult.Success || !detailsResult.Results?.length) return null;
+      const detailIds = detailsResult.Results.map((d) => `'${d.ID}'`).join(',');
+
+      // Find the most recent Output artifact junction across those details.
+      const junctionResult = await rv.RunView(
+        {
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: `ConversationDetailID IN (${detailIds}) AND Direction='Output'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!junctionResult.Success || !junctionResult.Results?.length) return null;
+
+      // Look up artifact IDs for each version and filter to Component type.
+      const versionIds = Array.from(
+        new Set((junctionResult.Results as Array<{ ArtifactVersionID: string }>).map((j) => j.ArtifactVersionID)),
+      );
+      if (versionIds.length === 0) return null;
+      const versionFilter = versionIds.map((id) => `'${id}'`).join(',');
+      const versionsResult = await rv.RunView(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${versionFilter})`,
+          Fields: ['ID', 'ArtifactID'],
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!versionsResult.Success || !versionsResult.Results?.length) return null;
+
+      const versionToArtifact = new Map<string, string>();
+      for (const v of versionsResult.Results as Array<{ ID: string; ArtifactID: string }>) {
+        versionToArtifact.set(v.ID, v.ArtifactID);
+      }
+
+      const artifactIds = Array.from(new Set([...versionToArtifact.values()]));
+      const artifactFilter = artifactIds.map((id) => `'${id}'`).join(',');
+      const artifactsResult = await rv.RunView<MJArtifactEntity>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID IN (${artifactFilter})`,
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!artifactsResult.Success || !artifactsResult.Results?.length) return null;
+
+      // Resolve the Component type ID from the metadata engine to filter to it.
+      const componentType = ArtifactMetadataEngine.Instance.FindArtifactType('Component');
+      if (!componentType) return null;
+
+      const componentArtifactIds = new Set(
+        (artifactsResult.Results as Array<{ ID: string; TypeID: string | null }>)
+          .filter((a) => UUIDsEqual(a.TypeID, componentType.ID))
+          .map((a) => a.ID),
+      );
+      if (componentArtifactIds.size === 0) return null;
+
+      // Walk junctions in newest-first order; return the first whose artifact is Component.
+      for (const junction of junctionResult.Results as Array<{ ArtifactVersionID: string }>) {
+        const artifactId = versionToArtifact.get(junction.ArtifactVersionID);
+        if (artifactId && componentArtifactIds.has(artifactId)) {
+          return artifactId;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('[client:capture-data-snapshot] findMostRecentComponentArtifactId failed:', error);
+      return null;
     }
   }
 
@@ -2432,7 +3595,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Handle intent check started - show temporary "Analyzing intent..." message
    */
   async onIntentCheckStarted(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
 
     // Create a temporary message that looks like an AI response in-progress

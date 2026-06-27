@@ -4,6 +4,15 @@
   "payloadChangeRequest*": {
     "[NOTE]": "Follow the format of AgentPayloadChangeRequest. OMIT payloadChangeRequest entirely if no changes are needed."
   },
+  "artifactToolCalls*": [
+    {
+      "artifactId": "[STRING: The single-letter artifact ID from the manifest, e.g. A, B, C]",
+      "tool": "[STRING: Tool name from the artifact tools documentation, e.g. get_rows, get_text, search_text]",
+      "input": {
+        "[PARAM_NAME]": "[Value matching the tool's input schema]"
+      }
+    }
+  ],
   "reasoning?": "[STRING: Your internal explanation of why you made this decision - helps with debugging]",
   "confidence?": "[OPTIONAL NUMBER: 0.0 to 1.0 indicating confidence in this decision]",
   "nextStep?": {

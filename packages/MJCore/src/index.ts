@@ -13,8 +13,12 @@ export * from "./generic/runQuery";
 export * from "./generic/interfaces";
 export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";
+export * from "./generic/BaseEntitySaveQueue";
+export * from "./generic/EntityFieldRules";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
+export * from "./generic/baseRemotableOperation";
+export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
 export * from "./generic/securityInfo";
 export * from "./generic/transactionGroup";
@@ -28,7 +32,7 @@ export * from "./generic/runQuerySQLFilterImplementations";
 export * from "./generic/libraryInfo";
 export * from "./generic/QueryCacheConfig";
 export * from "./generic/QueryCache";
-export * from "./generic/QueryCacheManager";
+
 export * from "./generic/explorerNavigationItem";
 export * from "./generic/compositeKey";
 export * from "./generic/authEvaluator";
@@ -45,9 +49,13 @@ export * from "./generic/RegisterForStartup";
 export * from "./generic/telemetryManager";
 export * from "./generic/InMemoryLocalStorageProvider";
 export * from "./generic/dataHooks";
+export * from "./generic/column-descriptors";
+export * from "./generic/data-table";
+export * from "./generic/data-snapshot";
+export * from "./generic/permissionInterfaces";
 
 export function SetProvider(provider) {
-    Metadata.Provider = provider;
+    Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter
     BaseEntity.Provider = provider;
     RunView.Provider = provider;
     RunReport.Provider = provider;

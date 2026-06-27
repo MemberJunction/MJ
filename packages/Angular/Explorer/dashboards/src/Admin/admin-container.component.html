@@ -1,0 +1,19 @@
+<mj-page-layout>
+    <mj-page-header
+        [Title]="ContainerTitle"
+        [Icon]="ContainerIcon"
+        [Subtitle]="ContainerSubtitle">
+    </mj-page-header>
+
+    <mj-page-body [Flex]="true" [Padding]="false" Direction="row">
+        <mj-left-nav
+            MobileTitle="Administration"
+            [Sections]="NavSections"
+            [ActiveId]="ActiveSection"
+            (ItemClicked)="OnNavItemClicked($event)">
+        </mj-left-nav>
+        <mj-left-nav-content [Loading]="IsLoading" [Error]="LoadError">
+            <ng-container #contentHost></ng-container>
+        </mj-left-nav-content>
+    </mj-page-body>
+</mj-page-layout>

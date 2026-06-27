@@ -10,13 +10,21 @@ import { AvailableResourcesComponent } from './lib/available-resources.component
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import { RequestResourceAccessComponent } from './lib/request-access.component';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJDropdownComponent,
+  MJEmptyStateComponent,
+  MJWindowComponent,
+  MJWindowTitlebarComponent
+} from '@memberjunction/ng-ui-components';
+import { GenericShareDialogComponent } from './lib/resource-share-dialog.component';
 
 @NgModule({
   declarations: [
     ResourcePermissionsComponent,
     AvailableResourcesComponent,
-    RequestResourceAccessComponent
+    RequestResourceAccessComponent,
+    GenericShareDialogComponent
   ],
   imports: [
     CommonModule,
@@ -26,12 +34,16 @@ import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-co
     GenericDialogModule,
     SharedGenericModule,
     MJButtonDirective,
-    MJDropdownComponent
+    MJDropdownComponent,
+    MJEmptyStateComponent,
+    MJWindowComponent,
+    MJWindowTitlebarComponent
   ],
   exports: [
     ResourcePermissionsComponent,
     AvailableResourcesComponent,
-    RequestResourceAccessComponent
+    RequestResourceAccessComponent,
+    GenericShareDialogComponent
   ]
 })
 export class ResourcePermissionsModule { }

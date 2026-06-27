@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Dashboards",
+      "CascadeDeletes": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Dashboards"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T14:07:05.918Z",
+      "checksum": "18e24f556a027a1124481fd8a3f2bac194a298953edef58d3ff0ce603b9c0499"
+    }
+  }
+]

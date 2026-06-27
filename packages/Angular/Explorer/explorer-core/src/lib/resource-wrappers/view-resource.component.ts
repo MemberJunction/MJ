@@ -3,9 +3,11 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
-import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, EntityViewMode } from '@memberjunction/ng-entity-viewer';
+import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
+import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
+import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -143,18 +145,16 @@ export class UserViewResource extends BaseResourceComponent {
     public viewEntity: MJUserViewEntityExtended | null = null;
     public gridState: ViewGridState | null = null;
 
-    /** View mode from dashboard configuration (grid/cards/timeline/map) */
-    public configuredViewMode: EntityViewMode | null = null;
-
-    /** Map render mode from dashboard configuration */
-    public configuredMapRenderMode: 'point' | 'choropleth' | 'heatmap' = 'point';
-
     // Export state
     public isExporting: boolean = false;
 
-    private dataLoaded = false;
-    private metadata = new Metadata();
+    // Save-as-list dialog state
+    public saveAsListDialogVisible = false;
+    public saveAsListRecordCount: number | null = null;
+    public isSavingAsList = false;
 
+    private dataLoaded = false;
+    private get metadata() { return this.ProviderToUse; }
     constructor(
         private cdr: ChangeDetectorRef,
         private exportService: ExportService
@@ -170,20 +170,8 @@ export class UserViewResource extends BaseResourceComponent {
         const newRecordId = value?.ResourceRecordID;
         const newEntity = value?.Configuration?.Entity;
 
-        // Read view mode and map render mode from configuration if provided
-        const viewMode = value?.Configuration?.['viewMode'] as string | undefined;
-        if (viewMode && ['grid', 'cards', 'timeline', 'map'].includes(viewMode)) {
-            this.configuredViewMode = viewMode as EntityViewMode;
-        } else {
-            this.configuredViewMode = null;
-        }
-
-        const mapMode = value?.Configuration?.['mapRenderMode'] as string | undefined;
-        if (mapMode && ['point', 'choropleth', 'heatmap'].includes(mapMode)) {
-            this.configuredMapRenderMode = mapMode as 'point' | 'choropleth' | 'heatmap';
-        } else {
-            this.configuredMapRenderMode = 'point';
-        }
+        // View-type (grid/cards/timeline/map) and per-view-type config are now resolved
+        // internally by mj-entity-viewer from the saved view's ViewTypeID — nothing to read here.
 
         // Load on first set, or when the view/entity has changed
         if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
@@ -283,6 +271,10 @@ export class UserViewResource extends BaseResourceComponent {
                 this.gridState = null;
             }
         }
+
+        // View-type + per-view-type config persistence is fully owned by mj-entity-viewer
+        // (it reads ViewTypeID + DisplayState.viewTypeConfigs off the [viewEntity] and, with
+        // [AutoSaveView]="true", saves changes back) — nothing to wire here.
     }
 
     /**
@@ -311,6 +303,16 @@ export class UserViewResource extends BaseResourceComponent {
     public onRecordOpened(event: RecordOpenedEvent): void {
         if (event && event.entity && event.compositeKey) {
             this.navigationService.OpenEntityRecord(event.entity.Name, event.compositeKey);
+        }
+    }
+
+    /**
+     * Handle a related-record navigation requested from within a view-type renderer
+     * (e.g. a foreign-key cell) - open the target record in a new tab.
+     */
+    public onOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
+        if (nav?.entityName && nav.recordKey != null) {
+            this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromID(String(nav.recordKey)));
         }
     }
 
@@ -398,6 +400,65 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     /**
+     * Open the Save-as-List dialog. Only meaningful for saved views (a
+     * ViewID is required to materialize). Dynamic views fall back to a
+     * user-visible notification rather than silently doing nothing.
+     */
+    public onSaveAsList(): void {
+        if (!this.viewEntity?.ID) {
+            this.showNotification('Save as List requires a saved View. Save this view first.', 'info', 4000);
+            return;
+        }
+        // Best-effort record-count hint — the entity-viewer exposes the
+        // grid's row count on its gridState; we surface it so the dialog's
+        // confirm button can say "Save List (476 records)".
+        this.saveAsListRecordCount = this.entityViewerRef?.TotalRecordCount ?? null;
+        this.saveAsListDialogVisible = true;
+        this.cdr.detectChanges();
+    }
+
+    public onSaveAsListCancelled(): void {
+        this.saveAsListDialogVisible = false;
+        this.cdr.detectChanges();
+    }
+
+    public async onSaveAsListSubmit(payload: SaveViewAsListResult): Promise<void> {
+        const viewId = this.viewEntity?.ID;
+        if (!viewId) return;
+        this.isSavingAsList = true;
+        this.cdr.detectChanges();
+        try {
+            const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
+            const client = new GraphQLListsClient(provider);
+            const result = await client.MaterializeFromView(viewId, {
+                ListName: payload.ListName,
+                Description: payload.Description,
+                CategoryId: payload.CategoryId,
+                RememberLineage: payload.RememberLineage,
+                UseSnapshot: payload.UseSnapshot,
+                RefreshMode: payload.RefreshMode,
+            });
+            if (result.Success && result.CreatedListId) {
+                this.saveAsListDialogVisible = false;
+                this.showNotification(
+                    `List created with ${result.Counts?.Added ?? 0} record(s).`,
+                    'success',
+                    3000,
+                );
+                this.navigationService.OpenEntityRecord('MJ: Lists', new CompositeKey([{ FieldName: 'ID', Value: result.CreatedListId }]));
+            } else {
+                this.showNotification(`Save failed: ${result.Message}`, 'error', 5000);
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            this.showNotification(`Save failed: ${message}`, 'error', 5000);
+        } finally {
+            this.isSavingAsList = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
      * Load all records for the current view/entity for export
      */
     private async loadExportRows(): Promise<Record<string, unknown>[]> {
@@ -405,7 +466,7 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error('No entity selected for export');
         }
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         let filter = '';
         if (this.viewEntity?.WhereClause) {
             filter = this.viewEntity.WhereClause;

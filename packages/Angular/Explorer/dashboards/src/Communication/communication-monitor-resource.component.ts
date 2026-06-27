@@ -35,8 +35,19 @@ interface HourlyBucket {
   standalone: false,
     selector: 'mj-communication-monitor-resource',
     template: `
-    <div class="monitor-wrapper">
-      <div class="monitor-container">
+    <mj-page-layout>
+      <mj-page-header
+        Title="Monitor"
+        Icon="fa-solid fa-chart-line"
+        Subtitle="Live delivery health, provider status, and channel breakdown">
+        <div actions>
+          <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
+            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> <span class="action-btn-label">Refresh</span>
+          </button>
+        </div>
+      </mj-page-header>
+
+      <mj-page-body>
         <!-- KPI STRIP -->
         <div class="kpi-strip">
           <div class="kpi-card sent">
@@ -120,10 +131,8 @@ interface HourlyBucket {
                   </div>
                 }
                 @if (recentLogs.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-inbox"></i>
-                    <p>No recent activity</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                    Title="No recent activity" />
                 }
               </div>
             </div>
@@ -155,10 +164,8 @@ interface HourlyBucket {
                   </div>
                 }
                 @if (providerHealth.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-server"></i>
-                    <p>No providers configured</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-server"
+                    Title="No providers configured" />
                 }
               </div>
             </div>
@@ -186,31 +193,17 @@ interface HourlyBucket {
                   </div>
                 }
                 @if (channelBreakdown.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-layer-group"></i>
-                    <p>No channel data available</p>
-                  </div>
+                  <mj-empty-state Size="compact" Icon="fa-solid fa-layer-group"
+                    Title="No channel data available" />
                 }
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
     styles: [`
-    .monitor-wrapper {
-        height: 100%;
-        overflow-y: auto;
-        background: var(--mj-bg-surface);
-    }
-    .monitor-container {
-        padding: 24px;
-        min-height: 100%;
-        max-width: 1600px;
-        margin: 0 auto;
-    }
-
     /* KPI STRIP */
     .kpi-strip {
         display: grid;
@@ -504,13 +497,6 @@ interface HourlyBucket {
     }
 
     /* EMPTY STATE */
-    .empty-state {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 40px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
 
     @media (max-width: 1200px) {
         .kpi-strip { grid-template-columns: repeat(2, 1fr); }
@@ -556,7 +542,7 @@ export class CommunicationMonitorResourceComponent extends BaseResourceComponent
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayIso = yesterday.toISOString();

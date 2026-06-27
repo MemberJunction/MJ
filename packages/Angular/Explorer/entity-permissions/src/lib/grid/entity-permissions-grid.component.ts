@@ -2,9 +2,10 @@ import { Component, Output, EventEmitter, OnInit, Input, SimpleChanges, OnChange
 
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export type EntityPermissionChangedEvent = {
   EntityName: string,
   RoleID: string
@@ -19,7 +20,7 @@ export type EntityPermissionChangedEvent = {
   templateUrl: './entity-permissions-grid.component.html',
   styleUrls: ['./entity-permissions-grid.component.css']
 })
-export class EntityPermissionsGridComponent implements OnInit, OnChanges {
+export class EntityPermissionsGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
   @Input() Mode: 'Entity' | 'Role' = 'Entity';
   @Input() EntityName!: string; // used when Mode is 'Entity'
   @Input() RoleName!: string; // used when Mode is 'Role'
@@ -31,8 +32,16 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   public gridHeight: number = 750;
   public isLoading: boolean = false;
 
-  constructor() { 
-  } 
+  /**
+   * Role-name lookup keyed by NormalizeUUID(roleID). Built once when roles are
+   * available (data load) so {@link getRoleName} is an O(1) Map read per table
+   * row instead of an O(roles) UUIDsEqual scan over `md.Roles` every CD cycle.
+   */
+  private roleNameMap = new Map<string, string>();
+
+  constructor() {
+    super();
+  }
 
   ngOnInit(): void {
     this.Refresh()
@@ -56,7 +65,8 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     const startTime = new Date().getTime();
     this.isLoading = true
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
+    this.buildRoleNameMap();
     const entity = md.Entities.find(e => e.Name === this.EntityName);
     if (this.Mode === 'Entity' && !entity)
       throw new Error("Entity not found: " + this.EntityName)
@@ -65,7 +75,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     if (this.Mode === 'Role' && !r)
       throw new Error("Role not found: " + this.RoleName)
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const filter: string = this.Mode === 'Entity' ? `EntityID='${entity!.ID}'` : `RoleName='${r?.Name}'`;
     const result = await rv.RunView({
       EntityName: 'MJ: Entity Permissions',
@@ -128,16 +138,28 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   }
     
 
+  /**
+   * Populates {@link roleNameMap} from the provider's role list. Called on data
+   * load so the per-row template binding {@link getRoleName} never scans
+   * `md.Roles` during change detection.
+   */
+  private buildRoleNameMap(): void {
+    const md = this.ProviderToUse;
+    this.roleNameMap.clear();
+    for (const r of md.Roles) {
+      this.roleNameMap.set(NormalizeUUID(r.ID), r.Name);
+    }
+  }
+
   public getRoleName(roleID: string): string {
-    const md = new Metadata();
-    const r = md.Roles.find(r => UUIDsEqual(r.ID, roleID));
-    return r ? r.Name : '';
+    if (!roleID) return '';
+    return this.roleNameMap.get(NormalizeUUID(roleID)) ?? '';
   }
   
   public async savePermissions() {
     if (this.NumDirtyPermissions > 0) {
       // iterate through each permisison and for the ones that are dirty, add to transaction group then commit at once
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
       let itemCount: number = 0;
       for (const p of this.permissions) {

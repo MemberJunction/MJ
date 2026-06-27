@@ -7,7 +7,7 @@
       }
       <h3 class="panel-title">{{ recordTitle }}</h3>
     </div>
-    <button class="close-btn" (click)="onClose()" title="Close">
+    <button class="close-btn" (click)="onClose()" title="Close" aria-label="Close panel">
       <i class="fa-solid fa-times"></i>
     </button>
   </div>
@@ -74,7 +74,10 @@
           }
 
           @if (displayFields.length === 0) {
-            <div class="empty-section">No details available</div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-circle-info"
+              Title="No details available" />
           }
         </div>
       }
@@ -95,7 +98,10 @@
               <mj-loading text="Loading related records..." size="small"></mj-loading>
             </div>
           } @else if (relatedEntitiesWithRecords.length === 0) {
-            <div class="empty-section">No related records</div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-diagram-project"
+              Title="No related records" />
           } @else {
             @for (relEntity of relatedEntitiesWithRecords; track relEntity.relatedEntityName) {
               <div class="related-entity-group" [class.expanded]="relEntity.isExpanded">
@@ -165,7 +171,10 @@
               <mj-loading text="Loading organic key matches..." size="small"></mj-loading>
             </div>
           } @else if (organicKeyMatchesWithRecords.length === 0) {
-            <div class="empty-section">No organic key matches</div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-link"
+              Title="No organic key matches" />
           } @else {
             @for (match of organicKeyMatchesWithRecords; track match.relatedEntityName) {
               <div class="related-entity-group" [class.expanded]="match.isExpanded">

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { FormState, FormSectionState, DEFAULT_FORM_STATE, DEFAULT_SECTION_STATE } from './form-state.interface';
 
@@ -27,7 +27,18 @@ export class FormStateService {
     /** Track which entities are currently in edit mode (saves suppressed) */
     private editingEntities = new Set<string>();
 
-    private metadata = new Metadata();
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+     */
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
+    private get metadata(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     /**
      * Get the observable state for an entity.
@@ -100,11 +111,14 @@ export class FormStateService {
     isSectionExpanded(entityName: string, sectionKey: string, defaultExpanded?: boolean): boolean {
         const state = this.getCurrentState(entityName);
         const sectionState = state.sections[sectionKey];
-        if (sectionState) {
+        // Only honor a persisted expansion when it was EXPLICITLY set. A section entry that
+        // exists solely to hold a panelHeight has isExpanded === undefined and must fall through
+        // to the caller's seeded default (collapsed for related-entity panels).
+        if (sectionState && sectionState.isExpanded !== undefined) {
             return sectionState.isExpanded;
         }
-        // No persisted state - use provided default or fall back to DEFAULT_SECTION_STATE
-        return defaultExpanded !== undefined ? defaultExpanded : DEFAULT_SECTION_STATE.isExpanded;
+        // No explicit persisted state - use provided default or fall back to DEFAULT_SECTION_STATE
+        return defaultExpanded !== undefined ? defaultExpanded : (DEFAULT_SECTION_STATE.isExpanded ?? true);
     }
 
     /**
@@ -158,16 +172,26 @@ export class FormStateService {
     }
 
     /**
-     * Set form width mode.
-     * @param entityName The entity name
-     * @param widthMode The width mode
+     * Whether this entity has had an EXPLICIT widthMode set via the toolbar
+     * width-toggle (and thus the user's choice should win over component
+     * defaults). Returns false for pre-existing persisted blobs that had a
+     * default `widthMode` serialized as a side effect of other state saves.
+     */
+    hasExplicitWidthMode(entityName: string): boolean {
+        return this.getCurrentState(entityName).widthModeExplicit === true;
+    }
+
+    /**
+     * Set form width mode. Marks the preference as explicit so it wins over
+     * any component-level default in `BaseFormComponent.getFormWidthMode`.
      */
     setWidthMode(entityName: string, widthMode: 'centered' | 'full-width'): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
         const newState: FormState = {
             ...currentState,
-            widthMode
+            widthMode,
+            widthModeExplicit: true
         };
         subject.next(newState);
         this.queueSave(entityName);
@@ -336,7 +360,9 @@ export class FormStateService {
         const state = this.getCurrentState(entityName);
         return sectionKeys.filter(key => {
             const section = state.sections[key];
-            return section ? section.isExpanded : DEFAULT_SECTION_STATE.isExpanded;
+            // No entry → seeded global default; entry with explicit value → that value;
+            // entry with only a panelHeight (isExpanded undefined) → treat as collapsed.
+            return section ? (section.isExpanded ?? false) : DEFAULT_SECTION_STATE.isExpanded;
         }).length;
     }
 
@@ -360,7 +386,10 @@ export class FormStateService {
     private updateSectionState(entityName: string, sectionKey: string, updates: Partial<FormSectionState>): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
-        const currentSection = currentState.sections[sectionKey] || { ...DEFAULT_SECTION_STATE };
+        // Start from the existing entry or an EMPTY object — do NOT seed DEFAULT_SECTION_STATE.
+        // Seeding it would force isExpanded:true onto a section that's only being given a
+        // panelHeight, silently expanding panels the user never opened.
+        const currentSection = currentState.sections[sectionKey] || {};
 
         const newState: FormState = {
             ...currentState,
@@ -404,7 +433,9 @@ export class FormStateService {
 
             if (setting?.Value) {
                 const savedState = JSON.parse(setting.Value) as Partial<FormState>;
-                // Merge with defaults to handle new properties
+                // Merge with defaults to handle new properties. `widthModeExplicit`
+                // rides along with the blob — pre-existing blobs won't have it,
+                // which is the desired behavior (component defaults win).
                 subject.next({ ...DEFAULT_FORM_STATE, ...savedState });
             } else {
                 // No saved state, use defaults

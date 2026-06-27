@@ -126,53 +126,14 @@
    EMPTY STATE
    ============================================ */
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 0;
-  color: var(--mj-text-secondary);
-}
-
-.empty-icon {
-  font-size: 48px;
-  color: var(--mj-border-strong);
-  margin-bottom: 16px;
-}
-
-.empty-state p {
+.search-result-empty-message {
   margin: 4px 0;
   font-size: 15px;
 }
 
 .empty-hint {
   color: var(--mj-text-disabled);
-  font-size: 13px !important;
-}
-
-/* ============================================
-   SINGLE RESULT — auto-nav state
-   ============================================ */
-
-.single-result-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px 0;
-  color: var(--mj-text-secondary);
-}
-
-.redirect-icon {
-  font-size: 32px;
-  color: var(--mj-brand-primary);
-  margin-bottom: 16px;
-}
-
-.single-result-state p {
-  font-size: 15px;
-  margin: 4px 0;
+  font-size: 13px;
 }
 
 /* ============================================

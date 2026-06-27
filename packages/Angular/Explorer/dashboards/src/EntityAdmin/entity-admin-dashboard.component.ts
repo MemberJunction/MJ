@@ -31,10 +31,15 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   public selectedEntity: EntityInfo | null = null;
   public filteredEntities: EntityInfo[] = [];
 
+  /** Total unfiltered entity count — feeds the chrome's X-of-Y badge. */
+  public get TotalEntityCount(): number {
+    return this.erdComposite?.entities?.length ?? 0;
+  }
+
   // State management
   private userStateChangeSubject = new Subject<ERDCompositeState>();
   private hasLoadedUserState = false;
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
   private userSettingEntity: MJUserSettingEntity | null = null;
 
   ngAfterViewInit(): void {

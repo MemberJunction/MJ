@@ -92,18 +92,21 @@ Page size changes always reset to page 1.
 - Component validates fields exist in entity metadata
 - Warning logged for unknown fields
 
-## Primary Key Detection
-Auto-detects primary keys from entity metadata for OpenEntityRecord integration:
-- Handles single keys: `'ID'`
-- Handles composite keys: `['OrderID', 'LineNumber']`
-- Passes to DataGrid as `entityPrimaryKeys` prop for row click behavior
+## Primary Key Detection (Internal)
+EntityDataGrid auto-detects primary keys from entity metadata for OpenEntityRecord integration. Users do NOT need to pass primary key information -- this is handled entirely internally.
+
+Detection supports:
+- Single keys: `'ID'`
+- Composite keys: `['OrderID', 'LineNumber']`
+
+The detected keys are passed internally to the wrapped DataGrid component.
 
 ## Integration with DataGrid
 EntityDataGrid passes managed data to DataGrid with these overrides:
 
 - `data`: Current page records (loaded/cached)
 - `entityName`: Passed through
-- `entityPrimaryKeys`: Auto-detected from metadata
+- `entityPrimaryKeys`: Auto-detected from entity metadata (not a user-facing prop)
 - `columns`: Maps `fields` prop to DataGrid columns (auto-detected if omitted)
 - `sorting={false}`: Component handles sorting logic (client vs server)
 - `paging={false}`: Component handles pagination logic (client vs server)

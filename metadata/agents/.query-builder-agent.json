@@ -19,7 +19,10 @@
         "plan",
         "columns.*",
         "rows.*",
-        "metadata.*"
+        "metadata.*",
+        "tables.*",
+        "interpretation",
+        "computations.*"
       ],
       "FinalPayloadValidation": "@file:validation/query-builder-payload-validation.json",
       "FinalPayloadValidationMode": "Retry",
@@ -222,6 +225,7 @@
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
             "IconClass": "fa-solid fa-database",
+            "MaxIterationsPerRun": 50,
             "PayloadDownstreamPaths": [
               "*"
             ],
@@ -231,7 +235,10 @@
               "plan",
               "columns.*",
               "rows.*",
-              "metadata.*"
+              "metadata.*",
+              "tables.*",
+              "interpretation",
+              "computations.*"
             ],
             "FinalPayloadValidation": "@file:validation/query-builder-payload-validation.json",
             "FinalPayloadValidationMode": "Retry",
@@ -381,8 +388,8 @@
             "ID": "17E1C958-909C-41B2-8B52-138AED224108"
           },
           "sync": {
-            "lastModified": "2026-03-13T19:10:49.643Z",
-            "checksum": "338df9b05af90d1da40d03f32a497e5dd0811e8c9820b5e3f9377434d59dfbbc"
+            "lastModified": "2026-06-16T01:17:22.155Z",
+            "checksum": "52f1b3b936097da7463a314d31b5d523d478023a6a87ceb3c68ac8bca2356d27"
           }
         }
       ]
@@ -391,8 +398,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:49.505Z",
-      "checksum": "54a16ab1a87fddd94d3a52907af62e977d52fff81dd8f384f809e726c0021e66"
+      "lastModified": "2026-06-16T01:17:22.121Z",
+      "checksum": "903631bcce151f68bc1069f91fc0f7e32f477f55b22cde5a017a0936680fa4bc"
     }
   }
 ]

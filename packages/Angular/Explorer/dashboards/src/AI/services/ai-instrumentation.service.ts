@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { switchMap, shareReplay, tap, map } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
+import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 
 /**
  * Lightweight record types for dashboard aggregation.
@@ -18,6 +18,8 @@ export interface PromptRunRecord {
   TokensUsed: number | null;
   TokensPrompt: number | null;
   TokensCompletion: number | null;
+  TokensCacheRead: number | null;
+  TokensCacheWrite: number | null;
   ExecutionTimeMS: number | null;
   ModelID: string | null;
   Model: string | null;
@@ -43,7 +45,7 @@ export interface AgentRunRecord {
 /** Fields to request for prompt runs — only what the dashboard needs for aggregation */
 const PROMPT_RUN_FIELDS = [
   'ID', 'RunAt', 'CompletedAt', 'Success', 'Cost', 'TokensUsed',
-  'TokensPrompt', 'TokensCompletion', 'ExecutionTimeMS',
+  'TokensPrompt', 'TokensCompletion', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS',
   'ModelID', 'Model', 'AgentID', 'Agent', 'Prompt', 'ErrorMessage'
 ];
 
@@ -66,6 +68,7 @@ export interface DashboardKPIs {
   topAgent: string;
   errorRate: number;
   dailyCostBurn: number;
+  cacheHitRate: number;
 }
 
 export interface TrendData {
@@ -125,6 +128,17 @@ interface DashboardRawData {
   providedIn: 'root'
 })
 export class AIInstrumentationService {
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
     start: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
     end: new Date()
@@ -187,7 +201,7 @@ export class AIInstrumentationService {
     const now = new Date();
     const recentTime = new Date(now.getTime() - 5 * 60 * 1000);
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [promptResults, agentResults, livePromptResults, liveAgentResults] = await rv.RunViews<PromptRunRecord | AgentRunRecord>([
       {
         EntityName: 'MJ: AI Prompt Runs',
@@ -247,8 +261,21 @@ export class AIInstrumentationService {
       topModel: this.getTopModel(promptRuns),
       topAgent: this.getTopAgent(agentRuns),
       errorRate: 1 - successRate,
-      dailyCostBurn: this.calculateDailyCostBurn(promptRuns, agentRuns)
+      dailyCostBurn: this.calculateDailyCostBurn(promptRuns, agentRuns),
+      cacheHitRate: this.calculateCacheHitRate(promptRuns)
     };
+  }
+
+  /** Share of input tokens served from the provider's prompt cache across the period's prompt runs. */
+  private calculateCacheHitRate(promptRuns: PromptRunRecord[]): number {
+    let uncached = 0, read = 0, write = 0;
+    for (const r of promptRuns) {
+      uncached += r.TokensPrompt || 0;
+      read += r.TokensCacheRead || 0;
+      write += r.TokensCacheWrite || 0;
+    }
+    const totalInput = uncached + read + write;
+    return totalInput > 0 ? read / totalInput : 0;
   }
 
   // ─── Trend Computation ────────────────────────────────────────────
@@ -548,7 +575,7 @@ export class AIInstrumentationService {
   }
 
   private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [result, childrenResult] = await rv.RunViews<PromptRunRecord>([
       {
         EntityName: 'MJ: AI Prompt Runs',
@@ -588,7 +615,7 @@ export class AIInstrumentationService {
   }
 
   private async getAgentExecutionDetails(agentRunId: string): Promise<ExecutionDetails> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [result, childrenResult] = await rv.RunViews<AgentRunRecord>([
       {
         EntityName: 'MJ: AI Agent Runs',

@@ -2,7 +2,8 @@ import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
 import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
 import { BaseEntity, BaseEntityResult, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
-import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
+import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { LogError } from "./logging";
@@ -10,6 +11,7 @@ import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunRepo
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { RunReportParams } from "./runReport";
 import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
 export { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
@@ -101,6 +103,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * Server in-process transport for Remote Operations: resolves the registered operation by key
+     * and runs it via `ExecuteServer`. Inherited by both SQL Server and PostgreSQL providers. The
+     * client (GraphQL) provider overrides this to marshal over the wire instead.
+     */
+    protected override async InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        let fallbackUser: UserInfo | undefined;
+        try {
+            fallbackUser = this.CurrentUser;
+        } catch {
+            // CurrentUser is unavailable until the provider is configured — rely on options.user instead.
+        }
+        return dispatchRemoteOperationInProcess<TInput, TOutput>(operationKey, input, options, this, fallbackUser);
+    }
+
+    /**
      * Executes a SQL query with optional parameters and options.
      * @param query
      * @param parameters
@@ -110,6 +127,15 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns A promise that resolves to an array of results of type T
      */
     abstract ExecuteSQL<T>(query: string, parameters?: unknown[], options?: ExecuteSQLOptions, contextUser?: UserInfo): Promise<Array<T>>
+
+    /**
+     * Builds a parameter placeholder for parameterized queries.
+     * Default: PG-style ($1, $2, ...). SQL Server overrides to @p0, @p1, etc.
+     * @param index Zero-based parameter index
+     */
+    public BuildParameterPlaceholder(index: number): string {
+        return `$${index + 1}`;
+    }
 
     /**
      * Begins a transaction for the current database connection.
@@ -127,6 +153,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     abstract RollbackTransaction(): Promise<void>;
 
     /**
+     * Whether this provider currently has an active transaction. Subclasses
+     * that track transaction state should override this. Used by callers
+     * (e.g. `runMaybeSerial`) to decide whether to fan out concurrent saves
+     * or run them sequentially. Defaults to `false` for providers that don't
+     * expose this state.
+     */
+    public get IsInTransaction(): boolean {
+        return false;
+    }
+
+    /**
      * Internal implementation for spec-based query execution.
      * Subclasses must provide the concrete pipeline (composition → templates → execute).
      */
@@ -140,6 +177,28 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     override get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
     }
+
+    /**
+     * The {@link SQLDialect} instance matching this provider's `PlatformKey`.
+     *
+     * Use this whenever runtime code needs to emit dialect-specific SQL
+     * (boolean literals, identifier quoting, casts, …) — it spares callers
+     * from doing `GetDialect(provider.PlatformKey)` every time, and keeps
+     * dialect resolution in one place. Resolves lazily and is cached so
+     * repeated access is free.
+     *
+     * Example:
+     * ```typescript
+     * const lit = provider.Dialect.BooleanLiteral(true); // '1' on SS, 'TRUE' on PG
+     * ```
+     */
+    public get Dialect(): SQLDialect {
+        if (!this._dialect) {
+            this._dialect = GetDialect(this.PlatformKey);
+        }
+        return this._dialect;
+    }
+    private _dialect: SQLDialect | null = null;
 
     /**
      * Gets the MemberJunction core schema name (e.g. '__mj').
@@ -1235,14 +1294,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     State: {},
                 };
 
-                entityResult.OriginalValues = entity.Fields.map((f) => {
-                    const tempStatus = f.ActiveStatusAssertions;
-                    f.ActiveStatusAssertions = false;
-                    const ret = { FieldName: f.Name, Value: f.Value };
-                    f.ActiveStatusAssertions = tempStatus;
-                    return ret;
-                });
-                entity.ResultHistory.push(entityResult);
+                // Reads f.Value directly (framework-internal capture for record-change history) —
+                // EntityField.Value does not assert active status, so no suppression is needed.
+                entityResult.OriginalValues = entity.Fields.map((f) => ({ FieldName: f.Name, Value: f.Value }));
+                entity.RegisterResultHistoryEntry(entityResult);
 
                 // Step 2: Validation hook
                 if (!bReplay) {
@@ -1400,7 +1455,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 FieldName: f.Name,
                 Value: f.Value,
             }));
-            entity.ResultHistory.push(entityResult);
+            entity.RegisterResultHistoryEntry(entityResult);
 
             // Generate provider-specific delete SQL
             const sqlDetails = this.GenerateDeleteSQL(entity, user);

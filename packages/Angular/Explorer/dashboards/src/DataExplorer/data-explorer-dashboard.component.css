@@ -96,7 +96,7 @@
   gap: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   position: relative;
-  z-index: 1100; /* Above Leaflet map containers (z-index ~400-1000) so dropdowns render on top */
+  z-index: 2; /* Above sibling .content-body so header dropdowns render on top of grid/map content */
 }
 
 .header-left {
@@ -435,11 +435,20 @@
 }
 
 .content-body {
-  flex: 1;
-  overflow: hidden;
-  padding: 20px 24px;
   display: flex;
-  flex-direction: column;
+  flex: 1 1 0%;
+  overflow: hidden;
+  /* Contain the body's stacking context. The view components inside (grid
+  option menus, the map's Leaflet panes/toolbar, etc.) use z-index values up
+  to ~1000; .content-header sits at z-index 2 (kept below the shell header —
+  see #2701). Without this, those body z-indices leak into the shared context
+  and paint over the header's own dropdowns (view-selector, date-field).
+  `isolation: isolate` flattens all body z-indices into one context beneath
+  the header. Safe because modals + the detail panel render at the dashboard
+  root (outside .content-body), so they still overlay everything. */
+  isolation: isolate;
+  position: relative;   /* added */
+  z-index: 3;           /* added — higher than .content-header's z-index: 2 */
 }
 
 .loading-container,
@@ -465,38 +474,6 @@
   color: var(--mj-text-secondary);
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: var(--mj-text-muted);
-  background: var(--mj-bg-surface);
-  border-radius: 8px;
-  padding: 40px;
-}
-
-.empty-icon {
-  font-size: 64px;
-  color: var(--mj-border-default);
-  margin-bottom: 24px;
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-  max-width: 400px;
-  color: var(--mj-text-secondary);
-}
 
 /* ============================================
    CONCEPT D: HOME VIEW LAYOUT
@@ -988,24 +965,6 @@
   text-align: center;
 }
 
-/* No results state for home view */
-.home-no-results {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--mj-text-muted);
-}
-
-.home-no-results i {
-  font-size: 28px;
-  margin-bottom: 10px;
-  display: block;
-}
-
-.home-no-results p {
-  font-size: 14px;
-  margin: 0;
-}
-
 .detail-panel {
   flex-shrink: 0;
   height: 100%;
@@ -1124,29 +1083,6 @@
 .toggle-label {
   font-size: 12px;
   font-weight: 500;
-}
-
-/* ============================================
-   EMPTY STATE VARIANTS
-   ============================================ */
-
-.empty-state.small {
-  height: auto;
-  padding: 32px;
-  background: var(--mj-bg-surface-card);
-}
-
-.empty-state.small .empty-icon {
-  font-size: 40px;
-  margin-bottom: 16px;
-}
-
-.empty-state.small h3 {
-  font-size: 16px;
-}
-
-.empty-state.small p {
-  font-size: 13px;
 }
 
 /* ============================================

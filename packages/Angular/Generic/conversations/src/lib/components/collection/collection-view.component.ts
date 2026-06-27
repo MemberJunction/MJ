@@ -1,4 +1,5 @@
 import { Component, Input, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -51,15 +52,12 @@ type SortBy = 'name' | 'date' | 'type';
     
       <div class="view-content" [class.grid-mode]="viewMode === 'grid'" [class.list-mode]="viewMode === 'list'">
         @if (artifactVersions.length === 0) {
-          <div class="empty-state">
-            <i class="fas fa-folder-open"></i>
-            <p>This collection is empty</p>
-            @if (canEdit) {
-              <button class="btn-add-primary" (click)="onAddArtifact()">
-                <i class="fas fa-plus"></i> Add Artifact
-              </button>
-            }
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-folder-open"
+            Title="This collection is empty"
+            [ActionText]="canEdit ? 'Add Artifact' : ''"
+            ActionIcon="fa-solid fa-plus"
+            (Action)="onAddArtifact()" />
         }
     
         @for (item of artifactVersions; track item.version.ID) {
@@ -113,17 +111,11 @@ type SortBy = 'name' | 'date' | 'type';
     .view-content.grid-mode { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
     .view-content.list-mode { display: flex; flex-direction: column; gap: 12px; }
 
-    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 64px 24px; color: var(--mj-text-disabled); }
-    .empty-state i { font-size: 64px; margin-bottom: 24px; }
-    .empty-state p { margin: 0 0 24px 0; font-size: 16px; }
-    .btn-add-primary { padding: 12px 24px; background: var(--mj-brand-primary); color: var(--mj-text-inverse); border: none; border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
-    .btn-add-primary:hover { background: var(--mj-brand-primary-hover); }
-
     .artifact-viewer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--mj-bg-overlay); display: flex; align-items: center; justify-content: center; z-index: 10000; }
     .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: var(--mj-bg-surface); border-radius: 12px; overflow: hidden; box-shadow: var(--mj-shadow-lg); }
   `]
 })
-export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
+export class CollectionViewComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
   @Input() collection!: MJCollectionEntity;
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
@@ -146,7 +138,8 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     { label: 'Type', value: 'type' }
   ];
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   ngOnInit() {
     this.loadArtifacts();
@@ -169,8 +162,8 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.collection) return;
 
     try {
-      const rv = new RunView();
-      const md = new Metadata();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const md = this.ProviderToUse;
 
       // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
@@ -264,7 +257,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
 
     try {
       // Delete THIS SPECIFIC VERSION from the collection
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView({
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `CollectionID='${this.collection.ID}' AND ArtifactVersionID='${item.version.ID}'`,
@@ -272,9 +265,20 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
       }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        // Delete this version association
+        // Delete all version associations atomically
+        const md = this.ProviderToUse;
+        const tg = await md.CreateTransactionGroup();
         for (const joinRecord of result.Results) {
+          joinRecord.TransactionGroup = tg;
           await joinRecord.Delete();
+        }
+        const success = await tg.Submit();
+        if (!success) {
+          MJNotificationService.Instance.CreateSimpleNotification(
+            `Failed to remove ${versionLabel} from collection`,
+            'error'
+          );
+          return;
         }
         await this.loadArtifacts();
         this.cdr.detectChanges();
@@ -301,7 +305,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
 
     try {
       // Create new artifact
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
 
       artifact.Name = name;
@@ -311,7 +315,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
       const saved = await artifact.Save();
       if (saved) {
         // Get the latest version of this artifact to add to collection
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const versionResult = await rv.RunView({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID='${artifact.ID}'`,

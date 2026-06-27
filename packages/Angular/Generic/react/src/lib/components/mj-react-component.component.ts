@@ -17,22 +17,49 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
-import { 
+import {
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   resourceManager,
   reactRootManager,
   ResolvedComponents,
   SetupStyles,
-  ComponentRegistryService
+  ComponentRegistryService,
+  resolveUserStateScope,
+  userStateStorageKey,
+  parseStoredUserSettings,
+  mergeUserSettings,
+  applyUserSettingsUpdate
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
-import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, RunViewParams, RunViewResult, RunQueryParams, RunQueryResult, DataSnapshot, DataTable, MJColumnDescriptor } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { ComponentUtilities, SimpleRunView, SimpleRunQuery } from '@memberjunction/interactive-component-types';
+
+/**
+ * A captured RunView/RunQuery result with its original parameters.
+ * Used by the automatic data capture system for components that don't
+ * implement getCurrentDataState().
+ */
+interface CapturedDataResult {
+  /** Entity name or query name */
+  sourceName: string;
+  /** 'view' or 'query' */
+  sourceType: 'view' | 'query';
+  /** Original RunView/RunQuery params */
+  params: Record<string, unknown>;
+  /** Returned rows */
+  rows: Record<string, unknown>[];
+  /** Total available rows (may differ from rows.length due to pagination) */
+  totalRows: number;
+  /** When the data was fetched */
+  fetchedAt: Date;
+}
 
 /**
  * Event emitted by React components
@@ -126,7 +153,7 @@ export interface UserSettingsChangedEvent {
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MJReactComponent implements AfterViewInit, OnDestroy {
+export class MJReactComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy  {
   private _component!: ComponentSpec;
 
   /**
@@ -211,7 +238,49 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   get savedUserSettings(): any {
     return this._savedUserSettings;
   }
-  
+
+  /**
+   * Optional explicit scope for per-user settings persistence. When omitted, the
+   * scope defaults to `<namespace>/<name>` of the component spec. Settings are
+   * stored per-user via `UserInfoEngine` under the key
+   * `InteractiveComponents_UserState_Root/<scope>`. Provide an
+   * explicit scope when a single component spec is rendered in multiple distinct
+   * contexts that should NOT share preferences (e.g. the same form spec used for
+   * different entities) — set it to something stable and unique per context.
+   */
+  @Input() UserStateScope?: string;
+
+  /**
+   * When `true` (default), the host transparently persists `savedUserSettings`
+   * per-user, cross-device via `UserInfoEngine` — seeding the component from
+   * storage on load and saving (debounced) on every `onSaveUserSettings` call,
+   * auto-scoped per component. Set to `false` to opt out and own persistence
+   * yourself by handling the `userSettingsChanged` output instead.
+   */
+  @Input() PersistUserSettings: boolean = true;
+
+  /**
+   * Host-supplied props spread into the React component's props alongside the
+   * standard `utilities`, `callbacks`, `components`, `styles`, `libraries`, and
+   * `savedUserSettings`. Used by hosts that need to push data context the React
+   * component can't fetch itself — e.g. `InteractiveFormComponent` passing
+   * `FormHostProps` (the current record snapshot, mode, permissions).
+   *
+   * Standard keys take precedence over caller-supplied keys to keep the
+   * platform contract stable.
+   */
+  private _componentProps: object = {};
+  @Input()
+  set componentProps(value: object | undefined) {
+    this._componentProps = value ?? {};
+    if (this.isInitialized) {
+      this.renderComponent();
+    }
+  }
+  get componentProps(): object {
+    return this._componentProps;
+  }
+
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
   @Output() refreshData = new EventEmitter<void>();
@@ -221,7 +290,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Output() initialized = new EventEmitter<void>();
   
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
-  
+
+  // ─── Automatic data capture ───
+  // Stores RunView/RunQuery results for components that don't implement getCurrentDataState().
+  // Cleared on component reinitialize. Used as fallback in GetCurrentDataState().
+  private capturedData: CapturedDataResult[] = [];
+
   private reactRootId: string | null = null;
   private compiledComponent: ComponentObject | null = null;
   private loadedDependencies: Record<string, ComponentObject> = {};
@@ -249,6 +323,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     private cdr: ChangeDetectorRef,
     private notificationService: MJNotificationService
   ) {
+    super();
     // Generate unique component ID for resource tracking
     this.componentId = `mj-react-component-${Date.now()}-${Math.random()}`;
   }
@@ -307,6 +382,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     this.componentVersion = '';
     this.hasError = false;
     this.isInitialized = false;
+    this.capturedData = [];
 
     // Unmount existing React root if present
     if (this.reactRootId) {
@@ -330,10 +406,10 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     try {
       // Ensure React is loaded
       await this.reactBridge.getReactContext();
-      
+
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
-      
+
       // NEW: Use ComponentManager if enabled (default: true)
       if (this.useComponentManager) {
         console.log(`🎯 [initializeComponent] Using NEW ComponentManager approach`);
@@ -413,7 +489,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         (container: HTMLElement) => reactContext.ReactDOM.createRoot(container),
         this.componentId
       );
-      
+
+      // Seed savedUserSettings from durable per-user storage before the first
+      // render so the component mounts with the user's persisted preferences.
+      await this.seedUserSettingsFromStore();
+
       // Initial render
       this.renderComponent();
       this.isInitialized = true;
@@ -491,7 +571,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const resolved = await resolver.resolveComponents(
       spec, 
       namespace,
-      Metadata.Provider.CurrentUser // Pass current user context for database operations
+      this.ProviderToUse.CurrentUser // Pass current user context for database operations
     );
     
     if (this.enableLogging) {
@@ -512,7 +592,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       
       // Load the entire hierarchy with one simple call
       const result = await manager.loadHierarchy(this.component, {
-        contextUser: Metadata.Provider.CurrentUser,
+        contextUser: this.ProviderToUse.CurrentUser,
         defaultNamespace: 'Global',
         defaultVersion: this.component.version || this.generateComponentHash(this.component),
         returnType: 'both'
@@ -621,7 +701,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     }
     
     // Initialize metadata engine
-    await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
+    await ComponentMetadataEngine.Instance.Config(false, this.ProviderToUse.CurrentUser);
     
     // Use the runtime's hierarchy registrar
     const registrar = new ComponentHierarchyRegistrar(
@@ -650,7 +730,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         allowOverride: false,  // Each version is unique
         allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries,
         debug: true,
-        contextUser: Metadata.Provider.CurrentUser
+        contextUser: this.ProviderToUse.CurrentUser
       }
     );
     
@@ -797,9 +877,15 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const runtimeContext = this.adapter.getRuntimeContext();
     const libraries = runtimeContext.libraries || {};
     
-    // Build props with savedUserSettings pattern
+    // Build props — wrap utilities with data capture for fallback snapshot support.
+    // Host-supplied componentProps spread first so platform-provided keys
+    // (utilities, callbacks, components, styles, libraries, savedUserSettings,
+    // onSaveUserSettings) always win — the contract stays stable regardless of
+    // what a host passes in.
+    const wrappedUtilities = this.wrapUtilitiesWithCapture(this.utilities);
     const props = {
-      utilities: this.utilities, // Now uses getter which auto-initializes if needed
+      ...this._componentProps,
+      utilities: wrappedUtilities,
       callbacks: this.currentCallbacks,
       components,
       styles: this.styles as any,
@@ -917,8 +1003,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           // now in some cases we have key/value pairs that the component we are hosting
           // use, but are not the pkey, so if that is the case, we'll run a quick view to try
           // and get the pkey so that we can emit the openEntityRecord call with the pkey
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const e = md.EntityByName(entityName);
+          if (!e) {
+            console.warn(`Entity not found: ${entityName}`);
+            return;
+          }
           let shouldRunView = false;
           // now check each key in the keyToUse to see if it is a pkey
           for (const singleKey of keyToUse.KeyValuePairs) {
@@ -940,7 +1030,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           // if we get here and shouldRunView is true, we need to run a view using the info provided
           // by our contained component to get the pkey
           if (shouldRunView) {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
               EntityName: entityName,
               ExtraFilter: keyToUse.ToWhereClause()
@@ -961,8 +1051,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           }
 
           this.openEntityRecord.emit({ entityName, key: keyToUse });
-        }  
-      } 
+        }
+      },
+      NotifyEvent: async (eventName: string, args: BaseEventArgs) => {
+        this.componentEvent.emit({ type: eventName, payload: args });
+      }
     };
   }
 
@@ -982,21 +1075,214 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Handle onSaveUserSettings from components
-   * This implements the SavedUserSettings pattern
+   * Handle onSaveUserSettings from components.
+   *
+   * This implements the SavedUserSettings pattern: the component owns its single
+   * settings object and hands us the full latest copy whenever it changes. We
+   * (1) **merge** the payload over our in-memory snapshot so any future re-render
+   * passes the latest values, (2) persist the merged snapshot per-user via
+   * UserInfoEngine (debounced, auto-scoped) unless the host opted out, and
+   * (3) still bubble the event up for any parent container that wants to observe
+   * changes — carrying the merged snapshot, so observers and storage agree.
+   *
+   * Merge (not replace) makes the host resilient to a component passing only the
+   * changed keys, and to the stale-prop case: we deliberately never re-render on
+   * save, so the `savedUserSettings` prop a component spreads is frozen at mount
+   * and would otherwise lose earlier same-session changes. Removing a key
+   * requires explicit intent — set it to `null` (see applyUserSettingsUpdate).
    */
   private handleSaveUserSettings(newSettings: Record<string, any>) {
-    // Just bubble the event up to parent containers for persistence
-    // We don't need to store anything here
+    // Keep our snapshot current WITHOUT going through the setter (which would
+    // re-render). The component already holds the correct state — it's the one
+    // that told us about the change — so re-rendering would only cause flicker.
+    this._savedUserSettings = applyUserSettingsUpdate(this._savedUserSettings, newSettings);
+
+    // Durably persist the latest settings for this user, scoped to this component.
+    this.persistUserSettings(this._savedUserSettings);
+
+    // Bubble the event up to parent containers (back-compat; no consumer required).
     this.userSettingsChanged.emit({
-      settings: newSettings,
+      settings: this._savedUserSettings,
       componentName: this.component?.name,
       timestamp: new Date()
     });
-    
-    // DO NOT re-render the component!
-    // The component already has the correct state - it's the one that told us about the change.
-    // Re-rendering would cause unnecessary DOM updates and visual flashing.
+  }
+
+  /**
+   * Resolve the durable storage key for this component's per-user settings, or
+   * null when persistence is disabled or no stable scope can be derived.
+   */
+  private getUserStateStorageKey(): string | null {
+    if (!this.PersistUserSettings) {
+      return null;
+    }
+    const scope = resolveUserStateScope(
+      this.UserStateScope,
+      this._component?.namespace,
+      this._component?.name
+    );
+    return userStateStorageKey(scope);
+  }
+
+  /**
+   * Seed `savedUserSettings` from durable per-user storage (UserInfoEngine),
+   * merging stored values over any host-provided defaults (stored wins). Best
+   * effort — any failure leaves the host-provided / empty settings in place.
+   */
+  private async seedUserSettingsFromStore(): Promise<void> {
+    const key = this.getUserStateStorageKey();
+    if (!key) {
+      return;
+    }
+    try {
+      const provider = this.ProviderToUse;
+      const user = provider?.CurrentUser;
+      if (!user) {
+        return; // No user context — cannot scope settings to a user.
+      }
+      // Idempotent: a no-op when the engine is already loaded for this user.
+      await UserInfoEngine.Instance.Config(false, user, provider);
+      const stored = parseStoredUserSettings(UserInfoEngine.Instance.GetSetting(key));
+      this._savedUserSettings = mergeUserSettings(this._savedUserSettings, stored);
+    } catch (error) {
+      if (this.enableLogging) {
+        console.warn('MJReactComponent: failed to seed user settings from store', error);
+      }
+    }
+  }
+
+  /**
+   * Persist the component's settings object for the current user (debounced,
+   * cross-device). Best effort — failures are logged when logging is enabled and
+   * never surfaced to the component.
+   */
+  private persistUserSettings(settings: Record<string, any> | string): void {
+    const key = this.getUserStateStorageKey();
+    if (!key) {
+      return;
+    }
+    try {
+      const provider = this.ProviderToUse;
+      const user = provider?.CurrentUser;
+      if (!user) {
+        return;
+      }
+      // The component normally hands us an object, but guard against a caller
+      // that already serialized it — double-stringifying would store a quoted
+      // JSON string the seed path could not parse back into settings.
+      const serialized = typeof settings === 'string' ? settings : JSON.stringify(settings);
+      UserInfoEngine.Instance.SetSettingDebounced(key, serialized, user);
+    } catch (error) {
+      if (this.enableLogging) {
+        console.warn('MJReactComponent: failed to persist user settings', error);
+      }
+    }
+  }
+
+  // =================================================================
+  // Automatic Data Capture — intercept RunView/RunQuery for fallback
+  // =================================================================
+
+  /**
+   * Wraps a ComponentUtilities object so that every RunView / RunViews / RunQuery
+   * call transparently stores the result in `this.capturedData`. The wrapped
+   * object is referentially distinct from the original and is safe to pass to
+   * multiple renders (results accumulate until the component resets).
+   */
+  private wrapUtilitiesWithCapture(original: ComponentUtilities): ComponentUtilities {
+    const self = this;
+    const wrappedRv: SimpleRunView = {
+      RunView: async (params: RunViewParams, contextUser?: unknown) => {
+        const result = await original.rv.RunView(params, contextUser as undefined);
+        if (result?.Success) {
+          self.capturedData.push({
+            sourceName: String(params.EntityName ?? params.ExtraFilter ?? 'Unknown'),
+            sourceType: 'view',
+            params: params as unknown as Record<string, unknown>,
+            rows: result.Results ?? [],
+            totalRows: result.TotalRowCount ?? result.Results?.length ?? 0,
+            fetchedAt: new Date()
+          });
+        }
+        return result;
+      },
+      RunViews: async (params: RunViewParams[], contextUser?: unknown) => {
+        const results = await original.rv.RunViews(params, contextUser as undefined);
+        results.forEach((result: RunViewResult, i: number) => {
+          if (result?.Success) {
+            self.capturedData.push({
+              sourceName: String(params[i]?.EntityName ?? `View ${i}`),
+              sourceType: 'view',
+              params: params[i] as unknown as Record<string, unknown>,
+              rows: result.Results ?? [],
+              totalRows: result.TotalRowCount ?? result.Results?.length ?? 0,
+              fetchedAt: new Date()
+            });
+          }
+        });
+        return results;
+      }
+    };
+
+    const wrappedRq: SimpleRunQuery = {
+      RunQuery: async (params: RunQueryParams, contextUser?: unknown) => {
+        const result = await original.rq.RunQuery(params, contextUser as undefined);
+        if (result?.Success) {
+          self.capturedData.push({
+            sourceName: String(params.QueryID ?? params.QueryName ?? 'Query'),
+            sourceType: 'query',
+            params: params as unknown as Record<string, unknown>,
+            rows: (result.Results ?? []) as Record<string, unknown>[],
+            totalRows: result.TotalRowCount ?? result.Results?.length ?? 0,
+            fetchedAt: new Date()
+          });
+        }
+        return result;
+      }
+    };
+
+    return {
+      ...original,
+      rv: wrappedRv,
+      rq: wrappedRq
+    };
+  }
+
+  /**
+   * Builds a DataSnapshot from captured RunView/RunQuery results.
+   * Returns null if no data was captured.
+   */
+  private BuildCapturedDataSnapshot(): DataSnapshot | null {
+    if (this.capturedData.length === 0) return null;
+
+    const tables: DataTable[] = this.capturedData.map((captured, idx) => {
+      const table = new DataTable();
+      table.name = captured.sourceName || `Table ${idx + 1}`;
+      table.source = captured.sourceType;
+      table.rows = captured.rows;
+      // Infer columns from the first row's keys
+      if (captured.rows.length > 0) {
+        const firstRow = captured.rows[0];
+        table.columns = Object.keys(firstRow).map(key => {
+          const col = new MJColumnDescriptor(key);
+          col.displayName = key;
+          const val = firstRow[key];
+          if (typeof val === 'number') col.sqlBaseType = 'float';
+          else if (val instanceof Date) col.sqlBaseType = 'datetime';
+          else col.sqlBaseType = 'nvarchar';
+          return col;
+        });
+      }
+      table.metadata = {
+        entityName: captured.sourceType === 'view' ? captured.sourceName : undefined,
+        rowCount: captured.rows.length,
+        totalAvailableRows: captured.totalRows,
+        fetchedAt: captured.fetchedAt
+      };
+      return table;
+    });
+
+    return DataSnapshot.FromTables(tables, this.component?.title ?? this.component?.name);
   }
 
   /**
@@ -1025,6 +1311,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     // Clear references
     this.compiledComponent = null;
     this.isInitialized = false;
+    this.capturedData = [];
 
     // Trigger registry cleanup
     this.adapter.getRegistry().cleanup();
@@ -1060,20 +1347,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   // =================================================================
   
   /**
-   * Gets the current data state of the component
-   * Used by AI agents to understand what data is currently displayed
-   * @returns The current data state, or undefined if not implemented
+   * Gets the current data state of the component.
+   * Tries the component's explicit implementation first, then falls back
+   * to a DataSnapshot built from intercepted RunView/RunQuery results.
    */
-  getCurrentDataState(): any {
-    return this.compiledComponent?.getCurrentDataState?.();
-  }
-  
-  /**
-   * Gets the history of data state changes in the component
-   * @returns Array of timestamped state snapshots, or empty array if not implemented
-   */
-  getDataStateHistory(): Array<{ timestamp: Date; state: any }> {
-    return this.compiledComponent?.getDataStateHistory?.() || [];
+  getCurrentDataState(): DataSnapshot | undefined {
+    const explicit = this.compiledComponent?.getCurrentDataState?.();
+    if (explicit && typeof explicit === 'object') return explicit;
+    return this.BuildCapturedDataSnapshot() ?? undefined;
   }
   
   /**
@@ -1154,13 +1435,31 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   public static forceClearRegistries(): void {
     // Clear React runtime's component registry service
     ComponentRegistryService.reset();
-    
+
     // Clear any cached hierarchy registrar
     if (typeof window !== 'undefined' && (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__) {
       (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__ = null;
     }
-    
+
     console.log('🧹 All component registries cleared for fresh load');
+  }
+
+  /**
+   * Gets the current data state from the hosted React component.
+   * Falls back to a DataSnapshot built from intercepted RunView/RunQuery results
+   * when the component does not explicitly implement getCurrentDataState.
+   */
+  public GetCurrentDataState(): DataSnapshot | undefined {
+    return this.getCurrentDataState();
+  }
+
+  /**
+   * Applies a data state snapshot to the hosted React component.
+   * Returns true if the snapshot was successfully applied, false if the
+   * component does not support setDataState or the operation failed.
+   */
+  public SetDataState(snapshot: DataSnapshot): boolean {
+    return this.compiledComponent?.setDataState?.(snapshot) ?? false;
   }
 
 }

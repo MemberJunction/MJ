@@ -18,21 +18,16 @@ interface CategoryViewModel {
   standalone: false,
   selector: 'mj-lists-categories-resource',
   template: `
-    <div class="lists-categories-container">
-      <!-- Header -->
-      <div class="categories-header">
-        <div class="header-title">
-          <i class="fa-solid fa-tags"></i>
-          <h2>List Categories</h2>
-        </div>
-        <div class="header-actions">
-          <button class="btn-create" (click)="createCategory()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New Category</span>
+    <mj-page-layout>
+      <mj-page-header Title="List Categories" Icon="fa-solid fa-tags">
+        <div actions>
+          <button mjButton variant="primary" size="sm" (click)="createCategory()">
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New Category</span>
           </button>
         </div>
-      </div>
-    
+      </mj-page-header>
+
+      <mj-page-body>
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
@@ -42,13 +37,13 @@ interface CategoryViewModel {
     
       <!-- Empty State -->
       @if (!isLoading && categoryViewModels.length === 0) {
-        <div class="empty-state">
-          <div class="empty-state-icon-wrapper">
-            <div class="icon-bg"></div>
-            <i class="fa-solid fa-folder-tree"></i>
-          </div>
-          <h3>No Categories Yet</h3>
-          <p>Categories help you organize lists into logical groups.</p>
+        <mj-empty-state Size="large"
+          Icon="fa-solid fa-folder-tree"
+          Title="No Categories Yet"
+          Message="Categories help you organize lists into logical groups."
+          ActionText="Create Your First Category"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="createCategory()">
           <div class="empty-state-features">
             <div class="feature-item">
               <i class="fa-solid fa-check-circle"></i>
@@ -59,11 +54,7 @@ interface CategoryViewModel {
               <span>Quickly find related lists</span>
             </div>
           </div>
-          <button class="btn-create-large" (click)="createCategory()">
-            <i class="fa-solid fa-plus"></i>
-            Create Your First Category
-          </button>
-        </div>
+        </mj-empty-state>
       }
     
       <!-- Categories Content -->
@@ -143,10 +134,9 @@ interface CategoryViewModel {
             <!-- No Selection State -->
             @if (!selectedCategory) {
               <div class="category-detail-panel empty">
-                <div class="no-selection">
-                  <i class="fa-solid fa-arrow-left"></i>
-                  <p>Select a category to view details</p>
-                </div>
+                <mj-empty-state Size="compact"
+                  Icon="fa-solid fa-arrow-left"
+                  Title="Select a category to view details" />
               </div>
             }
           </div>
@@ -273,7 +263,8 @@ interface CategoryViewModel {
           </div>
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
@@ -281,14 +272,6 @@ interface CategoryViewModel {
       flex-direction: column;
       width: 100%;
       height: 100%;
-    }
-
-    .lists-categories-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface);
-      overflow: hidden;
     }
 
     /* Header */
@@ -347,61 +330,12 @@ interface CategoryViewModel {
       flex: 1;
     }
 
-    /* Empty State */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      padding: 48px 40px;
-      text-align: center;
-      max-width: 420px;
-      margin: 0 auto;
-    }
-
-    .empty-state-icon-wrapper {
-      position: relative;
-      margin-bottom: 24px;
-    }
-
-    .empty-state-icon-wrapper .icon-bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    }
-
-    .empty-state-icon-wrapper > i {
-      position: relative;
-      font-size: 48px;
-      color: var(--mj-brand-primary);
-      z-index: 1;
-    }
-
-    .empty-state h3 {
-      margin: 0 0 12px;
-      font-size: 22px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .empty-state p {
-      margin: 0 0 8px;
-      color: var(--mj-text-secondary);
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
+    /* Onboarding feature checklist — projected into <mj-empty-state>. */
     .empty-state-features {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin: 16px 0 24px;
+      gap: var(--mj-space-2);
+      margin: var(--mj-space-5) 0 var(--mj-space-2);
       text-align: left;
     }
 
@@ -416,28 +350,6 @@ interface CategoryViewModel {
     .feature-item i {
       font-size: 14px !important;
       color: var(--mj-status-success) !important;
-    }
-
-    .btn-create-large {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-    }
-
-    .btn-create-large:hover {
-      background: var(--mj-brand-primary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
     }
 
     /* Content Layout */
@@ -680,20 +592,6 @@ interface CategoryViewModel {
       display: flex;
       align-items: center;
       justify-content: center;
-    }
-
-    .no-selection {
-      text-align: center;
-      color: var(--mj-text-muted);
-    }
-
-    .no-selection i {
-      font-size: 32px;
-      margin-bottom: 12px;
-    }
-
-    .no-selection p {
-      margin: 0;
     }
 
     /* Form */
@@ -961,8 +859,8 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.isLoading = true;
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const userId = md.CurrentUser?.ID;
 
       const [categoriesResult, listsResult] = await rv.RunViews([
@@ -1219,7 +1117,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     const categoryName = this.dialogName;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let category: MJListCategoryEntity;
 
       if (this.editingCategory) {

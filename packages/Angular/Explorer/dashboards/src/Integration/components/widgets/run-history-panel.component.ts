@@ -14,10 +14,9 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
         <mj-loading text="Loading run history..." size="small"></mj-loading>
       </div>
     } @else if (Runs.length === 0) {
-      <div class="history-empty">
-        <i class="fa-solid fa-clock-rotate-left"></i>
-        <p>No runs recorded yet</p>
-      </div>
+      <mj-empty-state class="history-empty" Size="compact"
+        Icon="fa-solid fa-clock-rotate-left"
+        Title="No runs recorded yet" />
     } @else {
       <div class="history-panel">
         <table class="history-table">
@@ -137,9 +136,9 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
       border-radius: 10px; display: inline-flex; align-items: center; gap: 4px;
       white-space: nowrap;
     }
-    .chip-green { background: #e6f9ed; color: #1b7a3d; }
-    .chip-amber { background: #fff7e0; color: #b5850a; }
-    .chip-red   { background: #fde8e8; color: #c62828; }
+    .chip-green { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+    .chip-amber { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+    .chip-red   { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
 
     .duration-cell {
       font-variant-numeric: tabular-nums;
@@ -163,7 +162,7 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
       text-align: left; padding: 4px 6px; color: var(--mj-text-muted); font-weight: 500;
     }
     .detail-table td { padding: 4px 6px; }
-    .error-count { color: #c62828; font-weight: 600; }
+    .error-count { color: var(--mj-status-error-text); font-weight: 600; }
 
     /* Error Details */
     .error-details-section {
@@ -173,7 +172,7 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
     }
     .error-toggle {
       background: none; border: none; cursor: pointer;
-      font-size: 12px; font-weight: 600; color: #c62828;
+      font-size: 12px; font-weight: 600; color: var(--mj-status-error-text);
       display: flex; align-items: center; gap: 6px;
       padding: 4px 0;
     }
@@ -184,11 +183,11 @@ type RunStatusColorType = 'amber' | 'green' | 'red';
     .toggle-icon.rotated { transform: rotate(180deg); }
     .error-log {
       margin: 8px 0 0 0; padding: 10px;
-      background: #fff0f0; border: 1px solid #fdd;
+      background: var(--mj-status-error-bg); border: 1px solid var(--mj-status-error-border);
       border-radius: 4px; font-size: 11px;
       white-space: pre-wrap; word-break: break-word;
       max-height: 200px; overflow-y: auto;
-      color: #7a1111;
+      color: var(--mj-status-error-text);
     }
   `]
 })

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 
@@ -16,10 +17,10 @@ import { UserInfo, RunView } from '@memberjunction/core';
     
       <div class="version-list">
         @if (versions.length === 0) {
-          <div class="empty-state">
-            <i class="fas fa-history"></i>
-            <p>No version history available</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-clock-rotate-left"
+            Title="No version history available"
+            Size="compact" />
         }
     
         @for (version of versions; track version) {
@@ -96,10 +97,6 @@ import { UserInfo, RunView } from '@memberjunction/core';
     .btn-action { padding: 6px 12px; background: #0076B6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 6px; }
     .btn-action:hover { background: #005A8C; }
 
-    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; color: #999; }
-    .empty-state i { font-size: 48px; margin-bottom: 16px; }
-    .empty-state p { margin: 0; font-size: 14px; }
-
     .diff-panel { border-top: 2px solid #D9D9D9; max-height: 50%; overflow: hidden; display: flex; flex-direction: column; }
     .diff-header { padding: 12px 16px; background: #F8F8F8; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }
     .diff-header h4 { margin: 0; font-size: 13px; font-weight: 600; }
@@ -109,7 +106,7 @@ import { UserInfo, RunView } from '@memberjunction/core';
     .diff-content pre { margin: 0; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; }
   `]
 })
-export class ArtifactVersionHistoryComponent implements OnInit {
+export class ArtifactVersionHistoryComponent extends BaseAngularComponent implements OnInit  {
   @Input() artifact!: MJArtifactEntity;
   @Input() currentUser!: UserInfo;
 
@@ -129,7 +126,7 @@ export class ArtifactVersionHistoryComponent implements OnInit {
 
   private async loadVersions(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID='${this.artifact.ID}'`,

@@ -4,6 +4,8 @@ Server-only Tag Engine that extends `@memberjunction/tag-engine-base` via compos
 
 **Server-side only.** For client-side tag operations (hierarchy, lookups, CRUD), use `@memberjunction/tag-engine-base` directly.
 
+> **Read first:** [Taxonomy & Tagging Guide](../../../../guides/TAXONOMY_TAGGING_GUIDE.md) — the canonical design doc for the tag taxonomy, the 4+1-tier resolver, scoping, governance, the suggestion queue, and Tag Health. This README is the API reference; the guide is the *why* and *how*.
+
 ## Installation
 
 ```bash
@@ -142,4 +144,4 @@ The embedding text for each tag is composed as `"Name: Description"` (or just `"
 
 ## Further Reading
 
-See the [Content Autotagging Guide](/guides/CONTENT_AUTOTAGGING_GUIDE.md) for full pipeline documentation including the tag taxonomy bridge, prompt structure, and configuration.
+See the [Content Autotagging Guide](../../../../guides/CONTENT_AUTOTAGGING_GUIDE.md) for full pipeline documentation including the tag taxonomy bridge, prompt structure, and configuration.

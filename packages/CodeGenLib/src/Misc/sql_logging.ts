@@ -1,8 +1,11 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
-import { configInfo, mj_core_schema, SQLOutputConfig } from "../Config/config";
+import { configInfo, mj_core_schema, SQLOutputConfig, dbPlatform } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
 import path from 'path';
+
+const DEFAULT_SS_SQL_OUTPUT_FOLDER = './migrations/v5/';
+const DEFAULT_PG_SQL_OUTPUT_FOLDER = './migrations-pg/v5/';
 
 /**
  * Utility class for logging SQL to a run file that can be fresh for each run or appended to depending on the settings in the configuration
@@ -31,13 +34,22 @@ export class SQLLogging {
                 return; // we are not doing anything here....
 
             if (config.folderPath) {
-                const dirExists: boolean = fs.existsSync(config.folderPath);
+                // On PostgreSQL, swap the default SQL Server output folder for the
+                // PG-equivalent so CodeGen audit SQL lands in migrations-pg/v5/ alongside
+                // the rest of the PG tooling. Users who explicitly override folderPath are
+                // honored as-is.
+                let folderPath = config.folderPath;
+                if (dbPlatform() === 'postgresql' && folderPath === DEFAULT_SS_SQL_OUTPUT_FOLDER) {
+                    folderPath = DEFAULT_PG_SQL_OUTPUT_FOLDER;
+                }
+
+                const dirExists: boolean = fs.existsSync(folderPath);
                 if (!dirExists) {
-                    fs.mkdirSync(config.folderPath, {recursive: true });
+                    fs.mkdirSync(folderPath, {recursive: true });
                 }
 
                 const fileName: string = config.fileName || this.createFileName();
-                SQLLogging._SQLLoggingFilePath = path.join(config.folderPath,fileName);
+                SQLLogging._SQLLoggingFilePath = path.join(folderPath, fileName);
 
                 if (!config.appendToFile || !fs.existsSync(SQLLogging.SQLLoggingFilePath)) {
                     //create an empty file
@@ -109,6 +121,27 @@ export class SQLLogging {
             if(description){
                 const comment = `/* ${description} */\n`;
                 contents = `${comment}${contents}`;
+            }
+
+            // Many call sites pass SQL without a trailing semicolon because they execute
+            // it via the PG client / mssql driver where the protocol treats each query as
+            // standalone. When that SQL is concatenated into a replayable log file (a
+            // CodeGen_Run_*.sql migration), the missing ; turns each subsequent statement
+            // into a syntax error during raw `psql -f` / `mj migrate` replay
+            // ("syntax error at or near INSERT" on the next statement).
+            //
+            // Normalize: strip any trailing whitespace and ensure the content ends with `;`
+            // before adding spacing. Multiple `;`s are harmless in both T-SQL and PG, so
+            // call sites that already include a terminator pay nothing.
+            //
+            // EXCEPTION: T-SQL `GO` is a batch separator, not a statement — emitters like
+            // generateBaseView / generateCRUDCreate / generateRootIDFunction return strings
+            // ending in `GO`. Appending `;` produces `GO;`, which SSMS and sqlcmd reject
+            // ("Incorrect syntax near ';'"). Detect and skip the `;` append in that case.
+            const trimmed = contents.replace(/[\s;]+$/g, '');
+            if (trimmed.length > 0) {
+                const endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
+                contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
             contents = includeBatchSeparator

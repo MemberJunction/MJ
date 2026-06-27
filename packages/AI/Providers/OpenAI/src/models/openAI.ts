@@ -1,6 +1,6 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
 import { OpenAI } from "openai";
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
 
 /**
@@ -38,6 +38,36 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
+     * OpenAI supports image file inputs natively via vision.
+     *
+     * Values reflect OpenAI's documented chat-completions vision API hard limits
+     * (https://platform.openai.com/docs/guides/images-vision):
+     *   - 512 MB total payload per request
+     *   - 1500 individual image inputs per request
+     *   - Supported formats: PNG, JPEG, WEBP, non-animated GIF
+     *
+     * Note: the docs specify NO per-image size cap — only the request-level
+     * payload ceiling. We therefore set MaxFileSize to the same 512 MB value
+     * so this layer never rejects a single file OpenAI would accept; the
+     * effective constraint is that the SUM of all files in a request stays
+     * under 512 MB, which callers must enforce.
+     *
+     * These are API-level constraints — consistent across vision-capable chat
+     * models (gpt-4o, gpt-4.1, gpt-4-turbo, etc.), not per-model — so returning
+     * them from the shared driver is correct. Subclasses/wrappers that target
+     * non-standard endpoints (Azure OpenAI with its 50 MB cap, OpenAI-compatible
+     * gateways, etc.) should override this method if their limits differ.
+     */
+    public override GetFileCapabilities(): FileCapabilities | null {
+        return {
+            SupportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            MaxFileSize: 512 * 1024 * 1024,
+            MaxFilesPerRequest: 1500,
+            HasFileAPI: false,
+        };
+    }
+
+    /**
      * Check if the model supports reasoning via system prompt keywords
      * GPT-OSS models use "Reasoning: low/medium/high" in system prompt
      */
@@ -62,6 +92,17 @@ export class OpenAILLM extends BaseLLM {
         if (numValue <= 33) return 'low';
         if (numValue <= 66) return 'medium';
         return 'high';
+    }
+
+    /**
+     * Extra request-body params merged into BOTH the streaming and non-streaming ChatCompletion
+     * requests, beyond the standard OpenAI schema. Default is none. Subclasses targeting
+     * OpenAI-compatible gateways override this to opt into provider extensions the OpenAI SDK
+     * passes through verbatim — e.g. OpenRouter returns `usage.cost` / `usage.cost_details` only
+     * when `usage: { include: true }` is sent on the request.
+     */
+    protected getProviderRequestExtras(params: ChatParams): Record<string, unknown> {
+        return {};
     }
 
     /**
@@ -152,18 +193,35 @@ export class OpenAILLM extends BaseLLM {
             }
         }
 
+        // Merge any provider-specific extras (e.g. OpenRouter's usage accounting opt-in). The OpenAI
+        // SDK forwards unknown body keys unchanged, so this is how compatible gateways are extended.
+        Object.assign(openAIParams, this.getProviderRequestExtras(params));
+
         const result = await this.OpenAI.chat.completions.create(openAIParams);
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
 
-        // Create ModelUsage with any available timing data
-        const usage = new ModelUsage(result.usage.prompt_tokens, result.usage.completion_tokens);
-        
-        // OpenAI doesn't provide the same timing metrics as Groq,
-        // but we can check for any extended usage data
+        // Create ModelUsage normalized to the uniform ModelUsage contract.
+        // OpenAI's cache convention: `prompt_tokens` INCLUDES cached tokens, and the cached count is
+        // nested at `prompt_tokens_details.cached_tokens`. The contract requires promptTokens to be
+        // UNCACHED/net-new input ONLY, with cache reads tracked separately and DISJOINT. So we record
+        // cacheReadTokens first, then subtract it from the native prompt count (clamped at 0).
+        // OpenAI does not bill or report cache WRITES, so cacheWriteTokens stays 0. The full native
+        // prompt count is recoverable via usage.totalInputTokens (promptTokens + cacheReadTokens).
         const extendedUsage = result.usage as any;
-        if (extendedUsage.prompt_tokens_details) {
-            // Store prompt token details in usage if needed in future
+        const openAICachedTokens = extendedUsage.prompt_tokens_details?.cached_tokens ?? 0;
+        const openAINetPromptTokens = Math.max(0, (result.usage.prompt_tokens ?? 0) - openAICachedTokens);
+        const usage = new ModelUsage(openAINetPromptTokens, result.usage.completion_tokens);
+        usage.cacheReadTokens = openAICachedTokens;
+        // cacheWriteTokens intentionally left at 0 (OpenAI implicit caching has no separate write charge).
+
+        // OpenAI-compatible gateways (e.g. OpenRouter, when usage accounting is requested) report the
+        // authoritative dollar cost on the usage object. OpenAI itself never sets this, so the read is
+        // a safe no-op for the base provider. When present we surface it as the provider-reported cost,
+        // which the prompt-cost pipeline prefers over rate-table estimation (see MJAIPromptRunEntityServer).
+        if (typeof extendedUsage.cost === 'number') {
+            usage.cost = extendedUsage.cost;
+            usage.costCurrency = 'USD';
         }
         if (extendedUsage.completion_tokens_details) {
             // Store completion token details in usage if needed in future
@@ -219,6 +277,12 @@ export class OpenAILLM extends BaseLLM {
             exception: null
         } as ChatResult;
         
+        // Surface cache hit info uniformly (cacheHit driven by cache READ tokens).
+        chatResult.cacheInfo = {
+            cacheHit: openAICachedTokens > 0,
+            cachedTokenCount: openAICachedTokens
+        };
+
         // Add model-specific response details
         chatResult.modelSpecificResponseDetails = {
             provider: 'openai',
@@ -229,11 +293,17 @@ export class OpenAILLM extends BaseLLM {
             object: result.object,
             service_tier: (result as any).service_tier,
             usage_details: {
-                reasoning_tokens: extendedUsage.reasoning_tokens,
-                cached_tokens: extendedUsage.cached_tokens,
+                reasoning_tokens: extendedUsage.completion_tokens_details?.reasoning_tokens,
+                cached_tokens: openAICachedTokens,
                 prompt_tokens_details: extendedUsage.prompt_tokens_details,
-                completion_tokens_details: extendedUsage.completion_tokens_details
-            }
+                completion_tokens_details: extendedUsage.completion_tokens_details,
+                // Present on OpenAI-compatible gateways that report cost (OpenRouter); undefined for OpenAI.
+                cost: extendedUsage.cost,
+                cost_details: extendedUsage.cost_details
+            },
+            // Full native provider response (circular-safe) for review/audit. OpenAI-compatible
+            // gateways (OpenRouter, Groq, etc.) inherit this, so their raw payloads land here too.
+            raw: ToJSONSafe(result)
         };
         
         return chatResult;
@@ -317,9 +387,13 @@ export class OpenAILLM extends BaseLLM {
                 break;
         }
         
+        // Merge any provider-specific extras (e.g. OpenRouter's usage accounting opt-in), same as the
+        // non-streaming path. The OpenAI SDK forwards unknown body keys unchanged.
+        Object.assign(openAIParams, this.getProviderRequestExtras(params));
+
         return this.OpenAI.chat.completions.create(openAIParams);
     }
-    
+
     // State tracking for streaming thinking extraction
     private _streamingState: {
         accumulatedThinking: string;
@@ -334,9 +408,15 @@ export class OpenAILLM extends BaseLLM {
     };
 
     /**
-     * Reset streaming state for a new request
+     * Reset streaming state for a new request. Overrides the base-class hook so
+     * `BaseLLM.handleStreamingChatCompletion` calls this both at the start of a
+     * request AND in its `finally` block — releasing accumulated reasoning/
+     * thinking buffers and preventing state from a prior request bleeding into
+     * the next. Inheriting providers (Cerebras, Fireworks, Groq, xAI, Zhipu,
+     * Inception, LlamaCpp, etc.) automatically benefit from this override. See
+     * audit R2-C5.
      */
-    private resetStreamingState(): void {
+    protected resetStreamingState(): void {
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,
@@ -356,7 +436,25 @@ export class OpenAILLM extends BaseLLM {
         // Handle potential null/undefined values safely
         let content = '';
         const usage = chunk?.usage || null;
-        
+
+        // Normalize the streaming usage once, to the uniform ModelUsage contract. OpenAI's
+        // `prompt_tokens` INCLUDES cached tokens; the cache-read count is nested at
+        // prompt_tokens_details.cached_tokens (present on the final usage chunk when
+        // stream_options.include_usage is set). promptTokens must be UNCACHED/net-new only, so we
+        // subtract the cache-read count (clamped at 0) and carry the cache-read count alongside.
+        const streamCacheReadTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
+        const streamNetPromptTokens = Math.max(0, (usage?.prompt_tokens || 0) - streamCacheReadTokens);
+        const streamUsage = usage ? {
+            promptTokens: streamNetPromptTokens,
+            completionTokens: usage.completion_tokens || 0,
+            totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0),
+            cacheReadTokens: streamCacheReadTokens,
+            // Provider-reported cost (OpenRouter et al.) arrives on the final usage chunk; carry it
+            // forward so finalizeStreamingResponse can surface it as the authoritative cost.
+            cost: typeof usage.cost === 'number' ? usage.cost : undefined,
+            costCurrency: typeof usage.cost === 'number' ? 'USD' : undefined
+        } : null;
+
         // Check if chunk contains reasoning content (for o1 models)
         const delta = chunk?.choices?.[0]?.delta;
         if (delta) {
@@ -367,11 +465,7 @@ export class OpenAILLM extends BaseLLM {
                 return {
                     content: '',
                     finishReason: chunk?.choices?.[0]?.finish_reason,
-                    usage: usage ? {
-                        promptTokens: usage.prompt_tokens || 0,
-                        completionTokens: usage.completion_tokens || 0,
-                        totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
-                    } : null
+                    usage: streamUsage
                 };
             } else if (delta.reasoning) {
                 this._streamingState.accumulatedThinking += delta.reasoning;
@@ -379,33 +473,25 @@ export class OpenAILLM extends BaseLLM {
                 return {
                     content: '',
                     finishReason: chunk?.choices?.[0]?.finish_reason,
-                    usage: usage ? {
-                        promptTokens: usage.prompt_tokens || 0,
-                        completionTokens: usage.completion_tokens || 0,
-                        totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
-                    } : null
+                    usage: streamUsage
                 };
             }
-            
+
             // Process regular content
             const rawContent = delta.content || '';
             if (rawContent) {
                 // Add raw content to pending content for processing
                 this._streamingState.pendingContent += rawContent;
-                
+
                 // Process the pending content to extract thinking
                 content = this.processThinkingInStreamingContent();
             }
         }
-        
+
         return {
             content,
             finishReason: chunk?.choices?.[0]?.finish_reason,
-            usage: usage ? {
-                promptTokens: usage.prompt_tokens || 0,
-                completionTokens: usage.completion_tokens || 0,
-                totalTokens: (usage.prompt_tokens || 0) + (usage.completion_tokens || 0)
-            } : null
+            usage: streamUsage
         };
     }
 
@@ -502,16 +588,29 @@ export class OpenAILLM extends BaseLLM {
         const content = accumulatedContent || '';
         const promptTokens = usage?.promptTokens || 0;
         const completionTokens = usage?.completionTokens || 0;
-        
+        const cacheReadTokens = usage?.cacheReadTokens || 0;
+
         // Create dates (will be overridden by base class)
         const now = new Date();
-        
+
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
-        
+
         // Get thinking content from streaming state
         const thinkingContent = this._streamingState.accumulatedThinking.trim();
-        
+
+        // promptTokens here is already normalized to UNCACHED/net-new (processStreamingChunk
+        // subtracted the cache-read count); cacheReadTokens is the disjoint cache-read subset.
+        // OpenAI does not report cache writes, so cacheWriteTokens stays 0.
+        const modelUsage = new ModelUsage(promptTokens, completionTokens);
+        modelUsage.cacheReadTokens = cacheReadTokens;
+
+        // Provider-reported cost carried from the final usage chunk (OpenAI-compatible gateways).
+        if (typeof usage?.cost === 'number') {
+            modelUsage.cost = usage.cost;
+            modelUsage.costCurrency = usage.costCurrency || 'USD';
+        }
+
         // Set all properties
         result.data = {
             choices: [{
@@ -523,13 +622,17 @@ export class OpenAILLM extends BaseLLM {
                 finish_reason: lastChunk?.choices?.[0]?.finish_reason || 'stop',
                 index: 0
             }],
-            usage: new ModelUsage(promptTokens, completionTokens)
+            usage: modelUsage
         };
-        
+
         result.statusText = 'success';
         result.errorMessage = null;
         result.exception = null;
-        
+        result.cacheInfo = {
+            cacheHit: cacheReadTokens > 0,
+            cachedTokenCount: cacheReadTokens
+        };
+
         return result;
     }
 
@@ -581,9 +684,16 @@ export class OpenAILLM extends BaseLLM {
                                 image_url: { url: c.content }
                             };
                         }
+                        // file_url with image MIME → treat as image_url (OpenAI vision)
+                        else if (c.type === 'file_url' && c.mimeType && c.mimeType.startsWith('image/')) {
+                            return {
+                                type: 'image_url' as const,
+                                image_url: { url: c.content }
+                            };
+                        }
                         // Warn about unsupported types
                         else {
-                            console.warn(`Unsupported content type for OpenAI API: ${c.type}. This content will be skipped.`);
+                            console.warn(`Unsupported content type for OpenAI API: ${c.type} (mime: ${c.mimeType}). This content will be skipped.`);
                             return null;
                         }
                     })

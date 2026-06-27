@@ -5,7 +5,8 @@ import {
   StandardUserInfo,
   StandardAuthToken,
   StandardAuthError,
-  TokenRefreshResult
+  TokenRefreshResult,
+  SessionScope
 } from './auth-types';
 
 /**
@@ -224,7 +225,11 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    * to your provider or application.
    */
   protected get preservedLocalStorageKeys(): Set<string> {
-    return new Set(['mj-login-theme']);
+    // 'mj-theme' is the unified theme key used by the inline pre-paint
+    // script in index.html, MJExplorerAppComponent's login screen, and
+    // ThemeService post-login. Preserving across logout means the login
+    // screen continues to show the user's last theme without flashing.
+    return new Set(['mj-theme']);
   }
 
   /**
@@ -414,6 +419,17 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    */
   async getProfilePictureUrl(): Promise<string | null> {
     return this.getProfilePictureUrlInternal();
+  }
+
+  /**
+   * Returns any constraints this provider places on the session, or `null` for
+   * an unconstrained session. The host shell uses this to confine the UI (e.g.
+   * hide app-switching and lock to a single app for magic-link sessions).
+   *
+   * Default: unconstrained. Constrained providers override this.
+   */
+  public GetSessionScope(): SessionScope | null {
+    return null;
   }
 
   // ============================================================================

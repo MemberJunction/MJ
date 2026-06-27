@@ -18,24 +18,25 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'promptDefinitionMetadata', sectionName: 'Prompt Definition & Metadata', isExpanded: false },
             { sectionKey: 'modelSelectionExecutionSettings', sectionName: 'Model Selection & Execution Settings', isExpanded: true },
-            { sectionKey: 'outputValidation', sectionName: 'Output & Validation', isExpanded: false },
-            { sectionKey: 'retryFailoverPolicies', sectionName: 'Retry & Failover Policies', isExpanded: false },
-            { sectionKey: 'cachingPerformance', sectionName: 'Caching & Performance', isExpanded: false },
+            { sectionKey: 'outputValidation', sectionName: 'Output & Validation', isExpanded: true },
+            { sectionKey: 'retryFailoverPolicies', sectionName: 'Retry & Failover Policies', isExpanded: true },
+            { sectionKey: 'cachingPerformance', sectionName: 'Caching & Performance', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
-            { sectionKey: 'mJAIConfigurationsDefaultPromptForContextSummarizationID', sectionName: 'AI Configurations (Default Prompt For Context Summarization)', isExpanded: false },
-            { sectionKey: 'mJAIAgentTypes', sectionName: 'AI Agent Types', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AI Agent Actions', isExpanded: false },
+            { sectionKey: 'mJAIAgentTypes', sectionName: 'AI Agent Types', isExpanded: false },
+            { sectionKey: 'mJAIConfigurationsDefaultPromptForContextSummarizationID', sectionName: 'AI Configurations (Default Prompt For Context Summarization)', isExpanded: false },
+            { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJAIConfigurationsDefaultPromptForContextCompressionID', sectionName: 'AI Configurations (Default Prompt For Context Compression)', isExpanded: false },
             { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'AI Agent Prompts', isExpanded: false },
-            { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJAIAgentSteps', sectionName: 'AI Agent Steps', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunsPromptID', sectionName: 'AI Prompt Runs (Prompt)', isExpanded: false },
+            { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsChildPromptID', sectionName: 'AI Prompt Runs (Child Prompt)', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunsJudgeID', sectionName: 'AI Prompt Runs (Judge)', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunsPromptID', sectionName: 'AI Prompt Runs (Prompt)', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunsJudgeID', sectionName: 'AI Prompt Runs (Judge Prompt)', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
-            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false }
+            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
         ]);
     }
 }

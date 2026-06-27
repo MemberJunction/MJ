@@ -1,16 +1,31 @@
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Scheduling Dashboard"
+      Icon="fa-solid fa-gauge-high"
+      Subtitle="System health, KPIs, and alerts">
+      <div actions>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+        <button mjButton
+          [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'"
+          size="sm"
+          (click)="ToggleAutoRefresh()"
+          title="Toggle auto-refresh">
+          <i class="fa-solid fa-rotate"></i>
+          <span class="action-btn-label">Auto: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}</span>
+        </button>
+      </div>
+    </mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
+
+<ng-template #content>
 <div class="overview-container">
-  <!-- Header Controls -->
-  <div class="overview-header">
-    <div class="header-controls">
-      <button mjButton variant="secondary" (click)="Refresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
-      <button mjButton [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'" (click)="ToggleAutoRefresh()">
-        <i class="fa-solid fa-rotate"></i>
-        Auto-Refresh: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
-      </button>
-    </div>
-  </div>
 
   @if (IsLoading) {
     <div class="loading-container">
@@ -97,10 +112,8 @@
           </div>
           <div class="panel-body">
             @if (LiveExecutions.length === 0) {
-              <div class="empty-state-small">
-                <i class="fa-solid fa-inbox"></i>
-                <span>No recent executions</span>
-              </div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                Title="No recent executions" />
             }
             @for (exec of LiveExecutions; track exec) {
               <div class="execution-item">
@@ -136,10 +149,8 @@
             </div>
             <div class="panel-body">
               @if (Alerts.length === 0) {
-                <div class="empty-state-small all-clear">
-                  <i class="fa-solid fa-circle-check"></i>
-                  <span>No active alerts</span>
-                </div>
+                <mj-empty-state Variant="success" Size="compact"
+                  Title="No active alerts" />
               }
               @for (alert of Alerts; track alert) {
                 <div class="alert-item" [ngClass]="'alert-' + alert.severity">
@@ -169,10 +180,8 @@
             </div>
             <div class="panel-body">
               @if (UpcomingExecutions.length === 0) {
-                <div class="empty-state-small">
-                  <i class="fa-solid fa-calendar-xmark"></i>
-                  <span>No upcoming executions</span>
-                </div>
+                <mj-empty-state Size="compact" Icon="fa-solid fa-calendar-xmark"
+                  Title="No upcoming executions" />
               }
               @for (upcoming of UpcomingExecutions; track upcoming) {
                 <div class="upcoming-item">
@@ -242,3 +251,4 @@
     </div>
   }
 </div>
+</ng-template>

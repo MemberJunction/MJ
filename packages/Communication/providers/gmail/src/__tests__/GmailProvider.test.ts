@@ -26,9 +26,13 @@ vi.mock('@memberjunction/communication-types', () => ({
   },
 }));
 
-vi.mock('@memberjunction/global', () => ({
-  RegisterClass: () => (target: unknown) => target,
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    RegisterClass: () => (target: unknown) => target,
+  };
+});
 
 vi.mock('@memberjunction/core', () => ({
   LogError: vi.fn(),
@@ -213,6 +217,127 @@ describe('GmailProvider', () => {
       });
       expect(result.Success).toBe(false);
       expect(result.Error).toContain('Missing required credential');
+    });
+  });
+
+  describe('GetMessages body extraction', () => {
+    // Gmail returns part data as base64url; encode helper mirrors that.
+    const b64url = (s: string) => Buffer.from(s, 'utf-8').toString('base64url');
+
+    /**
+     * Drives a single message payload through the public GetMessages() path
+     * and returns the extracted Body. The Gmail API flow is list() -> get().
+     */
+    const getBodyFor = async (payload: Record<string, unknown>): Promise<string> => {
+      mockMessagesList.mockResolvedValue({ data: { messages: [{ id: 'msg-1' }] } });
+      mockMessagesGet.mockResolvedValue({
+        data: { id: 'msg-1', threadId: 'thread-1', payload },
+      });
+
+      const result = await provider.GetMessages({ NumMessages: 1 } as never);
+      expect(result.Success).toBe(true);
+      expect(result.Messages).toHaveLength(1);
+      return result.Messages![0].Body;
+    };
+
+    it('extracts a single-part text/plain body (payload.body.data)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'text/plain',
+        headers: [{ name: 'From', value: 'a@example.com' }],
+        body: { data: b64url('Hello plain world') },
+      });
+      expect(body).toBe('Hello plain world');
+    });
+
+    it('extracts body from multipart/alternative (prefers text/html)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/alternative',
+        headers: [],
+        parts: [
+          { mimeType: 'text/plain', body: { data: b64url('plain version') } },
+          { mimeType: 'text/html', body: { data: b64url('<p>html version</p>') } },
+        ],
+      });
+      expect(body).toBe('<p>html version</p>');
+    });
+
+    it('extracts the nested body from multipart/related with an inline image (the failing case)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/related',
+        headers: [],
+        parts: [
+          {
+            mimeType: 'multipart/alternative',
+            parts: [
+              { mimeType: 'text/plain', body: { data: b64url('plain body') } },
+              { mimeType: 'text/html', body: { data: b64url('<p>body with <img src="cid:logo"></p>') } },
+            ],
+          },
+          {
+            mimeType: 'image/png',
+            filename: 'logo.png',
+            body: { attachmentId: 'att-1', size: 1234 },
+          },
+        ],
+      });
+      expect(body).toBe('<p>body with <img src="cid:logo"></p>');
+    });
+
+    it('extracts body from multipart/mixed and ignores the attachment part', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/mixed',
+        headers: [],
+        parts: [
+          {
+            mimeType: 'multipart/alternative',
+            parts: [
+              { mimeType: 'text/plain', body: { data: b64url('plain body') } },
+              { mimeType: 'text/html', body: { data: b64url('<p>real body</p>') } },
+            ],
+          },
+          {
+            mimeType: 'application/pdf',
+            filename: 'doc.pdf',
+            body: { attachmentId: 'att-2', size: 4096 },
+          },
+        ],
+      });
+      expect(body).toBe('<p>real body</p>');
+    });
+
+    it('extracts body from an HTML-only message (no text/plain part)', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/alternative',
+        headers: [],
+        parts: [
+          { mimeType: 'text/html', body: { data: b64url('<h1>html only</h1>') } },
+        ],
+      });
+      expect(body).toBe('<h1>html only</h1>');
+    });
+
+    it('decodes base64url payloads containing - and _ characters cleanly', async () => {
+      // A string whose base64url encoding contains both '-' and '_'.
+      const original = 'subjects??>>';
+      const encoded = Buffer.from(original, 'utf-8').toString('base64url');
+      expect(encoded).toMatch(/[-_]/); // guard: fixture actually exercises base64url alphabet
+      const body = await getBodyFor({
+        mimeType: 'text/plain',
+        headers: [],
+        body: { data: encoded },
+      });
+      expect(body).toBe(original);
+    });
+
+    it('returns empty string when no text part exists anywhere', async () => {
+      const body = await getBodyFor({
+        mimeType: 'multipart/mixed',
+        headers: [],
+        parts: [
+          { mimeType: 'image/png', filename: 'a.png', body: { attachmentId: 'att-3', size: 10 } },
+        ],
+      });
+      expect(body).toBe('');
     });
   });
 

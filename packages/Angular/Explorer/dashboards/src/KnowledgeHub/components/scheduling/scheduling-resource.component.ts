@@ -9,7 +9,7 @@
  * Registered as BaseResourceComponent for the Knowledge Hub application.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
+import { Component, Input, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceData, MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
@@ -36,6 +36,18 @@ interface CronParts {
     styleUrls: ['./scheduling-resource.component.css'],
 })
 export class SchedulingResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
+    /**
+     * When true, renders only the body content (no <mj-page-layout> + <mj-page-header>
+     * chrome). Used when embedded inside another resource page (e.g. KH Configuration's
+     * Scheduling section) so we don't get nested page-layouts that trap click events.
+     *
+     * Named `HideToolbar` for cross-section consistency with Scheduling/Testing inner
+     * components — see plans/explorer-chrome-conventions.md Section 5. The name is
+     * narrower than its actual behavior (suppresses entire chrome, not just the toolbar)
+     * but matches the documented convention.
+     */
+    @Input() HideToolbar = false;
+
     private cdr = inject(ChangeDetectorRef);
     protected override navigationService = inject(NavigationService);
     private scheduledJobService = inject(ScheduledJobService);
@@ -156,7 +168,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
 
     /** Navigate to the full Scheduling application */
     public GoToSchedulingApp(): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const schedulingApp = md.Applications.find(a => a.Name === 'Scheduling');
         if (schedulingApp) {
             this.navigationService.SwitchToApp(schedulingApp.ID);
@@ -252,7 +264,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [jobsResult, runsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Scheduled Jobs',

@@ -1,8 +1,9 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
-import { Metadata, RunView } from "@memberjunction/core";
+import { IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import type { IRunViewProvider } from "@memberjunction/core";
 
 /**
  * Action that returns field details and sample data for a specific entity.
@@ -10,7 +11,8 @@ import { Metadata, RunView } from "@memberjunction/core";
  *
  * Returns:
  * - Field names, types, descriptions
- * - Sample data (top 3 rows by default)
+ * - Sample data (top 3 rows by default, capped at 10; individual field values
+ *   truncated to a few hundred characters to keep agent context bounded)
  * - Total row count
  * - Primary key information
  * - Related entity references
@@ -44,6 +46,20 @@ import { Metadata, RunView } from "@memberjunction/core";
 @RegisterClass(BaseAction, "Get Entity Details")
 export class GetEntityDetailsAction extends BaseAction {
 
+    /**
+     * Hard cap on sample rows regardless of what the caller requests. Sample data
+     * exists to show an agent what real values look like — a handful of rows is
+     * always enough, and large requests bloat agent conversation context.
+     */
+    private static readonly MAX_SAMPLE_ROWS = 10;
+
+    /**
+     * Maximum characters per field value in sample rows. Entities like AI Prompt
+     * Runs carry multi-megabyte text/JSON columns; returning them untruncated has
+     * blown LLM context limits (a single sample row can exceed 1MB).
+     */
+    private static readonly MAX_SAMPLE_FIELD_CHARS = 250;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const startTime = Date.now();
@@ -58,20 +74,20 @@ export class GetEntityDetailsAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            const sampleRowCount = this.getNumericParam(params, "samplerowcount", 3);
+            const requestedSampleRows = this.getNumericParam(params, "samplerowcount", 3);
+            const sampleRowCount = Math.min(Math.max(0, requestedSampleRows), GetEntityDetailsAction.MAX_SAMPLE_ROWS);
             const includeRelatedEntityInfo = this.getBooleanParam(params, "includerelatedentityinfo", true);
+            const useSemanticSearch = this.getBooleanParam(params, "usesemanticsearch", false);
 
             // Get entity metadata
-            const md = new Metadata();
-            const entity = md.Entities.find(e =>
-                e.Name.toLowerCase() === entityName.toLowerCase()
-            );
+            const md = params.Provider ?? new Metadata();
+            const entity = md.EntityByName(entityName);
 
             if (!entity) {
                 return {
                     Success: false,
                     ResultCode: "ENTITY_NOT_FOUND",
-                    Message: `Entity '${entityName}' not found. Use 'Get Entity List' action to see available entities.`
+                    Message: await this.buildEntityNotFoundMessage(entityName, md, useSemanticSearch, params.ContextUser)
                 } as ActionResultSimple;
             }
 
@@ -114,9 +130,10 @@ export class GetEntityDetailsAction extends BaseAction {
                     } as ActionResultSimple;
                 }
 
-                // Ensure we only return the requested number of rows
+                // Ensure we only return the requested number of rows, with large
+                // field values truncated so sample data can't blow out context
                 const allResults = result.Results || [];
-                sampleData = allResults.slice(0, sampleRowCount);
+                sampleData = allResults.slice(0, sampleRowCount).map(row => this.truncateRowValues(row));
                 totalRowCount = result.TotalRowCount || 0;
             }
 
@@ -132,6 +149,12 @@ export class GetEntityDetailsAction extends BaseAction {
                         .map(f => f.RelatedEntity!)
                 );
                 relatedEntities = Array.from(relatedEntityNames).map(name => ({
+                    // Look up the related entity's ID from metadata so callers
+                    // get `{ ID, Name }` pairs ready to drop into
+                    // `permissions.allowedEntities` for Runtime actions. Null
+                    // only if the FK references an entity the metadata cache
+                    // hasn't indexed — shouldn't happen in practice.
+                    ID: md.EntityByName(name)?.ID ?? null,
                     Name: name,
                     FieldsReferencingThis: fields
                         .filter(f => f.RelatedEntity === name)
@@ -155,6 +178,11 @@ export class GetEntityDetailsAction extends BaseAction {
                 Success: true,
                 ResultCode: "SUCCESS",
                 Message: message,
+                // Named `ID` (not `EntityID`) to match the actual column on
+                // the Entity record. Callers that need to build Runtime
+                // action permission blocks (`{ id, name }` pairs for every
+                // referenced entity) read this directly — no second lookup.
+                ID: entity.ID,
                 EntityName: entity.Name,
                 SchemaName: entity.SchemaName,
                 Description: entity.Description,
@@ -180,6 +208,102 @@ export class GetEntityDetailsAction extends BaseAction {
     }
 
     /**
+     * Truncate oversized string values in a sample row so entities with huge
+     * text/JSON columns (LLM transcripts, payloads, etc.) return useful but
+     * bounded sample data.
+     */
+    private truncateRowValues(row: Record<string, unknown>): Record<string, unknown> {
+        const maxChars = GetEntityDetailsAction.MAX_SAMPLE_FIELD_CHARS;
+        const truncated: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(row)) {
+            if (typeof value === 'string' && value.length > maxChars) {
+                truncated[key] = `${value.substring(0, maxChars)}… [truncated, ${value.length.toLocaleString()} chars total]`;
+            } else {
+                truncated[key] = value;
+            }
+        }
+        return truncated;
+    }
+
+    /**
+     * Build an ENTITY_NOT_FOUND message that suggests close matches. Agents
+     * commonly pass display-style names (e.g., 'AI Agents') when the real
+     * entity name carries an 'MJ: ' prefix ('MJ: AI Agents') — pointing at the
+     * exact candidates lets them recover in one step instead of guessing.
+     *
+     * When substring matching finds nothing and `useSemanticSearch` is enabled,
+     * falls back to ranked entity search over 'MJ: Entities' to surface
+     * conceptually related entities (e.g., 'Customers' → 'Accounts').
+     */
+    private async buildEntityNotFoundMessage(
+        entityName: string,
+        md: IMetadataProvider | Metadata,
+        useSemanticSearch: boolean,
+        contextUser?: UserInfo
+    ): Promise<string> {
+        const needle = entityName.trim().toLowerCase();
+        const suggestions = md.Entities
+            .filter(e => {
+                const name = e.Name.toLowerCase();
+                const displayName = (e.DisplayName || '').toLowerCase();
+                return name.includes(needle) || needle.includes(name) || displayName === needle;
+            })
+            .slice(0, 5)
+            .map(e => `'${e.Name}'`);
+
+        const base = `Entity '${entityName}' not found.`;
+        if (suggestions.length > 0) {
+            return `${base} Did you mean: ${suggestions.join(', ')}? Entity names must match exactly, including any 'MJ: ' prefix.`;
+        }
+
+        if (useSemanticSearch) {
+            const semanticSuggestions = await this.findSemanticEntitySuggestions(entityName, md, contextUser);
+            if (semanticSuggestions.length > 0) {
+                return `${base} No close name matches — semantically related entities: ${semanticSuggestions.join(', ')}. Entity names must match exactly, including any 'MJ: ' prefix.`;
+            }
+        }
+        return `${base} Entity names must match exactly, including any 'MJ: ' prefix. Use the 'Get Entity List' action (if available) or your entity catalog to find the correct name.`;
+    }
+
+    /**
+     * Ranked search over the 'MJ: Entities' records to find entities that are
+     * conceptually related to the requested name. Best-effort: returns an empty
+     * array if the search index isn't configured or the search fails — the
+     * caller falls back to the generic guidance message.
+     */
+    private async findSemanticEntitySuggestions(
+        entityName: string,
+        md: IMetadataProvider | Metadata,
+        contextUser?: UserInfo
+    ): Promise<string[]> {
+        try {
+            // SearchEntity is declared on IRunViewProvider; every real provider
+            // (and the Metadata facade) implements both provider interfaces, so
+            // this cast follows the same pattern as SearchEntityAction.
+            const searchProvider = md as unknown as IRunViewProvider;
+            if (typeof searchProvider.SearchEntity !== 'function') {
+                return [];
+            }
+            const results = await searchProvider.SearchEntity({
+                entityName: 'MJ: Entities',
+                searchText: entityName,
+                options: {
+                    mode: 'hybrid',
+                    topK: 3,
+                    contextUser
+                }
+            });
+            return results
+                .map(r => md.Entities.find(e => UUIDsEqual(e.ID, r.recordId)))
+                .filter(e => e != null)
+                .map(e => `'${e.Name}'`);
+        } catch (error) {
+            LogError(`Get Entity Details: semantic entity suggestion search failed: ${error instanceof Error ? error.message : String(error)}`);
+            return [];
+        }
+    }
+
+    /**
      * Build detailed message with entity information for agent consumption
      */
     private buildDetailedMessage(
@@ -194,7 +318,8 @@ export class GetEntityDetailsAction extends BaseAction {
 
         // Header
         lines.push(`# Entity Details: ${entity.Name}`);
-        lines.push(`\n**Schema:** ${entity.SchemaName}`);
+        lines.push(`\n**ID:** \`${entity.ID}\``);
+        lines.push(`**Schema:** ${entity.SchemaName}`);
         lines.push(`**Base View:** ${entity.BaseView}`);
         if (entity.Description) {
             lines.push(`**Description:** ${entity.Description}`);
@@ -252,7 +377,8 @@ export class GetEntityDetailsAction extends BaseAction {
         if (relatedEntities.length > 0) {
             lines.push(`## Related Entities (${relatedEntities.length})\n`);
             for (const rel of relatedEntities) {
-                lines.push(`- **${rel.Name}** (via ${rel.FieldsReferencingThis.join(', ')})`);
+                const idSuffix = rel.ID ? ` — \`${rel.ID}\`` : '';
+                lines.push(`- **${rel.Name}**${idSuffix} (via ${rel.FieldsReferencingThis.join(', ')})`);
             }
             lines.push('');
         }

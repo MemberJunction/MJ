@@ -1,4 +1,4 @@
-import { BaseEntity, BaseEntityResult, CompositeKey, EntityInfo, Metadata } from "@memberjunction/core";
+import { BaseEntity, BaseEntityResult, CompositeKey, EntityInfo, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { MJListDetailEntity } from "../generated/entity_subclasses";
 
@@ -48,8 +48,8 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
         const effectiveEntityInfo = entityInfo || this._sourceEntityInfo;
         if (!effectiveEntityInfo) {
             // Try to get entity info from the List's EntityID
-            const md = new Metadata();
-            const list = md.Entities.find(e => e.Name === 'MJ: Lists');
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            const list = md.EntityByName('MJ: Lists');
             if (!list) {
                 throw new Error('Cannot determine entity info. Provide entityInfo parameter or call SetRecordIDFromEntity first.');
             }
@@ -156,17 +156,24 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
                 throw new Error('ContextCurrentUser cannot be null');
             }
 
-            const rvResult = await rv.RunView({
-                EntityName: 'MJ: List Details',
-                ExtraFilter: `ListID = '${this.ListID}' AND RecordID = '${this.RecordID}'`
-            }, this.ContextCurrentUser);
+            // Duplicate-membership check only matters on INSERT. On UPDATE
+            // the row is already in the list (it's the one we're updating),
+            // so the check would always find itself and falsely reject the
+            // save with "Record X already exists in List Y" — blocking all
+            // status / additional-data updates.
+            if (!this.IsSaved) {
+                const rvResult = await rv.RunView({
+                    EntityName: 'MJ: List Details',
+                    ExtraFilter: `ListID = '${this.ListID}' AND RecordID = '${this.RecordID}'`
+                }, this.ContextCurrentUser);
 
-            if(!rvResult.Success){
-                throw new Error(rvResult.ErrorMessage);
-            }
+                if(!rvResult.Success){
+                    throw new Error(rvResult.ErrorMessage);
+                }
 
-            if(rvResult.Results.length > 0){
-                throw new Error(`Record ${this.RecordID} already exists in List ${this.ListID}`);
+                if(rvResult.Results.length > 0){
+                    throw new Error(`Record ${this.RecordID} already exists in List ${this.ListID}`);
+                }
             }
 
             const saveResult = await super.Save();
@@ -181,7 +188,7 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
                 newResult.Message = e.message;
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();               
-                this.ResultHistory.push(newResult);
+                this.RegisterResultHistoryEntry(newResult);
             }
             return false;
         }

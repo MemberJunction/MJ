@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
@@ -101,19 +102,6 @@ const COST_COLORS = [
     standalone: false,
     selector: 'app-analytics-agent-runs',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [Filters]="globalFilters"
-            [ShowModelFilter]="false"
-            [ShowPromptFilter]="false"
-            [ShowAgentFilter]="true"
-            [ShowStatusFilter]="true"
-            [ShowCompareToggle]="false"
-            [ShowExportButton]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-            (FiltersChange)="OnFiltersChange($event)"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">
@@ -158,7 +146,8 @@ const COST_COLORS = [
                 </div>
                 <div class="panel-body">
                     @if (CostAttributionRows.length === 0) {
-                        <div class="panel-empty">No agent cost data for selected period</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-bar"
+                            Title="No agent cost data for selected period" />
                     }
                     @for (row of CostAttributionRows; track row.AgentID) {
                         <div class="attribution-row">
@@ -326,13 +315,6 @@ const COST_COLORS = [
 
         .panel-body {
             padding: 16px 18px;
-        }
-
-        .panel-empty {
-            text-align: center;
-            padding: 24px;
-            color: var(--mj-text-disabled);
-            font-size: 13px;
         }
 
         /* ── Cost Attribution ── */
@@ -553,12 +535,35 @@ const COST_COLORS = [
         }
     `]
 })
-export class AnalyticsAgentRunsComponent implements OnInit, OnDestroy {
-    @Input() TimeRange = '7d';
-    @Input() Filters: AgentRunFilters = { Agents: [], Statuses: [] };
+export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+    private _timeRange = '7d';
+    @Input()
+    set TimeRange(value: string) {
+        const prev = this._timeRange;
+        this._timeRange = value;
+        if (prev !== value && this.initialized) this.LoadData();
+    }
+    get TimeRange(): string { return this._timeRange; }
+
+    private _filters: AgentRunFilters = { Agents: [], Statuses: [] };
+    @Input()
+    set Filters(value: AgentRunFilters) {
+        const next = value ?? { Agents: [], Statuses: [] };
+        const changed = !this.shallowFiltersEqual(this._filters, next);
+        this._filters = next;
+        if (changed && this.initialized) this.LoadData();
+    }
+    get Filters(): AgentRunFilters { return this._filters; }
+
+    private shallowFiltersEqual(a: AgentRunFilters, b: AgentRunFilters): boolean {
+        const sameArr = (x: string[], y: string[]) => x.length === y.length && x.every((v, i) => v === y[i]);
+        return sameArr(a.Agents, b.Agents) && sameArr(a.Statuses, b.Statuses);
+    }
 
     @Output() TimeRangeChange = new EventEmitter<string>();
     @Output() FiltersChange = new EventEmitter<AgentRunFilters>();
+
+    private initialized = false;
 
     private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
@@ -603,6 +608,7 @@ export class AnalyticsAgentRunsComponent implements OnInit, OnDestroy {
     private promptRuns: PromptRunRecord[] = [];
 
     ngOnInit(): void {
+        this.initialized = true;
         this.LoadData();
     }
 
@@ -649,7 +655,7 @@ export class AnalyticsAgentRunsComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const dateFilter = this.buildDateFilter('StartedAt');
             const agentFilter = this.buildAgentFilter();
             const statusFilter = this.buildStatusFilter();

@@ -6,6 +6,7 @@ import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentSelectorResult {
   selectedAgents: MJAIAgentEntityExtended[];
   createNew: boolean;
@@ -34,7 +35,7 @@ export interface AgentDisplayItem extends MJAIAgentEntityExtended {
   templateUrl: './sub-agent-selector-dialog.component.html',
   styleUrls: ['./sub-agent-selector-dialog.component.css']
 })
-export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
+export class SubAgentSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   config!: SubAgentSelectorConfig;
@@ -67,11 +68,24 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     return this.filteredAgents$.value.length;
   }
 
+  /** True when the empty list is the result of search/type filtering (vs. no eligible agents at all). */
+  get IsAgentListNarrowed(): boolean {
+    return this.totalAgentCount > 0;
+  }
+
+  /** Supporting copy for the no-agents empty state. */
+  get NoAgentsMessage(): string {
+    return this.IsAgentListNarrowed
+      ? 'Try adjusting your search criteria or selecting a different agent type.'
+      : 'No eligible root agents are available to become sub-agents.';
+  }
+
   @Output() DialogClose = new EventEmitter<void>();
 
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeData();
@@ -97,7 +111,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   private async loadAgentsAndTypes() {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     // Load both agents and types in a single batch for better performance
     const results = await rv.RunViews([
@@ -232,6 +246,17 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   clearSearch() {
     this.searchControl.reset();
+  }
+
+  /**
+   * Backs the no-results empty-state "Clear Filters" CTA. Unlike clearSearch (the
+   * inline search-box X, which must only clear the search), this resets every
+   * dimension the list narrows on — search AND the agent-type filter — so the CTA
+   * actually returns results instead of appearing to do nothing.
+   */
+  clearFilters() {
+    this.searchControl.reset();
+    this.selectedTypeId$.next('all');
   }
 
   getAgentIcon(agent: AgentDisplayItem): string {

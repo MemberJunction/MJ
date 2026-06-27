@@ -1,9 +1,11 @@
 import { Component, Input, Output, EventEmitter, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 /**
  * Flattened tree item for rendering the component hierarchy
@@ -22,11 +24,11 @@ interface TreeItem {
 @Component({
   selector: 'mj-component-feedback-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, MarkdownModule],
+  imports: [CommonModule, FormsModule, MarkdownModule, MJEmptyStateComponent],
   templateUrl: './component-feedback-panel.component.html',
   styleUrls: ['./component-feedback-panel.component.css']
 })
-export class ComponentFeedbackPanelComponent implements OnDestroy {
+export class ComponentFeedbackPanelComponent extends BaseAngularComponent implements OnDestroy  {
   @Input() ComponentSpec: ComponentSpec | null = null;
   @Input() ReactContainerElement: HTMLElement | null = null;
   @Input() ConversationId: string | null = null;
@@ -159,9 +161,9 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
 
     try {
       // Dynamic import to avoid adding graphql-dataprovider as a package dependency.
-      // At runtime in the browser, Metadata.Provider is always a GraphQLDataProvider.
+      // At runtime in the browser, this.ProviderToUse is always a GraphQLDataProvider.
       const { GraphQLComponentRegistryClient } = await import('@memberjunction/graphql-dataprovider');
-      const provider = Metadata.Provider;
+      const provider = this.ProviderToUse;
       const client = new GraphQLComponentRegistryClient(provider as ConstructorParameters<typeof GraphQLComponentRegistryClient>[0]);
 
       const response = await client.SendComponentFeedback({

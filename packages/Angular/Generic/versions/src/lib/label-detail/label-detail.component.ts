@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, HostListener, ElementRef, NgZone } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo, EntityRecordNameInput } from '@memberjunction/core';
+import { RunView, EntityInfo, CompositeKey, UserInfo, EntityRecordNameInput } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJVersionLabelEntityType, MJVersionLabelItemEntityType, MJVersionLabelRestoreEntityType, MJVersionLabelEntity } from '@memberjunction/core-entities';
 import { MicroViewData, FieldChangeView } from '../types';
 import { EntityLinkClickEvent } from '../record-micro-view/record-micro-view.component';
@@ -75,7 +76,7 @@ interface RecordChangeRow {
     styleUrls: ['./label-detail.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MjLabelDetailComponent implements OnInit, OnDestroy {
+export class MjLabelDetailComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Input() Label!: MJVersionLabelEntityType;
     @Input() AllLabels: MJVersionLabelEntityType[] = [];
     @Input() ItemCountMap = new Map<string, number>();
@@ -140,14 +141,14 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     private resizeMaxWidthRatio = 0.92;
     private static readonly PREFS_KEY = 'VersionHistory.DetailPanel.UserPreferences';
 
-    private metadata = new Metadata();
+    private get metadata() { return this.ProviderToUse; }
     private destroy$ = new Subject<void>();
 
     // Bound handlers for resize (need references for removeEventListener)
     private boundOnResizeMove = this.onResizeMove.bind(this);
     private boundOnResizeEnd = this.onResizeEnd.bind(this);
 
-    constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone, private elRef: ElementRef) {}
+    constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone, private elRef: ElementRef) { super(); }
 
     // =========================================================================
     // Lifecycle
@@ -215,7 +216,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const label = await md.GetEntityObject<MJVersionLabelEntity>('MJ: Version Labels');
             await label.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.Label.ID }]));
             label.Status = 'Archived';
@@ -247,7 +248,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJVersionLabelItemEntityType>({
                 EntityName: 'MJ: Version Label Items',
                 ExtraFilter: `VersionLabelID = '${this.Label.ID}'`,
@@ -431,7 +432,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const entityGroups: ClientDiffEntityGroup[] = [];
             let totalChanged = 0;
             let totalUnchanged = 0;
@@ -684,7 +685,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJVersionLabelRestoreEntityType>({
                 EntityName: 'MJ: Version Label Restores',
                 ExtraFilter: `VersionLabelID = '${this.Label.ID}'`,

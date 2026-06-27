@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SageIntacctConnector } from '../SageIntacctConnector.js';
+import type { CreateRecordContext } from '@memberjunction/integration-engine';
 
 // --- Unit tests (no DB or API required) ---
 describe('SageIntacctConnector (unit)', () => {

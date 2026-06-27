@@ -8,17 +8,20 @@ import { RunView } from '@memberjunction/core';
   standalone: false,
     selector: 'mj-communication-runs-resource',
     template: `
-    <div class="runs-wrapper">
-      <div class="card">
-        <div class="card-header">
-          <h3><i class="fa-solid fa-play-circle"></i> Bulk Communication Runs</h3>
-          <div class="header-actions">
-            <button class="tb-btn" (click)="loadData()">
-              <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
-            </button>
-          </div>
+    <mj-page-layout>
+      <mj-page-header
+        Title="Runs"
+        Icon="fa-solid fa-play-circle"
+        Subtitle="Bulk communication run history">
+        <div actions>
+          <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
+            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> <span class="action-btn-label">Refresh</span>
+          </button>
         </div>
-        <div class="card-body no-padding">
+      </mj-page-header>
+
+      <mj-page-body>
+        <div class="card">
           <!-- SUMMARY STATS -->
           <div class="runs-summary">
             <div class="run-stat-card info">
@@ -64,69 +67,24 @@ import { RunView } from '@memberjunction/core';
             }
     
             @if (runs.length === 0 && !isLoading) {
-              <div class="empty-state">
-                <i class="fa-solid fa-play-circle"></i>
-                <p>No communication runs found</p>
-              </div>
+              <mj-empty-state Icon="fa-solid fa-play-circle"
+                Title="No communication runs found" />
             }
           </div>
         </div>
-      </div>
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
     styles: [`
-    .runs-wrapper {
-        height: 100%;
-        padding: 24px;
-        overflow-y: auto;
-        background: var(--mj-bg-surface);
-    }
     .card {
         background: var(--mj-bg-surface-card);
         border: 1px solid var(--mj-border-default);
         border-radius: 12px;
         overflow: hidden;
+        padding: 16px 0 0;
     }
-    .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px 20px 12px;
-        border-bottom: 1px solid var(--mj-border-default);
-    }
-    .card-header h3 {
-        font-size: 13px; font-weight: 700;
-        color: var(--mj-text-primary);
-        display: flex; align-items: center; gap: 8px;
-        margin: 0;
-    }
-    .card-header h3 i {
-        color: var(--mj-text-muted); font-size: 12px;
-    }
-    .header-actions { display: flex; gap: 8px; }
-
-    .tb-btn {
-        display: inline-flex; align-items: center;
-        gap: 6px; padding: 6px 12px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 4px;
-        background: var(--mj-bg-surface-card);
-        color: var(--mj-text-secondary);
-        font-size: 12px; font-weight: 500;
-        cursor: pointer; transition: all 0.15s ease;
-        font-family: inherit;
-    }
-    .tb-btn:hover {
-        background: var(--mj-bg-surface-sunken);
-        border-color: var(--mj-border-strong);
-        color: var(--mj-text-primary);
-    }
-    .tb-btn i { font-size: 12px; }
-
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .spinning { animation: spin 1s linear infinite; }
-
-    .card-body.no-padding { padding: 0; }
 
     /* SUMMARY */
     .runs-summary {
@@ -251,13 +209,6 @@ import { RunView } from '@memberjunction/core';
     }
 
     /* EMPTY STATE */
-    .empty-state {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 48px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
   `]
 })
 export class CommunicationRunsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
@@ -288,7 +239,7 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayIso = yesterday.toISOString();

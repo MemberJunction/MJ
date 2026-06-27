@@ -1,4 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 
@@ -51,10 +52,10 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
           </div>
         }
         @if (!isLoading && filteredCollections.length === 0) {
-          <div class="empty-state">
-            <i class="fas fa-folder-open"></i>
-            <p>{{ searchQuery ? 'No collections found' : 'No collections yet' }}</p>
-          </div>
+          <mj-empty-state
+            [Variant]="searchQuery ? 'no-results' : 'empty'"
+            Icon="fa-solid fa-folder-open"
+            [Title]="searchQuery ? 'No collections found' : 'No collections yet'" />
         }
         @if (!isLoading && filteredCollections.length > 0) {
           <div class="library-folders">
@@ -200,7 +201,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       padding: 24px;
     }
 
-    .loading-state, .empty-state {
+    .loading-state {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -209,15 +210,8 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
       color: #9CA3AF;
     }
 
-    .empty-state i {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-
-    .empty-state p {
-      margin: 0;
-      font-size: 14px;
+    .collections-content mj-empty-state {
+      height: 100%;
     }
 
     .library-folders {
@@ -284,7 +278,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
     }
   `]
 })
-export class LibraryFullViewComponent implements OnInit {
+export class LibraryFullViewComponent extends BaseAngularComponent implements OnInit  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
@@ -295,7 +289,8 @@ export class LibraryFullViewComponent implements OnInit {
   public breadcrumbs: Array<{ id: string; name: string }> = [];
   public currentCollectionId: string | null = null;
 
-  constructor() {}
+  constructor() {
+  super();}
 
   ngOnInit() {
     this.loadCollections();
@@ -304,7 +299,7 @@ export class LibraryFullViewComponent implements OnInit {
   async loadCollections(): Promise<void> {
     this.isLoading = true;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const filter = `EnvironmentID='${this.environmentId}'` +
                      (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
 

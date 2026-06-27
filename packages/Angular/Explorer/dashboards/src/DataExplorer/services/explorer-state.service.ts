@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey, EntityRecordNameInput, IMetadataProvider } from '@memberjunction/core';
 import { MJUserSettingEntity, MJUserFavoriteEntity, MJApplicationEntityEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { DataExplorerState, DEFAULT_EXPLORER_STATE, RecentItem, FavoriteItem, EntityCacheEntry, BreadcrumbItem, DataExplorerFilter, FavoriteEntity, RecentRecordAccess, FavoriteRecord, DataExplorerViewMode } from '../models/explorer-state.interface';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -16,7 +16,17 @@ const MAX_ENTITY_CACHE_SIZE = 50; // LRU cache limit
 })
 export class ExplorerStateService {
   private state$ = new BehaviorSubject<DataExplorerState>(DEFAULT_EXPLORER_STATE);
-  private metadata = new Metadata();
+  private _provider: IMetadataProvider | null = null;
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+  private get metadata(): IMetadataProvider {
+    return this.Provider;
+  }
   private saveTimeout: ReturnType<typeof setTimeout> | null = null;
 
   /** Current context filter (determines which settings key to use) */
@@ -501,7 +511,7 @@ export class ExplorerStateService {
       if (!userId) return;
 
       const settingKey = this.getSettingKey();
-      const md = new Metadata();
+      const md = this.Provider;
       const engine = UserInfoEngine.Instance;
 
       // Find existing setting from cached user settings
@@ -664,7 +674,7 @@ export class ExplorerStateService {
       if (!entitiesEntity) return false;
 
       // Create User Favorite record
-      const md = new Metadata();
+      const md = this.Provider;
       const favorite = await md.GetEntityObject<MJUserFavoriteEntity>('MJ: User Favorites');
       favorite.UserID = userId;
       favorite.EntityID = entitiesEntity.ID;
@@ -697,7 +707,7 @@ export class ExplorerStateService {
       if (!favorite) return true; // Already not favorited
 
       // Delete User Favorite record
-      const md = new Metadata();
+      const md = this.Provider;
       const favoriteEntity = await md.GetEntityObject<MJUserFavoriteEntity>('MJ: User Favorites');
       await favoriteEntity.Load(favorite.userFavoriteId);
       const deleted = await favoriteEntity.Delete();
@@ -732,7 +742,7 @@ export class ExplorerStateService {
         return;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const result = await rv.RunView<MJApplicationEntityEntity>({
         EntityName: 'MJ: Application Entities',
         ExtraFilter: `ApplicationID = '${this.currentFilter.applicationId}'`,

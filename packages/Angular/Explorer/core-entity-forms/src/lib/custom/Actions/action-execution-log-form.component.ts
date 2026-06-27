@@ -6,10 +6,23 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { MJActionExecutionLogFormComponent } from '../../generated/Entities/MJActionExecutionLog/mjactionexecutionlog.form.component';
 
+type ParamType = 'Input' | 'Output' | 'Both';
+type TypeFilter = 'All' | ParamType;
+type SortKey = 'name' | 'type';
+type SortDir = 'asc' | 'desc';
+
 interface ActionParameter {
     Name: string;
     Value: unknown;
-    Type: 'Input' | 'Output' | 'Both';
+    Type: ParamType;
+}
+
+interface DisplayParameter extends ActionParameter {
+    ValueKind: 'string' | 'number' | 'boolean' | 'null' | 'undefined' | 'array' | 'object';
+    Preview: string;
+    IsExpandable: boolean;
+    Expanded: boolean;
+    FormattedValue: string;
 }
 
 @RegisterClass(BaseFormComponent, 'MJ: Action Execution Logs')
@@ -21,37 +34,30 @@ interface ActionParameter {
 })
 export class MJActionExecutionLogFormComponentExtended extends MJActionExecutionLogFormComponent implements OnInit {
     public record!: MJActionExecutionLogEntity;
-    
+
     // Related entities
     public action: MJActionEntity | null = null;
     public user: MJUserEntity | null = null;
-    
-    // Parameter counts for visibility
-    public hasInputParams = false;
-    public hasOutputParams = false;
-    public hasBothParams = false;
-    
+
     // Loading states
     public isLoadingAction = false;
     public isLoadingUser = false;
-    
+
     // Formatted JSON fields
     public formattedParams: string = '';
     public formattedMessage: string = '';
-    public formattedInputParams: string = '';
-    public formattedOutputParams: string = '';
-    public formattedBothParams: string = '';
-    
-    // UI state
-    public expandedSections = {
-        execution: true,
-        input: true,
-        output: true,
-        inputParams: true,
-        outputParams: true,
-        bothParams: true,
-        metadata: false
-    };
+
+    // Unified parameter display
+    public allParameters: DisplayParameter[] = [];
+    public paramCounts: Record<TypeFilter, number> = { All: 0, Input: 0, Output: 0, Both: 0 };
+    public hasAnyParameters = false;
+
+    // Filter / sort / view state
+    public typeFilter: TypeFilter = 'All';
+    public searchText: string = '';
+    public sortKey: SortKey = 'type';
+    public sortDir: SortDir = 'asc';
+    public showRawJson: boolean = false;
 
     async ngOnInit() {
         await super.ngOnInit();
@@ -74,7 +80,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         
         this.isLoadingAction = true;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
             if (this.action) {
                 await this.action.Load(this.record.ActionID);
@@ -91,7 +97,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         
         this.isLoadingUser = true;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
             if (this.user) {
                 await this.user.Load(this.record.UserID);
@@ -116,16 +122,15 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
                 const parsed = JSON.parse(this.record.Params);
                 const recursivelyParsed = ParseJSONRecursive(parsed, parseOptions);
                 this.formattedParams = JSON.stringify(recursivelyParsed, null, 2);
-                
-                // Format parameter-specific views if params is an array of ActionParameter objects
+
                 if (Array.isArray(recursivelyParsed)) {
-                    this.formatParameterSections(recursivelyParsed as ActionParameter[]);
+                    this.buildDisplayParameters(recursivelyParsed as ActionParameter[]);
                 }
             } catch (e) {
                 this.formattedParams = this.record.Params;
             }
         }
-        
+
         // Format Message field with recursive JSON parsing
         if (this.record.Message) {
             try {
@@ -138,49 +143,167 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         }
     }
 
-    private formatParameterSections(params: ActionParameter[]) {
-        // Reset visibility flags
-        this.hasInputParams = false;
-        this.hasOutputParams = false;
-        this.hasBothParams = false;
-        
-        // Arrays to collect parameters by type
-        const inputParams: ActionParameter[] = [];
-        const outputParams: ActionParameter[] = [];
-        const bothParams: ActionParameter[] = [];
-        
-        // Sort parameters by type
-        for (const param of params) {
-            switch (param.Type) {
-                case 'Input':
-                    inputParams.push(param);
-                    this.hasInputParams = true;
-                    break;
-                case 'Output':
-                    outputParams.push(param);
-                    this.hasOutputParams = true;
-                    break;
-                case 'Both':
-                    bothParams.push(param);
-                    this.hasBothParams = true;
-                    break;
+    /**
+     * Build the unified parameter display list once, so filtering/sorting can
+     * operate on a cheap, pre-computed structure.
+     */
+    private buildDisplayParameters(params: ActionParameter[]) {
+        this.paramCounts = { All: 0, Input: 0, Output: 0, Both: 0 };
+        this.allParameters = params
+            .filter((p) => p && typeof p.Name === 'string')
+            .map((p) => {
+                const valueKind = this.detectValueKind(p.Value);
+                const isExpandable = valueKind === 'array' || valueKind === 'object';
+                this.paramCounts.All += 1;
+                if (p.Type === 'Input' || p.Type === 'Output' || p.Type === 'Both') {
+                    this.paramCounts[p.Type] += 1;
+                }
+                return {
+                    Name: p.Name,
+                    Value: p.Value,
+                    Type: p.Type,
+                    ValueKind: valueKind,
+                    Preview: this.buildPreview(p.Value, valueKind),
+                    IsExpandable: isExpandable,
+                    Expanded: false,
+                    FormattedValue: isExpandable ? JSON.stringify(p.Value, null, 2) : ''
+                };
+            });
+        this.hasAnyParameters = this.allParameters.length > 0;
+    }
+
+    private detectValueKind(value: unknown): DisplayParameter['ValueKind'] {
+        if (value === null) return 'null';
+        if (value === undefined) return 'undefined';
+        if (Array.isArray(value)) return 'array';
+        const t = typeof value;
+        if (t === 'string' || t === 'number' || t === 'boolean') return t;
+        if (t === 'object') return 'object';
+        return 'string';
+    }
+
+    /**
+     * Short inline preview for the row header. Objects/arrays get a compact
+     * one-liner; expansion reveals the full formatted JSON below.
+     */
+    private buildPreview(value: unknown, kind: DisplayParameter['ValueKind']): string {
+        switch (kind) {
+            case 'null': return 'null';
+            case 'undefined': return 'undefined';
+            case 'boolean': return value ? 'true' : 'false';
+            case 'number': return String(value);
+            case 'string': {
+                const s = value as string;
+                return s.length > 160 ? `"${s.slice(0, 157)}…"` : `"${s}"`;
+            }
+            case 'array': {
+                const arr = value as unknown[];
+                if (arr.length === 0) return '[]';
+                if (arr.length <= 5 && arr.every((v) => v === null || typeof v !== 'object')) {
+                    return `[${arr.map((v) => this.buildPreview(v, this.detectValueKind(v))).join(', ')}]`;
+                }
+                return `Array(${arr.length})`;
+            }
+            case 'object': {
+                const obj = value as Record<string, unknown>;
+                const keys = Object.keys(obj);
+                if (keys.length === 0) return '{}';
+                const head = keys.slice(0, 3).join(', ');
+                return keys.length <= 3 ? `{ ${head} }` : `{ ${head}, …+${keys.length - 3} }`;
             }
         }
-        
-        // Format input parameters
-        if (inputParams.length > 0) {
-            this.formattedInputParams = JSON.stringify(inputParams, null, 2);
+    }
+
+    // --- Filter / sort / view helpers (invoked from template) ----------------
+
+    public get filteredParameters(): DisplayParameter[] {
+        const needle = this.searchText.trim().toLowerCase();
+        let list = this.allParameters;
+        if (this.typeFilter !== 'All') {
+            list = list.filter((p) => p.Type === this.typeFilter);
         }
-        
-        // Format output parameters
-        if (outputParams.length > 0) {
-            this.formattedOutputParams = JSON.stringify(outputParams, null, 2);
+        if (needle) {
+            list = list.filter(
+                (p) =>
+                    p.Name.toLowerCase().includes(needle) ||
+                    (p.Preview && p.Preview.toLowerCase().includes(needle))
+            );
         }
-        
-        // Format both parameters
-        if (bothParams.length > 0) {
-            this.formattedBothParams = JSON.stringify(bothParams, null, 2);
+        const typeOrder: Record<ParamType, number> = { Input: 0, Both: 1, Output: 2 };
+        const dirMult = this.sortDir === 'asc' ? 1 : -1;
+        return [...list].sort((a, b) => {
+            if (this.sortKey === 'name') {
+                return dirMult * a.Name.localeCompare(b.Name, undefined, { sensitivity: 'base' });
+            }
+            const typeCmp = typeOrder[a.Type] - typeOrder[b.Type];
+            if (typeCmp !== 0) return dirMult * typeCmp;
+            return a.Name.localeCompare(b.Name, undefined, { sensitivity: 'base' });
+        });
+    }
+
+    public setTypeFilter(filter: TypeFilter): void {
+        this.typeFilter = filter;
+    }
+
+    public toggleSort(key: SortKey): void {
+        if (this.sortKey === key) {
+            this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            this.sortKey = key;
+            this.sortDir = 'asc';
         }
+    }
+
+    public toggleExpanded(param: DisplayParameter): void {
+        if (!param.IsExpandable) return;
+        param.Expanded = !param.Expanded;
+    }
+
+    public toggleRawJson(): void {
+        this.showRawJson = !this.showRawJson;
+    }
+
+    public clearFilters(): void {
+        this.typeFilter = 'All';
+        this.searchText = '';
+    }
+
+    public trackParam(_index: number, p: DisplayParameter): string {
+        return `${p.Type}::${p.Name}`;
+    }
+
+    public copyParamValue(param: DisplayParameter): void {
+        const text = param.IsExpandable
+            ? param.FormattedValue
+            : this.formatScalarForCopy(param.Value);
+        void this.copyToClipboard(text);
+    }
+
+    private formatScalarForCopy(value: unknown): string {
+        if (value === null) return 'null';
+        if (value === undefined) return '';
+        if (typeof value === 'string') return value;
+        return String(value);
+    }
+
+    /**
+     * Returns the icon class for a value kind — rendered to the left of each
+     * preview so object/array/scalar rows are visually distinct at a glance.
+     */
+    public getValueKindIcon(kind: DisplayParameter['ValueKind']): string {
+        switch (kind) {
+            case 'string': return 'fa-quote-right';
+            case 'number': return 'fa-hashtag';
+            case 'boolean': return 'fa-toggle-on';
+            case 'array': return 'fa-list-ol';
+            case 'object': return 'fa-code';
+            case 'null': return 'fa-circle-minus';
+            case 'undefined': return 'fa-ban';
+        }
+    }
+
+    public getTypeLabel(type: ParamType): string {
+        return type === 'Both' ? 'In/Out' : type;
     }
 
     // Navigation

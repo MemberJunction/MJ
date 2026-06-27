@@ -1,0 +1,28 @@
+{
+  "name": "@memberjunction/lists-base",
+  "type": "module",
+  "version": "5.43.0",
+  "description": "MemberJunction: Lists — shared TypeScript type surface used by the server-side @memberjunction/lists package, the GraphQL data provider client, and Angular UI consumers. Pure types/interfaces only; no runtime, isomorphic.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

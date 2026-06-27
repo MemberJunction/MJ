@@ -1,0 +1,207 @@
+:host {
+  display: block;
+  /* External consumers using <mj-page-header> outside <mj-page-layout> get a
+     24px bottom margin so the header has breathing room from whatever follows.
+     This preserves backward compatibility with the published v5.x contract. */
+  margin-bottom: var(--mj-space-6);
+}
+
+/* When nested inside <mj-page-layout>, the spacing between header and body is
+   owned by <mj-page-body>'s padding-top — so the header sits flush against the
+   body. This lets pages using <mj-page-body [Padding]="false"> (e.g. AI
+   Analytics flush sidebar) render truly flush against the header. */
+:host-context(mj-page-layout) {
+  margin-bottom: 0;
+}
+
+/* Slot-wrapper passthrough — any element a consumer projects with the `meta`,
+   `actions`, or `toolbar` attribute (regardless of class name) becomes a
+   transparent container so its children become direct flex children of the
+   page-header row and inherit the row's gap. Eliminates the per-page
+   `.{section}-header-meta { display: contents }` rules that pages had to
+   declare in their own CSS files. */
+:host ::ng-deep [meta],
+:host ::ng-deep [actions],
+:host ::ng-deep [toolbar] {
+  display: contents;
+}
+
+.mj-page-header {
+  display: flex;
+  flex-direction: column;
+  background: var(--mj-bg-surface);
+  /* Drop shadow for visual separation from the body below.
+     `position: relative; z-index: 1` lifts the header into its own stacking
+     context above <mj-page-body> (which has `position: relative` and would
+     otherwise paint over the downward shadow as a later flex sibling).
+     --mj-shadow-md is used instead of --mj-shadow-sm because the latter is
+     rgba(0,0,0,0.05) in light mode — too faint to read as separation. */
+  box-shadow: var(--mj-shadow-md);
+  position: relative;
+  z-index: 1;
+}
+
+.mj-page-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  padding: 0 var(--mj-space-6);
+}
+
+/* Primary row centers the actions cluster vertically against the identity
+   column. The identity column stacks title → subtitle → (optional meta);
+   centering keeps the actions visually balanced against the whole block
+   instead of pinning them to the title baseline. When meta badges are
+   present the actions drift down a touch — acceptable trade for the more
+   common no-meta case where flex-start looks top-heavy. */
+.mj-page-header-row--primary {
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--mj-space-4);
+  padding-top: var(--mj-space-4);
+  padding-bottom: var(--mj-space-4);
+}
+
+.mj-page-header-row--toolbar {
+  flex-wrap: wrap;
+  /* Control bar (search · Filter · view) is right-aligned on desktop; the
+     mobile block below resets it to flex-start. */
+  justify-content: flex-end;
+  padding-top: 0;
+  padding-bottom: var(--mj-space-4);
+  border-top: 1px solid var(--mj-border-subtle);
+  margin-top: 0;
+  padding-top: var(--mj-space-3);
+}
+
+.mj-page-header-row--toolbar:empty {
+  display: none;
+  border-top: 0;
+  padding: 0;
+}
+
+.mj-page-header-titlebar {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mj-page-header-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
+  border-radius: var(--mj-radius-md);
+  font-size: var(--mj-text-lg);
+}
+
+/* Identity column — title, subtitle, meta stacked vertically. */
+.mj-page-header-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-page-header-title {
+  margin: 0;
+  font-size: var(--mj-text-xl);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mj-page-header-subtitle {
+  margin: var(--mj-space-1) 0 0;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
+  line-height: 1.4;
+}
+
+/* Meta lives in the identity column UNDER the subtitle — supporting info
+   for the identity, not a peer to the title. Wraps when there are many
+   badges. Matches the mj-page-header-interior pattern so both chrome
+   surfaces have one mental model. */
+.mj-page-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mj-space-2);
+  margin-top: var(--mj-space-2);
+}
+
+.mj-page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  flex-shrink: 0;
+}
+
+.mj-page-header-meta:empty,
+.mj-page-header-actions:empty {
+  display: none;
+}
+
+/* ── Mobile compaction (≤768px) ───────────────────────────────────────────
+   On a phone the header must not eat the viewport. We tighten padding, drop
+   the title a size, hide the decorative icon + subtitle (identity is carried
+   by the title alone), and let the actions cluster wrap tightly under the
+   title. The meta badge and toolbar stay — they're functional. */
+@media (max-width: 768px) {
+  .mj-page-header-row {
+    padding-left: var(--mj-space-4);
+    padding-right: var(--mj-space-4);
+    gap: var(--mj-space-2);
+  }
+  .mj-page-header-row--primary {
+    /* Stays a single row on mobile: title (truncates) + the primary CTA in
+       [actions]. Filters/search/view now live in the [toolbar] control bar, so
+       the primary row no longer needs to stack. */
+    gap: var(--mj-space-2);
+    padding-top: var(--mj-space-3);
+    padding-bottom: var(--mj-space-3);
+  }
+  /* Icon + subtitle are desktop niceties; reclaim their footprint on mobile. */
+  .mj-page-header-icon,
+  .mj-page-header-subtitle {
+    display: none;
+  }
+  .mj-page-header-title {
+    font-size: var(--mj-text-lg);
+    line-height: 1.2;
+  }
+  .mj-page-header-meta {
+    margin-top: var(--mj-space-1);
+  }
+  .mj-page-header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: var(--mj-space-2);
+  }
+  /* Action buttons go icon-only on mobile — consumers wrap the text in
+     <span class="action-btn-label"> so it can hide without touching mjButton. */
+  .mj-page-header-actions ::ng-deep .action-btn-label {
+    display: none;
+  }
+  .mj-page-header-row--toolbar {
+    /* Left-aligned on mobile (search grows to fill the row). */
+    justify-content: flex-start;
+    padding-top: var(--mj-space-2);
+    padding-bottom: var(--mj-space-3);
+  }
+  /* In the control bar (search · Filter · view), let search grow so the Filter
+     button + view-toggle sit at the trailing edge on one line. */
+  .mj-page-header-row--toolbar ::ng-deep mj-page-search {
+    flex: 1;
+    min-width: 0;
+  }
+}

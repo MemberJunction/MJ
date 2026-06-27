@@ -59,9 +59,12 @@ export interface MJServerConfig {
 async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
   const codeGeneration = configResult.config?.codeGeneration as Record<string, Record<string, string>> | undefined;
   if (!codeGeneration?.packages) {
-    console.warn('No codeGeneration.packages configuration found - skipping auto-import of generated packages');
+    // Common case for app deployments that import their generated package directly —
+    // not actionable, so stay silent (was a verbose-only console.debug).
     return;
   }
+
+  console.log('Loading generated packages...');
 
   const packages = codeGeneration.packages;
 
@@ -88,6 +91,97 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
       }
     }
   }
+
+  console.log('');
+}
+
+/** One entry of `dynamicPackages.server[]` in mj.config.cjs (written by `mj app install`). */
+interface DynamicServerPackage {
+  /** npm package name to import. */
+  PackageName?: string;
+  /** Optional named export to invoke after import (a startup hook). */
+  StartupExport?: string;
+  /** Whether this package should be loaded. Treated as enabled unless explicitly `false`. */
+  Enabled?: boolean;
+}
+
+/**
+ * Imports the server packages of installed Open Apps, declared in
+ * `mj.config.cjs` under `dynamicPackages.server[]` by `mj app install`.
+ *
+ * Importing each package triggers its `@RegisterClass` decorators; if an entry
+ * declares a `StartupExport`, that named export is invoked after import. This is
+ * called AFTER {@link discoverAndLoadGeneratedPackages} (and after the bootstrap
+ * manifests imported at module load), so an app's registrations land last and
+ * therefore win via the ClassFactory's load-order priority — letting an app
+ * override a base class.
+ *
+ * It ALSO collects each package's exported `RESOLVER_PATHS` (absolute paths to the
+ * package's generated resolver files) and returns them. This is required for the app's
+ * GraphQL mutations/queries to actually enter the live schema: side-effect-importing a
+ * resolver class only registers type-graphql metadata, but `buildSchema` includes a
+ * resolver ONLY if it is PASSED in. `serve()` builds its resolver set by globbing the
+ * paths it is given — so the caller must hand these paths to `serve()`, or the app's
+ * entity-specific mutations (e.g. `CreateXxx`) never appear in the API. The app's own
+ * `packages/MJAPI/src/generated/generated.ts` does NOT regenerate the app's entities, so
+ * the package is the only source of these resolvers.
+ *
+ * Mirrors the generated-package loader's robustness contract: no-op when the
+ * section is absent, per-package try/catch, tolerate `ERR_MODULE_NOT_FOUND`
+ * (e.g. before `npm install`), warn on anything else, and never crash boot.
+ *
+ * @param configResult - The loaded MemberJunction configuration
+ * @returns absolute resolver-file paths to add to `serve()`'s resolver globs (empty when
+ *          no Open App server packages are installed — the common case).
+ */
+async function loadDynamicAppPackages(configResult: { config: Record<string, unknown> }): Promise<string[]> {
+  const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicServerPackage[] } | undefined;
+  const serverPackages = dynamicPackages?.server;
+  const resolverPaths: string[] = [];
+  if (!serverPackages || serverPackages.length === 0) {
+    // No installed Open App server packages — the common case. Stay silent, no paths.
+    return resolverPaths;
+  }
+
+  console.log('Loading Open App server packages...');
+
+  for (const entry of serverPackages) {
+    const pkgName = entry?.PackageName;
+    if (!pkgName || entry.Enabled === false) {
+      continue;
+    }
+    try {
+      // Dynamic import to trigger side effects (class registration).
+      const mod = (await import(pkgName)) as Record<string, unknown>;
+      // Invoke the declared startup export, if any (e.g. a registration kicker).
+      const startup = entry.StartupExport ? mod[entry.StartupExport] : undefined;
+      if (typeof startup === 'function') {
+        await Promise.resolve((startup as () => unknown)());
+      }
+      // Collect the package's exported resolver paths so serve() globs them into the schema.
+      const pkgResolverPaths = mod.RESOLVER_PATHS;
+      let added = 0;
+      if (Array.isArray(pkgResolverPaths)) {
+        for (const p of pkgResolverPaths) {
+          if (typeof p === 'string' && p.length > 0) {
+            resolverPaths.push(p);
+            added++;
+          }
+        }
+      }
+      console.log(`  Loaded Open App server package: ${pkgName}${entry.StartupExport ? ` (ran ${entry.StartupExport})` : ''}${added > 0 ? ` (+${added} resolver path${added === 1 ? '' : 's'})` : ''}`);
+    } catch (error: unknown) {
+      const errObj = error as { code?: string };
+      if (errObj.code === 'ERR_MODULE_NOT_FOUND') {
+        console.log(`  Open App server package not found (run 'npm install'?): ${pkgName}`);
+      } else {
+        console.warn(`  Error loading Open App server package ${pkgName}:`, error);
+      }
+    }
+  }
+
+  console.log('');
+  return resolverPaths;
 }
 
 /**
@@ -130,12 +224,12 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
  * ```
  */
 export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
-  console.log('🚀 MemberJunction Server Bootstrap');
-  console.log('=====================================\n');
+  // No banner here: serve()'s StartupLogger shows a transient "Bootstrapping…"
+  // indicator while booting and prints the 🚀 summary block once ready, so the
+  // rocket appears only after launch.
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time
   // We just need to load the raw user config to access codeGeneration.packages setting
-  console.log('');
   const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
   const configSearchResult = explorer.search(options.configPath || process.cwd());
 
@@ -147,18 +241,27 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
 
   // Discover and load generated packages automatically
   // This triggers their @RegisterClass decorators to register entities, actions, etc.
-  console.log('Loading generated packages...');
   await discoverAndLoadGeneratedPackages(configResult);
-  console.log('');
+
+  // Load installed Open App server packages (dynamicPackages.server[] from `mj app
+  // install`). Done AFTER the generated packages so an app's @RegisterClass wins via
+  // ClassFactory load-order priority. Without this, `mj app install` writes the
+  // section but nothing consumes it — the app's server classes never load. The returned
+  // resolver paths are the app packages' generated resolver files, which must be globbed
+  // into the schema below (loading the classes alone does NOT put their mutations/queries
+  // in the GraphQL schema — type-graphql only includes resolvers passed to serve()).
+  const dynamicResolverPaths = await loadDynamicAppPackages(configResult);
 
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths
-  const resolverPaths = options.resolverPaths || [
+  const baseResolverPaths = options.resolverPaths || [
     // Standard locations where generated resolvers may exist
     './src/generated/generated.{js,ts}',
     './dist/generated/generated.{js,ts}',
     './generated/generated.{js,ts}',
   ];
+  // Append the installed Open Apps' resolver paths so their GraphQL operations are served.
+  const resolverPaths = [...baseResolverPaths, ...dynamicResolverPaths];
 
   // Optional pre-start hook
   if (options.beforeStart) {
@@ -183,7 +286,6 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   // - WebSocket setup for subscriptions
   // - REST API endpoint registration
   // - Graceful shutdown handling
-  console.log('Starting MemberJunction Server...\n');
   await serve(resolverPaths, undefined, serverOptions);
 
   // Optional post-start hook

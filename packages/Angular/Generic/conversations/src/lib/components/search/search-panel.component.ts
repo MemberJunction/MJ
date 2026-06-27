@@ -12,6 +12,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UserInfo } from '@memberjunction/core';
+import { HighlightSearchMatches } from '@memberjunction/global';
 import {
   SearchService,
   SearchResult,
@@ -55,6 +56,11 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
   };
   public recentSearches: string[] = [];
   public selectedIndex: number = -1;
+
+  /** Message for the "no results" empty state, echoing the search term. */
+  public get NoResultsMessage(): string {
+    return `No results found for "${this.searchQuery}"`;
+  }
 
   private destroy$ = new Subject<void>();
 
@@ -308,21 +314,9 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     return `${Math.floor(days / 365)} years ago`;
   }
 
-  /**
-   * Highlight matched text in result
-   */
+  /** Highlight matched text in result. Output is bound to `[innerHTML]` in the template. */
   public highlightMatch(text: string, query: string): string {
-    if (!query) return text;
-
-    const regex = new RegExp(`(${this.escapeRegex(query)})`, 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
-  }
-
-  /**
-   * Escape regex special characters
-   */
-  private escapeRegex(str: string): string {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return HighlightSearchMatches(text, query);
   }
 
   /**

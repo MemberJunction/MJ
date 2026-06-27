@@ -30,7 +30,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     public searchText = '';
 
     // Permissions
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
     @ViewChild('categoryEditPanel') categoryEditPanel!: CredentialCategoryEditPanelComponent;
@@ -109,7 +109,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [catResult, typeResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Credential Categories',
@@ -314,6 +314,15 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     public clearSearch(): void {
         this.searchText = '';
         this.cdr.markForCheck();
+    }
+
+    /** Empty-state CTA: clear search when narrowing, otherwise create. */
+    public onEmptyStateAction(): void {
+        if (this.searchText) {
+            this.clearSearch();
+        } else {
+            this.createNewCategory();
+        }
     }
 
     public expandAll(): void {

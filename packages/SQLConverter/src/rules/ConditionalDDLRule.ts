@@ -16,7 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate, convertCommonFunctions } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions, removeNPrefix, castBooleanInsertValues, convertBooleanLiteralComparisons } from './ExpressionHelpers.js';
 
 export class ConditionalDDLRule implements IConversionRule {
   Name = 'ConditionalDDLRule';
@@ -25,8 +25,9 @@ export class ConditionalDDLRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CONDITIONAL_DDL'];
   Priority = 55;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL IF NOT EXISTS / IF OBJECT_ID guards around DDL (CREATE INDEX, CREATE TABLE, etc.) need conversion to PG IF NOT EXISTS clauses or DO $ BEGIN ... EXCEPTION blocks. sqlglot does not perform this structural transformation.';
 
-  PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
+  PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = sql;
 
     // Convert identifiers: [schema].[table] → schema."table"
@@ -42,7 +43,7 @@ export class ConditionalDDLRule implements IConversionRule {
     result = this.fixInformationSchema(result);
 
     // Remove N prefix from string literals
-    result = result.replace(/(?<![a-zA-Z])N'/g, "'");
+    result = removeNPrefix(result);
 
     // Convert common SQL Server functions BEFORE PascalCase quoting
     // (prevents GETUTCDATE from being quoted as "GETUTCDATE" before conversion to NOW())
@@ -56,8 +57,26 @@ export class ConditionalDDLRule implements IConversionRule {
     const roleResult = this.tryConvertConditionalRole(result);
     if (roleResult) return roleResult + '\n';
 
+    // Try CREATE SCHEMA conditional pattern (sys.schemas + EXEC('CREATE SCHEMA ...')) →
+    // PG-native CREATE SCHEMA IF NOT EXISTS "X"
+    const schemaResult = this.tryConvertConditionalSchema(result);
+    if (schemaResult) return schemaResult + '\n';
+
+    // Try schema-level extended property pattern (sys.extended_properties + sp_addextendedproperty
+    // with @level0type = SCHEMA, no level1) → PG-native COMMENT ON SCHEMA
+    const extPropResult = this.tryConvertConditionalSchemaExtendedProperty(result);
+    if (extPropResult) return extPropResult + '\n';
+
     // Convert IF NOT EXISTS (...) BEGIN ... END → DO $$ BEGIN IF NOT EXISTS (...) THEN ... END IF; END $$;
     result = this.convertToDoBlock(result);
+
+    // CodeGen wraps its metadata INSERTs in IF-NOT-EXISTS guards, so the INSERT
+    // lands inside the DO block above and never passes through InsertRule. Cast
+    // its BIT (0/1) literals to PG boolean here using the same shared helper.
+    result = castBooleanInsertValues(result, context.TableColumns);
+    // Also fold any `"BoolCol" = 0/1` comparisons (e.g. inside the IF guard or an
+    // UPDATE body) to FALSE/TRUE.
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
 
     return result + '\n';
   }
@@ -149,11 +168,13 @@ export class ConditionalDDLRule implements IConversionRule {
     // Strip comments before matching to avoid matching role keywords inside comments
     // (e.g., "Create Role and Grant Permissions" in a comment would match "and" as role name)
     const stripped = sql.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[^\n]*/g, '');
-    const roleMatch = stripped.match(/CREATE\s+ROLE\s+("?\w+"?)/i);
+    // Accept [bracket], "quoted", or bare role names. SS emits the AUTHORIZATION
+    // clause (e.g. CREATE ROLE [cdp_BI] AUTHORIZATION [db_securityadmin]) which PG
+    // has no equivalent for — we capture only the name and drop the rest.
+    const roleMatch = stripped.match(/CREATE\s+ROLE\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
     if (!roleMatch) return null;
-    const roleName = roleMatch[1];
-    // Strip quotes to get the bare name for the pg_roles lookup
-    const bareRoleName = roleName.replace(/^"|"$/g, '');
+    const bareRoleName = roleMatch[1] || roleMatch[2] || roleMatch[3];
+    const roleName = `"${bareRoleName}"`;
     return [
       'DO $$',
       'BEGIN',
@@ -162,6 +183,86 @@ export class ConditionalDDLRule implements IConversionRule {
       '    END IF;',
       'END $$;',
     ].join('\n');
+  }
+
+  /** Convert IF NOT EXISTS (sys.schemas WHERE name = 'X') ... EXEC('CREATE SCHEMA [X]')
+   *  to PG-native CREATE SCHEMA IF NOT EXISTS "X".
+   *
+   *  Source pattern (T-SQL):
+   *      IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '__mj_UDT')
+   *      BEGIN
+   *          EXEC('CREATE SCHEMA [__mj_UDT]')
+   *      END
+   *
+   *  Target output (PG):
+   *      CREATE SCHEMA IF NOT EXISTS "__mj_UDT";
+   *
+   *  Notes: ConditionalDDLRule's PostProcess runs convertIdentifiers() before this method,
+   *  so by the time we see the SQL the [brackets] have already become double-quotes —
+   *  we still strip both to be defensive against pattern variants.
+   */
+  private tryConvertConditionalSchema(sql: string): string | null {
+    // Must reference sys.schemas in the IF NOT EXISTS condition AND have a CREATE SCHEMA inside
+    if (!/sys\.schemas/i.test(sql)) return null;
+    if (!/CREATE\s+SCHEMA\b/i.test(sql)) return null;
+
+    // Extract the schema name from CREATE SCHEMA — handles both [X], "X", and bare X.
+    // EXEC('CREATE SCHEMA [X]') after PostProcess identifier conversion may already be
+    // EXEC('CREATE SCHEMA "X"'), so accept either bracket or quote forms.
+    const schemaMatch = sql.match(/CREATE\s+SCHEMA\s+(?:\[([^\]]+)\]|"([^"]+)"|(\w+))/i);
+    if (!schemaMatch) return null;
+    const schemaName = schemaMatch[1] || schemaMatch[2] || schemaMatch[3];
+    if (!schemaName) return null;
+
+    return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
+  }
+
+  /** Convert IF NOT EXISTS (sys.extended_properties ...) ... EXEC sp_addextendedproperty
+   *  with @level0type = 'SCHEMA' (no level1) to PG-native COMMENT ON SCHEMA.
+   *
+   *  Source pattern (T-SQL):
+   *      IF NOT EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 3 AND ...)
+   *      BEGIN
+   *          EXEC sp_addextendedproperty
+   *              @name = N'MS_Description',
+   *              @value = N'description text',
+   *              @level0type = N'SCHEMA',
+   *              @level0name = N'__mj_UDT'
+   *      END
+   *
+   *  Target output (PG):
+   *      COMMENT ON SCHEMA "__mj_UDT" IS 'description text';
+   *
+   *  Note: the existing ExtendedPropertyRule handles TABLE/VIEW/COLUMN-level properties
+   *  but assumes a non-empty @level1type. Schema-level properties (level0 only) need
+   *  their own conversion. We emit COMMENT ON SCHEMA which is idempotent in PG, so the
+   *  IF NOT EXISTS guard is unnecessary on the target side.
+   */
+  private tryConvertConditionalSchemaExtendedProperty(sql: string): string | null {
+    // Must reference sys.extended_properties AND sp_addextendedproperty
+    if (!/sys\.extended_properties/i.test(sql)) return null;
+    if (!/sp_addextendedproperty/i.test(sql)) return null;
+    // Must be a schema-level property (level0 = SCHEMA, no level1)
+    if (!/@level0type\s*=\s*N?'SCHEMA'/i.test(sql)) return null;
+    if (/@level1type\s*=/i.test(sql)) return null; // not schema-level if level1 is set
+
+    // Extract @value (handles N'...' and '...', with '' for escaped single-quote inside).
+    // Use a greedy alternation so that '' pairs are consumed as escapes rather than
+    // treated as the terminator. Lazy * here would stop at the first ' of an escape.
+    const valueMatch = sql.match(/@value\s*=\s*N?'((?:''|[^'])*)'/i);
+    if (!valueMatch) return null;
+    const rawValue = valueMatch[1];
+
+    // Extract @level0name — the schema name
+    const schemaMatch = sql.match(/@level0name\s*=\s*N?'([^']+)'/i);
+    if (!schemaMatch) return null;
+    const schemaName = schemaMatch[1];
+
+    // Convert SS-style escaped quotes ('') to single quotes, then re-escape for PG
+    const value = rawValue.replace(/''/g, "'");
+    const pgValue = value.replace(/'/g, "''");
+
+    return `COMMENT ON SCHEMA "${schemaName}" IS '${pgValue}';`;
   }
 
   private convertToDoBlock(sql: string): string {
@@ -210,6 +311,12 @@ export class ConditionalDDLRule implements IConversionRule {
         return `-- SKIPPED: conditional DDL (auto-conversion not supported)\n${commented}\n`;
       }
     }
+
+    // Translate SQL Server constraint catalog views (sys.key_constraints,
+    // sys.check_constraints, sys.foreign_keys) into PG's pg_constraint before
+    // PascalCase quoting — these idempotency guards have no direct PG catalog
+    // equivalent and would otherwise reference a non-existent relation.
+    condition = this.convertConstraintCatalogCondition(condition);
 
     // Quote PascalCase column names that aren't already quoted
     condition = this.quoteColumnNames(condition);
@@ -322,6 +429,39 @@ export class ConditionalDDLRule implements IConversionRule {
       if (ConditionalDDLRule.SQL_KEYWORDS.has(word.toUpperCase())) return match;
       return `"${word}"`;
     });
+  }
+
+  /**
+   * Convert T-SQL constraint-catalog existence checks to PG's pg_constraint.
+   *
+   * SQL Server exposes constraints through several catalog views — sys.key_constraints
+   * (PK/UNIQUE), sys.check_constraints (CHECK), and sys.foreign_keys (FK) — each keyed
+   * by a `name` column. PostgreSQL stores all of them in a single pg_constraint catalog
+   * keyed by `conname`. So an idempotency guard like:
+   *
+   *     SELECT 1 FROM sys.key_constraints WHERE name = 'UQ_Foo'
+   *
+   * becomes:
+   *
+   *     SELECT 1 FROM pg_constraint WHERE conname = 'UQ_Foo'
+   *
+   * The `name = '...'` match is sufficient for the guard (constraint names are unique
+   * within a schema in our migrations). Returns the condition unchanged if none of the
+   * constraint catalogs are referenced.
+   */
+  private convertConstraintCatalogCondition(condition: string): string {
+    if (!/\bsys\.(key_constraints|check_constraints|foreign_keys)\b/i.test(condition)) {
+      return condition;
+    }
+    let result = condition.replace(
+      /\bsys\.(key_constraints|check_constraints|foreign_keys)\b/gi,
+      'pg_constraint'
+    );
+    // Map the SS catalog's `name` column to pg_constraint's `conname`. Only the
+    // bare `name` identifier (not part of a larger word, not already prefixed)
+    // is rewritten.
+    result = result.replace(/(?<![\w.])name\b/gi, 'conname');
+    return result;
   }
 
   private convertTypes(sql: string): string {

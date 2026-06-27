@@ -1,10 +1,11 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
+import { DragDropModule } from '@angular/cdk/drag-drop';
+import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent, MjSlidePanelComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
-import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+import { BaseFormsModule, MjFormDialogComponent } from '@memberjunction/ng-base-forms';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
@@ -34,7 +35,6 @@ import { TestingModule } from "@memberjunction/ng-testing";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
-import { VersionsModule } from "@memberjunction/ng-versions";
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
@@ -47,11 +47,14 @@ import { MJAIAgentRunFormComponentExtended } from "./ai-agent-run/ai-agent-run.c
 import { AIAgentRunTimelineComponent } from "./ai-agent-run/ai-agent-run-timeline.component";
 import { AIAgentRunStepNodeComponent } from "./ai-agent-run/ai-agent-run-step-node.component";
 import { AIAgentRunAnalyticsComponent } from "./ai-agent-run/ai-agent-run-analytics.component";
-import { AIAgentRunVisualizationComponent } from "./ai-agent-run/ai-agent-run-visualization.component";
 import { AIAgentRunStepDetailComponent } from "./ai-agent-run/ai-agent-run-step-detail.component";
+import { AIAgentRunFlowComponent } from "./ai-agent-run/flow/agent-run-flow.component";
+import { FlameCascadeComponent } from "./ai-agent-run/flow/flame-cascade.component";
+import { SubwayLinesComponent } from "./ai-agent-run/flow/subway-lines.component";
+import { ConstellationComponent } from "./ai-agent-run/flow/constellation.component";
+import { FlowchartComponent } from "./ai-agent-run/flow/flowchart.component";
 import { MJQueryFormComponentExtended } from "./Queries/query-form.component";
 import { QueryRunDialogComponent } from "./Queries/query-run-dialog.component";
-import { QueryCategoryDialogComponent } from "./Queries/query-category-dialog.component";
 import { FlowAgentFormSectionComponent } from "./AIAgents/FlowAgentType/flow-agent-form-section.component";
 import { FlowEditorModule } from "@memberjunction/ng-flow-editor";
 import { MarkdownModule } from "@memberjunction/ng-markdown";
@@ -64,7 +67,27 @@ import { MJTestRunFeedbackFormComponentExtended } from "./Tests/test-run-feedbac
 import { MJTestRubricFormComponentExtended } from "./Tests/test-rubric-form.component";
 import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 import { MJListFormComponentExtended } from "./Lists/list-form.component";
-import { MJContentSourceFormComponentExtended } from "./ContentSources/content-source-form.component";
+// ContentSources: the custom-form override was removed once dynamic
+// BaseFormPanel slots landed. Slot-registered panels live in
+// `../panels/content-sources/` and self-mount into the generated form via
+// the `after-fields` slot. Imported here so the @RegisterClassEx decorators
+// run at module load (Angular tree-shaking guard).
+import { TagPipelineConfigurationPanel } from "../panels/content-sources/tag-pipeline-configuration.panel";
+import { WebsiteCrawlerSettingsPanel } from "../panels/content-sources/website-crawler-settings.panel";
+import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
+import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
+import { SearchModule } from "@memberjunction/ng-search";
+import { MJAIAgentSessionFormComponentExtended } from "./AIAgentSessions/ai-agent-session-form.component";
+import { MJAIAgentChannelFormComponentExtended } from "./AIAgentChannels/ai-agent-channel-form.component";
+// Realtime Bridges — custom Extended forms (Pattern 2) for the three major bridge entities.
+import { MJAIBridgeProviderFormComponentExtended, LoadMJAIBridgeProviderFormComponentExtended } from "./BridgeProviders/bridge-provider-form.component";
+import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridgeFormComponentExtended } from "./SessionBridges/session-bridge-form.component";
+import { RecordProcessFormComponentExtended } from "./RecordProcesses/record-process-form.component";
+import { RecordProcessEditorComponent } from "@memberjunction/ng-record-process-studio";
+import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
+// AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
+// @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
+import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/agent-realtime.panel";
 
 @NgModule({
     declarations: [
@@ -93,11 +116,14 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         AIAgentRunTimelineComponent,
         AIAgentRunStepNodeComponent,
         AIAgentRunAnalyticsComponent,
-        AIAgentRunVisualizationComponent,
         AIAgentRunStepDetailComponent,
+        AIAgentRunFlowComponent,
+        FlameCascadeComponent,
+        SubwayLinesComponent,
+        ConstellationComponent,
+        FlowchartComponent,
         MJQueryFormComponentExtended,
         QueryRunDialogComponent,
-        QueryCategoryDialogComponent,
         FlowAgentFormSectionComponent,
         MJTestRunFormComponentExtended,
         MJTestFormComponentExtended,
@@ -107,13 +133,26 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
-        MJContentSourceFormComponentExtended,
+        // ContentSource-specific BaseFormPanel slot components (no custom form override).
+        TagPipelineConfigurationPanel,
+        WebsiteCrawlerSettingsPanel,
+        MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
+        RecordProcessFormComponentExtended,
     ],
     imports: [
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
+        DragDropModule,
         AgGridModule,
+        MJEmptyStateComponent,
         MJButtonDirective,
         MJAccordionPanelComponent,
         MJAccordionTitleDirective,
@@ -146,7 +185,10 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         MarkdownModule,
         NgTreesModule,
         AngularSplitModule,
-        VersionsModule
+        MjSlidePanelComponent,
+        MjFormDialogComponent,
+        SearchModule,
+        RecordProcessEditorComponent
     ],
     exports: [
         MJEntityFormComponentExtended,
@@ -173,8 +215,18 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         MJTestRubricFormComponentExtended,
         EntityLinkPillComponent,
         MJListFormComponentExtended,
-        MJContentSourceFormComponentExtended,
-        ActionsModule
+        TagPipelineConfigurationPanel,
+        WebsiteCrawlerSettingsPanel,
+        MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
+        MJAIAgentSessionFormComponentExtended,
+        MJAIAgentChannelFormComponentExtended,
+        MJAIBridgeProviderFormComponentExtended,
+        MJAIAgentSessionBridgeFormComponentExtended,
+        MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentRealtimePanel,
+        ActionsModule,
+        RecordProcessFormComponentExtended
     ],
     providers: [
         NewAgentDialogService,

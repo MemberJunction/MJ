@@ -17,11 +17,23 @@ vi.mock('@memberjunction/core', async () => {
             }
         },
         Metadata: class MockMetadata {
+            // Multi-provider migration: MatchEngine uses this.ProviderToUse which falls back
+            // to Metadata.Provider. Expose a static Provider with the methods/properties the
+            // engine needs.
+            static Provider = {
+                Entities: [{ Name: 'Contacts', FirstPrimaryKey: { Name: 'ID' } }],
+                EntityByName(name: string) {
+                    return this.Entities.find((e: { Name: string }) => e.Name === name);
+                },
+            };
             get Entities() {
                 return [{
                     Name: 'Contacts',
                     FirstPrimaryKey: { Name: 'ID' },
                 }];
+            }
+            EntityByName(name: string) {
+                return this.Entities.find(e => e.Name === name);
             }
         },
     };
@@ -178,8 +190,12 @@ describe('MatchEngine', () => {
             expect(results[0].MatchedMJRecordID).toBe('mj-multi-key');
 
             const callArgs = mockRunViewFn.mock.calls[0][0] as { ExtraFilter: string };
-            expect(callArgs.ExtraFilter).toContain('[Email]');
-            expect(callArgs.ExtraFilter).toContain('[CompanyName]');
+            // ANSI double-quoted identifiers — portable across dialects (QUOTED_IDENTIFIER ON on
+            // SQL Server, standard on Postgres) and safe for reserved-word columns (e.g. `open`).
+            // SQL-Server square brackets are NOT used — they break Postgres.
+            expect(callArgs.ExtraFilter).toContain('"Email" =');
+            expect(callArgs.ExtraFilter).toContain('"CompanyName" =');
+            expect(callArgs.ExtraFilter).not.toContain('[Email]');
             expect(callArgs.ExtraFilter).toContain('AND');
         });
     });

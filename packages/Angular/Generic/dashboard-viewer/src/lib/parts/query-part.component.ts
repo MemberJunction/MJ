@@ -2,7 +2,6 @@ import { Component, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } fro
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { Metadata } from '@memberjunction/core';
 import { MJQueryEntity } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
 
@@ -25,19 +24,23 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
         
           <!-- Error state -->
           @if (ErrorMessage && !IsLoading) {
-            <div class="error-state">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>{{ ErrorMessage }}</span>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Variant="error"
+              Icon="fa-solid fa-triangle-exclamation"
+              Title="Couldn't load query"
+              [Message]="ErrorMessage"
+              Size="compact" />
           }
-        
+
           <!-- No query configured -->
           @if (!IsLoading && !ErrorMessage && !hasQuery) {
-            <div class="empty-state">
-              <i class="fa-solid fa-flask"></i>
-              <h4>No Query Selected</h4>
-              <p>Click the configure button to select a query for this part.</p>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Icon="fa-solid fa-flask"
+              Title="No Query Selected"
+              Message="Click the configure button to select a query for this part."
+              Size="compact" />
           }
         
           <!-- Query Viewer -->
@@ -72,9 +75,7 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             background: var(--mj-bg-surface);
         }
 
-        .loading-state,
-        .error-state,
-        .empty-state {
+        .loading-state {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -85,25 +86,8 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             padding: 24px;
         }
 
-        .error-state i,
-        .empty-state i {
-            font-size: 48px;
-            color: var(--mj-text-muted);
-            margin-bottom: 16px;
-        }
-
-        .error-state i {
-            color: var(--mj-status-error);
-        }
-
-        .empty-state h4 {
-            margin: 0 0 8px 0;
-            color: var(--mj-text-primary);
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 13px;
+        .part-placeholder {
+            height: 100%;
         }
 
         .query-content {
@@ -154,11 +138,11 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         this.stopAutoRefresh();
 
         try {
-            const md = new Metadata();
+            const p = this.ProviderToUse;
 
             if (queryId) {
                 // Load query by ID to verify it exists
-                this.queryEntity = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
+                this.queryEntity = await p.GetEntityObject<MJQueryEntity>('MJ: Queries', p.CurrentUser);
                 const loaded = await this.queryEntity.Load(queryId);
 
                 if (!loaded) {
@@ -168,7 +152,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
                 this.queryId = queryId;
             } else if (queryName) {
                 // Query by name - find the query ID from metadata
-                const queryInfo = md.Queries.find(q => q.Name === queryName);
+                const queryInfo = p.Queries.find(q => q.Name === queryName);
                 if (queryInfo) {
                     this.queryId = queryInfo.ID;
                 } else {

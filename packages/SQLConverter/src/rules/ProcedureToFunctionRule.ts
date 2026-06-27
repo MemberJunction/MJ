@@ -10,9 +10,39 @@ import {
   convertIdentifiers, convertDateFunctions, convertCharIndex,
   convertStringConcat, convertTopToLimit, convertCastTypes,
   convertIIF, convertConvertFunction, removeNPrefix, removeCollate,
-  convertCommonFunctions, convertStuff,
+  convertCommonFunctions, convertStuff, emitDropOverloadsBlock,
 } from './ExpressionHelpers.js';
 import { resolveType } from './TypeResolver.js';
+
+/**
+ * Views referenced via `RETURNS SETOF` by CRUD sprocs for deprecated entities
+ * whose backing view is no longer created by any migration. PostgreSQL resolves
+ * the SETOF return type at function-CREATE time, so emitting these sprocs against
+ * a nonexistent view fails the apply. Because the entity is deprecated (the view
+ * exists in no baseline or migration), the sproc is intentionally skipped rather
+ * than emitted. Mirrors the targeted-skip precedent in CatalogViewRule
+ * (vwFlywayVersionHistoryParsed). Add a view here only when its sproc is a true
+ * orphan — the default for every other view is to emit the sproc regardless (see
+ * determineReturnType), so live sprocs are never silently dropped.
+ */
+const ORPHANED_RETURN_VIEWS = new Set<string>([
+  'vwEntityBehaviors',
+  'vwEntityBehaviorTypes',
+]);
+
+/**
+ * PostgreSQL caps functions at 100 arguments (FUNC_MAX_ARGS). MJ's CRUD sprocs
+ * pair every nullable column with a `_Clear` companion, so wide entities (e.g.
+ * AIPromptRun) project well past that. This mirrors POSTGRESQL_PROCEDURE_PARAM_LIMIT
+ * in @memberjunction/postgresql-data-provider — the exact threshold the shared
+ * `useJsonArgShape` predicate uses, so CodeGen emit and runtime invocation agree.
+ *
+ * A typed-arg sproc over this limit simply cannot be created on PostgreSQL, so we
+ * skip it here; CodeGen emits the single-JSONB-arg form for those entities, shipped
+ * for PostgreSQL via the `*_JSON_Arg_Shape.pg-only.sql` overrides. (This restores
+ * the documented behavior — the converted v5.37 baseline already skipped these.)
+ */
+export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
 
 export class ProcedureToFunctionRule implements IConversionRule {
   Name = 'ProcedureToFunctionRule';
@@ -21,6 +51,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_PROCEDURE'];
   Priority = 30;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL CREATE PROCEDURE → PG CREATE FUNCTION conversion: parameter renaming (@param → p_param), DECLARE handling, RAISERROR → RAISE EXCEPTION, INSERT...OUTPUT handling, RETURN value semantics, and SETOF return types. This is structural transformation sqlglot does not perform.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     // Extract proc name via regex
@@ -44,6 +75,22 @@ export class ProcedureToFunctionRule implements IConversionRule {
     const bodyStart = procMatch.index! + procMatch[0].length;
     const body = sql.slice(bodyStart).trim();
 
+    // PostgreSQL can't create a function whose arg count exceeds FUNC_MAX_ARGS.
+    // MJ switches wide entities to a single-JSONB-arg sproc above
+    // POSTGRESQL_PROCEDURE_PARAM_LIMIT (the shared useJsonArgShape threshold used
+    // by both CodeGen and the runtime). The SS sproc is itself CodeGen output, so
+    // its parameter list already IS the writable-field set the runtime sends in
+    // p_data — we transform it into the same (p_data JSONB) shape so the converted
+    // baseline is self-contained and needs no separate CodeGen pass.
+    const paramCount = splitParams(paramsBlock).length;
+    if (paramCount > POSTGRESQL_PROCEDURE_PARAM_LIMIT) {
+      const jsonArg = this.generateJsonArgCrud(procName, paramsBlock, body, context);
+      if (jsonArg) return jsonArg;
+      // Couldn't confidently transform (e.g. non-single-UUID PK) — skip rather
+      // than emit a function PG can't create. Flag for manual review.
+      return `-- SKIPPED (INTENTIONAL): ${procName} — ${paramCount} parameters exceeds PostgreSQL's ${POSTGRESQL_PROCEDURE_PARAM_LIMIT}-argument limit and could not be auto-converted to JSON-arg shape; needs manual handling`;
+    }
+
     const pgParams = this.convertProcParams(paramsBlock);
     const booleanParams = this.extractBooleanParams(paramsBlock);
     const pgBody = this.convertProcBody(body, procName, context, booleanParams);
@@ -54,12 +101,159 @@ export class ProcedureToFunctionRule implements IConversionRule {
       return returnsClause;
     }
 
-    let result = `CREATE OR REPLACE FUNCTION __mj."${procName}"(${pgParams})\n`;
+    // Drop any existing overloads of this function before recreating. PG
+    // dispatches functions by (name, ordered-arg-type-list) — `CREATE OR
+    // REPLACE FUNCTION` only replaces the body when the new signature
+    // matches the prior signature exactly. Adding a parameter (even with
+    // DEFAULT) creates a NEW overload alongside the old one, leading to
+    // "function ... is not unique" errors at call time. Shared helper
+    // emits the canonical pg_proc-iteration DROP block; FunctionRule uses
+    // the same helper so reviewers see one pattern across the converter.
+    let result = emitDropOverloadsBlock(procName);
+    result += `CREATE OR REPLACE FUNCTION __mj."${procName}"(${pgParams})\n`;
     result += `${returnsClause}\n$$\n`;
     result += pgBody;
     result += '\n$$ LANGUAGE plpgsql;\n';
 
     return result;
+  }
+
+  // ---------------------------------------------------------------------------
+  // JSON-arg shape for wide CRUD sprocs (over PG's FUNC_MAX_ARGS limit)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Transform a wide `spCreate*`/`spUpdate*` sproc into the single-JSONB-arg
+   * shape MJ's runtime + CodeGen use for entities past the PG arg limit
+   * (`useJsonArgShape`). The SS sproc is CodeGen output, so its parameter list is
+   * exactly the writable-field set the runtime serializes into `p_data` — we emit
+   * a `(p_data JSONB)` function that reads those keys, keeping the converted
+   * baseline self-contained (no CodeGen pass needed) and in lockstep with the
+   * runtime contract.
+   *
+   * Returns null when the sproc doesn't match the supported single-`ID`-UUID-PK
+   * CRUD shape (caller then skips). DELETE is never wide (PK-only), so unsupported.
+   */
+  private generateJsonArgCrud(procName: string, paramsBlock: string, body: string, context: ConversionContext): string | null {
+    const verbMatch = procName.match(/^sp(Create|Update|Delete)(.+)$/i);
+    if (!verbMatch) return null;
+    const verb = verbMatch[1].toLowerCase();
+    if (verb === 'delete') return null;
+
+    const tableMatch = body.match(/\b(?:INSERT\s+INTO|UPDATE)\s+\[?__mj\]?\.\[?(\w+)\]?/i);
+    const viewMatch = body.match(/\bFROM\s+\[?__mj\]?\.\[?(vw\w+)\]?/i);
+    if (!tableMatch || !viewMatch) return null;
+    const table = tableMatch[1];
+    const view = viewMatch[1];
+    const schema = context.Schema;
+    const q = (id: string) => `${schema}."${id}"`;
+
+    // Parse params → writable fields (drop the PK and `_Clear` companions).
+    const writable: Array<{ name: string; pgType: string }> = [];
+    let pkName: string | null = null;
+    for (const raw of splitParams(paramsBlock)) {
+      const pm = raw.trim().match(/^@(\w+)\s+([A-Za-z]\w*(?:\s*\([^)]*\))?)/);
+      if (!pm) continue;
+      const name = pm[1];
+      if (/_Clear$/i.test(name)) continue;
+      const pgType = resolveType(pm[2]).toUpperCase();
+      if (/^ID$/i.test(name) && pgType === 'UUID') { pkName = name; continue; }
+      writable.push({ name, pgType });
+    }
+    if (!pkName || writable.length === 0) return null;
+
+    const drop = emitDropOverloadsBlock(procName);
+
+    if (verb === 'create') {
+      const fieldArray = writable.map((f) => `'${f.name}'`).join(', ');
+      const caseEntries = writable.map((f) => {
+        const cast = this.jsonArgCast(f.name, f.pgType, '$1').replace(/'/g, "''");
+        return `                WHEN '${f.name}' THEN '${cast}'`;
+      }).join('\n');
+      return `${drop}CREATE OR REPLACE FUNCTION ${q(procName)}(p_data JSONB)
+RETURNS SETOF ${q(view)}
+AS $$
+DECLARE
+    v_id UUID;
+    v_field_name TEXT;
+    v_cast_expr  TEXT;
+    v_col_list   TEXT;
+    v_val_list   TEXT;
+    v_sql        TEXT;
+BEGIN
+    IF p_data ? '${pkName}' THEN
+        v_id := (p_data->>'${pkName}')::UUID;
+    ELSE
+        v_id := gen_random_uuid();
+    END IF;
+
+    v_col_list := quote_ident('${pkName}');
+    v_val_list := quote_literal(v_id) || '::UUID';
+
+    -- Build column/value lists from the keys present in p_data. A key that is
+    -- absent OR explicitly JSON null is omitted so the column DEFAULT applies,
+    -- matching the typed-arg sproc per-column coalescing (a defaulted NOT NULL
+    -- column such as OwnerUserID falls back to its DEFAULT instead of inserting NULL).
+    FOREACH v_field_name IN ARRAY ARRAY[${fieldArray}]
+    LOOP
+        IF p_data ? v_field_name AND jsonb_typeof(p_data->v_field_name) <> 'null' THEN
+            v_cast_expr := CASE v_field_name
+${caseEntries}
+            END;
+            v_col_list := v_col_list || ', ' || quote_ident(v_field_name);
+            v_val_list := v_val_list || ', ' || v_cast_expr;
+        END IF;
+    END LOOP;
+
+    v_sql := format('INSERT INTO ${q(table)} (%s) VALUES (%s)', v_col_list, v_val_list);
+    EXECUTE v_sql USING p_data;
+
+    RETURN QUERY SELECT * FROM ${q(view)} WHERE "${pkName}" = v_id;
+END;
+$$ LANGUAGE plpgsql;
+`;
+    }
+
+    // UPDATE: per-column key-presence CASE; key-absent leaves the column intact.
+    const setClauses = writable.map((f) => {
+      const cast = this.jsonArgCast(f.name, f.pgType, 'p_data');
+      return `        "${f.name}" = CASE WHEN p_data ? '${f.name}' THEN ${cast} ELSE "${f.name}" END`;
+    });
+    setClauses.push('        "__mj_UpdatedAt" = NOW()');
+    return `${drop}CREATE OR REPLACE FUNCTION ${q(procName)}(p_data JSONB)
+RETURNS SETOF ${q(view)}
+AS $$
+DECLARE
+    v_id UUID := (p_data->>'${pkName}')::UUID;
+    v_updated_count INTEGER;
+BEGIN
+    IF p_data IS NULL OR NOT (p_data ? '${pkName}') THEN
+        RAISE EXCEPTION '${procName}: p_data must include "${pkName}"';
+    END IF;
+
+    UPDATE ${q(table)} SET
+${setClauses.join(',\n')}
+    WHERE "${pkName}" = v_id;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    IF v_updated_count = 0 THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY SELECT * FROM ${q(view)} WHERE "${pkName}" = v_id;
+END;
+$$ LANGUAGE plpgsql;
+`;
+  }
+
+  /** Per-column JSON extraction+cast for the JSON-arg sproc body (ref = `p_data` or `$1`). */
+  private jsonArgCast(fieldName: string, pgType: string, ref: string): string {
+    const t = pgType.toUpperCase();
+    const key = `'${fieldName}'`;
+    if (t === 'JSONB' || t === 'JSON') return `(${ref}->${key})::${t}`;
+    if (t === 'BYTEA') return `decode(${ref}->>${key}, 'base64')`;
+    if (t === 'TEXT' || t.startsWith('VARCHAR') || t.startsWith('CHAR')) return `(${ref}->>${key})`;
+    return `(${ref}->>${key})::${t}`;
   }
 
   // ---------------------------------------------------------------------------
@@ -287,6 +481,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
     if (allBoolVars.size > 0) {
       for (const boolVar of allBoolVars) {
         const escaped = boolVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // COALESCE(<bool>, 0|1) → COALESCE(<bool>, FALSE|TRUE)
         sql = sql.replace(
           new RegExp(`COALESCE\\(${escaped},\\s*0\\)`, 'gi'),
           `COALESCE(${boolVar}, FALSE)`
@@ -295,6 +490,20 @@ export class ProcedureToFunctionRule implements IConversionRule {
           new RegExp(`COALESCE\\(${escaped},\\s*1\\)`, 'gi'),
           `COALESCE(${boolVar}, TRUE)`
         );
+        // T-SQL bodies routinely test boolean params/vars with `= 1` / `= 0`
+        // / `<> 1` / `!= 0` etc. After converting the param type bit→boolean,
+        // those comparisons become `boolean = integer` and PG rejects them at
+        // call time. Coerce the integer literal to TRUE/FALSE here so the
+        // function body type-checks against the now-boolean parameter.
+        // Order matters: handle multi-char operators (<>, !=) before the
+        // single-char `=` so `\\b<bool>\\s*=` doesn't fire on the trailing
+        // `=` of `!=`.
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*<>\\s*1\\b`, 'gi'), `${boolVar} <> TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*<>\\s*0\\b`, 'gi'), `${boolVar} <> FALSE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*!=\\s*1\\b`, 'gi'), `${boolVar} != TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*!=\\s*0\\b`, 'gi'), `${boolVar} != FALSE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*=\\s*1\\b`, 'gi'),  `${boolVar} = TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*=\\s*0\\b`, 'gi'),  `${boolVar} = FALSE`);
       }
     }
 
@@ -508,25 +717,45 @@ export class ProcedureToFunctionRule implements IConversionRule {
   // Return type detection
   // ---------------------------------------------------------------------------
 
-  private determineReturnType(body: string, _procName: string, context: ConversionContext): string {
+  private determineReturnType(body: string, procName: string, context: ConversionContext): string {
     // Check for SELECT * FROM __mj.vwViewName → RETURNS SETOF
     const viewMatch = body.match(
       /SELECT\s+(?:\*|[\w\s,.*]+)\s+FROM\s+\[?__mj\]?\.\[?(vw\w+)\]?/i
     );
     if (viewMatch) {
       const viewName = viewMatch[1];
-      // If the view wasn't created in this file, skip this function.
-      // This handles CodeGen-generated views that aren't in the baseline —
-      // SQL Server allows deferred name resolution but PG requires types to exist.
-      if (!context.CreatedViews.has(viewName)) {
-        return `-- SKIPPED: References view "${viewName}" not created in this file (CodeGen will recreate)\n`;
+      // A handful of CRUD sprocs reference views for deprecated entities that no
+      // migration creates. PG resolves the SETOF return type at CREATE time, so
+      // emitting them fails the apply. Skip these specific orphans (gate-approved
+      // INTENTIONAL marker) rather than emit broken DDL.
+      if (ORPHANED_RETURN_VIEWS.has(viewName)) {
+        return `-- SKIPPED (INTENTIONAL): ${procName} — return view __mj."${viewName}" is a deprecated/orphaned entity view not created by any migration (PG requires the RETURNS SETOF view to exist at function-CREATE time)`;
       }
+      // Emit the sproc regardless of whether the view is in this file — it
+      // typically lives in the baseline or an earlier migration, and by the
+      // time this migration runs sequentially the view already exists in the
+      // database. Skipping here silently drops sproc regens needed after
+      // column additions (e.g. v5.15 SupportsPrefill broke spCreateAIModel),
+      // which then causes later Metadata_Sync migrations to fail when they
+      // try to PERFORM the sproc with the new signature.
       return `RETURNS SETOF __mj."${viewName}" AS`;
     }
 
     // Delete procs return SELECT @ID AS [ID] or SELECT NULL AS [ID]
     if (/SELECT\s+.*\s+AS\s+\[?ID\]?/i.test(body)) {
       return 'RETURNS TABLE("_result_id" UUID) AS';
+    }
+
+    // Scalar result set: `SELECT @var AS Alias` (or a literal / @@ROWCOUNT) — a
+    // single projected column aliased to something other than ID. T-SQL procs use
+    // this to hand a status / row-count back to the caller. The body converter turns
+    // it into `RETURN QUERY SELECT ...`, which PG rejects unless the function is
+    // SETOF/TABLE — so we MUST declare RETURNS TABLE(...) here (declaring VOID would
+    // produce "cannot use RETURN QUERY in a non-SETOF function" at apply time).
+    const scalarMatch = body.match(/SELECT\s+(@@?\w+|NULL|\d+)\s+AS\s+\[?"?(\w+)"?\]?\s*;/i);
+    if (scalarMatch) {
+      const colType = this.inferScalarColumnType(scalarMatch[1], body);
+      return `RETURNS TABLE("${scalarMatch[2]}" ${colType}) AS`;
     }
 
     // If there's any SELECT that returns rows
@@ -536,6 +765,24 @@ export class ProcedureToFunctionRule implements IConversionRule {
     }
 
     return 'RETURNS VOID AS';
+  }
+
+  /**
+   * Infer the PG column type for a scalar `SELECT <expr> AS Alias` result set.
+   * `@@ROWCOUNT`, integer literals, and NULL default to INTEGER (the row-count case);
+   * a `@var` is resolved from its `DECLARE @var <type>` in the source body. Falls back
+   * to INTEGER when the declaration can't be found — these scalar returns are almost
+   * always counts/flags, and INTEGER is the safe, common case.
+   */
+  private inferScalarColumnType(expr: string, body: string): string {
+    if (/^@@/.test(expr) || /^\d+$/.test(expr) || /^NULL$/i.test(expr)) {
+      return 'INTEGER';
+    }
+    const varName = expr.replace(/^@/, '');
+    const declMatch = body.match(
+      new RegExp(`DECLARE\\s+@${varName}\\s+([A-Za-z0-9_]+(?:\\s*\\(\\s*\\d+\\s*(?:,\\s*\\d+\\s*)?\\))?)`, 'i'),
+    );
+    return declMatch ? resolveType(declMatch[1].trim()) : 'INTEGER';
   }
 }
 
@@ -831,7 +1078,17 @@ function convertExecCalls(sql: string): string {
   // EXEC @sql → EXECUTE p_sql
   sql = sql.replace(/\bEXEC\s+(p_\w+)\s*;/gi, 'EXECUTE $1;');
 
-  // EXEC __mj."spProc" @param = value → PERFORM __mj."spProc"(value1, value2...)
+  // EXEC __mj."spProc" @param = value → PERFORM __mj."spProc"(p_param => value, ...)
+  //
+  // Use NAMED-arg PG syntax (`p_x => value`) rather than positional. T-SQL
+  // EXEC always uses named-arg syntax (`@X = value`); PG positional PERFORM
+  // would silently bind to the wrong parameter slots if the called function's
+  // signature changes (e.g. when a `_Clear` companion gets inserted between
+  // existing params). Named-arg PERFORM survives signature insertion because
+  // PG matches by parameter name. The `@var` → `p_var` rename has already
+  // happened earlier in the body conversion (line ~211), so the EXEC param
+  // names here already use the `p_` prefix that matches the target function's
+  // parameter declarations.
   sql = sql.replace(
     /\bEXEC\s+(__mj\."sp\w+")\s*(.*?)(?:;|$)/gim,
     (_match: string, procRef: string, paramsStr: string) => {
@@ -840,16 +1097,20 @@ function convertExecCalls(sql: string): string {
         return `PERFORM ${procRef}();`;
       }
       const paramParts = trimmedParams.split(/,\s*/);
-      const values: string[] = [];
+      const args: string[] = [];
       for (const p of paramParts) {
-        const eqMatch = p.trim().match(/^p_\w+\s*=\s*(.+)/);
+        // Capture both the parameter name and the value so we can emit
+        // PG's named-arg call syntax `name => value`.
+        const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
         if (eqMatch) {
-          values.push(eqMatch[1].trim());
+          args.push(`${eqMatch[1]} => ${eqMatch[2].trim()}`);
         } else {
-          values.push(p.trim());
+          // Fallback: positional argument (no `param = value` form). Rare
+          // for MJ-generated SS sprocs, but preserved for robustness.
+          args.push(p.trim());
         }
       }
-      return `PERFORM ${procRef}(${values.join(', ')});`;
+      return `PERFORM ${procRef}(${args.join(', ')});`;
     }
   );
 

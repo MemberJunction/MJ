@@ -1,5 +1,6 @@
 export { gql } from 'graphql-request';
 export { setupGraphQLClient } from './config';
+export { PACKAGE_VERSION } from './version.generated';
 export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
 export type { AuthenticationErrorCallback, SocketConnectionState } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
@@ -7,6 +8,7 @@ export { FieldMapper } from './FieldMapper';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
 export { GraphQLActionClient } from './graphQLActionClient';
+export { GraphQLListsClient } from './graphQLListsClient';
 export { GraphQLEncryptionClient } from './graphQLEncryptionClient';
 export type { CreateAPIKeyParams, CreateAPIKeyResult, RevokeAPIKeyResult } from './graphQLEncryptionClient';
 export { GraphQLAIClient } from './graphQLAIClient';
@@ -22,6 +24,30 @@ export type {
     VectorizeEntityParams,
     VectorizeEntityResult
 } from './graphQLAIClient';
+export { GraphQLClusterClient } from './graphQLClusterClient';
+export type {
+    RunClusterAnalysisInput,
+    RunClusterAnalysisResult,
+    ClusterAnalysisPoint,
+    ClusterAnalysisInfo,
+    ClusterAnalysisMetrics
+} from './graphQLClusterClient';
+export { GraphQLLiveKitClient } from './graphQLLiveKitClient';
+export type {
+    MintLiveKitClientTokenInput,
+    LiveKitClientTokenResult,
+    StartLiveKitAgentRoomSessionInput,
+    LiveKitAgentRoomSessionResult,
+    LiveKitRecordingResult,
+    RealtimeModelVoices,
+    RealtimeVoiceOption
+} from './graphQLLiveKitClient';
+export { GraphQLClassifyClient } from './graphQLClassifyClient';
+export type {
+    GenerateSeedTaxonomyInput,
+    SeedTaxonomyResult,
+    SeedTaxonomyNode
+} from './graphQLClassifyClient';
 export { GraphQLTestingClient } from './graphQLTestingClient';
 export type {
     RunTestParams,
@@ -78,5 +104,7 @@ export type {
     DefaultObjectConfigResult,
     DefaultConfigResult,
     ApplyAllEntityMapCreated,
-    ApplyAllResult
+    ApplyAllResult,
+    SourceObjectListItem,
+    SourceObjectSelectionInput
 } from './graphQLIntegrationClient';

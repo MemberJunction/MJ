@@ -1,7 +1,8 @@
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { CompositeKey, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, KeyValuePair, LogError, Metadata, TransactionVariable, BaseEntity, EntityDeleteOptions, EntitySaveOptions } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
+import { GetReadWriteProvider } from '../util.js';
 
 export enum TransactionVariableType {
     Define = "Define",
@@ -84,7 +85,7 @@ export class TransactionResolver {
     ) {
         try { 
             // we have received the transaction group information via the network, now we need to reconstruct our TransactionGroup object and run it
-            const md = new Metadata();
+            const md = (GetReadWriteProvider(context.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider) ?? new Metadata();
             const tg = await md.CreateTransactionGroup();
             const entityObjects: BaseEntity[] = [];
             const objectValues: any[] = [];

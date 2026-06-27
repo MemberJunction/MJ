@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { MJEntityActionEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJEntityActionFormComponent } from '../../generated/Entities/MJEntityAction/mjentityaction.form.component';
 import { TabEvent } from '@memberjunction/ng-tabstrip';
@@ -15,6 +15,10 @@ import { TabEvent } from '@memberjunction/ng-tabstrip';
 })
 export class MJEntityActionFormComponentExtended extends MJEntityActionFormComponent {
     public record!: MJEntityActionEntity;
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout Entity Action form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
     private sharedService = inject(SharedService);
     private currentTab: string | null = null;
 

@@ -347,12 +347,39 @@ export class SkipProxyAgent extends BaseAgent {
     }
 
     /**
-     * Handle analysis_complete phase — validates componentOptions before accessing
+     * Handle analysis_complete phase — supports both component-bearing responses
+     * (componentOptions populated) and analysis-only responses (markdown in `analysis`
+     * with no component, produced by Skip's Analysis Agent path).
      */
     private handleAnalysisComplete(
         response: SkipAPIAnalysisCompleteResponse
     ): BaseAgentNextStep<ComponentSpec> {
-        if (!response.componentOptions || response.componentOptions.length === 0) {
+        const hasComponentOptions = response.componentOptions && response.componentOptions.length > 0;
+        const skipMessage = response.messages?.filter(msg => msg.role === 'system').pop();
+        const analysisText = response.analysis?.trim();
+
+        // Skip-Brain attaches actionableCommands as an extension field on the
+        // analysis_complete response (e.g. `client:capture-data-snapshot` when
+        // the Analysis Agent needs the user's current view). Forward to the
+        // next step so AgentRunner persists them to ConversationDetail.ActionableCommands
+        // — which the chat UI's actionable-commands.component reads to render buttons.
+        const responseExt = response as unknown as { actionableCommands?: unknown[] };
+        const actionableCommands = Array.isArray(responseExt.actionableCommands) && responseExt.actionableCommands.length > 0
+            ? (responseExt.actionableCommands as BaseAgentNextStep<ComponentSpec>['actionableCommands'])
+            : undefined;
+        LogStatus(`[SkipProxyAgent DEBUG] handleAnalysisComplete actionableCommands from response: ${JSON.stringify(responseExt.actionableCommands)}`);
+
+        if (!hasComponentOptions) {
+            if (analysisText || skipMessage?.content) {
+                return {
+                    terminate: true,
+                    step: 'Success',
+                    message: analysisText || skipMessage!.content,
+                    newPayload: undefined,
+                    actionableCommands
+                };
+            }
+
             const msg = 'Skip completed analysis but returned no component options. '
                 + `Title: "${response.title || 'none'}". `
                 + `Result type: "${response.resultType || 'none'}"`;
@@ -366,14 +393,14 @@ export class SkipProxyAgent extends BaseAgent {
             };
         }
 
-        const componentSpec = response.componentOptions[0].option;
-        const skipMessage = response.messages?.filter(msg => msg.role === 'system').pop();
+        const componentSpec = response.componentOptions![0].option;
 
         return {
             terminate: true,
             step: 'Success',
             message: skipMessage?.content || response.title || 'Analysis complete',
-            newPayload: componentSpec
+            newPayload: componentSpec,
+            actionableCommands
         };
     }
 

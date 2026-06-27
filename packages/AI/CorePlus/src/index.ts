@@ -10,7 +10,9 @@ export * from './conversation-utility';
 export * from './foreach-operation';
 export * from './while-operation';
 export * from './agent-scratchpad';
+export * from './agent-run-steps';
 export * from './app-context';
+export * from './artifact-tool-library';
 
 export * from './MJAIPromptEntityExtended';
 export * from './MJAIPromptCategoryEntityExtended';
@@ -19,3 +21,4 @@ export * from './MJAIModelEntityExtended';
 export * from './MJAIAgentRunEntityExtended';
 export * from './MJAIAgentRunStepEntityExtended';
 export * from './MJAIPromptRunEntityExtended';
+export * from './MJEntityDocumentEntityExtended';

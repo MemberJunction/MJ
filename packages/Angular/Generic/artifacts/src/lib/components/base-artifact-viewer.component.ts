@@ -1,5 +1,7 @@
 import { Component, EventEmitter, Input, Type } from '@angular/core';
+import { DataSnapshot } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
 /**
@@ -76,11 +78,23 @@ export interface ArtifactViewerTab {
   standalone: false,
   template: ''
 })
-export abstract class BaseArtifactViewerPluginComponent implements IArtifactViewerComponent {
+export abstract class BaseArtifactViewerPluginComponent extends BaseAngularComponent implements IArtifactViewerComponent {
   /**
    * The artifact version to display
    */
   @Input() artifactVersion!: MJArtifactVersionEntity;
+
+  /**
+   * Inline-PREVIEW resolution does NOT live here.
+   *
+   * Plugins that want to drive an inline preview inside conversation message cards declare the
+   * preview contract as STATIC members on their class — `static readonly PreviewComponentType` and
+   * `static CanHandlePreview(...)` — described by {@link IArtifactViewerPluginPreviewStatics}. The
+   * resolver reads those statics off the registered constructor WITHOUT instantiating the plugin
+   * (these are Angular components with DI constructors; a bare `new` outside an injection context
+   * throws). There is intentionally NO instance-level preview member on this base class — static is
+   * the single source of truth.
+   */
 
   /**
    * Optional: Custom height for the viewer (defaults to auto)
@@ -242,6 +256,36 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
    *          Note: 'Display' cannot be removed (it's the main view)
    */
   public GetStandardTabRemovals?(): string[];
+
+  /**
+   * Return a point-in-time snapshot of the data this viewer is currently displaying.
+   * Every viewer plugin MUST implement this with type-appropriate content.
+   *
+   * Guidelines for file-based viewers:
+   * - PDF: page count, current page in interpretation, extracted text summary in custom
+   * - Excel: each sheet as a DataTable in tables[], active sheet in activeTab
+   * - Word: section count in interpretation, extracted text in custom
+   * - For all: use getDisplayTitle() for snap.title
+   *
+   * @returns A DataSnapshot describing the current state, or null if no data is available.
+   */
+  public abstract GetCurrentStateSnapshot(): DataSnapshot | null;
+
+  /**
+   * Get the raw text content from the artifact version.
+   * Returns null if no content is available.
+   */
+  protected getRawContent(): string | null {
+    return this.artifactVersion?.Content ?? null;
+  }
+
+  /**
+   * Get a display-friendly title for the artifact.
+   * Returns null if no name is available.
+   */
+  protected getDisplayTitle(): string | null {
+    return this.artifactVersion?.Name ?? null;
+  }
 
   /**
    * Trigger a browser file download from a URL.

@@ -5,6 +5,7 @@ import { RunView, Metadata } from '@memberjunction/core';
 import { MJApplicationEntity, MJApplicationEntityEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { ApplicationDialogData, ApplicationDialogResult } from './application-dialog/application-dialog.component';
 
 interface AppStats {
@@ -58,8 +59,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   public expandedAppId: string | null = null;
 
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
@@ -110,7 +110,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
 
   private async loadApplications(): Promise<MJApplicationEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJApplicationEntity>({
       EntityName: 'MJ: Applications',
       ResultType: 'entity_object',
@@ -121,7 +121,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
   
   private async loadApplicationEntities(): Promise<MJApplicationEntityEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJApplicationEntityEntity>({
       EntityName: 'MJ: Application Entities',
       ResultType: 'entity_object',
@@ -199,11 +199,6 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ search: value });
-  }
-  
   public onStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
     this.updateFilter({ status });
   }
@@ -213,6 +208,64 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips) apply immediately. Text search still goes
+    // through the 300ms debounce in setupFilterSubscription.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
+  }
+
+  // -- Concise chrome: one Filter popover (Status) + applied-filter chips -----
+
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'status',
+        type: 'chips',
+        label: 'Status',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'Active', value: 'active' },
+          { text: 'Inactive', value: 'inactive' },
+        ],
+      },
+    ];
+  }
+
+  public get filterValues(): Record<string, unknown> {
+    return { status: this.filters$.value.status };
+  }
+
+  /** Total active filters (Status) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    return this.filters$.value.status !== 'all' ? 1 : 0;
+  }
+
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    if ('status' in values) {
+      this.updateFilter({ status: (values['status'] as FilterOptions['status']) || 'all' });
+    }
+  }
+
+  /** Clear all filters (Status); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ status: 'all' });
+  }
+
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Status) and refresh
+   *  immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ status: 'all', search: '' });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
   
   public toggleAppExpansion(appId: string): void {

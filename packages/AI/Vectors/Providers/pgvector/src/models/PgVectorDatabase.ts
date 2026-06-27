@@ -18,7 +18,7 @@ import {
     VectorMetadataFilter,
     VectorRecord,
 } from '@memberjunction/ai-vectordb';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import pg from 'pg';
 import { ParseConnectionString, PgVectorConnectionConfig } from '../config';
 
@@ -172,7 +172,7 @@ export class PgVectorDatabase extends VectorDBBase {
                 [params.id]
             );
             if (result.rows.length === 0) {
-                return this.WrapFailureResponse(`Index "${params.id}" not found`);
+                return this.wrapFailureResponse(`Index "${params.id}" not found`);
             }
             const row = result.rows[0] as { name: string; dimension: number; metric: string };
             const desc: IndexDescription = {
@@ -181,11 +181,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 metric: row.metric as IndexModelMetricEnum,
                 host: `${this._config.Host}:${this._config.Port}`,
             };
-            return this.WrapSuccessResponse(desc);
+            return this.wrapSuccessResponse(desc);
         }
         catch (ex) {
             LogError('PgVectorDatabase.GetIndex error', undefined, ex);
-            return this.WrapFailureResponse('Error getting index');
+            return this.wrapFailureResponse('Error getting index');
         }
     }
 
@@ -250,11 +250,11 @@ export class PgVectorDatabase extends VectorDBBase {
             );
 
             LogStatus(`PgVectorDatabase: Created index "${tableName}" (dim=${dimension}, metric=${metric})`);
-            return this.WrapSuccessResponse({ name: tableName, dimension, metric });
+            return this.wrapSuccessResponse({ name: tableName, dimension, metric });
         }
         catch (ex) {
             LogError('PgVectorDatabase.CreateIndex error', undefined, ex);
-            return this.WrapFailureResponse('Error creating index');
+            return this.wrapFailureResponse('Error creating index');
         }
     }
 
@@ -275,11 +275,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 `DELETE FROM ${this.QualifyTable(INDEX_REGISTRY_TABLE)} WHERE name = $1`,
                 [params.id]
             );
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         }
         catch (ex) {
             LogError('PgVectorDatabase.DeleteIndex error', undefined, ex);
-            return this.WrapFailureResponse('Error deleting index');
+            return this.wrapFailureResponse('Error deleting index');
         }
     }
 
@@ -294,7 +294,7 @@ export class PgVectorDatabase extends VectorDBBase {
     public async EditIndex(params: EditIndexParams): Promise<BaseResponse> {
         // pgvector tables don't have many editable properties.
         // This is a placeholder that could support renaming or adding columns in the future.
-        return this.WrapFailureResponse('EditIndex is not currently supported for pgvector');
+        return this.wrapFailureResponse('EditIndex is not currently supported for pgvector');
     }
 
     // ----------------------------------------------------------------
@@ -323,17 +323,20 @@ export class PgVectorDatabase extends VectorDBBase {
      *          scored matches, or a failure response on error.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async QueryIndex(params: QueryOptions): Promise<BaseResponse> {
+    // pgvector authenticates via the configured pg connection, so contextUser
+    // is unused here. Accepting the parameter keeps the override compatible
+    // with the abstract signature added in @memberjunction/ai-vectordb v5.30+.
+    public async QueryIndex(params: QueryOptions, _contextUser?: UserInfo): Promise<BaseResponse> {
         try {
             const pool = this.GetPool();
             const vector = 'vector' in params ? params.vector : null;
             const indexName = 'id' in params ? (params as { id: string }).id : null;
 
             if (!vector) {
-                return this.WrapFailureResponse('QueryIndex requires a vector in the params');
+                return this.wrapFailureResponse('QueryIndex requires a vector in the params');
             }
             if (!indexName) {
-                return this.WrapFailureResponse('QueryIndex requires an index name (params.id)');
+                return this.wrapFailureResponse('QueryIndex requires an index name (params.id)');
             }
 
             const topK = params.topK || 10;
@@ -385,11 +388,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 namespace: this._config.Schema,
             };
 
-            return this.WrapSuccessResponse(queryResponse);
+            return this.wrapSuccessResponse(queryResponse);
         }
         catch (ex) {
             LogError('PgVectorDatabase.QueryIndex error', undefined, ex);
-            return this.WrapFailureResponse('Error querying index');
+            return this.wrapFailureResponse('Error querying index');
         }
     }
 
@@ -408,7 +411,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async CreateRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.WrapFailureResponse('indexName is required for CreateRecord');
+            return this.wrapFailureResponse('indexName is required for CreateRecord');
         }
         return this.UpsertRecords([record], indexName);
     }
@@ -427,7 +430,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async CreateRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.WrapFailureResponse('indexName is required for CreateRecords');
+            return this.wrapFailureResponse('indexName is required for CreateRecords');
         }
         return this.UpsertRecords(records, indexName);
     }
@@ -446,7 +449,7 @@ export class PgVectorDatabase extends VectorDBBase {
             const pool = this.GetPool();
             const indexName = params.data?.indexName as string;
             if (!indexName) {
-                return this.WrapFailureResponse('params.data.indexName is required');
+                return this.wrapFailureResponse('params.data.indexName is required');
             }
 
             const result = await pool.query(
@@ -457,7 +460,7 @@ export class PgVectorDatabase extends VectorDBBase {
             );
 
             if (result.rows.length === 0) {
-                return this.WrapFailureResponse(`Record "${params.id}" not found`);
+                return this.wrapFailureResponse(`Record "${params.id}" not found`);
             }
 
             const row = result.rows[0] as { id: string; embedding_text: string; metadata: Record<string, unknown> };
@@ -466,11 +469,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 values: this.ParseVectorString(row.embedding_text),
                 metadata: row.metadata as Record<string, string | boolean | number | string[]>,
             };
-            return this.WrapSuccessResponse(record);
+            return this.wrapSuccessResponse(record);
         }
         catch (ex) {
             LogError('PgVectorDatabase.GetRecord error', undefined, ex);
-            return this.WrapFailureResponse('Error getting record');
+            return this.wrapFailureResponse('Error getting record');
         }
     }
 
@@ -490,10 +493,10 @@ export class PgVectorDatabase extends VectorDBBase {
             const indexName = params.data?.indexName as string;
             const ids = params.data?.ids as string[];
             if (!indexName) {
-                return this.WrapFailureResponse('params.data.indexName is required');
+                return this.wrapFailureResponse('params.data.indexName is required');
             }
             if (!ids || ids.length === 0) {
-                return this.WrapFailureResponse('params.data.ids is required');
+                return this.wrapFailureResponse('params.data.ids is required');
             }
 
             const placeholders = ids.map((_: string, i: number) => `$${i + 1}`).join(', ');
@@ -509,11 +512,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 values: this.ParseVectorString(row['embedding_text'] as string),
                 metadata: row['metadata'] as Record<string, string | boolean | number | string[]>,
             }));
-            return this.WrapSuccessResponse(records);
+            return this.wrapSuccessResponse(records);
         }
         catch (ex) {
             LogError('PgVectorDatabase.GetRecords error', undefined, ex);
-            return this.WrapFailureResponse('Error getting records');
+            return this.wrapFailureResponse('Error getting records');
         }
     }
 
@@ -534,7 +537,7 @@ export class PgVectorDatabase extends VectorDBBase {
             const pool = this.GetPool();
             const indexName = (record as Record<string, unknown>)['indexName'] as string;
             if (!indexName) {
-                return this.WrapFailureResponse('indexName property is required on the UpdateOptions object');
+                return this.wrapFailureResponse('indexName property is required on the UpdateOptions object');
             }
 
             const setClauses: string[] = [];
@@ -553,7 +556,7 @@ export class PgVectorDatabase extends VectorDBBase {
             }
 
             if (setClauses.length === 0) {
-                return this.WrapSuccessResponse(null);
+                return this.wrapSuccessResponse(null);
             }
 
             queryParams.push(record.id);
@@ -564,11 +567,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 queryParams
             );
 
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         }
         catch (ex) {
             LogError('PgVectorDatabase.UpdateRecord error', undefined, ex);
-            return this.WrapFailureResponse('Error updating record');
+            return this.wrapFailureResponse('Error updating record');
         }
     }
 
@@ -596,7 +599,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async DeleteRecord(record: VectorRecord, indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.WrapFailureResponse('indexName is required for DeleteRecord');
+            return this.wrapFailureResponse('indexName is required for DeleteRecord');
         }
         try {
             const pool = this.GetPool();
@@ -604,11 +607,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 `DELETE FROM ${this.QualifyTable(indexName)} WHERE id = $1`,
                 [record.id]
             );
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         }
         catch (ex) {
             LogError('PgVectorDatabase.DeleteRecord error', undefined, ex);
-            return this.WrapFailureResponse('Error deleting record');
+            return this.wrapFailureResponse('Error deleting record');
         }
     }
 
@@ -622,7 +625,7 @@ export class PgVectorDatabase extends VectorDBBase {
      */
     public async DeleteRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         if (!indexName) {
-            return this.WrapFailureResponse('indexName is required for DeleteRecords');
+            return this.wrapFailureResponse('indexName is required for DeleteRecords');
         }
         try {
             const pool = this.GetPool();
@@ -632,11 +635,11 @@ export class PgVectorDatabase extends VectorDBBase {
                 `DELETE FROM ${this.QualifyTable(indexName)} WHERE id IN (${placeholders})`,
                 ids
             );
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         }
         catch (ex) {
             LogError('PgVectorDatabase.DeleteRecords error', undefined, ex);
-            return this.WrapFailureResponse('Error deleting records');
+            return this.wrapFailureResponse('Error deleting records');
         }
     }
 
@@ -653,11 +656,11 @@ export class PgVectorDatabase extends VectorDBBase {
         try {
             const pool = this.GetPool();
             await pool.query(`DELETE FROM ${this.QualifyTable(indexName)}`);
-            return this.WrapSuccessResponse(null);
+            return this.wrapSuccessResponse(null);
         }
         catch (ex) {
             LogError('PgVectorDatabase.DeleteAllRecords error', undefined, ex);
-            return this.WrapFailureResponse('Error deleting all records');
+            return this.wrapFailureResponse('Error deleting all records');
         }
     }
 
@@ -792,7 +795,7 @@ export class PgVectorDatabase extends VectorDBBase {
                     );
                 }
                 await client.query('COMMIT');
-                return this.WrapSuccessResponse({ upsertedCount: records.length });
+                return this.wrapSuccessResponse({ upsertedCount: records.length });
             }
             catch (txErr) {
                 await client.query('ROLLBACK');
@@ -804,7 +807,7 @@ export class PgVectorDatabase extends VectorDBBase {
         }
         catch (ex) {
             LogError('PgVectorDatabase.UpsertRecords error', undefined, ex);
-            return this.WrapFailureResponse('Error upserting records');
+            return this.wrapFailureResponse('Error upserting records');
         }
     }
 
@@ -935,19 +938,4 @@ export class PgVectorDatabase extends VectorDBBase {
         }
     }
 
-    private WrapSuccessResponse(data: unknown): BaseResponse {
-        return {
-            success: true,
-            message: '',
-            data: data,
-        };
-    }
-
-    private WrapFailureResponse(message?: string): BaseResponse {
-        return {
-            success: false,
-            message: message || 'An error occurred',
-            data: null,
-        };
-    }
 }

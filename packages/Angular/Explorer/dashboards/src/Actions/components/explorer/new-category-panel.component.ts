@@ -11,10 +11,11 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { Metadata, LogError } from '@memberjunction/core';
+import { LogError } from '@memberjunction/core';
 import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 @Component({
   standalone: false,
@@ -34,7 +35,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     ])
   ]
 })
-export class NewCategoryPanelComponent implements OnInit, OnDestroy {
+export class NewCategoryPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() Categories: MJActionCategoryEntity[] = [];
   @Input() PreselectedParentId: string | null = null;
   @Output() CategoryCreated = new EventEmitter<MJActionCategoryEntity>();
@@ -56,7 +57,7 @@ export class NewCategoryPanelComponent implements OnInit, OnDestroy {
   constructor(
     public StateService: ActionExplorerStateService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) { super(); }
 
   ngOnInit(): void {
     this.StateService.NewCategoryPanelOpen$.pipe(
@@ -130,7 +131,7 @@ export class NewCategoryPanelComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const category = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
 
       category.Name = this.Name.trim();

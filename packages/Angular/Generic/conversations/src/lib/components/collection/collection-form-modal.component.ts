@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
@@ -128,7 +129,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
   `]
 })
-export class CollectionFormModalComponent implements OnChanges {
+export class CollectionFormModalComponent extends BaseAngularComponent implements OnChanges  {
   @Input() isOpen: boolean = false;
   @Input() collection?: MJCollectionEntity;
   @Input() parentCollection?: MJCollectionEntity;
@@ -149,9 +150,13 @@ export class CollectionFormModalComponent implements OnChanges {
   constructor(
     private toastService: ToastService,
     private permissionService: CollectionPermissionService
-  ) {}
+  ) {
+  super();}
 
   ngOnChanges(changes: SimpleChanges) {
+    // Bind provider-aware service to this component's provider on every input change pass.
+    this.permissionService.Provider = this.ProviderToUse;
+
     if (changes['collection'] || changes['isOpen']) {
       if (this.isOpen && this.collection) {
         this.formData.name = this.collection.Name || '';
@@ -206,7 +211,7 @@ export class CollectionFormModalComponent implements OnChanges {
         }
       }
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const collection = this.collection ||
         await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
@@ -234,20 +239,17 @@ export class CollectionFormModalComponent implements OnChanges {
         // If creating new collection, set up permissions
         if (!this.collection) {
           if (this.parentCollection) {
-            // Child collection - copy all permissions from parent (including owner)
+            // Child collection - copy non-owner permissions from parent.
+            // (The owner gets implicit full access via OwnerID; no self-share row is written.)
             await this.permissionService.copyParentPermissions(
               this.parentCollection.ID,
               collection.ID,
               this.currentUser
             );
-          } else {
-            // Root collection - create owner permission for current user
-            await this.permissionService.createOwnerPermission(
-              collection.ID,
-              this.currentUser.ID,
-              this.currentUser
-            );
           }
+          // Root collection: nothing to do. CollectionPermissionProvider treats OwnerID as
+          // an implicit full-access grant — writing a self-share row was redundant and was
+          // failing server-side auth on freshly-created collections.
         }
 
         this.toastService.success(

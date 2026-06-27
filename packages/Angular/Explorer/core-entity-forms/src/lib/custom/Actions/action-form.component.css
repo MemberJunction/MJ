@@ -465,10 +465,6 @@
     padding: 12px 20px;
 }
 
-.params-section-compact .empty-state {
-    padding: 12px !important;
-}
-
 .params-header {
     display: flex;
     justify-content: space-between;
@@ -922,44 +918,6 @@
     margin-bottom: 12px;
 }
 
-.empty-state {
-    text-align: center;
-    padding: 60px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state.mini {
-    padding: 20px;
-}
-
-.empty-state i {
-    font-size: 3em;
-    margin-bottom: 16px;
-    opacity: 0.3;
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 1.1em;
-}
-
-.empty-hint {
-    margin-top: 8px !important;
-    font-size: var(--mj-text-sm) !important;
-    opacity: 0.7;
-}
-
-.no-params {
-    text-align: center;
-    padding: 20px;
-    color: var(--mj-text-muted);
-    font-style: italic;
-}
-
-.no-params p {
-    margin: 0;
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
     .action-hero-header {
@@ -988,40 +946,3 @@
     }
 }
 
-/* ============================================
-   KENDO EXPANSION PANEL OVERRIDES
-   ============================================ */
-::ng-deep .k-expander {
-    background: var(--mj-bg-surface-card) !important;
-    border-color: var(--mj-border-default) !important;
-    color: var(--mj-text-primary) !important;
-}
-
-::ng-deep .k-expander-header {
-    background: var(--mj-bg-surface-elevated) !important;
-    color: var(--mj-text-primary) !important;
-    border-color: var(--mj-border-default) !important;
-}
-
-::ng-deep .k-expander-header:hover {
-    background: var(--mj-bg-surface-hover) !important;
-}
-
-::ng-deep .k-expander-title {
-    color: var(--mj-text-primary) !important;
-}
-
-::ng-deep .k-expander-indicator .k-icon,
-::ng-deep .k-expander-indicator .k-svg-icon {
-    color: var(--mj-text-muted) !important;
-}
-
-::ng-deep .k-expander-content-wrapper {
-    border-color: var(--mj-border-default) !important;
-}
-
-::ng-deep .k-expander-content {
-    background: var(--mj-bg-surface-card) !important;
-    border-color: var(--mj-border-default) !important;
-    color: var(--mj-text-primary) !important;
-}

@@ -187,23 +187,26 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     public async onDashboardDelete(event: DashboardDeleteEvent): Promise<void> {
         // The generic browser handles the confirmation dialog
-        // We just need to perform the actual deletion
+        // We just need to perform the actual deletion atomically
         try {
             this.isLoading = true;
             this.cdr.detectChanges();
 
+            if (event.Dashboards.length === 0) return;
+
+            const md = this.ProviderToUse;
+            const tg = await md.CreateTransactionGroup();
             for (const dashboard of event.Dashboards) {
-                const deleted = await dashboard.Delete();
-                if (deleted) {
-                    const index = this.dashboards.findIndex(d => UUIDsEqual(d.ID, dashboard.ID));
-                    if (index >= 0) {
-                        this.dashboards.splice(index, 1);
-                    }
-                }
+                dashboard.TransactionGroup = tg;
+                await dashboard.Delete();
             }
 
-            // Create new array reference to trigger change detection
-            this.dashboards = [...this.dashboards];
+            if (await tg.Submit()) {
+                const deletedIds = new Set(event.Dashboards.map(d => d.ID));
+                this.dashboards = this.dashboards.filter(d => !deletedIds.has(d.ID));
+            } else {
+                console.error('Failed to delete dashboards — all changes rolled back');
+            }
         } catch (err) {
             console.error('Failed to delete dashboards:', err);
         } finally {
@@ -222,8 +225,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const md = new Metadata();
+            if (event.Dashboards.length === 0) return;
+
+            const md = this.ProviderToUse;
             const currentUserId = md.CurrentUser.ID;
+            const tg = await md.CreateTransactionGroup();
+            const sharedDashboardIds: string[] = [];
 
             for (const dashboard of event.Dashboards) {
                 const permissions = DashboardEngine.Instance.GetDashboardPermissions(dashboard.ID, currentUserId);
@@ -231,69 +238,48 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 if (permissions.IsOwner) {
                     // Owner can modify the dashboard directly
                     dashboard.CategoryID = event.TargetCategoryId;
+                    dashboard.TransactionGroup = tg;
                     await dashboard.Save();
                 } else {
                     // Non-owner: create or update a category link instead
-                    await this.createOrUpdateCategoryLink(dashboard.ID, currentUserId, event.TargetCategoryId);
+                    const existingLinks = DashboardEngine.Instance.DashboardCategoryLinks.filter(
+                        link => UUIDsEqual(link.DashboardID, dashboard.ID) && UUIDsEqual(link.UserID, currentUserId)
+                    );
 
-                    // Update the effective category map immediately for UI refresh
-                    this.effectiveCategoryMap.set(dashboard.ID, event.TargetCategoryId);
+                    let link: MJDashboardCategoryLinkEntity;
+                    if (existingLinks.length > 0) {
+                        link = existingLinks[0];
+                        link.DashboardCategoryID = event.TargetCategoryId;
+                    } else {
+                        link = await md.GetEntityObject<MJDashboardCategoryLinkEntity>('MJ: Dashboard Category Links');
+                        link.DashboardID = dashboard.ID;
+                        link.UserID = currentUserId;
+                        link.DashboardCategoryID = event.TargetCategoryId;
+                    }
+                    link.TransactionGroup = tg;
+                    await link.Save();
+
+                    sharedDashboardIds.push(dashboard.ID);
                 }
             }
 
-            // Create new map reference to trigger change detection
-            this.effectiveCategoryMap = new Map(this.effectiveCategoryMap);
-
-            // Refresh the list
-            this.dashboards = [...this.dashboards];
-
-            // Navigate to the target category to follow the moved items
-            this.selectedCategoryId = event.TargetCategoryId;
-            this.updateUrlQueryParams();
+            if (await tg.Submit()) {
+                // Update the effective category map for the shared dashboards now that the server confirmed
+                for (const id of sharedDashboardIds) {
+                    this.effectiveCategoryMap.set(id, event.TargetCategoryId);
+                }
+                this.effectiveCategoryMap = new Map(this.effectiveCategoryMap);
+                this.dashboards = [...this.dashboards];
+                this.selectedCategoryId = event.TargetCategoryId;
+                this.updateUrlQueryParams();
+            } else {
+                console.error('Failed to move dashboards — all changes rolled back');
+            }
         } catch (err) {
             console.error('Failed to move dashboards:', err);
         } finally {
             this.isLoading = false;
             this.cdr.detectChanges();
-        }
-    }
-
-    /**
-     * Creates or updates a DashboardCategoryLink for organizing a shared dashboard.
-     * Ensures only one link exists per user/dashboard combination.
-     * @param dashboardId - The ID of the shared dashboard
-     * @param userId - The current user's ID
-     * @param categoryId - The target category ID (null for root/uncategorized)
-     */
-    private async createOrUpdateCategoryLink(
-        dashboardId: string,
-        userId: string,
-        categoryId: string | null
-    ): Promise<void> {
-        const md = new Metadata();
-
-        // Check if a link already exists for this user/dashboard
-        const existingLinks = DashboardEngine.Instance.DashboardCategoryLinks.filter(
-            link => UUIDsEqual(link.DashboardID, dashboardId) && UUIDsEqual(link.UserID, userId)
-        );
-
-        let link: MJDashboardCategoryLinkEntity;
-
-        if (existingLinks.length > 0) {
-            // Update existing link
-            link = existingLinks[0];
-            link.DashboardCategoryID = categoryId;
-        } else {
-            // Create new link
-            link = await md.GetEntityObject<MJDashboardCategoryLinkEntity>('MJ: Dashboard Category Links');
-            link.DashboardID = dashboardId;
-            link.UserID = userId;
-            link.DashboardCategoryID = categoryId;
-        }
-
-        const saved = await link.Save();
-        if (!saved) {
-            console.error('Failed to save dashboard category link:', link.LatestResult);
         }
     }
 
@@ -334,7 +320,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             console.debug('[DashboardBrowserResource] Current user:', {
                 userId: md.CurrentUser?.ID,
                 userName: md.CurrentUser?.Name,
@@ -402,36 +388,41 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            // Get all child categories recursively
-            const categoriesToDelete = this.getChildCategoriesRecursive(event.Category.ID);
-            categoriesToDelete.push(event.Category);
+            // Get all categories in child-first order so parent FKs are satisfied as we delete.
+            // getChildCategoriesRecursive returns pre-order (parent before its descendants);
+            // reversing that list gives a valid leaves-first order, then we append the root last.
+            const descendants = this.getChildCategoriesRecursive(event.Category.ID);
+            descendants.reverse();
+            const categoriesToDelete = [...descendants, event.Category];
 
             console.debug('[DashboardBrowserResource] Deleting categories:', categoriesToDelete.map(c => c.Name));
 
-            // Delete in reverse order (children first)
-            for (const cat of categoriesToDelete.reverse()) {
-                // First, move any dashboards in this category to uncategorized
-                const dashboardsInCategory = this.dashboards.filter(d => UUIDsEqual(d.CategoryID, cat.ID));
-                for (const dashboard of dashboardsInCategory) {
-                    dashboard.CategoryID = null!;
-                    await dashboard.Save();
-                }
+            const categoryIds = new Set(categoriesToDelete.map(c => c.ID));
+            const dashboardsToUncategorize = this.dashboards.filter(d =>
+                d.CategoryID && categoryIds.has(d.CategoryID)
+            );
 
-                // Then delete the category
-                const deleted = await cat.Delete();
-                if (deleted) {
-                    const index = this.categories.findIndex(c => UUIDsEqual(c.ID, cat.ID));
-                    if (index >= 0) {
-                        this.categories.splice(index, 1);
-                    }
-                } else {
-                    console.error('[DashboardBrowserResource] Failed to delete category:', cat.Name, cat.LatestResult);
-                }
+            // Queue dashboard uncategorize saves first, then category deletes — single atomic transaction
+            const md = this.ProviderToUse;
+            const tg = await md.CreateTransactionGroup();
+
+            for (const dashboard of dashboardsToUncategorize) {
+                dashboard.CategoryID = null!;
+                dashboard.TransactionGroup = tg;
+                await dashboard.Save();
             }
 
-            // Refresh arrays
-            this.categories = [...this.categories];
-            this.dashboards = [...this.dashboards];
+            for (const cat of categoriesToDelete) {
+                cat.TransactionGroup = tg;
+                await cat.Delete();
+            }
+
+            if (await tg.Submit()) {
+                this.categories = this.categories.filter(c => !categoryIds.has(c.ID));
+                this.dashboards = [...this.dashboards];
+            } else {
+                console.error('[DashboardBrowserResource] Failed to delete categories — all changes rolled back');
+            }
         } catch (err) {
             console.error('[DashboardBrowserResource] Exception deleting category:', err);
         } finally {
@@ -465,7 +456,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.mode = 'view';
 
         // Compute permissions for the selected dashboard
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
             dashboard.ID,
             md.CurrentUser.ID
@@ -481,7 +472,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     public editDashboard(dashboard: MJDashboardEntity): void {
         // Check if user has edit permission
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const permissions = DashboardEngine.Instance.GetDashboardPermissions(
             dashboard.ID,
             md.CurrentUser.ID
@@ -563,7 +554,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
         if (result.Action === 'save' && this.selectedDashboard) {
             // Recompute permissions after sharing changes
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 this.selectedDashboard.ID,
                 md.CurrentUser.ID
@@ -585,7 +576,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
 
             dashboard.Name = 'New Dashboard';
@@ -730,7 +721,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 compositeKey.SimpleLoadFromURLSegment(request.recordId);
                 // If simple load didn't work (single ID without field name), look up actual PK field
                 if (compositeKey.KeyValuePairs.length === 0) {
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const entity = md.Entities.find(e => e.Name === request.entityName);
                     const pkFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
                     compositeKey.LoadFromSingleKeyValuePair(pkFieldName, request.recordId);
@@ -760,7 +751,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
             case 'OpenQuery': {
                 // Navigate to query viewer
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const queryInfo = md.Queries.find(q => UUIDsEqual(q.ID, request.queryId));
                 if (queryInfo) {
                     this.navigationService.OpenQuery(
@@ -786,7 +777,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Resolve an application name to its ID
      */
     private resolveAppId(appName: string): string | undefined {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
         return app?.ID;
     }
@@ -927,7 +918,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const engine = DashboardEngine.Instance;
             await engine.Config(false); // Wait for engine to load data
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const currentUserId = md.CurrentUser.ID;
 
             // Get data from engine - sort dashboards by updated date, categories by name

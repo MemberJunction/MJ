@@ -9,7 +9,7 @@
                     Clear ({{ GetActiveFilterCount() }})
                 </button>
             }
-            <button class="filter-close-btn" (click)="CloseRequested.emit()" title="Hide filters">
+            <button class="filter-close-btn" (click)="CloseRequested.emit()" title="Hide filters" aria-label="Hide filters">
                 <i class="fa-solid fa-times"></i>
             </button>
         </div>
@@ -104,8 +104,7 @@
     }
 
     @if (Filters.length === 0 && !ShowRelevanceSlider) {
-        <div class="filter-empty">
-            <p>No filters available</p>
-        </div>
+        <mj-empty-state class="filter-empty" Size="compact"
+            Icon="" Title="No filters available" />
     }
 </div>

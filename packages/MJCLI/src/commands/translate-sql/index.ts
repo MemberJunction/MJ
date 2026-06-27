@@ -231,11 +231,12 @@ export default class TranslateSQL extends Command {
 
         try {
             const { Metadata } = await import('@memberjunction/core');
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
 
-            // Queries
+            // Queries — read from QueryEngine for event-driven freshness
+            const { QueryEngine } = await import('@memberjunction/core-entities');
             if (scope === 'all' || scope === 'queries') {
-                for (const query of md.Queries) {
+                for (const query of QueryEngine.Instance.Queries) {
                     if (query.SQL) {
                         fragments.push({ label: `Query: ${query.Name}`, sql: query.SQL });
                     }
@@ -250,7 +251,7 @@ export default class TranslateSQL extends Command {
 
             // Row Level Security Filters (accessed via Provider, not exposed on Metadata directly)
             if (scope === 'all' || scope === 'filters') {
-                for (const filter of Metadata.Provider.RowLevelSecurityFilters) {
+                for (const filter of Metadata.Provider.RowLevelSecurityFilters) { // global-provider-ok: CLI tool, single-provider context
                     if (filter.FilterText) {
                         fragments.push({
                             label: `RLS Filter: ${filter.Name}`,

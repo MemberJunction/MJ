@@ -12,6 +12,8 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { cacheHitRate } from '../../../services/cache-metrics';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
@@ -28,6 +30,8 @@ interface PromptRunRecord {
     TokensUsed: number | null;
     TokensPrompt: number | null;
     TokensCompletion: number | null;
+    TokensCacheRead: number | null;
+    TokensCacheWrite: number | null;
     ExecutionTimeMS: number | null;
     ModelID: string | null;
     Model: string | null;
@@ -46,6 +50,7 @@ interface PromptRunStats {
     SuccessRate: number;
     P95LatencySeconds: number;
     TotalCost: number;
+    CacheHitRate: number;
 }
 
 interface ChartBucket {
@@ -67,13 +72,13 @@ interface StatusBreakdownItem extends BreakdownItem {
     cssClass: string;
 }
 
-type ChartMetric = 'volume' | 'cost' | 'tokens';
+type ChartMetric = 'volume' | 'cost' | 'tokens' | 'cacheHit';
 type SortField = 'RunAt' | 'Prompt' | 'Model' | 'Status' | 'ExecutionTimeMS' | 'TokensUsed' | 'Cost';
 type SortDirection = 'asc' | 'desc';
 
 const FIELDS = [
     'ID', 'RunAt', 'CompletedAt', 'Status', 'Success', 'Cost', 'TotalCost',
-    'TokensUsed', 'TokensPrompt', 'TokensCompletion', 'ExecutionTimeMS',
+    'TokensUsed', 'TokensPrompt', 'TokensCompletion', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS',
     'ModelID', 'Model', 'AgentID', 'Agent', 'PromptID', 'Prompt', 'ErrorMessage'
 ];
 
@@ -83,16 +88,6 @@ const PAGE_SIZE = 25;
     standalone: false,
     selector: 'app-analytics-prompt-runs',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [Filters]="Filters"
-            [ShowExportButton]="true"
-            [ShowCompareToggle]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-            (FiltersChange)="OnFiltersChange($event)"
-            (ExportClicked)="ExportCSV()"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">
@@ -129,6 +124,10 @@ const PAGE_SIZE = 25;
                     <div class="stat-label">Total Cost</div>
                     <div class="stat-value">{{ FormatCurrency(Stats.TotalCost, 2) }}</div>
                 </div>
+                <div class="stat-card" title="Share of input tokens served from the provider's prompt cache">
+                    <div class="stat-label">Cache Hit Rate</div>
+                    <div class="stat-value">{{ Stats.CacheHitRate * 100 | number:'1.1-1' }}%</div>
+                </div>
             </div>
 
             <!-- Chart Panel -->
@@ -148,7 +147,8 @@ const PAGE_SIZE = 25;
                 </div>
                 <div class="chart-area">
                     @if (ChartBuckets.length === 0) {
-                        <div class="chart-empty">No data for selected time range</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-column"
+                            Title="No data for selected time range" />
                     } @else {
                         <div class="chart-bars">
                             @for (bucket of ChartBuckets; track bucket.label) {
@@ -181,7 +181,7 @@ const PAGE_SIZE = 25;
                         </div>
                     }
                     @if (ModelBreakdown.length === 0) {
-                        <div class="breakdown-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-cube" Title="No data" />
                     }
                 </div>
 
@@ -198,7 +198,7 @@ const PAGE_SIZE = 25;
                         </div>
                     }
                     @if (PromptBreakdown.length === 0) {
-                        <div class="breakdown-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-message" Title="No data" />
                     }
                 </div>
 
@@ -213,7 +213,7 @@ const PAGE_SIZE = 25;
                         </div>
                     }
                     @if (StatusBreakdown.length === 0) {
-                        <div class="breakdown-empty">No data</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-circle-dot" Title="No data" />
                     }
                 </div>
             </div>
@@ -249,7 +249,7 @@ const PAGE_SIZE = 25;
                                     <td><span class="model-tag">{{ run.Model ?? 'N/A' }}</span></td>
                                     <td><span class="status-pill" [class]="GetStatusClass(run.Status)">{{ run.Status }}</span></td>
                                     <td class="cell-number">{{ FormatDuration(run.ExecutionTimeMS) }}</td>
-                                    <td class="cell-number">{{ run.TokensUsed != null ? (run.TokensUsed | number) : '-' }}</td>
+                                    <td class="cell-number" title="Total tokens processed, including cached input">{{ run.TokensUsed != null ? (TrueTotalTokens(run) | number) : '-' }}</td>
                                     <td class="cell-number">{{ FormatCurrency(run.Cost, 4) }}</td>
                                 </tr>
                             }
@@ -398,14 +398,9 @@ const PAGE_SIZE = 25;
             align-items: flex-end;
         }
 
-        .chart-empty {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .chart-area mj-empty-state {
             width: 100%;
             height: 100%;
-            color: var(--mj-text-muted);
-            font-size: 13px;
         }
 
         .chart-bars {
@@ -532,12 +527,6 @@ const PAGE_SIZE = 25;
             background: var(--mj-brand-primary);
             border-radius: 3px;
             transition: width 0.3s;
-        }
-
-        .breakdown-empty {
-            font-size: 13px;
-            color: var(--mj-text-muted);
-            padding: 8px 0;
         }
 
         .status-dot {
@@ -771,7 +760,7 @@ const PAGE_SIZE = 25;
         }
     `]
 })
-export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
+export class AnalyticsPromptRunsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
     private isInitialized = false;
@@ -822,6 +811,7 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
         { key: 'volume', label: 'By Volume' },
         { key: 'cost', label: 'By Cost' },
         { key: 'tokens', label: 'By Tokens' },
+        { key: 'cacheHit', label: 'By Cache Hit %' },
     ];
 
     readonly TableColumns: { field: SortField; label: string; sortable: boolean }[] = [
@@ -944,7 +934,7 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
             r.Model ?? '',
             r.Status,
             r.ExecutionTimeMS?.toString() ?? '',
-            r.TokensUsed?.toString() ?? '',
+            this.TrueTotalTokens(r).toString(),
             r.Cost?.toString() ?? ''
         ]);
         const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
@@ -980,6 +970,9 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
         if (this.ActiveChartMetric === 'cost') {
             return '$' + value.toFixed(2);
         }
+        if (this.ActiveChartMetric === 'cacheHit') {
+            return value.toFixed(0) + '%';
+        }
         if (value >= 1000) {
             return (value / 1000).toFixed(1) + 'k';
         }
@@ -998,7 +991,7 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const cutoff = this.getTimeRangeCutoff(this._timeRange);
             const filter = cutoff ? `RunAt >= '${cutoff.toISOString()}'` : '';
 
@@ -1045,18 +1038,31 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
         return filtered;
     }
 
+    /**
+     * Total tokens the model processed for a run, INCLUDING cached input. TokensUsed excludes the
+     * cache buckets by design, so a heavily-cached run looks tiny; this is the true throughput.
+     */
+    public TrueTotalTokens(run: PromptRunRecord): number {
+        return (run.TokensUsed ?? 0) + (run.TokensCacheRead ?? 0) + (run.TokensCacheWrite ?? 0);
+    }
+
     private computeStats(runs: PromptRunRecord[]): PromptRunStats {
         const total = runs.length;
         if (total === 0) {
-            return { TotalRuns: 0, AvgCost: 0, AvgTokens: 0, AvgLatencySeconds: 0, SuccessRate: 0, P95LatencySeconds: 0, TotalCost: 0 };
+            return { TotalRuns: 0, AvgCost: 0, AvgTokens: 0, AvgLatencySeconds: 0, SuccessRate: 0, P95LatencySeconds: 0, TotalCost: 0, CacheHitRate: 0 };
         }
 
         const totalCost = this.sumNullable(runs, r => r.Cost);
-        const totalTokens = this.sumNullable(runs, r => r.TokensUsed);
+        const totalTokens = runs.reduce((sum, r) => sum + this.TrueTotalTokens(r), 0);
         const latencies = this.collectNonNull(runs, r => r.ExecutionTimeMS);
         const avgLatencyMs = latencies.length > 0 ? latencies.reduce((a, b) => a + b, 0) / latencies.length : 0;
         const successCount = runs.filter(r => r.Status === 'Completed').length;
         const p95 = this.percentile(latencies, 95);
+        const cacheHit = cacheHitRate({
+            uncachedInputTokens: this.sumNullable(runs, r => r.TokensPrompt),
+            cacheReadTokens: this.sumNullable(runs, r => r.TokensCacheRead),
+            cacheWriteTokens: this.sumNullable(runs, r => r.TokensCacheWrite)
+        });
 
         return {
             TotalRuns: total,
@@ -1066,6 +1072,7 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
             SuccessRate: (successCount / total) * 100,
             P95LatencySeconds: p95 / 1000,
             TotalCost: totalCost,
+            CacheHitRate: cacheHit,
         };
     }
 
@@ -1078,13 +1085,15 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
         const rangeMs = now.getTime() - cutoff.getTime();
         const bucketMs = rangeMs / bucketCount;
 
-        const buckets: { label: string; total: number; start: Date; end: Date }[] = [];
+        const buckets: { label: string; total: number; cacheRead: number; inputForHit: number; start: Date; end: Date }[] = [];
         for (let i = 0; i < bucketCount; i++) {
             const start = new Date(cutoff.getTime() + i * bucketMs);
             const end = new Date(cutoff.getTime() + (i + 1) * bucketMs);
             buckets.push({
                 label: this.formatBucketLabel(start),
                 total: 0,
+                cacheRead: 0,
+                inputForHit: 0,
                 start,
                 end,
             });
@@ -1095,6 +1104,15 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
             const idx = Math.min(Math.floor((runTime - cutoff.getTime()) / bucketMs), bucketCount - 1);
             if (idx >= 0 && idx < bucketCount) {
                 buckets[idx].total += this.getChartMetricValue(run);
+                // Cache hit-rate is a ratio, not a sum — accumulate the components and divide below.
+                buckets[idx].cacheRead += run.TokensCacheRead ?? 0;
+                buckets[idx].inputForHit += (run.TokensPrompt ?? 0) + (run.TokensCacheRead ?? 0) + (run.TokensCacheWrite ?? 0);
+            }
+        }
+
+        if (this.ActiveChartMetric === 'cacheHit') {
+            for (const b of buckets) {
+                b.total = b.inputForHit > 0 ? (b.cacheRead / b.inputForHit) * 100 : 0;
             }
         }
 
@@ -1112,7 +1130,7 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
     private getChartMetricValue(run: PromptRunRecord): number {
         switch (this.ActiveChartMetric) {
             case 'cost': return run.Cost ?? 0;
-            case 'tokens': return run.TokensUsed ?? 0;
+            case 'tokens': return this.TrueTotalTokens(run);
             default: return 1; // volume = count
         }
     }

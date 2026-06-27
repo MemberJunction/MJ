@@ -11,10 +11,13 @@ import {
   NgZone
 } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
 import {
@@ -164,7 +167,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     ])
   ]
 })
-export class EntityDataGridComponent implements OnInit, OnDestroy {
+export class EntityDataGridComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   // ========================================
   // Data Source Inputs (RunViewParams-based)
   // ========================================
@@ -970,6 +973,63 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     return this._entityActions;
   }
 
+  private _autoLoadEntityActions = false;
+  private _entityActionsAutoLoaded = false;
+  /**
+   * When true, the grid resolves the current entity's active EntityActions itself (via the metadata-only
+   * `EntityActionEngineBase`) and shows them — no parent wiring or `LoadEntityActionsRequested` handler
+   * needed. Buttons appear only when the entity actually has active actions (data-driven). Actions whose
+   * invocation names a `RuntimeUXDriverClass` mount that interactive driver in-place when clicked.
+   */
+  @Input()
+  set AutoLoadEntityActions(value: boolean) {
+    this._autoLoadEntityActions = value;
+    void this.maybeAutoLoadEntityActions();
+  }
+  get AutoLoadEntityActions(): boolean {
+    return this._autoLoadEntityActions;
+  }
+
+  /** Loads + maps the entity's active actions once, when auto-load is on and the entity is known. */
+  private async maybeAutoLoadEntityActions(): Promise<void> {
+    if (!this._autoLoadEntityActions || !this._entityInfo || this._entityActionsAutoLoaded) {
+      return;
+    }
+    this._entityActionsAutoLoaded = true;
+    try {
+      const provider = this.ProviderToUse;
+      await EntityActionEngineBase.Instance.Config(false, provider?.CurrentUser, provider);
+      const configs = this.mapEntityActionsToConfigs(this._entityInfo.Name);
+      if (configs.length > 0) {
+        this._entityActions = configs;
+        this._showEntityActionButtons = true;
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Non-fatal: leave the action bar empty if the engine can't load.
+      this._entityActionsAutoLoaded = false;
+    }
+  }
+
+  /** Maps the entity's active EntityActions to grid configs, carrying the driver key + RecordProcessID. */
+  private mapEntityActionsToConfigs(entityName: string): EntityActionConfig[] {
+    const engine = EntityActionEngineBase.Instance;
+    return engine.GetActionsByEntityName(entityName, 'Active').map((ea): EntityActionConfig => {
+      const driverInvocation = engine.Invocations.find(i => UUIDsEqual(i.EntityActionID, ea.ID) && !!i.RuntimeUXDriverClass);
+      const recordProcessParam = engine.Params.find(p => UUIDsEqual(p.EntityActionID, ea.ID) && p.ActionParam?.trim().toLowerCase() === 'recordprocessid');
+      const config: EntityActionConfig = {
+        id: ea.ID,
+        name: ea.Action ?? 'Action',
+        icon: 'fa-solid fa-bolt',
+        runtimeUXDriverClass: driverInvocation?.RuntimeUXDriverClass ?? undefined,
+      };
+      if (recordProcessParam?.Value) {
+        config.metadata = { RecordProcessID: recordProcessParam.Value };
+      }
+      return config;
+    });
+  }
+
   // ========================================
   // Aggregate Inputs
   // ========================================
@@ -1463,7 +1523,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     private elementRef: ElementRef,
     private exportService: ExportService,
     private ngZone: NgZone
-  ) {}
+  ) {
+  super();}
 
   // ========================================
   // Lifecycle Hooks
@@ -1599,7 +1660,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       } else if (this._params.EntityName) {
         // Dynamic view - just get entity metadata
         this._viewEntity = null;
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
 
         // Reset columns to force regeneration from metadata when switching to dynamic view
@@ -1620,9 +1681,27 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       // Rebuild AG Grid column definitions to reflect the new view's settings
       this.buildAgColumnDefs();
 
-      // Load data if auto-refresh is enabled and parent hasn't disabled loading
-      if (this._autoRefreshOnParamsChange && this._allowLoad) {
-        await this.loadData(false);
+      // If the parent already supplied external [Data] BEFORE [Params] resolved the entity,
+      // the earlier processData() ran with a null _entityInfo and produced rows with no field
+      // values (empty cells). This happens when the grid is dynamic-mounted by the view-type
+      // plug-in host, where Angular applies the batched inputs in template order ([Data] before
+      // [Params]). Now that _entityInfo + columns exist, re-map the rows so values render.
+      if (this._useExternalData && this._entityInfo) {
+        this.processData();
+      }
+
+      // Load data if auto-refresh is enabled and parent hasn't disabled loading.
+      // Defer the AllowLoad check to a microtask: Angular applies @Input setters synchronously
+      // in template order, and [Params] is commonly bound before [AllowLoad] (see the wrapper in
+      // explorer-entity-data-grid). Reading _allowLoad synchronously here would see its default
+      // (true) before a later [AllowLoad]="false" binding lands, causing collapsed/deferred panels
+      // to fire a RunView anyway. Yielding lets all sibling input setters apply first so the check
+      // reflects the final AllowLoad value.
+      if (this._autoRefreshOnParamsChange) {
+        await Promise.resolve();
+        if (this._allowLoad) {
+          await this.loadData(false);
+        }
       }
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';
@@ -1630,6 +1709,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     } finally {
       // Re-enable persistence now that the new view is fully loaded
       this._suppressPersist = false;
+      // Entity is resolved by now — self-load its actions if auto-load is enabled.
+      void this.maybeAutoLoadEntityActions();
     }
   }
 
@@ -1674,7 +1755,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return viewEntity.ViewEntityInfo;
     }
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // Second try: Look up by Entity name (virtual field that returns entity name)
     if (viewEntity.Entity) {
@@ -1948,7 +2029,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Build the ExtraFilter from params or view entity
       let extraFilter: string | undefined;
@@ -2932,7 +3013,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           }));
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         ...runViewParams,
         ResultType: 'simple',
@@ -3066,7 +3147,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           runViewParams.StartRow = startRow;
           runViewParams.MaxRows = blockSize;
 
-          const rv = new RunView();
+          const rv = RunView.FromMetadataProvider(this.ProviderToUse);
           const result = await rv.RunView<Record<string, unknown>>({
             ...runViewParams,
             ResultType: 'simple',
@@ -4278,16 +4359,63 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handles entity action click from the overflow menu
+   * The runtime-UX driver currently mounted over the grid (e.g. the Record Process bulk-update runner),
+   * or null when none. Set when an action whose invocation names a `RuntimeUXDriverClass` is clicked.
+   */
+  public ActiveRuntimeDriver: { DriverClass: string; Context: EntityActionUXContext } | null = null;
+
+  /**
+   * Handles entity action click from the overflow menu. When the action names a runtime-UX driver, the
+   * grid mounts that interactive driver in-place (no parent wiring required); otherwise it emits
+   * `EntityActionRequested` for the host to invoke the action the classic way.
    */
   onEntityActionClick(action: EntityActionConfig): void {
     if (!this._entityInfo) return;
+
+    if (action.runtimeUXDriverClass) {
+      this.mountRuntimeDriver(action);
+      return;
+    }
 
     this.EntityActionRequested.emit({
       entityInfo: this._entityInfo,
       action,
       selectedRecords: this.GetSelectedRows()
     });
+  }
+
+  /** Builds the driver context from the current entity + selection and mounts the named driver. */
+  private mountRuntimeDriver(action: EntityActionConfig): void {
+    const entity = this._entityInfo!;
+    const pkName = entity.FirstPrimaryKey?.Name;
+    const selectedRecordIDs = pkName
+      ? this.GetSelectedRows().map(r => String(r[pkName])).filter(id => id.length > 0)
+      : [];
+    this.ActiveRuntimeDriver = {
+      DriverClass: action.runtimeUXDriverClass!,
+      Context: {
+        EntityInfo: entity,
+        ScopeKind: 'records',
+        SelectedRecordIDs: selectedRecordIDs,
+        Config: action.metadata ?? {},
+        Provider: this.ProviderToUse,
+        ContextUser: this.ProviderToUse?.CurrentUser,
+        ActionLabel: action.name
+      }
+    };
+  }
+
+  /** The mounted driver finished — refresh the grid when it changed data, then unmount. */
+  async OnRuntimeDriverCompleted(result: EntityActionUXResult): Promise<void> {
+    this.ActiveRuntimeDriver = null;
+    if (result?.RefreshData) {
+      await this.Refresh();
+    }
+  }
+
+  /** The user dismissed the mounted driver without applying — just unmount. */
+  OnRuntimeDriverCancelled(): void {
+    this.ActiveRuntimeDriver = null;
   }
 
   /**

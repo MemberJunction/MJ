@@ -1,0 +1,129 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Resource Access Report"
+    Icon="fa-solid fa-cube"
+    Subtitle="Look up every grantee for a specific resource">
+  </mj-page-header>
+
+  <mj-page-body>
+
+  @if (ErrorMessage) {
+    <div class="message error-message">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  <div class="selector-row wrap">
+    <label class="selector-label" for="domain-select">Domain:</label>
+    <select
+      id="domain-select"
+      class="mj-input"
+      [ngModel]="SelectedDomainName"
+      (ngModelChange)="OnDomainChanged($event)"
+      [disabled]="IsLoading"
+    >
+      @for (d of Domains; track d.ID) {
+        <option [ngValue]="d.Name">{{ d.Name }}</option>
+      }
+    </select>
+
+    <label class="selector-label" for="rtype-input">Resource Type:</label>
+    <mj-combobox
+      id="rtype-input"
+      [Data]="ResourceTypes"
+      [ValuePrimitive]="true"
+      [Filterable]="true"
+      [AllowCustom]="true"
+      Placeholder="Select or type a resource type"
+      [Disabled]="IsLoading || !SelectedDomainName"
+      [(ngModel)]="ResourceTypeInput">
+    </mj-combobox>
+
+    <label class="selector-label" for="rid-input">Resource ID:</label>
+    <input
+      id="rid-input"
+      class="mj-input mono"
+      placeholder="UUID or record ID"
+      [(ngModel)]="ResourceIdInput"
+      [disabled]="IsLoading"
+    />
+
+    <button
+      mjButton
+      variant="primary"
+      (click)="OnLookupResource()"
+      [disabled]="IsLoading"
+    >
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> Looking up...
+      } @else {
+        <i class="fa-solid fa-magnifying-glass"></i> Lookup
+      }
+    </button>
+  </div>
+
+  @if (IsLoading) {
+    <mj-loading text="Looking up grantees..." size="medium"></mj-loading>
+  } @else if (!LastQueryLabel) {
+    <mj-empty-state Icon="fa-solid fa-cube"
+      Title="No lookup yet"
+      Message="Pick a domain and enter a resource type + ID, then press Lookup to see who has access." />
+  } @else if (ResourceAccessRows.length === 0) {
+    <mj-empty-state Variant="no-results" Icon="fa-solid fa-user-slash"
+      Title="No grantees found"
+      [Message]="NoGranteesMessage" />
+  } @else {
+    <div class="total-summary">
+      <strong>{{ ResourceAccessRows.length }}</strong> grantee{{ ResourceAccessRows.length === 1 ? '' : 's' }}
+      on <strong>{{ LastQueryLabel }}</strong>
+    </div>
+
+    <div class="domain-body">
+      <table class="perms-table">
+        <thead>
+          <tr>
+            <th>Grantee</th>
+            <th>Type</th>
+            <th>Actions</th>
+            <th>Effect</th>
+            <th>Expires</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of ResourceAccessRows; track TrackByResourceRow($index, row)) {
+            <tr>
+              <td class="resource-cell">
+                <span class="resource-name">{{ row.GranteeName || row.GranteeID || row.GranteeType }}</span>
+                @if (row.GranteeID && row.GranteeName && row.GranteeName !== row.GranteeID) {
+                  <span class="resource-id">{{ row.GranteeID }}</span>
+                }
+              </td>
+              <td>{{ row.GranteeType }}</td>
+              <td>
+                <div class="action-chips">
+                  @for (action of row.Actions; track action) {
+                    <span class="action-chip">{{ action }}</span>
+                  }
+                </div>
+              </td>
+              <td>
+                <span class="effect-badge" [class.effect-allow]="row.Effect === 'Allow'" [class.effect-deny]="row.Effect === 'Deny'">
+                  {{ row.Effect }}
+                </span>
+              </td>
+              <td>
+                @if (row.ExpiresAt) {
+                  <span>{{ row.ExpiresAt | date:'short' }}</span>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  </mj-page-body>
+</mj-page-layout>

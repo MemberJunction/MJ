@@ -1,0 +1,20 @@
+{
+  "name": "NoMetadataDependencyComponent",
+  "title": "Dependency Without Property Metadata",
+  "description": "Tests skip-with-warning when child component property metadata is unavailable",
+  "type": "report",
+  "code": "function NoMetadataDependencyComponent({ utilities, styles, components, callbacks }) {\n  const { UnknownWidget12345 } = components;\n  const [data, setData] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        setData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  if (!UnknownWidget12345) return <div>Widget not available</div>;\n\n  return (\n    <div>\n      <h3>With Widget</h3>\n      <UnknownWidget12345 styles={styles} utilities={utilities} components={components} callbacks={callbacks} />\n    </div>\n  );\n}",
+  "properties": [],
+  "events": [],
+  "dependencies": [{
+    "name": "UnknownWidget12345",
+    "title": "Unknown Widget",
+    "description": "A widget with no property metadata",
+    "type": "Generic",
+    "location": "embedded",
+    "code": "function UnknownWidget12345({ data }) { return <div>{JSON.stringify(data)}</div>; }",
+    "functionalRequirements": "",
+    "technicalDesign": "",
+    "exampleUsage": ""
+  }]
+}

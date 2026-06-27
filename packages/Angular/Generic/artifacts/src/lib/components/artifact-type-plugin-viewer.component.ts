@@ -12,6 +12,7 @@ import {
   Type
 } from '@angular/core';
 import { MJArtifactVersionEntity, MJArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
@@ -112,7 +113,7 @@ import { BaseArtifactViewerPluginComponent, NavigationRequest } from './base-art
     }
   `]
 })
-export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
+export class ArtifactTypePluginViewerComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   @Input() artifactVersion!: MJArtifactVersionEntity;
   @Input() artifactTypeName!: string;
   @Input() contentType?: string;
@@ -124,6 +125,13 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() pluginLoaded = new EventEmitter<void>();
   @Output() tabsChanged = new EventEmitter<void>();
+  /**
+   * Bubbled up from the component-artifact-viewer's form-aware branch when
+   * the user clicks "Apply to my form". Carries the spec + entity so the
+   * consumer (chat message card, conversation host) can invoke the
+   * Create-or-Modify Interactive Form action behind a confirmation dialog.
+   */
+  @Output() applyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
 
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   viewerContainer!: ViewContainerRef;
@@ -292,6 +300,17 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
         });
       }
 
+      // Subscribe to the form-aware "Apply to my form" event when the
+      // underlying plugin is a component-artifact-viewer rendering a
+      // form-role spec. Other plugin types don't have this output.
+      if (componentInstance.applyFormRequested) {
+        componentInstance.applyFormRequested.subscribe(
+          (event: { spec: unknown; entityName: string }) => {
+            this.applyFormRequested.emit(event);
+          }
+        );
+      }
+
       // Trigger change detection
       this.componentRef.changeDetectorRef.detectChanges();
 
@@ -373,7 +392,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
    */
   private async getArtifactTypeById(id: string): Promise<MJArtifactTypeEntity | null> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types');
       const loaded = await artifactType.Load(id);
 

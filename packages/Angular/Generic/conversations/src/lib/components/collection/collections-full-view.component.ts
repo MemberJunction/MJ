@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -8,7 +9,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { Subject, takeUntil } from 'rxjs';
 import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSortOrder } from '../../models/collection-view.model';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
 /**
  * Full-panel Collections view component
@@ -23,7 +24,15 @@ import { UUIDsEqual } from '@memberjunction/global';
       <div class="collections-header">
         <!-- Breadcrumb navigation -->
         <div class="collections-breadcrumb">
-          <div class="breadcrumb-item">
+          <button class="btn-icon nav-toggle" (click)="toggleNavigator()"
+            [class.active]="showNavigator" title="Toggle collections panel">
+            <i class="fas fa-bars"></i>
+          </button>
+          <div class="breadcrumb-item"
+            [class.drag-over]="dragOverTargetId === 'root'"
+            (dragover)="onCrumbDragOver(null, $event)"
+            (dragleave)="onDragLeave('root')"
+            (drop)="onCrumbDrop(null, $event)">
             <i class="fas fa-home"></i>
             <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
           </div>
@@ -33,6 +42,10 @@ import { UUIDsEqual } from '@memberjunction/global';
                 <i class="fas fa-chevron-right breadcrumb-separator"></i>
                 <a class="breadcrumb-link"
                   [class.active]="last"
+                  [class.drag-over]="dragOverTargetId === 'crumb:' + crumb.id"
+                  (dragover)="onCrumbDragOver(crumb.id, $event)"
+                  (dragleave)="onDragLeave('crumb:' + crumb.id)"
+                  (drop)="onCrumbDrop(crumb.id, $event)"
                   (click)="navigateTo(crumb)">
                   {{ crumb.name }}
                 </a>
@@ -176,18 +189,77 @@ import { UUIDsEqual } from '@memberjunction/global';
             <span class="selection-count">{{ selectedItems.size }} selected</span>
           </div>
           <div class="selection-actions">
+            <div class="dropdown-container">
+              <button class="btn-toolbar" (click)="openBulkMove($event)">
+                <i class="fas fa-folder-tree"></i>
+                Move to…
+              </button>
+              @if (showBulkMovePopover) {
+                <div class="bulk-move-backdrop" (click)="closeBulkMove()"></div>
+                <div class="dropdown-menu bulk-move-menu">
+                  @if (navigatorNodes.length === 0) {
+                    <div class="dropdown-note">No collections available</div>
+                  } @else {
+                    @for (node of navigatorNodes; track node.collection.ID) {
+                      <button class="dropdown-item" [style.paddingLeft.px]="12 + node.depth * 12"
+                        (click)="bulkMoveTo(node.collection)">
+                        <i class="fas fa-folder" [style.color]="node.collection.Color || null"></i>
+                        <span>{{ node.collection.Name }}</span>
+                      </button>
+                    }
+                  }
+                </div>
+              }
+            </div>
+            <button class="btn-toolbar" (click)="stageSelected()" title="Add to the staging shelf to move later">
+              <i class="fas fa-layer-group"></i>
+              Stage
+            </button>
             <button class="btn-toolbar" (click)="clearSelection()">
               <i class="fas fa-times"></i>
-              Clear Selection
+              Clear
             </button>
             <button class="btn-toolbar btn-danger" (click)="deleteSelected()">
               <i class="fas fa-trash"></i>
-              Delete Selected
+              Delete
             </button>
           </div>
         </div>
       }
     
+      <!-- Body: navigator pane (#6) + content -->
+      <div class="collections-body">
+        @if (showNavigator) {
+          <div class="collections-navigator">
+            <div class="nav-header">Collections</div>
+            <div class="nav-list">
+              <button class="nav-row"
+                [class.active]="!currentCollectionId"
+                [class.drag-over]="dragOverTargetId === 'root'"
+                (click)="navigateToRoot()"
+                (dragover)="onCrumbDragOver(null, $event)"
+                (dragleave)="onDragLeave('root')"
+                (drop)="onCrumbDrop(null, $event)">
+                <i class="fas fa-home"></i>
+                <span>All Collections</span>
+              </button>
+              @for (node of navigatorNodes; track node.collection.ID) {
+                <button class="nav-row"
+                  [class.active]="isCurrentNavigator(node.collection)"
+                  [class.drag-over]="dragOverTargetId === 'nav:' + node.collection.ID"
+                  [style.paddingLeft.px]="10 + node.depth * 14"
+                  (click)="navigatorClick(node.collection)"
+                  (dragover)="onNavigatorDragOver(node.collection, $event)"
+                  (dragleave)="onDragLeave('nav:' + node.collection.ID)"
+                  (drop)="onNavigatorDrop(node.collection, $event)"
+                  [title]="node.collection.Name">
+                  <i class="fas fa-folder" [style.color]="node.collection.Color || null"></i>
+                  <span class="nav-row-name">{{ node.collection.Name }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        }
       <!-- Content area -->
       <div class="collections-content">
         <!-- Loading state -->
@@ -199,32 +271,19 @@ import { UUIDsEqual } from '@memberjunction/global';
     
         <!-- Empty state -->
         @if (!isLoading && unifiedItems.length === 0) {
-          <div class="empty-state">
-            <i class="fas fa-folder-open"></i>
-            <!-- Search returned no results -->
-            @if (searchQuery) {
-              <h3>No items found</h3>
-              <p>Try adjusting your search</p>
-            }
-            <!-- Empty root level -->
-            @if (!searchQuery && !currentCollectionId) {
-              <h3>No collections yet</h3>
-              <p>Create your first collection to get started</p>
-              @if (canEditCurrent()) {
-                <button class="btn-primary empty-state-cta"
-                  (click)="createCollection()"
-                  >
-                  <i class="fas fa-plus"></i>
-                  Create Collection
-                </button>
-              }
-            }
-            <!-- Empty collection (has parent) -->
+          <mj-empty-state
+            [Variant]="searchQuery ? 'no-results' : 'empty'"
+            Icon="fa-solid fa-folder-open"
+            [Title]="EmptyStateTitle"
+            [Message]="EmptyStateMessage"
+            [ActionText]="(!searchQuery && !currentCollectionId && canEditCurrent()) ? 'Create Collection' : ''"
+            ActionIcon="fa-solid fa-plus"
+            (Action)="createCollection()">
+            <!-- Empty collection (has parent): rich hint with emphasis -->
             @if (!searchQuery && currentCollectionId) {
-              <h3>This collection is empty</h3>
-              <p>Use the <strong>New</strong> button above to add collections or artifacts</p>
+              <p class="empty-collection-hint">Use the <strong>New</strong> button above to add collections or artifacts</p>
             }
-          </div>
+          </mj-empty-state>
         }
     
         <!-- Grid view -->
@@ -237,17 +296,23 @@ import { UUIDsEqual } from '@memberjunction/global';
                 class="grid-item"
                 [class.selected]="item.selected"
                 [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
+                [class.dragging]="draggedItemIds.includes(item.id)"
+                [class.drag-over]="dragOverTargetId === item.id"
+                [draggable]="true"
+                (dragstart)="onItemDragStart(item, $event)"
+                (dragend)="onItemDragEnd()"
+                (dragover)="item.type === 'folder' ? onFolderItemDragOver(item, $event) : null"
+                (dragleave)="item.type === 'folder' ? onDragLeave(item.id) : null"
+                (drop)="item.type === 'folder' ? onFolderItemDrop(item, $event) : null"
                 (click)="onItemClick(item, $event)"
                 (dblclick)="onItemDoubleClick(item, $event)"
                 (contextmenu)="onItemContextMenu(item, $event)">
-                <!-- Selection checkbox (only visible in select mode) -->
-                @if (isSelectMode) {
-                  <div class="item-checkbox"
-                    (click)="toggleItemSelection(item, $event)">
-                    <i class="fas"
-                    [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
-                  </div>
-                }
+                <!-- Selection checkbox (hover-reveal — no explicit select mode needed) -->
+                <div class="item-checkbox"
+                  (click)="onCheckboxClick(item, $event)">
+                  <i class="fas"
+                  [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"></i>
+                </div>
                 <!-- Folder item -->
                 @if (item.type === 'folder') {
                   <div
@@ -364,13 +429,11 @@ import { UUIDsEqual } from '@memberjunction/global';
             <table class="list-table">
               <thead>
                 <tr>
-                  @if (isSelectMode) {
-                    <th class="col-checkbox">
-                      <i class="fas"
-                        [ngClass]="selectedItems.size === unifiedItems.length ? 'fa-check-square' : 'fa-square'"
-                      (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
-                    </th>
-                  }
+                  <th class="col-checkbox">
+                    <i class="fas"
+                      [ngClass]="selectedItems.size === unifiedItems.length && unifiedItems.length > 0 ? 'fa-check-square' : 'fa-square'"
+                    (click)="selectedItems.size === unifiedItems.length ? clearSelection() : selectAll()"></i>
+                  </th>
                   <th class="col-name sortable" (click)="setSortBy('name')">
                     <span>Name</span>
                     @if (sortBy !== 'name') {
@@ -410,16 +473,22 @@ import { UUIDsEqual } from '@memberjunction/global';
                     class="list-item"
                     [class.selected]="item.selected"
                     [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
+                    [class.dragging]="draggedItemIds.includes(item.id)"
+                    [class.drag-over]="dragOverTargetId === item.id"
+                    [draggable]="true"
+                    (dragstart)="onItemDragStart(item, $event)"
+                    (dragend)="onItemDragEnd()"
+                    (dragover)="item.type === 'folder' ? onFolderItemDragOver(item, $event) : null"
+                    (dragleave)="item.type === 'folder' ? onDragLeave(item.id) : null"
+                    (drop)="item.type === 'folder' ? onFolderItemDrop(item, $event) : null"
                     (click)="onItemClick(item, $event)"
                     (dblclick)="onItemDoubleClick(item, $event)"
                     (contextmenu)="onItemContextMenu(item, $event)">
-                    @if (isSelectMode) {
-                      <td class="col-checkbox">
-                        <i class="fas"
-                          [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
-                        (click)="toggleItemSelection(item, $event)"></i>
-                      </td>
-                    }
+                    <td class="col-checkbox">
+                      <i class="fas"
+                        [ngClass]="item.selected ? 'fa-check-circle' : 'fa-circle'"
+                      (click)="onCheckboxClick(item, $event)"></i>
+                    </td>
                     <td class="col-name">
                       <div class="list-name-cell">
                         <i class="fas"
@@ -499,6 +568,38 @@ import { UUIDsEqual } from '@memberjunction/global';
           }
         }
       </div>
+      </div>
+
+      <!-- Staging shelf (#5) — survives navigation; drop staged items into the open collection -->
+      @if (shelf.length > 0) {
+        <div class="staging-shelf">
+          <div class="shelf-info">
+            <i class="fas fa-layer-group"></i>
+            <span>{{ shelf.length }} staged</span>
+          </div>
+          <div class="shelf-chips">
+            @for (entry of shelf; track entry.item.id) {
+              <span class="shelf-chip" [title]="entry.item.name">
+                <i class="fas" [ngClass]="entry.item.type === 'folder' ? 'fa-folder' : entry.item.icon"></i>
+                <span class="shelf-chip-name">{{ entry.item.name }}</span>
+                <button class="shelf-chip-x" (click)="removeFromShelf(entry.item.id)" title="Remove">
+                  <i class="fas fa-times"></i>
+                </button>
+              </span>
+            }
+          </div>
+          <div class="shelf-actions">
+            <button class="btn-toolbar btn-primary-toolbar"
+              (click)="dropShelfHere()"
+              [disabled]="!currentCollectionId"
+              [title]="currentCollectionId ? 'Move staged items into this collection' : 'Open a collection to move items here'">
+              <i class="fas fa-arrow-down"></i>
+              Move here
+            </button>
+            <button class="btn-toolbar" (click)="clearShelf()">Clear</button>
+          </div>
+        </div>
+      }
     </div>
 
     <!-- Context Menu -->
@@ -534,16 +635,48 @@ import { UUIDsEqual } from '@memberjunction/global';
           }
         }
         @if (contextMenuItem.type === 'artifact') {
-          <button class="context-menu-item" (click)="onContextMenuAction('view')">
-            <i class="fas fa-eye"></i>
-            <span>View</span>
-          </button>
-          @if (canEditCurrent()) {
-            <div class="context-menu-divider"></div>
-            <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('remove')">
-              <i class="fas fa-times-circle"></i>
-              <span>Remove from Collection</span>
+          @if (showMoveSubmenu) {
+            <button class="context-menu-item" (click)="closeMoveSubmenu($event)">
+              <i class="fas fa-chevron-left"></i>
+              <span>Move to Collection</span>
             </button>
+            <div class="context-menu-divider"></div>
+            @if (isLoadingMoveTargets) {
+              <div class="context-menu-note"><i class="fas fa-spinner fa-spin"></i> Loading…</div>
+            } @else if (moveTargets.length === 0) {
+              <div class="context-menu-note">No other collections</div>
+            } @else {
+              <div class="move-target-list">
+                @for (t of moveTargets; track t.collection.ID) {
+                  <button class="context-menu-item" [style.paddingLeft.px]="14 + t.depth * 12"
+                          (click)="moveArtifactToCollection(t.collection)">
+                    <i class="fas fa-folder" [style.color]="t.collection.Color || null"></i>
+                    <span>{{ t.collection.Name }}</span>
+                  </button>
+                }
+              </div>
+            }
+          } @else {
+            <button class="context-menu-item" (click)="onContextMenuAction('view')">
+              <i class="fas fa-eye"></i>
+              <span>View</span>
+            </button>
+            <button class="context-menu-item" (click)="onContextMenuAction('openConversation')">
+              <i class="fas fa-comments"></i>
+              <span>Open source conversation</span>
+            </button>
+            @if (canEditCurrent()) {
+              <button class="context-menu-item" (click)="openMoveSubmenu($event)">
+                <i class="fas fa-folder-tree"></i>
+                <span>Move to Collection</span>
+                <i class="fas fa-chevron-right submenu-arrow"></i>
+              </button>
+              <div class="context-menu-divider"></div>
+              <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('remove')">
+                <i class="fas fa-times-circle"></i>
+                <span>Remove from Collection</span>
+              </button>
+            }
           }
         }
       </div>
@@ -902,7 +1035,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     /* Loading and empty states */
-    .loading-state, .empty-state {
+    .loading-state {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -914,37 +1047,15 @@ import { UUIDsEqual } from '@memberjunction/global';
       padding: 24px;
     }
 
-    .empty-state > i {
-      font-size: 64px;
-      margin-bottom: 24px;
-      opacity: 0.3;
-      color: var(--mj-border-strong);
+    .collections-content mj-empty-state {
+      flex: 1;
+      min-height: 0;
     }
 
-    .empty-state h3 {
-      margin: 0 0 8px 0;
-      color: var(--mj-text-secondary);
-      font-size: 18px;
-      font-weight: 600;
-    }
-
-    .empty-state p {
-      margin: 0 0 24px 0;
+    .empty-collection-hint {
+      margin: 0;
       font-size: 14px;
       color: var(--mj-text-muted);
-    }
-
-    .empty-state .empty-state-cta {
-      padding: 10px 20px;
-      font-size: 14px;
-      border-radius: 8px;
-    }
-
-    .empty-state-actions {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
     }
 
     /* Grid view */
@@ -1439,15 +1550,174 @@ import { UUIDsEqual } from '@memberjunction/global';
       background: var(--mj-border-default);
       margin: 4px 0;
     }
+    .submenu-arrow {
+      margin-left: auto;
+      font-size: 10px;
+      opacity: 0.6;
+    }
+    .move-target-list {
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .context-menu-note {
+      padding: 8px 14px;
+      font-size: 12px;
+      color: var(--mj-text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ===== Body: navigator pane + content (#6) ===== */
+    .collections-body {
+      flex: 1;
+      display: flex;
+      flex-direction: row;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .collections-navigator {
+      width: 240px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .nav-header {
+      padding: 12px 14px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--mj-text-muted);
+    }
+    .nav-list { display: flex; flex-direction: column; padding: 0 6px 12px; gap: 1px; }
+    .nav-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 7px 10px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--mj-text-secondary);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s ease;
+    }
+    .nav-row:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+    .nav-row.active {
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      font-weight: 600;
+    }
+    .nav-row.drag-over {
+      background: color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+      border-color: var(--mj-brand-primary);
+    }
+    .nav-row i { font-size: 13px; width: 16px; flex-shrink: 0; }
+    .nav-row-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nav-toggle.active { color: var(--mj-brand-primary); }
+
+    /* ===== Drag-and-drop visuals (#1/#2) ===== */
+    .grid-item.dragging, .list-item.dragging { opacity: 0.4; }
+    .grid-item.drag-over {
+      border-color: var(--mj-brand-primary) !important;
+      background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface)) !important;
+    }
+    .list-item.drag-over td {
+      background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+      box-shadow: inset 0 0 0 1px var(--mj-brand-primary);
+    }
+    .breadcrumb-item.drag-over, .breadcrumb-link.drag-over {
+      background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+      border-radius: 6px;
+      outline: 1px solid var(--mj-brand-primary);
+    }
+
+    /* Hover-reveal checkboxes (frictionless selection #4) */
+    .item-checkbox { opacity: 0; transition: opacity 150ms ease; }
+    .grid-item:hover .item-checkbox,
+    .grid-item.selected .item-checkbox,
+    .unified-grid.select-mode .item-checkbox { opacity: 1; }
+    .list-item .col-checkbox i { opacity: 0; transition: opacity 150ms ease; }
+    .list-item:hover .col-checkbox i,
+    .list-item.selected .col-checkbox i,
+    .unified-list.select-mode .col-checkbox i { opacity: 1; }
+    .list-item.selected .col-checkbox i { color: var(--mj-brand-primary); }
+
+    /* ===== Bulk "Move to…" popover (#3) ===== */
+    .bulk-move-backdrop {
+      position: fixed; inset: 0; z-index: 1000;
+    }
+    .bulk-move-menu {
+      max-height: 320px;
+      overflow-y: auto;
+      z-index: 1001;
+    }
+    .dropdown-note { padding: 10px 14px; font-size: 12px; color: var(--mj-text-muted); }
+
+    /* ===== Staging shelf (#5) ===== */
+    .staging-shelf {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      background: var(--mj-bg-surface);
+      border-top: 1px solid var(--mj-border-default);
+      box-shadow: 0 -2px 8px color-mix(in srgb, var(--mj-text-primary) 6%, transparent);
+    }
+    .shelf-info {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 600; font-size: 13px; color: var(--mj-text-primary);
+      flex-shrink: 0;
+    }
+    .shelf-info i { color: var(--mj-brand-primary); }
+    .shelf-chips {
+      flex: 1; min-width: 0;
+      display: flex; gap: 6px; overflow-x: auto; padding: 2px 0;
+    }
+    .shelf-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 6px 4px 10px;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 999px;
+      font-size: 12px; color: var(--mj-text-secondary);
+      flex-shrink: 0;
+    }
+    .shelf-chip-name { max-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .shelf-chip-x {
+      width: 18px; height: 18px; border: 0; background: transparent;
+      color: var(--mj-text-muted); cursor: pointer; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 10px;
+    }
+    .shelf-chip-x:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+    .shelf-actions { display: flex; gap: 8px; flex-shrink: 0; }
+    .btn-toolbar.btn-primary-toolbar {
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      border-color: var(--mj-brand-primary);
+    }
+    .btn-toolbar.btn-primary-toolbar:hover:not(:disabled) { background: var(--mj-brand-primary-hover); }
+    .btn-toolbar:disabled { opacity: 0.5; cursor: not-allowed; }
   `]
 })
-export class CollectionsFullViewComponent implements OnInit, OnDestroy {
+export class CollectionsFullViewComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Output() collectionNavigated = new EventEmitter<{
     collectionId: string | null;
     versionId?: string | null;
   }>();
+
+  /** Emitted when the user asks to open the conversation an artifact was produced in. */
+  @Output() openConversationRequested = new EventEmitter<{ conversationId: string }>();
 
   public collections: MJCollectionEntity[] = [];
   public artifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
@@ -1471,6 +1741,21 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public sortBy: CollectionSortBy = 'name';
   public sortOrder: CollectionSortOrder = 'asc';
   public searchQuery: string = '';
+
+  /** Empty-state heading — varies by search / root / inside-collection context. */
+  public get EmptyStateTitle(): string {
+    if (this.searchQuery) return 'No items found';
+    if (!this.currentCollectionId) return 'No collections yet';
+    return 'This collection is empty';
+  }
+
+  /** Empty-state supporting message (the rich inside-collection hint is projected, not bound here). */
+  public get EmptyStateMessage(): string {
+    if (this.searchQuery) return 'Try adjusting your search';
+    if (!this.currentCollectionId) return 'Create your first collection to get started';
+    return '';
+  }
+
   public unifiedItems: CollectionViewItem[] = [];
   public selectedItems: Set<string> = new Set();
   public showNewDropdown: boolean = false;
@@ -1508,6 +1793,31 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public contextMenuPosition: { x: number; y: number } = { x: 0, y: 0 };
   public contextMenuItem: CollectionViewItem | null = null;
 
+  /** "Move to Collection" submenu state (within the artifact context menu). */
+  public showMoveSubmenu: boolean = false;
+  public isLoadingMoveTargets: boolean = false;
+  public moveTargets: Array<{ collection: MJCollectionEntity; depth: number }> = [];
+
+  /** Anchor index (into unifiedItems) for shift-click range selection. */
+  private lastSelectedIndex: number | null = null;
+
+  /** Drag-and-drop state. draggedItemIds = the item ids being dragged (1 or the whole selection). */
+  public draggedItemIds: string[] = [];
+  /** Tag of the current drop target for highlight: item id, 'root', 'crumb:<id>', or 'nav:<id>'. */
+  public dragOverTargetId: string | null = null;
+
+  /** Bulk "Move to…" popover (selection toolbar). */
+  public showBulkMovePopover: boolean = false;
+
+  /** All accessible collections (navigator pane + move targets + folder-cycle checks). */
+  public allCollections: MJCollectionEntity[] = [];
+  private allCollectionsById: Map<string, MJCollectionEntity> = new Map();
+  public navigatorNodes: Array<{ collection: MJCollectionEntity; depth: number }> = [];
+  public showNavigator: boolean = true;
+
+  /** Staging shelf: items held across navigation, then dropped into a destination collection. */
+  public shelf: Array<{ item: CollectionViewItem; sourceCollectionId: string | null }> = [];
+
   private destroy$ = new Subject<void>();
   private isNavigatingProgrammatically = false;
 
@@ -1518,15 +1828,24 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     private permissionService: CollectionPermissionService,
     private artifactIconService: ArtifactIconService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit() {
+    // Bind provider-aware services to this component's provider.
+    const p = this.ProviderToUse;
+    this.artifactState.Provider = p;
+    this.permissionService.Provider = p;
+
     // Subscribe to collection state changes for deep linking FIRST
     // This ensures that if there's a URL with collectionId, we set it before loading data
     this.subscribeToCollectionState();
 
     // Subscribe to artifact state changes to track active artifact
     this.subscribeToArtifactState();
+
+    // Load the full collection set for the navigator pane + drag targets + cycle checks
+    void this.loadAllCollections();
 
     // Check if there's an active collection from URL params (set by parent component)
     const activeCollectionId = this.collectionState.activeCollectionId;
@@ -1623,9 +1942,9 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadCollections(): Promise<void> {
+  private async loadCollections(bypassCache: boolean = false): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load collections where user is owner OR has permissions
       const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
@@ -1646,7 +1965,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
           ExtraFilter: filter,
           OrderBy: 'Name ASC',
           MaxRows: 1000,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
+          BypassCache: bypassCache
         },
         this.currentUser
       );
@@ -1655,7 +1975,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         this.collections = result.Results || [];
         await Promise.all([
           this.loadUserPermissions(),
-          this.loadItemCounts()
+          this.loadItemCounts(bypassCache)
         ]);
         this.filteredCollections = [...this.collections];
       }
@@ -1665,29 +1985,33 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load item counts (child collections + artifacts) for all visible collections
+   * Load item counts (child collections + artifacts) for all visible collections.
+   * `bypassCache` is passed right after a mutation so the count badges reflect committed
+   * DB state immediately (cache invalidation is async relative to Save/Delete resolving).
    */
-  private async loadItemCounts(): Promise<void> {
+  private async loadItemCounts(bypassCache: boolean = false): Promise<void> {
     this.itemCountMap.clear();
     if (this.collections.length === 0) return;
 
     const collectionIds = this.collections.map(c => c.ID);
     const inClause = collectionIds.map(id => `'${id}'`).join(',');
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const [childResult, artifactResult] = await rv.RunViews(
       [
         {
           EntityName: 'MJ: Collections',
           ExtraFilter: `ParentID IN (${inClause})`,
           Fields: ['ID', 'ParentID'],
-          ResultType: 'simple'
+          ResultType: 'simple',
+          BypassCache: bypassCache
         },
         {
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID IN (${inClause})`,
           Fields: ['ID', 'CollectionID'],
-          ResultType: 'simple'
+          ResultType: 'simple',
+          BypassCache: bypassCache
         }
       ],
       this.currentUser
@@ -1742,7 +2066,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private async loadArtifacts(): Promise<void> {
+  private async loadArtifacts(bypassCache: boolean = false): Promise<void> {
     if (!this.currentCollectionId) {
       this.artifactVersions = [];
       this.filteredArtifactVersions = [];
@@ -1752,7 +2076,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     try {
       this.artifactVersions = await this.artifactState.loadArtifactVersionsForCollection(
         this.currentCollectionId,
-        this.currentUser
+        this.currentUser,
+        bypassCache
       );
       this.filteredArtifactVersions = [...this.artifactVersions];
     } catch (error) {
@@ -1791,7 +2116,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         this.currentCollectionId = crumb.id;
 
         // Load the collection entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.currentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await this.currentCollection.Load(crumb.id);
 
@@ -1852,7 +2177,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       console.log('📁 Navigating to collection by ID:', collectionId);
 
       // Load the target collection
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await targetCollection.Load(collectionId);
 
@@ -1959,7 +2284,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       try {
         console.log('Attempting to delete collection and all children...');
         await this.deleteCollectionRecursive(collection.ID);
-        await this.loadCollections();
+        await this.loadCollections(true);
+        await this.loadAllCollections(true);
       } catch (error) {
         console.error('Error deleting collection:', error);
         await this.dialogService.alert('Error', `An error occurred while deleting the collection: ${error}`);
@@ -1968,7 +2294,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   private async deleteCollectionRecursive(collectionId: string): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     // Step 1: Find and delete all child collections recursively
     const childrenResult = await rv.RunView<MJCollectionEntity>(
@@ -2008,7 +2334,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
 
     // Step 4: Delete the collection itself
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
     await collection.Load(collectionId);
     const deleted = await collection.Delete();
@@ -2021,7 +2347,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async onCollectionSaved(collection: MJCollectionEntity): Promise<void> {
     this.isFormModalOpen = false;
     this.editingCollection = undefined;
-    await this.loadCollections();
+    await this.loadCollections(true);
+    await this.loadAllCollections(true);
     // Reload current collection permission (it was cleared by loadUserPermissions)
     await this.loadCurrentCollectionPermission();
 
@@ -2054,7 +2381,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
     this.isArtifactModalOpen = false;
-    await this.loadArtifacts();
+    await this.loadArtifacts(true);
     this.cdr.detectChanges();
   }
 
@@ -2082,7 +2409,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     if (confirmed) {
       try {
         // Delete THIS SPECIFIC VERSION from the collection
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
@@ -2094,7 +2421,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
           for (const joinRecord of result.Results) {
             await joinRecord.Delete();
           }
-          await this.loadArtifacts();
+          await this.loadArtifacts(true);
           this.buildUnifiedItemList();
         } else {
           await this.dialogService.alert('Error', 'Collection artifact link not found.');
@@ -2215,7 +2542,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   async onPermissionsChanged(): Promise<void> {
     // Reload collections and permissions after sharing changes
-    await this.loadCollections();
+    await this.loadCollections(true);
+    await this.loadAllCollections(true);
     this.cdr.detectChanges();
   }
 
@@ -2418,24 +2746,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
    */
   public toggleItemSelection(item: CollectionViewItem, event: MouseEvent): void {
     event.stopPropagation();
-
-    if (event.metaKey || event.ctrlKey) {
-      // Cmd/Ctrl+Click: Toggle individual selection
-      if (this.selectedItems.has(item.id)) {
-        this.selectedItems.delete(item.id);
-      } else {
-        this.selectedItems.add(item.id);
-      }
-    } else if (event.shiftKey) {
-      // Shift+Click: Select range (TODO: implement range selection)
-      this.selectedItems.add(item.id);
-    } else {
-      // Regular click: Select only this item
-      this.selectedItems.clear();
-      this.selectedItems.add(item.id);
-    }
-
-    this.buildUnifiedItemList(); // Refresh to update selected states
+    // Checkbox click: additive toggle by default, shift = range, cmd/ctrl = toggle.
+    this.applySelectionGesture(item, event);
   }
 
   /**
@@ -2446,7 +2758,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     for (const item of this.unifiedItems) {
       this.selectedItems.add(item.id);
     }
-    this.buildUnifiedItemList();
+    this.refreshSelectionFlags();
   }
 
   /**
@@ -2454,7 +2766,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
    */
   public clearSelection(): void {
     this.selectedItems.clear();
-    this.buildUnifiedItemList();
+    this.lastSelectedIndex = null;
+    this.refreshSelectionFlags();
   }
 
   /**
@@ -2481,7 +2794,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       }
 
       if (artifactItems.length > 0 && this.currentCollectionId) {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         for (const item of artifactItems) {
           const result = await rv.RunView<MJCollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',
@@ -2498,9 +2811,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       }
 
       this.clearSelection();
-      await this.loadCollections();
+      await this.loadCollections(true);
+      await this.loadAllCollections(true);
       if (artifactItems.length > 0) {
-        await this.loadArtifacts();
+        await this.loadArtifacts(true);
       }
       this.buildUnifiedItemList();
     } catch (error) {
@@ -2522,7 +2836,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
    * In normal mode: opens item (folder or artifact)
    */
   public onItemClick(item: CollectionViewItem, event?: MouseEvent): void {
-    // In select mode, single click toggles selection
+    // Modifier-click selects without needing select mode (shift = range, cmd/ctrl = toggle)
+    if (event && (event.shiftKey || event.metaKey || event.ctrlKey)) {
+      this.applySelectionGesture(item, event, true);
+      return;
+    }
+
+    // In sticky select mode, a plain click toggles selection
     if (this.isSelectMode) {
       this.toggleItemSelectionSimple(item);
       return;
@@ -2567,7 +2887,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     } else {
       this.selectedItems.add(item.id);
     }
-    this.buildUnifiedItemList();
+    this.lastSelectedIndex = this.indexOfItem(item.id);
+    this.refreshSelectionFlags();
   }
 
   /**
@@ -2644,6 +2965,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.contextMenuItem = item;
     this.contextMenuPosition = this.clampContextMenuPosition(event.clientX, event.clientY);
     this.showContextMenu = true;
+    this.showMoveSubmenu = false;
     this.cdr.detectChanges();
   }
 
@@ -2663,7 +2985,137 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public closeContextMenu(): void {
     this.showContextMenu = false;
     this.contextMenuItem = null;
+    this.showMoveSubmenu = false;
     this.cdr.detectChanges();
+  }
+
+  /** Opens the inline "Move to Collection" submenu and loads candidate target collections. */
+  public openMoveSubmenu(event: Event): void {
+    event.stopPropagation();
+    this.showMoveSubmenu = true;
+    void this.loadMoveTargets();
+  }
+
+  public closeMoveSubmenu(event: Event): void {
+    event.stopPropagation();
+    this.showMoveSubmenu = false;
+    this.cdr.detectChanges();
+  }
+
+  /** Loads every collection the user can access in this environment (flattened, indented), minus the current one. */
+  private async loadMoveTargets(): Promise<void> {
+    this.isLoadingMoveTargets = true;
+    this.moveTargets = [];
+    this.cdr.detectChanges();
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
+      const permissionSubquery = `ID IN (
+        SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.currentUser.ID}'
+      )`;
+      const filter = `EnvironmentID='${this.environmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+
+      const result = await rv.RunView<MJCollectionEntity>({
+        EntityName: 'MJ: Collections',
+        ExtraFilter: filter,
+        OrderBy: 'Name ASC',
+        MaxRows: 1000,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      const all = result.Success ? (result.Results || []) : [];
+      const flattened = this.flattenCollectionTree(all);
+      this.moveTargets = this.currentCollectionId
+        ? flattened.filter(t => !UUIDsEqual(t.collection.ID, this.currentCollectionId!))
+        : flattened;
+    } catch (error) {
+      console.error('Failed to load move targets:', error);
+      this.moveTargets = [];
+    } finally {
+      this.isLoadingMoveTargets = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Flattens collections into a depth-first, indented list (orphans treated as roots). */
+  private flattenCollectionTree(all: MJCollectionEntity[]): Array<{ collection: MJCollectionEntity; depth: number }> {
+    const ids = new Set(all.map(c => NormalizeUUID(c.ID)));
+    const byParent = new Map<string | null, MJCollectionEntity[]>();
+    for (const c of all) {
+      const pid = c.ParentID ? NormalizeUUID(c.ParentID) : null;
+      const key = pid && ids.has(pid) ? pid : null;
+      const arr = byParent.get(key) || [];
+      arr.push(c);
+      byParent.set(key, arr);
+    }
+    const out: Array<{ collection: MJCollectionEntity; depth: number }> = [];
+    const walk = (parentKey: string | null, depth: number): void => {
+      for (const c of (byParent.get(parentKey) || [])) {
+        out.push({ collection: c, depth });
+        walk(NormalizeUUID(c.ID), depth + 1);
+      }
+    };
+    walk(null, 0);
+    return out;
+  }
+
+  /**
+   * Moves the right-clicked artifact version from the current collection to the target.
+   * Adds to the target first (so a failure never drops it from the source), then removes
+   * the version's join row from the source collection.
+   */
+  public async moveArtifactToCollection(target: MJCollectionEntity): Promise<void> {
+    const item = this.contextMenuItem;
+    const fromCollectionId = this.currentCollectionId;
+    this.closeContextMenu();
+
+    if (!item?.artifact || !item.version || !fromCollectionId) return;
+    if (UUIDsEqual(target.ID, fromCollectionId)) return;
+
+    try {
+      const p = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(p);
+
+      // Add to target (skip if the version is already there to avoid a duplicate join row)
+      const existing = await rv.RunView<MJCollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${target.ID}' AND ArtifactVersionID='${item.version.ID}'`,
+        ResultType: 'simple',
+        Fields: ['ID']
+      }, this.currentUser);
+
+      if (!(existing.Success && (existing.Results?.length ?? 0) > 0)) {
+        const junction = await p.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+        junction.CollectionID = target.ID;
+        junction.ArtifactVersionID = item.version.ID;
+        junction.Sequence = 0;
+        const saved = await junction.Save();
+        if (!saved) {
+          throw new Error(junction.LatestResult?.CompleteMessage || 'Failed to add artifact to the target collection');
+        }
+      }
+
+      // Remove this version's join row(s) from the source collection
+      const sourceRows = await rv.RunView<MJCollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${fromCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (sourceRows.Success && sourceRows.Results) {
+        for (const row of sourceRows.Results) {
+          await row.Delete();
+        }
+      }
+
+      await this.loadArtifacts(true);
+      await this.loadCollections(true);
+      await this.loadAllCollections(true);
+      this.buildUnifiedItemList();
+    } catch (error) {
+      console.error('Error moving artifact:', error);
+      await this.dialogService.alert('Error', 'Failed to move artifact. Please try again.');
+    }
   }
 
   /** Handle context menu action dispatch */
@@ -2699,7 +3151,53 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
           this.removeArtifact({ artifact: item.artifact, version: item.version });
         }
         break;
+      case 'openConversation':
+        if (item.artifact && item.version) {
+          void this.openSourceConversation(item);
+        }
+        break;
     }
+  }
+
+  /**
+   * Resolves the artifact version the user right-clicked to the conversation it was produced in,
+   * then asks the host to open it. Chain: Artifact Version → Conversation Detail Artifacts
+   * (prefer Direction='Output' = produced here) → Conversation Detail → ConversationID.
+   */
+  private async openSourceConversation(item: CollectionViewItem): Promise<void> {
+    if (!item.version) return;
+    const conversationId = await this.resolveArtifactToConversation(item.version.ID);
+    if (conversationId) {
+      this.openConversationRequested.emit({ conversationId });
+    } else {
+      await this.dialogService.alert('No Source Conversation', 'This artifact is not linked to a conversation.');
+    }
+  }
+
+  private async resolveArtifactToConversation(artifactVersionId: string): Promise<string | null> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+
+    // Find the message(s) this version is attached to. Prefer the one that produced it
+    // (Direction='Output'); fall back to any link if it only appears as an input.
+    const linkResult = await rv.RunView<{ ConversationDetailID: string; Direction: string }>({
+      EntityName: 'MJ: Conversation Detail Artifacts',
+      ExtraFilter: `ArtifactVersionID='${artifactVersionId}'`,
+      Fields: ['ConversationDetailID', 'Direction'],
+      ResultType: 'simple'
+    }, this.currentUser);
+
+    const links = linkResult.Success ? (linkResult.Results ?? []) : [];
+    if (links.length === 0) return null;
+    const link = links.find(l => l.Direction === 'Output') ?? links[0];
+
+    const detailResult = await rv.RunView<{ ConversationID: string }>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ID='${link.ConversationDetailID}'`,
+      Fields: ['ConversationID'],
+      ResultType: 'simple'
+    }, this.currentUser);
+
+    return detailResult.Success ? (detailResult.Results?.[0]?.ConversationID ?? null) : null;
   }
 
   /** Close context menu on Escape key */
@@ -2707,6 +3205,363 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public onEscapeKey(): void {
     if (this.showContextMenu) {
       this.closeContextMenu();
+    }
+  }
+
+  // ============================================================
+  //  Selection gestures (#4 — frictionless multi-select)
+  // ============================================================
+
+  private indexOfItem(id: string): number {
+    return this.unifiedItems.findIndex(i => i.id === id);
+  }
+
+  /** Re-sync each item's `selected` flag from the set without rebuilding (preserves page). */
+  private refreshSelectionFlags(): void {
+    for (const it of this.unifiedItems) {
+      it.selected = this.selectedItems.has(it.id);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Centralized selection gesture used by both the hover checkbox and modifier-clicks.
+   * - shift  → range select from the last anchor
+   * - cmd/ctrl → additive toggle
+   * - plain  → additive toggle (checkbox) or replace (plainReplaces, used by body clicks)
+   */
+  private applySelectionGesture(item: CollectionViewItem, event: MouseEvent, plainReplaces = false): void {
+    const idx = this.indexOfItem(item.id);
+    if (event.shiftKey && this.lastSelectedIndex != null && this.lastSelectedIndex >= 0) {
+      const lo = Math.min(this.lastSelectedIndex, idx);
+      const hi = Math.max(this.lastSelectedIndex, idx);
+      for (let i = lo; i <= hi; i++) {
+        const it = this.unifiedItems[i];
+        if (it) this.selectedItems.add(it.id);
+      }
+    } else if (event.metaKey || event.ctrlKey || !plainReplaces) {
+      if (this.selectedItems.has(item.id)) {
+        this.selectedItems.delete(item.id);
+      } else {
+        this.selectedItems.add(item.id);
+      }
+      this.lastSelectedIndex = idx;
+    } else {
+      this.selectedItems.clear();
+      this.selectedItems.add(item.id);
+      this.lastSelectedIndex = idx;
+    }
+    this.refreshSelectionFlags();
+  }
+
+  /** Hover-checkbox click — selects without requiring an explicit "select mode". */
+  public onCheckboxClick(item: CollectionViewItem, event: MouseEvent): void {
+    event.stopPropagation();
+    this.applySelectionGesture(item, event);
+  }
+
+  // ============================================================
+  //  Drag-and-drop (#1, #2 — drag items onto folders / breadcrumbs / navigator)
+  // ============================================================
+
+  public onItemDragStart(item: CollectionViewItem, event: DragEvent): void {
+    // If the dragged item is part of the current selection, drag the whole selection;
+    // otherwise drag just this item.
+    this.draggedItemIds = (this.selectedItems.has(item.id) && this.selectedItems.size > 0)
+      ? Array.from(this.selectedItems)
+      : [item.id];
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', this.draggedItemIds.join(','));
+    }
+  }
+
+  public onItemDragEnd(): void {
+    this.draggedItemIds = [];
+    this.dragOverTargetId = null;
+  }
+
+  private draggedItems(): CollectionViewItem[] {
+    return this.unifiedItems.filter(i => this.draggedItemIds.includes(i.id));
+  }
+
+  /** Folder grid card / list row as a drop target. */
+  public onFolderItemDragOver(folderItem: CollectionViewItem, event: DragEvent): void {
+    const targetId = folderItem.collection?.ID;
+    if (this.draggedItemIds.length === 0 || this.draggedItemIds.includes(folderItem.id)) return;
+    if (!this.canDropOnCollection(targetId)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dragOverTargetId = folderItem.id;
+  }
+
+  public onFolderItemDrop(folderItem: CollectionViewItem, event: DragEvent): void {
+    event.preventDefault();
+    const targetId = folderItem.collection?.ID ?? null;
+    this.dragOverTargetId = null;
+    void this.moveDraggedItemsTo(targetId);
+  }
+
+  /** Breadcrumb crumb / Home root as a drop target. crumbId null = top level. */
+  public onCrumbDragOver(crumbId: string | null, event: DragEvent): void {
+    if (this.draggedItemIds.length === 0) return;
+    // Artifacts can't live at the top level (no collection)
+    if (crumbId === null && this.draggedItems().some(i => i.type === 'artifact')) return;
+    if (!this.canDropOnCollection(crumbId)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dragOverTargetId = crumbId === null ? 'root' : 'crumb:' + crumbId;
+  }
+
+  public onCrumbDrop(crumbId: string | null, event: DragEvent): void {
+    event.preventDefault();
+    this.dragOverTargetId = null;
+    void this.moveDraggedItemsTo(crumbId);
+  }
+
+  /** True when the dragged set may be dropped on the target collection (blocks folder cycles). */
+  private canDropOnCollection(targetCollectionId: string | null | undefined): boolean {
+    if (targetCollectionId === undefined) return false;
+    for (const f of this.draggedItems()) {
+      if (f.type !== 'folder' || !f.collection) continue;
+      const fid = f.collection.ID;
+      if (targetCollectionId && (UUIDsEqual(fid, targetCollectionId) || this.isCollectionDescendant(targetCollectionId, fid))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private isCollectionDescendant(nodeId: string, ancestorId: string): boolean {
+    let cur = this.allCollectionsById.get(NormalizeUUID(nodeId));
+    const seen = new Set<string>();
+    while (cur?.ParentID) {
+      const pid = NormalizeUUID(cur.ParentID);
+      if (seen.has(pid)) break;
+      seen.add(pid);
+      if (UUIDsEqual(pid, ancestorId)) return true;
+      cur = this.allCollectionsById.get(pid);
+    }
+    return false;
+  }
+
+  private async moveDraggedItemsTo(targetCollectionId: string | null): Promise<void> {
+    const items = this.draggedItems();
+    this.draggedItemIds = [];
+    await this.moveItemsTo(items, targetCollectionId, this.currentCollectionId);
+  }
+
+  // ============================================================
+  //  Move primitives (shared by drag, bulk move, and shelf)
+  // ============================================================
+
+  /**
+   * Moves items into the target collection. Artifacts: add the version to the target and remove
+   * it from its source collection. Folders: reparent (target null = top level). Skips no-ops and
+   * invalid folder moves (cycles). Reloads and rebuilds when done.
+   */
+  private async moveItemsTo(
+    items: CollectionViewItem[],
+    targetCollectionId: string | null,
+    artifactSourceCollectionId: string | null
+  ): Promise<void> {
+    if (items.length === 0) return;
+    try {
+      const p = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(p);
+
+      for (const item of items) {
+        if (item.type === 'artifact' && item.version) {
+          if (targetCollectionId == null) continue; // artifacts require a collection
+          if (artifactSourceCollectionId && UUIDsEqual(artifactSourceCollectionId, targetCollectionId)) continue;
+          await this.addVersionToCollection(p, rv, item.version.ID, targetCollectionId);
+          if (artifactSourceCollectionId) {
+            await this.removeVersionFromCollection(rv, item.version.ID, artifactSourceCollectionId);
+          }
+        } else if (item.type === 'folder' && item.collection) {
+          const fid = item.collection.ID;
+          if (targetCollectionId && (UUIDsEqual(fid, targetCollectionId) || this.isCollectionDescendant(targetCollectionId, fid))) continue;
+          await this.reparentCollection(fid, targetCollectionId);
+        }
+      }
+
+      this.clearSelection();
+      await this.loadCollections(true);
+      await this.loadArtifacts(true);
+      await this.loadAllCollections(true);
+      this.buildUnifiedItemList();
+    } catch (error) {
+      console.error('Error moving items:', error);
+      await this.dialogService.alert('Error', 'Failed to move item(s). Please try again.');
+    }
+  }
+
+  private async addVersionToCollection(p: IMetadataProvider, rv: RunView, versionId: string, collectionId: string): Promise<void> {
+    const existing = await rv.RunView<MJCollectionArtifactEntity>({
+      EntityName: 'MJ: Collection Artifacts',
+      ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${versionId}'`,
+      ResultType: 'simple',
+      Fields: ['ID']
+    }, this.currentUser);
+    if (existing.Success && (existing.Results?.length ?? 0) > 0) return;
+
+    const junction = await p.GetEntityObject<MJCollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+    junction.CollectionID = collectionId;
+    junction.ArtifactVersionID = versionId;
+    junction.Sequence = 0;
+    const ok = await junction.Save();
+    if (!ok) throw new Error(junction.LatestResult?.CompleteMessage || 'Failed to add artifact to collection');
+  }
+
+  private async removeVersionFromCollection(rv: RunView, versionId: string, collectionId: string): Promise<void> {
+    const rows = await rv.RunView<MJCollectionArtifactEntity>({
+      EntityName: 'MJ: Collection Artifacts',
+      ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${versionId}'`,
+      ResultType: 'entity_object'
+    }, this.currentUser);
+    if (rows.Success && rows.Results) {
+      for (const row of rows.Results) await row.Delete();
+    }
+  }
+
+  private async reparentCollection(collectionId: string, newParentId: string | null): Promise<void> {
+    const p = this.ProviderToUse;
+    const collection = await p.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
+    await collection.Load(collectionId);
+    collection.ParentID = newParentId;
+    const ok = await collection.Save();
+    if (!ok) throw new Error(collection.LatestResult?.CompleteMessage || 'Failed to move folder');
+  }
+
+  // ============================================================
+  //  All-collections cache (navigator + cycle checks + bulk move)
+  // ============================================================
+
+  public async loadAllCollections(bypassCache: boolean = false): Promise<void> {
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
+    const permissionSubquery = `ID IN (
+      SELECT CollectionID FROM [__mj].[vwCollectionPermissions] WHERE UserID='${this.currentUser.ID}'
+    )`;
+    const filter = `EnvironmentID='${this.environmentId}' AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    const result = await rv.RunView<MJCollectionEntity>({
+      EntityName: 'MJ: Collections',
+      ExtraFilter: filter,
+      OrderBy: 'Name ASC',
+      MaxRows: 1000,
+      ResultType: 'entity_object',
+      BypassCache: bypassCache
+    }, this.currentUser);
+    this.allCollections = result.Success ? (result.Results || []) : [];
+    this.allCollectionsById = new Map(this.allCollections.map(c => [NormalizeUUID(c.ID), c]));
+    this.navigatorNodes = this.flattenCollectionTree(this.allCollections);
+    this.cdr.detectChanges();
+  }
+
+  public toggleNavigator(): void {
+    this.showNavigator = !this.showNavigator;
+  }
+
+  public navigatorClick(collection: MJCollectionEntity): void {
+    void this.navigateToCollectionById(collection.ID);
+  }
+
+  public isCurrentNavigator(collection: MJCollectionEntity): boolean {
+    return !!this.currentCollectionId && UUIDsEqual(collection.ID, this.currentCollectionId);
+  }
+
+  public onNavigatorDragOver(collection: MJCollectionEntity, event: DragEvent): void {
+    if (this.draggedItemIds.length === 0 || this.draggedItemIds.some(id => UUIDsEqual(id, collection.ID))) return;
+    if (!this.canDropOnCollection(collection.ID)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dragOverTargetId = 'nav:' + collection.ID;
+  }
+
+  public onNavigatorDrop(collection: MJCollectionEntity, event: DragEvent): void {
+    event.preventDefault();
+    this.dragOverTargetId = null;
+    void this.moveDraggedItemsTo(collection.ID);
+  }
+
+  public onDragLeave(tag: string): void {
+    if (this.dragOverTargetId === tag) this.dragOverTargetId = null;
+  }
+
+  // ============================================================
+  //  Bulk "Move to…" (#3)
+  // ============================================================
+
+  public openBulkMove(event: Event): void {
+    event.stopPropagation();
+    if (this.navigatorNodes.length === 0) void this.loadAllCollections();
+    this.showBulkMovePopover = true;
+  }
+
+  public closeBulkMove(): void {
+    this.showBulkMovePopover = false;
+  }
+
+  public async bulkMoveTo(collection: MJCollectionEntity): Promise<void> {
+    const items = this.unifiedItems.filter(i => this.selectedItems.has(i.id));
+    this.showBulkMovePopover = false;
+    await this.moveItemsTo(items, collection.ID, this.currentCollectionId);
+  }
+
+  // ============================================================
+  //  Staging shelf (#5)
+  // ============================================================
+
+  public stageSelected(): void {
+    const items = this.unifiedItems.filter(i => this.selectedItems.has(i.id));
+    for (const it of items) {
+      if (!this.shelf.some(s => s.item.id === it.id)) {
+        this.shelf.push({ item: it, sourceCollectionId: this.currentCollectionId });
+      }
+    }
+    this.clearSelection();
+    this.cdr.detectChanges();
+  }
+
+  public removeFromShelf(id: string): void {
+    this.shelf = this.shelf.filter(s => s.item.id !== id);
+    this.cdr.detectChanges();
+  }
+
+  public clearShelf(): void {
+    this.shelf = [];
+    this.cdr.detectChanges();
+  }
+
+  /** Moves all staged items into the currently-open collection. */
+  public async dropShelfHere(): Promise<void> {
+    if (this.shelf.length === 0 || !this.currentCollectionId) return;
+    const target = this.currentCollectionId;
+    try {
+      const p = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(p);
+      for (const entry of this.shelf) {
+        const it = entry.item;
+        if (it.type === 'artifact' && it.version) {
+          if (entry.sourceCollectionId && UUIDsEqual(entry.sourceCollectionId, target)) continue;
+          await this.addVersionToCollection(p, rv, it.version.ID, target);
+          if (entry.sourceCollectionId) {
+            await this.removeVersionFromCollection(rv, it.version.ID, entry.sourceCollectionId);
+          }
+        } else if (it.type === 'folder' && it.collection) {
+          const fid = it.collection.ID;
+          if (UUIDsEqual(fid, target) || this.isCollectionDescendant(target, fid)) continue;
+          await this.reparentCollection(fid, target);
+        }
+      }
+      this.shelf = [];
+      await this.loadCollections(true);
+      await this.loadArtifacts(true);
+      await this.loadAllCollections(true);
+      this.buildUnifiedItemList();
+    } catch (error) {
+      console.error('Error moving staged items:', error);
+      await this.dialogService.alert('Error', 'Failed to move staged items. Please try again.');
     }
   }
 }

@@ -10,6 +10,15 @@ import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 
 /**
+ * Narrow typed view over a parsed `ts.SourceFile` exposing the internal-but-stable
+ * `parseDiagnostics` property the parser populates during `ts.createSourceFile`.
+ * Lets us read syntax diagnostics without constructing a full `ts.Program`.
+ */
+interface ParsedSourceFile extends ts.SourceFile {
+    parseDiagnostics?: ts.Diagnostic[];
+}
+
+/**
  * Dynamically collects all own property names from BaseEntity's prototype chain
  * (excluding Object.prototype). Any entity field whose CodeName matches one of
  * these is suffixed with `_` to avoid shadowing base-class members at the
@@ -87,21 +96,10 @@ export class EntitySubClassGeneratorBase {
           ts.ScriptKind.TS
       );
 
-      // Check for syntax errors using a minimal compiler program
-      const compilerHost = ts.createCompilerHost({});
-      const originalGetSourceFile = compilerHost.getSourceFile;
-      compilerHost.getSourceFile = (fileName: string, languageVersion: ts.ScriptTarget) => {
-          if (fileName === 'jsontype-validation.ts') return sourceFile;
-          return originalGetSourceFile.call(compilerHost, fileName, languageVersion);
-      };
-
-      const program = ts.createProgram(
-          ['jsontype-validation.ts'],
-          { noEmit: true, strict: false, skipLibCheck: true },
-          compilerHost
-      );
-
-      const syntacticDiagnostics = program.getSyntacticDiagnostics(sourceFile);
+      // Read syntax errors directly from the parser-populated diagnostics on the
+      // source file — avoids constructing a full ts.Program (which loads the TS
+      // default-lib .d.ts files on every call).
+      const syntacticDiagnostics = (sourceFile as ParsedSourceFile).parseDiagnostics ?? [];
       for (const diag of syntacticDiagnostics) {
           const message = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
           errors.push(`${prefix}: Syntax error — ${message}`);
@@ -333,7 +331,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @throws {Error} - Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.
     */
-    public async Delete(): Promise<boolean> {
+    public override async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
       } else if (entity.CascadeDeletes) {
@@ -347,10 +345,10 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -385,7 +383,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @throws {Error} - Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
     */
-    public async Save(options?: EntitySaveOptions) : Promise<boolean> {
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 
@@ -485,48 +483,55 @@ ${fields}
       // logging the generated function means that we want to EMIT SQL that will update the EntityField table for the fields that had emitted validation functions
       // so that we have a record of what was generated
       // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
-      const md = new Metadata();
-      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'MJ: Entity Fields')?.ID;
-      const entitiesEntityID = md.Entities.find(e=>e.Name === 'MJ: Entities')?.ID;
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      const entityFieldsEntityID = md.EntityByName('MJ: Entity Fields')?.ID;
+      const entitiesEntityID = md.EntityByName('MJ: Entities')?.ID;
 
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records
         // we have in the ret.validators array but this is an explicit flag to ensure we don't even bother checking
+        // Build SQL through the dialect rather than hardcoding T-SQL syntax — `[brackets]` and
+        // `GETUTCDATE()` are SS-only and PG's strict parser rejects both.
+        const dialect = pool.Dialect;
+        const qi = (n: string) => dialect.QuoteIdentifier(n);
+        const lit = (v: string) => dialect.QuoteStringLiteral(v);
+        const utcNow = dialect.CurrentTimestampUTC();
+        const generatedCodeTbl = dialect.QuoteSchema(mj_core_schema(), 'GeneratedCode');
+        const generatedCodeCatsView = dialect.QuoteSchema(mj_core_schema(), 'vwGeneratedCodeCategories');
+        const validatorCodeCategoryID = `(SELECT ${qi('ID')} FROM ${generatedCodeCatsView} WHERE ${qi('Name')}=${lit('CodeGen: Validators')})`;
+
         let sSQL: string  = '';
         const justGenerated = ret.validators.filter((f) => f.wasGenerated);
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
-          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());   
+          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
           sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
-          const code = v.functionText.replace(/'/g, "''");
-          const source = v.sourceCheckConstraint.replace(/'/g, "''");
-          const description = v.functionDescription.replace(/'/g, "''");
-          const name = v.functionName.replace(/'/g, "''");
-          const validatorCodeCategoryID = `(SELECT ID FROM ${mj_core_schema()}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators')`;
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
-            sSQL += `UPDATE [${mj_core_schema()}].[GeneratedCode] SET
-                        Source='${source}',
-                        Code='${code}',
-                        Description='${description}',
-                        Name='${name}',
-                        GeneratedAt=GETUTCDATE(),
-                        GeneratedByModelID='${v.aiModelID}'
+            sSQL += `UPDATE ${generatedCodeTbl} SET
+                        ${qi('Source')}=${lit(v.sourceCheckConstraint)},
+                        ${qi('Code')}=${lit(v.functionText)},
+                        ${qi('Description')}=${lit(v.functionDescription)},
+                        ${qi('Name')}=${lit(v.functionName)},
+                        ${qi('GeneratedAt')}=${utcNow},
+                        ${qi('GeneratedByModelID')}=${lit(v.aiModelID)}
                      WHERE
-                        ID='${v.generatedCodeId}';`
+                        ${qi('ID')}=${lit(v.generatedCodeId)};`
           }
           else {
             // need to create a row inside the __mj.GeneratedCode table
-            sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES (${validatorCodeCategoryID}, '${v.aiModelID}', GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
+            const linkedEntityID = f ? entityFieldsEntityID : entitiesEntityID;
+            const linkedRecordPK = f ? f.ID : entity.ID;
+            sSQL += `INSERT INTO ${generatedCodeTbl} (${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
+                      VALUES (${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)});
 
             `
           }
         }
-  
+
         // now Log and Execute the SQL
         try {
-          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
+          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
         }
         catch (e) {
           logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
@@ -642,7 +647,12 @@ ${validationFunctions}`
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
           const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
-          typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
+          // z.union() requires at least 2 members. When there's only one allowed
+          // value (single-value CHECK constraint), emit z.literal() directly.
+          const literals = sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`);
+          typeString = literals.length === 1
+            ? literals[0].substring(2) // strip leading 'z.' since caller prepends it
+            : `union([${literals.join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;

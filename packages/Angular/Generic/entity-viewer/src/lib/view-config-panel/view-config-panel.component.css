@@ -18,12 +18,12 @@
 /* Sliding Panel */
 .config-panel {
   position: fixed;
-  top: 0;
+  top: 60px;
   right: 0;
   width: 450px;
   min-width: 360px;
   max-width: min(800px, 100vw);
-  height: 100%;
+  height: calc(100% - 60px);
   background: var(--mj-bg-surface);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
   z-index: 1201; /* Above backdrop (1200) */
@@ -413,20 +413,6 @@
 
 .action-btn i {
   font-size: 12px;
-}
-
-/* Empty List */
-.empty-list {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px;
-  color: var(--mj-text-muted);
-  font-size: 13px;
-}
-
-.empty-list i {
-  color: var(--mj-text-disabled);
 }
 
 /* Format Editor */
@@ -932,37 +918,6 @@
 .sort-hint i {
   color: var(--mj-text-disabled);
   margin-top: 1px;
-}
-
-/* Sort Empty State */
-.sort-empty-state,
-.aggregates-empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 32px 16px;
-  color: var(--mj-text-muted);
-  text-align: center;
-}
-
-.sort-empty-state i,
-.aggregates-empty-state i {
-  font-size: 32px;
-  opacity: 0.4;
-}
-
-.sort-empty-state span,
-.aggregates-empty-state span {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.sort-empty-hint,
-.empty-hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--mj-text-disabled);
 }
 
 /* Filter Mode Selector */

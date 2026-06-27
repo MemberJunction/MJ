@@ -3,7 +3,7 @@ import { MJScheduledActionEntityExtended, MJScheduledActionParamEntity } from "@
 import { MJActionEntityExtended, ActionParam, ActionResult, RunActionParams } from "@memberjunction/actions-base";
 import cronParser from 'cron-parser';
 import { SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
-import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
+import { GenericDatabaseProvider } from "@memberjunction/generic-database-provider";
 import { ActionEngineServer } from "@memberjunction/actions";
 
 /**
@@ -141,7 +141,11 @@ export class ScheduledActionEngine extends BaseEngine<ScheduledActionEngine> {
     protected async ExecuteSQL(sql: string): Promise<any> {
         // execute the SQL and return the result
         try {
-            const sqlProvider = <SQLServerDataProvider>Metadata.Provider;
+            // Use this engine's bound provider (set via Config()) so multi-tenant scheduler
+            // runs hit the right database. Cast to GenericDatabaseProvider — the scheduler
+            // doesn't depend on a specific dialect (SQL Server vs Postgres), only on the
+            // shared ExecuteSQL contract that both database providers expose.
+            const sqlProvider = this.ProviderToUse as unknown as GenericDatabaseProvider;
             const result = await sqlProvider.ExecuteSQL(sql);
             return result;
         }

@@ -3,7 +3,8 @@ import {
   convertIdentifiers, removeNPrefix, removeCollate, convertCastTypes,
   quotePascalCaseIdentifiers, convertCommonFunctions, convertStringConcat,
   convertCharIndex, convertStuff, convertConvertFunction, convertIIF, convertTopToLimit,
-  transformCodeOnly,
+  transformCodeOnly, castBooleanInsertValues, convertJsonFunctions,
+  convertBooleanLiteralComparisons,
 } from './ExpressionHelpers.js';
 
 /** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
@@ -46,6 +47,7 @@ export class InsertRule implements IConversionRule {
   AppliesTo: StatementType[] = ['INSERT', 'UPDATE', 'DELETE'];
   Priority = 50;
   BypassSqlglot = true;
+  BypassJustification = 'INSERT INTO with N\'string\' literals, GETUTCDATE() defaults, IDENTITY_INSERT, [bracket] identifiers, and SQL Server BIT (0/1) for BOOLEAN columns. The rule strips N prefixes, converts date functions, and quotes identifiers — work sqlglot does partially but with quirks for MJ\'s CodeGen-emitted INSERTs.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = convertIdentifiers(sql);
@@ -58,6 +60,9 @@ export class InsertRule implements IConversionRule {
     result = convertStuff(result);
     result = convertConvertFunction(result);
     result = convertIIF(result);
+    // Convert SS JSON functions (JSON_VALUE / ISJSON) BEFORE PascalCase quoting,
+    // so the function names aren't quoted as identifiers.
+    result = convertJsonFunctions(result);
     result = convertCastTypes(result);
     // Convert SELECT TOP N subqueries to SELECT ... LIMIT N
     result = convertTopToLimit(result);
@@ -79,6 +84,13 @@ export class InsertRule implements IConversionRule {
     );
     // Quote bare PascalCase identifiers (column names in INSERT/UPDATE/DELETE)
     result = quotePascalCaseIdentifiers(result);
+    // Cast SS BIT literals (0/1) → PG boolean (FALSE/TRUE) at boolean-column
+    // positions in INSERT VALUES. PG rejects integer literals for boolean columns.
+    result = castBooleanInsertValues(result, context.TableColumns);
+    // Convert `"BoolCol" = 0/1` comparisons/assignments (UPDATE SET, WHERE) to
+    // FALSE/TRUE. INSERT VALUES is positional (handled above); this covers the
+    // `"col" = N` form that appears in UPDATE/DELETE statements.
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
     // Convert T-SQL UPDATE alias FROM pattern to PG syntax
     result = this.convertUpdateFromAlias(result);
     // Ensure semicolon after the actual SQL statement (not after trailing comments).
@@ -118,15 +130,27 @@ export class InsertRule implements IConversionRule {
   /** Convert T-SQL UPDATE alias FROM pattern to PostgreSQL syntax.
    *  T-SQL: UPDATE alias SET alias.Col = val FROM schema.table alias JOIN ... WHERE ...
    *  PG:    UPDATE schema.table AS alias SET Col = val FROM other_tables WHERE ... */
-  private convertUpdateFromAlias(sql: string): string {
+  private convertUpdateFromAlias(fullSql: string): string {
     // Detect UPDATE <bareWord> SET (bareWord with no dots/quotes = alias, not table)
-    const aliasMatch = sql.match(/\bUPDATE\s+(\w+)\s+SET\b/i);
-    if (!aliasMatch) return sql;
+    const aliasMatch = fullSql.match(/\bUPDATE\s+(\w+)\s+SET\b/i);
+    if (!aliasMatch || aliasMatch.index === undefined) return fullSql;
     const alias = aliasMatch[1];
 
-    // Verify the alias appears in a FROM clause as: <schema>."<table>" <alias>
+    // Isolate any leading comment block from the statement itself. Comments can
+    // contain the word "from" (e.g. "...backfill X from the legacy Y..."), which
+    // would otherwise be matched by the \bFROM\b searches below and corrupt the
+    // rewrite. We process only the SQL from UPDATE onward, then re-prepend the head.
+    const head = fullSql.slice(0, aliasMatch.index);
+    const sql = fullSql.slice(aliasMatch.index);
+    return head + this.rewriteUpdateFromAlias(sql, alias);
+  }
+
+  /** Core UPDATE-alias-FROM rewrite, operating on the statement text (no leading comments). */
+  private rewriteUpdateFromAlias(sql: string, alias: string): string {
+
+    // Verify the alias appears in a FROM clause as: <schema>."<table>" [AS] <alias>
     const tableMatch = sql.match(
-      new RegExp(`\\bFROM\\b[\\s\\S]*?(\\w+\\."[^"]+")\\s+${alias}\\b`, 'i')
+      new RegExp(`\\bFROM\\b[\\s\\S]*?(\\w+\\."[^"]+")\\s+(?:AS\\s+)?${alias}\\b`, 'i')
     );
     if (!tableMatch) return sql;
     const tableName = tableMatch[1];
@@ -180,7 +204,7 @@ export class InsertRule implements IConversionRule {
     const onConditions: string[] = [];
     for (let i = 1; i < fragments.length; i++) {
       const body = fragments[i].trim();
-      const parsed = body.match(/^([\w]+\."[^"]+"\s+\w+)\s+ON\s+([\s\S]+)$/i);
+      const parsed = body.match(/^([\w]+\."[^"]+"\s+(?:AS\s+)?\w+)\s+ON\s+([\s\S]+)$/i);
       if (parsed) {
         otherTables.push(parsed[1].trim());
         onConditions.push(parsed[2].trim());

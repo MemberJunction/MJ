@@ -8,14 +8,15 @@
       "TemplateText": "@file:templates/query-builder/system-prompt.md",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "Status": "Active",
-      "PromptPosition": "First"
+      "PromptPosition": "First",
+      "EffortLevel": 1
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 25
           },
@@ -23,8 +24,8 @@
             "ID": "8819D9A9-AEC7-49F7-992F-F6E3844D52AC"
           },
           "sync": {
-            "lastModified": "2026-03-12T21:00:26.530Z",
-            "checksum": "afe6e28eba228132e11532a0326d1156577c35039ad1fc50748213613e5a19d5"
+            "lastModified": "2026-05-29T19:49:19.550Z",
+            "checksum": "059e6e4d6499772edda6bb2db6bed0b429a87fd7477c6e3732a18f75ad31c170"
           }
         },
         {
@@ -56,6 +57,21 @@
             "lastModified": "2026-02-19T02:31:15.118Z",
             "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 24
+          },
+          "primaryKey": {
+            "ID": "E23DCB50-8D1F-4DF8-97BE-7CCD3987CA81"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:19.566Z",
+            "checksum": "33729928dc18d71c434ba27b3a610b82bfdaccd97e7a922a60933877e182688c"
+          }
         }
       ]
     },
@@ -63,8 +79,8 @@
       "ID": "6B5F08B2-BE23-4462-96DA-FC60B238FEF0"
     },
     "sync": {
-      "lastModified": "2026-03-20T21:19:34.235Z",
-      "checksum": "2e0438823c1ca02f09c92299cc5d7fbe4b7d6b7f7f4d90c2832d0d41f2d7fab0"
+      "lastModified": "2026-05-29T19:49:19.522Z",
+      "checksum": "954143db572ac46b130346dd476e73c3645ed9b87692b5eb696af28035a122e7"
     }
   }
 ]

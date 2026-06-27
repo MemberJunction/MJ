@@ -56,6 +56,7 @@ export * from './Database/sql'
 // Code generation exports
 export * from './Misc/entity_subclasses_codegen'
 export * from './Misc/action_subclasses_codegen';
+export * from './Misc/remote_operations_codegen';
 export * from './Misc/graphql_server_codegen'
 
 // Angular exports
@@ -70,6 +71,7 @@ export * from './Misc/status_logging'
 export * from './Misc/system_integrity';
 export * from './Misc/runCommand'
 export * from './Misc/util'
+export * from './Misc/codegen-reporter'
 
 // Manifest generation
 export * from './Manifest/GenerateClassRegistrationsManifest'

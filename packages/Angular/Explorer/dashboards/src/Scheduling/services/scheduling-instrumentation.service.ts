@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { switchMap, shareReplay, tap } from 'rxjs/operators';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -60,6 +60,8 @@ export interface JobStatistics {
   ownerUser: string | null;
   notifyOnSuccess: boolean;
   notifyOnFailure: boolean;
+  /** When true AND lastRunAt is unset, the scheduler runs the job immediately on its next poll instead of waiting for the next cron tick. */
+  runImmediatelyIfNeverRun: boolean;
   startAt?: Date;
   endAt?: Date;
   createdAt: Date;
@@ -103,6 +105,17 @@ export interface AlertCondition {
   providedIn: 'root'
 })
 export class SchedulingInstrumentationService {
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
     start: new Date(Date.now() - 24 * 60 * 60 * 1000),
     end: new Date()
@@ -179,7 +192,7 @@ export class SchedulingInstrumentationService {
     const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [jobsResult, runsResult, runs7dResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Scheduled Jobs',
@@ -246,7 +259,7 @@ export class SchedulingInstrumentationService {
     const now = new Date();
     const recentTime = new Date(now.getTime() - 5 * 60 * 1000);
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobRunEntity>({
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${recentTime.toISOString()}'`,
@@ -263,7 +276,7 @@ export class SchedulingInstrumentationService {
     const now = new Date();
     const next24Hours = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       ExtraFilter: `Status='Active' AND NextRunAt IS NOT NULL AND NextRunAt >= '${now.toISOString()}' AND NextRunAt <= '${next24Hours.toISOString()}'`,
@@ -287,7 +300,7 @@ export class SchedulingInstrumentationService {
   private async loadExecutionHistory(): Promise<JobExecution[]> {
     const { start, end } = this._dateRange$.value;
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobRunEntity>({
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
@@ -304,7 +317,7 @@ export class SchedulingInstrumentationService {
     const { start, end } = this._dateRange$.value;
     const buckets = this.createTimeBuckets(start, end);
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobRunEntity>({
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
@@ -333,7 +346,7 @@ export class SchedulingInstrumentationService {
 
   // ── Job Statistics ────────────────────────────────────────
   private async loadJobStatistics(): Promise<JobStatistics[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       OrderBy: 'Name ASC',
@@ -363,6 +376,7 @@ export class SchedulingInstrumentationService {
       ownerUser: job.OwnerUser,
       notifyOnSuccess: job.NotifyOnSuccess,
       notifyOnFailure: job.NotifyOnFailure,
+      runImmediatelyIfNeverRun: job.RunImmediatelyIfNeverRun === true,
       startAt: job.StartAt ? new Date(job.StartAt) : undefined,
       endAt: job.EndAt ? new Date(job.EndAt) : undefined,
       createdAt: new Date(job.__mj_CreatedAt)
@@ -371,7 +385,7 @@ export class SchedulingInstrumentationService {
 
   // ── Job Types ─────────────────────────────────────────────
   private async loadJobTypes(): Promise<JobTypeStatistics[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [typesResult, jobsResult, runsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Scheduled Job Types',
@@ -414,7 +428,7 @@ export class SchedulingInstrumentationService {
   // ── Lock Info ─────────────────────────────────────────────
   private async loadLockInfo(): Promise<LockInfo[]> {
     const now = new Date();
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       ExtraFilter: 'LockToken IS NOT NULL',
@@ -537,7 +551,7 @@ export class SchedulingInstrumentationService {
   // ── CRUD Operations ───────────────────────────────────────
   async updateJobStatus(jobId: string, status: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired'): Promise<boolean> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       job.Status = status;
@@ -565,7 +579,7 @@ export class SchedulingInstrumentationService {
     NotifyOnFailure: boolean;
   }>): Promise<boolean> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
 
       if (jobId) {
@@ -598,7 +612,7 @@ export class SchedulingInstrumentationService {
 
   async deleteJob(jobId: string): Promise<boolean> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       const result = await job.Delete();
@@ -612,7 +626,7 @@ export class SchedulingInstrumentationService {
 
   async releaseLock(jobId: string): Promise<boolean> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
       await job.Load(jobId);
       job.LockToken = null;
@@ -629,7 +643,7 @@ export class SchedulingInstrumentationService {
   }
 
   async loadJobTypesForDropdown(): Promise<{ id: string; name: string }[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJScheduledJobTypeEntity>({
       EntityName: 'MJ: Scheduled Job Types',
       OrderBy: 'Name ASC',

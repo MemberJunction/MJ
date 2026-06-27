@@ -1,87 +1,62 @@
-<div class="agent-configuration-container">
+<mj-page-layout>
   <!-- Header -->
-  <div class="dashboard-header">
-    <div class="header-info">
-      <h2 class="dashboard-title">
-        <i class="fa-solid fa-robot"></i>
-        Agent Configuration
-      </h2>
-      <button 
-        type="button" 
-        class="filter-toggle-btn"
-        (click)="toggleFilterPanel()"
-        title="Toggle Filters">
-        <i class="fa-solid fa-filter"></i>
-        @if (filterPanelVisible) {
-          Hide Filters
-        } @else {
-          Show Filters
-        }
-      </button>
-      <span class="item-count">{{ filteredAgents.length }} agents</span>
+  <mj-page-header
+    Title="Agents"
+    Icon="fa-solid fa-robot">
+    <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
+    <div meta>
+      <mj-stat-badge
+        [Count]="filteredAgents.length"
+        [Total]="agents.length"
+        Label="agents">
+      </mj-stat-badge>
     </div>
-    
-    <div class="header-controls">
-      <div class="view-toggle">
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'grid'"
-          (click)="setViewMode('grid')"
-          title="Grid View">
-          <i class="fa-solid fa-grip"></i>
-        </button>
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'list'"
-          (click)="setViewMode('list')"
-          title="List View">
-          <i class="fa-solid fa-list"></i>
-        </button>
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'tree'"
-          (click)="setViewMode('tree')"
-          title="Category Tree View">
-          <i class="fa-solid fa-folder-tree"></i>
-        </button>
-      </div>
-      
-      <button 
-        type="button" 
-        class="control-btn primary"
-        (click)="createNewAgent()"
-        title="Create New Agent">
+    <div actions>
+      <button mjButton variant="primary" size="sm" (click)="createNewAgent()" title="Create New Agent">
         <i class="fa-solid fa-plus"></i>
-        New Agent
+        <span class="action-btn-label">New Agent</span>
       </button>
     </div>
-  </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search agents..."
+        [Value]="currentFilters.searchTerm"
+        (ValueChange)="onSearchTermChange($event)">
+      </mj-page-search>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="onResetFilters()">
+        <mj-filter-panel
+          [Fields]="agentFilterFields"
+          [Values]="$any(currentFilters)"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="onResetFilters()">
+          <!-- Custom widget: Category uses a tree-dropdown, projected via mj-filter-field -->
+          <mj-filter-field Label="Category" Icon="fa-solid fa-folder-tree">
+            <mj-tree-dropdown
+              [BranchConfig]="CategoryBranchConfig"
+              [Value]="SelectedCategoryKey"
+              SelectionMode="single"
+              SelectableTypes="branch"
+              Placeholder="All Categories"
+              [Clearable]="true"
+              [EnableSearch]="true"
+              (ValueChange)="onCategoryChange($event)">
+            </mj-tree-dropdown>
+          </mj-filter-field>
+        </mj-filter-panel>
+      </mj-filter-popover>
+      <mj-view-toggle
+        [Options]="agentViewOptions"
+        [ActiveKey]="viewMode"
+        (KeyChange)="setViewMode($any($event))">
+      </mj-view-toggle>
+    </div>
+  </mj-page-header>
 
-  <!-- Main Content with Splitter -->
-  <div class="main-content" >
-    <as-split direction="horizontal" class="main-splitter">
-
-      <!-- Filter Panel (Left) -->
-      @if (filterPanelVisible) {
-      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
-        <mj-agent-filter-panel
-          [agents]="agents"
-          [filteredAgents]="filteredAgents"
-          [filters]="currentFilters"
-          (filtersChange)="onFiltersChange($event)"
-          (filterChange)="onFilterChange()"
-          (resetFilters)="onResetFilters()"
-          (closePanel)="toggleFilterPanel()">
-        </mj-agent-filter-panel>
-      </as-split-area>
-      }
-
-      <!-- Agents List Panel -->
-      <as-split-area>
-        <div class="agents-content">
+  <!-- Main Content (no sidebar — filters live in the popover above) -->
+  <mj-page-body [Flex]="true">
           <!-- Loading State -->
           @if (isLoading) {
             <div class="loading-container">
@@ -92,18 +67,12 @@
           <!-- Agents Display -->
           @if (!isLoading) {
             @if (filteredAgents.length === 0) {
-              <div class="empty-state">
-                <i class="fa-solid fa-robot"></i>
-                <h3>No agents found</h3>
-                <p>No agents match your current filters. Try adjusting your search criteria or create a new agent.</p>
-                <button 
-                  type="button" 
-                  class="empty-state-btn"
-                  (click)="createNewAgent()">
-                  <i class="fa-solid fa-plus"></i>
-                  Create New Agent
-                </button>
-              </div>
+              <mj-empty-state Icon="fa-solid fa-robot"
+                Title="No agents found"
+                Message="No agents match your current filters. Try adjusting your search criteria or create a new agent."
+                ActionText="Create New Agent"
+                ActionIcon="fa-solid fa-plus"
+                (Action)="createNewAgent()" />
             } @else {
               <!-- Grid View -->
               @if (viewMode === 'grid') {
@@ -308,10 +277,7 @@
               }
             }
           }
-        </div>
-      </as-split-area>
-    </as-split>
-  </div>
+  </mj-page-body>
 
   <!-- Detail Panel Overlay -->
   @if (detailPanelVisible) {
@@ -457,6 +423,6 @@
       </div>
     }
   </div>
-</div>
+</mj-page-layout>
 
 <!-- AI Agent Test Harness - Now handled by service with minimize support -->

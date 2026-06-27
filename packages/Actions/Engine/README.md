@@ -392,22 +392,25 @@ Standalone OAuth2 token manager supporting multiple grant types.
 This package depends on:
 
 - [@memberjunction/global](../../MJGlobal/README.md) — ClassFactory and `@RegisterClass` decorator
-- [@memberjunction/core](../../MJCore/README.md) — `Metadata`, `RunView`, `BaseEntity`, logging utilities
-- [@memberjunction/actions-base](../Base/README.md) — Shared types (`ActionEngineBase`, `RunActionParams`, `ActionResult`, etc.)
-- [@memberjunction/core-entities](../../MJCoreEntities/README.md) — Generated entity classes (`ActionExecutionLogEntity`, `ActionFilterEntity`, etc.)
-- [@memberjunction/ai](../../AI/Core/README.md) — AI model integration
-- [@memberjunction/ai-core-plus](../../AI/CorePlus/README.md) — Extended AI utilities
-- [@memberjunction/aiengine](../../AI/Engine/README.md) — AI engine orchestration
-- [@memberjunction/ai-prompts](../../AI/Prompts/README.md) — AI prompt execution
+- [@memberjunction/core](../../MJCore/readme.md) — `Metadata`, `RunView`, `BaseEntity`, logging utilities
+- [@memberjunction/actions-base](../Base/README.md) — Shared types (`ActionEngineBase`, `RunActionParams`, `ActionResult`, `RuntimeActionBridgeBuilder` abstract)
+- [@memberjunction/core-entities](../../MJCoreEntities/readme.md) — Generated entity classes (`ActionExecutionLogEntity`, `ActionFilterEntity`, etc.)
+- [@memberjunction/action-runtime](../Runtime/README.md) — Sandbox executor for `Type='Runtime'` actions
+- [@memberjunction/code-execution](../CodeExecution/README.md) — `BridgeHandlerMap` type (host-side bridge passed to the sandbox)
+- [@memberjunction/ai](../../AI/Core/readme.md) — AI model integration (shared types)
+
+**Not a direct dependency any longer**: `@memberjunction/ai-agents`, `@memberjunction/ai-prompts`, `@memberjunction/aiengine`, `@memberjunction/ai-core-plus`. These used to be pulled in for the Runtime-action bridge; the bridge was extracted into [`@memberjunction/action-runtime-host`](../RuntimeHost/README.md) (top of the Actions stack), and this package now resolves the concrete bridge builder via `MJGlobal.ClassFactory.CreateInstance(RuntimeActionBridgeBuilder)`. See the RuntimeHost README for the cycle-breaking architecture.
 
 ## Related Packages
 
 - [@memberjunction/actions-base](../Base/README.md) — Shared types and base classes used by both client and server
+- [@memberjunction/action-runtime](../Runtime/README.md) — Sandboxed executor for `Type='Runtime'` actions (approval gate, input/output wiring, isolated-vm dispatch)
+- [@memberjunction/action-runtime-host](../RuntimeHost/README.md) — Default `utilities.*` bridge (md / rv / rq / entity / actions / agents / ai) exposed to sandboxed Runtime-action code
 - [CoreActions](../CoreActions/) — Built-in action implementations (Create Record, generated actions, etc.)
 - [ScheduledActions](../ScheduledActions/) — Scheduled action execution support
 - [ApolloEnrichment](../ApolloEnrichment/) — Apollo data enrichment actions
 - [ContentAutotag](../ContentAutotag/) — Content auto-tagging actions
-- [CodeExecution](../CodeExecution/) — Dynamic code execution actions
+- [CodeExecution](../CodeExecution/) — Isolated-vm sandbox + worker pool (`CodeExecutionService` used by `action-runtime`)
 
 For the Actions system philosophy and development guide, see the [Actions CLAUDE.md](../CLAUDE.md).
 

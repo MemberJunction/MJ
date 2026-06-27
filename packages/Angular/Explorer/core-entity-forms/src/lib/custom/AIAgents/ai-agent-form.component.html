@@ -1,7 +1,13 @@
-<div class="record-form-container">
-  @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm">
-      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Agent Header — expanded view -->
       @if (!HeaderCollapsed) {
         <div class="agent-header">
@@ -139,14 +145,114 @@
                     }
                 </ng-template>
                 <div class="panel-content execution-history-panel">
+                  <!-- Segmented toggle: agent runs vs. realtime voice sessions -->
+                  @if (UserCanViewSessions) {
+                    <div class="history-view-toggle" role="tablist">
+                      <button type="button" class="history-toggle-option"
+                        [class.active]="executionHistoryView === 'runs'"
+                        (click)="setExecutionHistoryView('runs')">
+                        <i class="fa-solid fa-person-running"></i> Runs
+                        @if (totalExecutionHistoryCount > 0) {
+                          <span class="history-toggle-count">{{ totalExecutionHistoryCount }}</span>
+                        }
+                      </button>
+                      <button type="button" class="history-toggle-option"
+                        [class.active]="executionHistoryView === 'sessions'"
+                        (click)="setExecutionHistoryView('sessions')">
+                        <i class="fa-solid fa-tower-broadcast"></i> Sessions
+                        @if (totalSessionCount > 0) {
+                          <span class="history-toggle-count">{{ totalSessionCount }}</span>
+                        }
+                      </button>
+                    </div>
+                  }
+                  @if (executionHistoryView === 'sessions') {
+                    <!-- Voice/realtime sessions list -->
+                    @if (loadingSessions) {
+                      <mj-loading text="Loading sessions..." size="medium"></mj-loading>
+                    } @else if (agentSessions.length === 0) {
+                      <mj-empty-state
+                        Icon="fa-solid fa-tower-broadcast"
+                        Title="No Voice Sessions"
+                        Message="This agent hasn't participated in any realtime voice sessions yet — neither as the co-agent nor as a delegation target."
+                        Size="compact" />
+                    } @else {
+                      <div class="execution-history-list">
+                        @for (item of agentSessions; track item.row.ID) {
+                          <div class="execution-card session-card" (click)="openSessionRecord(item.row.ID)" title="Open session">
+                            <div class="execution-header">
+                              <div class="execution-left-section">
+                                <div class="execution-status">
+                                  <div class="status-indicator" [style.background-color]="getSessionStatusColor(item.row.Status)">
+                                    <i [class]="getSessionStatusIcon(item.row.Status)"></i>
+                                  </div>
+                                  <div class="execution-info">
+                                    <div class="execution-title">
+                                      Session #{{ item.row.ID.substring(0, 8) }}
+                                      @if (item.isCoAgent) {
+                                        <span class="session-role-chip">as co-agent</span>
+                                      }
+                                      @if (item.isTarget) {
+                                        <span class="session-role-chip session-role-chip--target">as target</span>
+                                      }
+                                    </div>
+                                    <div class="execution-date">{{ item.row.__mj_CreatedAt | date:'MMM d, h:mm a' }}</div>
+                                  </div>
+                                </div>
+                                <div class="execution-metrics">
+                                  <div class="metric-item">
+                                    <span class="session-status-pill" [attr.data-status]="item.row.Status">{{ item.row.Status }}</span>
+                                  </div>
+                                  <div class="metric-item">
+                                    <i class="fa-solid fa-stopwatch"></i>
+                                    <span class="metric-label">Duration:</span>
+                                    <span class="metric-value">{{ formatSessionDuration(item) }}</span>
+                                  </div>
+                                  <div class="metric-item">
+                                    <i class="fa-solid fa-plug"></i>
+                                    <span class="metric-label">Channels:</span>
+                                    <span class="metric-value">{{ item.channelCount }}</span>
+                                  </div>
+                                  @if (item.isCoAgent && item.targetAgentName) {
+                                    <div class="metric-item">
+                                      <i class="fa-solid fa-bullseye"></i>
+                                      <span class="metric-label">Target:</span>
+                                      <span class="metric-value">{{ item.targetAgentName }}</span>
+                                    </div>
+                                  }
+                                  @if (item.isTarget && !item.isCoAgent && item.row.Agent) {
+                                    <div class="metric-item">
+                                      <i class="fa-solid fa-tower-broadcast"></i>
+                                      <span class="metric-label">Co-agent:</span>
+                                      <span class="metric-value">{{ item.row.Agent }}</span>
+                                    </div>
+                                  }
+                                  <div class="metric-item">
+                                    <i class="fa-solid fa-user"></i>
+                                    <span class="metric-label">User:</span>
+                                    <span class="metric-value">{{ item.row.User }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div class="execution-actions">
+                                <button class="action-btn" (click)="openSessionRecord(item.row.ID); $event.stopPropagation()" title="View session details">
+                                  <i class="fa-solid fa-external-link-alt"></i>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      </div>
+                    }
+                  } @else {
                   @if (loadingStates.executionHistory) {
                     <mj-loading text="Loading execution history..." size="medium"></mj-loading>
                   } @else if (executionHistoryCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-history"></i>
-                      <h4>No Execution History</h4>
-                      <p>This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here.</p>
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-clock-rotate-left"
+                      Title="No Execution History"
+                      Message="This agent hasn't been executed yet. Use the Test Agent button to run the agent and see execution history here."
+                      Size="compact" />
                   } @else {
                     <!-- Search Bar -->
                     <div class="execution-search-bar">
@@ -161,11 +267,11 @@
                     </div>
                     <div class="execution-history-list">
                       @if (filteredExecutions.length === 0) {
-                        <div class="empty-state">
-                          <i class="fa-solid fa-search"></i>
-                          <h4>No Matching Results</h4>
-                          <p>No execution history found matching "{{ executionSearchText }}"</p>
-                        </div>
+                        <mj-empty-state
+                          Variant="no-results"
+                          Title="No Matching Results"
+                          [Message]="ExecutionSearchEmptyMessage"
+                          Size="compact" />
                       }
                       @for (execution of filteredExecutions; track execution.ID) {
                         <div class="execution-card" [class.expanded]="expandedExecutions[execution.ID]">
@@ -356,6 +462,7 @@
                       }
                     </div>
                   }
+                  }
                 </div>
             </mj-accordion-panel>
           }
@@ -389,16 +496,14 @@
                       </div>
                     </div>
                     @if (actionCount === 0) {
-                      <div class="empty-state">
-                        <i class="fa-solid fa-bolt"></i>
-                        <h4>No Actions Configured</h4>
-                        <p>Add actions to enable this agent to perform specific tasks and operations.</p>
-                        @if (EditMode && UserCanCreateActions) {
-                          <button mjButton variant="primary" (click)="configureActions()">
-                            <i class="fa-solid fa-plus"></i> Configure First Action
-                          </button>
-                        }
-                      </div>
+                      <mj-empty-state
+                        Icon="fa-solid fa-bolt"
+                        Title="No Actions Configured"
+                        Message="Add actions to enable this agent to perform specific tasks and operations."
+                        [ActionText]="(EditMode && UserCanCreateActions) ? 'Configure First Action' : ''"
+                        ActionIcon="fa-solid fa-plus"
+                        (Action)="configureActions()"
+                        Size="compact" />
                     } @else {
                       <div class="entity-list">
                         @for (action of agentActions; track action.ID) {
@@ -510,10 +615,11 @@
                   </div>
                   <!-- Empty State -->
                   @if (totalSubAgentCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-sitemap"></i>
-                      <h4>No Sub-Agents</h4>
-                      <p>Sub-agents help build complex workflows through hierarchical orchestration.</p>
+                    <mj-empty-state
+                      Icon="fa-solid fa-sitemap"
+                      Title="No Sub-Agents"
+                      Message="Sub-agents help build complex workflows through hierarchical orchestration."
+                      Size="compact">
                       <div class="empty-state-info">
                         <div class="info-card">
                           <i class="fa-solid fa-link" style="color: var(--mj-status-info);"></i>
@@ -526,7 +632,7 @@
                           <p>Reusable agents with payload mapping</p>
                         </div>
                       </div>
-                    </div>
+                    </mj-empty-state>
                   } @else {
                     <!-- Unified Sub-Agent List -->
                     <div class="entity-list">
@@ -666,16 +772,14 @@
                     </div>
                   </div>
                   @if (promptCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-comments"></i>
-                      <h4>No Prompts Configured</h4>
-                      <p>Add prompts to define how this agent processes requests and generates responses.</p>
-                      @if (EditMode && UserCanCreateNewPrompts) {
-                        <button mjButton variant="primary" (click)="addPrompt()">
-                          <i class="fa-solid fa-plus"></i> Create First Prompt
-                        </button>
-                      }
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-comments"
+                      Title="No Prompts Configured"
+                      Message="Add prompts to define how this agent processes requests and generates responses."
+                      [ActionText]="(EditMode && UserCanCreateNewPrompts) ? 'Create First Prompt' : ''"
+                      ActionIcon="fa-solid fa-plus"
+                      (Action)="addPrompt()"
+                      Size="compact" />
                   } @else {
                     <div class="entity-list">
                       @for (prompt of agentPrompts; track prompt.ID) {
@@ -748,11 +852,11 @@
                     </div>
                   </div>
                   @if (learningCycleCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-brain"></i>
-                      <h4>No Learning Cycles</h4>
-                      <p>Learning cycles will appear here as the agent processes requests and improves over time.</p>
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-brain"
+                      Title="No Learning Cycles"
+                      Message="Learning cycles will appear here as the agent processes requests and improves over time."
+                      Size="compact" />
                   } @else {
                     <div class="entity-list">
                       @for (cycle of learningCycles; track cycle.ID) {
@@ -816,16 +920,14 @@
                     </div>
                   </div>
                   @if (noteCount === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-sticky-note"></i>
-                      <h4>No Notes</h4>
-                      <p>Add notes to document important information, observations, or instructions for this agent.</p>
-                      @if (EditMode && UserCanCreateNotes) {
-                        <button mjButton variant="primary" (click)="addNote()">
-                          <i class="fa-solid fa-plus"></i> Create First Note
-                        </button>
-                      }
-                    </div>
+                    <mj-empty-state
+                      Icon="fa-solid fa-sticky-note"
+                      Title="No Notes"
+                      Message="Add notes to document important information, observations, or instructions for this agent."
+                      [ActionText]="(EditMode && UserCanCreateNotes) ? 'Create First Note' : ''"
+                      ActionIcon="fa-solid fa-plus"
+                      (Action)="addNote()"
+                      Size="compact" />
                   } @else {
                     <div class="entity-list">
                       @for (note of agentNotes; track note.ID) {
@@ -856,6 +958,115 @@
                         <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Notes', '')">
                           <span>View all {{ noteCount }} notes...</span>
                         </div>
+                      }
+                    </div>
+                  }
+                </div>
+            </mj-accordion-panel>
+          }
+          <!-- Search -->
+          @if (record.ID) {
+            <mj-accordion-panel id="search"
+              [Expanded]="GetSectionExpanded('search', false)">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </ng-template>
+                <div class="panel-content">
+                  <div class="section-header">
+                    <div class="section-description">
+                      Control this agent's access to <strong>Scoped Search</strong> and assign the scopes it can use for pre-execution RAG or agent-invoked search.
+                    </div>
+                  </div>
+
+                  <!-- Scope Access mode -->
+                  <div class="agent-search-access">
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'All'">
+                      <input type="radio" name="SearchScopeAccess" value="All" [checked]="record.SearchScopeAccess === 'All'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'All'">
+                      <i class="fa-solid fa-globe"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">All</div>
+                        <div class="agent-search-access-desc">Can use any scope including Global. No scope restriction.</div>
+                      </div>
+                    </label>
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'Assigned'">
+                      <input type="radio" name="SearchScopeAccess" value="Assigned" [checked]="record.SearchScopeAccess === 'Assigned'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'Assigned'">
+                      <i class="fa-solid fa-user-check"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">Assigned</div>
+                        <div class="agent-search-access-desc">Can use ONLY scopes listed below. Other scopes are rejected with ACCESS_DENIED.</div>
+                      </div>
+                    </label>
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'None'">
+                      <input type="radio" name="SearchScopeAccess" value="None" [checked]="record.SearchScopeAccess === 'None'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'None'">
+                      <i class="fa-solid fa-ban"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">None</div>
+                        <div class="agent-search-access-desc">No search capability. The Scoped Search action is disabled for this agent.</div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <!-- Assigned scopes grid -->
+                  @if (record.SearchScopeAccess !== 'None') {
+                    <div class="agent-search-grid-header">
+                      <h4>Assigned Scopes</h4>
+                      <p class="section-description">
+                        <strong>Pre-Execution</strong> scopes are injected automatically before the first LLM call.
+                        <strong>Agent-Invoked</strong> scopes are callable via the Scoped Search tool during execution.
+                        <strong>Both</strong> covers both paths.
+                      </p>
+                    </div>
+                    <mj-search-scope-child-grid
+                      [ParentID]="record.ID"
+                      ChildEntityName="MJ: AI Agent Search Scopes"
+                      ParentFieldName="AgentID"
+                      [Columns]="AgentSearchScopeColumns"
+                      [Disabled]="!EditMode"
+                      AddButtonLabel="+ Assign another scope"
+                      EmptyMessage="No scopes assigned yet. Assign at least one if this agent will use Scoped Search."
+                      (RowsChanged)="LoadPermissionSummary()">
+                    </mj-search-scope-child-grid>
+
+                    <!-- Phase 2A: read-only audit summary of who has
+                         permission on each of this agent's assigned scopes.
+                         Editing happens in the Knowledge Hub Config dashboard
+                         (see "Permissions" subtab under Search Scopes). -->
+                    <div class="agent-search-section" style="margin-top: 16px;">
+                      <h4 style="margin: 0 0 8px 0;">
+                        <i class="fa-solid fa-shield-halved"></i> Effective scope permissions
+                      </h4>
+                      <p class="section-description" style="margin-bottom: 8px;">
+                        Per-user / per-role grants on the scopes assigned above. Edit grants in
+                        <strong>Knowledge Hub Config &rarr; Search Scopes &rarr; Permissions</strong>.
+                      </p>
+                      @if (IsLoadingPermissions) {
+                        <div style="color: var(--mj-text-muted);">Loading permissions&hellip;</div>
+                      } @else if (PermissionSummary.length === 0) {
+                        <div style="color: var(--mj-text-muted); font-style: italic;">
+                          No scopes assigned yet — permissions will appear here once you add scopes above.
+                        </div>
+                      } @else {
+                        @for (s of PermissionSummary; track s.ScopeID) {
+                          <div style="margin-bottom: 12px; padding: 8px 12px; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 4px;">
+                            <div style="font-weight: 600; margin-bottom: 4px;">{{ s.ScopeName }}</div>
+                            @if (s.Permissions.length === 0) {
+                              <div style="color: var(--mj-text-muted); font-size: 0.9em;">
+                                No explicit permissions. Access falls back to this agent's <code>SearchScopeAccess</code> setting.
+                              </div>
+                            } @else {
+                              <ul style="margin: 4px 0 0 16px; padding: 0;">
+                                @for (p of s.Permissions; track p.Principal + p.Level) {
+                                  <li style="font-size: 0.9em; padding: 2px 0;">
+                                    <i class="fa-solid" [class.fa-user]="p.PrincipalType === 'User'" [class.fa-users]="p.PrincipalType === 'Role'"></i>
+                                    <strong>{{ p.Principal }}</strong>
+                                    <span style="color: var(--mj-text-muted);">({{ p.PrincipalType }})</span>
+                                    &mdash; <span [style.color]="p.Level === 'None' ? 'var(--mj-status-error-text)' : 'var(--mj-text-primary)'">{{ p.Level }}</span>
+                                  </li>
+                                }
+                              </ul>
+                            }
+                          </div>
+                        }
                       }
                     </div>
                   }
@@ -1544,14 +1755,14 @@
           </mj-accordion-panel>
       </div>
     </form>
-  }
+</mj-record-form-container>
+}
 
-  <!-- Permissions Dialog (from @memberjunction/ng-agents) -->
-  @if (ShowPermissionsDialog) {
-    <mj-agent-permissions-dialog
-      [Agent]="record"
-      (Closed)="onPermissionsDialogClosed()"
-      (PermissionsChanged)="refreshRelatedData()">
-    </mj-agent-permissions-dialog>
-  }
-</div>
+<!-- Permissions Dialog (from @memberjunction/ng-agents) -->
+@if (ShowPermissionsDialog) {
+  <mj-agent-permissions-dialog
+    [Agent]="record"
+    (Closed)="onPermissionsDialogClosed()"
+    (PermissionsChanged)="refreshRelatedData()">
+  </mj-agent-permissions-dialog>
+}

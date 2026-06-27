@@ -9,8 +9,8 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
-      "EffortLevel": 100,
+      "PrefillFallbackMode": "Ignore",
+      "EffortLevel": 1,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -26,6 +26,21 @@
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "7859CC40-5745-495D-BB51-ADBB567AA616"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:58.479Z",
+            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+          }
+        },
         {
           "fields": {
             "PromptID": "@parent:ID",
@@ -55,6 +70,21 @@
             "lastModified": "2026-02-13T20:48:47.220Z",
             "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "6CAA347F-B9F0-4212-95B7-D765985700E5"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:58.510Z",
+            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+          }
         }
       ]
     },
@@ -62,8 +92,8 @@
       "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.710Z",
-      "checksum": "021015c54be4aa61b1061611b835a0e4680bde57b6bb62ca387aed82a6cb01a0"
+      "lastModified": "2026-05-29T19:48:58.410Z",
+      "checksum": "d11207ec253c8820e658b53185c89fdae4753fcd07bc3a9b8cda93105781444e"
     }
   },
   {
@@ -76,8 +106,8 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
-      "EffortLevel": 100,
+      "PrefillFallbackMode": "Ignore",
+      "EffortLevel": 1,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -93,6 +123,21 @@
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "4AE61AD6-A4DC-469A-9F1E-5CA171BF34F7"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:58.527Z",
+            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
+          }
+        },
         {
           "fields": {
             "PromptID": "@parent:ID",
@@ -122,6 +167,21 @@
             "lastModified": "2026-02-13T20:48:47.222Z",
             "checksum": "5daf3d0de11eb147870f0a71402075747f9373e11c7f20e637eee282c25ef955"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "BD10C051-1F41-47DE-B1D1-8E84B1647F50"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:58.543Z",
+            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+          }
         }
       ]
     },
@@ -129,8 +189,8 @@
       "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.720Z",
-      "checksum": "ad452301ef8c8995e0900b13c6b07148e37fb9f7f500c977ffb7c10e9f55cbae"
+      "lastModified": "2026-05-29T19:48:58.348Z",
+      "checksum": "9da0d1f572a412e5a620df454b78b6cca72a1dfd8bd8e10984715678b014ed09"
     }
   },
   {
@@ -143,8 +203,8 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
-      "EffortLevel": 100,
+      "PrefillFallbackMode": "Ignore",
+      "EffortLevel": 1,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -163,16 +223,16 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 10
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
           },
           "primaryKey": {
-            "ID": "C62C4C5F-3A99-45ED-B4AF-CB2F160EF68E"
+            "ID": "596CE88F-AF19-4829-AB83-F44BD18D7B00"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.223Z",
-            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+            "lastModified": "2026-05-29T19:48:58.557Z",
+            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
           }
         },
         {
@@ -189,6 +249,36 @@
             "lastModified": "2026-02-13T20:48:47.224Z",
             "checksum": "4819af745b22f03517dd842dd20c1ea6f311569e9134c84aff8ac376205c6588"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "C62C4C5F-3A99-45ED-B4AF-CB2F160EF68E"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:47.223Z",
+            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "2FEAD16A-6E40-4800-9098-42D6DB8DE4E6"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:58.589Z",
+            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
+          }
         }
       ]
     },
@@ -196,8 +286,8 @@
       "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.729Z",
-      "checksum": "955c5c24fd04c7ce82bca5cf6095a6440d634f0161693e78f4aa8d0ffb7004bd"
+      "lastModified": "2026-05-29T19:48:58.434Z",
+      "checksum": "d17eb9ac56d8a06ea4270017a5f6421b0e8e04b89f401da58d009c3d38d61a07"
     }
   },
   {
@@ -210,8 +300,8 @@
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
       "StopSequences": "\n```",
-      "PrefillFallbackMode": "SystemInstruction",
-      "EffortLevel": 100,
+      "PrefillFallbackMode": "Ignore",
+      "EffortLevel": 1,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -230,16 +320,16 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 10
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 12
           },
           "primaryKey": {
-            "ID": "309F9BE7-E490-4B00-8C82-C4762D40DADE"
+            "ID": "0914BFC0-D669-4672-B849-01CD5F599F26"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.225Z",
-            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+            "lastModified": "2026-05-29T19:48:58.608Z",
+            "checksum": "70ac92a4332116b859c3e02183d49da12255dbf80e1e9694b2c3fc19a3ba7c6d"
           }
         },
         {
@@ -260,16 +350,31 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=Qwen 3 32B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 5
+            "Priority": 10
           },
           "primaryKey": {
-            "ID": "6B42CADC-172F-446C-A1A1-C6EBA91783EF"
+            "ID": "309F9BE7-E490-4B00-8C82-C4762D40DADE"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:47.228Z",
-            "checksum": "396b6b95a45a5014cbc680ab3c5120a8f874c0e083fa3342f8c62b5ed973e09f"
+            "lastModified": "2026-02-13T20:48:47.225Z",
+            "checksum": "8b25a03aaba6b40015a1efe6fff192e70b3c9aa3d9cc75993f04696a8f18bfc2"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "D598BE14-122F-4ED0-ACFF-53E5FF8C7956"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:48:58.626Z",
+            "checksum": "5e0fa2ba78823a310f0e8064ddfd3e3deab2dc0def5534cee034dc1a8410b1af"
           }
         }
       ]
@@ -278,8 +383,8 @@
       "ID": "FA0031BB-4838-4C16-A161-ED670E9A147B"
     },
     "sync": {
-      "lastModified": "2026-03-26T22:04:37.735Z",
-      "checksum": "6ef511f6be3608cce6c3f4b5ddc154ebc0cb5a6d3b222e28ef1fb6bf4f60062e"
+      "lastModified": "2026-05-29T19:48:58.379Z",
+      "checksum": "09561b6916edb1ac4ced339b9adf8435c9e6bde5d0a1e69e2c1be225c89d95be"
     }
   }
 ]

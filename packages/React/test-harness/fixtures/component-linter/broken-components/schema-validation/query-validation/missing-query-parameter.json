@@ -10,11 +10,34 @@
       {
         "name": "MonthlyReport",
         "categoryPath": "Reports/Monthly",
-        "fields": ["ID", "Amount", "Category"],
-        "entityNames": ["Invoices"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "Amount",
+            "type": "int"
+          },
+          {
+            "name": "Category",
+            "type": "nvarchar"
+          }
+        ],
+        "entityNames": [
+          "Invoices"
+        ],
         "parameters": [
-          { "name": "year", "type": "number", "required": true },
-          { "name": "month", "type": "number", "required": true }
+          {
+            "name": "year",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "month",
+            "type": "number",
+            "required": true
+          }
         ]
       }
     ]

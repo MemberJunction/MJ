@@ -79,7 +79,7 @@
             }
             @if(AllowDeletePermissions) {
               <td>
-                <button mjButton (click)="deletePermission(p)"><span class="fa-solid fa-trash-can"></span></button>
+                <button mjButton aria-label="Delete permission" title="Delete permission" (click)="deletePermission(p)"><span class="fa-solid fa-trash-can"></span></button>
               </td>
             }
           </tr>  

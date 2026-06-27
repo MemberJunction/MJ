@@ -1,10 +1,11 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem } from "./interfaces";
+import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
-import { LocalCacheManager } from "./localCacheManager";
+import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
@@ -29,15 +30,20 @@ import { TransformSimpleObjectToEntityObject } from "./util";
  * @param md - The metadata provider for context
  * @returns A fully populated AllMetadata instance with proper type instances
  */
-export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllMetadata {
+export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllMetadata | undefined {
     try {
         const newObject = MetadataFromSimpleObjectWithoutUser(data, md);
+        if (!newObject) {
+            LogError('MetadataFromSimpleObject: MetadataFromSimpleObjectWithoutUser returned undefined');
+            return undefined;
+        }
         newObject.CurrentUser = data.CurrentUser ? new UserInfo(md, data.CurrentUser) : null;
 
         return newObject;
     }
     catch (e) {
-        LogError(e);
+        LogError(`MetadataFromSimpleObject failed: ${e instanceof Error ? e.message : String(e)}`);
+        return undefined;
     }
 }
 
@@ -48,7 +54,7 @@ export function MetadataFromSimpleObject(data: any, md: IMetadataProvider): AllM
  * @param md - The metadata provider for context
  * @returns A fully populated AllMetadata instance with proper type instances
  */
-export function MetadataFromSimpleObjectWithoutUser(data: any, md: IMetadataProvider): AllMetadata {
+export function MetadataFromSimpleObjectWithoutUser(data: any, md: IMetadataProvider): AllMetadata | undefined {
     try {
         const returnMetadata: AllMetadata = new AllMetadata();
         // now iterate through the AllMetadataMapping array and construct the return type
@@ -62,14 +68,26 @@ export function MetadataFromSimpleObjectWithoutUser(data: any, md: IMetadataProv
                 // for example in our strongly typed AllMetadata class we have AllQueryCategories, but in the simple allMetadata object we have QueryCategories
                 // so we need to check for both which is what the above is doing.
 
-                // Build the array of the correct type and initialize with the simple object
-                returnMetadata[m.key] = data[simpleKey].map((d: any) => new m.class(d, md));
+                // Build the array of the correct type and initialize with the simple object.
+                // Individual item failures are logged but do not abort the entire deserialization —
+                // a cache with 514 of 515 entities is far better than no cache at all.
+                const items: any[] = [];
+                for (const d of data[simpleKey]) {
+                    try {
+                        items.push(new m.class(d, md));
+                    }
+                    catch (itemErr) {
+                        LogError(`MetadataFromSimpleObject: failed to construct ${m.class?.name || m.key} item: ${itemErr instanceof Error ? itemErr.message : String(itemErr)}`);
+                    }
+                }
+                returnMetadata[m.key] = items;
             }
         }
         return returnMetadata;
     }
     catch (e) {
-        LogError(e);
+        LogError(`MetadataFromSimpleObjectWithoutUser failed: ${e instanceof Error ? e.message : String(e)}`);
+        return undefined;
     }
 }
 
@@ -86,6 +104,12 @@ export const AllMetadataArrays = [
     { key: 'AllRowLevelSecurityFilters', class: RowLevelSecurityFilterInfo },
     { key: 'AllAuditLogTypes', class: AuditLogTypeInfo},
     { key: 'AllAuthorizations', class: AuthorizationInfo},
+    /**
+     * Flat join-table records linking authorizations to roles.
+     * Consumed lazily by `AuthorizationInfo.Roles` — no post-processing
+     * in `GetAllMetadata` is required.  Mirrors the QueryFields pattern.
+     */
+    { key: 'AllAuthorizationRoles', class: AuthorizationRoleInfo},
     { key: 'AllQueryCategories', class: QueryCategoryInfo},
     { key: 'AllQueries', class: QueryInfo },
     { key: 'AllQueryFields', class: QueryFieldInfo },
@@ -102,11 +126,108 @@ export const AllMetadataArrays = [
 
 
 /**
+ * Raw entity-metadata row shapes flowing into `PostProcessEntityMetadata` from the
+ * dataset loader. These rows are untyped JSON off the wire; we capture only the
+ * properties this code path actually reads or writes, with an `unknown` index
+ * signature for the rest — matching the `Record<string, unknown> & {…}` pattern
+ * already used by `EntityInfo`'s constructor.
+ */
+type BaseMetadataRow = Record<string, unknown>;
+export type EntityMetadataRow = BaseMetadataRow & {
+    ID: string;
+    Name: string;
+    SchemaName?: string;
+    EntityFields?: unknown[];
+    EntityPermissions?: unknown[];
+    EntityRelationships?: unknown[];
+    EntitySettings?: unknown[];
+    EntityOrganicKeys?: unknown[];
+};
+export type EntityFieldMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Sequence: number;
+    EntityFieldValues?: unknown[];
+};
+export type EntityFieldValueMetadataRow = BaseMetadataRow & { EntityFieldID: string };
+export type EntityChildMetadataRow = BaseMetadataRow & { EntityID: string };
+export type OrganicKeyMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Status: string;
+    EntityOrganicKeyRelatedEntities?: unknown[];
+};
+export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
+
+/**
+ * Projects plain-object rows down to a caller-requested field subset, matching
+ * field names case-insensitively (and ignoring surrounding whitespace).
+ *
+ * Used by the RunView caching pipeline: when a query is cacheable, the provider
+ * widens `params.Fields` to ALL entity fields so the cache entry is a universal
+ * superset that satisfies any future field subset. This helper restores the
+ * caller's originally requested shape — on cache hits (filtering the cached
+ * superset) AND on cache misses (filtering the widened DB result) — so callers
+ * always receive the same columns regardless of cache temperature.
+ *
+ * Returns the original array untouched when no projection is requested
+ * (`requestedFields` null/empty) or there are no rows. Never mutates input rows.
+ *
+ * @param rows - Plain-object result rows (NOT BaseEntity objects)
+ * @param requestedFields - The caller's original Fields list, or null for "all fields"
+ */
+export function ProjectRowsToFields<T = Record<string, unknown>>(
+    rows: T[],
+    requestedFields: string[] | null | undefined
+): T[] {
+    if (!requestedFields || requestedFields.length === 0 || !rows || rows.length === 0) {
+        return rows;
+    }
+    const requestedFieldSet = new Set(requestedFields.map(f => f.trim().toLowerCase()));
+
+    // No-op probe: SQL result rows are uniform (same SELECT list), so if every key of
+    // the first row is requested, the projection would copy every row unchanged —
+    // return the original array and skip the per-row object rebuilds entirely. This
+    // is the common case for entity_object-widened requests and full-coverage Fields.
+    const probe = rows[0] as Record<string, unknown>;
+    if (probe && typeof probe === 'object') {
+        let allKept = true;
+        for (const key of Object.keys(probe)) {
+            if (!requestedFieldSet.has(key.toLowerCase())) {
+                allKept = false;
+                break;
+            }
+        }
+        if (allKept) {
+            return rows;
+        }
+    }
+
+    // Cache lowercase key→keep decisions across rows to avoid repeated allocations
+    const keyCache = new Map<string, boolean>();
+    return rows.map((row) => {
+        const source = row as Record<string, unknown>;
+        const filtered: Record<string, unknown> = {};
+        for (const key of Object.keys(source)) {
+            let keep = keyCache.get(key);
+            if (keep === undefined) {
+                keep = requestedFieldSet.has(key.toLowerCase());
+                keyCache.set(key, keep);
+            }
+            if (keep) {
+                filtered[key] = source[key];
+            }
+        }
+        return filtered as T;
+    });
+}
+
+/**
  * Base class for all metadata providers in MemberJunction.
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
-export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider {
+export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider, IRemoteOperationProvider {
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -174,25 +295,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /** Timer handle for the coalesce flush */
     private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // ── Fast Startup Mode ─────────────────────────────────────────────
-    /**
-     * When enabled, the first round of RunViews calls after startup will
-     * trust the local IndexedDB/localStorage cache without server validation.
-     * This eliminates the smart cache check round-trips during initial load,
-     * making warm page refreshes near-instant.
-     *
-     * After the first round of engine loads completes, FastStartupMode
-     * automatically disables itself so subsequent data access uses normal
-     * server validation.
-     *
-     * Only applies to client-side providers (TrustLocalCacheCompletely=false).
-     * Set to false to disable.
-     */
-    public static FastStartupMode: boolean = true;
-
-    /** Tracks whether fast startup has been consumed (auto-disables after first use) */
-    private static _fastStartupConsumed = false;
-
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
      * How long (ms) a resolved RunViews result stays available for instant
@@ -200,6 +302,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * still applies).  Default 5 000 ms.
      */
     public static DedupLingerMs: number = 5000;
+
+    /**
+     * Safety cap on the number of linger entries held simultaneously. The linger
+     * window is a latency optimization — under extreme churn (more distinct query
+     * keys than this resolving within one window) new resolutions skip lingering
+     * instead of accumulating result arrays in memory.
+     */
+    public static MaxLingerEntries: number = 500;
 
     /**
      * In-flight + linger cache keyed by a deterministic fingerprint of
@@ -472,6 +582,48 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     // ========================================================================
 
     /**
+     * Routes a typed Remote Operation by key to its implementation (see {@link IRemoteOperationProvider}).
+     *
+     * This is the public **power-tool** transport seam. Prefer the typed
+     * `BaseRemotableOperation.Execute()` entry point in application code — `RouteOperation` is the
+     * stringly-typed escape hatch for dynamic dispatch / generic tooling, not for building
+     * significant systems. Server providers override {@link InternalRouteOperation} to execute the
+     * operation in-process; the client (GraphQL) provider overrides it to marshal over the wire.
+     * Only registered, active (and, when AI-authored, approved) operations are routable, and every
+     * call is authorized on the server side.
+     *
+     * @param operationKey - Stable registry key of the operation (e.g. `RecordProcess.RunNow`).
+     * @param input - The operation's typed input payload.
+     * @param options - Optional invocation options (mode, progress callback, user, provider, fingerprint).
+     * @returns The operation result; never throws for logical failures — check `Success`/`ErrorMessage`.
+     */
+    public async RouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, input: TInput, options?: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        const key = operationKey?.trim();
+        if (!key) {
+            return { Success: false, ResultCode: 'INVALID_OPERATION_KEY', ErrorMessage: 'operationKey is required' };
+        }
+        return this.InternalRouteOperation<TInput, TOutput>(key, input, options ?? {});
+    }
+
+    /**
+     * Provider-specific transport for a Remote Operation. The default implementation reports that
+     * the provider does not support remote operations; concrete providers override it — server
+     * providers resolve and execute the operation in-process, the client provider marshals it over
+     * GraphQL. Kept as an overridable (non-abstract) hook so existing providers remain source-
+     * compatible until they opt in.
+     * @param operationKey - Trimmed, non-empty operation key (validated by {@link RouteOperation}).
+     * @param input - The operation's typed input payload.
+     * @param options - Invocation options (never undefined here; defaulted by {@link RouteOperation}).
+     */
+    protected InternalRouteOperation<TInput = unknown, TOutput = unknown>(operationKey: string, _input: TInput, _options: RemoteOpInvokeOptions): Promise<RemoteOpResult<TOutput>> {
+        return Promise.resolve({
+            Success: false,
+            ResultCode: 'NOT_SUPPORTED',
+            ErrorMessage: `This provider does not support remote operations (operationKey='${operationKey}')`,
+        });
+    }
+
+    /**
      * Runs a view based on the provided parameters.
      * This method orchestrates the full execution flow: pre-processing, cache check,
      * internal execution, post-processing, and cache storage.
@@ -480,7 +632,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        if (this.TrustLocalCacheCompletely && !params.BypassCache) {
+        // Shallow-clone so the pipeline's in-place modifications (PlatformSQL resolution,
+        // Fields widening for cache-superset storage) never leak into the CALLER's params
+        // object — reusing a params object across calls must be safe.
+        params = { ...params };
+        // Keyset (AfterKey) queries always bypass the server cache: each call uses a
+        // different seek key, so a cached entry would never be reusable. Treat them like
+        // explicit BypassCache=true requests.
+        if (this.TrustLocalCacheCompletely && !params.BypassCache && !params.AfterKey) {
             // Server-side: use direct Pre → Internal → Post pipeline.
             // Cache is kept in sync via BaseEntity events + Redis pub/sub,
             // so PreRunView cache hits are returned immediately with no DB round-trip.
@@ -531,6 +690,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns Array of view results (shallow-copied Results per caller)
      */
     public async RunViews<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        // Shallow-clone every param so the pipeline's in-place modifications (PlatformSQL
+        // resolution, Fields widening for cache-superset storage) never leak into the
+        // CALLER's objects — reusing params across calls must be safe.
+        params = params.map(p => ({ ...p }));
         // Bypass dedup for side-effect calls (SaveViewResults creates DB records)
         if (this.ShouldBypassDedup(params)) {
             return this.ExecuteRunViewsPipeline<T>(params, contextUser);
@@ -575,14 +738,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // ── Fresh execution ──
         const promise = this.ExecuteRunViewsPipeline<T>(params, contextUser)
             .then(results => {
-                // Stash resolved results for the linger window
+                // Stash resolved results for the linger window. Safety cap: under
+                // extreme churn (hundreds of distinct keys resolving within one linger
+                // window) skip lingering rather than hold more result arrays in memory —
+                // the linger is a latency optimization, never a correctness requirement.
                 const entry = this._inflightViews.get(key);
                 if (entry && entry.promise === promise) {
-                    entry.resolvedResults = results as RunViewResult[];
-                    entry.resolvedAt = Date.now();
+                    if (ProviderBase.DedupLingerMs > 0 && this._inflightViews.size <= ProviderBase.MaxLingerEntries) {
+                        entry.resolvedResults = results as RunViewResult[];
+                        entry.resolvedAt = Date.now();
 
-                    // Schedule cleanup after linger expires
-                    if (ProviderBase.DedupLingerMs > 0) {
+                        // Schedule cleanup after linger expires
                         setTimeout(() => {
                             const current = this._inflightViews.get(key);
                             if (current && current.promise === promise) {
@@ -787,11 +953,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
         const startTime = Date.now();
         try {
-            const md = new Metadata();
             const maxRows = params.MaxRowsPerEntity ?? 10;
 
-            // Get all FTS-enabled entities
-            const ftsEntities = this.resolveFTSEntities(md, params.EntityNames);
+            // Use this provider's metadata directly — `this` implements IMetadataProvider, so
+            // its Entities reflect the schema for the database this provider is connected to.
+            // (The previous `new Metadata()` reached for the global default provider, which is
+            // wrong in multi-provider client setups.)
+            const ftsEntities = this.resolveFTSEntities(this, params.EntityNames);
             if (ftsEntities.length === 0) {
                 return {
                     Success: true,
@@ -863,7 +1031,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Resolve which entities to search. Filters to only FTS-enabled entities.
      * If entityNames provided, intersects with the FTS-enabled set.
      */
-    private resolveFTSEntities(md: Metadata, entityNames?: string[]): EntityInfo[] {
+    private resolveFTSEntities(md: IMetadataProvider, entityNames?: string[]): EntityInfo[] {
         const allEntities = md.Entities.filter(e => e.FullTextSearchEnabled);
 
         if (!entityNames || entityNames.length === 0) {
@@ -943,15 +1111,69 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Generates a deterministic dedup key for a batch of RunViewParams.
      * Extends the local-cache fingerprint with additional fields that
-     * affect result identity (Fields, UserSearchString, ViewID, ViewName,
-     * contextUser).
+     * affect result identity (Fields, ResultType, UserSearchString, ViewID,
+     * ViewName, contextUser).
+     *
+     * Unlike the cache fingerprint — which deliberately excludes Fields and
+     * ResultType because the cache stores the full-width superset and projects
+     * / transforms per-read — the dedup layer shares the FINAL pipeline output:
+     * results already projected to one caller's Fields and already transformed
+     * per that caller's ResultType. A linger or in-flight hit hands those rows
+     * to the next caller verbatim (shallow array copy only), so callers with
+     * different Fields or ResultType must NOT share a dedup slot or the second
+     * caller silently receives the first caller's shape.
      */
+    /**
+     * Single source of truth for whether a RunView call participates in the local
+     * cache (both READ and WRITE). Pre/Post hooks for the singular and batch paths
+     * must all use this predicate — historically each site recomputed it inline and
+     * they drifted (PostRunViews wrote BypassCache results into the cache, poisoning
+     * the Fields-agnostic superset slot with narrow rows).
+     *
+     * Ineligible:
+     * - `BypassCache` — caller explicitly wants true DB state, no cache interaction
+     * - `AfterKey` — keyset pages are single-use AND the fingerprint doesn't include
+     *   the seek key, so caching a page would poison the entity+filter slot
+     * - `ResultType 'count_only'` — returns no rows; caching its empty Results under
+     *   a fingerprint that excludes ResultType would poison row queries
+     * - entities where server caching is disallowed
+     */
+    protected runViewCacheEligible(param: RunViewParams): boolean {
+        return !param.BypassCache &&
+            !param.AfterKey &&
+            param.ResultType !== 'count_only' &&
+            (param.CacheLocal === true || this.TrustLocalCacheCompletely) &&
+            this.IsServerCacheAllowedForEntity(param);
+    }
+
+    /**
+     * Returns the caller's requested fields (lowercased) unioned with the entity's
+     * primary key field names. Platform contract: when `Fields` is explicitly
+     * specified, results ALWAYS include the primary key(s) — the direct SQL path has
+     * always done this, differential smart-cache merges require it, and entity
+     * linking in UIs depends on it. Applying the same union at every projection site
+     * keeps result shapes identical across cached, non-cached, and smart-cache paths.
+     */
+    protected static UnionFieldsWithPrimaryKeys(fields: string[], entity: EntityInfo): string[] {
+        const result = [...fields];
+        const present = new Set(fields);
+        // Defensive ?? [] — virtual entities can be PK-less, and test doubles may not model PrimaryKeys
+        for (const pk of entity.PrimaryKeys ?? []) {
+            const name = pk.Name.trim().toLowerCase();
+            if (!present.has(name)) {
+                present.add(name);
+                result.push(name);
+            }
+        }
+        return result;
+    }
+
     private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
         const parts = params.map(p => {
             const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
-            // Fields is intentionally excluded — cache stores full entity width
-            // and filters on return, so different Fields values are the same query.
             const extras = [
+                ProviderBase.NormalizeFieldsKey(p.Fields),
+                p.ResultType ?? 'simple',
                 p.UserSearchString ?? '',
                 p.ViewID ?? '',
                 p.ViewName ?? '',
@@ -963,12 +1185,376 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Normalizes a Fields list into a stable key segment: trimmed, lowercased,
+     * sorted, comma-joined — `'*'` when the caller wants all fields. Matches the
+     * matching semantics of `ProjectRowsToFields` (trim + lowercase) so that
+     * semantically identical requests collapse to the same key. Used by both the
+     * request-dedup key and the client-side cache fingerprint.
+     */
+    private static NormalizeFieldsKey(fields: string[] | undefined): string {
+        return fields && fields.length > 0
+            ? fields.map(f => f.trim().toLowerCase()).sort().join(',')
+            : '*';
+    }
+
+    /**
+     * Client-side cache fingerprint: the shared RunView fingerprint plus a
+     * normalized Fields suffix (`|f:<fields>` or `|f:*`).
+     *
+     * Why the client fingerprint includes Fields when the server's deliberately
+     * does NOT: the server cache widens every cacheable query to ALL entity
+     * fields before the DB hit, stores one full-width superset per entity+filter,
+     * and projects per-read — so a single Fields-agnostic slot can serve any
+     * field subset. The client smart-cache flow does NOT widen (narrow wire
+     * payloads are the point of `Fields` client-side) and does NOT project on
+     * read: rows are stored exactly as the server returned them. Under a
+     * Fields-agnostic fingerprint, a narrow entry would pass the staleness check
+     * for a DIFFERENT field subset of the same entity+filter — `maxUpdatedAt`
+     * and `rowCount` are column-independent — and silently serve rows missing
+     * the newly requested columns. Per-Fields slots make client entries
+     * exact-match only: each field subset stores, validates, and serves its own
+     * shape. (Subset-serving from wider entries was considered and deliberately
+     * rejected: it requires candidate enumeration, per-entry field metadata, and
+     * careful staleness attribution for marginal hit-rate gains.)
+     */
+    private clientCacheFingerprint(param: RunViewParams): string {
+        // Memoized per params object: RunViews shallow-clones params once at entry and
+        // the SAME object references flow through prepare → execute → process, where this
+        // fingerprint was previously recomputed up to 3× per param (string building +
+        // Fields normalization each time). Safe because params are not mutated after the
+        // first computation (entity_object Fields widening happens in
+        // prepareSmartCacheCheckParams BEFORE the first fingerprint call).
+        const memoized = this._clientFingerprintMemo.get(param);
+        if (memoized) {
+            return memoized;
+        }
+        const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+        const fingerprint = `${base}|f:${ProviderBase.NormalizeFieldsKey(param.Fields)}`;
+        this._clientFingerprintMemo.set(param, fingerprint);
+        return fingerprint;
+    }
+    private _clientFingerprintMemo = new WeakMap<RunViewParams, string>();
+
+    /**
+     * Ranked search over **one** entity's records. See {@link IMetadataProvider.SearchEntity}
+     * for the contract and how this differs from {@link EntityByName} /
+     * {@link FullTextSearch}.
+     *
+     * Implementation overview (concrete on `ProviderBase`, used as-is by every
+     * server-side provider; `GraphQLDataProvider` overrides to proxy via GQL):
+     *   1. Resolve the EntityDocument (by `params.options.entityDocumentId`
+     *      override or by looking up the active Search-category doc for the entity).
+     *   2. In parallel: run the lexical pass (RunView with LIKE filters on the
+     *      name field + any `IncludeInUserSearchAPI` fields) and the semantic
+     *      pass (`searchEntitiesSemanticPass`, the protected template method
+     *      each concrete server provider implements).
+     *   3. Fuse via canonical `ComputeRRF()` with optional per-list weights.
+     *   4. Permission-filter via a second RunView constrained to the matched
+     *      record IDs — that pipeline already enforces row-level read perms
+     *      on this entity, so any rows the user can't read drop out.
+     *   5. Slice to topK, apply minScore cutoff, return.
+     */
+    public async SearchEntity(params: SearchEntityParams): Promise<EntitySearchResult[]> {
+        const { entityName, searchText } = params;
+        const options: SearchEntitiesOptions = params.options ?? {};
+
+        const entity = this.EntityByName(entityName);
+        if (!entity) {
+            LogError(`SearchEntity: unknown entity "${entityName}"`);
+            return [];
+        }
+        if (!searchText || !searchText.trim()) {
+            return [];
+        }
+
+        const mode = options.mode ?? 'hybrid';
+        const topK = options.topK ?? 10;
+        const minScore = options.minScore ?? 0;
+        const overFetch = topK * 2;
+        const contextUser = options.contextUser;
+
+        // Resolve EntityDocument when semantic ranking is in play
+        let entityDocumentId: string | null = null;
+        let embeddingAIModelId: string | null = null;
+        if (mode === 'semantic' || mode === 'hybrid') {
+            const resolved = await this.resolveSearchEntityDocument(
+                entity.ID,
+                options.entityDocumentId,
+                contextUser
+            );
+            if (resolved) {
+                entityDocumentId = resolved.id;
+                embeddingAIModelId = resolved.aiModelId;
+            }
+            if (!entityDocumentId && mode === 'semantic') {
+                LogError(`SearchEntity: no active 'Search' EntityDocument for entity "${entityName}"; cannot run semantic-only mode`);
+                return [];
+            }
+        }
+
+        // Dispatch lexical and semantic in parallel. Wrapping the lexical pass
+        // in Promise.resolve adds no real cost today and keeps the shape ready
+        // if the lexical implementation ever goes async (FTS, external index).
+        const [lexicalRanked, semanticRanked] = await Promise.all([
+            mode === 'semantic'
+                ? Promise.resolve<ScoredCandidate[]>([])
+                : this.searchEntitiesLexicalPass(entity, searchText, overFetch, contextUser),
+            mode === 'lexical' || !entityDocumentId
+                ? Promise.resolve<ScoredCandidate[]>([])
+                : this.searchEntitiesSemanticPass(
+                    entityDocumentId,
+                    searchText,
+                    overFetch,
+                    embeddingAIModelId,
+                    contextUser
+                ),
+        ]);
+
+        // Blend
+        const blended = this.searchEntitiesBlend(mode, lexicalRanked, semanticRanked, options);
+
+        // Build component-score lookup for the result-shape step
+        const lexicalScoreById = new Map<string, number>();
+        for (const c of lexicalRanked) lexicalScoreById.set(c.ID, c.Score);
+        const semanticScoreById = new Map<string, number>();
+        const semanticDocByRecord = new Map<string, string>();
+        for (const c of semanticRanked) {
+            semanticScoreById.set(c.ID, c.Score);
+            const erdId = (c.Metadata?.['entityRecordDocumentId'] as string | undefined);
+            if (erdId) semanticDocByRecord.set(c.ID, erdId);
+        }
+
+        // Permission-filter post hoc via RunView constrained to the matched
+        // record IDs — the existing pipeline already enforces row-level read
+        // permissions on this entity, so unauthorized rows simply drop out.
+        const ids = blended.map(c => c.ID);
+        const allowedIds = ids.length > 0
+            ? await this.searchEntitiesFilterByPermission(entity, ids, contextUser)
+            : new Set<string>();
+
+        const results: EntitySearchResult[] = [];
+        for (const cand of blended) {
+            if (!allowedIds.has(cand.ID)) continue;
+            if (cand.Score < minScore) continue;
+            const lex = lexicalScoreById.get(cand.ID);
+            const sem = semanticScoreById.get(cand.ID);
+            const matchType: EntitySearchResult['matchType'] = (lex != null && sem != null)
+                ? 'hybrid'
+                : (lex != null ? 'lexical' : 'semantic');
+            results.push({
+                entityRecordDocumentId: semanticDocByRecord.get(cand.ID) ?? null,
+                recordId: cand.ID,
+                score: cand.Score,
+                matchType,
+                components: { lexical: lex, semantic: sem },
+            });
+            if (results.length >= topK) break;
+        }
+
+        return results;
+    }
+
+    /**
+     * Batch form of {@link SearchEntity}. Fans the input list out to N
+     * independent `SearchEntity` calls via `Promise.all`; result arrays come
+     * back aligned by input order (`result[i]` holds the matches for `params[i]`).
+     *
+     * On the server side, the per-entity passes are independent — running them
+     * concurrently is a real wall-clock win when the caller wants results from
+     * multiple entities. On the client side, `GraphQLDataProvider` overrides
+     * this method to pack the whole batch into a single GraphQL round-trip
+     * instead of issuing N parallel HTTP requests.
+     *
+     * See {@link IMetadataProvider.SearchEntities} for the contract.
+     */
+    public async SearchEntities(params: SearchEntityParams[]): Promise<EntitySearchResult[][]> {
+        if (!params || params.length === 0) return [];
+        return Promise.all(params.map(p => this.SearchEntity(p)));
+    }
+
+    /**
+     * Look up the EntityDocument that backs entity search for `entityID`.
+     * Caller supplies an explicit ID override; otherwise we filter for an
+     * Active EntityDocument joined to the 'Search' type via the denormalized
+     * `Type` column on `vwEntityDocuments` (avoids a SQL subquery and keeps
+     * this metadata-layer code provider-agnostic).
+     *
+     * Returns just the EntityDocument PK and its AIModelID; concrete semantic-pass
+     * implementations look up the model from `AIEngine` to recover the driver
+     * class and API name (the view does not project them). Threading AIModelID
+     * through ensures the query embedding is generated with the *same* model
+     * used to build the index — anything else produces garbage cosine scores.
+     */
+    private async resolveSearchEntityDocument(
+        entityID: string,
+        explicitId: string | undefined,
+        contextUser: UserInfo | undefined
+    ): Promise<{ id: string; aiModelId: string | null } | null> {
+        const filter = explicitId
+            ? `ID='${explicitId.replace(/'/g, "''")}'`
+            : `EntityID='${entityID.replace(/'/g, "''")}' AND Status='Active' AND Type='Search'`;
+        const r = await this.RunView<{
+            ID: string;
+            AIModelID: string | null;
+        }>({
+            EntityName: 'MJ: Entity Documents',
+            ExtraFilter: filter,
+            ResultType: 'simple',
+            MaxRows: 1,
+        }, contextUser);
+
+        if (!r.Success || (r.Results?.length ?? 0) === 0) return null;
+        const row = r.Results![0];
+        return {
+            id: row.ID,
+            aiModelId: row.AIModelID ?? null,
+        };
+    }
+
+    /**
+     * Substring/prefix LIKE search against the entity's name field and any
+     * string-typed fields flagged `IncludeInUserSearchAPI`. Returns lexical
+     * scores in [0,1] blended by best match per row.
+     *
+     * **Wildcard handling.** SQL Server's `LIKE` treats `%`, `_`, and `[`
+     * specially; a user searching for `50%_off` would otherwise match far more
+     * than intended. We escape those three characters and declare an explicit
+     * `ESCAPE '\\'` so user-supplied text is matched literally.
+     *
+     * **Field filtering.** Only string-typed fields are searched. Bit/numeric/
+     * date fields can be flagged `IncludeInUserSearchAPI` via metadata edit;
+     * applying `LIKE` to those would error or implicit-convert in subtle ways.
+     */
+    private async searchEntitiesLexicalPass(
+        entity: EntityInfo,
+        searchText: string,
+        overFetch: number,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        const trimmed = searchText.trim();
+        if (!trimmed) return [];
+
+        // Escape quotes for SQL string literal, then escape LIKE wildcards
+        // (%, _, [) with the explicit ESCAPE character we declare below.
+        const sanitized = trimmed
+            .replace(/'/g, "''")
+            .replace(/\\/g, '\\\\')
+            .replace(/%/g, '\\%')
+            .replace(/_/g, '\\_')
+            .replace(/\[/g, '\\[');
+
+        const searchableFields = entity.Fields
+            .filter(f => (f.IncludeInUserSearchAPI || f.IsNameField) && f.TSType === EntityFieldTSType.String);
+        if (searchableFields.length === 0) return [];
+
+        const likeClauses = searchableFields
+            .map(f => `${f.Name} LIKE '%${sanitized}%' ESCAPE '\\'`)
+            .join(' OR ');
+
+        const r = await this.RunView<Record<string, unknown>>({
+            EntityName: entity.Name,
+            ExtraFilter: likeClauses,
+            ResultType: 'simple',
+            MaxRows: overFetch,
+        }, contextUser);
+
+        if (!r.Success) return [];
+
+        const lower = trimmed.toLowerCase();
+        const nameField = entity.NameField?.Name ?? entity.Fields.find(f => f.IsNameField)?.Name ?? null;
+        const out: ScoredCandidate[] = [];
+        for (const row of (r.Results ?? [])) {
+            const id = String(row['ID'] ?? '');
+            if (!id) continue;
+            const nameVal = nameField ? String(row[nameField] ?? '').toLowerCase() : '';
+            let score = 0.5; // any match (in some searchable field)
+            if (nameVal) {
+                if (nameVal === lower) score = 1.0;
+                else if (nameVal.startsWith(lower)) score = 0.85;
+                else if (nameVal.includes(lower)) score = 0.7;
+            }
+            out.push({ ID: id, Score: score });
+        }
+        // ComputeRRF reads order, not magnitude — sort by score so rank 1 = best lexical match
+        out.sort((a, b) => b.Score - a.Score);
+        return out;
+    }
+
+    /**
+     * Run the semantic ranking pass for {@link SearchEntity}. Each concrete
+     * `ProviderBase` subclass supplies its own implementation: server-side
+     * providers (`GenericDatabaseProvider`) embed the query text and query
+     * an in-process vector pool directly; client-side providers
+     * (`GraphQLDataProvider`) override `SearchEntity` / `SearchEntities`
+     * outright to proxy via GraphQL and never reach this method.
+     *
+     * @returns Ranked array of `ScoredCandidate` whose `ID` is the parent
+     *          entity's record ID and `Metadata.entityRecordDocumentId`
+     *          carries the EntityRecordDocument PK.
+     */
+    protected abstract searchEntitiesSemanticPass(
+        entityDocumentId: string,
+        searchText: string,
+        overFetch: number,
+        embeddingAIModelId: string | null,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]>;
+
+    /** Blend lexical + semantic via canonical weighted ComputeRRF. */
+    private searchEntitiesBlend(
+        mode: NonNullable<SearchEntitiesOptions['mode']>,
+        lexicalRanked: ScoredCandidate[],
+        semanticRanked: ScoredCandidate[],
+        options: SearchEntitiesOptions
+    ): ScoredCandidate[] {
+        if (mode === 'lexical') return lexicalRanked;
+        if (mode === 'semantic') return semanticRanked;
+        const weights = [
+            options.weights?.lexical ?? 1.0,
+            options.weights?.semantic ?? 1.0,
+        ];
+        return ComputeRRF([lexicalRanked, semanticRanked], options.rrfK ?? 60, weights);
+    }
+
+    /**
+     * Run a permission-aware RunView restricted to the matched IDs. Whatever
+     * comes back is what the user is allowed to see. Used as a post-filter
+     * over the fused result set.
+     */
+    private async searchEntitiesFilterByPermission(
+        entity: EntityInfo,
+        ids: string[],
+        contextUser: UserInfo | undefined
+    ): Promise<Set<string>> {
+        if (ids.length === 0) return new Set();
+        const escaped = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+        const r = await this.RunView<{ ID: string }>({
+            EntityName: entity.Name,
+            ExtraFilter: `ID IN (${escaped})`,
+            Fields: ['ID'],
+            ResultType: 'simple',
+            MaxRows: ids.length,
+        }, contextUser);
+        if (!r.Success) return new Set();
+        return new Set((r.Results ?? []).map(row => row.ID));
+    }
+
+    /**
      * Returns true if any param in the batch has SaveViewResults set,
      * which means the call has a side effect (creating UserViewRun records)
      * and must not be deduplicated.
      */
     private ShouldBypassDedup(params: RunViewParams[]): boolean {
-        return params.some(p => p.SaveViewResults === true);
+        // BypassCache:true MUST bypass the dedup-linger cache as well —
+        // otherwise the "skip the cache to see DB truth" contract leaks: a
+        // recent identical RunView (within DedupLingerMs) would return its
+        // cached result even when the caller explicitly asked for a fresh
+        // read. Permission resolvers and other security-critical paths rely
+        // on BypassCache being a hard cache bypass; without this, freshly
+        // revoked grants stay visible through the linger window.
+        // SaveViewResults bypasses for the original reason: it creates DB
+        // records and must not be deduplicated.
+        return params.some(p => p.SaveViewResults === true || p.BypassCache === true);
     }
 
     /**
@@ -992,6 +1578,87 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The query results
      */
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
+        // Shallow-clone for symmetry with RunView — pipeline must never mutate caller objects
+        params = { ...params };
+
+        // ── CacheLocal: the RunQuery result cache (RunQueryCache category) ──
+        // Engages ONLY on explicit opt-in. Saved queries only (QueryID/QueryName) —
+        // ad-hoc SQL is never cached. Semantics per RunQueryParams JSDoc:
+        //  - cached + unexpired + provider supports RunQueriesWithCacheCheck (client):
+        //    server validates via the Query's CacheValidationSQL → 'current' serves the
+        //    local slot, 'stale'/'no_validation' returns fresh rows and rewrites the slot
+        //  - cached + unexpired + no validation transport (server providers): TTL mode —
+        //    serve directly until expiry
+        //  - miss/expired: run normally, then store with TTL (CacheLocalTTL override,
+        //    else the LocalCacheManager default)
+        const queryCacheEngaged = params.CacheLocal === true
+            && !params.SQL
+            && (!!params.QueryID || !!params.QueryName)
+            && LocalCacheManager.Instance.IsInitialized;
+        let queryFingerprint: string | undefined;
+        if (queryCacheEngaged) {
+            // MaxRows/StartRow shape the result set — they MUST distinguish cache slots,
+            // so fold them into the parameters portion of the fingerprint.
+            const fingerprintParams: Record<string, unknown> = {
+                ...(params.Parameters ?? {}),
+                __maxRows: params.MaxRows ?? -1,
+                __startRow: params.StartRow ?? 0
+            };
+            queryFingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
+                params.QueryID, params.QueryName, fingerprintParams, this.InstanceConnectionString
+            );
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(queryFingerprint); // TTL-enforced
+            if (cached) {
+                const serveFromSlot = (): RunQueryResult => ({
+                    QueryID: cached.queryId ?? params.QueryID ?? '',
+                    QueryName: params.QueryName ?? '',
+                    Success: true,
+                    Results: cached.results as RunQueryResult['Results'],
+                    RowCount: cached.results.length,
+                    TotalRowCount: cached.rowCount ?? cached.results.length,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    CacheHit: true,
+                    CacheKey: queryFingerprint
+                });
+                const checker = (this as IRunQueryProvider).RunQueriesWithCacheCheck?.bind(this);
+                if (!checker || this.TrustLocalCacheCompletely) {
+                    // TTL mode (server providers / no validation transport)
+                    return serveFromSlot();
+                }
+                // Client smart validation round trip
+                const response = await checker([{
+                    params,
+                    cacheStatus: { maxUpdatedAt: cached.maxUpdatedAt, rowCount: cached.rowCount }
+                }], contextUser);
+                const check = response.results?.[0];
+                if (response.success && check) {
+                    if (check.status === 'current') {
+                        return serveFromSlot();
+                    }
+                    if ((check.status === 'stale' || check.status === 'no_validation') && check.results) {
+                        const freshRows = check.results as RunQueryResult['Results'];
+                        // Fire-and-forget slot rewrite — same pattern as the RunView client path
+                        LocalCacheManager.Instance.SetRunQueryResult(
+                            queryFingerprint, params.QueryName ?? '', freshRows,
+                            check.maxUpdatedAt ?? '', check.rowCount, check.queryId, params.CacheLocalTTL
+                        ).catch(e => LogError(`RunQuery cache rewrite failed: ${e}`));
+                        return {
+                            QueryID: check.queryId ?? params.QueryID ?? '',
+                            QueryName: params.QueryName ?? '',
+                            Success: true,
+                            Results: freshRows,
+                            RowCount: freshRows.length,
+                            TotalRowCount: check.rowCount ?? freshRows.length,
+                            ExecutionTime: 0,
+                            ErrorMessage: ''
+                        };
+                    }
+                }
+                // validation transport failed — fall through to a normal execution
+            }
+        }
+
         // Pre-processing: telemetry, cache check
         const preResult = await this.PreRunQuery(params, contextUser);
 
@@ -1010,6 +1677,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Post-processing: cache storage, telemetry end
         await this.PostRunQuery(result, params, preResult, contextUser);
+
+        // Store in the RunQuery cache on success (fire-and-forget; TTL per CacheLocalTTL
+        // or the LocalCacheManager default). maxUpdatedAt is unknown for a plain run —
+        // the smart-validation path stamps it when the Query has CacheValidationSQL.
+        if (queryCacheEngaged && queryFingerprint && result.Success) {
+            LocalCacheManager.Instance.SetRunQueryResult(
+                queryFingerprint, result.QueryName, result.Results,
+                '', result.TotalRowCount, result.QueryID, params.CacheLocalTTL
+            ).catch(e => LogError(`RunQuery cache write failed: ${e}`));
+        }
 
         return result;
     }
@@ -1097,6 +1774,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         cacheStatus: 'hit' | 'miss' | 'disabled' | 'expired';
         cachedResult?: RunViewResult;
         fingerprint?: string;
+        /**
+         * The caller's original Fields list (lowercased), captured before PreRunView
+         * widened params.Fields to all entity fields for cache-superset storage.
+         * Non-null ONLY when that widening actually happened — PostRunView uses it
+         * to project cache-miss DB results back down to the requested shape.
+         */
+        callerRequestedFields?: string[] | null;
     };
 
     /**
@@ -1112,6 +1796,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         smartCacheCheckParams?: RunViewWithCacheCheckParams[];
         /** When CacheLocal is enabled, indicates we should use smart cache check */
         useSmartCacheCheck?: boolean;
+        /**
+         * Per-param-index caller Fields lists (lowercased), captured before PreRunViews
+         * widened params.Fields to all entity fields for cache-superset storage.
+         * An index is present ONLY when that widening actually happened — PostRunViews
+         * uses it to project cache-miss DB results back down to the requested shape.
+         */
+        callerFieldsMap?: Map<number, string[]>;
+        /**
+         * Per-param-index cache fingerprints computed during PreRunViews — carried
+         * forward so PostRunViews doesn't recompute the RLS where-clause and
+         * fingerprint string for every batch item.
+         */
+        fingerprintMap?: Map<number, string>;
     };
 
     /**
@@ -1187,6 +1884,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     // ========================================================================
 
     /**
+     * Computes the per-user Row-Level-Security WHERE clause that {@link InternalRunView} will
+     * append to this query's SQL for the given user, so it can be folded into the cache
+     * fingerprint. RLS-scoped reads return a different result set than unscoped reads of the same
+     * entity+filter; without including the RLS clause in the cache key, a scoped user could be
+     * served a cached unscoped result set (a data leak).
+     *
+     * Returns '' when the user is exempt from RLS on this entity (the common case), which makes the
+     * resulting fingerprint byte-identical to the pre-RLS format — preserving normal cache sharing.
+     *
+     * Uses `this` (the active provider) to resolve the entity, never the global Metadata, so the
+     * correct per-provider/per-tenant metadata is consulted.
+     */
+    protected ComputeRunViewRLSWhereClause(params: RunViewParams, contextUser?: UserInfo): string {
+        const user = contextUser ?? this.CurrentUser;
+        if (!user || !params.EntityName) return '';
+        const entity = this.EntityByName(params.EntityName);
+        if (!entity) return '';
+        return entity.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+    }
+
+    /**
      * Pre-processing hook for RunView.
      * Handles telemetry, validation, entity status check, and cache lookup.
      * @param params - The view parameters
@@ -1219,8 +1937,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
+                // Pagination cursor (keyset) — included so consecutive pages of a sweep are
+                // distinct fingerprints and not falsely flagged as a Duplicate RunView.
+                AfterKey: params.AfterKey?.ToConcatenatedString(),
                 CacheLocal: params.CacheLocal,
-                _fromEngine: params._fromEngine
+                _fromEngine: params._fromEngine,
+                Exempt: params.Telemetry?.Exempt,
+                ExemptReason: params.Telemetry?.Reason
             },
             contextUser?.ID
         );
@@ -1235,15 +1958,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // We always fetch ALL fields from the DB so the cache entry is a universal superset
         // that satisfies any future query for the same entity+filter regardless of field subset.
         const entityLookupStart = performance.now();
-        const callerRequestedFields = params.Fields && params.Fields.length > 0
+        let callerRequestedFields = params.Fields && params.Fields.length > 0
             ? params.Fields.map(f => f.trim().toLowerCase())
             : null; // null = caller wants all fields
 
-        // Always override Fields to all entity fields for the DB query.
-        // This ensures one cache entry per entity+filter that satisfies all field subsets.
+        // Only override Fields to all entity fields when caching will actually happen
+        // for this call. For non-cached calls we respect the caller's narrow Fields
+        // end-to-end — there's no cache-coherence concern to preserve.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
-        if (entity) {
+        const willCache = this.runViewCacheEligible(params);
+        if (entity && willCache) {
             params.Fields = entity.Fields.map(f => f.Name);
+            // Platform contract: explicit Fields always include the primary key(s) —
+            // project back down to requested ∪ PK, matching the direct SQL path.
+            if (callerRequestedFields) {
+                callerRequestedFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerRequestedFields, entity);
+            }
         }
         const entityLookupTime = performance.now() - entityLookupStart;
 
@@ -1253,31 +1983,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         let cachedResult: RunViewResult | undefined;
         let fingerprint: string | undefined;
 
-        const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
-        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && entityCacheAllowed && LocalCacheManager.Instance.IsInitialized) {
-            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+        if (willCache && LocalCacheManager.Instance.IsInitialized) {
+            const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+            fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
             const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
             if (cached) {
                 // Filter cached results to only the caller's requested fields (if specified)
                 let results = cached.results;
                 if (callerRequestedFields && params.ResultType !== 'entity_object') {
-                    // Cache lowercase key→keep decisions across rows to avoid repeated allocations
-                    const requestedFieldSet = new Set(callerRequestedFields);
-                    const keyCache = new Map<string, boolean>();
-                    results = results.map((row: Record<string, unknown>) => {
-                        const filtered: Record<string, unknown> = {};
-                        for (const key of Object.keys(row)) {
-                            let keep = keyCache.get(key);
-                            if (keep === undefined) {
-                                keep = requestedFieldSet.has(key.toLowerCase());
-                                keyCache.set(key, keep);
-                            }
-                            if (keep) {
-                                filtered[key] = row[key];
-                            }
-                        }
-                        return filtered;
-                    });
+                    results = ProjectRowsToFields(results, callerRequestedFields);
                 }
 
                 // Reconstruct RunViewResult from cached data
@@ -1310,7 +2024,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             telemetryEventId,
             cacheStatus,
             cachedResult,
-            fingerprint
+            fingerprint,
+            // Only non-null when params.Fields was actually widened above — tells
+            // PostRunView to project cache-miss DB results back to the caller's shape
+            callerRequestedFields: (entity && willCache) ? callerRequestedFields : null
         };
     }
 
@@ -1340,66 +2057,31 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             {
                 BatchSize: params.length,
                 Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
+                // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
+                // tell apart two batches over the same entity set but with different filters.
+                Filters: params.map(p => p.ExtraFilter as string | undefined),
+                OrderBys: params.map(p => p.OrderBy as string | undefined),
                 _fromEngine: fromEngine
             },
             contextUser?.ID
         );
 
-        // Client-side providers use smart cache check (lightweight server validation)
-        // Server-side providers trust the cache completely and fall through to
-        // the traditional flow which returns cached data immediately on hit.
+        // Client-side providers route any CacheLocal params through smart-cache-check:
+        // a single batched GraphQL call sends fingerprints (hashes + counts) per view,
+        // the server confirms current vs stale, and only stale views return data.
+        // Server-side providers trust the cache completely and fall through to the
+        // traditional flow which returns cached data immediately on hit.
         if (!this.TrustLocalCacheCompletely) {
-            // FastStartupMode: on the first engine load after a page refresh, trust
-            // the local IndexedDB cache without server validation. This eliminates
-            // the RunViewsWithCacheCheck round-trips that dominate warm-load TTI.
-            // After the first batch of engine loads, auto-disable so subsequent
-            // requests use normal server validation for data freshness.
-            const useFastStartup = ProviderBase.FastStartupMode
-                && !ProviderBase._fastStartupConsumed
-                && LocalCacheManager.Instance.IsInitialized
-                && params.some(p => p.CacheLocal);
-
-            if (useFastStartup) {
-                // Check if we actually have cached data for ALL params
-                let allHaveCachedData = true;
-                for (const param of params) {
-                    if (param.CacheLocal) {
-                        const fp = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-                        const cached = await LocalCacheManager.Instance.GetRunViewResult(fp);
-                        if (!cached) {
-                            allHaveCachedData = false;
-                            break;
-                        }
-                    }
-                }
-
-                if (allHaveCachedData) {
-                    // Mark fast startup as consumed — subsequent loads will validate normally
-                    ProviderBase._fastStartupConsumed = true;
-                    const entityNames = params.map(p => p.EntityName || p.ViewName || '?').join(', ');
-                    LogStatusEx({
-                        message: `⚡ [Fast-Start] Trusting local cache for ${params.length} views [${entityNames}] — skipping server validation`,
-                        verboseOnly: false
-                    });
-                    // Fall through to the traditional flow below which will return cached data
-                } else {
-                    // Not all params have cached data — use normal smart cache check
-                    ProviderBase._fastStartupConsumed = true; // Still consume the fast-start flag
-                    const useSmartCacheCheck = params.some(p => p.CacheLocal);
-                    if (useSmartCacheCheck) {
-                        return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
-                    }
-                }
-            } else if (!useFastStartup) {
-                const useSmartCacheCheck = params.some(p => p.CacheLocal);
-                if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
-                    return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
-                }
+            const useSmartCacheCheck = params.some(p => p.CacheLocal);
+            if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
+                return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
             }
         }
 
         // Traditional caching flow
         const cacheStatusMap = new Map<number, { status: 'hit' | 'miss' | 'disabled' | 'expired'; result?: RunViewResult }>();
+        const callerFieldsMap = new Map<number, string[]>();
+        const fingerprintMap = new Map<number, string>();
         const uncachedParams: RunViewParams[] = [];
         const cachedResults: (RunViewResult | null)[] = [];
         let allCached = true;
@@ -1412,43 +2094,39 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Save caller's original Fields, then always fetch all fields from DB.
             // One cache entry per entity+filter satisfies all field subsets.
-            const callerFields = param.Fields && param.Fields.length > 0
+            let callerFields = param.Fields && param.Fields.length > 0
                 ? param.Fields.map(f => f.trim().toLowerCase())
                 : null;
 
+            // Only override Fields to all entity fields when caching will actually happen
+            // for this call. For non-cached calls we respect the caller's narrow Fields
+            // end-to-end — there's no cache-coherence concern to preserve.
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
-            if (batchEntity) {
+            const batchWillCache = this.runViewCacheEligible(param);
+            if (batchEntity && batchWillCache) {
                 param.Fields = batchEntity.Fields.map(f => f.Name);
+                // Platform contract: explicit Fields always include the primary key(s)
+                if (callerFields) {
+                    callerFields = ProviderBase.UnionFieldsWithPrimaryKeys(callerFields, batchEntity);
+                    // Remember the caller's original shape so PostRunViews can project
+                    // cache-miss DB results back down to it
+                    callerFieldsMap.set(i, callerFields);
+                }
             }
 
             // Check local cache if enabled or if server trusts its cache completely
             // BypassCache skips cache entirely — used by maintenance actions querying for
             // records that were inserted via direct SQL (bypassing BaseEntity.Save())
-            if (!param.BypassCache && (param.CacheLocal || this.TrustLocalCacheCompletely) && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+            if (batchWillCache && LocalCacheManager.Instance.IsInitialized) {
+                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(param, contextUser);
+                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString, rlsWhereClause);
+                fingerprintMap.set(i, fingerprint);
                 const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
                 if (cached) {
                     // Filter cached results to caller's requested fields (if specified and not entity_object)
                     let results = cached.results;
                     if (callerFields && param.ResultType !== 'entity_object') {
-                        // ⚡ Bolt: Cache key-to-lowercase string resolutions to eliminate O(n*c) string allocations and array search operations.
-                        // This improves post-cache filtering by ~40-50% for large datasets with many columns.
-                        const requestedFieldSet = new Set(callerFields);
-                        const keyCache = new Map<string, boolean>();
-                        results = results.map((row: Record<string, unknown>) => {
-                            const filtered: Record<string, unknown> = {};
-                            for (const key of Object.keys(row)) {
-                                let keep = keyCache.get(key);
-                                if (keep === undefined) {
-                                    keep = requestedFieldSet.has(key.toLowerCase());
-                                    keyCache.set(key, keep);
-                                }
-                                if (keep) {
-                                    filtered[key] = row[key];
-                                }
-                            }
-                            return filtered;
-                        });
+                        results = ProjectRowsToFields(results, callerFields);
                     }
 
                     const cachedViewResult: RunViewResult = {
@@ -1491,7 +2169,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ? cachedResults.filter(r => r !== null) as RunViewResult[]
                 : (hasCacheHits ? cachedResults as RunViewResult[] : undefined),
             uncachedParams: allCached ? undefined : uncachedParams,
-            cacheStatusMap
+            cacheStatusMap,
+            callerFieldsMap: callerFieldsMap.size > 0 ? callerFieldsMap : undefined,
+            fingerprintMap: fingerprintMap.size > 0 ? fingerprintMap : undefined
         };
     }
 
@@ -1505,13 +2185,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         telemetryEventId: string,
         contextUser?: UserInfo
     ): Promise<typeof this._preRunViewsResultType> {
-        const smartCacheCheckParams: RunViewWithCacheCheckParams[] = [];
-
-        for (const param of params) {
-            // Entity status check
+        // Phase 1 — sync setup: entity status checks, entity_object Fields population,
+        // and fingerprint computation. None of this touches storage; do it serially
+        // so we have the full fingerprint list ready to issue ONE batched IDB read.
+        const cacheable: { paramIndex: number; fingerprint: string }[] = [];
+        for (let i = 0; i < params.length; i++) {
+            const param = params[i];
             await this.EntityStatusCheck(param, 'PreRunViews');
 
-            // Handle entity_object result type - need all fields
             if (param.ResultType === 'entity_object') {
                 const entity = this.EntityByName(param.EntityName);
                 if (!entity) {
@@ -1520,24 +2201,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
-            // Build the cache check param with optional cache status
-            let cacheStatus: RunViewCacheStatus | undefined;
-
             if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-                const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
-                if (cached) {
-                    cacheStatus = {
-                        maxUpdatedAt: cached.maxUpdatedAt,
-                        rowCount: cached.rowCount
-                    };
-                }
+                cacheable.push({ paramIndex: i, fingerprint: this.clientCacheFingerprint(param) });
             }
+        }
 
-            smartCacheCheckParams.push({
-                params: param,
-                cacheStatus
-            });
+        // Phase 2 — batched read: one IDB transaction (or one Redis MGET) returns
+        // every cached entry's status (maxUpdatedAt + rowCount). Was previously N
+        // serialized GetItem calls — for the 8-engine warm-load case this drops
+        // from ~85 transactions to 1.
+        const cacheMap = cacheable.length > 0
+            ? await LocalCacheManager.Instance.GetRunViewResults(cacheable.map(c => c.fingerprint))
+            : new Map<string, CachedRunViewResult | null>();
+
+        // Phase 3 — assemble per-param cache check entries from the resolved map.
+        const smartCacheCheckParams: RunViewWithCacheCheckParams[] = params.map(p => ({ params: p }));
+        for (const { paramIndex, fingerprint } of cacheable) {
+            const cached = cacheMap.get(fingerprint);
+            if (cached) {
+                smartCacheCheckParams[paramIndex].cacheStatus = {
+                    maxUpdatedAt: cached.maxUpdatedAt,
+                    rowCount: cached.rowCount,
+                };
+            }
         }
 
         return {
@@ -1587,9 +2273,33 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }));
         }
 
-        // Process all results in parallel
+        // ── Batched cache pre-read for 'current' entries ──────────────────
+        // Each 'current' result needs its cached row data to materialize the response.
+        // Collect every fingerprint up front and issue ONE batched read instead of
+        // letting each per-param processor do its own GetRunViewResult call (~85
+        // serialized IDB transactions in the 8-engine warm-load case).
+        const currentFingerprints: string[] = [];
+        for (const sr of response.results) {
+            if (sr.status === 'current' && params[sr.viewIndex]) {
+                currentFingerprints.push(this.clientCacheFingerprint(params[sr.viewIndex]));
+            }
+        }
+        const preResolvedCache = currentFingerprints.length > 0
+            ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
+            : new Map<string, CachedRunViewResult | null>();
+
+        // Pre-build index Map for server results lookup — avoids O(N^2) .find() scans below.
+        const serverResultsByViewIndex = new Map<number, RunViewWithCacheCheckResult<T>>();
+        if (response.results) {
+            for (const r of response.results) {
+                serverResultsByViewIndex.set(r.viewIndex, r);
+            }
+        }
+
+        // Process all results in parallel — 'current' entries now read from the
+        // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, response.results, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -1617,15 +2327,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Processes a single smart cache check result.
      * Handles cache lookup for 'current' items and cache update for 'stale' items.
+     *
+     * @param preResolvedCache - Pre-resolved cache map produced by the batched
+     *   `GetRunViewResults` call in `executeSmartCacheCheck`. Lookups for
+     *   'current' items hit this map instead of issuing per-param IDB reads,
+     *   amortizing IndexedDB transaction overhead across the whole batch.
      */
     private async processSingleSmartCacheResult<T>(
         param: RunViewParams,
         index: number,
-        serverResults: RunViewWithCacheCheckResult<T>[],
+        checkResult: RunViewWithCacheCheckResult<T> | undefined,
+        preResolvedCache: Map<string, CachedRunViewResult | null>,
         contextUser?: UserInfo
     ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
-        const checkResult = serverResults.find(r => r.viewIndex === index);
-
         if (!checkResult) {
             return {
                 result: {
@@ -1643,9 +2357,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         if (checkResult.status === 'current') {
-            // Cache is current - use cached data
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-            const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+            // Cache is current - use the pre-resolved cache entry from the batched read
+            // (executeSmartCacheCheck reads all 'current' fingerprints in one IDB
+            // transaction up front, so we don't pay per-param transaction overhead here).
+            const fingerprint = this.clientCacheFingerprint(param);
+            const cached = preResolvedCache.get(fingerprint) ?? null;
 
             if (cached) {
                 const cachedResult: RunViewResult<T> = {
@@ -1679,7 +2395,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         } else if (checkResult.status === 'differential') {
             // Cache is stale but we have differential data - merge with cached data
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+            const fingerprint = this.clientCacheFingerprint(param);
 
             // Get entity info for primary key field name
             const entity = this.EntityByName(param.EntityName);
@@ -1695,7 +2411,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     primaryKeyFieldName,
                     checkResult.maxUpdatedAt || new Date().toISOString(),
                     checkResult.rowCount || 0,
-                    checkResult.aggregateResults // Pass fresh aggregate results (can't be differentially computed)
+                    checkResult.aggregateResults, // Pass fresh aggregate results (can't be differentially computed)
+                    this
                 );
 
                 if (merged) {
@@ -1740,7 +2457,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Update the local cache with fresh data (don't await - fire and forget for performance)
             if (param.CacheLocal && checkResult.maxUpdatedAt && LocalCacheManager.Instance.IsInitialized) {
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                const fingerprint = this.clientCacheFingerprint(param);
                 // Note: We don't await here to avoid blocking the response
                 // Cache update happens in background
                 LocalCacheManager.Instance.SetRunViewResult(
@@ -1749,7 +2466,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     checkResult.results || [],
                     checkResult.maxUpdatedAt,
                     checkResult.aggregateResults, // Include aggregate results in cache
-                    checkResult.rowCount
+                    checkResult.rowCount,
+                    this
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -1860,8 +2578,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // with circular subscriber references that break JSON.stringify.
         // On cache read, TransformSimpleObjectToEntityObject is called to restore
         // entity objects when ResultType === 'entity_object'.
-        const postEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
-        if ((params.CacheLocal || this.TrustLocalCacheCompletely) && postEntityCacheAllowed && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
+        // runViewCacheEligible is the same predicate PreRunView used to decide whether to
+        // widen Fields — only widened (superset) results may be written to the cache.
+        // preResult.fingerprint doubles as a guard (only computed when eligible).
+        if (this.runViewCacheEligible(params) && result.Success && preResult.fingerprint && LocalCacheManager.Instance.IsInitialized) {
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 preResult.fingerprint,
@@ -1869,13 +2589,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.Results,
                 maxUpdatedAt,
                 result.AggregateResults,
-                result.TotalRowCount
+                result.TotalRowCount,
+                this
             );
         } else if (this.shouldAutoCache(params, result)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
             // automatically cached even without explicit CacheLocal. These are
             // safe for in-place upsert on entity changes (no filter to evaluate).
-            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
+            const fingerprint = preResult.fingerprint || LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params, contextUser));
             const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
             await LocalCacheManager.Instance.SetRunViewResult(
                 fingerprint,
@@ -1883,9 +2604,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.Results,
                 maxUpdatedAt,
                 result.AggregateResults,
-                result.TotalRowCount
+                result.TotalRowCount,
+                this
             );
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
+        }
+
+        // Project cache-miss DB results back down to the caller's originally requested
+        // fields. PreRunView widened params.Fields to ALL entity fields so the cache
+        // entry (written above) is a universal superset — but the caller must receive
+        // the same shape on a miss as they do on a hit (which projects from cache).
+        // Must run AFTER the cache writes (cache keeps the superset) and only for
+        // plain-object results (entity objects need all fields).
+        if (result.Success && preResult.callerRequestedFields && params.ResultType !== 'entity_object') {
+            result.Results = ProjectRowsToFields(result.Results, preResult.callerRequestedFields);
         }
 
         // Transform the result set into BaseEntity-derived objects, if needed
@@ -1939,9 +2671,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 continue;
             }
 
-            const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString);
-            const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(params[i]);
-            if ((params[i].CacheLocal || this.TrustLocalCacheCompletely) && batchEntityCacheAllowed && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
+            // Reuse the fingerprint PreRunViews already computed for this index —
+            // recomputing means rebuilding the RLS where-clause + fingerprint string
+            // per item. Compute lazily only for indexes PreRunViews skipped (cache
+            // was disabled for them but auto-cache/OnDataChanged may still need it).
+            const fingerprint = preResult.fingerprintMap?.get(i)
+                ?? LocalCacheManager.Instance.GenerateRunViewFingerprint(params[i], this.InstanceConnectionString, this.ComputeRunViewRLSWhereClause(params[i], contextUser));
+            // CRITICAL: must be the SAME eligibility predicate PreRunViews used to decide
+            // whether to widen Fields. Writing a non-widened (narrow or keyset-paged)
+            // result here poisons the Fields-agnostic superset slot — this exact gate
+            // previously omitted BypassCache/AfterKey and cached narrow BypassCache rows.
+            if (this.runViewCacheEligible(params[i]) && results[i].Success && LocalCacheManager.Instance.IsInitialized) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
                 cachePromises.push(LocalCacheManager.Instance.SetRunViewResult(
                     fingerprint,
@@ -1949,7 +2689,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].Results,
                     maxUpdatedAt,
                     results[i].AggregateResults,
-                    results[i].TotalRowCount
+                    results[i].TotalRowCount,
+                    this
                 ));
             } else if (this.shouldAutoCache(params[i], results[i])) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -1959,7 +2700,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].Results,
                     maxUpdatedAt,
                     results[i].AggregateResults,
-                    results[i].TotalRowCount
+                    results[i].TotalRowCount,
+                    this
                 ));
                 LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }
@@ -1973,6 +2715,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
         await Promise.all(cachePromises);
+
+        // Project cache-miss DB results back down to each caller's originally
+        // requested fields. PreRunViews widened those params' Fields to ALL entity
+        // fields so the cache entries (written above) are universal supersets — but
+        // callers must receive the same shape on a miss as on a hit (which projects
+        // from cache). Skip hits (already projected) and entity_object results
+        // (need all fields).
+        if (preResult.callerFieldsMap) {
+            for (let i = 0; i < results.length; i++) {
+                const cacheInfo = preResult.cacheStatusMap?.get(i);
+                if (cacheInfo?.status === 'hit') {
+                    continue;
+                }
+                const callerFields = preResult.callerFieldsMap.get(i);
+                if (callerFields && results[i].Success && params[i].ResultType !== 'entity_object') {
+                    results[i].Results = ProjectRowsToFields(results[i].Results, callerFields);
+                }
+            }
+        }
 
         // Transform results to entity objects AFTER caching plain objects.
         // Skip results that came from cache hits — they're already entity objects.
@@ -2142,11 +2903,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     protected shouldAutoCache(params: RunViewParams, result: RunViewResult): boolean {
         if (!this.TrustLocalCacheCompletely) return false;
-        if (params.BypassCache) return false; // caller explicitly wants no caching
         if (params.CacheLocal) return false; // already handled
+        // Same eligibility predicate as the main cache path — covers BypassCache,
+        // AfterKey (keyset pages), count_only, and cache-disallowed entities. An
+        // auto-cached keyset page or count_only result would poison the
+        // entity+filter slot just like the main-path variants of those bugs.
+        if (!this.runViewCacheEligible(params)) return false;
         if (!LocalCacheManager.Instance.IsInitialized) return false;
         if (!result.Success) return false;
-        if (!this.IsServerCacheAllowedForEntity(params)) return false;
         if (ProviderBase.ServerAutoCacheMaxRows <= 0) return false;
         if ((result.Results?.length ?? 0) > ProviderBase.ServerAutoCacheMaxRows) return false;
 
@@ -2163,6 +2927,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected extractMaxUpdatedAt(results: unknown[]): string {
         let maxDate: Date | null = null;
 
+        // Early exit: SQL result rows are uniform — if the first row carries neither
+        // timestamp column, none do, and the full O(rows) scan is pointless.
+        if (results.length > 0 && results[0] && typeof results[0] === 'object') {
+            const probe = results[0] as Record<string, unknown>;
+            if (probe['__mj_UpdatedAt'] === undefined && probe['UpdatedAt'] === undefined) {
+                return '';
+            }
+        }
+
         for (const item of results) {
             if (item && typeof item === 'object') {
                 const record = item as Record<string, unknown>;
@@ -2177,7 +2950,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        return maxDate ? maxDate.toISOString() : new Date().toISOString();
+        // Return empty string for empty/timestamp-less results instead of current server time.
+        // Using current time would make empty result sets perpetually "stale" — each smart-cache-check
+        // would see a different timestamp and force an unnecessary DB refresh.
+        return maxDate ? maxDate.toISOString() : '';
     }
 
     /**
@@ -2261,7 +3037,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 ResultType: params.ResultType,
                 MaxRows: params.MaxRows,
                 StartRow: params.StartRow,
-                _fromEngine: params._fromEngine
+                // Pagination cursor (keyset) — see PreRunView note: distinguishes sweep pages.
+                AfterKey: params.AfterKey?.ToConcatenatedString(),
+                _fromEngine: params._fromEngine,
+                Exempt: params.Telemetry?.Exempt,
+                ExemptReason: params.Telemetry?.Reason
             },
             contextUser?.ID
         );
@@ -2309,13 +3089,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async PreProcessRunViews(params: RunViewParams[], contextUser?: UserInfo): Promise<void> {
         // Start telemetry tracking for batch operation
         const fromEngine = params.some(p => p._fromEngine);
+        // A batch is exempt only when EVERY constituent view opts out — a mixed batch should still
+        // be analyzed. Reason is taken from the first view that supplied one.
+        const batchExempt = params.length > 0 && params.every(p => p.Telemetry?.Exempt);
         const eventId = TelemetryManager.Instance.StartEvent(
             'RunView',
             'ProviderBase.RunViews',
             {
                 BatchSize: params.length,
                 Entities: params.map(p => p.EntityName || p.ViewName || p.ViewID).filter(Boolean),
-                _fromEngine: fromEngine
+                // Per-view filter/orderBy parallel to Entities so the telemetry fingerprint can
+                // tell apart two batches over the same entity set but with different filters.
+                Filters: params.map(p => p.ExtraFilter as string | undefined),
+                OrderBys: params.map(p => p.OrderBy as string | undefined),
+                _fromEngine: fromEngine,
+                Exempt: batchExempt,
+                ExemptReason: params.find(p => p.Telemetry?.Reason)?.Telemetry?.Reason
             },
             contextUser?.ID
         );
@@ -2405,8 +3194,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
-        // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata
-        if (Metadata.Provider && !data.IgnoreExistingMetadata) {
+        // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata.
+        //
+        // ALSO bypass this fast-path when `this._refresh` is set — that flag means the caller
+        // explicitly invoked Refresh() to force a re-fetch (e.g. CodeGen runs Refresh after
+        // manageMetadata mutates the EntityField rows in the DB). Without this guard, Refresh()
+        // calls on the *same instance that's also Metadata.Provider* (the common case after
+        // SetProvider has been called) would short-circuit here and never re-read from the
+        // server, leaving in-memory metadata permanently stale relative to subsequent DB writes.
+        // This was Bug 1 of the 3-bug chain that caused first-run CodeGen on PG to silently
+        // drop CRUD for newly-created entities like SystemEvent — its EntityField rows existed
+        // in the DB but the in-memory snapshot used by the entity-loop never picked them up.
+        if (Metadata.Provider && !data.IgnoreExistingMetadata && !this._refresh) { // global-provider-ok: bootstrap checks for an existing global registration
             // we have an existing globally registered provider AND we are not
             // requested to ignore the existing metadata, so we will not refresh it
             if (this.CopyMetadataFromGlobalProvider()) {
@@ -2427,11 +3226,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
             await this.LoadLocalMetadataFromStorage();
             if (this._localMetadata?.AllEntities?.length) {
-                LogStatusEx({ message: `⚡ [Fast-Start] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — deferring server validation`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`, verboseOnly: false });
 
-                // Kick off background validation — if metadata is stale, it will
-                // be atomically swapped when the server response arrives.
-                this.backgroundValidateAndRefresh(providerToUse);
+                // Do NOT kick off background validation here — it writes to IndexedDB
+                // which contends with engine RunView cache reads during StartupManager.
+                // Instead, the caller (setupGraphQLClient) should call
+                // BackgroundValidateAndRefresh() after StartupManager completes.
 
                 return true; // App can proceed immediately with cached metadata
             }
@@ -2474,11 +3274,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * and atomically swaps it in. The app continues operating on cached data
      * during this process — no blocking.
      */
-    private async backgroundValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+    public async backgroundValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
         try {
             const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
             if (needsRefresh) {
-                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is stale — refreshing...`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is stale — refreshing...`, verboseOnly: false });
                 const start = Date.now();
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
@@ -2486,14 +3286,55 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     this.UpdateLocalMetadata(res);
                     this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
                     await this.SaveLocalMetadataToStorage();
-                    LogStatusEx({ message: `⚡ [Fast-Start] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
+                    LogStatusEx({ message: `⚡ [Metadata Cache] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
                 }
             } else {
-                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is current — no refresh needed`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is current — no refresh needed`, verboseOnly: false });
             }
         } catch (e) {
-            LogError(`[Fast-Start] Background validation failed: ${e}`);
+            LogError(`[Metadata Cache] Background validation failed: ${e}`);
             // Not critical — app continues with cached metadata
+        }
+    }
+
+    /**
+     * Synchronous pre-validation of cached metadata before engine startup.
+     *
+     * On a warm load we serve the metadata graph from IndexedDB so the app can boot
+     * without pulling MBs of metadata from the server. Before engines run, this method
+     * makes one batched timestamp round-trip to confirm the snapshot is still current:
+     *
+     *   - **Cached metadata is current** → engines proceed against the cached snapshot.
+     *     Their RunViews calls go through the normal smart-cache-check path which
+     *     batches per-view fingerprints to the server — efficient and authoritative.
+     *   - **Cached metadata is stale** → refresh framework metadata in place before
+     *     engines start, then proceed normally.
+     *
+     * Cost on the warm-current path is one batched timestamp fetch (~50–200 ms depending
+     * on RTT). On the warm-stale path we additionally pay the full metadata fetch but
+     * avoid serving stale data to the UI in the first place.
+     *
+     * Caller contract: invoke this before `StartupManager.Startup()`.
+     */
+    public async preValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+        try {
+            const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
+            if (needsRefresh) {
+                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`, verboseOnly: false });
+                const start = Date.now();
+                const res = await this.GetAllMetadata(providerToUse, false);
+                const elapsed = Date.now() - start;
+                if (res) {
+                    this.UpdateLocalMetadata(res);
+                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
+                    await this.SaveLocalMetadataToStorage();
+                    LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`, verboseOnly: false });
+                }
+            } else {
+                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is current`, verboseOnly: false });
+            }
+        } catch (e) {
+            LogError(`[Metadata Cache] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — engines will smart-cache-check`);
         }
     }
 
@@ -2512,8 +3353,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
-            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
-                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata);
+            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { // global-provider-ok: this method literally clones FROM the global provider on bootstrap
+                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata); // global-provider-ok: bootstrap clone path
                 return true;
             }
             return false;
@@ -2638,38 +3479,76 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param settings - Array of entity settings metadata
      * @returns Processed array of EntityInfo instances with all relationships established
      */
-    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[], organicKeys?: any[], organicKeyRelatedEntities?: any[]): any[] {
-        const result: any[] = [];
+    /**
+     * Groups items into a Map keyed by a NormalizeUUID-transformed value.
+     * Single-pass O(N) helper used to build pre-indexed lookup maps for
+     * metadata post-processing, replacing repeated O(N*M) filter scans.
+     */
+    private groupByNormalizedUUID<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+        const map = new Map<string, T[]>();
+        for (const item of items) {
+            const key = NormalizeUUID(keyFn(item));
+            let list = map.get(key);
+            if (!list) {
+                list = [];
+                map.set(key, list);
+            }
+            list.push(item);
+        }
+        return map;
+    }
+
+    protected PostProcessEntityMetadata(
+        entities: EntityMetadataRow[],
+        fields: EntityFieldMetadataRow[],
+        fieldValues: EntityFieldValueMetadataRow[],
+        permissions: EntityChildMetadataRow[],
+        relationships: EntityChildMetadataRow[],
+        settings: EntityChildMetadataRow[],
+        organicKeys?: OrganicKeyMetadataRow[],
+        organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[]
+    ): EntityInfo[] {
+        const result: EntityInfo[] = [];
 
         // Sort entities alphabetically by name to ensure deterministic ordering
         // This prevents non-deterministic output in CodeGen and other metadata consumers
         const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
-        if (fieldValues && fieldValues.length > 0)
-            for (let f of fields) {
-                // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => UUIDsEqual(fv.EntityFieldID, f.ID));
-            }
-
-        // Link organic key related entities to their parent organic keys
-        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
-            for (const ok of organicKeys) {
-                ok.EntityOrganicKeyRelatedEntities = organicKeyRelatedEntities.filter(
-                    okre => UUIDsEqual(okre.EntityOrganicKeyID, ok.ID)
-                );
+        if (fieldValues && fieldValues.length > 0) {
+            const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
+            for (const f of fields) {
+                f.EntityFieldValues = fieldValuesByFieldId.get(NormalizeUUID(f.ID)) || [];
             }
         }
 
-        for (let e of sortedEntities) {
-            e.EntityFields = fields.filter(f => UUIDsEqual(f.EntityID, e.ID)).sort((a, b) => a.Sequence - b.Sequence);
-            e.EntityPermissions = permissions.filter(p => UUIDsEqual(p.EntityID, e.ID));
-            e.EntityRelationships = relationships.filter(r => UUIDsEqual(r.EntityID, e.ID));
-            e.EntitySettings = settings.filter(s => UUIDsEqual(s.EntityID, e.ID));
+        // Link organic key related entities to their parent organic keys
+        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
+            const okreByOrganicKeyId = this.groupByNormalizedUUID(organicKeyRelatedEntities, okre => okre.EntityOrganicKeyID);
+            for (const ok of organicKeys) {
+                ok.EntityOrganicKeyRelatedEntities = okreByOrganicKeyId.get(NormalizeUUID(ok.ID)) || [];
+            }
+        }
+
+        const fieldsByEntityId = this.groupByNormalizedUUID(fields, f => f.EntityID);
+        const permissionsByEntityId = this.groupByNormalizedUUID(permissions, p => p.EntityID);
+        const relationshipsByEntityId = this.groupByNormalizedUUID(relationships, r => r.EntityID);
+        const settingsByEntityId = this.groupByNormalizedUUID(settings, s => s.EntityID);
+        const activeOrganicKeysByEntityId = organicKeys
+            ? this.groupByNormalizedUUID(organicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
+            : new Map<string, OrganicKeyMetadataRow[]>();
+
+        for (const e of sortedEntities) {
+            const entityIdKey = NormalizeUUID(e.ID);
+
+            const entityFields = fieldsByEntityId.get(entityIdKey) || [];
+            e.EntityFields = entityFields.sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityPermissions = permissionsByEntityId.get(entityIdKey) || [];
+            e.EntityRelationships = relationshipsByEntityId.get(entityIdKey) || [];
+            e.EntitySettings = settingsByEntityId.get(entityIdKey) || [];
+
             // Link active organic keys to the entity
             if (organicKeys) {
-                e.EntityOrganicKeys = organicKeys.filter(
-                    ok => UUIDsEqual(ok.EntityID, e.ID) && ok.Status === 'Active'
-                );
+                e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e));
         }
@@ -2768,65 +3647,48 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return this._localMetadata.AllAuthorizations;
     }
     /**
-     * Gets all saved queries in the system.
-     * @returns Array of QueryInfo objects representing stored queries
+     * Gets the flat collection of authorization-role assignments.
+     * Consumed lazily by {@link AuthorizationInfo.Roles} — consumers should
+     * prefer accessing roles through `AuthorizationInfo.Roles` rather than
+     * filtering this array directly.
+     * @returns Array of AuthorizationRoleInfo join-table objects
      */
+    public get AuthorizationRoles(): AuthorizationRoleInfo[] {
+        return this._localMetadata.AllAuthorizationRoles;
+    }
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get Queries(): QueryInfo[] {
         return this._localMetadata.AllQueries;
     }
-    /**
-     * Gets all query category definitions.
-     * @returns Array of QueryCategoryInfo objects for query organization
-     */
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryCategories(): QueryCategoryInfo[] {
         return this._localMetadata.AllQueryCategories;
     }
-    /**
-     * Gets all query field definitions.
-     * @returns Array of QueryFieldInfo objects defining query result columns
-     */
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryFields(): QueryFieldInfo[] {
         return this._localMetadata.AllQueryFields;
     }
-    /**
-     * Gets all query permission assignments.
-     * @returns Array of QueryPermissionInfo objects defining query access
-     */
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryPermissions(): QueryPermissionInfo[] {
         return this._localMetadata.AllQueryPermissions;
     }
-    /**
-     * Gets all query entity associations.
-     * @returns Array of QueryEntityInfo objects linking queries to entities
-     */
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryEntities(): QueryEntityInfo[] {
         return this._localMetadata.AllQueryEntities;
     }
-    /**
-     * Gets all query parameter definitions.
-     * @returns Array of QueryParameterInfo objects for parameterized queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
     }
-    /**
-     * Gets all query dependency records tracking composition references between queries.
-     * @returns Array of QueryDependencyInfo objects representing query-to-query dependencies
-     */
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryDependencies(): QueryDependencyInfo[] {
         return this._localMetadata.AllQueryDependencies;
     }
-    /**
-     * Gets all SQL dialect definitions.
-     * @returns Array of SQLDialectInfo objects representing supported SQL dialects
-     */
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get SQLDialects(): SQLDialectInfo[] {
         return this._localMetadata.AllSQLDialects;
     }
-    /**
-     * Gets all query SQL dialect variants.
-     * @returns Array of QuerySQLInfo objects containing dialect-specific SQL for queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QuerySQLs(): QuerySQLInfo[] {
         return this._localMetadata.AllQuerySQLs;
     }
@@ -2954,7 +3816,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 actualContextUser = loadKeyOrContextUser as UserInfo;
             }
 
-            const entity: EntityInfo = this.Metadata.Entities.find(e => e.Name == entityName);
+            const entity: EntityInfo = this.EntityByName(entityName);
             if (entity) {
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
@@ -3082,40 +3944,53 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param itemFilters 
      */
     public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
-        // first see if we have anything in cache at all, no reason to check server dates if we dont
-        if (await this.IsDatasetCached(datasetName, itemFilters)) {
-            // FastStartupMode: on warm loads, trust the cached dataset without server validation.
-            // Same pattern as FastStartupMode for RunViews — serve from IndexedDB immediately.
-            if (ProviderBase.FastStartupMode && !this.TrustLocalCacheCompletely) {
-                LogStatusEx({
-                    message: `⚡ [Fast-Start] Serving cached dataset "${datasetName}" from local cache — skipping server validation`,
-                    verboseOnly: false
-                });
-                return this.GetCachedDataset(datasetName, itemFilters);
-            }
+        const ls = this.LocalStorageProvider;
+        const key = ls ? this.GetDatasetCacheKey(datasetName, itemFilters) : null;
+        const dateKey = key ? key + '_date' : null;
 
-            // compare the local version, if exists to the server version dates
-            if (await this.IsDatasetCacheUpToDate(datasetName, itemFilters)) {
-                // we're up to date, all we need to do is get the local cache and return it
-                return this.GetCachedDataset(datasetName, itemFilters);
-            }
-            else {
-                // we're out of date, so get the dataset from the server
-                const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
-                // cache it
-                await this.CacheDataset(datasetName, itemFilters, dataset);
+        // ── Single batched read: data + date in one IDB transaction ────────────
+        // Previously this path issued 3 sequential reads of the data key (existence
+        // check, staleness check, materialize) plus 1 read of the date key. Now we
+        // pull both keys in one transaction up front and reuse the in-memory data
+        // for staleness checking and the return value.
+        let cachedDataset: DatasetResultType | null = null;
+        let cachedDateStr: string | null = null;
+        if (ls && key && dateKey) {
+            const both = await ls.GetItems<DatasetResultType | string>([key, dateKey], 'DatasetCache');
+            const rawData = both.get(key);
+            const rawDate = both.get(dateKey);
+            // Type guards — entries can be either depending on which key matched.
+            // (The cache writes data under `key` and the ISO date string under `dateKey`,
+            // so this is safe so long as the cache hasn't been corrupted.)
+            cachedDataset = (rawData && typeof rawData !== 'string') ? rawData as DatasetResultType : null;
+            cachedDateStr = (typeof rawDate === 'string') ? rawDate : null;
+        }
 
-                return dataset;
+        if (cachedDataset && cachedDateStr) {
+            // We have a candidate cache entry — confirm freshness with the server.
+            const localDate = new Date(cachedDateStr);
+            const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
+            if (status && localDate.getTime() >= status.LatestUpdateDate.getTime()) {
+                // Timestamps suggest cache is fresh; verify per-entity row counts to
+                // catch deleted rows (timestamp comparison alone misses pure deletes).
+                let allCountsMatch = true;
+                for (const eu of status.EntityUpdateDates) {
+                    const localEntity = cachedDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
+                    if (!localEntity || localEntity.Results.length !== eu.RowCount) {
+                        allCountsMatch = false;
+                        break;
+                    }
+                }
+                if (allCountsMatch) {
+                    return cachedDataset;
+                }
             }
         }
-        else {
-            // get the dataset from the server
-            const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
-            // cache it
-            await this.CacheDataset(datasetName, itemFilters, dataset);
 
-            return dataset;
-        }
+        // Cold path or stale: fetch from server and cache.
+        const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
+        await this.CacheDataset(datasetName, itemFilters, dataset);
+        return dataset;
     }
 
 
@@ -3130,7 +4005,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             const dateKey = key + '_date';
-            const val: string = await ls.GetItem(dateKey);
+            const val = await ls.GetItem<string>(dateKey);
             if (val) {
                 return new Date(val);
             }
@@ -3193,9 +4068,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.GetItem(key);
-            if (val) {
-                const dataset = JSON.parse(val);
+            // Native object read — IDB structured-clones, localStorage / Redis JSON-decode internally.
+            const dataset = await ls.GetItem<DatasetResultType>(key);
+            if (dataset) {
                 return dataset;
             }
         }
@@ -3211,11 +4086,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = JSON.stringify(dataset);
-            await ls.SetItem(key, val);
-            const dateKey = key + '_date';
-            const dateVal = dataset.LatestUpdateDate.toISOString();
-            await ls.SetItem(dateKey, dateVal);
+            // Native object storage — no JSON.stringify on the hot path.
+            await ls.SetItem<DatasetResultType>(key, dataset);
+            // Date is stored as ISO string for forward-compatibility across providers
+            // (Redis can't natively round-trip Date; localStorage requires string).
+            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString());
         }
     }
 
@@ -3228,8 +4103,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async IsDatasetCached(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<boolean> {
         const ls = this.LocalStorageProvider;
         if (ls) {
+            // Probe via the tiny `_date` ISO-string key instead of pulling the
+            // full multi-MB dataset blob. The two are written together by
+            // CacheDataset, so the date's presence is a faithful proxy for the
+            // data's presence.
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.GetItem(key);
+            const val = await ls.GetItem<string>(key + '_date');
             return val !== null && val !== undefined;
         }
     }
@@ -3451,30 +4330,105 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     protected async LoadLocalMetadataFromStorage() {
         try {
             const ls = this.LocalStorageProvider;
-            if (ls) {
-                // execution environment supports local storage, use it
-                this._latestLocalMetadataTimestamps = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey))
-                const temp = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey)); // we now have a simple object for all the metadata
-                if (temp) {
-                    // we have local metadata
-                    const metadata = MetadataFromSimpleObject(temp, this); // create a new object to start this up
-                    this.UpdateLocalMetadata(metadata);
-                }
+            if (!ls) return;
+
+            const overallStart = Date.now();
+
+            // The metadata snapshot uses three keys (timestamps, format, AllMetadata).
+            // Pull them in a single batched read — saves two IDB transaction round-trips
+            // on warm boot. The values are still strings (string storage is intentional
+            // here so the gzip+base64 compression path round-trips cleanly).
+            const tsKey   = this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey;
+            const fmtKey  = this.LocalStoragePrefix + ProviderBase.localStorageFormatKey;
+            const dataKey = this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey;
+
+            const readStart = Date.now();
+            const all = await ls.GetItems<string>([tsKey, fmtKey, dataKey]);
+            const readMs = Date.now() - readStart;
+
+            const tsRaw = all.get(tsKey) ?? null;
+            const format = all.get(fmtKey) ?? null;
+            const raw = all.get(dataKey) ?? null;
+
+            this._latestLocalMetadataTimestamps = tsRaw ? JSON.parse(tsRaw) : null;
+            if (!raw) return;
+
+            // Decompress if stored in compressed format, otherwise parse directly
+            const parseStart = Date.now();
+            let temp: any;
+            if (format === 'gzip' && typeof raw === 'string') {
+                // Compressed path: base64 → binary → gzip decompress → JSON parse
+                const binary = ProviderBase.base64ToArrayBuffer(raw);
+                const blob = new Blob([binary]);
+                const ds = new DecompressionStream('gzip');
+                const decompressedStream = blob.stream().pipeThrough(ds);
+                const jsonString = await new Response(decompressedStream).text();
+                temp = JSON.parse(jsonString);
+            } else {
+                // Legacy uncompressed path
+                temp = typeof raw === 'string' ? JSON.parse(raw) : raw;
+            }
+            const parseMs = Date.now() - parseStart;
+
+            if (!temp) return;
+
+            // Reconstruct typed metadata objects from the parsed JSON
+            const deserializeStart = Date.now();
+            const metadata = MetadataFromSimpleObject(temp, this);
+            const deserializeMs = Date.now() - deserializeStart;
+
+            if (metadata) {
+                this.UpdateLocalMetadata(metadata);
+                const totalMs = Date.now() - overallStart;
+                LogStatusEx({
+                    message: `[Metadata Cache] Load complete: read=${readMs}ms, parse=${parseMs}ms, deserialize=${deserializeMs}ms, total=${totalMs}ms, entities=${metadata.AllEntities?.length ?? 0}`,
+                    verboseOnly: true
+                });
+            } else {
+                LogError('[Metadata Cache] MetadataFromSimpleObject returned undefined — cache deserialization failed. Check console for per-item errors above.');
             }
         }
         catch (e) {
-            // some enviroments don't support local storage
+            LogError(`[Metadata Cache] LoadLocalMetadataFromStorage failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
     private static localStorageRootKey ='___MJCore_Metadata'
     private static localStorageTimestampsKey = this.localStorageRootKey + '_Timestamps'
     private static localStorageAllMetadataKey = this.localStorageRootKey + '_AllMetadata'
+    private static localStorageFormatKey = this.localStorageRootKey + '_Format'
 
     private static localStorageKeys = [
         ProviderBase.localStorageTimestampsKey,
         ProviderBase.localStorageAllMetadataKey,
+        ProviderBase.localStorageFormatKey,
     ];
+
+    /**
+     * Converts a base64-encoded string to an ArrayBuffer.
+     * Used for compressed metadata storage/retrieval.
+     */
+    protected static base64ToArrayBuffer(base64: string): ArrayBuffer {
+        const binaryString = atob(base64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    /**
+     * Converts an ArrayBuffer to a base64-encoded string.
+     * Used for compressed metadata storage/retrieval.
+     */
+    protected static arrayBufferToBase64(buffer: ArrayBuffer): string {
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
 
     /**
      * This property will return the prefix to use for local storage keys. This is useful if you have multiple instances of a provider running in the same environment
@@ -3492,17 +4446,56 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async SaveLocalMetadataToStorage() {
         try {
             const ls = this.LocalStorageProvider;
-            if (ls) {
-                // execution environment supports local storage, use it
-                await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps))
+            if (!ls) return;
 
-                // now persist the AllMetadata object
-                await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, JSON.stringify(this._localMetadata))
+            const start = Date.now();
+
+            // Save timestamps as a JSON string. The metadata snapshot path intentionally uses
+            // string storage so the compressed (gzip+base64) format below can round-trip cleanly
+            // through providers that don't support binary natively.
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
+
+            // Serialize the AllMetadata object
+            const jsonString = JSON.stringify(this._localMetadata);
+
+            // Attempt compressed storage using native CompressionStream (available in modern browsers and Node 18+)
+            if (typeof CompressionStream !== 'undefined') {
+                try {
+                    const blob = new Blob([jsonString]);
+                    const cs = new CompressionStream('gzip');
+                    const compressedStream = blob.stream().pipeThrough(cs);
+                    const compressedBuffer = await new Response(compressedStream).arrayBuffer();
+                    const base64 = ProviderBase.arrayBufferToBase64(compressedBuffer);
+
+                    await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, base64);
+                    await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'gzip');
+
+                    const elapsed = Date.now() - start;
+                    const ratio = jsonString.length > 0 ? (base64.length / jsonString.length * 100).toFixed(1) : '?';
+                    LogStatusEx({
+                        message: `[Metadata Cache] Save complete: ${elapsed}ms, raw=${(jsonString.length / 1024 / 1024).toFixed(1)}MB, compressed=${(base64.length / 1024 / 1024).toFixed(1)}MB (${ratio}%)`,
+                        verboseOnly: true
+                    });
+                    return;
+                }
+                catch (compressErr) {
+                    // Compression failed — fall through to uncompressed save
+                    LogError(`[Metadata Cache] Compression failed, falling back to uncompressed: ${compressErr instanceof Error ? compressErr.message : String(compressErr)}`);
+                }
             }
+
+            // Fallback: uncompressed save (older environments without CompressionStream)
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, jsonString);
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'json');
+
+            const elapsed = Date.now() - start;
+            LogStatusEx({
+                message: `[Metadata Cache] Save complete (uncompressed): ${elapsed}ms, size=${(jsonString.length / 1024 / 1024).toFixed(1)}MB`,
+                verboseOnly: true
+            });
         }
         catch (e) {
-            // some enviroments don't support local storage
-            LogError(e)
+            LogError(`[Metadata Cache] SaveLocalMetadataToStorage failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 

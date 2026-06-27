@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ChangeDetectionStrategy, ChangeDetectorRef, HostListener } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, CompositeKey, KeyValuePair, BaseEntity } from '@memberjunction/core';
 import { MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -175,7 +176,7 @@ export interface SaveQueryResult {
       pointer-events: none;
     }
     .sqp-backdrop.sqp-visible {
-      background: rgba(0, 0, 0, 0.3);
+      background: var(--mj-bg-overlay, rgba(0, 0, 0, 0.3));
       pointer-events: auto;
     }
 
@@ -188,7 +189,7 @@ export interface SaveQueryResult {
       right: -440px;
       height: 100vh;
       width: 440px;
-      background: var(--card-background, #ffffff);
+      background: var(--mj-bg-surface);
       box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12);
       z-index: 1001;
       display: flex;
@@ -205,7 +206,7 @@ export interface SaveQueryResult {
       align-items: center;
       justify-content: space-between;
       padding: 20px 24px 16px;
-      border-bottom: 1px solid var(--border-color, #e5e7eb);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
     .sqp-title-group {
@@ -215,13 +216,13 @@ export interface SaveQueryResult {
     }
     .sqp-title-icon {
       font-size: 20px;
-      color: #5c6bc0;
+      color: var(--mj-brand-primary);
     }
     .sqp-title {
       margin: 0;
       font-size: 18px;
       font-weight: 700;
-      color: var(--text-primary, #1f2937);
+      color: var(--mj-text-primary);
     }
     .sqp-close-btn {
       display: flex;
@@ -232,15 +233,15 @@ export interface SaveQueryResult {
       background: none;
       border: none;
       border-radius: 8px;
-      color: var(--text-secondary, #6b7280);
+      color: var(--mj-text-secondary);
       cursor: pointer;
       transition: all 0.15s ease;
       font-size: 16px;
       flex-shrink: 0;
     }
     .sqp-close-btn:hover {
-      background: var(--hover-background, #f3f4f6);
-      color: var(--text-primary, #1f2937);
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
     }
 
     /* Body */
@@ -265,7 +266,7 @@ export interface SaveQueryResult {
       margin-bottom: 6px;
       font-weight: 600;
       font-size: 13px;
-      color: var(--text-primary, #374151);
+      color: var(--mj-text-primary);
     }
     .sqp-label-row .sqp-label {
       margin-bottom: 0;
@@ -275,38 +276,38 @@ export interface SaveQueryResult {
       margin-bottom: 4px;
       font-weight: 500;
       font-size: 12px;
-      color: #6b7280;
+      color: var(--mj-text-secondary);
     }
     .sqp-required {
-      color: #dc2626;
+      color: var(--mj-status-error);
     }
     .sqp-input {
       width: 100%;
       padding: 10px 12px;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 14px;
-      color: #1f2937;
-      background: #fff;
+      color: var(--mj-text-primary);
+      background: var(--mj-bg-surface);
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
       box-sizing: border-box;
     }
     .sqp-input:focus {
       outline: none;
-      border-color: #5c6bc0;
-      box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.15);
+      border-color: var(--mj-border-focus);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
     }
     .sqp-input::placeholder {
-      color: #9ca3af;
+      color: var(--mj-text-disabled);
     }
     .sqp-textarea {
       width: 100%;
       padding: 10px 12px;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 14px;
-      color: #1f2937;
-      background: #fff;
+      color: var(--mj-text-primary);
+      background: var(--mj-bg-surface);
       resize: vertical;
       font-family: inherit;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -314,11 +315,11 @@ export interface SaveQueryResult {
     }
     .sqp-textarea:focus {
       outline: none;
-      border-color: #5c6bc0;
-      box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.15);
+      border-color: var(--mj-border-focus);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
     }
     .sqp-textarea::placeholder {
-      color: #9ca3af;
+      color: var(--mj-text-disabled);
     }
 
     /* Add category button */
@@ -328,24 +329,24 @@ export interface SaveQueryResult {
       gap: 4px;
       padding: 3px 10px;
       background: none;
-      border: 1px solid #d1d5db;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 12px;
-      color: #5c6bc0;
+      color: var(--mj-brand-primary);
       cursor: pointer;
       transition: all 0.15s ease;
     }
     .sqp-add-btn:hover {
-      background: #eef2ff;
-      border-color: #5c6bc0;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
     }
 
     /* Inline create category */
     .sqp-create-category {
       margin-top: 12px;
       padding: 14px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
     }
     .sqp-create-header {
@@ -354,11 +355,11 @@ export interface SaveQueryResult {
       gap: 6px;
       font-size: 13px;
       font-weight: 600;
-      color: #475569;
+      color: var(--mj-text-secondary);
       margin-bottom: 10px;
     }
     .sqp-create-header i {
-      color: #5c6bc0;
+      color: var(--mj-brand-primary);
     }
     .sqp-create-fields {
       display: flex;
@@ -376,7 +377,7 @@ export interface SaveQueryResult {
     .sqp-inline-error {
       margin-top: 8px;
       font-size: 12px;
-      color: #dc2626;
+      color: var(--mj-status-error-text);
     }
 
     /* Buttons */
@@ -397,39 +398,39 @@ export interface SaveQueryResult {
       cursor: not-allowed;
     }
     .sqp-btn-save {
-      background: #5c6bc0;
-      color: #fff;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       padding: 10px 20px;
       font-size: 14px;
     }
     .sqp-btn-save:hover:not(:disabled) {
-      background: #3f51b5;
+      background: var(--mj-brand-primary-hover);
     }
     .sqp-btn-cancel {
       background: none;
-      border: 1px solid #d1d5db;
-      color: #6b7280;
+      border: 1px solid var(--mj-border-default);
+      color: var(--mj-text-secondary);
       padding: 10px 20px;
       font-size: 14px;
     }
     .sqp-btn-cancel:hover:not(:disabled) {
-      background: #f3f4f6;
-      color: #374151;
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-primary);
     }
     .sqp-btn-create {
-      background: #16a34a;
-      color: #fff;
+      background: var(--mj-status-success);
+      color: var(--mj-text-inverse);
     }
     .sqp-btn-create:hover:not(:disabled) {
-      background: #15803d;
+      background: color-mix(in srgb, var(--mj-status-success) 85%, black);
     }
     .sqp-btn-cancel-create {
       background: none;
-      color: #6b7280;
+      color: var(--mj-text-secondary);
     }
     .sqp-btn-cancel-create:hover:not(:disabled) {
-      color: #374151;
-      background: #f1f5f9;
+      color: var(--mj-text-primary);
+      background: var(--mj-bg-surface-sunken);
     }
 
     /* Footer */
@@ -437,7 +438,7 @@ export interface SaveQueryResult {
       display: flex;
       gap: 10px;
       padding: 16px 24px;
-      border-top: 1px solid var(--border-color, #e5e7eb);
+      border-top: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -447,10 +448,10 @@ export interface SaveQueryResult {
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: #fef2f2;
-      border: 1px solid #fecaca;
+      background: var(--mj-status-error-bg);
+      border: 1px solid var(--mj-status-error-border);
       border-radius: 6px;
-      color: #dc2626;
+      color: var(--mj-status-error-text);
       font-size: 13px;
     }
 
@@ -476,7 +477,7 @@ export interface SaveQueryResult {
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class SaveQueryPanelComponent {
+export class SaveQueryPanelComponent extends BaseAngularComponent {
   @Input() QueryName = '';
   @Input() QueryDescription = '';
   @Input() SQL = '';
@@ -515,7 +516,8 @@ export class SaveQueryPanelComponent {
     OrderBy: 'Name ASC'
   };
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   public get CanSave(): boolean {
     return !!this.Name?.trim();
@@ -595,7 +597,7 @@ export class SaveQueryPanelComponent {
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
 
       category.Name = name;
@@ -607,9 +609,6 @@ export class SaveQueryPanelComponent {
       const saved = await category.Save();
       if (saved) {
         MJNotificationService.Instance.CreateSimpleNotification(`Category "${name}" created`, 'success', 2500);
-
-        // Refresh core metadata so Metadata.QueryCategories is up to date
-        await md.Refresh();
 
         // Refresh tree to pick up the new category
         await this.categoryTree.Refresh();
@@ -655,7 +654,7 @@ export class SaveQueryPanelComponent {
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
 
       query.Name = this.Name.trim();

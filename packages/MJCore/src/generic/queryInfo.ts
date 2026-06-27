@@ -18,6 +18,7 @@ import {
  * Represents a SQL dialect (e.g., T-SQL, PostgreSQL) in the MemberJunction system.
  * Maps to the SQLDialect database table.
  */
+/** @deprecated Use `MJSQLDialectEntity` from `@memberjunction/core-entities` instead. */
 export class SQLDialectInfo extends BaseInfo {
     /** Unique identifier for this SQL dialect */
     public ID: string = null
@@ -54,6 +55,7 @@ export class SQLDialectInfo extends BaseInfo {
  * Stores dialect-specific SQL for a query. Each record pairs a Query with a SQLDialect
  * and provides the SQL text written in that dialect.
  * Maps to the QuerySQL database table.
+ * @deprecated Use `MJQuerySQLEntity` from `@memberjunction/core-entities` instead.
  */
 export class QuerySQLInfo extends BaseInfo {
     /** Unique identifier */
@@ -84,19 +86,22 @@ export class QuerySQLInfo extends BaseInfo {
 
     /** Gets the parent query info */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /** Gets the SQL dialect info */
     get SQLDialectInfo(): SQLDialectInfo {
-        return Metadata.Provider.SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));
+        return Metadata.Provider.SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
 /**
- * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. 
+ * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused.
  * Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability
  * instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.
+ * @deprecated Use `MJQueryEntityExtended` from `@memberjunction/core-entities` instead.
+ * `MJQueryEntityExtended` provides the same child-relationship getters and business logic
+ * with event-driven cache invalidation via `QueryEngine`.
  */
 export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     /**
@@ -302,7 +307,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Fields(): QueryFieldInfo[] {
         if (this._fields === null) {
-            this._fields = Metadata.Provider.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
+            this._fields = Metadata.Provider.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._fields;
     }
@@ -312,7 +317,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryPermissionInfo[]} Array of permission settings for the query
      */
     public get Permissions(): QueryPermissionInfo[] {
-        return Metadata.Provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
+        return Metadata.Provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     private _parameters: QueryParameterInfo[] = null;
@@ -323,7 +328,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Parameters(): QueryParameterInfo[] {
         if (this._parameters === null) {
-            this._parameters = Metadata.Provider.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
+            this._parameters = Metadata.Provider.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._parameters;
     }
@@ -335,7 +340,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Entities(): QueryEntityInfo[] {
         if (this._entities === null) {
-            this._entities = Metadata.Provider.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
+            this._entities = Metadata.Provider.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._entities;
     }
@@ -362,7 +367,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryCategoryInfo} The category this query belongs to, or undefined if not categorized
      */
     get CategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.CategoryID));
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.CategoryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
@@ -447,7 +452,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Dependencies(): QueryDependencyInfo[] {
         if (this._dependencies === null) {
-            this._dependencies = Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
+            this._dependencies = Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._dependencies;
     }
@@ -458,7 +463,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryDependencyInfo[]} Array of dependency records where this query is the referenced query
      */
     public get Dependents(): QueryDependencyInfo[] {
-        return Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));
+        return Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
@@ -499,7 +504,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * Uses the SQLDialect table to map platform keys to dialect IDs.
      */
     private resolveQuerySQLForPlatform(platform: DatabasePlatform): string | null {
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
         if (!provider || !provider.SQLDialects || !provider.QuerySQLs) return null;
 
         const dialect = provider.SQLDialects.find(d => d.PlatformKey === platform);
@@ -525,6 +530,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
 
 /**
  * Organizes saved queries into categories for discovery and management, supporting folder-like organization of queries.
+ * @deprecated Use `MJQueryCategoryEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryCategoryInfo extends BaseInfo {
     /**
@@ -586,7 +592,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryCategoryInfo} The parent category, or undefined if this is a top-level category
      */
     get ParentCategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.ParentID));
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.ParentID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
@@ -594,12 +600,13 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryInfo[]} Array of queries in this category
      */
     get Queries(): QueryInfo[] {
-        return Metadata.Provider.Queries.filter(q => UUIDsEqual(q.CategoryID, this.ID));
+        return Metadata.Provider.Queries.filter(q => UUIDsEqual(q.CategoryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
 /**
  * Stores field-level metadata for queries including display names, data types, and formatting rules for result presentation.
+ * @deprecated Use `MJQueryFieldEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
     /**
@@ -685,7 +692,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {EntityInfo} The source entity metadata, or undefined if not linked to an entity
      */
     get SourceEntityInfo(): EntityInfo {
-        const p = Metadata.Provider;
+        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
         if (p.EntityByID) {
             return p.EntityByID(this.SourceEntityID);
         }
@@ -697,13 +704,14 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.ID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
 
 /**
  * Controls access to queries by defining which users and roles can run specific queries.
+ * @deprecated Use `MJQueryPermissionEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInfoBase {
     /**
@@ -737,13 +745,14 @@ export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInf
      * @returns {QueryInfo} The query metadata this permission controls
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
 /**
  * Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries
  * that can be executed and serve as examples for AI.
+ * @deprecated Use `MJQueryEntityEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
     /**
@@ -793,7 +802,7 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
@@ -801,7 +810,7 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {EntityInfo} The entity metadata
      */
     get EntityInfo(): EntityInfo {
-        const p = Metadata.Provider;
+        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
         if (p.EntityByID) {
             return p.EntityByID(this.EntityID);
         }
@@ -810,10 +819,11 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
 }
 
 /**
- * Stores parameter definitions for parameterized queries that use Nunjucks templates. Each parameter represents a dynamic value 
- * that can be passed when executing the query. Parameters are automatically extracted from the query template by the MJQueryEntityServer 
- * using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a 
+ * Stores parameter definitions for parameterized queries that use Nunjucks templates. Each parameter represents a dynamic value
+ * that can be passed when executing the query. Parameters are automatically extracted from the query template by the MJQueryEntityServer
+ * using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a
  * self-documenting, type-safe query execution system.
+ * @deprecated Use `MJQueryParameterEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoBase {
     /**
@@ -883,7 +893,7 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
     
     /**
@@ -904,6 +914,7 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
  * Tracks which queries reference other queries via {{query:"..."}} composition syntax.
  * Auto-populated by the query save pipeline when SQL contains composition tokens.
  * Maps to the QueryDependency database table.
+ * @deprecated Use `MJQueryDependencyEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryDependencyInfo extends BaseInfo {
     /**
@@ -965,14 +976,14 @@ export class QueryDependencyInfo extends BaseInfo {
      * Gets the query that contains the {{query:"..."}} reference.
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
      * Gets the referenced (depended-on) query.
      */
     get DependsOnQueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**

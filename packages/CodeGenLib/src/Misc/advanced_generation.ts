@@ -1,9 +1,11 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
 import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { SafeJSONParse } from "@memberjunction/global";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
+import { CodeGenReporter } from "./codegen-reporter";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -11,10 +13,16 @@ export type CheckConstraintParserResult = { Description: string, Code: string, M
 
 export type SmartFieldIdentificationResult = {
     /**
-     * One or more fields that together form the human-readable record name.
-     * For person entities: ["FirstName", "LastName"]
-     * For simple entities: ["Name"]
-     * Displayed concatenated with spaces in card titles, tooltips, etc.
+     * RANKED candidate list for the entity's human-readable record name, best first.
+     * For person entities: ["FirstName", "LastName"]; for simple entities: ["Name"].
+     *
+     * IMPORTANT: although the LLM may propose several fields, MemberJunction's metadata
+     * supports exactly ONE `IsNameField` per entity — `EntityInfo.NameField`, the
+     * base-view FK-name virtual columns, and `RelatedEntityNameFieldMap` resolution all
+     * assume a single winner. `applyNameFieldUpdates` therefore flags only the FIRST
+     * eligible candidate (and clears any other auto-updatable `IsNameField` flags).
+     * Composite display names are NOT implemented downstream; treat extra entries as
+     * fallback candidates, not as a concatenation recipe.
      */
     nameFields: string[];
     nameFieldsReason: string;
@@ -110,7 +118,7 @@ export class AdvancedGeneration {
     private _promptRunner: AIPromptRunner;
 
     constructor() {
-        this._metadata = new Metadata();
+        this._metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         this._promptRunner = new AIPromptRunner();
     }
 
@@ -151,8 +159,36 @@ export class AdvancedGeneration {
     private async executePrompt<T>(
         params: AIPromptParams
     ): Promise<AIPromptRunResult<T>> {
+        const startMs = Date.now();
+        const promptName = params.prompt?.Name ?? 'unknown';
         try {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
+            // Resilience: some models return the JSON payload as a raw string rather
+            // than a parsed object (and Warn-mode validation lets it through with
+            // success=true). If we got a string, try to recover a structured object
+            // before any feature consumes it. SafeJSONParse returns null on genuine
+            // non-JSON (e.g. a "Here is the JSON requested:" preamble with no body),
+            // in which case we leave result.result as-is and the per-feature
+            // typeof-object guards degrade gracefully (skip the entity, no crash).
+            if (typeof result.result === 'string') {
+                const parsed = SafeJSONParse<T>(result.result);
+                if (parsed && typeof parsed === 'object') {
+                    result.result = parsed;
+                }
+            }
+            // Record telemetry for this LLM call. Entity attribution falls back to the
+            // entityPhase in processEntityAdvancedGeneration via CodeGenReporter's
+            // _currentEntity. No-op if no run is active.
+            CodeGenReporter.Instance.recordLLMCall({
+                promptName,
+                // Model name lives on the promptRun entity once the call succeeds;
+                // falls back to null for runs where the entity didn't get populated.
+                model: (result.promptRun as unknown as { Model?: string })?.Model ?? null,
+                tokensIn: result.promptTokens ?? 0,
+                tokensOut: result.completionTokens ?? 0,
+                costUSD: result.cost ?? 0,
+                latencyMs: result.executionTimeMS ?? (Date.now() - startMs),
+            });
             return result;
         } catch (error) {
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
@@ -204,10 +240,23 @@ export class AdvancedGeneration {
 
             const result = await this.executePrompt<SmartFieldIdentificationResult>(params);
 
-            if (result.success && result.result) {
-                return result.result;
+            // Guard against a non-object result. With Warn-mode validation, a model
+            // that returns a non-JSON preamble (e.g. "Here is the JSON requested:")
+            // comes back as a raw string with success=true — we must not treat that
+            // as a usable result (and must not try to set properties on a primitive).
+            if (result.success && result.result && typeof result.result === 'object') {
+                // Normalize: LLMs frequently omit array keys when they would be
+                // empty. Default every collection so downstream apply* consumers
+                // can iterate without undefined-guard crashes.
+                const r = result.result;
+                r.nameFields ??= [];
+                r.defaultInView ??= [];
+                r.searchableFields ??= [];
+                r.searchPredicates ??= [];
+                r.fullTextSearchFields ??= [];
+                return r;
             } else {
-                LogError(`AdvancedGeneration:Smart field identification failed: ${result.errorMessage}`);
+                LogError(`AdvancedGeneration:Smart field identification failed or returned a non-object result: ${result.errorMessage ?? `got ${typeof result.result}`}`);
                 return null;
             }
         } catch (error) {
@@ -413,7 +462,12 @@ export class AdvancedGeneration {
 
             const result = await this.executePrompt<FormLayoutResult>(params);
 
-            if (result.success && result.result) {
+            if (result.success && result.result && typeof result.result === 'object') {
+                // Normalize: a model that returns no/invalid JSON can leave this
+                // undefined; downstream applyFieldCategories iterates it, so default
+                // it to an empty array to avoid a "not iterable" crash.
+                result.result.fieldCategories ??= [];
+
                 // Merge category info - preserve ALL existing categories, only add new ones
                 if (existingInfo.categoryInfo) {
                     const newFieldCategoryInfo = result.result.categoryInfo || {};

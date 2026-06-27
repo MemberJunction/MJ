@@ -1,119 +1,22 @@
-/* Main Dashboard Container */
-.api-keys-dashboard {
-    display: flex;
-    height: 100%;
-    position: relative;
-    overflow: hidden;
-}
-
-.api-keys-dashboard.panel-open .dashboard-content {
-    overflow: hidden;
-}
-
-/* Left Navigation Sidebar */
-.dashboard-nav {
-    width: 220px;
-    background: var(--mj-bg-surface);
-    border-right: 1px solid var(--mj-border-default);
+/*
+  APIKeysResource renders as a sub-page inside Admin → Identity & Access's
+  left-nav shell. Host is a flex column so <mj-page-header-interior> pins at
+  the top and <mj-page-body-interior> fills the rest. See Section 10 of
+  plans/explorer-chrome-conventions.md.
+*/
+:host {
     display: flex;
     flex-direction: column;
-    flex-shrink: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--mj-bg-page);
 }
 
-.nav-header {
-    padding: 20px;
-    border-bottom: 1px solid var(--mj-border-default);
-}
-
-.nav-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-weight: 700;
-    font-size: 16px;
-    color: var(--mj-text-primary);
-}
-
-.nav-title i {
-    color: var(--mj-brand-primary);
-    font-size: 18px;
-}
-
-.nav-items {
+.api-keys-loading {
     flex: 1;
-    padding: 12px;
-    overflow-y: auto;
-}
-
-.nav-item {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    margin-bottom: 4px;
-    background: transparent;
-    border: none;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    width: 100%;
-    text-align: left;
-}
-
-.nav-item:hover {
-    background: var(--mj-bg-surface-hover);
-    color: var(--mj-text-primary);
-}
-
-.nav-item.active {
-    background: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
-    box-shadow: var(--mj-shadow-brand-sm);
-}
-
-.nav-item i {
-    font-size: 16px;
-    width: 20px;
-    text-align: center;
-}
-
-.nav-item .nav-label {
-    flex: 1;
-}
-
-.nav-badge {
-    display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    height: 20px;
-    padding: 0 6px;
-    background: var(--mj-bg-surface-active);
-    border-radius: 10px;
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.nav-item.active .nav-badge {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-/* Dashboard Content Area */
-.dashboard-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    min-width: 0;
-}
-
-.content-wrapper {
-    flex: 1;
-    padding: 24px;
-    overflow-y: auto;
 }
 
 /* List View Header */
@@ -139,77 +42,6 @@
 .back-btn:hover {
     background: var(--mj-bg-surface-hover);
     color: var(--mj-text-primary);
-}
-
-/* Header */
-.overview-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 24px;
-}
-
-.header-left {
-    flex: 1;
-}
-
-.overview-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-    margin: 0 0 4px 0;
-}
-
-.overview-subtitle {
-    font-size: 14px;
-    color: var(--mj-text-secondary);
-    margin: 0;
-}
-
-.header-actions {
-    display: flex;
-    gap: 12px;
-}
-
-.btn-refresh {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    background: var(--mj-bg-surface);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-refresh:hover {
-    background: var(--mj-bg-surface-hover);
-}
-
-.btn-refresh i {
-    color: var(--mj-text-secondary);
-}
-
-.btn-primary {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 20px;
-    background: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 14px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--mj-shadow-brand-md);
 }
 
 /* Health Banner */
@@ -917,22 +749,6 @@
     color: var(--mj-text-secondary);
 }
 
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 32px;
-    color: var(--mj-text-secondary);
-    text-align: center;
-}
-
-.empty-state i {
-    font-size: 32px;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
 
 /* Security Notice */
 .security-notice {
@@ -961,43 +777,9 @@
     font-weight: 600;
 }
 
-/* Mobile Navigation Toggle */
-.mobile-nav-toggle {
-    display: none;
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 56px;
-    height: 56px;
-    background: var(--mj-brand-primary);
-    border: none;
-    border-radius: 50%;
-    color: var(--mj-text-inverse);
-    font-size: 24px;
-    box-shadow: var(--mj-shadow-brand-md);
-    cursor: pointer;
-    z-index: 50;
-    transition: transform 0.2s ease;
-}
-
-.mobile-nav-toggle:hover {
-    transform: scale(1.05);
-}
-
-/* Mobile Nav Overlay */
-.mobile-nav-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--mj-bg-overlay);
-    z-index: 90;
-}
-
 /* ========================================
-   Responsive Styles
+   Responsive Styles — chrome / nav responsiveness now owned by
+   <mj-page-layout> + <mj-left-nav>; only inner content needs tuning here.
    ======================================== */
 
 /* Tablet */
@@ -1023,67 +805,12 @@
     .scope-legend {
         flex: 1;
     }
-
-    .dashboard-nav {
-        width: 200px;
-    }
 }
 
 /* Mobile */
 @media (max-width: 768px) {
-    .api-keys-dashboard {
-        flex-direction: column;
-    }
-
-    .dashboard-nav {
-        position: fixed;
-        top: 0;
-        left: -280px;
-        width: 280px;
-        height: 100%;
-        z-index: 100;
-        transition: left 0.3s ease;
-        box-shadow: var(--mj-shadow-xl);
-    }
-
-    .api-keys-dashboard.nav-open .dashboard-nav {
-        left: 0;
-    }
-
-    .mobile-nav-toggle {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .mobile-nav-overlay {
-        display: block;
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-    }
-
-    .api-keys-dashboard.nav-open .mobile-nav-overlay {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    .dashboard-content {
-        width: 100%;
-    }
-
     .content-wrapper {
         padding: 16px;
-    }
-
-    .overview-header {
-        flex-direction: column;
-        gap: 16px;
-    }
-
-    .header-actions {
-        width: 100%;
-        justify-content: flex-end;
     }
 
     .health-banner {
@@ -1147,14 +874,5 @@
 
     .kpi-value {
         font-size: 20px;
-    }
-
-    .overview-title {
-        font-size: 20px;
-    }
-
-    .btn-primary {
-        padding: 8px 16px;
-        font-size: 13px;
     }
 }

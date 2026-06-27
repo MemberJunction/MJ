@@ -21,6 +21,14 @@ const { mockRunViewFn, mockEntities } = vi.hoisted(() => {
 vi.mock('@memberjunction/core', () => {
     class MockMetadata {
         get Entities() { return mockEntities; }
+        EntityByName(name: string) { return mockEntities.find(e => e.Name === name); }
+        // Multi-provider migration: EntitySearchProvider uses this.ProviderToUse, which falls
+        // back to Metadata.Provider. Expose a static Provider that returns the same
+        // mockEntities list so the search has a metadata catalog to walk.
+        static Provider = {
+            get Entities() { return mockEntities; },
+            EntityByName(name: string) { return mockEntities.find(e => e.Name === name); },
+        };
     }
     class MockRunView {
         RunView = mockRunViewFn;
@@ -345,6 +353,72 @@ describe('EntitySearchProvider', () => {
 
             const results = await provider.Search('document', 10, undefined, contextUser);
             expect(results[0].Title).toBe('My Document');
+        });
+    });
+
+    /**
+     * Tier-1 release-readiness: SQL LIKE wildcard sanitation.
+     *
+     * The downstream `GenericDatabaseProvider.createViewUserSearchSQL`
+     * builds `LIKE '%${input}%'` clauses with only single-quote escaping —
+     * unstripped LIKE wildcards (`%`, `_`, `[`, `]`) would either match
+     * everything (`Query="%"`) or trigger character-class parsing
+     * (`Query="[abc]"`). EntitySearchProvider strips those characters
+     * before passing the string to RunView.
+     */
+    describe('Search — LIKE wildcard sanitation', () => {
+        const seedSearchableEntity = (): void => {
+            mockEntities.push({
+                Name: 'People',
+                AllowUserSearchAPI: true,
+                Fields: [
+                    { Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 },
+                ],
+                NameField: { Name: 'Name' },
+            });
+            mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
+        };
+
+        it('strips lone `%` from the query and returns empty (does not match every row)', async () => {
+            seedSearchableEntity();
+            await provider.Search('%', 10, undefined, contextUser);
+            // Sanitized to empty → short-circuit, no RunView call
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('strips lone `_` from the query and returns empty', async () => {
+            seedSearchableEntity();
+            await provider.Search('___', 10, undefined, contextUser);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('strips `[` and `]` (LIKE character-class brackets) from the query', async () => {
+            seedSearchableEntity();
+            await provider.Search('[abc]', 10, undefined, contextUser);
+            expect(mockRunViewFn).toHaveBeenCalled();
+            const passedSearchString = (mockRunViewFn.mock.calls[0][0] as { UserSearchString: string }).UserSearchString;
+            expect(passedSearchString).toBe('abc');
+        });
+
+        it('strips embedded `%` from a query while preserving the literal text', async () => {
+            seedSearchableEntity();
+            await provider.Search('100% match', 10, undefined, contextUser);
+            const passedSearchString = (mockRunViewFn.mock.calls[0][0] as { UserSearchString: string }).UserSearchString;
+            // `%` removed; whitespace collapsed
+            expect(passedSearchString).toBe('100 match');
+        });
+
+        it('handles a query with all wildcard chars by returning empty', async () => {
+            seedSearchableEntity();
+            await provider.Search('%_[]%', 10, undefined, contextUser);
+            expect(mockRunViewFn).not.toHaveBeenCalled();
+        });
+
+        it('does not modify queries without wildcard characters', async () => {
+            seedSearchableEntity();
+            await provider.Search('normal query text', 10, undefined, contextUser);
+            const passedSearchString = (mockRunViewFn.mock.calls[0][0] as { UserSearchString: string }).UserSearchString;
+            expect(passedSearchString).toBe('normal query text');
         });
     });
 });

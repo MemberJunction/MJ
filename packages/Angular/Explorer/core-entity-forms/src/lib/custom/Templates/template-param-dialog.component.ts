@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { MJTemplateEntity, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { TemplateRunOperation } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface ParameterPair {
     key: string;
     value: string;
@@ -26,7 +27,7 @@ export interface TemplateRunResult {
     templateUrl: './template-param-dialog.component.html',
     styleUrls: ['./template-param-dialog.component.css']
 })
-export class TemplateParamDialogComponent implements OnInit {
+export class TemplateParamDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() template: MJTemplateEntity | null = null;
     
     public _isVisible: boolean = false;
@@ -69,7 +70,7 @@ export class TemplateParamDialogComponent implements OnInit {
 
         this.isLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView<MJTemplateParamEntity>({
                 EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID='${this.template.ID}'`,
@@ -167,31 +168,21 @@ export class TemplateParamDialogComponent implements OnInit {
                 }
             });
 
-            // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
-            
-            // Execute the RunTemplate GraphQL mutation
-            const query = `
-                mutation RunTemplate($templateId: String!, $contextData: String) {
-                    RunTemplate(templateId: $templateId, contextData: $contextData) {
-                        success
-                        output
-                        error
-                        executionTimeMs
-                    }
-                }
-            `;
+            // Run the template via the Template.Run Remote Operation (provider-scoped; routes over the
+            // generic ExecuteRemoteOperation transport — no bespoke GraphQL client).
+            const opResult = await new TemplateRunOperation().Execute(
+                { templateID: this.template.ID, data: contextData },
+                { provider: this.ProviderToUse },
+            );
 
-            const variables = {
-                templateId: this.template.ID,
-                contextData: JSON.stringify(contextData)
-            };
+            {
+                this.testResult = {
+                    success: opResult.Success,
+                    output: opResult.Output?.output,
+                    error: opResult.ErrorMessage,
+                    executionTimeMs: opResult.Output?.executionTimeMs,
+                };
 
-            const result = await dataProvider.ExecuteGQL(query, variables);
-            
-            if (result?.RunTemplate) {
-                this.testResult = result.RunTemplate;
-                
                 // Collapse parameters and expand results after execution
                 this.parametersExpanded = false;
                 this.resultsExpanded = true;
@@ -209,8 +200,6 @@ export class TemplateParamDialogComponent implements OnInit {
                         5000
                     );
                 }
-            } else {
-                throw new Error(result.errors?.[0]?.message || 'Unknown GraphQL error');
             }
 
         } catch (error) {
@@ -246,7 +235,7 @@ export class TemplateParamDialogComponent implements OnInit {
         if (newParams.length === 0) return;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             
             for (const param of newParams) {
                 const templateParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');

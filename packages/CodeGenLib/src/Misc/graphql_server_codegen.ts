@@ -1,4 +1,13 @@
 import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption, getGraphQLTypeNameBase } from '@memberjunction/core';
+import {
+    IsBinarySQLType,
+    IsBooleanSQLType,
+    IsCurrencySQLType,
+    IsDateSQLType,
+    IsFloatSQLType,
+    IsStringSQLType,
+    IsUuidSQLType,
+} from '@memberjunction/sql-dialect';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
@@ -71,7 +80,7 @@ export class GraphQLServerGeneratorBase {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
     let sEntityOutput: string = '';
     try {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
       const serverGraphQLTypeName: string = this.getServerGraphQLTypeName(entity);
 
@@ -190,7 +199,7 @@ ${this.generateEntityImports(entities, importLibrary, isInternal)}
     importLibrary: string,
     excludeRelatedEntitiesExternalToSchema: boolean
   ): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     let sRet: string = `/********************************************************************************
 * ${entity.Name} TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 *
@@ -255,48 +264,36 @@ export class ${serverGraphQLTypeName} {`;
         `;
   }
 
+  /**
+   * Maps a column's SQL type to the TypeGraphQL `@Field(...)` type-fn argument.
+   *
+   * Categories that emit an empty string fall through to TypeGraphQL's
+   * automatic inference based on the field's TypeScript type — appropriate
+   * for string, Date, and binary-as-string columns. Boolean / Float require
+   * an explicit type fn, and anything else defaults to Int.
+   *
+   * The category checks come from `@memberjunction/sql-dialect` so that the
+   * list of recognized type names lives in exactly one place per category.
+   */
   protected getTypeGraphQLFieldString(fieldInfo: EntityFieldInfo): string {
-    switch (fieldInfo.Type.toLowerCase()) {
-      case 'text':
-      case 'char':
-      case 'varchar':
-      case 'ntext':
-      case 'nchar':
-      case 'nvarchar':
-      case 'uniqueidentifier': //treat this as a string
-      case 'uuid': // PostgreSQL UUID type
-      case 'bytea': // PostgreSQL binary data, treat as string
-        return '';
-      case 'datetime':
-      case 'datetime2':
-      case 'smalldatetime':
-      case 'datetimeoffset':
-      case 'date':
-      case 'time':
-      case 'timestamptz': // PostgreSQL timestamp with time zone
-      case 'timestamp with time zone': // PostgreSQL full type name
-      case 'timestamp without time zone': // PostgreSQL full type name
-        return '';
-      case 'bit':
-      case 'bool': // PostgreSQL boolean type (internal name)
-      case 'boolean': // PostgreSQL boolean type (full name)
-        return '() => Boolean';
-      case 'decimal':
-      case 'numeric':
-      case 'float':
-      case 'real':
-      case 'money':
-      case 'smallmoney':
-      case 'float4': // PostgreSQL single precision
-      case 'float8': // PostgreSQL double precision
-        fieldInfo.IsFloat = true; // used by calling functions to determine if we need to import Float
-        return '() => Float';
-      case 'timestamp':
-      case 'rowversion':
-        return '';
-      default:
-        return '() => Int';
+    const t = fieldInfo.Type;
+
+    // String-shaped (text, varchar, char-family, citext, uuid, bytea-as-string,
+    // and SQL Server's `rowversion`/`timestamp` which are 8-byte binary surfaced
+    // as base64 string at the GraphQL layer) — TypeGraphQL infers String from TS.
+    if (IsStringSQLType(t) || IsUuidSQLType(t) || IsBinarySQLType(t)) return '';
+
+    // Date / time — TypeGraphQL infers Date from the TS type.
+    if (IsDateSQLType(t)) return '';
+
+    if (IsBooleanSQLType(t)) return '() => Boolean';
+
+    if (IsFloatSQLType(t) || IsCurrencySQLType(t)) {
+      fieldInfo.IsFloat = true; // calling functions use this to decide whether to import Float
+      return '() => Float';
     }
+
+    return '() => Int';
   }
 
   protected generateServerRelationship(md: Metadata, r: EntityRelationshipInfo, isInternal: boolean): string {
@@ -329,7 +326,7 @@ export class ${serverGraphQLTypeName} {`;
     excludeRelatedEntitiesExternalToSchema: boolean,
     isInternal: boolean
   ): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     let sRet = '';
 
@@ -391,16 +388,18 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
     }`;
       let graphQLPKEYArgs = '';
       let whereClause = '';
+      const pkParamNames: string[] = [];
       for (let i = 0; i < entity.PrimaryKeys.length; i++) {
         const pk = entity.PrimaryKeys[i];
-        const idQuotes = pk.NeedsQuotes ? "'" : '';
         graphQLPKEYArgs += graphQLPKEYArgs.length > 0 ? ', ' : '';
         graphQLPKEYArgs += `@Arg('${pk.CodeName}', () => ${pk.GraphQLType}) `;
         graphQLPKEYArgs += `${pk.CodeName}: ${pk.TSType}`;
 
         whereClause += whereClause.length > 0 ? ' AND ' : '';
-        whereClause += `\${provider.QuoteIdentifier('${pk.CodeName}')}=${idQuotes}\${${pk.CodeName}}${idQuotes}`;
+        whereClause += `\${provider.QuoteIdentifier('${pk.CodeName}')}=\${provider.BuildParameterPlaceholder(${i})}`;
+        pkParamNames.push(pk.CodeName);
       }
+      const pkParamsList = pkParamNames.join(', ');
 
       sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
@@ -408,7 +407,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(entity)}, '${entity.BaseView}')} WHERE ${whereClause} \` + this.getRowLevelSecurityWhereClause(provider, '${entity.Name}', userPayload, EntityPermissionType.Read, 'AND');${auditAccessCode}
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const rows = await provider.ExecuteSQL(sSQL, [${pkParamsList}], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.MapFieldNamesToCodeNames('${entity.Name}', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -469,7 +468,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
    */
   protected schemaNameExpression(entity: EntityInfo): string {
     if (entity.SchemaName === mjCoreSchema) {
-      return 'Metadata.Provider.ConfigData.MJCoreSchemaName';
+      return 'Metadata.Provider.ConfigData.MJCoreSchemaName'; // global-provider-ok: codegen runs offline against a single provider
     }
     return `'${entity.SchemaName}'`;
   }
@@ -607,7 +606,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
   }
 
   protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const re = md.EntityByName(r.RelatedEntity);
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
@@ -635,7 +634,6 @@ export class ${classPrefix}${typeNameBase}Input {`;
       return '';
     }
 
-    const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
     const relatedTypeName = this.getServerGraphQLTypeName(re);
     const serverClassName = serverPackagePrefix + relatedTypeName;
@@ -649,8 +647,8 @@ export class ${classPrefix}${typeNameBase}Input {`;
     async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${r.RelatedEntityJoinField}')}=${quotes}\${${instanceName}.${filterFieldName}}${quotes} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${r.RelatedEntityJoinField}')}=\${provider.BuildParameterPlaceholder(0)} \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [${instanceName}.${filterFieldName}], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
@@ -658,7 +656,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
   }
 
   protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
@@ -685,7 +683,6 @@ export class ${classPrefix}${typeNameBase}Input {`;
       return '';
     }
 
-    const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
     const relatedTypeName = this.getServerGraphQLTypeName(re);
     const serverClassName = serverPackagePrefix + relatedTypeName;
@@ -699,8 +696,8 @@ export class ${classPrefix}${typeNameBase}Input {`;
     async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${re.FirstPrimaryKey.Name}')} IN (SELECT \${provider.QuoteIdentifier('${r.JoinEntityInverseJoinField}')} FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.JoinView}')} WHERE \${provider.QuoteIdentifier('${r.JoinEntityJoinField}')}=${quotes}\${${instanceName}.${filterFieldName}}${quotes}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const sSQL = \`SELECT * FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.RelatedEntityBaseView}')} WHERE \${provider.QuoteIdentifier('${re.FirstPrimaryKey.Name}')} IN (SELECT \${provider.QuoteIdentifier('${r.JoinEntityInverseJoinField}')} FROM \${provider.QuoteSchemaAndView(${this.schemaNameExpression(re)}, '${r.JoinView}')} WHERE \${provider.QuoteIdentifier('${r.JoinEntityJoinField}')}=\${provider.BuildParameterPlaceholder(0)}) \` + this.getRowLevelSecurityWhereClause(provider, '${r.RelatedEntity}', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [${instanceName}.${filterFieldName}], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('${r.RelatedEntity}', rows, this.GetUserFromPayload(userPayload));
         return result;
     }

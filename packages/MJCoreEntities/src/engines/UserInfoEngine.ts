@@ -3,8 +3,9 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
-  Metadata,
+  LogStatus,
   RegisterForStartup,
+  RunView,
   UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -119,7 +120,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param provider - Optional custom metadata provider
    */
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-    const md = new Metadata();
+    const md = provider ?? this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -132,65 +133,75 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       forceRefresh = true; // Force refresh if user changed
     }
 
-    // Note: We intentionally do NOT use Filter or OrderBy in configs.
-    // This allows BaseEngine to use immediate array mutations for better performance.
-    // Filtering by user and sorting is done in the getter methods instead.
-    // This also makes the engine reusable for server-side admin scenarios where
-    // all users' data might be needed.
+    // On the client (Network/GraphQL provider), filter user-specific entities by UserID
+    // to avoid loading all users' data. On the server (Database provider), load everything
+    // because the server handles multiple users from a single process.
+    const isClientSide = this.ProviderToUse.ProviderType === 'Network';
+    const userFilter = isClientSide && userId ? `UserID='${userId}'` : undefined;
+
     const configs: Partial<BaseEnginePropertyConfig>[] = [
       {
         Type: 'entity',
         EntityName: 'MJ: User Notifications',
         PropertyName: '_UserNotifications',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Types',
         PropertyName: '_NotificationTypes',
         CacheLocal: true,
+        // Global reference table — no user filter
       },
       {
         Type: 'entity',
         EntityName: 'MJ: Workspaces',
         PropertyName: '_Workspaces',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Settings',
         PropertyName: '_UserSettings',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Applications',
         PropertyName: '_UserApplications',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Favorites',
         PropertyName: '_UserFavorites',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Record Logs',
         PropertyName: '_UserRecordLogs',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Preferences',
         PropertyName: '_UserNotificationPreferences',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: Application Roles',
         PropertyName: '_applicationRoles',
         CacheLocal: true,
+        // Global reference table — no user filter
       },
     ];
 
@@ -253,10 +264,21 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
 
   /**
    * Get a user setting value by key.
+   *
+   * **Read-after-write semantics**: this consults the in-memory pending-
+   * debounced-writes map FIRST. Without that, a `SetSettingDebounced`
+   * followed immediately by `GetSetting` would return the old DB-cached
+   * value because the debounce timer hasn't fired yet and the entity
+   * hasn't been saved. Callers that update a preference and re-render
+   * synchronously (e.g. form-variant picker → form reload) depend on
+   * this freshness guarantee.
+   *
    * @param settingKey - The setting key to find (e.g., "default-view-setting/Contacts")
    * @returns The setting value string, or undefined if not found
    */
   public GetSetting(settingKey: string): string | undefined {
+    const pending = this._pendingSettings.get(settingKey);
+    if (pending !== undefined) return pending.value;
     const setting = this.UserSettings.find((s) => s.Setting === settingKey);
     return setting?.Value ?? undefined;
   }
@@ -278,7 +300,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns true if successful, false otherwise
    */
   public async SetSetting(settingKey: string, value: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -675,6 +697,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Read-only view of the ApplicationRole catalog. Used by permission providers
+   * that need to reason about grants for arbitrary users (not just CurrentUser).
+   */
+  public get ApplicationRoles(): readonly MJApplicationRoleEntity[] {
+    return this._applicationRoles;
+  }
+
+  /**
    * Checks if the current user's roles grant access to the application.
    * If no ApplicationRole records exist for the app, access is open (backwards compatible).
    * If records exist, user must have at least one role with CanAccess=1.
@@ -688,7 +718,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     if (appRoles.length === 0) return true;
 
     // Check if any of the user's roles have CanAccess=1
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user || !user.UserRoles) return false;
 
@@ -709,7 +739,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     );
     if (appRoles.length === 0) return false; // No admin without explicit grant
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user || !user.UserRoles) return false;
 
@@ -725,7 +755,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to check
    */
   public IsApplicationInactive(applicationId: string): boolean {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const appInfo = md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
     return appInfo != null && appInfo.Status !== 'Active';
   }
@@ -735,7 +765,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to find
    */
   public GetApplicationInfo(applicationId: string): ApplicationInfo | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
   }
 
@@ -745,7 +775,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public FindApplicationByPathOrName(pathOrName: string): ApplicationInfo | undefined {
     const normalized = pathOrName.trim().toLowerCase();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // First try path match
     const pathMatch = md.Applications.find((a) => a.Path?.toLowerCase() === normalized);
@@ -801,7 +831,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns The newly created MJUserApplicationEntity, or null if failed
    */
   public async InstallApplication(applicationId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity | null> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -994,16 +1024,55 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Checks the database directly for this user's UserApplication records.
+   * If the DB has records but our in-memory cache is empty (load failure),
+   * repairs the cache and emits a property change so subscribers update.
+   * @returns The DB records if repair occurred, empty array otherwise
+   */
+  private async repairUserApplicationsFromDatabase(userId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
+    try {
+      const rv = new RunView(this.RunViewProviderToUse);
+      const dbResult = await rv.RunView<MJUserApplicationEntity>({
+        EntityName: 'MJ: User Applications',
+        ExtraFilter: `UserID='${userId}'`,
+        ResultType: 'entity_object',
+        BypassCache: true
+      }, contextUser ?? this.ContextUser);
+
+      if (dbResult.Success && dbResult.Results.length > 0) {
+        LogStatus(`UserInfoEngine: Repaired _UserApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
+        this._UserApplications = dbResult.Results;
+        this.emitPropertyChange('_UserApplications');
+        return dbResult.Results;
+      }
+    } catch (error) {
+      console.error('UserInfoEngine.repairUserApplicationsFromDatabase: DB verification failed:', error instanceof Error ? error.message : String(error));
+    }
+    return [];
+  }
+
+  /**
    * Internal implementation of CreateDefaultApplications.
    * Separated to allow the public method to manage the promise state.
    */
   private async doCreateDefaultApplications(contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
       console.error('UserInfoEngine.CreateDefaultApplications: No user context available');
       return [];
+    }
+
+    // Verify against the database before creating — if the in-memory cache is empty
+    // due to a load failure (e.g., cache timestamp bug), we'd otherwise attempt to
+    // create records that already exist, hitting unique constraint violations.
+    const userAppsForUser = this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId));
+    if (userAppsForUser.length === 0) {
+      const repaired = await this.repairUserApplicationsFromDatabase(userId, contextUser);
+      if (repaired.length > 0) {
+        return repaired;
+      }
     }
 
     // Get existing UserApplication records for this user to prevent duplicates

@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tag Health · Option A — three summary cards</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .health-summary {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .h-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: var(--mj-shadow-sm);
+  }
+  .h-card .ic { width: 44px; height: 44px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; }
+  .h-card.merge .ic { background: #ede9fe; color: #6d28d9; }
+  .h-card.lowusage .ic { background: #f1f5f9; color: #475569; }
+  .h-card.widenode .ic { background: #ffedd5; color: #9a3412; }
+  .h-card .name { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); font-weight: 700; }
+  .h-card h3 { margin: 0; font-size: 18px; }
+  .h-card .big { font-size: 38px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
+  .h-card .sub { color: var(--mj-text-secondary); font-size: 13px; margin: 0; line-height: 1.5; }
+  .h-card .delta { font-size: 11px; }
+  .h-card .delta.up { color: var(--mj-status-error-text); }
+  .h-card .delta.down { color: var(--mj-status-success-text); }
+  .h-card .ft {
+    border-top: 1px dashed var(--mj-border-default);
+    padding-top: 12px;
+    display: flex; gap: 8px;
+    margin-top: auto;
+  }
+  .h-card .top { display: flex; gap: 14px; align-items: center; }
+
+  .top-list { font-size: 13px; }
+  .top-list .li { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 6px; }
+  .top-list .li:hover { background: var(--mj-bg-surface-hover); }
+  .top-list .nm { flex: 1; font-weight: 600; }
+  .top-list .meta { color: var(--mj-text-muted); font-size: 11px; }
+  .top-list .score { font-family: ui-monospace, monospace; font-weight: 700; color: var(--mj-text-primary); }
+  .top-list .arrow { color: var(--mj-text-muted); }
+
+  .panel-with-top {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+  }
+  .panel-with-top .ph { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-subtle); display: flex; align-items: center; justify-content: space-between; }
+  .panel-with-top .ph h2 { margin: 0; font-size: 14px; font-weight: 700; }
+
+  .runbar {
+    background: linear-gradient(135deg, #0076b6 0%, #2898d2 100%);
+    color: #fff;
+    padding: 16px 24px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    display: flex; gap: 24px; align-items: center;
+  }
+  .runbar .v { font-size: 22px; font-weight: 700; }
+  .runbar .l { font-size: 11px; text-transform: uppercase; opacity: 0.9; letter-spacing: 0.06em; }
+
+  .threshold-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    padding: 14px 18px;
+  }
+  .threshold-form .field { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup A:</strong> Tag Health Dashboard — three-card summary (representative)</span>
+  <span><a href="index.html">← Back to index</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span class="current">Tag Health</span>
+  </div>
+  <div class="right">
+    <span><strong>Last run:</strong> 14 hours ago</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+  <div class="page-title">
+    <div>
+      <h1>Tag Health</h1>
+      <div class="subtitle">Automated signals about taxonomy quality · runs after every autotag pass</div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn">History</button>
+      <button class="btn">Configure thresholds</button>
+      <button class="btn primary">Run now</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab">Sources</div>
+    <div class="tab">Taxonomy</div>
+    <div class="tab">Suggestions <span class="count">247</span></div>
+    <div class="tab active">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="runbar">
+    <div>
+      <div class="l">Last full run</div>
+      <div class="v">14h ago</div>
+    </div>
+    <div>
+      <div class="l">Tags scanned</div>
+      <div class="v">1,247</div>
+    </div>
+    <div>
+      <div class="l">Issues found</div>
+      <div class="v">76</div>
+    </div>
+    <div>
+      <div class="l">Suggestions enqueued</div>
+      <div class="v">76</div>
+    </div>
+    <div style="margin-left: auto;">
+      <div class="l">Next scheduled run</div>
+      <div class="v">in 4h</div>
+    </div>
+  </div>
+
+  <div class="health-summary">
+
+    <div class="h-card merge">
+      <div class="top">
+        <div class="ic">🔗</div>
+        <div>
+          <div class="name">Merge candidates</div>
+          <h3>Likely duplicate tags</h3>
+        </div>
+      </div>
+      <div class="big">68</div>
+      <p class="sub">Pairs with high embedding cosine and overlapping co-occurrence. Approving each merges the source tag into the target and re-points existing ContentItemTags.</p>
+      <div class="delta up">↑ 14 vs. last run</div>
+
+      <hr class="divider" style="margin: 0;" />
+      <div class="muted" style="font-size: 11px; font-weight: 600;">Top candidates</div>
+      <div class="top-list">
+        <div class="li"><span class="nm">GenAI</span> <span class="arrow">→</span> <span class="nm">Generative AI</span> <span class="score">0.96</span></div>
+        <div class="li"><span class="nm">JS</span> <span class="arrow">→</span> <span class="nm">JavaScript</span> <span class="score">0.94</span></div>
+        <div class="li"><span class="nm">A/B test</span> <span class="arrow">→</span> <span class="nm">A/B Testing</span> <span class="score">0.93</span></div>
+        <div class="li"><span class="nm">PostgreSQL</span> <span class="arrow">→</span> <span class="nm">Postgres</span> <span class="score">0.91</span></div>
+      </div>
+
+      <div class="ft">
+        <button class="btn primary sm">Open in Suggestions</button>
+        <button class="btn sm">Auto-approve top 90%…</button>
+      </div>
+    </div>
+
+    <div class="h-card lowusage">
+      <div class="top">
+        <div class="ic">🪦</div>
+        <div>
+          <div class="name">Low usage</div>
+          <h3>Deprecation candidates</h3>
+        </div>
+      </div>
+      <div class="big">6</div>
+      <p class="sub">Tags used &lt; 3 times in the last 90 days. Often abandoned imports, project-specific tags from finished projects, or one-shot creations.</p>
+      <div class="delta down">↓ 4 vs. last run (4 deprecated)</div>
+
+      <hr class="divider" style="margin: 0;" />
+      <div class="muted" style="font-size: 11px; font-weight: 600;">All candidates</div>
+      <div class="top-list">
+        <div class="li"><span class="nm">DEI</span> <span class="meta">2 uses · last 87d ago</span></div>
+        <div class="li"><span class="nm">Q1-2024-launch</span> <span class="meta">1 use · launch over</span></div>
+        <div class="li"><span class="nm">side-project</span> <span class="meta">0 uses</span></div>
+        <div class="li"><span class="nm">old-onboarding</span> <span class="meta">2 uses · superseded</span></div>
+      </div>
+
+      <div class="ft">
+        <button class="btn primary sm">Review</button>
+        <button class="btn sm">Bulk deprecate…</button>
+      </div>
+    </div>
+
+    <div class="h-card widenode">
+      <div class="top">
+        <div class="ic">🌳</div>
+        <div>
+          <div class="name">Wide nodes</div>
+          <h3>Parents with too many children</h3>
+        </div>
+      </div>
+      <div class="big">2</div>
+      <p class="sub">Parents with more direct children than your <strong>maxImplicitChildren</strong> threshold (default 30). Often a sign that the parent should be split into sub-categories.</p>
+      <div class="delta">no change vs. last run</div>
+
+      <hr class="divider" style="margin: 0;" />
+      <div class="muted" style="font-size: 11px; font-weight: 600;">Triggers</div>
+      <div class="top-list">
+        <div class="li"><span class="nm">Vendors</span> <span class="meta">47 children · 38 above threshold</span></div>
+        <div class="li"><span class="nm">Engineering</span> <span class="meta">38 children · 8 above</span></div>
+      </div>
+
+      <div class="ft">
+        <button class="btn primary sm">Review</button>
+        <button class="btn sm">Adjust threshold…</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Threshold tuning -->
+  <div class="panel-with-top">
+    <div class="ph">
+      <h2>Health-job thresholds</h2>
+      <span class="muted" style="font-size: 12px;">Stored on the TagHealthJob config · changes apply to next run</span>
+    </div>
+    <div class="threshold-form">
+      <div class="field">
+        <label>Merge: min co-occurrence</label>
+        <input class="input" value="10" />
+        <span class="hint">Pairs must appear together in this many items</span>
+      </div>
+      <div class="field">
+        <label>Merge: min embedding cosine</label>
+        <input class="input" value="0.85" />
+        <span class="hint">Plus name fuzzy ≥ 0.55</span>
+      </div>
+      <div class="field">
+        <label>Low usage: max usage in window</label>
+        <input class="input" value="3" />
+        <span class="hint">Window = 90 days</span>
+      </div>
+      <div class="field">
+        <label>Low usage: lookback (days)</label>
+        <input class="input" value="90" />
+      </div>
+      <div class="field">
+        <label>Wide node: max implicit children</label>
+        <input class="input" value="30" />
+        <span class="hint">Used when the parent has no MaxChildren cap</span>
+      </div>
+      <div class="field">
+        <label>Run frequency</label>
+        <select class="input"><option>After each autotag run</option><option>Daily</option><option>Weekly</option></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- recent runs -->
+  <div class="panel mt-24">
+    <div class="panel-hd"><h2>Run history</h2><span class="hd-meta">last 12 runs</span></div>
+    <div class="panel-bd flush">
+      <table class="tbl">
+        <thead><tr><th>When</th><th>Trigger</th><th>Tags scanned</th><th>Merge</th><th>Low usage</th><th>Wide node</th><th>Total enqueued</th><th>Duration</th></tr></thead>
+        <tbody>
+          <tr><td class="muted">14h ago</td><td>Post-run · HubSpot</td><td>1,247</td><td>68</td><td>6</td><td>2</td><td>76</td><td>2.4s</td></tr>
+          <tr><td class="muted">22h ago</td><td>Post-run · Salesforce</td><td>1,239</td><td>54</td><td>10</td><td>2</td><td>66</td><td>2.1s</td></tr>
+          <tr><td class="muted">2d ago</td><td>Manual · admin</td><td>1,233</td><td>61</td><td>9</td><td>2</td><td>72</td><td>2.0s</td></tr>
+          <tr><td class="muted">3d ago</td><td>Post-run · Confluence</td><td>1,228</td><td>57</td><td>11</td><td>2</td><td>70</td><td>2.5s</td></tr>
+          <tr><td class="muted">4d ago</td><td>Post-run · Zendesk</td><td>1,224</td><td>49</td><td>14</td><td>2</td><td>65</td><td>1.9s</td></tr>
+          <tr><td class="muted">5d ago</td><td>Manual · admin</td><td>1,219</td><td>63</td><td>16</td><td>3</td><td>82</td><td>2.2s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option A</h3>
+    <p>Three summary cards, one per signal. Each card includes both the headline number and a "top 4" peek so the
+    page tells the story without requiring drill-in. Threshold-tuning panel is right there — health is a knob-driven
+    feature and the knobs should be visible. Run history at the bottom builds confidence that the job actually runs.</p>
+    <ul>
+      <li><strong>Strengths:</strong> calm and scannable; "top N" peek inside each card means you don't always need to drill; thresholds and history co-located; clear story (here are 3 problems, here's how each is detected).</li>
+      <li><strong>Weaknesses:</strong> only 3 signals can fit; if we add a 4th the layout breaks; doesn't surface trends across runs.</li>
+      <li><strong>Best for:</strong> weekly review by a data-governance owner.</li>
+      <li><strong>Distinctive:</strong> 3-up card layout with embedded top-N preview; threshold knobs visible without leaving the page; run-history panel for trust.</li>
+    </ul>
+    <hr class="divider" />
+    <p class="muted"><strong>B and C variants (described in index, not built):</strong>
+    <em>B (insights feed)</em> would be a reverse-chronological stream of detected issues (Jira-Insights style) — better for tracking trends.
+    <em>C (tree heat-map)</em> would color the taxonomy tree by health score — most beautiful, most expensive to build.</p>
+  </div>
+
+</div>
+</body>
+</html>

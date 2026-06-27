@@ -7,7 +7,9 @@ const { mockClassFactory } = vi.hoisted(() => ({
         GetAllRegistrations: vi.fn().mockReturnValue([]),
     },
 }));
-vi.mock('@memberjunction/global', () => ({
+vi.mock('@memberjunction/global', async (importOriginal) => ({
+    // Real MJLruCache — EntityActionInvocationTypes' script cache (and its caching tests) need the real one.
+    MJLruCache: (await importOriginal<typeof import('@memberjunction/global')>()).MJLruCache,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
@@ -17,6 +19,31 @@ vi.mock('@memberjunction/global', () => ({
     SafeJSONParse: vi.fn((str: string) => {
         try { return JSON.parse(str); } catch { return null; }
     }),
+    // Case-insensitive UUID equality used by
+    // EntityActionInvocation*.MapParams to correlate params by ID.
+    UUIDsEqual: (a: unknown, b: unknown): boolean =>
+        typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase(),
+    NormalizeUUID: (value: unknown): string =>
+        typeof value === 'string' ? value.toLowerCase() : String(value),
+    // EntityActionEngineServer now composes the base via BaseSingleton instead of extending it.
+    BaseSingleton: class BaseSingletonMock<T> {
+        protected constructor() {}
+        protected static getInstance<U>(this: new () => U): U {
+            return new this();
+        }
+    },
+    // Bounded LRU cache backing EntityActionInvocation*._scriptCache (field initializer
+    // runs in the constructor, so the mock MUST export it or every invocation construct throws).
+    // Map-backed with PascalCase methods to match the real MJLruCache API the source calls.
+    MJLruCache: class MJLruCacheMock<K, V> {
+        private store = new Map<K, V>();
+        constructor(_opts?: unknown) {}
+        Get(key: K): V | undefined { return this.store.get(key); }
+        Set(key: K, value: V): void { this.store.set(key, value); }
+        Has(key: K): boolean { return this.store.has(key); }
+        Delete(key: K): boolean { return this.store.delete(key); }
+        Clear(): void { this.store.clear(); }
+    },
 }));
 
 // Mock @memberjunction/core
@@ -434,9 +461,12 @@ describe('EntityActionInvocationMultipleRecords', () => {
     });
 
     describe('GetRecordList', () => {
-        it('should return empty array by default', async () => {
+        it('should return an empty array for a non-View/List invocation type', async () => {
+            // View/List resolution is covered in EntityActionGetRecordList.test.ts; here we confirm
+            // the default fall-through for any other invocation type.
             const invocation = new EntityActionInvocationMultipleRecords();
-            const result = await (invocation as unknown as Record<string, Function>)['GetRecordList']();
+            const params = { InvocationType: { Name: 'SingleRecord' } } as unknown as Record<string, Function>;
+            const result = await (invocation as unknown as Record<string, Function>)['GetRecordList'](params);
             expect(result).toEqual([]);
         });
     });

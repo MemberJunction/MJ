@@ -1,7 +1,7 @@
-import { AuthProviderConfig } from '@memberjunction/core';
+import { AuthProviderConfig, LogStatusEx } from '@memberjunction/core';
 import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
-import { MJGlobal, BaseSingleton } from '@memberjunction/global';
+import { MJGlobal, BaseSingleton, MJLruCache } from '@memberjunction/global';
 
 // Import providers to ensure they're registered
 import './providers/Auth0Provider.js';
@@ -9,6 +9,7 @@ import './providers/MSALProvider.js';
 import './providers/OktaProvider.js';
 import './providers/CognitoProvider.js';
 import './providers/GoogleProvider.js';
+import './providers/MagicLinkProvider.js';
 
 /**
  * Factory and registry for managing authentication providers
@@ -16,8 +17,18 @@ import './providers/GoogleProvider.js';
  */
 export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
   private providers: Map<string, IAuthProvider> = new Map();
-  private issuerCache: Map<string, IAuthProvider> = new Map();
-  private issuerMultiCache: Map<string, IAuthProvider[]> = new Map();
+  /**
+   * Cache of resolved issuer → provider mappings. Bounded LRU(50) — prior
+   * unbounded `Map` was a low-effort DoS vector: a misconfigured/malicious
+   * client supplying arbitrary issuer URLs would walk the map up indefinitely.
+   * In production there should never be more than a handful of legitimate
+   * issuers. See audit R2-C4.
+   */
+  private issuerCache: MJLruCache<string, IAuthProvider> = new MJLruCache<string, IAuthProvider>({ maxSize: 50 });
+  /**
+   * Cache of issuer → all matching providers. Same LRU bound as `issuerCache`.
+   */
+  private issuerMultiCache: MJLruCache<string, IAuthProvider[]> = new MJLruCache<string, IAuthProvider[]>({ maxSize: 50 });
 
   public constructor() {
     super();
@@ -65,12 +76,15 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     }
 
     this.providers.set(provider.name, provider);
-    
+
     // Clear issuer caches when registering new provider
-    this.issuerCache.clear();
-    this.issuerMultiCache.clear();
+    this.issuerCache.Clear();
+    this.issuerMultiCache.Clear();
     
-    console.log(`Registered auth provider: ${provider.name} with issuer: ${provider.issuer}`);
+    // Verbose-only: provider NAMES are surfaced compactly in the server startup summary
+    // `Auth` line at standard level. Routes through the global verbose gate (set from the
+    // server's telemetry.level) so it's reusable by any consumer of this generic package.
+    LogStatusEx({ message: `Registered auth provider: ${provider.name} with issuer: ${provider.issuer}`, verboseOnly: true });
   }
 
   /**
@@ -78,15 +92,16 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
    */
   getByIssuer(issuer: string): IAuthProvider | undefined {
     // Check cache first
-    if (this.issuerCache.has(issuer)) {
-      return this.issuerCache.get(issuer);
+    const cached = this.issuerCache.Get(issuer);
+    if (cached) {
+      return cached;
     }
 
     // Search through providers
     for (const provider of this.providers.values()) {
       if (provider.matchesIssuer(issuer)) {
         // Cache for future lookups
-        this.issuerCache.set(issuer, provider);
+        this.issuerCache.Set(issuer, provider);
         return provider;
       }
     }
@@ -103,8 +118,9 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
    */
   getAllByIssuer(issuer: string): IAuthProvider[] {
     // Check multi-provider cache first
-    if (this.issuerMultiCache.has(issuer)) {
-      return this.issuerMultiCache.get(issuer)!;
+    const cached = this.issuerMultiCache.Get(issuer);
+    if (cached) {
+      return cached;
     }
 
     const matches: IAuthProvider[] = [];
@@ -115,7 +131,7 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
     }
 
     if (matches.length > 0) {
-      this.issuerMultiCache.set(issuer, matches);
+      this.issuerMultiCache.Set(issuer, matches);
     }
 
     return matches;
@@ -147,8 +163,8 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
    */
   clear(): void {
     this.providers.clear();
-    this.issuerCache.clear();
-    this.issuerMultiCache.clear();
+    this.issuerCache.Clear();
+    this.issuerMultiCache.Clear();
   }
 
   /**

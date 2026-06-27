@@ -135,6 +135,48 @@
           }
         }
       ],
+      "MJ: AI Agent Relationships": [
+        {
+          "_comment": "ActionSmith is a top-level agent (ExposeAsAction=true, ParentID NULL). Referenced here so Agent Manager can delegate capability-gap scenarios: 'User wants a new reusable action / composition' routes to ActionSmith, which in turn delegates JS generation to Codesmith.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=ActionSmith",
+            "Status": "Active",
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "77EF420D-5F7B-4AD4-A14E-D5E62A1ADF17"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T23:51:00.113Z",
+            "checksum": "7356b90a8c41d8f0369511d6d7e71450d2ce083b06ce957513a42bdddd7bf9a1"
+          }
+        },
+        {
+          "_comment": "Database Designer is called by Agent Manager AFTER the user approves the design plan, when Planning Designer has written pendingSchemaChanges to the payload. Agent Manager passes pendingSchemaChanges as callerContext.tableSpecs with subagentConfirmedByParent: true so DB Designer skips its own approval gate.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Designer",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "DatabaseDesignerResult": "schemaCreationResult"
+            },
+            "SubAgentContextPaths": [
+              "TechnicalDesign",
+              "FunctionalRequirements"
+            ]
+          },
+          "primaryKey": {
+            "ID": "0134CE98-A6A0-4CC8-80A9-813BF388D189"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T05:03:05.216Z",
+            "checksum": "2f4b45697b1579b0c7707c31dd2a6c3549ebb37f915fe9b6886bdb0d7c6c05bc"
+          }
+        }
+      ],
       "MJ: AI Agents": [
         {
           "fields": {
@@ -256,7 +298,8 @@
             ],
             "PayloadUpstreamPaths": [
               "TechnicalDesign",
-              "modificationPlan"
+              "modificationPlan",
+              "pendingSchemaChanges"
             ]
           },
           "relatedEntities": {
@@ -386,7 +429,9 @@
                   "AgentID": "@parent:ID",
                   "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Research Agent",
                   "Status": "Active",
-                  "SubAgentOutputMapping": "{\"*\": \"TechnicalDesign.databaseSchema\"}",
+                  "SubAgentOutputMapping": {
+                    "*": "databaseResearch"
+                  },
                   "SubAgentContextPaths": [
                     "*"
                   ]
@@ -395,8 +440,8 @@
                   "ID": "D1F2F505-309E-48FD-9DB7-CC3B11EF71FF"
                 },
                 "sync": {
-                  "lastModified": "2026-02-13T21:09:22.374Z",
-                  "checksum": "5fc6e0ea86814253e3151cf7c95bdecb077deceab7af14fecb29c831b6f280de"
+                  "lastModified": "2026-04-27T04:34:29.568Z",
+                  "checksum": "f4c5f1b81ee8ed6ea0e773750e749d4d18f0558c8d305c77432fdff77309c537"
                 }
               }
             ]
@@ -405,8 +450,8 @@
             "ID": "644674DB-7791-44C4-8360-3914111C0E10"
           },
           "sync": {
-            "lastModified": "2026-03-13T19:10:48.147Z",
-            "checksum": "b645f791fe7c431579a30849c6e93adc52f54f610a8f6f9262c64586e0fb5980"
+            "lastModified": "2026-04-27T05:29:32.648Z",
+            "checksum": "f1be9a459afcdd273062e1a2aac5796478fb9c6e056b7828996632a7c14f75a5"
           }
         },
         {

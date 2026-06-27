@@ -6,48 +6,26 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { Metadata, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
+import { EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
-import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig, MJUserViewEntity_IGridColumnSetting, MJUserViewEntity_IGridSortSetting, MJUserViewEntity_IGridState, MJUserViewEntity_ISortStateItem } from '@memberjunction/core-entities';
+import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
   DataLoadedEvent,
   FilteredCountChangedEvent,
   EntityViewerConfig,
-  EntityViewMode,
   NavigateToRelatedEvent,
-  EntityViewerComponent,
-  ViewGridState,
-  GridStateChangedEvent,
-  ViewSaveEvent,
-  ViewConfigPanelComponent,
-  ViewConfigSummary,
-  QuickSaveEvent,
-  QuickSaveAdvancedEvent,
-  DuplicateViewEvent,
-  SharedViewAction,
+  ViewWorkspaceComponent,
+  ViewRelatedRecordNavigation,
   buildCompositeKey,
   buildPkString
 } from '@memberjunction/ng-entity-viewer';
-import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
-import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, DataExplorerViewMode, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
-import { MapRenderMode } from '@memberjunction/ng-map-view';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
-import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
-import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
-import {
-  ExportService,
-  ExportDialogConfig,
-  ExportDialogResult
-} from '@memberjunction/ng-export-service';
-import {
-  ExportColumn,
-  ExportData
-} from '@memberjunction/export-engine';
+import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -76,19 +54,13 @@ import {
 @RegisterClass(BaseDashboard, 'DataExplorer')
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') filterInputRef: ElementRef<HTMLInputElement> | undefined;
 
-  /** Reference to the view selector for refreshing after save */
-  @ViewChild(ViewSelectorComponent) viewSelectorRef: ViewSelectorComponent | undefined;
-
-  /** Reference to the entity viewer for refreshing after view save */
-  @ViewChild(EntityViewerComponent) entityViewerRef: EntityViewerComponent | undefined;
-
-  /** Reference to the view config panel for passing filter state */
-  @ViewChild(ViewConfigPanelComponent) viewConfigPanelRef: ViewConfigPanelComponent | undefined;
+  /** Reference to the view workspace (owns view CRUD + the inner data renderer) */
+  @ViewChild(ViewWorkspaceComponent) viewWorkspaceRef: ViewWorkspaceComponent | undefined;
 
   /**
    * Optional filter to constrain which entities are shown in the explorer.
@@ -168,9 +140,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   // Loading state for entities
   public isLoadingEntities: boolean = true;
 
-  // Date field dropdown state
-  public isDateFieldDropdownOpen: boolean = false;
-
   // Recent records from User Record Logs
   public recentRecords: RecentRecordAccess[] = [];
 
@@ -182,38 +151,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Entity filter for recent records (null = show all, string = filter by entityId)
   public recentRecordsEntityFilter: string | null = null;
-
-  // Export functionality
-  public showExportDialog: boolean = false;
-  public exportDialogConfig: ExportDialogConfig | null = null;
-
-  // List management
-  public showListManagementDialog: boolean = false;
-  public listManagementConfig: ListManagementDialogConfig | null = null;
-
-  // Selection tracking for grid - needed to enable Add to List button in header
-  public selectedRecordIds: string[] = [];
-  public selectedRecords: Record<string, unknown>[] = [];
-
-  // Quick Save Dialog state (F-001)
-  public showQuickSaveDialog: boolean = false;
-  public quickSaveSummary: ViewConfigSummary | null = null;
-
-  // Pending new-view context: carries name/description/sharing from quick save dialog
-  // to the config panel when user clicks "Customize columns, filters & sorting..."
-  public pendingNewViewName: string = '';
-  public pendingNewViewDescription: string = '';
-  public pendingNewViewIsShared: boolean = false;
-
-  // Duplicate View Dialog state (F-005)
-  public showDuplicateDialog: boolean = false;
-  public duplicateSourceViewName: string = '';
-  public duplicateSummary: ViewConfigSummary | null = null;
-  private duplicateTargetViewId: string | null = null;
-
-  // Shared View Warning Dialog state (Scenario 5)
-  public showSharedViewWarning: boolean = false;
-  private pendingQuickSaveEvent: QuickSaveEvent | null = null;
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
     return "Data Explorer"
@@ -297,6 +234,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return this.flatFilteredEntities.length;
     }
     return this.filteredAppEntityGroups.reduce((sum, g) => sum + g.entities.length, 0);
+  }
+
+  /** No-results message for the entity list (echoes the filter text). */
+  get NoEntityResultsMessage(): string {
+    return `No entities match "${this.entityFilterText}".`;
   }
 
   /**
@@ -425,128 +367,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Check if the currently selected entity has date fields available for timeline view.
-   * Used to conditionally show the timeline toggle button in the header.
-   */
-  get entityHasDateFields(): boolean {
-    if (!this.selectedEntity) return false;
-    return this.selectedEntity.Fields.some(
-      f => f.TSType === EntityFieldTSType.Date
-    );
-  }
-
-  /**
-   * Get available date fields for the currently selected entity.
-   * Used for the date field selector in timeline view.
-   */
-  get availableDateFields(): { name: string; displayName: string }[] {
-    if (!this.selectedEntity) return [];
-    return this.selectedEntity.Fields
-      .filter(f => f.TSType === EntityFieldTSType.Date)
-      .sort((a, b) => {
-        // Prioritize DefaultInView fields, then by Sequence
-        if (a.DefaultInView && !b.DefaultInView) return -1;
-        if (!a.DefaultInView && b.DefaultInView) return 1;
-        return a.Sequence - b.Sequence;
-      })
-      .map(f => ({
-        name: f.Name,
-        displayName: f.DisplayNameOrName
-      }));
-  }
-
-  /**
-   * Get the effective timeline date field name.
-   * Returns stored value if valid, otherwise first available date field.
-   */
-  get effectiveTimelineDateField(): string | null {
-    const available = this.availableDateFields;
-    if (available.length === 0) return null;
-
-    // Check if stored value is still valid
-    if (this.state.timelineDateFieldName && available.some(f => f.name === this.state.timelineDateFieldName)) {
-      return this.state.timelineDateFieldName;
-    }
-
-    // Default to first available
-    return available[0].name;
-  }
-
-  /**
-   * Get the display name of the effective timeline date field.
-   */
-  get effectiveTimelineDateFieldDisplayName(): string {
-    const fieldName = this.effectiveTimelineDateField;
-    if (!fieldName) return '';
-    const field = this.availableDateFields.find(f => f.name === fieldName);
-    return field?.displayName || fieldName;
-  }
-
-  /**
-   * Set the timeline date field.
-   */
-  setTimelineDateField(fieldName: string): void {
-    this.state.timelineDateFieldName = fieldName;
-    this.stateService.updateState({ timelineDateFieldName: fieldName });
-    this.isDateFieldDropdownOpen = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Toggle the date field dropdown open/closed.
-   */
-  toggleDateFieldDropdown(): void {
-    this.isDateFieldDropdownOpen = !this.isDateFieldDropdownOpen;
-  }
-
-  /**
-   * Close the date field dropdown.
-   */
-  closeDateFieldDropdown(): void {
-    this.isDateFieldDropdownOpen = false;
-  }
-
-  /**
-   * Toggle timeline orientation between vertical and horizontal.
-   */
-  toggleTimelineOrientation(): void {
-    const newOrientation = this.state.timelineOrientation === 'vertical' ? 'horizontal' : 'vertical';
-    this.state.timelineOrientation = newOrientation;
-    this.stateService.updateState({ timelineOrientation: newOrientation });
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Toggle timeline sort order between newest first (desc) and oldest first (asc).
-   */
-  toggleTimelineSortOrder(): void {
-    const newSortOrder = this.state.timelineSortOrder === 'desc' ? 'asc' : 'desc';
-    this.state.timelineSortOrder = newSortOrder;
-    this.stateService.updateState({ timelineSortOrder: newSortOrder });
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Get the current timeline configuration for the entity-viewer.
-   */
-  get currentTimelineConfig(): { dateFieldName: string; orientation: 'vertical' | 'horizontal'; sortOrder: 'asc' | 'desc' } | null {
-    const dateField = this.effectiveTimelineDateField;
-    if (!dateField) return null;
-    return {
-      dateFieldName: dateField,
-      orientation: this.state.timelineOrientation,
-      sortOrder: this.state.timelineSortOrder
-    };
-  }
-
-  /**
    * Configuration for mj-entity-viewer composite component
    * Hides the built-in header since we have a custom header in the dashboard
    * Uses server-side pagination with 100 records per page (default)
    */
   public viewerConfig: Partial<EntityViewerConfig> = {
     showFilter: false,        // We have our own filter in the dashboard header
-    showViewModeToggle: false, // We have our own toggle in the dashboard header
+    showViewModeToggle: true,  // Use the viewer's metadata-driven view-type dropdown (no legacy header toggle)
     showRecordCount: false,   // We show count in the dashboard header
     showPagination: true,     // Show the pagination UI with "Load More" button
     serverSideFiltering: true, // Use RunView's UserSearchString for filtering
@@ -554,26 +381,10 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     height: '100%'
   };
 
-  /**
-   * Current grid state (built from view entity or local state changes)
-   * This is passed to mj-entity-viewer to control column display
-   */
-  public currentGridState: ViewGridState | null = null;
-
-  // Filter dialog state (rendered at dashboard level for full viewport width)
-  public isFilterDialogOpen: boolean = false;
-  public filterDialogFields: FilterFieldInfo[] = [];
-  public filterDialogState: CompositeFilterDescriptor = createEmptyFilter();
-  public filterDialogDisabled: boolean = false;
-
-  // View save state
-  public isSavingView: boolean = false;
-
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
     private recentAccessService: RecentAccessService,
-    private exportService: ExportService,
     private ngZone: NgZone
   ) {
     super();
@@ -582,6 +393,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    try {
     // Ensure UserInfoEngine is configured before we try to access user settings
     // This prevents race conditions where we try to load default view settings
     // before the user settings have been loaded from the server
@@ -599,6 +411,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const urlState = this.buildDeepLinkFromParams(rawParams);
 
     // Set context for state service (enables context-specific settings)
+    this.stateService.Provider = this.ProviderToUse;
     await this.stateService.setContext(this.entityFilter);
     this.state = this.stateService.CurrentState;
 
@@ -624,16 +437,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         const entityChanged = state.selectedEntityName !== this.state.selectedEntityName;
 
         this.state = state;
-
-        // Self-correct map mode: if a URL-sourced mode is pending and state
-        // has diverged (e.g., reset to 'point' by some init step), re-apply it.
-        // _pendingMapMode stays alive until the map component emits real state
-        // via onMapDisplayStateChange (user interaction), NOT on first state match.
-        if (this._pendingMapMode && state.mapRenderMode !== this._pendingMapMode) {
-          const mode = this._pendingMapMode;
-          this.stateService.updateState({ mapRenderMode: mode });
-          return; // Let the next subscription fire handle the rest
-        }
 
         // When entity changes, clear user search text and update title
         if (entityChanged) {
@@ -693,9 +496,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Push initial state to URL (covers deepLink and persisted state)
     this.pushCurrentStateToUrl();
-
-    // Notify that loading is complete (for resource wrapper integration)
-    this.NotifyLoadComplete();
+    } catch (err) {
+      // Never let a setup failure hang the app loading screen — log it and still signal completion.
+      console.error('[DataExplorer] ngOnInit setup failed (signaling load complete anyway):', err);
+    } finally {
+      // ALWAYS notify load complete — the loading screen waits on this; a thrown/awaited error before
+      // it would otherwise hang the screen forever on a direct-URL (deep-link) refresh.
+      this.NotifyLoadComplete();
+    }
   }
 
   /**
@@ -728,44 +536,34 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       return;
     }
 
-    // View management shortcuts (only when an entity is selected)
+    // View management shortcuts (only when an entity is selected). These delegate to the
+    // view workspace, which now owns the full saved-view lifecycle.
     if (this.selectedEntity && (event.metaKey || event.ctrlKey)) {
       // Ctrl+S / Cmd+S: Save current view
       if (event.key === 's' && !event.shiftKey) {
         event.preventDefault();
-        this.onQuickSaveRequested(false);
+        this.viewWorkspaceRef?.onQuickSaveRequested(false);
         return;
       }
 
       // Ctrl+Shift+S / Cmd+Shift+S: Save as new view
       if (event.key === 'S' || (event.key === 's' && event.shiftKey)) {
         event.preventDefault();
-        this.onQuickSaveRequested(true);
+        this.viewWorkspaceRef?.onQuickSaveRequested(true);
         return;
       }
 
-      // Ctrl+Shift+V / Cmd+Shift+V: Open view selector
-      if ((event.key === 'V' || (event.key === 'v' && event.shiftKey))) {
-        event.preventDefault();
-        this.viewSelectorRef?.toggleDropdown();
-        return;
-      }
-
-      // Ctrl+, / Cmd+,: Toggle config panel
+      // Ctrl+, / Cmd+,: Open config panel
       if (event.key === ',') {
         event.preventDefault();
-        if (this.state.viewConfigPanelOpen) {
-          this.onCloseViewConfigPanel();
-        } else {
-          this.onConfigureViewRequested();
-        }
+        this.viewWorkspaceRef?.onConfigureViewRequested();
         return;
       }
 
       // Ctrl+Z / Cmd+Z: Revert unsaved changes (only when modified)
       if (event.key === 'z' && !event.shiftKey && this.state.viewModified) {
         event.preventDefault();
-        this.onRevertView();
+        void this.viewWorkspaceRef?.onRevertView();
         return;
       }
     }
@@ -856,7 +654,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private async loadApplicationEntityIds(applicationId: string): Promise<void> {
     this.applicationEntityIds.clear();
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJApplicationEntityEntity>({
       EntityName: 'MJ: Application Entities',
       ExtraFilter: `ApplicationID = '${applicationId}'`,
@@ -917,18 +715,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Handle entity selection from navigation panel or home screen
    */
   public onEntitySelected(entity: EntityInfo): void {
-    // Ensure any pending grid state changes are saved before switching entities
-    // This ensures column resizes/reorders are saved to the current entity's view before switching
-    this.entityViewerRef?.EnsurePendingChangesSaved();
-
     this.resetRecordCounts();
     // Clear the previous entity's view — it belongs to the old entity and its sort/filter
-    // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups)
+    // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups).
+    // The workspace resets its own view/grid state when its [Entity] input changes.
     this.selectedViewEntity = null;
     this.selectedEntity = entity;
-    // Load user's saved default grid state for this entity (if any)
-    // This ensures formatting and column settings persist across sessions
-    this.currentGridState = this.loadUserDefaultGridState();
+    this.reconcileViewModeForEntity(entity);
     this.stateService.selectEntity(entity.Name);
     // Track entity access for recent entities
     this.stateService.trackEntityAccess(entity.Name, entity.ID);
@@ -942,8 +735,23 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
       this.resetRecordCounts();
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
-      // Load user's saved default grid state for this entity (if any)
-      this.currentGridState = this.loadUserDefaultGridState();
+      this.reconcileViewModeForEntity(this.selectedEntity);
+    }
+  }
+
+  /**
+   * Reset viewMode to 'grid' if the current mode isn't supported by the given entity
+   * (e.g., switching to an entity without geocoding while viewMode is 'map').
+   */
+  private reconcileViewModeForEntity(entity: EntityInfo | null): void {
+    if (!entity) return;
+    const mode = this.state.viewMode;
+    const hasDateFields = entity.Fields.some(f => f.TSType === EntityFieldTSType.Date);
+    const modeUnsupported =
+      (mode === 'map' && !entity.SupportsGeoCoding) ||
+      (mode === 'timeline' && !hasDateFields);
+    if (modeUnsupported) {
+      this.stateService.setViewMode('grid');
     }
   }
 
@@ -957,894 +765,56 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   // ========================================
-  // VIEW MANAGEMENT
+  // VIEW WORKSPACE EVENT HANDLERS
+  // (View CRUD now lives in mj-view-workspace; these thin handlers only drive
+  //  Explorer routing + URL/state sync.)
   // ========================================
 
   /**
-   * Handle view selection from view selector dropdown
+   * Handle a view selection emitted by the workspace. Tracks the selected view for routing/export
+   * and syncs the selected-view-id + smart-filter into the Explorer state service for URL sync.
+   * Grid-state application is owned by the workspace.
    */
-  public onViewSelected(event: ViewSelectedEvent): void {
-    // Ensure any pending grid state changes are saved before switching views
-    // This ensures column resizes/reorders are saved to the current view before switching
-    this.entityViewerRef?.EnsurePendingChangesSaved();
+  public onWorkspaceViewSelected(view: MJUserViewEntityExtended | null): void {
+    this.selectedViewEntity = view;
+    this.stateService.selectView(view?.ID ?? null);
 
-    this.selectedViewEntity = event.view;
-    this.stateService.selectView(event.viewId);
-
-    // When a view is selected, apply its configuration
-    if (event.view) {
-      // Parse and apply the view's grid state
-      this.currentGridState = this.parseViewGridState(event.view);
-
-      // Apply the view's filter - for Smart Filter views, use SmartFilterPrompt
-      // For regular filter views, the WhereClause is applied in the entity-viewer
-      if (event.view.SmartFilterEnabled && event.view.SmartFilterPrompt) {
-        this.stateService.setSmartFilterPrompt(event.view.SmartFilterPrompt);
-      } else {
-        // Clear the smart filter when switching to a view with regular filters
-        this.stateService.setSmartFilterPrompt('');
-      }
-      // Always clear user search text when switching views - smart filter is separate
-      this.liveFilterText = '';
-      this.debouncedFilterText = '';
+    if (view && view.SmartFilterEnabled && view.SmartFilterPrompt) {
+      this.stateService.setSmartFilterPrompt(view.SmartFilterPrompt);
     } else {
-      // Switching to default view - load user's saved defaults from UserInfoEngine
-      this.currentGridState = this.loadUserDefaultGridState();
       this.stateService.setSmartFilterPrompt('');
-      this.liveFilterText = '';
-      this.debouncedFilterText = '';
     }
-
-    // detectChanges pushes the new bindings to entity-viewer; its viewEntity setter
-    // already calls deferReload() so no explicit refresh() is needed.
+    // User search text is separate from a saved view's filter — always clear on view switch.
+    this.liveFilterText = '';
+    this.debouncedFilterText = '';
     this.cdr.detectChanges();
   }
 
   /**
-   * Load user's saved default grid state from UserInfoEngine
-   * Returns null if no saved state exists
-   */
-  private loadUserDefaultGridState(): ViewGridState | null {
-    if (!this.selectedEntity) return null;
-
-    try {
-      const settingKey = `default-view-setting/${this.selectedEntity.Name}`;
-      const savedState = UserInfoEngine.Instance.GetSetting(settingKey);
-
-      if (savedState) {
-        const gridState = JSON.parse(savedState);
-        if (gridState && Array.isArray(gridState.columnSettings)) {
-          // Validate columns and sorts against current entity to prevent stale
-          // fields from a previously viewed entity leaking into the query
-          const validColumns = gridState.columnSettings.filter(
-            (col: { Name: string }) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
-          );
-          const validSorts = (gridState.sortSettings || []).filter(
-            (s: { field: string }) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
-          );
-          if (validColumns.length > 0) {
-            return {
-              columnSettings: validColumns,
-              sortSettings: validSorts
-            };
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('[DataExplorer] Failed to load user default grid state:', error);
-    }
-
-    return null;
-  }
-
-  /**
-   * Parse GridState JSON from a UserView entity
-   * Returns null if no valid GridState is present
-   */
-  private parseViewGridState(view: MJUserViewEntityExtended): ViewGridState | null {
-    if (!view.GridState) {
-      return null;
-    }
-
-    try {
-      const parsed = view.GridStateObject;
-
-      // Validate structure - expect columnSettings array
-      if (parsed && Array.isArray(parsed.columnSettings)) {
-        // Validate columns and sorts against current entity to prevent stale
-        // fields from a previously viewed entity leaking into the query
-        const validColumns = this.selectedEntity
-          ? parsed.columnSettings.filter(
-              (col: MJUserViewEntity_IGridColumnSetting) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
-            )
-          : parsed.columnSettings;
-        const validSorts = this.selectedEntity
-          ? (parsed.sortSettings || []).filter(
-              (s: MJUserViewEntity_IGridSortSetting) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
-            )
-          : parsed.sortSettings || [];
-
-        if (validColumns.length > 0) {
-          return {
-            columnSettings: validColumns,
-            sortSettings: validSorts,
-            aggregates: parsed.aggregates || undefined
-          };
-        }
-        return null;
-      }
-
-      return null;
-    } catch (error) {
-      // BUG-010: Warn user about parse failure instead of silently returning null
-      console.warn('[DataExplorer] Failed to parse GridState:', error);
-      this.showNotification('Warning: Could not parse view grid configuration', 'info', 3000);
-      return null;
-    }
-  }
-
-  /**
-   * Handle grid state changes from entity-viewer (column resize, reorder, etc.)
-   * Updates the local currentGridState and marks view as modified
-   */
-  public onGridStateChanged(event: GridStateChangedEvent): void {
-    this.currentGridState = event.gridState;
-
-    // Mark view as modified if we have a selected view
-    if (this.state.selectedViewId) {
-      this.stateService.setViewModified(true);
-    }
-  }
-
-  /**
-   * Whether the config panel should default to save-as-new mode (BUG-011)
-   */
-  public defaultSaveAsNew: boolean = false;
-
-  /**
-   * Handle save view request from view selector (BUG-011: forward saveAsNew intent)
-   */
-  public onSaveViewRequested(event: SaveViewRequestedEvent): void {
-    this.defaultSaveAsNew = event.saveAsNew || false;
-    this.stateService.openViewConfigPanel();
-  }
-
-  /**
-   * Handle manage views request - opens view browser
-   */
-  public onManageViewsRequested(): void {
-    // TODO: Implement navigation to view management
-  }
-
-  /**
-   * Handle open in tab request - opens the view as a ViewResource in a new tab
+   * Handle the workspace's "open view in tab" request — route via NavigationService.
    */
   public onOpenInTabRequested(viewId: string): void {
-    // Get the view name from the component's selectedViewEntity (set when view is selected)
     const viewName = this.selectedViewEntity?.Name || 'View';
-
-    // Use NavigationService to open as a proper ViewResource (not entity record)
     this.navigationService.OpenView(viewId, viewName, { forceNewTab: true });
   }
 
   /**
-   * Handle configure view request - opens the configuration panel
+   * Handle the workspace's "create new record" request — route via NavigationService.
    */
-  public onConfigureViewRequested(): void {
-    this.stateService.openViewConfigPanel();
+  public onCreateNewRecordRequested(entity: EntityInfo): void {
+    this.navigationService.OpenNewEntityRecord(entity.Name);
   }
 
   /**
-   * Close the view configuration panel
+   * Clear the Explorer "view modified" flag after the workspace persists/reverts a view.
    */
-  public onCloseViewConfigPanel(): void {
-    this.stateService.closeViewConfigPanel();
-    this.clearPendingNewViewState();
-  }
-
-  private clearPendingNewViewState(): void {
-    this.pendingNewViewName = '';
-    this.pendingNewViewDescription = '';
-    this.pendingNewViewIsShared = false;
-    this.defaultSaveAsNew = false;
-  }
-
-  // ========================================
-  // FILTER DIALOG (at dashboard level for full width)
-  // ========================================
-
-  /**
-   * Handle request to open filter dialog from view config panel
-   * The dialog is rendered at dashboard level to allow full viewport width
-   */
-  public onOpenFilterDialogRequest(event: { filterState: CompositeFilterDescriptor; filterFields: FilterFieldInfo[] }): void {
-    this.filterDialogState = event.filterState;
-    this.filterDialogFields = event.filterFields;
-    this.filterDialogDisabled = !this.viewConfigPanelRef?.canEdit;
-    this.isFilterDialogOpen = true;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Close the filter dialog
-   */
-  public onCloseFilterDialog(): void {
-    this.isFilterDialogOpen = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle filter applied from dialog - pass back to view config panel
-   */
-  public onFilterApplied(filter: CompositeFilterDescriptor): void {
-    this.filterDialogState = filter;
-    this.isFilterDialogOpen = false;
-    // The view config panel will pick up the new filter state via input binding
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle save view from config panel
-   * BUG-001: Panel only closes on success (not on failure)
-   * BUG-002: Shows success/error notifications
-   * BUG-008: Consistent filter handling for both create and update paths
-   */
-  public async onSaveView(event: ViewSaveEvent): Promise<void> {
-    if (!this.selectedEntity) return;
-
-    this.isSavingView = true;
-    this.cdr.detectChanges();
-
-    try {
-      const md = new Metadata();
-
-      // Build GridState in Kendo-compatible format
-      const gridState = this.buildGridState(event);
-
-      // Build SortState in Kendo-compatible format
-      const sortState = this.buildSortState(event);
-
-      // BUG-008: Consistent filter state for both paths
-      const filterStateJson = event.filterState
-        ? JSON.stringify(event.filterState)
-        : JSON.stringify({ logic: 'and', filters: [] });
-
-      if (event.saveAsNew || !this.selectedViewEntity) {
-        // Create new view
-        const newView = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
-        newView.Name = event.name || 'Custom';
-        newView.Description = event.description;
-        newView.EntityID = this.selectedEntity.ID;
-        newView.UserID = md.CurrentUser.ID;
-        newView.IsShared = event.isShared;
-        newView.IsDefault = false;
-
-        // Set state via typed object setters
-        if (gridState) {
-          newView.GridStateObject = gridState;
-        }
-        if (sortState) {
-          newView.SortStateObject = sortState;
-        }
-
-        // Set Smart Filter settings
-        newView.SmartFilterEnabled = event.smartFilterEnabled;
-        newView.SmartFilterPrompt = event.smartFilterPrompt;
-
-        // BUG-008: Always set FilterState consistently (raw string — Kendo CompositeFilterDescriptor shape)
-        newView.FilterState = filterStateJson;
-
-        const saved = await newView.Save();
-        if (saved) {
-          this.selectedViewEntity = newView;
-          this.stateService.selectView(newView.ID);
-          this.stateService.setViewModified(false);
-          this.currentGridState = this.parseViewGridState(newView);
-          this.cdr.detectChanges();
-          await this.viewSelectorRef?.loadViews();
-          // BUG-007: Await the refresh
-          await this.entityViewerRef?.loadData();
-          // BUG-001: Only close panel on success
-          this.stateService.closeViewConfigPanel();
-          // BUG-002: Show success notification
-          this.showNotification(`View "${newView.Name}" created successfully`, 'success', 2500);
-          this.clearPendingNewViewState();
-        } else {
-          // BUG-001: Panel stays open on failure
-          // BUG-002: Show error notification
-          this.showNotification('Failed to create view', 'error', 3500);
-        }
-      } else {
-        // Update existing view
-        this.selectedViewEntity.Name = event.name;
-        this.selectedViewEntity.Description = event.description;
-        this.selectedViewEntity.IsShared = event.isShared;
-
-        // Update state via typed object setters
-        if (gridState) {
-          this.selectedViewEntity.GridStateObject = gridState;
-        }
-        if (sortState) {
-          this.selectedViewEntity.SortStateObject = sortState;
-        }
-
-        // Update Smart Filter settings
-        this.selectedViewEntity.SmartFilterEnabled = event.smartFilterEnabled;
-        this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
-
-        // BUG-008: Always set FilterState consistently (raw string — Kendo CompositeFilterDescriptor shape)
-        this.selectedViewEntity.FilterState = filterStateJson;
-
-        const saved = await this.selectedViewEntity.Save();
-        if (saved) {
-          this.stateService.setViewModified(false);
-          this.currentGridState = this.parseViewGridState(this.selectedViewEntity);
-          this.cdr.detectChanges();
-          await this.viewSelectorRef?.loadViews();
-          // BUG-007: Await the refresh
-          await this.entityViewerRef?.loadData();
-          // BUG-001: Only close panel on success
-          this.stateService.closeViewConfigPanel();
-          // BUG-002: Show success notification
-          this.showNotification(`View "${event.name}" updated successfully`, 'success', 2500);
-        } else {
-          // BUG-001: Panel stays open on failure
-          // BUG-002: Show error notification
-          this.showNotification('Failed to update view', 'error', 3500);
-        }
-      }
-
-      this.cdr.detectChanges();
-    } catch (error) {
-      console.error('[DataExplorer] Error saving view:', error);
-      // BUG-002: Show error notification with details
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.showNotification(`Failed to save view: ${errorMsg}`, 'error', 4000);
-    } finally {
-      this.ngZone.run(() => {
-        this.isSavingView = false;
-        this.cdr.detectChanges();
-      });
-    }
-  }
-
-  /**
-   * Handle saving default view settings to user settings
-   * Used for dynamic/default views that persist to MJ: User Settings
-   */
-  public async onSaveDefaultViewSettings(event: ViewSaveEvent): Promise<void> {
-    if (!this.selectedEntity) return;
-
-    this.isSavingView = true;
-    this.cdr.detectChanges();
-
-    try {
-      // Build GridState from the event
-      const gridState = this.buildGridState(event);
-
-      if (gridState) {
-        // Build sort settings if present - prefer sortItems (multi-sort)
-        if (event.sortItems && event.sortItems.length > 0) {
-          gridState.sortSettings = event.sortItems.map(item => ({
-            field: item.field,
-            dir: item.direction
-          }));
-        } else if (event.sortField) {
-          // Fallback to deprecated sortField for backward compatibility
-          gridState.sortSettings = [{
-            field: event.sortField,
-            dir: event.sortDirection
-          }];
-        }
-
-        // Save to user settings using the same key pattern as entity-data-grid
-        const settingKey = `default-view-setting/${this.selectedEntity.Name}`;
-        await UserInfoEngine.Instance.SetSetting(settingKey, JSON.stringify(gridState));
-
-        // Update currentGridState to reflect saved state
-        this.currentGridState = {
-          columnSettings: gridState.columnSettings as ViewGridState['columnSettings'],
-          sortSettings: gridState.sortSettings as ViewGridState['sortSettings'],
-          aggregates: gridState.aggregates
-        };
-
-        // Force change detection to ensure grid picks up the new gridState
-        this.cdr.detectChanges();
-
-        // Refresh the entity viewer data to apply saved aggregates and fetch their values
-        this.entityViewerRef?.refresh();
-
-        // Show success notification
-        this.showNotification('Default view settings saved', 'success', 2500);
-      }
-
-      this.stateService.closeViewConfigPanel();
-      this.cdr.detectChanges();
-    } catch (error) {
-      console.error('[DataExplorer] Error saving default view settings:', error);
-      // Show error notification
-      this.showNotification('Failed to save default view settings', 'error', 3500);
-    } finally {
-      this.ngZone.run(() => {
-        this.isSavingView = false;
-        this.cdr.detectChanges();
-      });
-    }
-  }
-
-  /**
-   * Build GridState in Kendo-compatible format
-   * Format: { columnSettings: [...], sortSettings: [...], aggregates: {...} }
-   *
-   * Priority for column settings:
-   * 1. If event.columns provided (from config panel) - use those
-   * 2. If currentGridState exists (from grid interactions) - use that
-   * 3. Otherwise return null
-   */
-  private buildGridState(event: ViewSaveEvent): MJUserViewEntity_IGridState | null {
-    let columnSettings: MJUserViewEntity_IGridColumnSetting[];
-
-    // First check if the event has columns configured (from config panel)
-    if (event.columns.length > 0) {
-      columnSettings = event.columns.map((col, idx) => ({
-        ID: col.fieldId,
-        Name: col.fieldName,
-        DisplayName: col.displayName,
-        userDisplayName: col.userDisplayName, // Include user-defined column alias
-        hidden: false, // Visible columns only
-        width: col.width || undefined,
-        orderIndex: idx,
-        format: col.format // Include column format settings
-      }));
-    }
-    // Otherwise, use the current grid state if available (from grid interactions)
-    else if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
-      columnSettings = this.currentGridState.columnSettings;
-    }
-    // BUG-005: Third fallback - use entity DefaultInView fields so we never return null
-    else if (this.selectedEntity) {
-      columnSettings = this.selectedEntity.Fields
-        .filter(f => f.DefaultInView)
-        .map((f, idx) => ({
-          ID: f.ID,
-          Name: f.Name,
-          DisplayName: f.DisplayNameOrName,
-          hidden: false,
-          width: f.DefaultColumnWidth || undefined,
-          orderIndex: idx
-        }));
-      if (columnSettings.length === 0) {
-        return null;
-      }
-    }
-    // No columns to save
-    else {
-      return null;
-    }
-
-    // Build sort settings - prefer event.sortItems (multi-sort), fall back to currentGridState
-    let sortSettings: MJUserViewEntity_IGridSortSetting[] | undefined;
-    if (event.sortItems && event.sortItems.length > 0) {
-      sortSettings = event.sortItems.map(item => ({
-        field: item.field,
-        dir: item.direction // 'asc' or 'desc'
-      }));
-    } else if (event.sortField) {
-      // Fallback to deprecated sortField for backward compatibility
-      sortSettings = [{
-        field: event.sortField,
-        dir: event.sortDirection
-      }];
-    } else if (this.currentGridState?.sortSettings && this.currentGridState.sortSettings.length > 0) {
-      sortSettings = this.currentGridState.sortSettings;
-    }
-
-    // Build aggregate settings from event or current state
-    let aggregates: ViewGridAggregatesConfig | undefined;
-    if (event.aggregatesConfig) {
-      aggregates = event.aggregatesConfig;
-    } else if (this.currentGridState?.aggregates) {
-      aggregates = this.currentGridState.aggregates;
-    }
-
-    return { columnSettings, sortSettings, aggregates };
-  }
-
-  /**
-   * Build SortState in Kendo-compatible format
-   * Format: [{field, direction}] where direction is 'asc' or 'desc'
-   * Supports multi-column sorting via sortItems array
-   */
-  private buildSortState(event: ViewSaveEvent): MJUserViewEntity_ISortStateItem[] | null {
-    // Prefer sortItems array (multi-sort) over deprecated sortField
-    if (event.sortItems && event.sortItems.length > 0) {
-      return event.sortItems.map(item => ({
-        field: item.field,
-        direction: item.direction
-      }));
-    }
-
-    // Fallback to deprecated sortField for backward compatibility
-    if (event.sortField) {
-      return [{
-        field: event.sortField,
-        direction: event.sortDirection
-      }];
-    }
-
-    return null;
-  }
-
-  /**
-   * Handle delete view from config panel
-   */
-  public async onDeleteView(): Promise<void> {
-    if (!this.selectedViewEntity) return;
-
-    const viewName = this.selectedViewEntity.Name;
-    try {
-      const deleted = await this.selectedViewEntity.Delete();
-      if (deleted) {
-        this.selectedViewEntity = null;
-        this.stateService.selectView(null);
-        this.stateService.closeViewConfigPanel();
-        await this.viewSelectorRef?.loadViews();
-        this.showNotification(`View "${viewName}" deleted`, 'success', 2500);
-      } else {
-        this.showNotification('Failed to delete view', 'error', 3500);
-      }
-    } catch (error) {
-      console.error('[DataExplorer] Error deleting view:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.showNotification(`Failed to delete view: ${errorMsg}`, 'error', 4000);
-    }
-  }
-
-  // ========================================
-  // QUICK SAVE, DUPLICATE, REVERT (F-001, F-005, F-007)
-  // ========================================
-
-  /**
-   * Handle quick save request from view selector (F-001)
-   * Builds a summary from the current config panel state and opens the Quick Save dialog
-   * @param saveAsNew - true when user explicitly clicked "Save As New"
-   */
-  public onQuickSaveRequested(saveAsNew: boolean): void {
-    this.defaultSaveAsNew = saveAsNew;
-    // Build summary from config panel if available
-    this.quickSaveSummary = this.viewConfigPanelRef?.BuildSummary() ?? null;
-    this.showQuickSaveDialog = true;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle quick save event from Quick Save dialog (F-001)
-   * If updating a shared view, intercepts to show the shared view warning first.
-   * Otherwise constructs a ViewSaveEvent and delegates to onSaveView.
-   */
-  public async onQuickSave(event: QuickSaveEvent): Promise<void> {
-    this.showQuickSaveDialog = false;
-
-    // If updating (not save-as-new) a shared view, show the warning dialog
-    if (!event.SaveAsNew && this.selectedViewEntity?.IsShared) {
-      this.pendingQuickSaveEvent = event;
-      this.showSharedViewWarning = true;
-      this.cdr.detectChanges();
-      return;
-    }
-
-    await this.executeQuickSave(event);
-  }
-
-  /**
-   * Execute the actual quick save (called directly or after shared view warning confirmation)
-   */
-  private async executeQuickSave(event: QuickSaveEvent): Promise<void> {
-    const viewSaveEvent: ViewSaveEvent = {
-      name: event.Name,
-      description: event.Description,
-      isShared: event.IsShared,
-      saveAsNew: event.SaveAsNew,
-      columns: [],
-      sortField: null,
-      sortDirection: 'asc',
-      sortItems: [],
-      smartFilterEnabled: false,
-      smartFilterPrompt: '',
-      filterState: this.filterDialogState ?? null,
-      aggregatesConfig: null
-    };
-
-    await this.onSaveView(viewSaveEvent);
-  }
-
-  /**
-   * Handle shared view warning dialog action
-   */
-  public async onSharedViewAction(action: SharedViewAction): Promise<void> {
-    this.showSharedViewWarning = false;
-    const event = this.pendingQuickSaveEvent;
-    this.pendingQuickSaveEvent = null;
-
-    if (!event) return;
-
-    if (action === 'update-shared') {
-      // Proceed with the update
-      await this.executeQuickSave(event);
-    } else if (action === 'save-as-copy') {
-      // Save as a new personal copy instead
-      await this.executeQuickSave({
-        ...event,
-        SaveAsNew: true,
-        IsShared: false
-      });
-    }
-    // 'cancel' - do nothing
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle shared view warning cancel
-   */
-  public onSharedViewWarningCancel(): void {
-    this.showSharedViewWarning = false;
-    this.pendingQuickSaveEvent = null;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle quick save dialog close
-   */
-  public onQuickSaveClose(): void {
-    this.showQuickSaveDialog = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle quick save "Open Advanced" - close dialog and open full config panel
-   */
-  public onQuickSaveOpenAdvanced(event: QuickSaveAdvancedEvent): void {
-    // Carry form data from quick save dialog to the config panel
-    this.pendingNewViewName = event.Name;
-    this.pendingNewViewDescription = event.Description;
-    this.pendingNewViewIsShared = event.IsShared;
-    this.defaultSaveAsNew = true;
-    this.showQuickSaveDialog = false;
-    this.stateService.openViewConfigPanel();
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle duplicate view request (F-005)
-   * Opens the Duplicate View Dialog so user can choose a name for the copy
-   */
-  public async onDuplicateView(viewId?: string): Promise<void> {
-    const targetId = viewId || this.selectedViewEntity?.ID;
-    if (!targetId || !this.selectedEntity) return;
-
-    // Find the view to get its name for the dialog
-    const allViews = [...(this.viewSelectorRef?.myViews ?? []), ...(this.viewSelectorRef?.sharedViews ?? [])];
-    const viewItem = allViews.find(v => v.id === targetId);
-    this.duplicateTargetViewId = targetId;
-    this.duplicateSourceViewName = viewItem?.name || this.selectedViewEntity?.Name || 'View';
-    this.duplicateSummary = this.buildDuplicateSummary(viewItem?.entity ?? this.selectedViewEntity);
-    this.showDuplicateDialog = true;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Build a ViewConfigSummary from a view entity for the duplicate dialog
-   */
-  private buildDuplicateSummary(view: MJUserViewEntityExtended | null): ViewConfigSummary | null {
-    if (!view) return null;
-    let columnCount = 0;
-    let filterCount = 0;
-    let sortCount = 0;
-    let aggregateCount = 0;
-
-    try {
-      const gridState = view.GridStateObject;
-      if (gridState?.columnSettings && Array.isArray(gridState.columnSettings)) {
-        columnCount = gridState.columnSettings.filter((c: MJUserViewEntity_IGridColumnSetting) => !c.hidden).length;
-      }
-    } catch { /* ignore */ }
-
-    try {
-      const filterState = view.FilterStateObject;
-      if (filterState?.filters?.length) filterCount = filterState.filters.length;
-    } catch { /* ignore */ }
-
-    try {
-      const sortState = view.SortStateObject;
-      if (Array.isArray(sortState)) sortCount = sortState.length;
-    } catch { /* ignore */ }
-
-    return {
-      ColumnCount: columnCount,
-      FilterCount: filterCount,
-      SortCount: sortCount,
-      SmartFilterActive: view.SmartFilterEnabled || false,
-      SmartFilterPrompt: view.SmartFilterPrompt || '',
-      AggregateCount: aggregateCount
-    };
-  }
-
-  /**
-   * Handle duplicate dialog confirmation - actually creates the copy
-   */
-  public async onDuplicateConfirmed(event: DuplicateViewEvent): Promise<void> {
-    this.showDuplicateDialog = false;
-    const targetId = this.duplicateTargetViewId;
-    this.duplicateTargetViewId = null;
-
-    if (!targetId || !this.selectedEntity) return;
-
-    const md = new Metadata();
-    const rv = new RunView();
-    try {
-      const result = await rv.RunView<MJUserViewEntityExtended>({
-        EntityName: 'MJ: User Views',
-        ExtraFilter: `ID = '${targetId}'`,
-        ResultType: 'entity_object'
-      });
-
-      if (!result.Success || !result.Results || result.Results.length === 0) {
-        this.showNotification('Could not find view to duplicate', 'error', 3500);
-        return;
-      }
-
-      const sourceView = result.Results[0];
-
-      const newView = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
-      newView.Name = event.Name;
-      newView.Description = sourceView.Description || '';
-      newView.EntityID = sourceView.EntityID;
-      newView.IsShared = false;
-      newView.IsDefault = false;
-      newView.GridState = sourceView.GridState;
-      newView.FilterState = sourceView.FilterState;
-      newView.SortState = sourceView.SortState;
-      newView.SmartFilterEnabled = sourceView.SmartFilterEnabled || false;
-      newView.SmartFilterPrompt = sourceView.SmartFilterPrompt || '';
-
-      const saved = await newView.Save();
-      if (saved) {
-        this.showNotification(`View duplicated as "${newView.Name}"`, 'success', 2500);
-        await this.viewSelectorRef?.loadViews();
-      } else {
-        this.showNotification('Failed to duplicate view', 'error', 3500);
-      }
-    } catch (error) {
-      console.error('[DataExplorer] Error duplicating view:', error);
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      this.showNotification(`Failed to duplicate view: ${errorMsg}`, 'error', 4000);
-    }
-  }
-
-  /**
-   * Handle duplicate dialog cancel
-   */
-  public onDuplicateCancel(): void {
-    this.showDuplicateDialog = false;
-    this.duplicateTargetViewId = null;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle duplicate from config panel (F-005)
-   * Duplicates the currently selected view
-   */
-  public onDuplicateFromPanel(): void {
-    if (this.selectedViewEntity?.ID) {
-      this.stateService.closeViewConfigPanel();
-      this.onDuplicateView(this.selectedViewEntity.ID);
-    }
-  }
-
-  /**
-   * Handle revert view request (F-007)
-   * Re-parses the saved view's GridState and resets modified flag
-   */
-  public async onRevertView(): Promise<void> {
-    if (!this.selectedViewEntity) return;
-
-    try {
-      // Re-parse the saved grid state from the view entity
-      const gridState = this.parseViewGridState(this.selectedViewEntity);
-      if (gridState) {
-        this.currentGridState = gridState;
-      }
-
-      // Reset modified flag
-      this.stateService.setViewModified(false);
-
-      // Refresh the viewer to apply the reverted state
-      await this.entityViewerRef?.loadData();
-
-      this.showNotification('View reverted to last saved state', 'info', 2500);
-      this.cdr.detectChanges();
-    } catch (error) {
-      console.error('[DataExplorer] Error reverting view:', error);
-      this.showNotification('Failed to revert view', 'error', 3500);
-    }
-  }
-
-  /**
-   * Handle inline view name change from ViewHeader (F-002)
-   * Updates the view entity name and saves immediately
-   */
-  public async onViewNameChanged(newName: string): Promise<void> {
-    if (!this.selectedViewEntity || !newName.trim()) return;
-
-    try {
-      this.selectedViewEntity.Name = newName.trim();
-      const saved = await this.selectedViewEntity.Save();
-      if (saved) {
-        this.showNotification(`View renamed to "${newName.trim()}"`, 'success', 2500);
-        // Refresh the view selector to show the updated name
-        this.viewSelectorRef?.loadViews();
-      } else {
-        this.showNotification('Failed to rename view', 'error', 3500);
-      }
-      this.cdr.detectChanges();
-    } catch (error) {
-      console.error('[DataExplorer] Error renaming view:', error);
-      this.showNotification('Failed to rename view', 'error', 3500);
-    }
+  public onWorkspaceViewSaved(): void {
+    this.stateService.setViewModified(false);
   }
 
   // ========================================
   // VIEW MODE & FILTERING (Dashboard Header)
   // ========================================
-
-  /**
-   * Handle view mode toggle from dashboard header
-   */
-  public onViewModeChanged(mode: EntityViewMode): void {
-    this.stateService.setViewMode(mode);
-    // Mark view as modified when view mode changes
-    if (this.state.selectedViewId) {
-      this.stateService.setViewModified(true);
-    }
-  }
-
-  /**
-   * Get the current map display state for passing to the EntityViewer/MapView.
-   */
-  get mapDisplayState(): { ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
-    if (this.state.mapZoom == null) {
-      return null;
-    }
-    return {
-      ZoomLevel: this.state.mapZoom,
-      CenterLat: this.state.mapCenterLat ?? 20,
-      CenterLng: this.state.mapCenterLng ?? 0
-    };
-  }
-
-  /**
-   * Handle map display state changes from the map component.
-   * Persists zoom, center, and render mode across page reloads.
-   */
-  /**
-   * Handle map render mode change (user clicked mode button in map component).
-   */
-  public onMapRenderModeChange(mode: MapRenderMode): void {
-    this._pendingMapMode = null; // User-initiated — clear any pending URL mode
-    this.stateService.updateState({ mapRenderMode: mode });
-  }
-
-  /**
-   * Handle map display state change (zoom/pan — fires on moveend).
-   */
-  public onMapDisplayStateChange(state: { ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
-    this._pendingMapMode = null; // Map is interactive now — clear pending
-    this.stateService.updateState({
-      mapZoom: state.ZoomLevel ?? null,
-      mapCenterLat: state.CenterLat ?? null,
-      mapCenterLng: state.CenterLng ?? null
-    });
-  }
 
   /**
    * Handle smart filter change from dashboard header
@@ -1937,6 +907,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
+   * Handle the workspace's OpenRecordRequested (record open from the inner viewer). Builds the
+   * composite key from the record and routes to the full record view via the OpenEntityRecord output.
+   */
+  public onWorkspaceOpenRecord(event: { entity: EntityInfo; record: Record<string, unknown> }): void {
+    this.OpenEntityRecord.emit({
+      EntityName: event.entity.Name,
+      RecordPKey: buildCompositeKey(event.record, event.entity)
+    });
+  }
+
+  /**
    * Handle data loaded from mj-entity-viewer
    */
   public onDataLoaded(event: DataLoadedEvent): void {
@@ -2025,199 +1006,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Use NavigationService to open a new record form
     this.navigationService.OpenNewEntityRecord(this.selectedEntity.Name);
-  }
-
-  /**
-   * Handle export request - opens the export dialog
-   */
-  public async onExport(): Promise<void> {
-    if (!this.selectedEntity) {
-      console.error('Cannot export: No entity selected');
-      return;
-    }
-
-    try {
-      this.showNotification('Preparing export...', 'info', 2000);
-
-      // Load the export data
-      const data = await this.getExportData();
-
-      // Get visible columns for export
-      const columns = this.getExportColumns();
-
-      // Generate file name
-      const viewName = this.selectedViewEntity?.Name || 'Data';
-      const fileName = `${this.selectedEntity.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
-
-      // Configure and show the export dialog
-      this.exportDialogConfig = {
-        data,
-        columns,
-        defaultFileName: fileName,
-        availableFormats: ['excel', 'csv', 'json'],
-        defaultFormat: 'excel',
-        showSamplingOptions: true,
-        defaultSamplingMode: 'all',
-        dialogTitle: `Export ${this.selectedEntity.Name}`
-      };
-      this.showExportDialog = true;
-      this.cdr.detectChanges();
-    } catch (e) {
-      this.showNotification('Error preparing export', 'error', 5000);
-      console.error('Export error:', e);
-    }
-  }
-
-  /**
-   * Handle export dialog close
-   */
-  public onExportDialogClosed(result: ExportDialogResult): void {
-    this.showExportDialog = false;
-    this.exportDialogConfig = null;
-    this.cdr.detectChanges();
-
-    if (result.exported) {
-      this.showNotification('Export complete', 'success', 2000);
-    }
-  }
-
-  /**
-   * Get visible columns for export based on current grid/view state
-   */
-  private getExportColumns(): ExportColumn[] {
-    if (!this.selectedEntity) return [];
-
-    // Priority 1: Current grid state (reflects actual displayed columns)
-    if (this.currentGridState?.columnSettings && this.currentGridState.columnSettings.length > 0) {
-      const visibleColumns = this.currentGridState.columnSettings.filter(col => col.hidden !== true);
-      return visibleColumns.map(col => {
-        const field = this.selectedEntity?.Fields.find(f => f.Name === col.Name);
-        return {
-          name: col.Name,
-          displayName: col.DisplayName || col.Name,
-          dataType: this.mapFieldTypeToExportType(field?.Type)
-        };
-      });
-    }
-
-    // Priority 2: View's column configuration
-    if (this.selectedViewEntity?.Columns) {
-      const visibleColumns = this.selectedViewEntity.Columns.filter(col => !col.hidden);
-      return visibleColumns.map(col => {
-        const field = this.selectedEntity?.Fields.find(f => f.Name === col.Name);
-        return {
-          name: col.Name,
-          displayName: col.DisplayName || col.Name,
-          dataType: this.mapFieldTypeToExportType(field?.Type)
-        };
-      });
-    }
-
-    // Priority 3: All non-virtual fields
-    const visibleFields = this.selectedEntity.Fields.filter(f => !f.IsVirtual);
-    return visibleFields.map(f => ({
-      name: f.Name,
-      displayName: f.DisplayNameOrName,
-      dataType: this.mapFieldTypeToExportType(f.Type)
-    }));
-  }
-
-  /**
-   * Map MemberJunction field types to export column types
-   */
-  private mapFieldTypeToExportType(fieldType?: string): ExportColumn['dataType'] {
-    if (!fieldType) return 'string';
-
-    const type = fieldType.toLowerCase();
-    if (type.includes('int') || type.includes('decimal') || type.includes('float') || type.includes('numeric')) {
-      return 'number';
-    }
-    if (type.includes('date') || type.includes('time')) {
-      return 'date';
-    }
-    if (type.includes('bit') || type.includes('bool')) {
-      return 'boolean';
-    }
-    if (type.includes('money') || type.includes('currency')) {
-      return 'currency';
-    }
-    return 'string';
-  }
-
-  /**
-   * Get the data for export - loads all records for the current view/entity
-   */
-  protected async getExportData(): Promise<ExportData> {
-    if (!this.selectedEntity) {
-      throw new Error('No entity selected for export');
-    }
-
-    const md = new Metadata();
-    const rv = new RunView();
-
-    // Build the run view params based on current state
-    const baseParams = {
-      EntityName: this.selectedEntity.Name,
-      ExtraFilter: this.buildExtraFilter(),
-      OrderBy: this.buildOrderBy(),
-      IgnoreMaxRows: true,
-      ForceAuditLog: true,
-      AuditLogDescription: `Export of Data From ${this.selectedViewEntity ? '"' + this.selectedViewEntity.Name + '"' : this.selectedEntity.Name} View for User ${md.CurrentUser.Email}`
-    };
-
-    // Add smart filter if present
-    const params = this.debouncedFilterText
-      ? { ...baseParams, UserSearchString: this.debouncedFilterText }
-      : baseParams;
-
-    const result = await rv.RunView(params);
-
-    if (result && result.Success) {
-      return result.Results as Record<string, unknown>[];
-    } else {
-      throw new Error('Unable to get export data: ' + (result?.ErrorMessage || 'Unknown error'));
-    }
-  }
-
-  /**
-   * Build the ExtraFilter string based on current view and filter state
-   */
-  private buildExtraFilter(): string {
-    const filters: string[] = [];
-
-    // Add view filter if a view is selected
-    if (this.selectedViewEntity?.WhereClause) {
-      filters.push(`(${this.selectedViewEntity.WhereClause})`);
-    }
-
-    // Add smart filter if present
-    if (this.debouncedFilterText) {
-      // Smart filter is applied via UserSearchString in RunView, not ExtraFilter
-      // So we don't need to add it here
-    }
-
-    return filters.join(' AND ');
-  }
-
-  /**
-   * Build the OrderBy string based on current view state
-   */
-  private buildOrderBy(): string {
-    // Use view's OrderByClause if available
-    if (this.selectedViewEntity?.OrderByClause) {
-      return this.selectedViewEntity.OrderByClause;
-    }
-
-    // Use grid state sort if available
-    if (this.currentGridState?.sortSettings && this.currentGridState.sortSettings.length > 0) {
-      const sorts = this.currentGridState.sortSettings.map(s =>
-        `${s.field} ${s.dir.toUpperCase()}`
-      );
-      return sorts.join(', ');
-    }
-
-    // Default sort by primary key
-    return this.selectedEntity!.FirstPrimaryKey.Name;
   }
 
   /**
@@ -2318,7 +1106,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     try {
       // Load the record
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
         ExtraFilter: `ID='${recordId}'`,
@@ -2388,10 +1176,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Apply a deep link to navigate to a specific entity/record
    */
   private async applyDeepLink(deepLink: DataExplorerDeepLink): Promise<void> {
-    // Apply view mode if specified
-    if (deepLink.viewMode) {
-      this.stateService.setViewMode(deepLink.viewMode);
-    }
+    // ViewTypeID-only: view type is no longer deep-linked — the inner viewer persists it.
 
     // Navigate to entity if specified
     if (deepLink.entity) {
@@ -2423,13 +1208,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /** Record ID to select once data loads (from deep link) */
   private pendingRecordSelection: string | null = null;
-
-  /**
-   * Pending map mode from URL that must survive initialization state resets.
-   * Set during applyUrlState, cleared once state matches or after first successful re-apply.
-   * The state subscription self-corrects: any time state diverges from this value, it re-applies.
-   */
-  private _pendingMapMode: MapRenderMode | null = null;
 
   // ========================================
   // BREADCRUMB NAVIGATION
@@ -2524,21 +1302,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const entity = params['entity'] || null;
     const record = params['record'] || null;
     const filterParam = params['filter'] || null;
-    const view = (params['view'] as DataExplorerViewMode) || null;
     const viewId = params['viewId'] || null;
-    const mapMode = params['mapMode'] || null;
 
-    if (!entity && !record && !filterParam && !view && !viewId && !mapMode) {
+    if (!entity && !record && !filterParam && !viewId) {
       return null;
     }
 
+    // ViewTypeID-only: the active view type is persisted via UserView.ViewTypeID / per-user settings
+    // by the inner viewer, NOT via URL query params. So we no longer read/write view/mapMode here.
     return {
       entity: entity || undefined,
       record: record || undefined,
       filter: filterParam || undefined,
-      viewMode: view || undefined,
-      viewId: viewId || undefined,
-      mapMode: mapMode || undefined
+      viewId: viewId || undefined
     };
   }
 
@@ -2584,13 +1360,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const hasEntity = !!this.state.selectedEntityName;
     const hasViewId = !!(this.state.selectedViewId && hasEntity);
 
+    // ViewTypeID-only: the active view type is persisted by the inner viewer (UserView.ViewTypeID /
+    // per-user settings), not via URL. We only round-trip entity / record / saved-view selection.
     const queryParams: Record<string, string | null> = {
       entity: this.state.selectedEntityName || null,
       record: (this.state.selectedRecordId && hasEntity) ? this.state.selectedRecordId : null,
       filter: null, // Never in URL — filters live in saved views (DB), not query strings
-      view: (this.state.viewMode && this.state.viewMode !== 'grid') ? this.state.viewMode : null,
-      viewId: hasViewId ? this.state.selectedViewId : null,
-      mapMode: this.state.viewMode === 'map' ? (this.state.mapRenderMode || 'point') : null
+      viewId: hasViewId ? this.state.selectedViewId : null
     };
 
 
@@ -2602,21 +1378,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Used both during init and for popstate handling.
    */
   private async applyUrlState(urlState: DataExplorerDeepLink): Promise<void> {
-    // Store URL-sourced map mode BEFORE switching to map view — various init steps
-    // can reset mapRenderMode to 'point'. The state subscription self-corrects using this.
-    if (urlState.mapMode && ['point', 'choropleth', 'heatmap'].includes(urlState.mapMode)) {
-      this._pendingMapMode = urlState.mapMode as MapRenderMode;
-    }
-
-    // Apply view mode (may trigger map component creation if switching to 'map')
-    if (urlState.viewMode) {
-      this.stateService.setViewMode(urlState.viewMode);
-    }
-
-    // Apply map render mode to state
-    if (this._pendingMapMode) {
-      this.stateService.updateState({ mapRenderMode: this._pendingMapMode });
-    }
+    // ViewTypeID-only: view type / map mode are no longer URL-driven — the inner viewer persists them.
 
     // Navigate to entity if specified
     if (urlState.entity) {
@@ -2634,14 +1396,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.selectEntity(entity.Name);
         }
 
-        // Restore saved view by ID if specified
+        // Restore saved view by ID if specified. The workspace applies the view's grid state
+        // itself once selectedViewEntity flows into its [SelectedView] input.
         if (urlState.viewId) {
           await this.restoreViewFromUrl(urlState.viewId, entity);
         } else {
           // No specific view — clear view selection to use default
           this.selectedViewEntity = null;
           this.stateService.selectView(null);
-          this.currentGridState = this.loadUserDefaultGridState();
         }
 
         // Filters live in saved views (DB), never in URL query strings.
@@ -2698,8 +1460,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   /**
    * Restore a saved view from the URL's viewId parameter.
-   * Looks up the view by ID, sets it as selected, and applies its grid state and filters.
-   * Must be async because UserViewEngine's cache may not be populated yet on cold page loads.
+   * Looks up the view by ID and sets it as selected; the workspace applies its grid state once
+   * selectedViewEntity flows into its [SelectedView] input. Must be async because UserViewEngine's
+   * cache may not be populated yet on cold page loads.
    */
   private async restoreViewFromUrl(viewId: string, entity: EntityInfo): Promise<void> {
     // Ensure the view engine cache is populated before querying —
@@ -2712,7 +1475,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (view) {
       this.selectedViewEntity = view;
       this.stateService.selectView(viewId);
-      this.currentGridState = this.parseViewGridState(view);
 
       // Apply the view's smart filter if it has one
       if (view.SmartFilterEnabled && view.SmartFilterPrompt) {
@@ -2722,7 +1484,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       console.warn('[DataExplorer] restoreViewFromUrl: view NOT FOUND, falling back to default. viewId=', viewId);
       this.selectedViewEntity = null;
       this.stateService.selectView(null);
-      this.currentGridState = this.loadUserDefaultGridState();
     }
 
     this.cdr.detectChanges();
@@ -2988,188 +1749,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return !this.selectedEntity;
   }
 
-  // ========================================
-  // SELECTION TRACKING
-  // ========================================
-
   /**
-   * Handle selection changes from entity-viewer grid.
-   * Tracks selected records to enable the Add to List button in the header toolbar.
+   * NAVIGATION handler: open a *related* record on a (possibly different) entity, bubbled up from a
+   * plug-in renderer through the workspace (e.g. a grid foreign-key drill-through). Resolves the
+   * target entity and shows the record in the detail panel, mirroring the FK navigation path used
+   * by {@link onOpenForeignKeyRecord}.
+   *
+   * @param nav the related-record navigation payload: the target entity name and the record's key.
    */
-  public onSelectionChanged(event: { records: Record<string, unknown>[]; recordIds: string[] }): void {
-    this.selectedRecords = event.records || [];
-    this.selectedRecordIds = event.recordIds || [];
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Check if there are selected records (for enabling Add to List button)
-   */
-  public get hasSelectedRecords(): boolean {
-    return this.selectedRecords.length > 0;
-  }
-
-  // ========================================
-  // LIST MANAGEMENT
-  // ========================================
-
-  /**
-   * Handle Add to List button click from header toolbar.
-   * Opens the list management dialog for selected records.
-   */
-  public onAddToListClick(): void {
-    if (!this.selectedEntity || this.selectedRecords.length === 0) {
-      console.warn('Add to List: No entity selected or no records selected');
-      return;
+  public onOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
+    if (nav?.entityName && nav.recordKey != null) {
+      void this.loadAndShowRecordInDetailPanel(nav.entityName, String(nav.recordKey));
     }
-
-    // Build the event object and delegate to existing handler
-    const event = {
-      entityInfo: this.selectedEntity,
-      records: this.selectedRecords,
-      recordIds: this.selectedRecordIds
-    };
-
-    this.onAddToListRequested(event);
-  }
-
-  /**
-   * Handle Add to List request from entity-viewer grid toolbar.
-   * Opens the list management dialog for multiple selected records.
-   */
-  public onAddToListRequested(event: { entityInfo: EntityInfo; records: Record<string, unknown>[]; recordIds: string[] }): void {
-    // Validate input
-    if (!event.entityInfo) {
-      console.error('Add to List: entityInfo is missing from event');
-      return;
-    }
-    if (!event.records || event.records.length === 0) {
-      console.error('Add to List: No records in event. Event:', event);
-      return;
-    }
-
-    console.log(`Add to List: Processing ${event.records.length} record(s) for entity "${event.entityInfo.Name}"`);
-
-    // Get display names for the records
-    const recordDisplayNames = event.records.map(record => {
-      try {
-        if (event.entityInfo.NameField) {
-          const nameValue = record[event.entityInfo.NameField.Name];
-          if (nameValue) return String(nameValue);
-        }
-        return buildPkString(record, event.entityInfo) || 'Unknown';
-      } catch (err) {
-        console.error('Add to List: Error getting record display name:', err);
-        return 'Unknown';
-      }
-    });
-
-    // Get raw primary key values (not concatenated strings) for list membership
-    const pkFieldName = event.entityInfo.PrimaryKeys[0]?.Name;
-    const recordIds = event.records.map(record => {
-      try {
-        if (!pkFieldName || record[pkFieldName] === null || record[pkFieldName] === undefined) {
-          console.error('Add to List: Record has no primary key:', record);
-          return '';
-        }
-        return String(record[pkFieldName]);
-      } catch (err) {
-        console.error('Add to List: Error getting record ID:', err);
-        return '';
-      }
-    }).filter(id => id !== '');
-
-    if (recordIds.length === 0) {
-      console.error('Add to List: No valid record IDs found');
-      return;
-    }
-
-    const recordCount = event.records.length;
-    const dialogTitle = recordCount === 1
-      ? `Manage Lists for "${recordDisplayNames[0]}"`
-      : `Add ${recordCount} Records to List`;
-
-    console.log(`Add to List: Opening dialog for ${recordIds.length} record(s)`);
-
-    this.listManagementConfig = {
-      mode: 'manage',
-      entityId: event.entityInfo.ID,
-      entityName: event.entityInfo.Name,
-      recordIds: recordIds,
-      recordDisplayNames: recordDisplayNames,
-      allowCreate: true,
-      allowRemove: recordCount === 1, // Only allow remove for single record
-      showMembership: recordCount === 1, // Only show membership for single record
-      dialogTitle: dialogTitle
-    };
-
-    this.showListManagementDialog = true;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Open the list management dialog for the currently selected record
-   */
-  public openListManagementDialog(): void {
-    if (!this.selectedEntity || !this.selectedRecord) {
-      return;
-    }
-
-    // Use the raw primary key value (not concatenated string) for list membership
-    // This matches how records are stored in List Details and enables proper subquery filtering
-    const pkFieldName = this.selectedEntity.PrimaryKeys[0]?.Name;
-    const recordId = pkFieldName ? String(this.selectedRecord[pkFieldName] ?? '') : '';
-    const recordName = this.getRecordDisplayName(this.selectedRecord);
-
-    this.listManagementConfig = {
-      mode: 'manage',
-      entityId: this.selectedEntity.ID,
-      entityName: this.selectedEntity.Name,
-      recordIds: [recordId],
-      recordDisplayNames: [recordName],
-      allowCreate: true,
-      allowRemove: true,
-      showMembership: true,
-      dialogTitle: `Manage Lists for "${recordName}"`
-    };
-
-    this.showListManagementDialog = true;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle completion of the list management dialog
-   */
-  public onListManagementComplete(result: ListManagementResult): void {
-    this.showListManagementDialog = false;
-    this.listManagementConfig = null;
-
-    if (result.action === 'apply') {
-      const addedCount = result.added.length;
-      const removedCount = result.removed.length;
-
-      if (addedCount > 0 || removedCount > 0) {
-        let message = '';
-        if (addedCount > 0) {
-          message += `Added to ${addedCount} list(s)`;
-        }
-        if (removedCount > 0) {
-          if (message) message += ', ';
-          message += `Removed from ${removedCount} list(s)`;
-        }
-        this.showNotification(message, 'success', 2500);
-      }
-    }
-
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Handle cancellation of the list management dialog
-   */
-  public onListManagementCancel(): void {
-    this.showListManagementDialog = false;
-    this.listManagementConfig = null;
-    this.cdr.detectChanges();
   }
 }

@@ -8,6 +8,8 @@
     "@memberjunction/actions-base",
     "@memberjunction/ai-core-plus",
     "@memberjunction/ai-engine-base",
+    "@memberjunction/ai-realtime-client",
+    "@memberjunction/ai-vectors-memory",
     "@memberjunction/communication-types",
     "@memberjunction/core",
     "@memberjunction/core-entities",
@@ -15,13 +17,18 @@
     "@memberjunction/graphql-dataprovider",
     "@memberjunction/ng-artifacts",
     "@memberjunction/ng-auth-services",
+    "@memberjunction/ng-clustering",
+    "@memberjunction/ng-conversations",
     "@memberjunction/ng-core-entity-forms",
     "@memberjunction/ng-dashboard-viewer",
     "@memberjunction/ng-dashboards",
+    "@memberjunction/ng-entity-action-ux",
+    "@memberjunction/ng-entity-viewer",
     "@memberjunction/ng-explorer-core",
     "@memberjunction/ng-explorer-settings",
     "@memberjunction/ng-file-storage",
     "@memberjunction/ng-shared",
+    "@memberjunction/tag-engine-base",
     "rxjs"
   ]
 }

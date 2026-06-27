@@ -18,9 +18,10 @@ export class MJAIAgentTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'basicDefinition', sectionName: 'Basic Definition', isExpanded: true },
             { sectionKey: 'promptConfiguration', sectionName: 'Prompt Configuration', isExpanded: true },
-            { sectionKey: 'behaviorUISettings', sectionName: 'Behavior & UI Settings', isExpanded: false },
-            { sectionKey: 'storageSettings', sectionName: 'Storage Settings', isExpanded: false },
+            { sectionKey: 'behaviorUISettings', sectionName: 'Behavior & UI Settings', isExpanded: true },
+            { sectionKey: 'storageSettings', sectionName: 'Storage Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentCoAgents', sectionName: 'AI Agent Co Agents', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }

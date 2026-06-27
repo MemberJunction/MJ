@@ -18,12 +18,12 @@ import {
   CompositeKey,
   EntityFieldInfo,
   EntityFieldTSType,
-  Metadata,
   RunView,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { diffChars, diffWords, Change } from 'diff';
 import { RestoreCommitEvent } from './restore-preview-panel/restore-preview-panel.component';
 
@@ -117,7 +117,7 @@ export interface FilterPill {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RecordChangesComponent implements OnInit, OnDestroy {
+export class RecordChangesComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   public IsLoading = false;
   public IsVisible = false;
   @Output() dialogClosed = new EventEmitter();
@@ -135,6 +135,15 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
 
   viewData: MJRecordChangeEntity[] = [];
   filteredData: MJRecordChangeEntity[] = [];
+
+  /**
+   * Change lookup keyed by NormalizeUUID(ID), rebuilt whenever {@link viewData}
+   * loads. Lets {@link getRestoredFromSourceChange} resolve a restore row's
+   * source change in O(1) instead of an O(rows) `UUIDsEqual` scan — which was
+   * previously executed twice per restore row per CD cycle (once in the
+   * template `@if` and once inside `getChangeSummary`), giving O(rows^2)/CD.
+   */
+  private viewDataById = new Map<string, MJRecordChangeEntity>();
   dateGroups: DateGroup[] = [];
   expandedItems: Set<string> = new Set();
 
@@ -185,7 +194,7 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
     private ngZone: NgZone,
     private mjNotificationService: MJNotificationService,
     private sanitizer: DomSanitizer,
-  ) {}
+  ) { super(); }
 
   ngOnInit(): void {
     if (this.record) {
@@ -241,13 +250,24 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
 
   public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string): Promise<void> {
     if (pkey && entityName) {
-      const md = new Metadata();
-      const changes = await md.GetRecordChanges<MJRecordChangeEntity>(entityName, pkey);
+      const md = this.ProviderToUse;
+      const entityInfo = md.EntityByName(entityName);
+      let changes: MJRecordChangeEntity[] = [];
+      if (entityInfo?.TrackRecordChanges) {
+        const rvResult = await RunView.FromMetadataProvider(md).RunView<MJRecordChangeEntity>({
+          EntityName: 'MJ: Record Changes',
+          ExtraFilter: `Entity='${entityName}' AND RecordID='${pkey.ToConcatenatedString()}'`,
+          OrderBy: 'ChangedAt DESC',
+          ResultType: 'entity_object',
+        });
+        if (rvResult.Success) changes = rvResult.Results;
+      }
       this.ngZone.run(() => {
         if (changes) {
           this.viewData = changes.sort(
-            (a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime(),
+            (a: MJRecordChangeEntity, b: MJRecordChangeEntity) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime(),
           );
+          this.rebuildViewDataIndex();
           this.rebuildConditionalPills();
           this.applyFilters();
           this.IsLoading = false;
@@ -424,7 +444,7 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
       const entityId = this.record.EntityInfo.ID;
       const recordId = this.record.PrimaryKey.ToConcatenatedString();
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const itemsResult = await rv.RunView<{ VersionLabelID: string }>({
         EntityName: 'MJ: Version Label Items',
         Fields: ['VersionLabelID'],
@@ -592,7 +612,18 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
   public getRestoredFromSourceChange(change: MJRecordChangeEntity): MJRecordChangeEntity | null {
     const sourceId = (change as any).RestoredFromID;
     if (!sourceId) return null;
-    return this.viewData.find(c => UUIDsEqual(c.ID, sourceId)) ?? null;
+    return this.viewDataById.get(NormalizeUUID(sourceId)) ?? null;
+  }
+
+  /**
+   * Rebuilds {@link viewDataById} from the current {@link viewData}. Called once
+   * per data load so source-change resolution is an O(1) Map read.
+   */
+  private rebuildViewDataIndex(): void {
+    this.viewDataById.clear();
+    for (const c of this.viewData) {
+      this.viewDataById.set(NormalizeUUID(c.ID), c);
+    }
   }
 
   /**

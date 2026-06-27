@@ -37,7 +37,7 @@ import {
   DownloadAttachmentParams,
   DownloadAttachmentResult
 } from "@memberjunction/communication-types";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
 import googleApis from 'googleapis';
@@ -90,8 +90,15 @@ export class GmailProvider extends BaseCommunicationProvider {
   /** Cached Gmail client for environment credentials */
   private envGmailClient: CachedGmailClient | null = null;
 
-  /** Cache of Gmail clients for per-request credentials */
-  private clientCache: Map<string, CachedGmailClient> = new Map();
+  /**
+   * Cache of Gmail clients keyed by clientId + refresh-token-prefix. Bounded
+   * LRU(100) + 1-hour TTL — prior unbounded `Map` retained credential-derived
+   * OAuth2 clients (and refresh-token fragments) indefinitely. See audit R2-C3.
+   */
+  private clientCache: MJLruCache<string, CachedGmailClient> = new MJLruCache<string, CachedGmailClient>({
+    maxSize: 100,
+    ttlMs: 60 * 60 * 1000,
+  });
 
   /**
    * Resolves credentials by merging request credentials with environment fallback
@@ -166,14 +173,14 @@ export class GmailProvider extends BaseCommunicationProvider {
 
     // For per-request credentials, use cached client by credential key
     const cacheKey = `${creds.clientId}:${creds.refreshToken.substring(0, 10)}`;
-    let cached = this.clientCache.get(cacheKey);
+    let cached = this.clientCache.Get(cacheKey);
 
     if (!cached) {
       cached = {
         client: this.createGmailClient(creds),
         userEmail: null
       };
-      this.clientCache.set(cacheKey, cached);
+      this.clientCache.Set(cacheKey, cached);
     }
 
     return cached;
@@ -402,18 +409,9 @@ export class GmailProvider extends BaseCommunicationProvider {
         const subject = getHeader('subject');
         const replyTo = getHeader('reply-to') ? [getHeader('reply-to')] : [from];
 
-        // Extract body
-        let body = '';
-        if (message.payload?.body?.data) {
-          // Base64 encoded data
-          body = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
-        } else if (message.payload?.parts) {
-          // Multipart message, try to find text part
-          const textPart = message.payload.parts.find(part => part.mimeType === 'text/plain');
-          if (textPart && textPart.body?.data) {
-            body = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
-          }
-        }
+        // Extract body by recursively walking the full MIME tree (handles
+        // embedded images, multipart/alternative, and HTML-only messages).
+        const body = this.extractBody(message.payload);
 
         return {
           From: from || '',
@@ -1232,6 +1230,62 @@ export class GmailProvider extends BaseCommunicationProvider {
   // ========================================================================
 
   /**
+   * Decodes a Gmail part body. Gmail returns part data as base64url
+   * (`-`/`_`, no padding), so we decode with the `base64url` encoding.
+   */
+  private decodePartData(data?: string | null): string {
+    return data ? Buffer.from(data, 'base64url').toString('utf-8') : '';
+  }
+
+  /**
+   * Recursively extracts the message body from a Gmail payload, walking the
+   * full MIME tree (`payload.parts[].parts[]…`). Prefers `text/html`, falls
+   * back to `text/plain`. Returns `''` only when no text part exists anywhere.
+   *
+   * Gmail nests the real body inside `multipart/*` containers for any message
+   * that isn't trivially single-part — every email with embedded/inline
+   * images, most HTML email, and forwarded/related content. Inspecting only
+   * the top level (or a single direct `text/plain` child) misses those and
+   * yields an empty body, so we must walk the whole tree.
+   *
+   * @param payload - The Gmail message payload (root `MessagePart`)
+   * @returns The decoded body — HTML if present, otherwise plain text
+   */
+  private extractBody(payload?: googleApis.gmail_v1.Schema$MessagePart | null): string {
+    if (!payload) {
+      return '';
+    }
+
+    // Depth-first collect of the first html and first plain-text parts found
+    // anywhere in the tree.
+    let html = '';
+    let text = '';
+
+    const walk = (part: googleApis.gmail_v1.Schema$MessagePart): void => {
+      const mime = (part.mimeType || '').toLowerCase();
+
+      if (mime === 'text/html' && !html && part.body?.data) {
+        html = this.decodePartData(part.body.data);
+      } else if (mime === 'text/plain' && !text && part.body?.data) {
+        text = this.decodePartData(part.body.data);
+      } else if (!part.parts && (mime === '' || mime.startsWith('text/')) && part.body?.data && !html && !text) {
+        // A single-part message carries its body directly on the payload,
+        // with no child parts and sometimes no/blank mimeType.
+        text = this.decodePartData(part.body.data);
+      }
+
+      for (const child of part.parts ?? []) {
+        walk(child);
+      }
+    };
+
+    walk(payload);
+
+    // Prefer the HTML body; fall back to plain text.
+    return html || text;
+  }
+
+  /**
    * Parses a Gmail message into the standard GetMessageMessage format
    */
   private parseGmailMessage(message: googleApis.gmail_v1.Schema$Message): GetMessageMessage {
@@ -1247,16 +1301,9 @@ export class GmailProvider extends BaseCommunicationProvider {
     const replyTo = getHeader('reply-to') ? [getHeader('reply-to')] : [from];
     const dateStr = getHeader('date');
 
-    // Extract body
-    let body = '';
-    if (message.payload?.body?.data) {
-      body = Buffer.from(message.payload.body.data, 'base64').toString('utf-8');
-    } else if (message.payload?.parts) {
-      const textPart = message.payload.parts.find(part => part.mimeType === 'text/plain');
-      if (textPart && textPart.body?.data) {
-        body = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
-      }
-    }
+    // Extract body by recursively walking the full MIME tree (handles
+    // embedded images, multipart/alternative, and HTML-only messages).
+    const body = this.extractBody(message.payload);
 
     // Parse date
     let receivedAt: Date | undefined;

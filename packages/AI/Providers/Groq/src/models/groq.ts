@@ -1,5 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import Groq from 'groq-sdk';
 import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart } from 'groq-sdk/resources/chat/completions';
 
@@ -227,22 +227,31 @@ export class GroqLLM extends BaseLLM {
             return res;
         });
         
-        // Create ModelUsage with timing data if available
-        const usage = new ModelUsage(chatResponse.usage.prompt_tokens, chatResponse.usage.completion_tokens);
-        
-        // Groq provides detailed timing in the usage object
-        const groqUsage = chatResponse.usage;
+        // Groq supports automatic prompt caching (OpenAI-compatible usage shape): the cache-read
+        // count is nested at prompt_tokens_details.cached_tokens and is INCLUDED in prompt_tokens.
+        // Normalize to the uniform ModelUsage contract: promptTokens must be UNCACHED/net-new only,
+        // so subtract the cache-read count (clamped at 0) and record it disjointly. Groq does not
+        // bill cache writes separately, so cacheWriteTokens stays 0.
+        const groqUsage = chatResponse.usage as typeof chatResponse.usage & { prompt_tokens_details?: { cached_tokens?: number } };
+        const groqCachedTokens = groqUsage.prompt_tokens_details?.cached_tokens ?? 0;
+        const groqNetPromptTokens = Math.max(0, (chatResponse.usage.prompt_tokens ?? 0) - groqCachedTokens);
+        const usage = new ModelUsage(groqNetPromptTokens, chatResponse.usage.completion_tokens);
+        usage.cacheReadTokens = groqCachedTokens;
+        // Convert from seconds to milliseconds and truncate to integer.
+        // Groq returns sub-second precision (e.g. 0.07161... s) which becomes
+        // 71.610... ms after the multiply — those fractional ms reach
+        // AIPromptRun.QueueTime/PromptTime/CompletionTime (declared INT4) and
+        // PG strict typing rejects the float. Truncation (vs. rounding) keeps
+        // PG behavior identical to SQL Server, whose documented FLOAT→INT
+        // implicit conversion truncates toward zero.
         if (groqUsage.queue_time !== undefined) {
-            // Convert from seconds to milliseconds
-            usage.queueTime = groqUsage.queue_time * 1000;
+            usage.queueTime = Math.trunc(groqUsage.queue_time * 1000);
         }
         if (groqUsage.prompt_time !== undefined) {
-            // Convert from seconds to milliseconds
-            usage.promptTime = groqUsage.prompt_time * 1000;
+            usage.promptTime = Math.trunc(groqUsage.prompt_time * 1000);
         }
         if (groqUsage.completion_time !== undefined) {
-            // Convert from seconds to milliseconds
-            usage.completionTime = groqUsage.completion_time * 1000;
+            usage.completionTime = Math.trunc(groqUsage.completion_time * 1000);
         }
         
         const result = {
@@ -258,12 +267,18 @@ export class GroqLLM extends BaseLLM {
             errorMessage: "",
             exception: null,
         } as ChatResult;
-        
+
+        result.cacheInfo = {
+            cacheHit: (usage.cacheReadTokens ?? 0) > 0,
+            cachedTokenCount: usage.cacheReadTokens ?? 0
+        };
+
         // Add model-specific response details
         result.modelSpecificResponseDetails = {
             provider: 'groq',
             model: chatResponse.model,
-            systemFingerprint: (chatResponse as any).system_fingerprint
+            systemFingerprint: (chatResponse as any).system_fingerprint,
+            raw: ToJSONSafe(chatResponse)
         };
         
         return result;

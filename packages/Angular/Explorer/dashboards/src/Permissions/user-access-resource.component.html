@@ -1,0 +1,114 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="User Access Report"
+    Icon="fa-solid fa-user"
+    Subtitle="See every resource a user can access across all registered permission domains">
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoadingUsers" [Disabled]="IsLoadingPermissions" (Clicked)="loadUsers()"></mj-refresh-button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+
+  @if (ErrorMessage) {
+    <div class="message error-message">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  <div class="selector-row">
+    <label class="selector-label" for="user-select">User:</label>
+    <select
+      id="user-select"
+      class="mj-input"
+      [ngModel]="SelectedUserId"
+      (ngModelChange)="OnUserChanged($event)"
+      [disabled]="IsLoadingUsers || IsLoadingPermissions"
+    >
+      @for (user of Users; track user.ID) {
+        <option [ngValue]="user.ID">{{ user.Name }}{{ user.Email ? ' — ' + user.Email : '' }}</option>
+      }
+    </select>
+
+    @if (SelectedUserRoles.length > 0) {
+      <div class="roles-badge" title="Roles assigned to this user">
+        <i class="fa-solid fa-user-tag"></i>
+        <span>{{ SelectedUserRoles.join(', ') }}</span>
+      </div>
+    }
+  </div>
+
+  @if (IsLoadingPermissions) {
+    <mj-loading text="Loading permissions..." size="medium"></mj-loading>
+  } @else if (!SelectedUserId) {
+    <mj-empty-state Icon="fa-solid fa-user-slash"
+      Title="No user selected"
+      Message="Select a user above to see their access report." />
+  } @else if (DomainGroups.length === 0) {
+    <mj-empty-state Icon="fa-solid fa-folder-open"
+      Title="No permissions"
+      Message="This user has no permissions granted in any domain." />
+  } @else {
+    <div class="total-summary">
+      <strong>{{ TotalCount }}</strong> permission{{ TotalCount === 1 ? '' : 's' }} across
+      <strong>{{ DomainGroups.length }}</strong> domain{{ DomainGroups.length === 1 ? '' : 's' }}
+    </div>
+
+    <div class="domain-groups">
+      @for (group of DomainGroups; track TrackByDomain($index, group)) {
+        <div class="domain-group" [class.expanded]="group.Expanded">
+          <button type="button" class="domain-header" (click)="ToggleGroup(group)">
+            <div class="domain-header-left">
+              <i [class]="group.Icon" class="domain-icon"></i>
+              <span class="domain-name">{{ group.DomainName }}</span>
+              <span class="domain-count">{{ group.Count }}</span>
+            </div>
+            <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="group.Expanded"></i>
+          </button>
+
+          @if (group.Expanded) {
+            <div class="domain-body">
+              <table class="perms-table">
+                <thead>
+                  <tr>
+                    <th>Resource</th>
+                    <th>Type</th>
+                    <th>Actions</th>
+                    <th>Effect</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of group.Rows; track TrackByPermission($index, row)) {
+                    <tr>
+                      <td class="resource-cell">
+                        <span class="resource-name">{{ row.ResourceName || row.ResourceID || '—' }}</span>
+                        @if (row.ResourceID && row.ResourceName && row.ResourceName !== row.ResourceID) {
+                          <span class="resource-id">{{ row.ResourceID }}</span>
+                        }
+                      </td>
+                      <td>{{ row.ResourceType }}</td>
+                      <td>
+                        <div class="action-chips">
+                          @for (action of row.Actions; track action) {
+                            <span class="action-chip">{{ action }}</span>
+                          }
+                        </div>
+                      </td>
+                      <td>
+                        <span class="effect-badge" [class.effect-allow]="row.Effect === 'Allow'" [class.effect-deny]="row.Effect === 'Deny'">
+                          {{ row.Effect }}
+                        </span>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+  </mj-page-body>
+</mj-page-layout>

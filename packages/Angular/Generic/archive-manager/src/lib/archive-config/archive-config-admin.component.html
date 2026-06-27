@@ -1,0 +1,313 @@
+<div class="config-admin">
+  <!-- Loading state -->
+  @if (IsLoading) {
+    <div class="config-loading">
+      <mj-loading text="Loading configurations..."></mj-loading>
+    </div>
+  }
+
+  @if (!IsLoading) {
+    <div class="config-layout">
+      <!-- Left panel: Config list -->
+      <div class="config-list-panel">
+        <div class="config-list-header">
+          <h2>Archive Configurations</h2>
+          <button class="btn btn-primary btn-sm" (click)="AddConfiguration()">
+            <i class="fa-solid fa-plus"></i>
+            Add Configuration
+          </button>
+        </div>
+
+        <div class="config-card-list">
+          @for (config of Configs; track config.ID) {
+            <div
+              class="config-card"
+              [class.selected]="IsSelectedConfig(config)"
+              (click)="SelectConfig(config)"
+              (keydown.enter)="SelectConfig(config)"
+              tabindex="0"
+              role="button">
+              <div class="config-card-header">
+                <span class="config-card-name">{{ config.Name }}</span>
+                <span
+                  class="config-status-badge"
+                  [class.status-active]="config.Status === 'Idle' || config.Status === 'Running'"
+                  [class.status-inactive]="config.Status === 'Disabled' || config.Status === 'Error'">
+                  {{ GetStatusLabel(config.Status) }}
+                </span>
+              </div>
+              <div class="config-card-meta">
+                <span><i class="fa-solid fa-database"></i> {{ config.StorageAccountName || 'No storage' }}</span>
+                <span><i class="fa-solid fa-folder"></i> {{ config.RootPath }}</span>
+              </div>
+              <div class="config-card-date">
+                <span class="config-status-mode"><i class="fa-solid fa-sliders"></i> {{ config.DefaultMode }}</span>
+              </div>
+            </div>
+          }
+
+          @if (Configs.length === 0) {
+            <mj-empty-state class="config-empty" Size="compact"
+              Icon="fa-solid fa-folder-open"
+              Title="No configurations found"
+              Message="Create one to get started." />
+          }
+        </div>
+      </div>
+
+      <!-- Right panel: Detail -->
+      <div class="config-detail-panel">
+        @if (!SelectedConfig) {
+          <mj-empty-state class="config-detail-placeholder"
+            Icon="fa-solid fa-hand-pointer"
+            Title="No configuration selected"
+            Message="Select a configuration to view details" />
+        }
+
+        @if (SelectedConfig) {
+          @if (IsDetailLoading) {
+            <div class="config-detail-loading">
+              <mj-loading text="Loading details..." size="small"></mj-loading>
+            </div>
+          }
+
+          @if (!IsDetailLoading) {
+            <div class="config-detail-content">
+              <!-- Header section -->
+              <div class="detail-section">
+                <div class="detail-field">
+                  <label for="config-name">Name</label>
+                  <input
+                    id="config-name"
+                    type="text"
+                    [(ngModel)]="SelectedConfig.Name"
+                    (ngModelChange)="OnConfigFieldChanged()"
+                    class="detail-input" />
+                </div>
+                <div class="detail-field">
+                  <label>Active</label>
+                  <div class="detail-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="SelectedConfig.Status === 'Idle'"
+                      (change)="SelectedConfig.Status = SelectedConfig.Status === 'Idle' ? 'Disabled' : 'Idle'; OnConfigFieldChanged()" />
+                  </div>
+                </div>
+                <div class="detail-field">
+                  <label for="config-desc">Description</label>
+                  <textarea
+                    id="config-desc"
+                    [(ngModel)]="SelectedConfig.Description"
+                    (ngModelChange)="OnConfigFieldChanged()"
+                    class="detail-input detail-textarea"
+                    rows="2"></textarea>
+                </div>
+              </div>
+
+              <!-- Storage section -->
+              <div class="detail-section">
+                <h3><i class="fa-solid fa-hard-drive"></i> Storage</h3>
+                <div class="detail-row">
+                  <div class="detail-field">
+                    <label for="config-storage">Storage Account</label>
+                    <select
+                      id="config-storage"
+                      [(ngModel)]="SelectedConfig.StorageAccountID"
+                      (ngModelChange)="OnConfigFieldChanged()"
+                      class="detail-input">
+                      <option value="">-- Select --</option>
+                      @for (account of StorageAccounts; track account.ID) {
+                        <option [value]="account.ID">{{ account.Name }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="detail-field">
+                    <label for="config-path">Root Path</label>
+                    <input
+                      id="config-path"
+                      type="text"
+                      [(ngModel)]="SelectedConfig.RootPath"
+                      (ngModelChange)="OnConfigFieldChanged()"
+                      class="detail-input" />
+                  </div>
+                </div>
+              </div>
+
+              <!-- Defaults section -->
+              <div class="detail-section">
+                <h3><i class="fa-solid fa-sliders"></i> Defaults</h3>
+                <div class="detail-row">
+                  <div class="detail-field">
+                    <label for="config-retention">Retention Days</label>
+                    <input
+                      id="config-retention"
+                      type="number"
+                      [(ngModel)]="SelectedConfig.DefaultRetentionDays"
+                      (ngModelChange)="OnConfigFieldChanged()"
+                      class="detail-input" />
+                  </div>
+                  <div class="detail-field">
+                    <label for="config-batch">Batch Size</label>
+                    <input
+                      id="config-batch"
+                      type="number"
+                      [(ngModel)]="SelectedConfig.DefaultBatchSize"
+                      (ngModelChange)="OnConfigFieldChanged()"
+                      class="detail-input" />
+                  </div>
+                </div>
+                <div class="detail-row">
+                  <div class="detail-field">
+                    <label for="config-mode">Archive Mode</label>
+                    <select
+                      id="config-mode"
+                      [(ngModel)]="SelectedConfig.DefaultMode"
+                      (ngModelChange)="OnConfigFieldChanged()"
+                      class="detail-input">
+                      @for (mode of ArchiveModes; track mode) {
+                        <option [value]="mode">{{ mode }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div class="detail-field">
+                    <label>Archive Record Changes</label>
+                    <div class="detail-checkbox">
+                      <input
+                        type="checkbox"
+                        [(ngModel)]="SelectedConfig.ArchiveRelatedRecordChanges"
+                        (ngModelChange)="OnConfigFieldChanged()" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Entities section -->
+              <div class="detail-section">
+                <div class="detail-section-header">
+                  <h3><i class="fa-solid fa-table"></i> Entities</h3>
+                  <button class="btn btn-sm btn-outline" (click)="AddEntity()">
+                    <i class="fa-solid fa-plus"></i> Add Entity
+                  </button>
+                </div>
+
+                @if (ConfigEntities.length > 0) {
+                  <div class="entity-table-wrapper">
+                    <table class="entity-table">
+                      <thead>
+                        <tr>
+                          <th>Entity</th>
+                          <th>Mode</th>
+                          <th>Retention</th>
+                          <th>Batch</th>
+                          <th>Date Field</th>
+                          <th>Active</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (entity of ConfigEntities; track entity.ID) {
+                          <tr>
+                            <td>
+                              <input
+                                type="text"
+                                [(ngModel)]="entity.EntityName"
+                                (ngModelChange)="OnEntityChanged(entity)"
+                                class="entity-input"
+                                placeholder="Entity name" />
+                            </td>
+                            <td>
+                              <select
+                                [(ngModel)]="entity.Mode"
+                                (ngModelChange)="OnEntityChanged(entity)"
+                                class="entity-input">
+                                @for (mode of ArchiveModes; track mode) {
+                                  <option [value]="mode">{{ mode }}</option>
+                                }
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                [(ngModel)]="entity.RetentionDays"
+                                (ngModelChange)="OnEntityChanged(entity)"
+                                class="entity-input entity-input-sm" />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                [(ngModel)]="entity.BatchSize"
+                                (ngModelChange)="OnEntityChanged(entity)"
+                                class="entity-input entity-input-sm" />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                [(ngModel)]="entity.DateField"
+                                (ngModelChange)="OnEntityChanged(entity)"
+                                class="entity-input"
+                                placeholder="e.g. CreatedAt" />
+                            </td>
+                            <td>
+                              <input
+                                type="checkbox"
+                                [(ngModel)]="entity.IsActive"
+                                (ngModelChange)="OnEntityChanged(entity)" />
+                            </td>
+                            <td>
+                              <button
+                                class="btn-icon btn-icon-danger"
+                                (click)="RemoveEntity(entity)"
+                                title="Remove entity"
+                                aria-label="Remove entity">
+                                <i class="fa-solid fa-trash-can"></i>
+                              </button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+
+                @if (ConfigEntities.length === 0) {
+                  <mj-empty-state class="entity-empty" Size="compact"
+                    Icon="" Title="No entities configured. Click &quot;Add Entity&quot; to add one." />
+                }
+              </div>
+
+              <!-- Status message -->
+              @if (StatusMessage) {
+                <div class="config-status" [class.status-success]="StatusType === 'success'" [class.status-error]="StatusType === 'error'">
+                  @if (StatusType === 'success') {
+                    <i class="fa-solid fa-circle-check"></i>
+                  }
+                  @if (StatusType === 'error') {
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                  }
+                  {{ StatusMessage }}
+                </div>
+              }
+
+              <!-- Action bar (Save on LEFT per MJ convention) -->
+              <div class="detail-actions">
+                <button
+                  class="btn btn-primary"
+                  [disabled]="IsSaving"
+                  (click)="Save()">
+                  @if (IsSaving) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+                  } @else {
+                    <i class="fa-solid fa-floppy-disk"></i> Save
+                  }
+                </button>
+                <button class="btn btn-secondary" [disabled]="IsSaving" (click)="Cancel()">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </div>
+  }
+</div>

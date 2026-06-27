@@ -97,11 +97,16 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    }
  
 
+   // NOTE: StartRun / EndRun / StartLog are public so the composed server engine
+   // (CommunicationEngine, which COMPOSES this base rather than extending it — see AIEngine pattern)
+   // can drive the send-run/log lifecycle via `this.Base.StartRun(...)`. They operate purely on this
+   // base's own ProviderToUse / ContextUser state.
+
    /**
    * Starts a communication run
    */
-   protected async StartRun(): Promise<MJCommunicationRunEntity> {
-      const md = new Metadata();
+   public async StartRun(): Promise<MJCommunicationRunEntity> {
+      const md = this.ProviderToUse;
       const run = await md.GetEntityObject<MJCommunicationRunEntity>('MJ: Communication Runs', this.ContextUser);
       run.Status = 'Pending';
       run.Direction = 'Sending';
@@ -130,7 +135,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    * @param run 
    * @returns 
    */
-   protected async EndRun(run: MJCommunicationRunEntity): Promise<boolean> {
+   public async EndRun(run: MJCommunicationRunEntity): Promise<boolean> {
       run.Status = 'Complete';
       run.EndedAt = new Date();
       return await run.Save();
@@ -141,8 +146,8 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    * @param processedMessage 
    * @param run 
    */
-   protected async StartLog(processedMessage: ProcessedMessage, run?: MJCommunicationRunEntity): Promise<MJCommunicationLogEntity> {
-      const md = new Metadata();
+   public async StartLog(processedMessage: ProcessedMessage, run?: MJCommunicationRunEntity): Promise<MJCommunicationLogEntity> {
+      const md = this.ProviderToUse;
       const log = await md.GetEntityObject<MJCommunicationLogEntity>('MJ: Communication Logs', this.ContextUser);
       log.CommunicationRunID = run?.ID;
       log.Status = 'Pending';

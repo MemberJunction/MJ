@@ -1,0 +1,19 @@
+{
+  "realtime": {
+    "allowUserModelOverride": true,
+    "narration": {
+      "paceMs": 8000
+    },
+    "turnTaking": {
+      "moderator": {
+        "promptId": "@lookup:MJ: AI Prompts.Name=Realtime: Turn Moderator",
+        "contextWindowTurns": 30,
+        "maxCharsPerTurn": 240,
+        "maxConsecutiveAgentOnlyTurns": null,
+        "timeoutMs": 800,
+        "onError": "silent",
+        "prestageOnAgentSpeech": true
+      }
+    }
+  }
+}

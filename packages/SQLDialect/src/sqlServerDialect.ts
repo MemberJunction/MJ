@@ -141,6 +141,20 @@ export class SQLServerDialect extends SQLDialect {
         return `[${schema}].[${object}]`;
     }
 
+    /**
+     * SQL Server identifiers are case-insensitive by default, so a bare
+     * alias preserves the requested casing when echoed in result-set
+     * column metadata. Bracketed quoting would also work but is unnecessary.
+     */
+    QuoteColumnAlias(aliasName: string): string {
+        return aliasName;
+    }
+
+    /** SQL Server is case-insensitive for identifiers; the schema name is stored as-given. */
+    CanonicalSchemaName(name: string): string {
+        return name;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {
@@ -156,9 +170,111 @@ export class SQLServerDialect extends SQLDialect {
         return value ? '1' : '0';
     }
 
+    BooleanParameterType(): string {
+        return 'bit';
+    }
+
+    ParameterRef(name: string): string {
+        return `@${name}`;
+    }
+
+    ParameterDefault(value: string): string {
+        return ` = ${value}`;
+    }
+
+    /**
+     * SQL Server has both `ISNULL` (T-SQL native, two-arg only) and `COALESCE`
+     * (ANSI, n-ary). For two-argument null-coalescing we emit the native
+     * `ISNULL` form so generated SPs match the conventional T-SQL idiom and
+     * the data-type-of-first-argument semantics callers may already rely on.
+     */
+    IsNull(expr: string, fallback: string): string {
+        return `ISNULL(${expr}, ${fallback})`;
+    }
+
+    /**
+     * SQL Server supports `COALESCE` as an ANSI-standard alternative to its
+     * native `ISNULL`. The two differ subtly in return-type inference and
+     * argument arity (`COALESCE` is n-ary; `ISNULL` is two-arg only). Use
+     * this helper when codegen needs the n-ary form or when caller intent
+     * is ANSI-portable rather than T-SQL-native.
+     */
+    Coalesce(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
     CurrentTimestampUTC(): string {
         return 'GETUTCDATE()';
     }
+
+    // ─── Type-Name Sets ──────────────────────────────────────────────
+    // SQL Server's column-type names as they appear in `sys.columns.name`
+    // / `EntityField.Type` for entities backed by a SQL Server schema.
+
+    private static readonly _BooleanTypeNames = ['bit'] as const;
+    private static readonly _StringTypeNames = ['text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar'] as const;
+    /** `char` and `nchar` right-pad stored values with spaces up to declared length. */
+    private static readonly _FixedWidthStringTypeNames = ['char', 'nchar'] as const;
+    private static readonly _DateTypeNames = ['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime'] as const;
+    private static readonly _IntegerTypeNames = ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'rowversion', 'timestamp'] as const;
+    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'float', 'real'] as const;
+    private static readonly _UuidTypeNames = ['uniqueidentifier'] as const;
+    private static readonly _BinaryTypeNames = ['binary', 'varbinary', 'image'] as const;
+    private static readonly _JsonTypeNames = ['xml'] as const;
+    private static readonly _CurrencyTypeNames = ['money', 'smallmoney'] as const;
+    private static readonly _IntervalTypeNames = [] as const;
+    private static readonly _NetworkTypeNames = [] as const;
+
+    get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._BooleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return SQLServerDialect._StringTypeNames; }
+    get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._FixedWidthStringTypeNames; }
+    /** SQL Server index keys are limited to 900 bytes → 450 NVARCHAR (2-byte) chars. */
+    override get MaxKeyStringLength(): number { return 450; }
+
+    /** SQL Server enforces a hard ~8060-byte in-row row size; only variable-length values go off-row. */
+    override get MaxInRowSizeBytes(): number { return 8060; }
+
+    /** SQL Server's hard per-table column cap. */
+    override get MaxColumnCount(): number { return 1024; }
+
+    /**
+     * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
+     * (incl. `(N)VARCHAR(MAX)`) contribute only a 24-byte in-row pointer; fixed-length types
+     * contribute their full size. Unknown types are treated as off-row pointers (conservative).
+     */
+    override EstimateInRowBytes(rawSqlType: string): number {
+        const t = (rawSqlType ?? '').toUpperCase().trim();
+        // Off-row-capable variable-length + LOB types → 24-byte in-row pointer floor.
+        if (/^(N?VARCHAR|VARBINARY)\s*\(/.test(t)) return 24; // covers (N)VARCHAR(MAX) too
+        if (/^(TEXT|NTEXT|IMAGE|XML|SQL_VARIANT)\b/.test(t)) return 24;
+        // Fixed-length character/binary types stay fully in-row.
+        const nchar = t.match(/^NCHAR\s*\(\s*(\d+)\s*\)/);
+        if (nchar) return parseInt(nchar[1], 10) * 2;
+        const chr = t.match(/^(?:CHAR|BINARY)\s*\(\s*(\d+)\s*\)/);
+        if (chr) return parseInt(chr[1], 10);
+        if (/^UNIQUEIDENTIFIER\b/.test(t)) return 16;
+        if (/^BIGINT\b/.test(t)) return 8;
+        if (/^SMALLINT\b/.test(t)) return 2;
+        if (/^TINYINT\b/.test(t)) return 1;
+        if (/^INT\b/.test(t)) return 4;
+        if (/^BIT\b/.test(t)) return 1;
+        if (/^(DECIMAL|NUMERIC|MONEY|SMALLMONEY)\b/.test(t)) return 17;
+        if (/^(FLOAT|REAL)\b/.test(t)) return 8;
+        if (/^DATETIMEOFFSET\b/.test(t)) return 10;
+        if (/^(DATETIME2|DATETIME|SMALLDATETIME)\b/.test(t)) return 8;
+        if (/^DATE\b/.test(t)) return 3;
+        if (/^TIME\b/.test(t)) return 5;
+        return 24; // unknown → treat as off-row variable-length pointer (conservative)
+    }
+    get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return SQLServerDialect._UuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return SQLServerDialect._BinaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return SQLServerDialect._JsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return SQLServerDialect._CurrencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return SQLServerDialect._IntervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return SQLServerDialect._NetworkTypeNames; }
 
     NewUUID(): string {
         return 'NEWID()';
@@ -166,6 +282,17 @@ export class SQLServerDialect extends SQLDialect {
 
     CastToText(expr: string): string {
         return `CAST(${expr} AS NVARCHAR(MAX))`;
+    }
+
+    /**
+     * SQL Server-specific Flyway escape. Interleaves a `CAST(N'' AS NVARCHAR(MAX))`
+     * between the split halves so the running T-SQL concat chain inherits
+     * NVARCHAR(MAX) precedence. Without the cast, `N'a' + N'b'` produces
+     * NVARCHAR(a+b) capped at NVARCHAR(4000) and silently truncates anything
+     * past 4,000 characters.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'+CAST(N'' AS NVARCHAR(MAX))+N'{");
     }
 
     CastToUUID(expr: string): string {
@@ -252,6 +379,10 @@ export class SQLServerDialect extends SQLDialect {
 
     get AllowsOrderByInCTE(): boolean {
         return false;
+    }
+
+    get DefaultPagingOrderBy(): string {
+        return '(SELECT NULL)';
     }
 
     // ─── Data Types ──────────────────────────────────────────────────
@@ -410,6 +541,30 @@ export class SQLServerDialect extends SQLDialect {
         ].join('\n');
     }
 
+    // ─── Idempotent (single-statement) DDL — see SQLDialect base ─────
+
+    override CreateTableIfAbsent(fullTable: string, columnsBody: string): string {
+        // Single-statement IF guard (no BEGIN/END) so migration chunkers that split on ';\n'
+        // boundaries cannot separate the guard from the CREATE. The only ';' is the terminating ');'.
+        return `IF OBJECT_ID(N'${fullTable}', N'U') IS NULL\nCREATE TABLE ${fullTable} (\n${columnsBody}\n);`;
+    }
+
+    override CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
+        const level1Type = this.objectTypeToLevel1Type(objectType);
+        // IF NOT EXISTS governs the single EXEC that follows (sp_addextendedproperty has no internal ';').
+        return [
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'${level1Type}', N'${name}', NULL, NULL))`,
+            `${this.CommentOnObject(objectType, schema, name, comment)};`,
+        ].join('\n');
+    }
+
+    override CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
+        return [
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'TABLE', N'${table}', N'COLUMN', N'${column}'))`,
+            this.CommentOnColumn(schema, table, column, comment),
+        ].join('\n');
+    }
+
     // ─── Schema Introspection ────────────────────────────────────────
 
     SchemaIntrospectionQueries(): SchemaIntrospectionSQL {
@@ -498,6 +653,18 @@ export class SQLServerDialect extends SQLDialect {
                 return this.FallbackType();
         }
     }
+
+    // ─── Error Classification ────────────────────────────────────────
+
+    IsConnectionError(e: unknown): boolean {
+        if (!(e instanceof Error)) return false;
+
+        // mssql driver sets error.name to 'ConnectionError' for all connectivity
+        // failures (timeout, refused, reset, TLS handshake, etc.)
+        return e.name === 'ConnectionError';
+    }
+
+    // ─── Private Helpers ────────────────────────────────────────────
 
     private resolveStringType(maxLength?: number): string {
         if (maxLength != null && maxLength > 0) {

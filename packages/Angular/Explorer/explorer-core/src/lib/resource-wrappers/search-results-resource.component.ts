@@ -1,4 +1,5 @@
 import { Component, ChangeDetectorRef, inject } from '@angular/core';
+import { Subscription } from 'rxjs';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -12,6 +13,7 @@ import {
     SearchRequest,
     SearchResponse,
     SearchResultSelectedEvent,
+    StreamingProviderStatus,
 } from '@memberjunction/ng-search';
 import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud';
 
@@ -21,6 +23,36 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
     selector: 'mj-search-results-resource',
     template: `
         <div class="search-results-page">
+            <!-- Streaming status strip — visible while streamScopedSearch is in flight -->
+            @if (EnableStreaming && (IsSearching || StreamingProviders.length > 0)) {
+                <div class="streaming-status-strip" aria-live="polite">
+                    @for (p of StreamingProviders; track p.Name) {
+                        <span class="streaming-chip"
+                              [class.streaming-chip-error]="p.State === 'Error'"
+                              [class.streaming-chip-completed]="p.State === 'Completed'">
+                            @if (p.State === 'Completed') {
+                                <i class="fa-solid fa-check"></i>
+                            } @else {
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            }
+                            <span class="streaming-chip-name">{{ p.Name }}</span>
+                            @if (p.State === 'Completed') {
+                                <span class="streaming-chip-count">{{ p.Count }}</span>
+                                <span class="streaming-chip-time">{{ p.ElapsedMs }}ms</span>
+                            } @else if (p.ErrorMessage) {
+                                <span class="streaming-chip-time">{{ p.ErrorMessage }}</span>
+                            }
+                        </span>
+                    }
+                    @if (IsSearching) {
+                        <span class="streaming-chip streaming-chip-pending">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                            <span>Streaming…</span>
+                        </span>
+                    }
+                </div>
+            }
+
             <!-- Header bar (always visible when we have server results) -->
             @if (HasSearched && ServerResultCount > 0) {
                 <div class="search-header">
@@ -87,11 +119,12 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
 
             <!-- No server results -->
             @if (!IsSearching && ServerResultCount === 0 && HasSearched) {
-                <div class="search-no-results">
-                    <i class="fa-solid fa-magnifying-glass-minus"></i>
-                    <h3>No results found</h3>
-                    <p>Try different keywords or broaden your search.</p>
-                </div>
+                <mj-empty-state
+                    class="search-no-results"
+                    Variant="no-results"
+                    Icon="fa-solid fa-magnifying-glass-minus"
+                    Title="No results found"
+                    Message="Try different keywords or broaden your search." />
             }
             <!-- Results body (visible when server returned results) -->
             @if (ServerResultCount > 0) {
@@ -144,10 +177,11 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
                                     (OpenRecordRequested)="OnOpenRecord($event)">
                                 </mj-search-results>
                             } @else {
-                                <div class="search-no-results-inline">
-                                    <i class="fa-solid fa-filter-circle-xmark"></i>
-                                    <p>No results match current filters. Try lowering the minimum relevance.</p>
-                                </div>
+                                <mj-empty-state
+                                    class="search-no-results-inline"
+                                    Variant="no-results"
+                                    Icon="fa-solid fa-filter-circle-xmark"
+                                    Title="No results match current filters. Try lowering the minimum relevance." />
                             }
                         </div>
                     }
@@ -262,25 +296,6 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
             min-width: 0;
             overflow-y: auto;
         }
-        .search-no-results {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--mj-text-muted);
-        }
-        .search-no-results i {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.4;
-        }
-        .search-no-results h3 {
-            font-size: 18px;
-            color: var(--mj-text-primary);
-            margin: 0 0 8px;
-        }
-        .search-no-results p {
-            font-size: 14px;
-            margin: 0;
-        }
         .search-results-body-wrapper {
             position: relative;
             flex: 1;
@@ -299,21 +314,6 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
         }
         .search-no-results-inline {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            color: var(--mj-text-muted);
-            padding: 40px 20px;
-        }
-        .search-no-results-inline i {
-            font-size: 32px;
-            opacity: 0.4;
-        }
-        .search-no-results-inline p {
-            font-size: 13px;
-            margin: 0;
         }
         .sr-view-toggle {
             display: flex;
@@ -349,6 +349,40 @@ import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud
             height: 100%;
             max-height: 600px;
         }
+        .streaming-status-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid var(--mj-border-subtle);
+        }
+        .streaming-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.55rem;
+            border-radius: 9999px;
+            border: 1px solid var(--mj-border-default);
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-secondary);
+            font-size: 0.74rem;
+        }
+        .streaming-chip-pending {
+            color: var(--mj-text-muted);
+        }
+        .streaming-chip-completed {
+            background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+            border-color: var(--mj-status-success-border);
+            color: var(--mj-status-success-text);
+        }
+        .streaming-chip-error {
+            background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+            border-color: var(--mj-status-error-border);
+            color: var(--mj-status-error-text);
+        }
+        .streaming-chip-name { font-weight: 500; }
+        .streaming-chip-count { opacity: 0.7; }
+        .streaming-chip-time { opacity: 0.6; font-size: 0.7rem; }
     `]
 })
 export class SearchResultsResource extends BaseResourceComponent {
@@ -379,6 +413,23 @@ export class SearchResultsResource extends BaseResourceComponent {
 
     /** All results from the last search (before client-side filtering) */
     private allResults: SearchResultItem[] = [];
+
+    /** Selected scope IDs from the search bar (empty = unscoped/global). */
+    private ScopeIDs: string[] = [];
+
+    /**
+     * Phase 2C streaming opt-in. Off by default to preserve Phase 1 request-response UX.
+     * Enable per-resource via `Data.Configuration.EnableStreaming` or per-tab via the
+     * `?stream=1` query param (mostly for engineering verification before flipping the
+     * default).
+     */
+    EnableStreaming = false;
+
+    /** Per-provider stream status displayed above results while a stream is in flight. */
+    StreamingProviders: StreamingProviderStatus[] = [];
+
+    /** Active stream subscription so we can cancel on a new search or destroy. */
+    private currentStream: Subscription | null = null;
 
     private dataLoaded = false;
 
@@ -420,6 +471,25 @@ export class SearchResultsResource extends BaseResourceComponent {
             }
         }
 
+        // Carry scope selection from the search bar through into the initial query.
+        if (Array.isArray(config?.ScopeIDs)) {
+            this.ScopeIDs = (config.ScopeIDs as unknown[]).filter((x): x is string => typeof x === 'string');
+        }
+
+        // Streaming opt-in: resource config wins; URL query param `?stream=1` is the
+        // engineering-verification override (cleared once the default flips). Read the
+        // URL directly because the resource's tab config doesn't always mirror URL params
+        // into `Configuration.queryParams` at the moment loadFromData() runs.
+        if (config?.EnableStreaming === true) {
+            this.EnableStreaming = true;
+        }
+        try {
+            const streamParam = new URL(window.location.href).searchParams.get('stream');
+            if (streamParam === '1' || streamParam === 'true') {
+                this.EnableStreaming = true;
+            }
+        } catch { /* ignore — server-side render or odd URL */ }
+
         // Sync min relevance to URL query param
         this.navigationService.UpdateActiveTabQueryParams({ minRelevance: String(this.MinScorePercent) });
 
@@ -428,6 +498,12 @@ export class SearchResultsResource extends BaseResourceComponent {
         }
 
         this.NotifyLoadComplete();
+    }
+
+    override ngOnDestroy(): void {
+        this.currentStream?.unsubscribe();
+        this.currentStream = null;
+        super.ngOnDestroy();
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -471,6 +547,26 @@ export class SearchResultsResource extends BaseResourceComponent {
             this.ExecuteSearch(this.CurrentQuery);
         } else {
             // User raised or stayed at/above server threshold — client-side filter is sufficient
+            this.applyClientFilters();
+        }
+    }
+
+    /**
+     * React to ?minRelevance= changes that arrive after initial load — e.g. a Home pin or
+     * deep link to a specific relevance threshold, or browser back/forward — when this tab
+     * is re-focused rather than freshly loaded (so loadFromData() does not run again).
+     */
+    protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        const minRelevance = params['minRelevance'];
+        if (minRelevance == null) return;
+        const mr = Number(minRelevance);
+        if (isNaN(mr) || mr < 0 || mr > 100 || mr === this.MinScorePercent) return;
+
+        this.MinScorePercent = mr;
+        if (mr < this.serverMinScorePercent && this.CurrentQuery) {
+            // Below what the server filtered — re-query with the lower threshold.
+            void this.ExecuteSearch(this.CurrentQuery);
+        } else {
             this.applyClientFilters();
         }
     }
@@ -564,6 +660,14 @@ export class SearchResultsResource extends BaseResourceComponent {
             IncludeSources: ['vector', 'fulltext', 'entity', 'storage'],
             MinScore: this.MinScorePercent / 100
         };
+        if (this.ScopeIDs.length > 0) {
+            request.ScopeIDs = [...this.ScopeIDs];
+        }
+
+        if (this.EnableStreaming) {
+            this.executeStreamingSearch(query, request);
+            return;
+        }
 
         const response: SearchResponse = await this.searchService.ExecuteSearch(request);
 
@@ -578,6 +682,75 @@ export class SearchResultsResource extends BaseResourceComponent {
         this.HasSearched = true;
         this.emitAgentContext();
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Phase 2C streaming variant. Subscribes to `streamScopedSearch` and progressively
+     * populates the result list as each provider reports back. The 'final' event carries
+     * the canonical fused/reranked list, which replaces any partials the user already saw.
+     *
+     * Cancellation: a new query starts by tearing down the in-flight stream so events
+     * from a stale search do not bleed into the current view.
+     */
+    private executeStreamingSearch(query: string, request: SearchRequest): void {
+        // Cancel any prior stream so events from a stale query don't leak in.
+        this.currentStream?.unsubscribe();
+        this.currentStream = null;
+
+        // Reset visible streaming state.
+        this.StreamingProviders = [];
+        this.allResults = [];
+        this.FilteredResults = [];
+        this.ServerResultCount = 0;
+        this.TotalCount = 0;
+        this.ElapsedMs = 0;
+        this.cdr.detectChanges();
+
+        this.currentStream = this.searchService.StreamSearch(request).subscribe({
+            next: (event) => {
+                if (event.Phase === 'provider' && event.ProviderName) {
+                    const count = event.Results?.length ?? 0;
+                    this.StreamingProviders = [
+                        ...this.StreamingProviders,
+                        {
+                            Name: event.ProviderName,
+                            Count: count,
+                            ElapsedMs: event.ElapsedMs ?? 0,
+                            State: 'Completed',
+                        },
+                    ];
+                    if (event.Results && event.Results.length > 0) {
+                        this.allResults = [...this.allResults, ...event.Results].sort((a, b) => b.Score - a.Score);
+                        this.ServerResultCount = this.allResults.length;
+                        this.applyClientFilters();
+                    }
+                } else if (event.Phase === 'final' && event.Results) {
+                    this.allResults = [...event.Results].sort((a, b) => b.Score - a.Score);
+                    this.ServerResultCount = this.allResults.length;
+                    this.TotalCount = event.Results.length;
+                    this.ElapsedMs = event.ElapsedMs ?? this.ElapsedMs;
+                    this.Filters = this.searchService.BuildFilters(this.allResults);
+                    this.applyClientFilters();
+                    this.HasSearched = true;
+                }
+                this.cdr.detectChanges();
+            },
+            error: (err: Error) => {
+                this.StreamingProviders = [
+                    ...this.StreamingProviders,
+                    { Name: 'stream', Count: 0, ElapsedMs: 0, State: 'Error', ErrorMessage: err.message },
+                ];
+                this.IsSearching = false;
+                this.HasSearched = true;
+                this.cdr.detectChanges();
+            },
+            complete: () => {
+                this.IsSearching = false;
+                this.HasSearched = true;
+                this.emitAgentContext();
+                this.cdr.detectChanges();
+            },
+        });
     }
 
     /**
@@ -681,7 +854,7 @@ export class SearchResultsResource extends BaseResourceComponent {
             // Group results by entity to build efficient queries
             const byEntity = new Map<string, string[]>();
             for (const result of this.allResults) {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const entity = md.Entities.find(e => e.Name === result.EntityName);
                 if (!entity) continue;
                 const list = byEntity.get(entity.ID) || [];
@@ -691,7 +864,7 @@ export class SearchResultsResource extends BaseResourceComponent {
 
             // Query Tagged Items for all record IDs across all entities
             const tagAggregates = new Map<string, { count: number; totalWeight: number }>();
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             for (const [entityID, recordIDs] of byEntity) {
                 if (recordIDs.length === 0) continue;

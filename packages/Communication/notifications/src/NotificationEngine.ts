@@ -42,7 +42,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await UserInfoEngine.Instance.Config(forceRefresh, contextUser, provider);
 
     // BaseEngine Load with empty configs - we don't load our own data
-    await this.Load([], provider || Metadata.Provider, forceRefresh, contextUser);
+    await this.Load([], provider ?? Metadata.Provider, forceRefresh, contextUser);
   }
 
   /**
@@ -214,7 +214,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<string> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const notification = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', contextUser);
 
     notification.UserID = params.userId;
@@ -287,12 +287,23 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     message.ContextData = params.templateData || {};
     message.Subject = params.title;
 
+    const fromAddress = message.From;
+    LogStatus(
+      `[NotificationEngine] Dispatching email for '${type.Name}' to ${user.Email} from ${fromAddress} ` +
+      `(template=${templateEntity.Name ?? emailTemplateId})`
+    );
+
     const sendResult = await commEngine.SendSingleMessage('SendGrid', 'Email', message, undefined, false);
 
     const success = sendResult?.Success === true;
 
     if (success) {
-      LogStatus(`Email sent successfully to ${user.Email} for notification type: ${type.Name}`);
+      LogStatus(`[NotificationEngine] Email sent successfully to ${user.Email} for notification type: ${type.Name}`);
+    } else {
+      LogError(
+        `[NotificationEngine] Email delivery failed for type '${type.Name}' to ${user.Email} from ${fromAddress}. ` +
+        `Provider reported: ${sendResult?.Error ?? '(no error message)'}`
+      );
     }
 
     return success;

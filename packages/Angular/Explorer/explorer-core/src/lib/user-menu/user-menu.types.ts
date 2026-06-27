@@ -159,6 +159,9 @@ export interface UserMenuContext {
 
     /** Currently applied theme ID (resolved, never 'system') */
     appliedTheme?: string;
+
+    /** Whether the in-app feedback feature is enabled for this org */
+    feedbackEnabled?: boolean;
 }
 
 /**

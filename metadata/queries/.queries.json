@@ -12,12 +12,29 @@
       "ExecutionCostRank": 3,
       "UsesTemplate": true
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/calculate-ai-agent-run-cost.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "44cdfaf2-9998-4c26-a469-dcbea46e3c4b"
+          },
+          "sync": {
+            "lastModified": "2026-04-29T05:22:46.738Z",
+            "checksum": "45a7374f87fc25068013df166a1b26f27bdf306f07aa7269a2620271a4c19d15"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "1ED5F808-5B12-45DB-A376-324CF65B0CAF"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:32.633Z",
+      "lastModified": "2026-04-29T05:22:45.511Z",
       "checksum": "1d4d11d4ecedd1a1e859d711c7a0a83a302c0e2f74c723a75dc5186a610db3a3"
     }
   },
@@ -37,7 +54,7 @@
       "ID": "23F8423E-F36B-1410-8D9C-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-27T22:37:52.531Z",
+      "lastModified": "2026-04-29T05:22:46.719Z",
       "checksum": "220493daf62cbec2f5b0e258251b235d2151e4ec35131285b3cf6bb4a777b1d1"
     }
   }

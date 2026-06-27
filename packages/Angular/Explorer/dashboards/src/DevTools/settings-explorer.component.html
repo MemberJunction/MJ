@@ -1,0 +1,120 @@
+<div class="mj-inspector mj-inspector--solo">
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Settings explorer"
+        Title="Settings Explorer"
+        Subtitle="User settings and instance-level configuration">
+        <div actions>
+            <mj-refresh-button [Loading]="false" (Clicked)="refresh()"></mj-refresh-button>
+        </div>
+    </mj-page-header-interior>
+
+    <div class="se-toolbar">
+        <div class="se-tabs">
+            <button type="button"
+                    class="se-tab"
+                    [class.se-tab--active]="Scope === 'user'"
+                    (click)="OnScopeChange('user')">
+                <i class="fa-solid fa-user"></i>
+                User Settings
+                <span class="se-count">{{ Counts.user }}</span>
+            </button>
+            <button type="button"
+                    class="se-tab"
+                    [class.se-tab--active]="Scope === 'instance'"
+                    (click)="OnScopeChange('instance')">
+                <i class="fa-solid fa-server"></i>
+                Instance Configurations
+                <span class="se-count">{{ Counts.instance }}</span>
+            </button>
+        </div>
+        <div class="se-search-wrap">
+            <i class="fa-solid fa-search se-search-icon"></i>
+            <input type="search"
+                   class="se-search"
+                   placeholder="Search keys or values…"
+                   [(ngModel)]="SearchQuery"
+                   (ngModelChange)="PersistPrefs()" />
+            @if (SearchQuery) {
+                <button class="se-search-clear" (click)="SearchQuery = ''" title="Clear">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="se-body">
+        <div class="se-list">
+            @if (FilteredRows.length === 0) {
+                @if (SearchQuery) {
+                    <mj-empty-state class="se-empty" Variant="no-results" Icon="fa-solid fa-magnifying-glass"
+                        [Title]="'No matches for “' + SearchQuery + '”'" />
+                } @else {
+                    <mj-empty-state class="se-empty" Icon="fa-regular fa-folder-open"
+                        [Title]="'No ' + (Scope === 'user' ? 'user settings' : 'instance configurations') + ' are defined.'" />
+                }
+            } @else {
+                <table class="se-table">
+                    <thead>
+                        <tr>
+                            <th class="se-th-key">Key</th>
+                            <th class="se-th-type">Type</th>
+                            <th class="se-th-value">Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (row of FilteredRows; track TrackByKey($index, row)) {
+                            <tr [class.se-row--selected]="Selected?.key === row.key"
+                                (click)="OnRowClick(row)">
+                                <td class="se-td-key">
+                                    <code>{{ row.key }}</code>
+                                    @if (row.meta) {
+                                        <div class="se-td-meta">{{ row.meta }}</div>
+                                    }
+                                </td>
+                                <td class="se-td-type">
+                                    <span class="se-type-pill" [class]="'se-type-pill--' + row.valueType">
+                                        {{ row.valueType }}
+                                    </span>
+                                </td>
+                                <td class="se-td-value">{{ row.preview }}</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </div>
+
+        @if (Selected) {
+            <aside class="se-detail">
+                <div class="se-detail-head">
+                    <div>
+                        <div class="se-detail-key">{{ Selected.key }}</div>
+                        @if (Selected.meta) {
+                            <div class="se-detail-meta">{{ Selected.meta }}</div>
+                        }
+                    </div>
+                    <div class="se-detail-actions">
+                        <button mjButton variant="secondary" size="sm" (click)="OnCopySelected()" title="Copy value">
+                            <i class="fa-solid fa-clipboard" aria-hidden="true"></i> Copy
+                        </button>
+                        <button mjButton variant="flat" size="sm" (click)="Selected = null" title="Close" aria-label="Close detail">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="se-detail-body">
+                    <div class="se-detail-meta-row">
+                        <span class="se-type-pill" [class]="'se-type-pill--' + Selected.valueType">{{ Selected.valueType }}</span>
+                        @if (Selected.updated) {
+                            <span class="se-detail-updated">Updated {{ Selected.updated.toLocaleString() }}</span>
+                        }
+                    </div>
+                    <pre class="se-detail-value"><code>{{ FormattedSelected || '(empty)' }}</code></pre>
+                </div>
+            </aside>
+        }
+    </div>
+
+    <div class="mj-inspector__footer-meta">Refreshed {{ LastRefreshedLabel }}</div>
+</div>

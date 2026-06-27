@@ -10,7 +10,7 @@
             <i class="fa-solid fa-plus-circle"></i>
             Add Part
           </h3>
-          <button class="close-button" (click)="onCancel()">
+          <button class="close-button" aria-label="Close dialog" (click)="onCancel()">
             <i class="fa-solid fa-times"></i>
           </button>
         </div>
@@ -56,14 +56,14 @@
       @if (step === 'configure') {
         <!-- Header -->
         <div class="dialog-header">
-          <button class="back-button" (click)="goBack()">
+          <button class="back-button" aria-label="Go back" (click)="goBack()">
             <i class="fa-solid fa-arrow-left"></i>
           </button>
           <h3>
             <i [class]="selectedPartType?.Icon || 'fa-solid fa-puzzle-piece'"></i>
             Configure {{ getConfigTypeName() }} Part
           </h3>
-          <button class="close-button" (click)="onCancel()">
+          <button class="close-button" aria-label="Close dialog" (click)="onCancel()">
             <i class="fa-solid fa-times"></i>
           </button>
         </div>

@@ -1,0 +1,310 @@
+[
+  {
+    "_comments": [
+      "Runtime Actions demo #5 — the full-stack composition.",
+      "Exercises rv.RunViews (parallel queries), libs.dateFns + libs.lodash,",
+      "ai.ExecutePrompt (markdown-format prompt), and actions.Invoke",
+      "('Send Single Message'). If this runs end-to-end, the whole Runtime",
+      "Actions infrastructure is working. Supports dryRun=true so you can",
+      "inspect the markdown before wiring a real recipient."
+    ],
+    "fields": {
+      "Name": "Weekly Entity Digest",
+      "Description": "Composes a weekly markdown digest from activity across one or more entities, then emails it via the Send Single Message action. Exercises every major bridge namespace: metadata-bounded entity queries (rv), standard library helpers (libs), AI prompt rendering (ai), and downstream action invocation (actions). Supports dryRun=true to return the markdown without sending.",
+      "Type": "Runtime",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-newspaper",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication",
+      "Code": "@file:runtime/code/weekly-entity-digest.js",
+      "RuntimeActionConfiguration": {
+        "permissions": {
+          "allowedActions": [
+            {
+              "id": "@lookup:MJ: Actions.Name=Send Single Message",
+              "name": "Send Single Message"
+            }
+          ],
+          "allowedAgents": [],
+          "allowedEntities": [],
+          "allowAnyEntity": true
+        },
+        "limits": {
+          "maxMemoryMB": 256,
+          "maxBridgeCalls": 20
+        }
+      },
+      "MaxExecutionTimeMS": 180000
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "entityNames",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of entity names to summarize (e.g. ['Customers', 'Orders', 'Support Tickets']).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DC7AF7A7-67BC-4079-AD09-DAEF308CAC00"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.348Z",
+            "checksum": "2532494b7211621dde978b73519f0da6d83484bd50aca89d49e3a6b8cff9591c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "timeRangeDays",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "How many days back the digest covers (filter on __mj_CreatedAt). Default: 7.",
+            "IsRequired": false,
+            "DefaultValue": "7"
+          },
+          "primaryKey": {
+            "ID": "3838D7F4-2236-401E-8EEA-843FF5AA28C3"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.379Z",
+            "checksum": "9bd5aae9f08724074839432a7d4b20906cde6bf64ba5b3a9e500faa533554266"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "recipientEmail",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email address to deliver the digest to. Required unless dryRun=true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6017C146-FF21-4D22-9D55-B45ED925A26D"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.411Z",
+            "checksum": "97e17284665d43956a3840dd29bc29de3736b1b38776eb7c14b68d694f051129"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "subject",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email subject line. Default: 'Weekly Digest — <date range>'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BE3FEBFB-9B70-4EC0-9A7A-A8CE33BFFDBD"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.442Z",
+            "checksum": "087b4de0905b4c08ccba4a95b1a9919dcc9508a81f73739d20b42455e065c3ba"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "dryRun",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true, skip the Send Single Message invocation and return the digest markdown only. Use for previewing.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "3E1117EE-FD7B-4531-BF7C-372F2C45D0D9"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.472Z",
+            "checksum": "1c34238114d3c06a99856fd2f5c34e7dc2d2a7bee375c5641effdac618d803c2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "digestMarkdown",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The generated markdown digest."
+          },
+          "primaryKey": {
+            "ID": "4D123779-3ACC-4F88-8ACC-BEF699CD46EA"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.503Z",
+            "checksum": "d59ab5e91db84364a7294b1b43b42a83969eae259d996c1af80456e7936159c0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "emailSent",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "True when Send Single Message succeeded. Always false in dryRun mode."
+          },
+          "primaryKey": {
+            "ID": "555DEC5C-CDBE-4F62-9280-65C69B5D4E6D"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.532Z",
+            "checksum": "8240170eac984c7b04f3bf60e4953f95faff22c0169e0a69f85b3e28fca9b51d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "recordCounts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Map of entityName -> count of records in the time range (null where the view query failed)."
+          },
+          "primaryKey": {
+            "ID": "1CCD9A07-08C0-451E-A006-27CBF50A3F59"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.562Z",
+            "checksum": "ee0211df941bb156d736df35a38dc2f6c7cdb569c6bfc4c85d17f5f67b4fbb6b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "totalRecords",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sum of recordCounts across all successful entity queries."
+          },
+          "primaryKey": {
+            "ID": "1DC7F18A-59F0-4AA0-995C-39EE800099AD"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.592Z",
+            "checksum": "3ee5ec68889d9aca797e4fc068e32924ad38c811c1cc4fbe2281218285a7dfdb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "errors",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Per-entity errors if any RunView calls failed. Absent when all succeeded."
+          },
+          "primaryKey": {
+            "ID": "3F66E3DF-CC9A-4AF3-B8A7-1A8FC579C15B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.621Z",
+            "checksum": "feaae50bea9ce0a4f9067712901e7535dc3cbef85f135c2579e3c5a225d62d2c"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Digest generated and delivered (or returned in dryRun mode)."
+          },
+          "primaryKey": {
+            "ID": "3563C3CD-1BA5-425E-8284-C5D30EB9AE84"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.664Z",
+            "checksum": "6f9daf2f703fbac4cb16e15ecd1ece6baa9142f9556ef0695bec577452ae6f4a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_INPUT",
+            "IsSuccess": false,
+            "Description": "entityNames is empty or recipientEmail is missing (without dryRun)."
+          },
+          "primaryKey": {
+            "ID": "8A234FC9-2C43-4017-9E60-5D6769C1714B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.683Z",
+            "checksum": "06aa8dd47094b9c3722443eab917ef8fc995d5b7c1e9bd7eab4d9ee4890ff029"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ALL_VIEWS_FAILED",
+            "IsSuccess": false,
+            "Description": "Every RunView call failed — no data to digest."
+          },
+          "primaryKey": {
+            "ID": "18E3E13F-BC28-4C86-A6FA-7459C00217C5"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.700Z",
+            "checksum": "3f1a0a227e35dc8d7f0842388dbaf37f1acc1ff584d8de37a0f7c76f3f710052"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROMPT_FAILED",
+            "IsSuccess": false,
+            "Description": "AI prompt execution failed."
+          },
+          "primaryKey": {
+            "ID": "DA55B45F-D18F-486F-9765-949C0A1B7426"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.717Z",
+            "checksum": "28d89d9ec5c8cc374e82c8d4811d05c9f8765bb4ab9d1faa44fd774f262cc114"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEND_FAILED",
+            "IsSuccess": false,
+            "Description": "Send Single Message returned Success=false."
+          },
+          "primaryKey": {
+            "ID": "46F76D81-E688-4192-AA3B-974EB9DF65CF"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:48.733Z",
+            "checksum": "acda147cc1837b7deaab2ed83c2942907a384fae2bdc43e534df25cd31eb5080"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B57BE9DE-FDBA-4545-822B-32EA6C4E706A"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T13:09:48.278Z",
+      "checksum": "f90dbecd2e7b3bfae64b7c4fece19a1c27babfd8ae795bb683a6f538238d76f3"
+    }
+  }
+]

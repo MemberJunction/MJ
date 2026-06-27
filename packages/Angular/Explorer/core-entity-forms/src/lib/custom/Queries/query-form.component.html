@@ -1,10 +1,25 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-  @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="ToolbarConfig"
+    [IsSaving]="IsSaving"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-      <mj-form-toolbar [Form]="this" [Config]="ToolbarConfig"></mj-form-toolbar>
+
+      <!-- Saving Overlay -->
+      @if (IsSaving) {
+        <div class="saving-overlay">
+          <i class="fa-solid fa-spinner fa-spin saving-spinner"></i>
+          <span>Saving...</span>
+        </div>
+      }
 
       <!-- Header Section -->
-      <div class="query-header">
+      <div class="query-header" [class.content-saving]="IsSaving">
         <div class="query-header-content">
           <!-- Top Row: Name and Run Button -->
           <div class="query-header-top">
@@ -42,16 +57,27 @@
             <div class="query-meta-item">
               <label class="meta-label">Category</label>
               @if (EditMode) {
-                <mj-dropdown
-                  [(ngModel)]="record.CategoryID"
-                  name="categoryId"
-                  [Data]="categoryOptions"
-                  TextField="text"
-                  ValueField="value"
-                  [ValuePrimitive]="true"
-                  Placeholder="Select category..."
-                  class="meta-dropdown">
-                </mj-dropdown>
+                <div class="meta-dropdown-row">
+                  <mj-tree-dropdown
+                    [BranchConfig]="CategoryBranchConfig"
+                    [Value]="CategoryIDAsKey"
+                    [SelectableTypes]="'branch'"
+                    [SelectionMode]="'single'"
+                    [Placeholder]="'Select category...'"
+                    [EnableSearch]="true"
+                    [Clearable]="true"
+                    (ValueChange)="OnCategoryTreeChange($event)"
+                    class="meta-dropdown">
+                  </mj-tree-dropdown>
+                  <button mjButton variant="icon" title="New category" (click)="createCategory()">
+                    <i class="fa-solid fa-plus"></i>
+                  </button>
+                  @if (record.CategoryID) {
+                    <button mjButton variant="icon" title="Edit category" (click)="editSelectedCategory()">
+                      <i class="fa-solid fa-pen"></i>
+                    </button>
+                  }
+                </div>
               } @else {
                 <span class="meta-value">{{ categoryPathDisplay || 'Uncategorized' }}</span>
               }
@@ -110,7 +136,7 @@
       }
 
       <!-- Main Content Area with Expansion Panels -->
-      <div class="query-content">
+      <div class="query-content" [class.content-saving]="IsSaving">
 
         <!-- SQL Query Panel -->
         <mj-accordion-panel
@@ -247,18 +273,12 @@
                 </div>
               } @else {
                 @if (queryParameters.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-sliders empty-state-icon"></i>
-                    <div class="empty-state-title">No Parameters Defined</div>
-                    <div class="empty-state-text">
-                      Add parameters to make your query dynamic and reusable.
-                    </div>
-                    @if (EditMode) {
-                      <button type="button" class="add-item-btn" (click)="addParameter()">
-                        <i class="fa-solid fa-plus"></i> Add First Parameter
-                      </button>
-                    }
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-sliders"
+                    Title="No Parameters Defined"
+                    Message="Add parameters to make your query dynamic and reusable."
+                    [ActionText]="EditMode ? 'Add First Parameter' : ''"
+                    ActionIcon="fa-solid fa-plus"
+                    (Action)="addParameter()" />
                 } @else {
                   @if (EditMode) {
                     <div class="panel-toolbar">
@@ -338,18 +358,12 @@
                 </div>
               } @else {
                 @if (queryFields.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-table empty-state-icon"></i>
-                    <div class="empty-state-title">No Fields Defined</div>
-                    <div class="empty-state-text">
-                      Define output fields for your query results.
-                    </div>
-                    @if (EditMode) {
-                      <button type="button" class="add-item-btn" (click)="addField()">
-                        <i class="fa-solid fa-plus"></i> Add First Field
-                      </button>
-                    }
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-table"
+                    Title="No Fields Defined"
+                    Message="Define output fields for your query results."
+                    [ActionText]="EditMode ? 'Add First Field' : ''"
+                    ActionIcon="fa-solid fa-plus"
+                    (Action)="addField()" />
                 } @else {
                   @if (EditMode) {
                     <div class="panel-toolbar">
@@ -475,18 +489,12 @@
                 </div>
               } @else {
                 @if (queryEntities.length === 0) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-database empty-state-icon"></i>
-                    <div class="empty-state-title">No Entities Tracked</div>
-                    <div class="empty-state-text">
-                      Track which entities this query uses for documentation.
-                    </div>
-                    @if (EditMode) {
-                      <button type="button" class="add-item-btn" (click)="addEntity()">
-                        <i class="fa-solid fa-plus"></i> Add First Entity
-                      </button>
-                    }
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-database"
+                    Title="No Entities Tracked"
+                    Message="Track which entities this query uses for documentation."
+                    [ActionText]="EditMode ? 'Add First Entity' : ''"
+                    ActionIcon="fa-solid fa-plus"
+                    (Action)="addEntity()" />
                 } @else {
                   @if (EditMode) {
                     <div class="panel-toolbar">
@@ -556,6 +564,83 @@
 
           <div class="panel-body">
             <div class="details-grid">
+              <!-- Reusable -->
+              <div class="detail-item">
+                <label class="detail-label">
+                  <i class="fa-solid fa-puzzle-piece"></i> Reusable
+                </label>
+                @if (EditMode) {
+                  <mj-switch [(ngModel)]="record.Reusable" name="reusable"></mj-switch>
+                  <div class="detail-hint">Allow other queries to reference this query using composition syntax</div>
+                } @else {
+                  <div class="detail-value">
+                    @if (record.Reusable) {
+                      <span class="detail-tag positive"><i class="fa-solid fa-check"></i> Reusable</span>
+                    } @else {
+                      <span class="detail-tag neutral"><i class="fa-solid fa-times"></i> Not Reusable</span>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- Cache Enabled -->
+              <div class="detail-item">
+                <label class="detail-label">
+                  <i class="fa-solid fa-bolt"></i> Cache Enabled
+                </label>
+                @if (EditMode) {
+                  <mj-switch [(ngModel)]="record.CacheEnabled" name="cacheEnabled"></mj-switch>
+                  <div class="detail-hint">Cache query results in memory to reduce database load on repeated runs</div>
+                } @else {
+                  <div class="detail-value">
+                    @if (record.CacheEnabled) {
+                      <span class="detail-tag positive"><i class="fa-solid fa-check"></i> Caching On</span>
+                    } @else {
+                      <span class="detail-tag neutral"><i class="fa-solid fa-times"></i> Caching Off</span>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- Cache TTL -->
+              @if (record.CacheEnabled) {
+                <div class="detail-item">
+                  <label class="detail-label">
+                    <i class="fa-solid fa-clock"></i> Cache TTL (Minutes)
+                  </label>
+                  @if (EditMode) {
+                    <input class="mj-input detail-input-narrow"
+                      type="number"
+                      [(ngModel)]="record.CacheTTLMinutes"
+                      name="cacheTTLMinutes"
+                      min="1"
+                      placeholder="Default" />
+                    <div class="detail-hint">How long cached results remain valid. Leave blank for default TTL.</div>
+                  } @else {
+                    <div class="detail-value">{{ record.CacheTTLMinutes != null ? record.CacheTTLMinutes + ' min' : 'Default' }}</div>
+                  }
+                </div>
+              }
+
+              <!-- Audit Query Runs -->
+              <div class="detail-item">
+                <label class="detail-label">
+                  <i class="fa-solid fa-clipboard-list"></i> Audit Runs
+                </label>
+                @if (EditMode) {
+                  <mj-switch [(ngModel)]="record.AuditQueryRuns" name="auditQueryRuns"></mj-switch>
+                  <div class="detail-hint">Log all executions of this query to the Audit Log for tracking and compliance</div>
+                } @else {
+                  <div class="detail-value">
+                    @if (record.AuditQueryRuns) {
+                      <span class="detail-tag positive"><i class="fa-solid fa-check"></i> Auditing On</span>
+                    } @else {
+                      <span class="detail-tag neutral"><i class="fa-solid fa-times"></i> Auditing Off</span>
+                    }
+                  </div>
+                }
+              </div>
+
               <!-- Uses Template -->
               <div class="detail-item">
                 <label class="detail-label">
@@ -622,13 +707,9 @@
                 </div>
               } @else {
                 @if (queryPermissions.length === 0 && !EditMode) {
-                  <div class="empty-state">
-                    <i class="fa-solid fa-shield-alt empty-state-icon"></i>
-                    <div class="empty-state-title">No Permissions Set</div>
-                    <div class="empty-state-text">
-                      This query uses default permissions.
-                    </div>
-                  </div>
+                  <mj-empty-state Icon="fa-solid fa-shield-halved"
+                    Title="No Permissions Set"
+                    Message="This query uses default permissions." />
                 } @else {
                   @if (EditMode) {
                     <mj-explorer-entity-data-grid
@@ -661,19 +742,13 @@
 
       </div>
     </form>
+</mj-record-form-container>
 
-    <!-- Query Run Dialog -->
-    <mj-query-run-dialog
-      [query]="record"
-      [parameters]="queryParameters"
-      [(isVisible)]="showRunDialog"
-      (onClose)="onRunDialogClose()">
-    </mj-query-run-dialog>
-
-    <!-- Category Creation Dialog -->
-    <mj-query-category-dialog
-      [(isVisible)]="showCategoryDialog"
-      (onCategoryCreated)="onCategoryCreated($event)">
-    </mj-query-category-dialog>
-  }
-</div>
+<!-- Query Run Dialog -->
+<mj-query-run-dialog
+  [query]="record"
+  [parameters]="queryParameters"
+  [(isVisible)]="showRunDialog"
+  (onClose)="onRunDialogClose()">
+</mj-query-run-dialog>
+}

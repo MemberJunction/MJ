@@ -1,9 +1,10 @@
-import { IMetadataProvider, IRunViewProvider, LogError, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo } from "@memberjunction/core";
 import {
     MJQueryParameterEntity,
     MJQueryFieldEntity,
     MJQueryEntityEntity,
     MJQueryDependencyEntity,
+    QueryEngine,
 } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import type {
@@ -112,7 +113,7 @@ export async function SyncParameters(
             ep => !extractedParamNames.includes(ep.Name.toLowerCase())
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         // Add new parameters
         for (const param of paramsToAdd) {
@@ -120,7 +121,7 @@ export async function SyncParameters(
                 'MJ: Query Parameters', contextUser
             );
             applyParameterValues(newParam, queryID, param);
-            promises.push(newParam.Save());
+            factories.push(() => newParam.Save());
         }
 
         // Update existing parameters if properties changed
@@ -129,18 +130,16 @@ export async function SyncParameters(
                 p => p.name.toLowerCase() === existingParam.Name.toLowerCase()
             );
             if (extractedParam && updateParameterIfChanged(existingParam, extractedParam)) {
-                promises.push(existingParam.Save());
+                factories.push(() => existingParam.Save());
             }
         }
 
         // Remove stale parameters
         for (const paramToRemove of paramsToRemove) {
-            promises.push(paramToRemove.Delete());
+            factories.push(() => paramToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync parameters for query ${queryID}:`, e);
         throw e;
@@ -246,7 +245,7 @@ export async function SyncFields(
             ef => !fieldNamesToSync.includes(ef.Name.toLowerCase())
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         // Add new fields
         for (let i = 0; i < fieldsToAdd.length; i++) {
@@ -255,7 +254,7 @@ export async function SyncFields(
                 'MJ: Query Fields', contextUser
             );
             applyFieldValues(newField, queryID, field, i + 1, metadataProvider);
-            promises.push(newField.Save());
+            factories.push(() => newField.Save());
         }
 
         // Update existing fields if properties changed
@@ -266,19 +265,17 @@ export async function SyncFields(
             if (extractedField) {
                 const globalIndex = extractedFields.indexOf(extractedField);
                 if (updateFieldIfChanged(existingField, extractedField, globalIndex + 1, metadataProvider)) {
-                    promises.push(existingField.Save());
+                    factories.push(() => existingField.Save());
                 }
             }
         }
 
         // Remove stale fields
         for (const fieldToRemove of fieldsToRemove) {
-            promises.push(fieldToRemove.Delete());
+            factories.push(() => fieldToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync fields for query ${queryID}:`, e);
         throw e;
@@ -440,7 +437,7 @@ export async function SyncEntities(
             ee => !entityMappings.some(mapping => UUIDsEqual(mapping.entityID, ee.EntityID))
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         for (const mapping of entitiesToAdd) {
             const newEntity = await metadataProvider.GetEntityObject<MJQueryEntityEntity>(
@@ -450,16 +447,14 @@ export async function SyncEntities(
             newEntity.EntityID = mapping.entityID;
             newEntity.DetectionMethod = 'AI';
             newEntity.AutoDetectConfidenceScore = 1.0;
-            promises.push(newEntity.Save());
+            factories.push(() => newEntity.Save());
         }
 
         for (const entityToRemove of entitiesToRemove) {
-            promises.push(entityToRemove.Delete());
+            factories.push(() => entityToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync entities for query ${queryID}:`, e);
         throw e;
@@ -483,7 +478,7 @@ export async function SyncDependencies(
     isSaved: boolean
 ): Promise<void> {
     if (resolvedRefs.length === 0) {
-        await RemoveAllRecords(queryID, 'MJ: Query Dependencies', contextUser, runViewProvider, isSaved);
+        await RemoveAllRecords(queryID, 'MJ: Query Dependencies', contextUser, runViewProvider, isSaved, metadataProvider);
         return;
     }
 
@@ -519,7 +514,7 @@ export async function SyncDependencies(
             )
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         // Add new dependencies
         for (const dep of depsToAdd) {
@@ -532,7 +527,7 @@ export async function SyncDependencies(
             newDep.Alias = dep.alias;
             newDep.ParameterMapping = dep.parameterMapping ? JSON.stringify(dep.parameterMapping) : null;
             newDep.DetectionMethod = 'Auto';
-            promises.push(newDep.Save());
+            factories.push(() => newDep.Save());
         }
 
         // Update existing dependencies if properties changed
@@ -542,18 +537,16 @@ export async function SyncDependencies(
                      existingDep.ReferencePath === d.referencePath
             );
             if (extractedDep && updateDependencyIfChanged(existingDep, extractedDep)) {
-                promises.push(existingDep.Save());
+                factories.push(() => existingDep.Save());
             }
         }
 
         // Remove stale dependencies
         for (const depToRemove of depsToRemove) {
-            promises.push(depToRemove.Delete());
+            factories.push(() => depToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync dependencies for query ${queryID}:`, e);
         throw e;
@@ -597,7 +590,8 @@ export async function RemoveAllRecords(
     entityName: string,
     contextUser: UserInfo,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    metadataProvider?: IMetadataProvider
 ): Promise<void> {
     try {
         if (!isSaved) return;
@@ -612,12 +606,10 @@ export async function RemoveAllRecords(
             throw new Error(`Failed to load existing ${entityName}: ${existingResult.ErrorMessage}`);
         }
 
-        const records = existingResult.Results || [];
-        const deletePromises = records.map((record: { Delete: () => Promise<boolean> }) => record.Delete());
+        const records = (existingResult.Results || []) as Array<{ Delete: () => Promise<boolean> }>;
+        const deleteFactories = records.map(record => () => record.Delete());
 
-        if (deletePromises.length > 0) {
-            await Promise.all(deletePromises);
-        }
+        await RunMaybeSerial(metadataProvider, deleteFactories);
     } catch (e) {
         LogError(`Failed to remove ${entityName} for query ${queryID}:`, e);
         throw e;
@@ -632,7 +624,20 @@ export async function RemoveAllRecords(
  * Loads all existing records of a given entity type for a query.
  * Returns an empty array if the query has not been saved yet.
  */
-async function loadExistingRecords<T>(
+/**
+ * Loads existing child records for a query.
+ *
+ * Prefers QueryEngine's in-memory cache when it is loaded (long-running MJAPI
+ * server): the engine already holds every query child and auto-refreshes via
+ * BaseEntity events, so we avoid a redundant RunView per save. When the cache
+ * is NOT loaded — typically a short-lived CLI process such as `mj sync push`
+ * or `mj codegen`, where QueryEngine was never `Config()`'d — we must read the
+ * authoritative state from the database. Trusting the empty cache there
+ * misclassifies already-persisted children as new and re-INSERTs them, hitting
+ * `UQ_QueryParameter_QueryID_Name` (and the sibling unique constraints), which
+ * on PostgreSQL aborts the entire push transaction and rolls back the run.
+ */
+async function loadExistingRecords<T extends { QueryID: string }>(
     entityName: string,
     queryID: string,
     runViewProvider: IRunViewProvider,
@@ -641,15 +646,31 @@ async function loadExistingRecords<T>(
 ): Promise<T[]> {
     if (!isSaved) return [];
 
-    const result = await runViewProvider.RunView<T>({
+    const qe = QueryEngine.Instance;
+    if (qe.Loaded) {
+        switch (entityName) {
+            case 'MJ: Query Parameters':
+                return qe.GetQueryParameters(queryID) as unknown as T[];
+            case 'MJ: Query Fields':
+                return qe.GetQueryFields(queryID) as unknown as T[];
+            case 'MJ: Query Entities':
+                return qe.QueryEntities.filter(e => UUIDsEqual(e.QueryID, queryID)) as unknown as T[];
+            case 'MJ: Query Dependencies':
+                return qe.Dependencies.filter(d => UUIDsEqual(d.QueryID, queryID)) as unknown as T[];
+            default:
+                return [];
+        }
+    }
+
+    // Cache cold — read straight from the DB so the add/update/remove delta is
+    // computed against real persisted state, not an empty cache.
+    const result = await runViewProvider.RunView({
         EntityName: entityName,
         ExtraFilter: `QueryID='${queryID}'`,
         ResultType: 'entity_object'
     }, contextUser);
-
     if (!result.Success) {
-        throw new Error(`Failed to load existing ${entityName}: ${result.ErrorMessage}`);
+        throw new Error(`Failed to load existing ${entityName} for query ${queryID}: ${result.ErrorMessage}`);
     }
-
-    return result.Results || [];
+    return (result.Results || []) as unknown as T[];
 }

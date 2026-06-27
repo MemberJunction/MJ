@@ -1,12 +1,21 @@
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
+import { serializeKeyValue } from './KeySerialization.js';
 
 /**
  * Resolves mapped records against existing MJ data to determine
  * whether each record should be Created, Updated, Skipped, or Deleted.
  */
 export class MatchEngine {
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Resolves change types for a batch of mapped records by checking for existing
      * MJ records via key field matching and record map lookups.
@@ -21,8 +30,10 @@ export class MatchEngine {
         records: MappedRecord[],
         entityMap: ICompanyIntegrationEntityMap,
         fieldMaps: ICompanyIntegrationFieldMap[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MappedRecord[]> {
+        if (provider) this._provider = provider;
         const keyFields = fieldMaps.filter(fm => fm.IsKeyField && fm.Status === 'Active');
         const conflictResolution = entityMap.ConflictResolution as ConflictResolution;
 
@@ -116,8 +127,8 @@ export class MatchEngine {
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByName(record.MJEntityName);
         const isCompositePK = (entityInfo?.PrimaryKeys?.length ?? 0) > 1;
 
         if (keyFields.length > 0 || isCompositePK) {
@@ -148,8 +159,8 @@ export class MatchEngine {
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
 
         if (pkFields.length === 0) return null;
@@ -166,8 +177,12 @@ export class MatchEngine {
             for (const pkField of pkFields) {
                 const value = record.MappedFields[pkField.Name];
                 if (value == null) continue;
-                const escaped = String(value).replace(/'/g, "''");
-                const clause = `[${pkField.Name}] = '${escaped}'`;
+                const escaped = serializeKeyValue(value).replace(/'/g, "''");
+                // ANSI double-quoted identifier — portable across SQL Server (QUOTED_IDENTIFIER ON,
+                // the driver default) and Postgres (exact-case; integration columns are lowercase).
+                // Plain identifiers break when a column name is a reserved word (e.g. a soft PK named
+                // `open`/`order`); brackets would fix SQL Server but break Postgres, so double-quote.
+                const clause = `"${pkField.Name}" = '${escaped}'`;
                 if (!filterClauses.includes(clause)) {
                     filterClauses.push(clause);
                 }
@@ -203,8 +218,11 @@ export class MatchEngine {
         for (const kf of keyFields) {
             const value = record.MappedFields[kf.DestinationFieldName];
             if (value == null) continue;
-            const escaped = String(value).replace(/'/g, "''");
-            clauses.push(`[${kf.DestinationFieldName}] = '${escaped}'`);
+            // serializeKeyValue mirrors the write-side coercion (objects → JSON, not "[object Object]")
+            // so an object-valued key filters against the value actually stored in the column.
+            const escaped = serializeKeyValue(value).replace(/'/g, "''");
+            // ANSI double-quoted identifier — reserved-word-safe + portable; see CompositePK note above.
+            clauses.push(`"${kf.DestinationFieldName}" = '${escaped}'`);
         }
         return clauses;
     }
@@ -229,6 +247,10 @@ export class MatchEngine {
             Fields: ['EntityRecordID'],
             MaxRows: 1,
             ResultType: 'simple',
+            // CRITICAL: this lookup decides CREATE vs UPDATE for an incoming record. It MUST read
+            // committed state — a cached null (from a lookup made before this record's map existed)
+            // would make a re-sync of a changed record wrongly CREATE → duplicate-key on the dest.
+            BypassCache: true,
         }, contextUser);
 
         if (!result.Success || result.Results.length === 0) return null;

@@ -165,6 +165,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     await this.LoadData();
     this.NotifyLoadComplete();
   }
@@ -275,6 +276,12 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   OnGlobalSearchChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.GlobalSearch = input.value;
+    this.cdr.detectChanges();
+  }
+
+  /** Bridge for <mj-page-search> which emits a plain string. */
+  OnGlobalSearchValue(value: string): void {
+    this.GlobalSearch = value;
     this.cdr.detectChanges();
   }
 

@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from '@memberjunction/actions';
-import { Metadata } from "@memberjunction/core";
+import { DatabaseProviderBase, Metadata } from "@memberjunction/core";
 import { MJUserRoleEntity } from "@memberjunction/core-entities";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
@@ -55,7 +55,7 @@ export class AssignUserRolesAction extends BaseAction {
                 };
             }
 
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
 
             // Validate user exists - check UserCache first
             // For newly created users, the cache might not be updated yet
@@ -79,34 +79,42 @@ export class AssignUserRolesAction extends BaseAction {
                 };
             }
 
-            // Process each role
+            // Separate roles that need to be assigned from those already present
+            const rolesToAssign = foundRoles.filter(role =>
+                !existingRoleIDs.some(id => UUIDsEqual(id, role.ID))
+            );
+            const skippedRoles = foundRoles
+                .filter(role => existingRoleIDs.some(id => UUIDsEqual(id, role.ID)))
+                .map(role => role.Name);
+
+            // Assign all roles atomically — any failure rolls back the whole batch
             const assignedRoles: { roleID: string, roleName: string, userRoleID: string }[] = [];
-            const skippedRoles: string[] = [];
             const errors: string[] = [];
 
-            for (const role of foundRoles) {
-                if (existingRoleIDs.some(id => UUIDsEqual(id, role.ID))) {
-                    skippedRoles.push(role.Name);
-                    continue;
-                }
-
+            if (rolesToAssign.length > 0) {
+                const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;
+                await provider.BeginTransaction();
                 try {
-                    // Create UserRole entity
-                    const userRole = await md.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', params.ContextUser);
-                    userRole.UserID = userID;
-                    userRole.RoleID = role.ID;
+                    for (const role of rolesToAssign) {
+                        const userRole = await md.GetEntityObject<MJUserRoleEntity>('MJ: User Roles', params.ContextUser);
+                        userRole.UserID = userID;
+                        userRole.RoleID = role.ID;
 
-                    if (await userRole.Save()) {
+                        if (!await userRole.Save()) {
+                            throw new Error(`Failed to assign role '${role.Name}': ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                        }
                         assignedRoles.push({
                             roleID: role.ID,
                             roleName: role.Name,
                             userRoleID: userRole.ID
                         });
-                    } else {
-                        errors.push(`Failed to assign role '${role.Name}'`);
                     }
+                    await provider.CommitTransaction();
                 } catch (e) {
-                    errors.push(`Error assigning role '${role.Name}': ${e.message}`);
+                    await provider.RollbackTransaction();
+                    // Roll back the in-memory tracking too, since none of them persisted
+                    assignedRoles.length = 0;
+                    errors.push(e instanceof Error ? e.message : String(e));
                 }
             }
 
@@ -144,9 +152,11 @@ export class AssignUserRolesAction extends BaseAction {
                 Type: 'Output'
             });
 
+            // With atomic TG, any error means zero roles were persisted — it's a full failure, not partial.
+            const hasErrors = errors.length > 0;
             return {
-                Success: errors.length === 0 && (assignedRoles.length > 0 || skippedRoles.length > 0),
-                ResultCode: errors.length > 0 ? 'PARTIAL_SUCCESS' : 'SUCCESS',
+                Success: !hasErrors && (assignedRoles.length > 0 || skippedRoles.length > 0),
+                ResultCode: hasErrors ? 'FAILED' : 'SUCCESS',
                 Message: message.trim(),
                 Params: params.Params
             };

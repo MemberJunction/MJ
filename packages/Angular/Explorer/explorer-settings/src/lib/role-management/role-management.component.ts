@@ -5,6 +5,7 @@ import { RunView, Metadata } from '@memberjunction/core';
 import { ResourceData, MJRoleEntity } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
 
 interface RoleStats {
@@ -56,15 +57,13 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
-  public showMobileFilters = false;
   public expandedRoleId: string | null = null;
 
   // Role permissions (simplified view)
   public rolePermissions: Map<string, string[]> = new Map();
 
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
@@ -110,7 +109,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async loadRoles(): Promise<MJRoleEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJRoleEntity>({
       EntityName: 'MJ: Roles',
       ResultType: 'entity_object',
@@ -174,11 +173,6 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ search: value });
-  }
-  
   public onTypeFilterChange(type: 'all' | 'system' | 'custom'): void {
     this.updateFilter({ type });
   }
@@ -188,6 +182,64 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips) apply immediately. Text search still goes
+    // through the 300ms debounce in setupFilterSubscription.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
+  }
+
+  // -- Concise chrome: one Filter popover (Type) + applied-filter chips -------
+
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'type',
+        type: 'chips',
+        label: 'Type',
+        chipOptions: [
+          { text: 'All', value: 'all' },
+          { text: 'System', value: 'system' },
+          { text: 'Custom', value: 'custom' },
+        ],
+      },
+    ];
+  }
+
+  public get filterValues(): Record<string, unknown> {
+    return { type: this.filters$.value.type };
+  }
+
+  /** Total active filters (Type) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    return this.filters$.value.type !== 'all' ? 1 : 0;
+  }
+
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    if ('type' in values) {
+      this.updateFilter({ type: (values['type'] as FilterOptions['type']) || 'all' });
+    }
+  }
+
+  /** Clear all filters (Type); search persists. */
+  public clearAllAppliedFilters(): void {
+    this.updateFilter({ type: 'all' });
+  }
+
+  /** True when search and/or panel filters are narrowing the list — gates the
+   *  no-results empty-state "Reset filters" CTA. */
+  public get IsListNarrowed(): boolean {
+    return this.filters$.value.search !== '' || this.TotalActiveFilterCount > 0;
+  }
+
+  /** Reset everything narrowing the list (search + Type) and refresh
+   *  immediately. Wired to the no-results empty-state CTA. Unlike
+   *  clearAllAppliedFilters(), this also clears the search box. */
+  public resetAllFiltersAndSearch(): void {
+    this.filters$.next({ type: 'all', search: '' });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
   
   public toggleRoleExpansion(roleId: string): void {

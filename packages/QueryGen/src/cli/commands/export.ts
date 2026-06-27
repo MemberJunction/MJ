@@ -11,9 +11,9 @@ import ora from 'ora';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { Metadata, UserInfo } from '@memberjunction/core';
 import { getSystemUser } from '../../utils/user-helpers';
-import { MJQueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
 import { extractErrorMessage } from '../../utils/error-handlers';
 import { QueryMetadataRecord } from '../../data/schema';
 
@@ -35,14 +35,14 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
     // 2. Verify database connection and load metadata
     spinner.text = 'Loading metadata...';
     // Assume provider is already configured by the calling application
-    if (!Metadata.Provider) {
+    if (!Metadata.Provider) { // global-provider-ok: CLI tool, single-provider context
       throw new Error('Metadata provider not configured. Please ensure database connection is set up before running CLI.');
     }
     spinner.succeed('Metadata loaded');
 
     // 3. Load queries from database
     spinner.start('Loading queries from database...');
-    const queries = await loadQueriesFromDatabase(contextUser);
+    const queries = loadQueriesFromDatabase(contextUser);
     spinner.succeed(chalk.green(`Found ${queries.length} queries`));
 
     // 4. Create output directory if it doesn't exist
@@ -115,25 +115,10 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
 }
 
 /**
- * Load all queries from the database
+ * Load all queries from QueryEngine's cache (already sorted by Name via BaseEngine)
  */
-async function loadQueriesFromDatabase(contextUser: UserInfo): Promise<MJQueryEntity[]> {
-  const rv = new RunView();
-  const result = await rv.RunView<MJQueryEntity>(
-    {
-      EntityName: 'MJ: Queries',
-      ExtraFilter: '',
-      OrderBy: 'Name',
-      ResultType: 'entity_object',
-    },
-    contextUser
-  );
-
-  if (!result.Success) {
-    throw new Error(`Failed to load queries: ${result.ErrorMessage}`);
-  }
-
-  return result.Results || [];
+function loadQueriesFromDatabase(_contextUser: UserInfo): MJQueryEntity[] {
+  return [...QueryEngine.Instance.Queries].sort((a, b) => a.Name.localeCompare(b.Name));
 }
 
 /**

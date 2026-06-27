@@ -11,10 +11,18 @@ import { SectionLoaderComponent } from './lib/section-loader-component';
 import { ExplorerEntityDataGridComponent } from './lib/explorer-entity-data-grid.component';
 import { MjIsaRelatedCardComponent } from './lib/isa-related-panel/isa-related-card.component';
 import { MjIsaRelatedPanelComponent } from './lib/isa-related-panel/isa-related-panel.component';
+import { FormPanelSlotComponent } from './lib/panel-slot/form-panel-slot.component';
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { RecordTagsModule } from '@memberjunction/ng-record-tags';
+import { MJReactModule } from '@memberjunction/ng-react';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
+import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
+import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -45,15 +53,24 @@ import { RecordTagsModule } from '@memberjunction/ng-record-tags';
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent,
     MjIsaRelatedCardComponent,
-    MjIsaRelatedPanelComponent
+    MjIsaRelatedPanelComponent,
+    FormPanelSlotComponent,
+    InteractiveFormComponent,
+    MjEntityFormHostComponent
   ],
   imports: [
     CommonModule,
     FormsModule,
+    MJEmptyStateComponent,
     RecordChangesModule,
     ListManagementModule,
     EntityViewerModule,
-    RecordTagsModule
+    RecordTagsModule,
+    MJReactModule,
+    MarkdownModule,
+    CodeEditorModule,
+    MJSafeRichHtmlPipe,
+    SharedGenericModule
   ],
   exports: [
     MjFormToolbarComponent,
@@ -64,7 +81,10 @@ import { RecordTagsModule } from '@memberjunction/ng-record-tags';
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent,
     MjIsaRelatedCardComponent,
-    MjIsaRelatedPanelComponent
+    MjIsaRelatedPanelComponent,
+    FormPanelSlotComponent,
+    InteractiveFormComponent,
+    MjEntityFormHostComponent
   ]
 })
 export class BaseFormsModule { }

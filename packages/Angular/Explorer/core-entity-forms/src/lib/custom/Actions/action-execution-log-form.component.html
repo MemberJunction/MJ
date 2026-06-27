@@ -103,84 +103,194 @@
                         </div>
                 </mj-accordion-panel>
 
-                <!-- Input Parameters Only -->
-                @if (hasInputParams && formattedInputParams) {
-                    <mj-accordion-panel [Expanded]="expandedSections.inputParams">
+                <!-- Unified Parameters section -->
+                @if (hasAnyParameters) {
+                    <mj-accordion-panel [Expanded]="true">
                         <ng-template mjAccordionTitle>
-                          <i class="fas fa-sign-in-alt"></i> Input Parameters
+                          <i class="fas fa-sliders-h"></i>
+                          Parameters
+                          <span class="param-count-pill">{{ paramCounts.All }}</span>
                         </ng-template>
-                            <div class="json-viewer">
-                                <div class="json-toolbar">
-                                    <span class="json-label">JSON (Input Parameters Only)</span>
-                                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedInputParams)">
-                                        <i class="fas fa-copy"></i>
+                        <div class="params-panel">
+                            <!-- Toolbar: filter chips, search, sort, raw toggle -->
+                            <div class="params-toolbar">
+                                <div class="filter-chips">
+                                    <button
+                                        type="button"
+                                        class="chip"
+                                        [class.active]="typeFilter === 'All'"
+                                        (click)="setTypeFilter('All')">
+                                        All <span class="chip-count">{{ paramCounts.All }}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="chip chip-input"
+                                        [class.active]="typeFilter === 'Input'"
+                                        [disabled]="paramCounts.Input === 0"
+                                        (click)="setTypeFilter('Input')">
+                                        <i class="fas fa-sign-in-alt"></i>
+                                        Input <span class="chip-count">{{ paramCounts.Input }}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="chip chip-both"
+                                        [class.active]="typeFilter === 'Both'"
+                                        [disabled]="paramCounts.Both === 0"
+                                        (click)="setTypeFilter('Both')">
+                                        <i class="fas fa-exchange-alt"></i>
+                                        In/Out <span class="chip-count">{{ paramCounts.Both }}</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="chip chip-output"
+                                        [class.active]="typeFilter === 'Output'"
+                                        [disabled]="paramCounts.Output === 0"
+                                        (click)="setTypeFilter('Output')">
+                                        <i class="fas fa-sign-out-alt"></i>
+                                        Output <span class="chip-count">{{ paramCounts.Output }}</span>
                                     </button>
                                 </div>
-                                <mj-code-editor 
-                                    [(ngModel)]="formattedInputParams"
-                                    name="formattedInputParams"
-                                    [readonly]="true"
-                                    [language]="'json'"
-                                    [lineWrapping]="true"
-                                    style="height: 300px; width: 100%;">
-                                </mj-code-editor>
-                            </div>
-                    </mj-accordion-panel>
-                }
 
-                <!-- Output Parameters Only -->
-                @if (hasOutputParams && formattedOutputParams) {
-                    <mj-accordion-panel [Expanded]="expandedSections.outputParams">
-                        <ng-template mjAccordionTitle>
-                          <i class="fas fa-sign-out-alt"></i> Output Parameters
-                        </ng-template>
-                            <div class="json-viewer">
-                                <div class="json-toolbar">
-                                    <span class="json-label">JSON (Output Parameters Only)</span>
-                                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedOutputParams)">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
-                                </div>
-                                <mj-code-editor 
-                                    [(ngModel)]="formattedOutputParams"
-                                    name="formattedOutputParams"
-                                    [readonly]="true"
-                                    [language]="'json'"
-                                    [lineWrapping]="true"
-                                    style="height: 300px; width: 100%;">
-                                </mj-code-editor>
-                            </div>
-                    </mj-accordion-panel>
-                }
+                                <div class="toolbar-right">
+                                    <div class="search-wrapper">
+                                        <i class="fas fa-search search-icon"></i>
+                                        <input
+                                            type="text"
+                                            class="mj-input params-search"
+                                            placeholder="Search name or value…"
+                                            [(ngModel)]="searchText"
+                                            name="paramSearch" />
+                                        @if (searchText) {
+                                            <button type="button" class="search-clear" (click)="searchText = ''" title="Clear search">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        }
+                                    </div>
 
-                <!-- Input+Output Parameters -->
-                @if (hasBothParams && formattedBothParams) {
-                    <mj-accordion-panel [Expanded]="expandedSections.bothParams">
-                        <ng-template mjAccordionTitle>
-                          <i class="fas fa-exchange-alt"></i> Input+Output Parameters
-                        </ng-template>
-                            <div class="json-viewer">
-                                <div class="json-toolbar">
-                                    <span class="json-label">JSON (Input+Output Parameters)</span>
-                                    <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedBothParams)">
-                                        <i class="fas fa-copy"></i>
+                                    <div class="sort-group" role="group" aria-label="Sort parameters">
+                                        <button
+                                            type="button"
+                                            class="sort-btn"
+                                            [class.active]="sortKey === 'type'"
+                                            (click)="toggleSort('type')"
+                                            title="Sort by type">
+                                            Type
+                                            @if (sortKey === 'type') {
+                                                <i class="fas" [ngClass]="sortDir === 'asc' ? 'fa-arrow-down-short-wide' : 'fa-arrow-up-wide-short'"></i>
+                                            }
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="sort-btn"
+                                            [class.active]="sortKey === 'name'"
+                                            (click)="toggleSort('name')"
+                                            title="Sort by name">
+                                            Name
+                                            @if (sortKey === 'name') {
+                                                <i class="fas" [ngClass]="sortDir === 'asc' ? 'fa-arrow-down-a-z' : 'fa-arrow-up-z-a'"></i>
+                                            }
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        class="raw-toggle"
+                                        [class.active]="showRawJson"
+                                        (click)="toggleRawJson()"
+                                        title="Toggle raw JSON view">
+                                        <i class="fas fa-code"></i>
+                                        Raw
                                     </button>
                                 </div>
-                                <mj-code-editor 
-                                    [(ngModel)]="formattedBothParams"
-                                    name="formattedBothParams"
-                                    [readonly]="true"
-                                    [language]="'json'"
-                                    [lineWrapping]="true"
-                                    style="height: 300px; width: 100%;">
-                                </mj-code-editor>
                             </div>
+
+                            @if (showRawJson) {
+                                <div class="json-viewer raw-json-viewer">
+                                    <div class="json-toolbar">
+                                        <span class="json-label">Raw JSON</span>
+                                        <button class="btn-icon" title="Copy JSON" (click)="copyToClipboard(formattedParams)">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </div>
+                                    <mj-code-editor
+                                        [(ngModel)]="formattedParams"
+                                        name="formattedParamsRaw"
+                                        [readonly]="true"
+                                        [language]="'json'"
+                                        [lineWrapping]="true"
+                                        style="height: 360px; width: 100%;">
+                                    </mj-code-editor>
+                                </div>
+                            } @else {
+                                <!-- Rich param list -->
+                                @if (filteredParameters.length === 0) {
+                                    <mj-empty-state
+                                        Variant="no-results"
+                                        Size="compact"
+                                        Icon="fa-solid fa-filter-circle-xmark"
+                                        Title="No parameters match the current filter."
+                                        ActionText="Clear filters"
+                                        ActionIcon="fa-solid fa-rotate-left"
+                                        ActionVariant="flat"
+                                        (Action)="clearFilters()" />
+                                } @else {
+                                    <ul class="params-list">
+                                        @for (p of filteredParameters; track trackParam($index, p)) {
+                                            <li class="param-row" [attr.data-type]="p.Type">
+                                                <div class="param-header">
+                                                    <span class="type-badge" [attr.data-type]="p.Type">
+                                                        @if (p.Type === 'Input') {
+                                                            <i class="fas fa-sign-in-alt"></i>
+                                                        } @else if (p.Type === 'Output') {
+                                                            <i class="fas fa-sign-out-alt"></i>
+                                                        } @else {
+                                                            <i class="fas fa-exchange-alt"></i>
+                                                        }
+                                                        {{ getTypeLabel(p.Type) }}
+                                                    </span>
+                                                    <div class="param-name-wrap">
+                                                        <span class="param-name">{{ p.Name }}</span>
+                                                        <span class="value-kind-chip" [attr.data-kind]="p.ValueKind">
+                                                            <i class="fas" [ngClass]="getValueKindIcon(p.ValueKind)"></i>
+                                                            {{ p.ValueKind }}
+                                                        </span>
+                                                    </div>
+                                                    <div class="param-actions">
+                                                        @if (p.IsExpandable) {
+                                                            <button type="button" class="btn-icon param-expand" [class.is-expanded]="p.Expanded" (click)="toggleExpanded(p)" [title]="p.Expanded ? 'Collapse' : 'Expand'">
+                                                                <i class="fas" [ngClass]="p.Expanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+                                                            </button>
+                                                        }
+                                                        <button type="button" class="btn-icon" (click)="copyParamValue(p)" title="Copy value">
+                                                            <i class="fas fa-copy"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div class="param-preview" [attr.data-kind]="p.ValueKind">{{ p.Preview }}</div>
+                                                @if (p.IsExpandable && p.Expanded) {
+                                                    <div class="param-expanded">
+                                                        <mj-code-editor
+                                                            [(ngModel)]="p.FormattedValue"
+                                                            [name]="'param-' + p.Name"
+                                                            [readonly]="true"
+                                                            [language]="'json'"
+                                                            [lineWrapping]="true"
+                                                            style="height: 240px; width: 100%;">
+                                                        </mj-code-editor>
+                                                    </div>
+                                                }
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            }
+                        </div>
                     </mj-accordion-panel>
                 }
 
                 <!-- Output Message -->
                 @if (record.Message) {
-                    <mj-accordion-panel [Expanded]="expandedSections.output">
+                    <mj-accordion-panel [Expanded]="true">
                         <ng-template mjAccordionTitle>
                           <i class="fas fa-comment-alt"></i> Output Message
                         </ng-template>
@@ -204,15 +314,15 @@
                 }
 
                 <!-- Empty States for missing data -->
-                @if (!record.Params && !record.Message && !hasInputParams && !hasOutputParams && !hasBothParams) {
+                @if (!record.Params && !record.Message && !hasAnyParameters) {
                     <mj-accordion-panel [Expanded]="true">
                         <ng-template mjAccordionTitle>
                           <i class="fas fa-database"></i> Execution Data
                         </ng-template>
-                            <div class="empty-state">
-                                <i class="fas fa-inbox"></i>
-                                <p>No execution data recorded</p>
-                            </div>
+                            <mj-empty-state
+                                Size="compact"
+                                Icon="fa-solid fa-inbox"
+                                Title="No execution data recorded" />
                     </mj-accordion-panel>
                 }
             </div>

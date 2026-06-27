@@ -1,4 +1,4 @@
-import { EntityInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
@@ -9,6 +9,8 @@ import { EntityOperations, OperationResult } from './EntityOperations.js';
 import { AgentOperations } from './AgentOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { ShutdownRegistry } from "@memberjunction/global";
+import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -33,40 +35,8 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// A2A Server Classes and Types
-type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
-
-interface Task {
-    id: string;
-    status: TaskStatus;
-    messages: Message[];
-    artifacts: Artifact[];
-    created: Date;
-    updated: Date;
-}
-
-interface Message {
-    id: string;
-    taskId: string;
-    role: 'user' | 'agent';
-    parts: Part[];
-    created: Date;
-}
-
-interface Part {
-    id: string;
-    type: 'text' | 'file' | 'data';
-    content: string | object;
-    metadata?: object;
-}
-
-interface Artifact {
-    id: string;
-    taskId: string;
-    name: string;
-    parts: Part[];
-    created: Date;
-}
+// A2A Server Classes and Types — `TaskStatus`, `Task`, `Message`, `Part`, `Artifact`
+// are imported from `./TaskStore.js` (extracted for testability).
 
 interface AgentCard {
     name: string;
@@ -96,8 +66,15 @@ interface AgentCard {
     };
 }
 
-// In-memory storage for tasks (in production, this would use a database)
-const tasks = new Map<string, Task>();
+// In-memory storage for tasks. Bounded by the periodic sweep started below;
+// in production you'd swap in a database-backed store. See `./TaskStore.ts`
+// for the implementation; the module-level `tasks` reference is kept for
+// drop-in compatibility with the rest of this file (which uses `tasks.set`
+// / `tasks.get` directly).
+const taskStore = new TaskStore();
+taskStore.Start();
+ShutdownRegistry.Instance.Register(taskStore);
+const tasks = taskStore;
 
 // Express application
 const app = express();
@@ -374,9 +351,22 @@ function setupRoutes() {
     });
 }
 
+/**
+ * Resolve the metadata provider for the current request.
+ *
+ * A2AServer doesn't yet expose a per-request `AppContext.providers` array — every request
+ * currently shares the process-global provider. When per-request provider plumbing lands,
+ * change THIS function to read from the request, and every downstream operation is
+ * automatically multi-tenant correct (because EntityOperations / AgentOperations and
+ * generateAgentCard already accept an injected provider).
+ */
+function resolveProviderForRequest(): IMetadataProvider {
+    return Metadata.Provider; // global-provider-ok: A2A server lacks per-request provider plumbing today; centralized boundary so future migration is one-line
+}
+
 async function generateAgentCard(): Promise<AgentCard> {
     const contextUser = UserCache.Instance.Users[0];
-    const md = new Metadata();
+    const md = resolveProviderForRequest();
     const entityCapabilities = getEntityCapabilities(md.Entities, contextUser);
     const agentCapabilities = await getAgentCapabilities(contextUser);
 
@@ -695,9 +685,12 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             throw new Error("No user context available for processing task");
         }
 
-        // Initialize operations handlers with the authenticated user
-        const entityOps = new EntityOperations();
-        const agentOps = new AgentOperations(contextUser);
+        // Initialize operations handlers with the authenticated user and the request's
+        // metadata provider so every downstream entity operation routes through the right
+        // connection (see resolveProviderForRequest for the multi-tenant migration plan).
+        const provider = resolveProviderForRequest();
+        const entityOps = new EntityOperations(provider);
+        const agentOps = new AgentOperations(contextUser, provider);
 
         // Extract text content and parse operation
         const textParts = lastMessage.parts.filter(p => p.type === 'text');

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '../sql-parser.js';
-const mjAstify = SQLParser.Astify.bind(SQLParser);
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+const tsqlDialect = new SQLServerDialect();
+const mjAstify = (sql: string) => SQLParser.Astify(sql, tsqlDialect);
 const mjSqlify = SQLParser.Sqlify.bind(SQLParser);
 const extractTemplateExpressions = SQLParser.ExtractTemplateExpressions.bind(SQLParser);
 const extractCompositionRefs = SQLParser.ExtractCompositionRefs.bind(SQLParser);
@@ -380,13 +382,128 @@ describe('extractParameterInfo', () => {
         expect(typeMap['g']).toBe('string');
         expect(typeMap['h']).toBe('unknown');
     });
+
+    describe('default values from {% else %} branches', () => {
+        it('should extract string default from else branch', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Status and Status.length > 0 %}
+  AND t.Status IN {{ Status | sqlIn }}
+{% else %}
+  AND t.Status = 'Attended'
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const status = params.find(p => p.name === 'Status');
+            expect(status).toBeDefined();
+            expect(status!.type).toBe('array');
+            expect(status!.defaultValue).toBe('Attended');
+        });
+
+        it('should extract numeric default from else branch', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Limit %}
+  AND t.Limit = {{ Limit | sqlNumber }}
+{% else %}
+  AND t.Limit = 100
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const limit = params.find(p => p.name === 'Limit');
+            expect(limit).toBeDefined();
+            expect(limit!.defaultValue).toBe(100);
+        });
+
+        it('should not override default from | default() filter', () => {
+            const sql = `SELECT * FROM t
+{% if Limit %}
+  WHERE t.Limit = {{ Limit | default(50) | sqlNumber }}
+{% else %}
+  WHERE t.Limit = 100
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const limit = params.find(p => p.name === 'Limit');
+            expect(limit).toBeDefined();
+            expect(limit!.defaultValue).toBe(50); // filter default takes precedence
+        });
+
+        it('should skip else branch with multiple literals (ambiguous)', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Region %}
+  AND t.Region = {{ Region | sqlString }}
+{% else %}
+  AND t.Region = 'US' AND t.SubRegion = 'West'
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const region = params.find(p => p.name === 'Region');
+            expect(region).toBeDefined();
+            expect(region!.defaultValue).toBeNull(); // ambiguous — two literals
+        });
+
+        it('should handle if/elif/else with default on else', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Priority %}
+  AND t.Priority = {{ Priority | sqlNumber }}
+{% elif Category %}
+  AND t.Category = {{ Category | sqlString }}
+{% else %}
+  AND t.Priority = 1
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const priority = params.find(p => p.name === 'Priority');
+            expect(priority).toBeDefined();
+            expect(priority!.defaultValue).toBe(1);
+        });
+
+        it('should not set default when there is no else branch', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Region %}
+  AND t.Region = {{ Region | sqlString }}
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const region = params.find(p => p.name === 'Region');
+            expect(region).toBeDefined();
+            expect(region!.defaultValue).toBeNull();
+        });
+
+        it('should handle the Member Event Attendance History pattern', () => {
+            const sql = `SELECT er.ID, er.MemberID, e.Name
+FROM vwEventRegistrations er
+INNER JOIN vwEvents e ON er.EventID = e.ID
+WHERE 1=1
+{% if MemberID and MemberID.length > 0 %}
+  AND CAST(er.MemberID AS NVARCHAR(36)) IN {{ MemberID | sqlIn }}
+{% endif %}
+{% if Status and Status.length > 0 %}
+  AND er.Status IN {{ Status | sqlIn }}
+{% else %}
+  AND er.Status = 'Attended'
+{% endif %}
+{% if StartDate and StartDate.length > 0 %}
+  AND e.StartDate >= {{ StartDate | sqlDate }}
+{% endif %}
+ORDER BY e.StartDate DESC`;
+            const params = extractParameterInfo(sql);
+
+            const memberID = params.find(p => p.name === 'MemberID');
+            expect(memberID).toBeDefined();
+            expect(memberID!.type).toBe('array');
+            expect(memberID!.defaultValue).toBeNull(); // no else branch
+
+            const status = params.find(p => p.name === 'Status');
+            expect(status).toBeDefined();
+            expect(status!.type).toBe('array');
+            expect(status!.defaultValue).toBe('Attended');
+
+            const startDate = params.find(p => p.name === 'StartDate');
+            expect(startDate).toBeDefined();
+            expect(startDate!.defaultValue).toBeNull(); // no else branch
+        });
+    });
 });
 
 // ═══════════════════════════════════════════════════
 // ExtractSelectColumns, RenameTemplateVariable, SubstituteTemplateVariable
 // ═══════════════════════════════════════════════════
 
-const extractSelectColumns = SQLParser.ExtractSelectColumns.bind(SQLParser);
+const extractSelectColumns = (sql: string) => SQLParser.ExtractSelectColumns(sql, tsqlDialect);
 const renameTemplateVariable = SQLParser.RenameTemplateVariable.bind(SQLParser);
 const substituteTemplateVariable = SQLParser.SubstituteTemplateVariable.bind(SQLParser);
 

@@ -1,0 +1,123 @@
+<div class="mj-inspector mj-inspector--solo">
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Class registry inspector"
+        Title="Class Registry"
+        Subtitle="Every class registered with @RegisterClass">
+        <div actions>
+            <button mjButton variant="secondary" size="sm" (click)="ExpandAll()" title="Expand all groups">
+                <i class="fa-solid fa-expand" aria-hidden="true"></i> <span class="mj-action-label">Expand</span>
+            </button>
+            <button mjButton variant="secondary" size="sm" (click)="CollapseAll()" title="Collapse all groups">
+                <i class="fa-solid fa-compress" aria-hidden="true"></i> <span class="mj-action-label">Collapse</span>
+            </button>
+            <mj-refresh-button [Loading]="false" (Clicked)="refresh()"></mj-refresh-button>
+            <button mjButton
+                    [variant]="CopyConfirmed ? 'success' : 'secondary'"
+                    size="sm"
+                    (click)="OnCopy()"
+                    [title]="CopyConfirmed ? 'Copied' : 'Copy as JSON'">
+                <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed" aria-hidden="true"></i>
+                <span class="mj-action-label">{{ CopyConfirmed ? 'Copied' : 'Copy' }}</span>
+            </button>
+        </div>
+    </mj-page-header-interior>
+
+    <div class="cr-stats-row">
+        <div class="cr-stat">
+            <div class="cr-stat__value">{{ Stats.total }}</div>
+            <div class="cr-stat__label">Total registrations</div>
+        </div>
+        <div class="cr-stat">
+            <div class="cr-stat__value">{{ Stats.baseClasses }}</div>
+            <div class="cr-stat__label">Base classes</div>
+        </div>
+        <div class="cr-stat" [class.cr-stat--warn]="Stats.withOverrides > 0">
+            <div class="cr-stat__value">{{ Stats.withOverrides }}</div>
+            <div class="cr-stat__label">With overrides</div>
+        </div>
+        <div class="cr-stat cr-stat--inline">
+            <div class="cr-search-wrap">
+                <i class="fa-solid fa-search cr-search-icon"></i>
+                <input type="search"
+                       class="cr-search"
+                       placeholder="Search base class, subclass, or key…"
+                       [value]="SearchQuery"
+                       (input)="OnSearchChange($any($event.target).value)" />
+                @if (SearchQuery) {
+                    <button class="cr-search-clear" (click)="OnSearchChange('')" title="Clear">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="cr-groups">
+        @for (group of FilteredGroups; track TrackByBase($index, group)) {
+            <div class="cr-group" [class.cr-group--expanded]="group.expanded">
+                <button type="button" class="cr-group-head" (click)="ToggleGroup(group)">
+                    <i class="fa-solid fa-chevron-right cr-group-chev"
+                       [class.cr-group-chev--down]="group.expanded"></i>
+                    <span class="cr-group-name">{{ group.baseClassName }}</span>
+                    <span class="cr-group-meta">
+                        <span class="cr-pill cr-pill--neutral">{{ group.count }}</span>
+                        @if (group.uniqueKeys !== group.count) {
+                            <span class="cr-pill cr-pill--info">{{ group.uniqueKeys }} keys</span>
+                        }
+                        @if (group.hasOverrides) {
+                            <span class="cr-pill cr-pill--warn">
+                                <i class="fa-solid fa-bolt"></i> overrides
+                            </span>
+                        }
+                    </span>
+                </button>
+                @if (group.expanded) {
+                    <table class="cr-table">
+                        <thead>
+                            <tr>
+                                <th class="cr-th-key">Key</th>
+                                <th class="cr-th-class">Subclass</th>
+                                <th class="cr-th-prio">Priority</th>
+                                <th class="cr-th-status"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (reg of group.registrations; track TrackByReg($index, reg)) {
+                                <tr [class.cr-row--conflict]="IsConflictRow(group, reg)"
+                                    [class.cr-row--winning]="IsWinningRow(group, reg)">
+                                    <td class="cr-td-key">
+                                        @if (reg.Key) {
+                                            <code>{{ reg.Key }}</code>
+                                        } @else {
+                                            <span class="cr-td-empty">(no key)</span>
+                                        }
+                                    </td>
+                                    <td class="cr-td-class">{{ reg.SubClass.name || '(anonymous)' }}</td>
+                                    <td class="cr-td-prio">{{ reg.Priority }}</td>
+                                    <td class="cr-td-status">
+                                        @if (IsWinningRow(group, reg)) {
+                                            <span class="cr-status cr-status--win" title="Highest priority among same-key registrations">
+                                                <i class="fa-solid fa-crown"></i> winner
+                                            </span>
+                                        } @else if (IsConflictRow(group, reg)) {
+                                            <span class="cr-status cr-status--shadowed" title="Outranked by another registration with the same key">
+                                                shadowed
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+        @if (FilteredGroups.length === 0) {
+            <mj-empty-state class="cr-empty" Variant="no-results" Icon="fa-solid fa-magnifying-glass"
+                [Title]="'No registrations match “' + SearchQuery + '”'" />
+        }
+    </div>
+
+    <div class="mj-inspector__footer-meta">Refreshed {{ LastRefreshedLabel }}</div>
+</div>

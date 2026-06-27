@@ -1,6 +1,7 @@
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { ResourceData } from '@memberjunction/core-entities';
 import { IRunViewProvider, RunView } from '@memberjunction/core';
 import {
@@ -64,10 +65,10 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
 
   StatusOptions: StatusFilterType[] = ['All', 'Success', 'Failed', 'In Progress', 'Pending'];
   DateOptions: { Value: DateFilterType; Label: string }[] = [
+    { Value: 'all', Label: 'All' },
     { Value: 'today', Label: 'Today' },
     { Value: '7d', Label: '7 Days' },
-    { Value: '30d', Label: '30 Days' },
-    { Value: 'all', Label: 'All' }
+    { Value: '30d', Label: '30 Days' }
   ];
 
   private dataService = inject(IntegrationDataService);
@@ -75,6 +76,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     await this.LoadData();
     this.NotifyLoadComplete();
   }
@@ -239,6 +241,79 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
 
   OnSearchChange(): void {
     this.ApplyFilters();
+  }
+
+  /** Bridge for <mj-page-search> which emits a plain string. */
+  OnSearchValueChange(value: string): void {
+    this.SearchQuery = value;
+    this.ApplyFilters();
+  }
+
+  // ---- Integration filter popover wiring ---------------------------------
+
+  get ActivityFilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'dateRange',
+        type: 'chips',
+        label: 'Date range',
+        chipOptions: this.DateOptions.map(d => ({ text: d.Label, value: d.Value })),
+      },
+      {
+        key: 'status',
+        type: 'chips',
+        label: 'Status',
+        chipOptions: this.StatusOptions.map(s => ({ text: s, value: s })),
+      },
+      {
+        key: 'integration',
+        type: 'dropdown',
+        label: 'Integration',
+        icon: 'fa-solid fa-plug',
+        placeholder: 'All Integrations',
+        filterable: this.Integrations.length > 10,
+        options: [
+          { text: 'All Integrations', value: '' },
+          ...this.Integrations.map(i => ({ text: i.Name, value: i.ID })),
+        ],
+      },
+    ];
+  }
+
+  get ActivityFilterValues(): Record<string, unknown> {
+    return {
+      dateRange: this.DateFilter,
+      status: this.StatusFilter,
+      integration: this.IntegrationFilter ?? ''
+    };
+  }
+
+  get ActiveFilterCount(): number {
+    let count = 0;
+    if (this.DateFilter !== '7d') count++;
+    if (this.StatusFilter !== 'All') count++;
+    if (this.IntegrationFilter) count++;
+    return count;
+  }
+
+  OnFilterValuesChange(values: Record<string, unknown>): void {
+    const next = (values ?? {}) as { dateRange?: string; status?: string; integration?: string };
+    if (next.dateRange && next.dateRange !== this.DateFilter) {
+      this.SetDateFilter(next.dateRange as DateFilterType);
+    }
+    if (next.status && next.status !== this.StatusFilter) {
+      this.SetStatusFilter(next.status as StatusFilterType);
+    }
+    const integ = next.integration ?? '';
+    if ((integ || null) !== this.IntegrationFilter) {
+      this.SetIntegrationFilter(integ || null);
+    }
+  }
+
+  ResetIntegrationFilter(): void {
+    if (this.DateFilter !== '7d') this.SetDateFilter('7d');
+    if (this.StatusFilter !== 'All') this.SetStatusFilter('All');
+    if (this.IntegrationFilter) this.SetIntegrationFilter(null);
   }
 
   async Refresh(): Promise<void> {

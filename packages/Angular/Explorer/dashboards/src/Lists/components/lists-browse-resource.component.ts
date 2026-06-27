@@ -1,13 +1,16 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef, HostListener } from '@angular/core';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
-import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { MJListEntity, MJListDetailEntity, MJUserFavoriteEntity } from '@memberjunction/core-entities';
+import { BaseEntity, BaseEntityEvent, Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
+import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -31,101 +34,72 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
   standalone: false,
   selector: 'mj-lists-browse-resource',
   template: `
-    <div class="lists-browse-container">
-      <!-- Header -->
-      <div class="browse-header">
-        <div class="header-row">
-          <div class="header-title">
-            <i class="fa-solid fa-list-check"></i>
-            <h2>Lists</h2>
-          </div>
-          <button class="btn-create" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New List</span>
+    <mj-page-layout>
+      <mj-page-header Title="Lists" Icon="fa-solid fa-list-check">
+        <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
+        <div meta>
+          <mj-stat-badge
+            [Count]="filteredLists.length"
+            [Total]="allLists.length"
+            Label="lists">
+          </mj-stat-badge>
+        </div>
+        <div actions>
+          <!-- Single primary CTA; all filters live behind the Filter button in
+               the control bar below (concise chrome). -->
+          <button mjButton variant="primary" size="sm" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i> <span class="action-btn-label">New List</span>
           </button>
         </div>
-    
-        <div class="header-actions">
-          <div class="search-box">
-            <i class="fa-solid fa-search"></i>
-            <input
-              type="text"
-              placeholder="Search lists..."
-              [(ngModel)]="searchTerm"
-              (ngModelChange)="onSearchChange($event)" />
-            @if (searchTerm) {
-              <button class="clear-search" (click)="clearSearch()">
-                <i class="fa-solid fa-times"></i>
-              </button>
-            }
-          </div>
-    
-          <div class="filter-group">
-            <select
-              [(ngModel)]="selectedOwner"
-              (ngModelChange)="onOwnerFilterChange($event)"
-              class="filter-select"
-              title="Filter by owner">
-              @for (opt of ownerOptions; track opt) {
-                <option [value]="opt.value">{{opt.name}}</option>
-              }
-            </select>
-          </div>
-    
-          <div class="filter-group">
-            <select
-              [(ngModel)]="selectedEntity"
-              (ngModelChange)="onEntityFilterChange($event)"
-              class="filter-select"
-              title="Filter by entity">
-              @for (opt of entityOptions; track opt) {
-                <option [value]="opt.value">{{opt.name}}</option>
-              }
-            </select>
-          </div>
-    
-          <div class="view-toggle-group">
-            <button
-              class="view-toggle"
-              [class.active]="viewMode === 'table'"
-              (click)="setViewMode('table')"
-              title="Table view">
-              <i class="fa-solid fa-table-list"></i>
-            </button>
-            <button
-              class="view-toggle"
-              [class.active]="viewMode === 'card'"
-              (click)="setViewMode('card')"
-              title="Card view">
-              <i class="fa-solid fa-grip"></i>
-            </button>
-            <button
-              class="view-toggle"
-              [class.active]="viewMode === 'hierarchy'"
-              (click)="setViewMode('hierarchy')"
-              title="Category view">
-              <i class="fa-solid fa-folder-tree"></i>
-            </button>
-          </div>
+        <div toolbar>
+          <!-- Control bar: search · Filter · view. Owner, Entity and Favorites
+               all live behind the one Filter button; applied filters (including
+               tags) show as removable chips below. On mobile the popover docks
+               as a bottom sheet and the Filter button is icon-only. -->
+          <mj-page-search
+            Placeholder="Search lists..."
+            [Value]="searchTerm"
+            (ValueChange)="onSearchChange($event)">
+          </mj-page-search>
+          <mj-filter-popover
+            Label="Filters"
+            Icon="fa-solid fa-filter"
+            [ActiveCount]="TotalActiveFilterCount"
+            [ShowClearAll]="TotalActiveFilterCount > 0"
+            (ClearAllRequested)="clearAllAppliedFilters()">
+            <mj-filter-panel
+              [Fields]="listFilterFields"
+              [Values]="listFilterValues"
+              (ValuesChange)="onFilterValuesChange($event)"
+              (Reset)="resetPopoverFilters()">
+            </mj-filter-panel>
+          </mj-filter-popover>
+          <mj-view-toggle
+            [Options]="listViewOptions"
+            [ActiveKey]="viewMode"
+            (KeyChange)="setViewMode($any($event))">
+          </mj-view-toggle>
         </div>
-      </div>
-    
+      </mj-page-header>
+
+      <mj-page-body>
+
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
           <mj-loading text="Loading lists..." size="medium"></mj-loading>
         </div>
       }
-    
+
       <!-- Empty State - No Lists -->
       @if (!isLoading && allLists.length === 0) {
-        <div class="empty-state">
-          <div class="empty-state-icon-wrapper">
-            <div class="icon-bg"></div>
-            <i class="fa-solid fa-list-check"></i>
-          </div>
-          <h3>No Lists Yet</h3>
-          <p>Lists help you organize and track groups of records across your data.</p>
+        <mj-empty-state Size="large"
+          Icon="fa-solid fa-list-check"
+          Title="No Lists Yet"
+          Message="Lists help you organize and track groups of records across your data."
+          ActionText="Create Your First List"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="createNewList()">
           <div class="empty-state-features">
             <div class="feature-item">
               <i class="fa-solid fa-check-circle"></i>
@@ -140,24 +114,18 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
               <span>Quick access from any view</span>
             </div>
           </div>
-          <button class="btn-create-large" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            Create Your First List
-          </button>
-        </div>
+        </mj-empty-state>
       }
-    
+
       <!-- Empty State - No Results -->
       @if (!isLoading && allLists.length > 0 && filteredLists.length === 0) {
-        <div class="empty-state search-empty">
-          <div class="empty-state-icon-wrapper search">
-            <i class="fa-solid fa-filter-circle-xmark"></i>
-          </div>
-          <h3>No Results Found</h3>
-          <p>No lists match your current filters.</p>
-          <p class="empty-hint">Try adjusting your search or filters.</p>
-          <button class="btn-clear" (click)="clearFilters()">Clear All Filters</button>
-        </div>
+        <mj-empty-state Variant="no-results"
+          Icon="fa-solid fa-filter-circle-xmark"
+          Title="No Results Found"
+          Message="No lists match your current filters. Try adjusting your search or filters."
+          ActionText="Reset filters"
+          ActionIcon="fa-solid fa-rotate-left"
+          (Action)="clearFilters()" />
       }
     
       <!-- Results Content -->
@@ -244,15 +212,13 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       </td>
                       <td class="col-updated" role="gridcell">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
                       <td class="col-actions" role="gridcell">
-                        @if (item.isOwner) {
-                          <button mjButton
-                            variant="flat"
-                            size="sm"
-                            (click)="openListMenu($event, item)"
-                            title="More options">
-                            <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                          </button>
-                        }
+                        <button mjButton
+                          variant="flat"
+                          size="sm"
+                          (click)="openListMenu($event, item)"
+                          title="More options">
+                          <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                        </button>
                       </td>
                     </tr>
                   }
@@ -274,13 +240,18 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                     <div class="card-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
                       <i [class]="getEntityIcon(item.entityName)"></i>
                     </div>
-                    @if (item.isOwner) {
-                      <div class="card-menu">
-                        <button class="menu-btn" (click)="openListMenu($event, item)">
-                          <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                        </button>
-                      </div>
-                    }
+                    <button
+                      class="favorite-btn"
+                      [class.favorite-btn--active]="isFavorite(item.list.ID)"
+                      (click)="toggleFavorite($event, item)"
+                      [title]="isFavorite(item.list.ID) ? 'Remove from favorites' : 'Add to favorites'">
+                      <i [class]="isFavorite(item.list.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                    </button>
+                    <div class="card-menu">
+                      <button class="menu-btn" (click)="openListMenu($event, item)">
+                        <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                      </button>
+                    </div>
                   </div>
                   <div class="card-body">
                     <h3 class="card-title">{{item.list.Name}}</h3>
@@ -296,6 +267,20 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                         <i class="fa-solid fa-hashtag"></i>
                         {{item.itemCount}} item{{item.itemCount !== 1 ? 's' : ''}}
                       </span>
+                    </div>
+                    <!-- Tag chips (Phase 4). Read-only on cards; click adds the
+                         tag to the filter row above. We stop propagation on
+                         the wrapper so clicks on chips don't also fire the
+                         card's openList handler. -->
+                    <div class="card-tags" (click)="$event.stopPropagation()">
+                      <mj-tag-chips
+                        [Provider]="Provider"
+                        EntityName="MJ: Lists"
+                        [RecordID]="item.list.ID"
+                        [Editable]="false"
+                        [MaxDisplay]="3"
+                        (TagClicked)="onCardTagClicked($event)">
+                      </mj-tag-chips>
                     </div>
                   </div>
                   <div class="card-footer">
@@ -378,13 +363,11 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       }
                     </span>
                   </div>
-                  @if (item.isOwner) {
-                    <div class="list-actions">
-                      <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item)">
-                        <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                      </button>
-                    </div>
-                  }
+                  <div class="list-actions">
+                    <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item)">
+                      <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                    </button>
+                  </div>
                 </div>
               }
             </div>
@@ -399,32 +382,53 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
         </div>
       </ng-template>
     
-      <!-- Context Menu -->
+      <!-- Context Menu (Phase 2.8 viewer-perspective gating).
+           Items shown depend on contextItemCapabilities, resolved lazily
+           on menu open. Viewers (no Edit/Share/Delete) still see
+           Duplicate. Server-side enforcement remains source of truth;
+           hiding is just UX so users don't see buttons that would fail. -->
       @if (showContextMenu) {
         <div class="context-menu-overlay" (click)="closeContextMenu()"></div>
       }
       @if (showContextMenu) {
         <div class="context-menu" [style.top.px]="contextMenuY" [style.left.px]="contextMenuX">
-          <button class="menu-item" (click)="editList()">
-            <i class="fa-solid fa-pen"></i>
-            Edit
-          </button>
-          <button class="menu-item" (click)="openShareDialog()">
-            <i class="fa-solid fa-share-nodes"></i>
-            Share
-          </button>
+          @if (contextItemCapabilities.CanEdit) {
+            <button class="menu-item" (click)="editList()">
+              <i class="fa-solid fa-pen"></i>
+              Edit
+            </button>
+          }
+          @if (contextItemCapabilities.CanShare) {
+            <button class="menu-item" (click)="openShareDialog()">
+              <i class="fa-solid fa-share-nodes"></i>
+              Share
+            </button>
+          }
           <button class="menu-item" (click)="duplicateList()">
             <i class="fa-solid fa-copy"></i>
             Duplicate
           </button>
-          <div class="menu-divider"></div>
-          <button class="menu-item danger" (click)="confirmDeleteList()">
-            <i class="fa-solid fa-trash"></i>
-            Delete
-          </button>
+          @if (contextItemCapabilities.CanDelete) {
+            <div class="menu-divider"></div>
+            <button class="menu-item danger" (click)="confirmDeleteList()">
+              <i class="fa-solid fa-trash"></i>
+              Delete
+            </button>
+          }
+          @if (!contextItemCapabilities.CanEdit && !contextItemCapabilities.CanShare && !contextItemCapabilities.CanDelete) {
+            <div class="menu-viewer-hint">
+              <i class="fa-solid fa-eye"></i>
+              Viewer access — read only
+            </div>
+          }
         </div>
       }
-    
+      </mj-page-body>
+
+      <!-- Modals/overlays live outside mj-page-body so its stacking context
+           doesn't trap them. Position:fixed overlays would otherwise render
+           behind a sibling overlay div, which silently closes the dialog on
+           any click. -->
       <!-- Create/Edit Dialog -->
       @if (showCreateDialog) {
         <div class="modal-overlay" (click)="closeCreateDialog()"></div>
@@ -534,8 +538,53 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           [config]="shareDialogConfig"
           [visible]="showShareDialog"
           (complete)="onShareComplete($event)"
-          (cancel)="onShareCancel()">
+          (cancel)="onShareCancel()"
+          (manageInvitations)="onManageInvitations()"
+          (viewAuditLog)="onViewAuditLog()">
         </mj-list-share-dialog>
+      }
+
+      <!-- Invitations Dialog (mockup 16) -->
+      @if (showInvitationsDialog && activeShareListId) {
+        <mj-dialog
+          [Visible]="true"
+          [Title]="'Invitations — ' + (activeShareListName ?? 'List')"
+          (Close)="closeInvitationsDialog()"
+          [MinWidth]="640"
+          [Width]="900"
+          [Height]="640">
+          <div class="dialog-content">
+            <mj-list-invitations
+              [Provider]="ProviderToUse"
+              [ListID]="activeShareListId"
+              [ListName]="activeShareListName">
+            </mj-list-invitations>
+          </div>
+          <mj-dialog-actions>
+            <button mjButton (click)="closeInvitationsDialog()" variant="outline">Close</button>
+          </mj-dialog-actions>
+        </mj-dialog>
+      }
+
+      <!-- Audit Log Dialog (mockup 18) -->
+      @if (showAuditLogDialog && activeShareListId) {
+        <mj-dialog
+          [Visible]="true"
+          [Title]="'Audit Log — ' + (activeShareListName ?? 'List')"
+          (Close)="closeAuditLogDialog()"
+          [MinWidth]="720"
+          [Width]="980"
+          [Height]="680">
+          <div class="dialog-content">
+            <mj-list-audit-log
+              [Provider]="ProviderToUse"
+              [ListID]="activeShareListId">
+            </mj-list-audit-log>
+          </div>
+          <mj-dialog-actions>
+            <button mjButton (click)="closeAuditLogDialog()" variant="outline">Close</button>
+          </mj-dialog-actions>
+        </mj-dialog>
       }
     
       <!-- Entity Dropdown Portal -->
@@ -562,7 +611,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           </div>
         </div>
       }
-    </div>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
@@ -570,6 +619,14 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       flex-direction: column;
       width: 100%;
       height: 100%;
+    }
+
+    /* Control bar: on mobile search grows so the icon-only Filter + view toggle
+       stay on one line. On desktop search keeps its natural width. */
+    @media (max-width: 768px) {
+      mj-page-search {
+        flex: 1;
+      }
     }
 
     .lists-browse-container {
@@ -749,75 +806,12 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       flex: 1;
     }
 
-    /* Empty State */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      flex: 1;
-      padding: 48px 40px;
-      text-align: center;
-      max-width: 480px;
-      margin: 0 auto;
-    }
-
-    .empty-state-icon-wrapper {
-      position: relative;
-      margin-bottom: 24px;
-    }
-
-    .empty-state-icon-wrapper .icon-bg {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    }
-
-    .empty-state-icon-wrapper > i {
-      position: relative;
-      font-size: 56px;
-      color: var(--mj-brand-primary);
-      z-index: 1;
-    }
-
-    .empty-state-icon-wrapper.search > i {
-      font-size: 48px;
-      color: var(--mj-text-disabled);
-    }
-
-    .empty-state h3 {
-      margin: 0 0 12px;
-      font-size: 22px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .empty-state p {
-      margin: 0 0 8px;
-      color: var(--mj-text-secondary);
-      font-size: 15px;
-      line-height: 1.5;
-    }
-
-    .empty-state p:last-of-type {
-      margin-bottom: 24px;
-    }
-
-    .empty-hint {
-      color: var(--mj-text-muted) !important;
-      font-size: 13px !important;
-    }
-
+    /* Onboarding feature checklist — projected into <mj-empty-state>. */
     .empty-state-features {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 28px;
+      gap: var(--mj-space-2);
+      margin: var(--mj-space-5) 0 var(--mj-space-2);
       text-align: left;
     }
 
@@ -832,42 +826,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
     .feature-item i {
       font-size: 14px !important;
       color: var(--mj-status-success) !important;
-    }
-
-    .btn-create-large {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-      border: none;
-      border-radius: 8px;
-      font-size: 15px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-    }
-
-    .btn-create-large:hover {
-      background: var(--mj-brand-primary-hover);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
-    }
-
-    .btn-clear {
-      padding: 10px 20px;
-      background: var(--mj-bg-surface-sunken);
-      border: none;
-      border-radius: 6px;
-      color: var(--mj-text-secondary);
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-clear:hover {
-      background: var(--mj-border-default);
     }
 
     /* Content */
@@ -1189,6 +1147,112 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       color: var(--mj-text-muted);
     }
 
+    /* Tag chips on a card. Stop-propagation is set on the wrapper so
+       clicks on chips don't open the underlying list. */
+    .card-tags {
+      margin-top: 8px;
+    }
+
+    /* Favorite star on cards (Phase 5.3). */
+    .favorite-btn {
+      background: none;
+      border: none;
+      padding: 4px;
+      margin: -4px;
+      cursor: pointer;
+      color: var(--mj-text-muted);
+      font-size: 14px;
+      border-radius: 4px;
+      transition: color 0.12s ease, background 0.12s ease;
+    }
+
+    .favorite-btn:hover {
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-status-warning);
+    }
+
+    .favorite-btn--active {
+      color: var(--mj-status-warning);
+    }
+
+    /* Favorites-only toggle in the toolbar. */
+    .favorite-filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: none;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      font-size: 12.5px;
+      color: var(--mj-text-secondary);
+      cursor: pointer;
+    }
+
+    .favorite-filter-toggle:hover {
+      border-color: var(--mj-status-warning);
+      color: var(--mj-status-warning);
+    }
+
+    .favorite-filter-toggle--active {
+      background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+      border-color: var(--mj-status-warning);
+      color: var(--mj-status-warning);
+      font-weight: 600;
+    }
+
+    /* Active-tag filter row above the grid (Phase 4.3). */
+    .tag-filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px dashed var(--mj-border-default);
+      border-radius: 8px;
+      font-size: 12.5px;
+    }
+
+    .tag-filter-row__label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--mj-text-muted);
+      font-weight: 500;
+    }
+
+    .tag-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      border: 1px solid var(--mj-brand-primary);
+      font-size: 11.5px;
+      cursor: pointer;
+    }
+
+    .tag-filter-chip:hover {
+      background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
+    }
+
+    .tag-filter-row__clear {
+      background: none;
+      border: none;
+      color: var(--mj-text-link);
+      font-size: 11.5px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    .tag-filter-row__clear:hover {
+      text-decoration: underline;
+    }
+
     .card-footer {
       display: flex;
       justify-content: space-between;
@@ -1370,6 +1434,17 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       background: var(--mj-border-default);
       margin: 4px 0;
     }
+
+    .menu-viewer-hint {
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--mj-text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-style: italic;
+    }
+    .menu-viewer-hint i { color: var(--mj-text-muted); }
 
     /* Modal Styles */
     .modal-overlay {
@@ -1673,6 +1748,31 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   selectedOwner = 'mine';
   selectedSort = 'name';
 
+  /**
+   * Active tag filters (Phase 4.3). Multi-tag = AND — a list must have
+   * every active tag to appear. URL state mirrors this via the `tags`
+   * query param (comma-separated tag IDs).
+   */
+  tagFilters: Array<{ TagID: string; Name: string }> = [];
+
+  /**
+   * Set of List IDs that match the current `tagFilters` (intersection).
+   * `null` means "no tag filter active" — pass-through. Populated by
+   * `recomputeTagMembership` whenever `tagFilters` changes; consumed by
+   * `applyFilters` to narrow the visible list.
+   */
+  private tagFilteredListIds: Set<string> | null = null;
+
+  /**
+   * Favorite-list IDs for the current user (Phase 5.3). Backed by the
+   * existing `MJ: User Favorites` entity. `null` while loading; a Set
+   * once populated so card-side toggling is O(1).
+   */
+  favoriteListIds: Set<string> = new Set();
+
+  /** When true, only favorited lists appear in the grid. */
+  showOnlyFavorites = false;
+
   allLists: BrowseListItem[] = [];
   filteredLists: BrowseListItem[] = [];
   categories: MJListCategoryEntity[] = [];
@@ -1724,6 +1824,32 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   showShareDialog = false;
   shareDialogConfig: ListShareDialogConfig | null = null;
 
+  // Viewer-perspective gating (Phase 2.8). Capabilities are computed
+  // lazily when the user opens the context menu — running per-card
+  // would mean N permission-resolve calls per browse render. The
+  // resolved level is cached on the item so re-opening the same menu
+  // doesn't refetch.
+  public contextItemCapabilities: ListCapabilities = CapabilitiesForLevel('Owner');
+  private capabilityCache = new Map<string, SharePermissionLevel | null>();
+
+  // Tracks whether the in-memory categories list is known-stale
+  // relative to the DB. Flipped to true by the BaseEntity event
+  // subscription whenever any `MJ: List Categories` row is saved or
+  // deleted (most often from the Categories tab next door). Reset to
+  // false after `refreshCategoriesForDialog` reloads. Initial true so
+  // the first dialog open always populates from a fresh fetch.
+  private categoriesDirty = true;
+
+  // Invitations / audit log dialogs (mockups 16, 18) — opened from
+  // the share dialog. Each dialog binds to a single list at a time,
+  // tracked by `activeShareListId`/`activeShareListName` lifted from
+  // shareDialogConfig at open time so we keep the context after the
+  // share dialog closes.
+  showInvitationsDialog = false;
+  showAuditLogDialog = false;
+  activeShareListId: string | null = null;
+  activeShareListName: string | null = null;
+
   private entityColorMap: Map<string, string> = new Map();
   private entityIconMap: Map<string, string> = new Map();
   private categoryMap: Map<string, MJListCategoryEntity> = new Map();
@@ -1767,8 +1893,35 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   async ngOnInit() {
     super.ngOnInit();
+    this.subscribeToCategoryChanges();
     await this.loadData();
     this.NotifyLoadComplete();
+  }
+
+  /**
+   * Mark the in-memory categories list dirty whenever any BaseEntity
+   * raises a save / delete event for `MJ: List Categories`. The
+   * Create/Edit dialog uses this flag to skip the per-open RunView
+   * unless something has actually changed since last load — keeps the
+   * dialog snappy without showing stale categories.
+   *
+   * Subscribes to MJGlobal's event bus rather than wiring each
+   * category entity's per-instance listener, because the Categories
+   * tab creates fresh BaseEntity instances we can't see from here.
+   */
+  private subscribeToCategoryChanges(): void {
+    MJGlobal.Instance.GetEventListener()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((mjEvt) => {
+        if (mjEvt.eventCode !== BaseEntity.BaseEventCode) return;
+        const beEvt = mjEvt.args as BaseEntityEvent | undefined;
+        if (!beEvt) return;
+        const entityName = beEvt.baseEntity?.EntityInfo.Name ?? beEvt.entityName;
+        if (entityName !== 'MJ: List Categories') return;
+        if (beEvt.type === 'save' || beEvt.type === 'delete') {
+          this.categoriesDirty = true;
+        }
+      });
   }
 
   ngOnDestroy() {
@@ -1781,16 +1934,21 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.isLoading = true;
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       this.currentUserId = md.CurrentUser?.ID || '';
 
-      // Load all lists, categories, details, and users in parallel
+      // BypassCache on Lists + List Details: after a delete/duplicate, the
+      // RunView cache for these entities doesn't always reflect the latest
+      // state in time (event-driven invalidation races the immediate
+      // refresh). Trading a small perf hit for correctness here is worth
+      // it — categories and users stay cache-warm.
       const [listsResult, categoriesResult, detailsResult, usersResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           OrderBy: 'Name',
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
+          BypassCache: true
         },
         {
           EntityName: 'MJ: List Categories',
@@ -1800,7 +1958,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         {
           EntityName: 'MJ: List Details',
           Fields: ['ListID'],
-          ResultType: 'simple'
+          ResultType: 'simple',
+          BypassCache: true
         },
         {
           EntityName: 'MJ: Users',
@@ -1827,6 +1986,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
       // Build flat categories for dropdown
       this.flatCategories = this.buildFlatCategories(this.categories);
+      // loadData() already pulled fresh categories — clear the dirty
+      // flag so the first dialog open doesn't redundantly refetch.
+      this.categoriesDirty = false;
 
       // Build user map
       const userMap = new Map<string, string>();
@@ -1878,6 +2040,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
       this.applyFilters();
       this.buildCategoryTree();
+
+      // Load favorites in parallel — not critical-path, but cheap.
+      void this.loadFavorites();
 
       // Load sharing info in the background
       this.loadSharingInfo();
@@ -1961,7 +2126,95 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.viewMode = mode;
   }
 
-  onSearchChange(_term: string) {
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly listViewOptions = [
+    { key: 'table',     icon: 'fa-solid fa-table-list',  title: 'Table view' },
+    { key: 'card',      icon: 'fa-solid fa-grip',        title: 'Card view' },
+    { key: 'hierarchy', icon: 'fa-solid fa-folder-tree', title: 'Category view' },
+  ];
+
+  /** Values record consumed by the centralized <mj-filter-panel>. */
+  public get listFilterValues(): Record<string, unknown> {
+    return {
+      selectedOwner: this.selectedOwner,
+      selectedEntity: this.selectedEntity,
+      favorites: this.showOnlyFavorites ? 'favorites' : 'all',
+    };
+  }
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get listFilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'selectedOwner',
+        type: 'dropdown',
+        label: 'Owner',
+        icon: 'fa-solid fa-user',
+        options: this.ownerOptions.map(o => ({ text: o.name, value: o.value })),
+      },
+      {
+        key: 'selectedEntity',
+        type: 'dropdown',
+        label: 'Entity',
+        icon: 'fa-solid fa-table',
+        filterable: this.entityOptions.length > 10,
+        options: this.entityOptions.map(o => ({ text: o.name, value: o.value })),
+      },
+      {
+        key: 'favorites',
+        type: 'chips',
+        label: 'Favorites',
+        chipOptions: [
+          { text: 'All lists', value: 'all' },
+          { text: 'Favorites only', value: 'favorites' },
+        ],
+      },
+    ];
+  }
+
+  /** Receive popover updates and apply them. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    this.selectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
+    this.selectedEntity = (values['selectedEntity'] as string) ?? 'all';
+    this.showOnlyFavorites = values['favorites'] === 'favorites';
+    this.applyFilters();
+    this.buildCategoryTree();
+  }
+
+  /** Reset the popover's own fields (Owner · Entity · Favorites); leaves search + tags alone. */
+  public resetPopoverFilters(): void {
+    this.selectedOwner = 'mine';
+    this.selectedEntity = 'all';
+    this.showOnlyFavorites = false;
+    this.applyFilters();
+    this.buildCategoryTree();
+  }
+
+  /** Active popover-field count for the badge (Owner + Entity; excludes search). */
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.selectedOwner  && this.selectedOwner  !== 'mine') n++;
+    if (this.selectedEntity && this.selectedEntity !== 'all')  n++;
+    return n;
+  }
+
+  /** Total active filters (Owner + Entity + Favorites + Tags) — drives the Filter button badge. */
+  public get TotalActiveFilterCount(): number {
+    return this.ActiveFilterCount + (this.showOnlyFavorites ? 1 : 0) + this.tagFilters.length;
+  }
+
+  /** Clear every filter (Owner · Entity · Favorites · Tags). Leaves search. */
+  public clearAllAppliedFilters(): void {
+    this.selectedOwner = 'mine';
+    this.selectedEntity = 'all';
+    this.showOnlyFavorites = false;
+    this.tagFilters = [];
+    void this.recomputeTagMembership();
+    this.buildCategoryTree();
+  }
+
+  onSearchChange(term: string) {
+    this.searchTerm = term;
     this.applyFilters();
     this.buildCategoryTree();
   }
@@ -1988,10 +2241,15 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   }
 
   clearFilters() {
+    // Reset EVERY dimension applyFilters() narrows on — search, owner, entity,
+    // favorites, and tags — so the empty-state "Reset filters" CTA actually clears
+    // the no-results state (favorites/tags were previously left active).
     this.searchTerm = '';
     this.selectedEntity = 'all';
     this.selectedOwner = 'mine';
-    this.applyFilters();
+    this.showOnlyFavorites = false;
+    this.tagFilters = [];
+    void this.recomputeTagMembership(); // empty tagFilters → clears tagFilteredListIds + re-applies
     this.buildCategoryTree();
   }
 
@@ -2019,6 +2277,18 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     // Entity filter
     if (this.selectedEntity !== 'all') {
       result = result.filter(item => item.entityName === this.selectedEntity);
+    }
+
+    // Tag filter (Phase 4.3 — intersection of all active tags).
+    if (this.tagFilteredListIds !== null) {
+      const matches = this.tagFilteredListIds;
+      result = result.filter(item => matches.has(item.list.ID));
+    }
+
+    // Favorites-only toggle (Phase 5.3).
+    if (this.showOnlyFavorites) {
+      const favs = this.favoriteListIds;
+      result = result.filter(item => favs.has(item.list.ID));
     }
 
     // Sort
@@ -2094,13 +2364,211 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.tabService.OpenList(item.list.ID, item.list.Name, appId);
   }
 
+  /**
+   * Handle a tag chip click on a list card — adds the tag to the
+   * filter row (multi-tag = AND). Wired by Phase 4.3; the chip
+   * component emits the (TagID, Name) pair so we can both display
+   * the chip name and filter by ID.
+   */
+  onCardTagClicked(payload: { TagID: string; Name: string }): void {
+    if (this.tagFilters.some((f) => f.TagID === payload.TagID)) return;
+    this.tagFilters = [...this.tagFilters, payload];
+    void this.recomputeTagMembership();
+  }
+
+  /** Remove a tag from the filter row. */
+  removeTagFilter(tagId: string): void {
+    this.tagFilters = this.tagFilters.filter((f) => f.TagID !== tagId);
+    void this.recomputeTagMembership();
+  }
+
+  /** Clear all active tag filters. */
+  clearTagFilters(): void {
+    this.tagFilters = [];
+    this.tagFilteredListIds = null;
+    this.applyFilters();
+  }
+
+  /**
+   * Resolve which lists have ALL active tags. Done server-side so the
+   * filter works regardless of which lists the user has scrolled past.
+   * Result is cached on `tagFilteredListIds`; `applyFilters` consumes it.
+   */
+  private async recomputeTagMembership(): Promise<void> {
+    if (this.tagFilters.length === 0) {
+      this.tagFilteredListIds = null;
+      this.applyFilters();
+      return;
+    }
+    try {
+      const md = this.ProviderToUse;
+      const listsEntity = md.Entities.find((e) => e.Name === 'MJ: Lists');
+      if (!listsEntity) {
+        this.tagFilteredListIds = new Set();
+        this.applyFilters();
+        return;
+      }
+      const tagIds = this.tagFilters.map((f) => `'${f.TagID}'`).join(',');
+      const rv = RunView.FromMetadataProvider(md);
+      const result = await rv.RunView<{ RecordID: string; TagID: string }>({
+        EntityName: 'MJ: Tagged Items',
+        ExtraFilter: `EntityID='${listsEntity.ID}' AND TagID IN (${tagIds})`,
+        Fields: ['RecordID', 'TagID'],
+        ResultType: 'simple',
+      });
+      // Intersection: count tag hits per list, keep only those with
+      // exactly `tagFilters.length` matches (one per required tag).
+      const counts = new Map<string, number>();
+      for (const row of result.Results ?? []) {
+        const id = String(row.RecordID);
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      const required = this.tagFilters.length;
+      const matches = new Set<string>();
+      for (const [id, count] of counts) {
+        if (count >= required) matches.add(id);
+      }
+      this.tagFilteredListIds = matches;
+    } catch (e) {
+      // On failure, fall back to "no match" so the user sees an empty
+      // state rather than every list — avoids leaking unfiltered data
+      // when the filter intent failed silently.
+      this.tagFilteredListIds = new Set();
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * Load the current user's favorite lists into `favoriteListIds`.
+   * Cheap — typically <100 rows per user. Driven by the `MJ: User
+   * Favorites` entity scoped by the Lists EntityID. Best-effort: on
+   * failure the star icons just stay dim.
+   */
+  private async loadFavorites(): Promise<void> {
+    try {
+      const md = this.ProviderToUse;
+      const listsEntity = md.Entities.find((e) => e.Name === 'MJ: Lists');
+      if (!listsEntity || !md.CurrentUser) return;
+      const rv = RunView.FromMetadataProvider(md);
+      const result = await rv.RunView<{ RecordID: string }>({
+        EntityName: 'MJ: User Favorites',
+        ExtraFilter: `UserID='${md.CurrentUser.ID}' AND EntityID='${listsEntity.ID}'`,
+        Fields: ['RecordID'],
+        ResultType: 'simple',
+      });
+      this.favoriteListIds = new Set((result.Results ?? []).map((r) => String(r.RecordID)));
+    } catch {
+      // Silent — favorites are a polish feature, not load-bearing.
+      this.favoriteListIds = new Set();
+    }
+  }
+
+  /**
+   * Toggle a list's favorite state. Optimistic: flips the local Set
+   * first, then writes through. Reverts on failure.
+   */
+  async toggleFavorite(event: Event, item: BrowseListItem): Promise<void> {
+    event.stopPropagation();
+    const wasFav = this.favoriteListIds.has(item.list.ID);
+    // Optimistic update.
+    if (wasFav) this.favoriteListIds.delete(item.list.ID);
+    else this.favoriteListIds.add(item.list.ID);
+    // Re-trigger filter recompute since the favorites-only toggle
+    // may be on.
+    this.applyFilters();
+
+    try {
+      const md = this.ProviderToUse;
+      const listsEntity = md.Entities.find((e) => e.Name === 'MJ: Lists');
+      if (!listsEntity || !md.CurrentUser) throw new Error('Cannot resolve user favorites entity');
+
+      if (wasFav) {
+        // Find + delete the existing favorite row.
+        const rv = RunView.FromMetadataProvider(md);
+        const result = await rv.RunView<MJUserFavoriteEntity>({
+          EntityName: 'MJ: User Favorites',
+          ExtraFilter:
+            `UserID='${md.CurrentUser.ID}' AND EntityID='${listsEntity.ID}' AND RecordID='${item.list.ID}'`,
+          ResultType: 'entity_object',
+        });
+        for (const row of result.Results ?? []) await row.Delete();
+      } else {
+        const fav = await md.GetEntityObject<MJUserFavoriteEntity>('MJ: User Favorites', md.CurrentUser);
+        fav.NewRecord();
+        fav.UserID = md.CurrentUser.ID;
+        fav.EntityID = listsEntity.ID;
+        fav.RecordID = item.list.ID;
+        await fav.Save();
+      }
+    } catch {
+      // Revert on failure.
+      if (wasFav) this.favoriteListIds.add(item.list.ID);
+      else this.favoriteListIds.delete(item.list.ID);
+      this.applyFilters();
+    }
+  }
+
+  isFavorite(listId: string): boolean {
+    return this.favoriteListIds.has(listId);
+  }
+
+  toggleShowOnlyFavorites(): void {
+    this.showOnlyFavorites = !this.showOnlyFavorites;
+    this.applyFilters();
+  }
+
   openListMenu(event: Event, item: BrowseListItem) {
     event.stopPropagation();
     const mouseEvent = event as MouseEvent;
     this.selectedContextItem = item;
     this.contextMenuX = mouseEvent.clientX;
     this.contextMenuY = mouseEvent.clientY;
+    // Fast path: owners always have full capabilities. Avoid an extra
+    // permission-resolve round trip for the common case.
+    if (item.isOwner) {
+      this.contextItemCapabilities = CapabilitiesForLevel('Owner');
+      this.showContextMenu = true;
+      return;
+    }
+    // Render the menu immediately with a conservative viewer-level cap
+    // set, then refine via async resolve. The flicker is a single tick
+    // — and viewers/editors stay correctly gated even if resolve fails.
+    const cached = this.capabilityCache.get(item.list.ID);
+    if (cached !== undefined) {
+      this.contextItemCapabilities = CapabilitiesForLevel(cached);
+    } else {
+      this.contextItemCapabilities = CapabilitiesForLevel('View');
+      void this.refineContextCapabilities(item.list.ID);
+    }
     this.showContextMenu = true;
+  }
+
+  /** Resolve the current user's permission level for a list and update
+   *  the open context menu in place. Cached so re-opening the same menu
+   *  doesn't re-hit the resolver. */
+  private async refineContextCapabilities(listId: string): Promise<void> {
+    try {
+      const currentUserId = this.ProviderToUse.CurrentUser?.ID;
+      if (!currentUserId) {
+        // No user context — leave the conservative fallback in place.
+        return;
+      }
+      // Go through the Angular sharing service rather than instantiating the
+      // server-side `ListSharing` class directly. The service hits the GraphQL
+      // surface, which is the only sanctioned client→server path; the server
+      // package writes audit logs + permission rows that have no business
+      // running in a browser bundle.
+      const level = (await this.listSharingService.getUserPermissionLevel(listId, currentUserId)) as SharePermissionLevel | null;
+      this.capabilityCache.set(listId, level);
+      // Only mutate state if the user is still on this same menu — they
+      // may have closed it before resolve finished.
+      if (this.showContextMenu && this.selectedContextItem && UUIDsEqual(this.selectedContextItem.list.ID, listId)) {
+        this.contextItemCapabilities = CapabilitiesForLevel(level);
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Conservative fallback already applied at menu open time.
+    }
   }
 
   closeContextMenu() {
@@ -2117,6 +2585,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedCategoryId = null;
     this.showEntityDropdown = false;
     this.showCreateDialog = true;
+    // Refresh categories so newly-created ones appear without a page
+    // reload. Cheap RunView; runs in the background while the user is
+    // typing the list name.
+    void this.refreshCategoriesForDialog();
   }
 
   editList() {
@@ -2129,8 +2601,46 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedEntityId = list.EntityID;
     this.entitySearchTerm = list.Entity || '';
     this.selectedCategoryId = list.CategoryID || null;
-    this.showCreateDialog = true;
+    // Ensure no stale state from a previous Create attempt — the entity
+    // dropdown portal renders at z-index 10002 and could otherwise sit on
+    // top of the edit dialog and block interaction.
+    this.showEntityDropdown = false;
+    // Close the context menu BEFORE opening the dialog. Doing it after
+    // leaves a one-tick window where both the menu and the modal-overlay
+    // are stacked, and the menu's outer click-overlay can swallow the
+    // first click into the form fields below it.
     this.closeContextMenu();
+    this.showCreateDialog = true;
+    this.cdr.detectChanges();
+    void this.refreshCategoriesForDialog();
+  }
+
+  /** Re-pull MJ: List Categories so the dropdown reflects any
+   *  newly-created categories. Skips the round trip when nothing has
+   *  changed since the last load — `categoriesDirty` is flipped on
+   *  by the BaseEntity event subscription whenever a category row
+   *  is saved/deleted, so the only times this actually fetches are
+   *  (a) the first dialog open, and (b) after the user touched a
+   *  category somewhere else. */
+  private async refreshCategoriesForDialog(): Promise<void> {
+    if (!this.categoriesDirty) return;
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<MJListCategoryEntity>({
+        EntityName: 'MJ: List Categories',
+        OrderBy: 'Name',
+        ResultType: 'simple',
+      });
+      if (!result.Success) return;
+      this.categories = (result.Results ?? []) as MJListCategoryEntity[];
+      this.categoryMap.clear();
+      for (const cat of this.categories) this.categoryMap.set(cat.ID, cat);
+      this.flatCategories = this.buildFlatCategories(this.categories);
+      this.categoriesDirty = false;
+      this.cdr.detectChanges();
+    } catch {
+      // Best-effort — the dialog still works with the previously-loaded list.
+    }
   }
 
   selectEntity(entity: { ID: string; Name: string }) {
@@ -2183,10 +2693,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
-      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
+      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
       newList.Name = `${listToDuplicate.Name} (Copy)`;
       newList.Description = listToDuplicate.Description;
       newList.EntityID = listToDuplicate.EntityID;
@@ -2199,29 +2709,54 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         return;
       }
 
+      // BypassCache to avoid any stale RunView cache that might mask members.
+      // High MaxRows to cover large lists; entity_object so we have typed access.
       const itemsResult = await rv.RunView<MJListDetailEntity>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
+        MaxRows: 100000,
+        BypassCache: true
       });
 
-      if (itemsResult.Success && itemsResult.Results.length > 0) {
-        let copiedCount = 0;
-        for (const item of itemsResult.Results) {
-          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details');
+      if (!itemsResult.Success) {
+        console.error('Duplicate: failed to load source list members', itemsResult.ErrorMessage);
+        this.notificationService.CreateSimpleNotification(
+          `Could not load source list members: ${itemsResult.ErrorMessage || 'unknown'}`,
+          'error', 6000
+        );
+        return;
+      }
+
+      const sourceItems = itemsResult.Results ?? [];
+      if (sourceItems.length === 0) {
+        this.notificationService.CreateSimpleNotification('List duplicated (source had no records)', 'success', 3000);
+      } else {
+        // Batch all detail inserts into one transaction group so this is
+        // a single round-trip instead of 1-per-row. All-or-nothing: if any
+        // row fails server-side validation the whole group rolls back.
+        const tg = await md.CreateTransactionGroup();
+        for (const item of sourceItems) {
+          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
           newItem.ListID = newList.ID;
           newItem.RecordID = item.RecordID;
           newItem.Sequence = item.Sequence;
-          const itemSaved = await newItem.Save();
-          if (itemSaved) copiedCount++;
+          newItem.TransactionGroup = tg;
+          await newItem.Save(); // queued into tg, not sent yet
         }
-        this.notificationService.CreateSimpleNotification(
-          `List duplicated with ${copiedCount} item${copiedCount !== 1 ? 's' : ''}`,
-          'success',
-          3000
-        );
-      } else {
-        this.notificationService.CreateSimpleNotification('List duplicated successfully', 'success', 3000);
+        const submitted = await tg.Submit();
+        if (submitted) {
+          this.notificationService.CreateSimpleNotification(
+            `List duplicated with ${sourceItems.length} item${sourceItems.length !== 1 ? 's' : ''}`,
+            'success', 3000
+          );
+        } else {
+          console.error('Duplicate: transaction group submit failed');
+          this.notificationService.CreateSimpleNotification(
+            `Duplicated list but failed to copy ${sourceItems.length} items — see console`,
+            'error', 6000
+          );
+        }
       }
 
       await this.loadData();
@@ -2258,16 +2793,45 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.cdr.detectChanges();
 
     try {
+      // spDeleteList doesn't cascade to MJ: List Details, so the FK
+      // constraint (FK_ListDetail_List) blocks the delete if the list
+      // has any members. Cascade-delete the details first in a
+      // transaction group so the whole thing rolls back if any single
+      // delete fails. The proper long-term fix is a migration that
+      // adds ON DELETE CASCADE (or extends the SP); this keeps the UI
+      // unblocked in the meantime.
+      const cascadeOk = await this.cascadeDeleteListMembers(listToDelete.ID);
+      if (!cascadeOk) {
+        this.notificationService.CreateSimpleNotification(
+          `Failed to delete list members for "${listName}" — list not deleted`,
+          'error', 6000,
+        );
+        return;
+      }
+
       const deleted = await listToDelete.Delete();
       if (deleted) {
         this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
+        // Optimistic removal from local state so the card disappears
+        // immediately. Without this, the user sees the just-deleted list
+        // until loadData() rebuilds — and worse, can click Delete on it
+        // again (which hangs because the in-memory entity still has the
+        // now-deleted record's ID).
+        const deletedId = listToDelete.ID;
+        this.allLists = this.allLists.filter(item => !UUIDsEqual(item.list.ID, deletedId));
+        this.applyFilters();
+        this.buildCategoryTree();
+        this.cdr.detectChanges();
       } else {
         const errorMessage = listToDelete.LatestResult?.Message || 'Unknown error occurred';
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
       this.cancelDelete();
-      await this.loadData();
+      // Authoritative refresh — loadData() now sets BypassCache: true on
+      // the 'MJ: Lists' RunView, so this no longer races the optimistic
+      // local removal against a stale cache.
+      void this.loadData();
     } catch (error) {
       console.error('Error deleting list:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -2276,6 +2840,36 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       this.isDeleting = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** Delete every MJ: List Details row for a given list in a single
+   *  transaction group. Returns true if everything succeeded (including
+   *  the trivial "no members" case). */
+  private async cascadeDeleteListMembers(listId: string): Promise<boolean> {
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(md);
+    const lookup = await rv.RunView<MJListDetailEntity>({
+      EntityName: 'MJ: List Details',
+      ExtraFilter: `ListID='${listId}'`,
+      ResultType: 'entity_object',
+    });
+    if (!lookup.Success) {
+      console.error('Failed to load list details for cascade-delete:', lookup.ErrorMessage);
+      return false;
+    }
+    const details = lookup.Results ?? [];
+    if (details.length === 0) return true;
+
+    const tg = await md.CreateTransactionGroup();
+    for (const d of details) {
+      d.TransactionGroup = tg;
+      await d.Delete();
+    }
+    const ok = await tg.Submit();
+    if (!ok) {
+      console.error('Cascade-delete transaction failed for list', listId);
+    }
+    return ok;
   }
 
   closeCreateDialog() {
@@ -2292,13 +2886,13 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     const listName = this.newListName;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let list: MJListEntity;
 
       if (this.editingList) {
         list = this.editingList;
       } else {
-        list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
+        list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
         list.UserID = md.CurrentUser!.ID;
         list.EntityID = this.selectedEntityId;
       }
@@ -2362,6 +2956,38 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   onShareCancel() {
     this.showShareDialog = false;
     this.shareDialogConfig = null;
+  }
+
+  /** "Manage Invitations" clicked inside the share dialog — opens a
+   *  modal hosting `<mj-list-invitations>` for the same list. The
+   *  share dialog is closed so dialogs don't visually stack. */
+  onManageInvitations() {
+    if (!this.shareDialogConfig) return;
+    this.activeShareListId = this.shareDialogConfig.listId;
+    this.activeShareListName = this.shareDialogConfig.listName;
+    this.showShareDialog = false;
+    this.showInvitationsDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  closeInvitationsDialog() {
+    this.showInvitationsDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  /** "View audit log" link in share dialog. */
+  onViewAuditLog() {
+    if (!this.shareDialogConfig) return;
+    this.activeShareListId = this.shareDialogConfig.listId;
+    this.activeShareListName = this.shareDialogConfig.listName;
+    this.showShareDialog = false;
+    this.showAuditLogDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  closeAuditLogDialog() {
+    this.showAuditLogDialog = false;
+    this.cdr.detectChanges();
   }
 
   private async loadSharingInfo() {

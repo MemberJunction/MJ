@@ -91,13 +91,45 @@ export class LoopAgentType extends BaseAgentType {
             // Parse the response using the base class utility
             const response = this.parseJSONResponse<LoopAgentResponse>(promptResult);
             if (!response) {
-                return this.createRetryStep('Failed to parse JSON response');
+                // Strong, specific corrective directive. The common failure mode here is the model
+                // drifting into conversational prose (e.g. "I'm executing the X action with
+                // parameters: ...") instead of emitting the JSON envelope. A terse "couldn't parse"
+                // message gives the model nothing to correct against, so we spell out exactly what
+                // to do and what NOT to do. This is the retry-feedback half of the prose-drift fix;
+                // the other half re-roles framework action records so they stop reading as prose
+                // assistant exemplars.
+                return this.createRetryStep(
+                    'Your previous message was not valid JSON and could not be parsed. Respond with ONLY a ' +
+                    'single raw JSON object conforming to the LoopAgentResponse interface — no prose, no ' +
+                    'markdown code fences, and no natural-language narration such as "I\'m executing the ... ' +
+                    'action". Do not describe your action in text; express it inside the JSON (e.g. via ' +
+                    'nextStep). Output the JSON object and nothing else.'
+                );
             }
             
             // Validate the response structure
             const validationResult = this.isValidLoopResponse(response);
             if (!validationResult.success) {
                 return this.createRetryStep(validationResult.message);
+            }
+
+            // A tool pipeline is a yield/await action (like client tools): the agent can't know
+            // its result until it runs. Handle it BEFORE Chat/taskComplete/nextStep-switch checks —
+            // the loop executes the pipeline inline, injects the final output, and we force one
+            // more turn (Retry, non-terminal) so the LLM can use the result. Pipeline is a singular
+            // `nextStep.type`, so the model cannot also request Actions/Chat/etc. this turn; checking
+            // it here preserves yield/await semantics (it pre-empts taskComplete, like client tools).
+            if (response.nextStep?.type === 'Pipeline' && response.nextStep.pipeline?.steps?.length) {
+                return this.createNextStep('Retry', {
+                    pipeline: response.nextStep.pipeline,
+                    terminate: false,
+                    scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
+                    memoryWrites: response.memoryWrites,
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    reasoning: response.reasoning,
+                    confidence: response.confidence
+                });
             }
 
             // Check for Chat nextStep BEFORE checking taskComplete
@@ -115,6 +147,8 @@ export class LoopAgentType extends BaseAgentType {
                     terminate: true, // Chat always terminates to return to user
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
+                    memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands,
@@ -140,6 +174,8 @@ export class LoopAgentType extends BaseAgentType {
                     confidence: response.confidence,
                     payloadChangeRequest: response.payloadChangeRequest,
                     scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
+                    memoryWrites: response.memoryWrites,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands
@@ -155,6 +191,8 @@ export class LoopAgentType extends BaseAgentType {
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 payloadChangeRequest: response.payloadChangeRequest,
                 scratchpad: response.scratchpad,
+                artifactToolCalls: response.artifactToolCalls,
+                memoryWrites: response.memoryWrites,
                 terminate: response.taskComplete,
                 responseForm: response.responseForm,
                 actionableCommands: response.actionableCommands,
@@ -162,18 +200,27 @@ export class LoopAgentType extends BaseAgentType {
             }
             switch (response.nextStep.type) {
                 case 'Sub-Agent':
-                    if (!response.nextStep.subAgent) {
+                    if (!response.nextStep.subAgent && (!response.nextStep.subAgents || response.nextStep.subAgents.length === 0)) {
                         retVal.step = 'Retry';
-                        retVal.message = 'When nextStep.type == "Sub-Agent", subAgent details must be specified';
+                        retVal.message = 'When nextStep.type == "Sub-Agent", subAgent or subAgents details must be specified';
                         retVal.errorMessage = 'Sub-agent details not specified';
                     }
                     else {
                         retVal.step = 'Sub-Agent';
-                        retVal.subAgent = {
-                            name: response.nextStep.subAgent.name,
-                            message: response.nextStep.subAgent.message,
-                            terminateAfter: response.nextStep.subAgent.terminateAfter,
-                            templateParameters: response.nextStep.subAgent.templateParameters || {}
+                        if (response.nextStep.subAgents && response.nextStep.subAgents.length > 0) {
+                            retVal.subAgents = response.nextStep.subAgents.map(sa => ({
+                                name: sa.name,
+                                message: sa.message,
+                                terminateAfter: sa.terminateAfter,
+                                templateParameters: sa.templateParameters || {}
+                            }));
+                        } else if (response.nextStep.subAgent) {
+                            retVal.subAgent = {
+                                name: response.nextStep.subAgent.name,
+                                message: response.nextStep.subAgent.message,
+                                terminateAfter: response.nextStep.subAgent.terminateAfter,
+                                templateParameters: response.nextStep.subAgent.templateParameters || {}
+                            };
                         }
                     }
                     break;
@@ -234,6 +281,13 @@ export class LoopAgentType extends BaseAgentType {
                     retVal.step = 'Retry';
                     retVal.messageIndex = response.nextStep.messageIndex;
                     retVal.expandReason = response.nextStep.reason;
+                    break;
+                case 'Pipeline':
+                    // A well-formed pipeline is handled by the early return above; reaching the
+                    // switch means type='Pipeline' was set with no (or empty) nextStep.pipeline.steps.
+                    retVal.step = 'Retry';
+                    retVal.message = 'When nextStep.type == "Pipeline", nextStep.pipeline.steps must contain 1 or more stages';
+                    retVal.errorMessage = 'Pipeline steps not specified for Pipeline type';
                     break;
                 default:
                     retVal.step = 'Retry';
@@ -321,12 +375,12 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
-            // be smart/lenient about missing types. if type is missing but we have a nextStep.subAgent, default to sub-agent and if type is missing and we have nextStep.actions, default to actions
-            if (!lcaseType && response.nextStep.subAgent) {
+            // be smart/lenient about missing types. if type is missing but we have a nextStep.subAgent/subAgents, default to sub-agent and if type is missing and we have nextStep.actions, default to actions
+            if (!lcaseType && (response.nextStep.subAgent || (response.nextStep.subAgents && response.nextStep.subAgents.length > 0))) {
                 response.nextStep.type = 'Sub-Agent'; // update the data structure to have the correct type
                 lcaseType = 'sub-agent';
             } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
@@ -341,6 +395,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.while) {
                 response.nextStep.type = 'While'; // update the data structure to have the correct type
                 lcaseType = 'while';
+            } else if (!lcaseType && response.nextStep.pipeline?.steps?.length) {
+                response.nextStep.type = 'Pipeline'; // update the data structure to have the correct type
+                lcaseType = 'pipeline';
             }
 
             if (!validStepTypes.includes(lcaseType)) {
@@ -356,8 +413,8 @@ export class LoopAgentType extends BaseAgentType {
                 return {success: false, message};
             }
 
-            if (lcaseType === 'sub-agent' && !response.nextStep.subAgent) {
-                const message = 'LoopAgentResponse requires subAgent object for sub-agent type';
+            if (lcaseType === 'sub-agent' && !response.nextStep.subAgent && (!response.nextStep.subAgents || response.nextStep.subAgents.length === 0)) {
+                const message = 'LoopAgentResponse requires subAgent or subAgents for sub-agent type';
                 LogError(message);
                 return {success: false, message};
             }

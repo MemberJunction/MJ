@@ -111,6 +111,15 @@ export interface MappedRecord {
     ChangeType: RecordChangeType;
     /** ID of an existing MJ record if matched */
     MatchedMJRecordID?: string;
+    /**
+     * Source keys the record returned that have NO active field map — the "extra" fields
+     * the target table has no column for (yet). Computed at {@link MapSingleRecord} as
+     * `keys(ExternalRecord.Fields) − active map SourceFieldNames`. Empty/undefined in the
+     * common case (everything mapped). When non-empty, the engine parks it as JSON in the
+     * `__mj_integration_CustomOverflow` system column so a post-sync RSU pass can promote
+     * pervasive keys to real columns. Backend staging only — see {@link CustomOverflow}.
+     */
+    UnmappedFields?: Record<string, unknown>;
 }
 
 /** Aggregate result of a sync operation */
@@ -141,7 +150,59 @@ export interface SyncResult {
     EntityMapResults?: EntityMapSyncResult[];
     /** Duration of the sync in milliseconds */
     Duration?: number;
+    /**
+     * True if this map hit a rate-limit/throttle during fetch. Feeds the per-layer AIMD controller
+     * so a throttle (not just a per-request token-bucket backoff) also reduces in-flight concurrency.
+     * Transient signal — not persisted.
+     */
+    Throttled?: boolean;
+    /**
+     * Outcome of the post-sync custom-column promotion pass (gaps.md §2). Present only when a
+     * promotion callback is registered AND ran; undefined for a customs-free sync (the common
+     * case). Lets the resolver surface SchemaUpdatePending to the client.
+     */
+    SchemaUpdate?: SchemaPromotionResult;
 }
+
+/** Outcome of the post-sync custom-column promotion pass (gaps.md §2 / M2). */
+export interface SchemaPromotionResult {
+    /** Whether any new column was promoted to real schema this run. */
+    Promoted: boolean;
+    /** The columns promoted, per target entity. */
+    ColumnsAdded: Array<{ EntityName: string; ColumnName: string }>;
+    /**
+     * Whether a schema change was applied that needs an MJAPI restart for the new columns to
+     * be exposed over GraphQL — surfaced so the client reads the restart as intentional, not a
+     * crash. False when nothing was promoted. (Restart orchestration itself: M3.)
+     */
+    SchemaUpdatePending: boolean;
+    /** Non-fatal detail when promotion was attempted but partially/fully failed. */
+    Message?: string;
+    /**
+     * Non-fatal problems encountered during promotion (RSU/DDL failure, IOF or field-map save
+     * failure, per-pass churn-cap deferral, a missing entity map). The engine surfaces each as a
+     * structured SyncWarning on the run stream so the operator sees what didn't promote — promotion
+     * NEVER fails the sync, but a swallowed problem must not be invisible.
+     */
+    Warnings?: string[];
+}
+
+/**
+ * Server-registered hook that runs the post-sync custom-column promotion (gaps.md §2). The
+ * engine never depends on RSU/CodeGen — the server registers an implementation that performs
+ * the coverage scan → RSU ADD COLUMN → IOF/field-map. Self-gated INSIDE the callback: a cheap
+ * EXISTS over the overflow column means a customs-free sync does no promotion work, so the
+ * two-stage process collapses to single-stage (1×) when there is nothing to promote.
+ *
+ * ContextUser/Provider are typed `unknown` to avoid a circular import; the engine passes a real
+ * UserInfo / IMetadataProvider and the server implementation narrows them back.
+ */
+export type PostSyncSchemaPromotionCallback = (ctx: {
+    CompanyIntegrationID: string;
+    ContextUser: unknown;
+    SyncedEntityNames: string[];
+    Provider?: unknown;
+}) => Promise<SchemaPromotionResult>;
 
 /** Per-entity-map result within a sync run */
 export interface EntityMapSyncResult {
@@ -264,6 +325,29 @@ export interface IntegrationSyncOptions {
 export interface SourceSchemaInfo {
     /** All objects (tables, API entities) discovered in the source system. */
     Objects: SourceObjectInfo[];
+    /**
+     * §7 — TRUE only when this schema is an AUTHORITATIVE live enumeration of the FULL gamut the
+     * credentials expose (a real list/describe endpoint that returns everything accessible). When true,
+     * a comprehensive refresh may DEACTIVATE declared/discovered objects/fields ABSENT from it (the
+     * source genuinely dropped them). When false/undefined — the default, and the case for stubbed
+     * discovery (`DiscoverObjects` returns nothing) or a CACHE-DRIVEN IntrospectSchema (which just
+     * re-reads persisted metadata) or any partial/scoped discovery — deactivation is FORBIDDEN, because
+     * absence proves nothing and would wrongly wipe the Declared metadata that is the only source.
+     * Set by the connector's `DiscoveryIsAuthoritative` getter; never assume true.
+     */
+    IsAuthoritative?: boolean;
+}
+
+/** Options controlling scope of IntrospectSchema. */
+export interface IntrospectSchemaOptions {
+    /**
+     * When set, restricts introspection (and any per-object describe calls)
+     * to this subset of object names. When omitted/empty, describes all
+     * objects the connector can discover — which for large systems (e.g.
+     * Salesforce with ~1,800 sobjects) is expensive. Prefer passing the
+     * user-selected subset whenever possible.
+     */
+    ObjectNames?: string[];
 }
 
 /** One source object (table, API entity) discovered during introspection. */
@@ -280,6 +364,14 @@ export interface SourceObjectInfo {
     PrimaryKeyFields: string[];
     /** Foreign key relationships to other source objects. */
     Relationships: SourceRelationshipInfo[];
+    /**
+     * Source field name that marks "last changed" for incremental sync.
+     * When introspecting a source whose docs (or describe response) name a
+     * watermark field, surface it here so SchemaBuilder/IntegrationSchemaSync
+     * can populate IntegrationObject.IncrementalWatermarkField. Leave undefined
+     * when the source does not expose a documented watermark.
+     */
+    IncrementalWatermarkField?: string;
 }
 
 /** One field/column in a source object discovered during introspection. */
@@ -292,8 +384,17 @@ export interface SourceFieldInfo {
     Description?: string;
     /** Generic source type (e.g., "string", "integer", "datetime", "boolean"). */
     SourceType: string;
-    /** Whether the field is required/non-nullable. */
+    /**
+     * Whether the field must be provided when creating a new record.
+     * Semantically distinct from AllowsNull — see ExternalFieldSchema.IsRequired.
+     */
     IsRequired: boolean;
+    /**
+     * Whether NULL is a permitted value at rest. Distinct from IsRequired.
+     * Undefined ⇒ source did not declare; default to permissive (nullable).
+     * Honest gap rather than fabricated NOT NULL.
+     */
+    AllowsNull?: boolean;
     /** Maximum length for string types (null if not applicable). */
     MaxLength: number | null;
     /** Precision for numeric types (null if not applicable). */
@@ -304,6 +405,19 @@ export interface SourceFieldInfo {
     DefaultValue: string | null;
     /** Whether this field is part of the primary key. */
     IsPrimaryKey: boolean;
+    /**
+     * Whether this field is constrained as unique. Distinct from IsPrimaryKey —
+     * an object can have several unique fields (email, phone) of which only one
+     * is the PK. Both flags should be set independently when the source distinguishes
+     * them; SchemaBuilder uses this for DDL UNIQUE constraint emission.
+     */
+    IsUniqueKey?: boolean;
+    /**
+     * Whether the field is read-only (computed, system-managed, or otherwise
+     * not user-writable). Affects whether the field is included in
+     * Create/Update operation bodies.
+     */
+    IsReadOnly?: boolean;
     /** Whether this field is a foreign key. */
     IsForeignKey: boolean;
     /** If FK, which source object it references (null if not a FK). */
@@ -349,6 +463,28 @@ export interface UpdateRecordContext extends CRUDContext {
     /** Field values to update */
     Attributes: Record<string, unknown>;
     /** Optional relationship data to update */
+    Relationships?: Record<string, unknown>;
+}
+
+/**
+ * Context for upserting a record in an external system — a single idempotent
+ * create-or-update keyed by a unique business property (not the system PK).
+ *
+ * Upsert exists to define create-then-update race conditions out of existence:
+ * a search-then-create sequence has a window in which a concurrent writer can
+ * create the same record, producing a duplicate-key conflict (e.g. HubSpot
+ * `409 Contact already exists`). A single keyed upsert call has no such window.
+ */
+export interface UpsertRecordContext extends CRUDContext {
+    /** Field values for the record (must include the upsert-key property's value) */
+    Attributes: Record<string, unknown>;
+    /**
+     * The unique business property to match on (e.g. 'email' for HubSpot contacts).
+     * Optional override; when omitted, the connector resolves a per-object default
+     * from its own metadata. Connectors that cannot resolve a default MUST fail loudly.
+     */
+    IDProperty?: string;
+    /** Optional relationship data */
     Relationships?: Record<string, unknown>;
 }
 

@@ -80,7 +80,10 @@ export class WorkspaceInitializerService {
       // 2. Load metadata and validate user
       await SharedService.RefreshData(true);
       await this.themeService.Initialize();
-      const md = new Metadata();
+      // This service runs the one-time app login flow and is wiring up the global
+      // Metadata.Provider via setupGraphQLClient above. There is no per-component
+      // provider scope here.
+      const md = new Metadata(); // global-provider-ok: bootstrap — wires the app's single global provider
 
       if (!md.CurrentUser) {
         return {
@@ -196,21 +199,10 @@ export class WorkspaceInitializerService {
         );
       }
 
-      // Check for specific "ResourceTypes" error which happens when user has no roles
-      if (err.toString && typeof err.toString === 'function') {
-        const errorString = err.toString();
-
-        // This is the specific error we're seeing that indicates no roles
-        if (errorString.includes("Cannot read properties of undefined (reading 'ResourceTypes')")) {
-          return true;
-        }
-      }
-
       // Check for error message directly on the error object
       if (err.message && typeof err.message === 'string') {
         const message = err.message;
-        return message.includes('does not have read permissions on User Roles') ||
-          message.includes("Cannot read properties of undefined (reading 'ResourceTypes')");
+        return message.includes('does not have read permissions on User Roles');
       }
 
       // Check for nested error object

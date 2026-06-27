@@ -94,6 +94,29 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     CacheLocalTTL?: number;
 
+    /**
+     * Controls whether loaded rows are returned as full BaseEntity subclass instances
+     * ('entity_object') or plain JavaScript objects ('simple').
+     *
+     * - 'entity_object': Full BaseEntity subclass instances with ORM capabilities
+     *   (.Save(), .Delete(), validation, dirty-tracking). Required for engines whose
+     *   data participates in immediate-mutation cache updates on entity save/delete events.
+     * - 'simple': Skips BaseEntity construction and class-factory lookup. Rows are plain
+     *   objects with typed field values. Much faster for read-only configuration data
+     *   that engines never mutate. NOTE: configs using 'simple' should be considered
+     *   read-only — the immediate-mutation path operates on BaseEntity arrays and is
+     *   not type-compatible with plain-object arrays.
+     *
+     * Resolution order when this property is left undefined:
+     *   1. The engine subclass's EngineDefaultResultType getter (override per engine)
+     *   2. The base getter, which returns 'entity_object'
+     *
+     * In other words, the effective default is 'entity_object' — leaving this undefined
+     * preserves the historical behavior. Do NOT initialize this field to a literal value
+     * here; it must remain undefined so the engine-level default can take effect.
+     */
+    ResultType?: 'simple' | 'entity_object';
+
     constructor(init?: Partial<BaseEnginePropertyConfig>) {
         super();
         // now copy the values from init to this object
@@ -164,13 +187,24 @@ export interface RemoteInvalidatePayload {
     recordData?: string;
 }
 
+/**
+ * Tracks the load state and data for a single engine property (entity or dataset config).
+ */
+export interface EngineDataMapEntry {
+    entityName?: string;
+    datasetName?: string;
+    data: unknown[];
+    loadedSuccessfully: boolean;
+    errorMessage?: string;
+}
+
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
-    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: unknown[] }> = new Map();
+    private _dataMap: Map<string, EngineDataMapEntry> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
@@ -264,6 +298,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Controls the default RunView ResultType for all entity configs loaded by this engine.
+     * Override in subclasses to change the default for the entire engine without modifying
+     * each individual config entry.
+     *
+     * - 'entity_object': Full BaseEntity subclass instances (slower, required for .Save()/.Delete())
+     * - 'simple': Plain JavaScript objects (much faster, suitable for read-only engines)
+     *
+     * Individual configs can still override this via their own ResultType property.
+     * @default 'entity_object'
+     */
+    protected get EngineDefaultResultType(): 'simple' | 'entity_object' {
+        return 'entity_object';
+    }
+
+    /**
      * All BaseEngine sub-classes get an implementation of IStartupSink so they can be set the auto start in their
      * app container, if desired, simply by adding the @see @RegisterForStartup decorator. The BaseEngine implementation
      * of IStartupSink.HandleStartup is to simply call @see Config
@@ -276,7 +325,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Returns the metadata provider to use for the engine. If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
      */
     public get ProviderToUse(): IMetadataProvider {
-        return this._provider || Metadata.Provider;
+        return this._provider || Metadata.Provider; // global-provider-ok: explicit fallback in BaseEngine accessor
     }
 
     /**
@@ -331,6 +380,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Ensures the engine is loaded before the caller reads engine state. This is
+     * the right call to make at every consumption point — especially for engines
+     * registered with `@RegisterForStartup({ deferred: true })` whose initial load
+     * runs in the background after app boot.
+     *
+     * Idempotent: if the engine is already loaded, returns immediately. If a load
+     * is in flight (e.g. the deferred startup or another consumer triggered it),
+     * returns the same in-progress promise rather than starting a second load —
+     * BaseEngine.Load handles this internally via `_loadingSubject`.
+     *
+     * Equivalent to `this.Config(false)` but reads more clearly at call sites:
+     *
+     * ```ts
+     * await AIEngineBase.Instance.EnsureLoaded();
+     * const models = AIEngineBase.Instance.Models;
+     * ```
+     *
+     * @param contextUser - Optional context user (server-side only)
+     * @param provider - Optional metadata provider override
+     */
+    public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (this._loaded) return;
+        await this.Config(false, contextUser, provider);
+    }
+
+    /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
      * @param configs
@@ -381,13 +456,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Register with the engine registry
                 BaseEngineRegistry.Instance.RegisterEngine(this);
 
-                await this.LoadConfigs(configs, contextUser);
+                await this.LoadConfigs(configs, contextUser, forceRefresh);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
-                this._loaded = true;
 
-                // Notify registry that engine is loaded
-                BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                // Only mark as loaded if all configs loaded successfully.
+                // If any config failed (e.g. network error during MJAPI restart),
+                // leaving _loaded=false allows EnsureLoaded()/Config() to retry on next attempt.
+                const hasFailures = Array.from(this._dataMap.values()).some(entry => !entry.loadedSuccessfully);
+                if (hasFailures) {
+                    const failedNames = Array.from(this._dataMap.entries())
+                        .filter(([, entry]) => !entry.loadedSuccessfully)
+                        .map(([key, entry]) => entry.entityName || entry.datasetName || key);
+                    LogError(`${this.constructor.name}: Not marking as loaded — ${failedNames.length} config(s) failed to load: ${failedNames.join(', ')}. Will retry on next Config()/EnsureLoaded() call.`);
+                } else {
+                    this._loaded = true;
+                    // Notify registry that engine is loaded
+                    BaseEngineRegistry.Instance.NotifyEngineLoaded(this);
+                }
             } catch (e) {
                 LogError(e);
             } finally {
@@ -398,64 +484,86 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**********************************************************************
-     * This section is for handling caching of multiple instances when needed
-     * We use the primary singleton as the instance to store a cache of instances
-     * that are tied to specific providers. This is useful when we have multiple
-     * providers in a given app going to different connections.
+     * This section is for handling caching of multiple instances when needed.
+     * We cache engine instances keyed by the **connection** they target — not by
+     * the provider object reference. Multiple per-request providers pointing at
+     * the same database share one cached engine instance.
+     *
+     * Keying by IMetadataProvider.InstanceConnectionString (a stable
+     * credential-free identifier like `mssql://host:port/db`) means:
+     *   - Multi-server clients still get separate engine instances per server
+     *     (different connection strings → different cache entries)
+     *   - Per-request providers on the server hit the cache (same connection
+     *     string as the persistent startup provider) instead of allocating a
+     *     fresh engine and running a full DB load every request
+     *   - Transient provider objects never get pinned by the cache, so they're
+     *     GC-eligible at end of request as designed
      *********************************************************************/
-    // private static _providerInstances: Map<{provider: IMetadataProvider, subclassConstructor: any}, any> = new Map();
-    // private static get ProviderInstances(): Map<{provider: IMetadataProvider, subclassConstructor: any}, any> {
-    //     return BaseEngine._providerInstances;
-    // }
-    private static _providerInstances: { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] = [];
-    private static get ProviderInstances(): { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] {
-        return BaseEngine._providerInstances;
-    }    
+    private static _providerInstances: Map<string, Map<Function, BaseEngine<unknown>>> = new Map();
 
     /**
-     * This method will check for the existence of an instance of this engine class that is tied to a specific provider. If one exists, it will return it, otherwise it will create a new instance
+     * Returns the cached engine instance for this engine subclass on the connection the given
+     * provider points to, creating one if none exists yet. Lookup is keyed by the provider's
+     * `InstanceConnectionString` so multiple provider objects targeting the same connection
+     * share a single cached engine.
      */
     public static GetProviderInstance<T>(provider: IMetadataProvider, subclassConstructor: new () => BaseEngine<T>): BaseEngine<T> {
-        const existingEntry = BaseEngine.ProviderInstances.find(
-            entry => entry.provider === provider && entry.subclassConstructor === subclassConstructor
-        );
+        const connectionKey = provider?.InstanceConnectionString;
+        if (connectionKey) {
+            const perConnectionMap = BaseEngine._providerInstances.get(connectionKey);
+            if (perConnectionMap) {
+                const existing = perConnectionMap.get(subclassConstructor);
+                if (existing) {
+                    return existing as BaseEngine<T>;
+                }
+            }
+        }
 
-        if (existingEntry) {
-            return existingEntry.instance;
-        }
-        else {
-            // we don't have an existing instance for this provider, so we need to create one
-            const newInstance = new subclassConstructor(); 
-            newInstance.SetProvider(provider);
-//            BaseEngine.ProviderInstances.set({provider, subclassConstructor}, newInstance);
-            //BaseEngine.ProviderInstances.push({ provider, subclassConstructor, instance: newInstance });
-                    
-            return newInstance;
-        }
+        const newInstance = new subclassConstructor();
+        newInstance.SetProvider(provider); // SetProvider -> CheckAddToProviderInstances handles registration
+        return newInstance;
     }
 
     /**
-     * Internal method to set the provider when an engine is loaded
-     * @param provider 
+     * Removes all cached engine instances for the given connection. Call this when a connection
+     * is being torn down (e.g. multi-tenant client logging out) to release the cached engines'
+     * memory eagerly. For normal server operation this is rarely needed — the cache is bounded
+     * by (distinct connections × engine classes), which is small.
+     */
+    public static RemoveConnectionInstances(connectionKey: string): void {
+        BaseEngine._providerInstances.delete(connectionKey);
+    }
+
+    /**
+     * Internal method to set the provider when an engine is loaded. Once this engine instance has
+     * a provider bound, subsequent calls are no-ops — preventing transient per-request providers
+     * from displacing the persistent provider that first bound to this connection. The cache key
+     * is the connection (not the object), so the first persistent provider to load an engine for
+     * a connection "owns" the engine for that connection's lifetime.
      */
     protected SetProvider(provider: IMetadataProvider) {
-        this._provider = provider;
-//        BaseEngine.ProviderInstances.set({provider: this.ProviderToUse, subclassConstructor: this.constructor} /*use default provider if one wasn't provided to use*/, <T><any>this);
-
-        this.CheckAddToProviderInstances(this.ProviderToUse);
+        // First-wins on the persistent _provider binding so transient per-request providers
+        // can't displace the persistent provider that first owned this engine.
+        if (!this._provider && provider) {
+            this._provider = provider;
+        }
+        // Always register under the incoming provider's connection key (or ProviderToUse if
+        // none was passed) so future GetProviderInstance lookups for that connection can find
+        // this engine. Multiple registrations for the same key are idempotent.
+        this.CheckAddToProviderInstances(provider || this.ProviderToUse);
     }
 
     protected CheckAddToProviderInstances(provider: IMetadataProvider) {
-        const existingEntry = BaseEngine.ProviderInstances.find(
-            entry => entry.provider === provider && entry.subclassConstructor === this.constructor
-        );
-
-        if (!existingEntry) {
-            BaseEngine.ProviderInstances.push({
-                provider: provider,
-                subclassConstructor: this.constructor,
-                instance: this
-            });
+        if (!provider) return; // no provider available (e.g. global default not yet initialized)
+        const connectionKey = provider.InstanceConnectionString;
+        if (!connectionKey) return; // provider not fully configured yet — skip registration
+        let perConnectionMap = BaseEngine._providerInstances.get(connectionKey);
+        if (!perConnectionMap) {
+            perConnectionMap = new Map();
+            BaseEngine._providerInstances.set(connectionKey, perConnectionMap);
+        }
+        if (!perConnectionMap.has(this.constructor)) {
+            perConnectionMap.set(this.constructor, this);
         }
     }
 
@@ -529,9 +637,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
 
                 if (allCanUseImmediate) {
-                    // Process immediately without debounce - synchronous array mutations
+                    // Process immediately without debounce - mutation requires await because the
+                    // entity must be cloned (with its provider rebound) before being cached
                     for (const config of matchingConfigs) {
-                        this.applyImmediateMutation(config, event);
+                        await this.applyImmediateMutation(config, event);
                     }
                     return true;
                 } else {
@@ -627,7 +736,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     ): Promise<boolean> {
         try {
             const recordData = JSON.parse(recordDataJSON);
-            const md = new Metadata();
+            // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
+            // multi-provider client setups instantiate entities against the correct server.
+            const md = this.ProviderToUse;
             // Find the proper entity name with original casing from the config
             const originalEntityName = matchingConfigs[0].EntityName!;
             const entity = await md.GetEntityObject(originalEntityName, this._contextUser);
@@ -645,11 +756,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                 if (index >= 0) {
                     currentData[index] = entity;
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
                     currentData.push(entity);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
                 this.emitPropertyChange(config.PropertyName);
@@ -693,7 +804,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (index >= 0) {
                     const removed = currentData[index];
                     currentData.splice(index, 1);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
                     this.emitPropertyChange(config.PropertyName);
                 }
@@ -809,7 +920,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // Check if we can use immediate array mutation instead of running a view
                     if (this.canUseImmediateMutation(config)) {
                         // LogStatus(`>>> Immediate mutation for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}`);
-                        this.applyImmediateMutation(config, event);
+                        await this.applyImmediateMutation(config, event);
                     } else {
                         // LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
                         await this.LoadSingleConfig(config, this._contextUser);
@@ -879,7 +990,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Immediate mutations are only safe when:
      * 1. The config has no Filter (no server-side filtering that might exclude the entity)
      * 2. The config has no OrderBy (no server-side ordering that would need to be maintained)
-     * 3. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
+     * 3. The config does not use ResultType='simple' (immediate-mutation pushes BaseEntity
+     *    instances; arrays loaded as plain objects would become type-mixed)
+     * 4. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
      *
      * @param config - The configuration to check
      * @param skipAdditionalLoadingCheck - When true, skips the AdditionalLoading override check.
@@ -899,6 +1012,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // - For creates: we'd need to insert at the correct position
         // - For updates: the entity might need to move to a different position
         if (config.OrderBy) {
+            return false;
+        }
+
+        // applyImmediateMutation pushes/replaces with the BaseEntity instance from the
+        // event payload. If the config loaded as 'simple', the property holds plain JS
+        // objects — mixing in a BaseEntity would create a heterogeneous array. Check the
+        // effective ResultType (config override OR engine-wide default) and force a full
+        // refresh in the simple case so the array stays homogeneous and respects the
+        // configured ResultType.
+        const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
+        if (effectiveResultType === 'simple') {
             return false;
         }
 
@@ -932,10 +1056,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Applies an immediate array mutation based on the entity event type.
      * This is faster than running a full view refresh for simple add/update/delete operations.
      *
+     * On save, the cached entry is a clone owned by this engine's provider — not the saver's
+     * entity instance. Storing the saver's instance would pin the saver's provider (often a
+     * per-request provider) inside the engine's cache for the engine's full lifetime, which
+     * leaks the provider and all its associated state.
+     *
      * @param config - The configuration for the property being mutated
      * @param event - The entity event containing the affected entity and event type
      */
-    protected applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): void {
+    protected async applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {
         const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
         if (!currentData) {
             // No existing array, nothing to mutate
@@ -945,6 +1074,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entity = event.baseEntity;
 
         if (event.type === 'save') {
+            // Clone the entity so the cache holds an instance owned by THIS engine's provider,
+            // not the saving provider. Falling back to the original entity here would reintroduce
+            // the leak, so on clone failure we bail and let the next full refresh fix the cache.
+            const cached = await this.cloneEntityForCache(entity, config);
+            if (!cached) {
+                LogError(`BaseEngine.applyImmediateMutation: failed to clone entity for ${config.EntityName}; skipping immediate mutation`);
+                return;
+            }
+
             if (event.saveSubType === 'create') {
                 // For create, first check if the exact object is already in the array
                 const existsByRef = currentData.indexOf(entity) >= 0;
@@ -955,34 +1093,34 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
-                        currentData[indexByKey] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'update', entity);
+                        currentData[indexByKey] = cached;
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Add the new entity to the array
-                        currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'add', entity);
+                        currentData.push(cached);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'add', cached);
                     }
                 }
             } else {
                 // Update: first check if the exact object is already in the array
                 // if already in the array, we don't do anything but we keep going
-                // in the method so stuff at end can be done 
+                // in the method so stuff at end can be done
                 const existsByRef = currentData.indexOf(entity) >= 0;
                 if (!existsByRef) {
                     // Find by composite primary key and replace
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
-                        currentData[index] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'update', entity);
+                        currentData[index] = cached;
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
-                        currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
-                        this.NotifyDataChange(config, currentData, 'add', entity);
+                        currentData.push(cached);
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
+                        this.NotifyDataChange(config, currentData, 'add', cached);
                     }
                 }
             }
@@ -996,7 +1134,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (index >= 0) {
                 currentData.splice(index, 1);
-                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
         }
@@ -1011,6 +1149,30 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Log status but don't fail - cache will self-correct on next fetch
                 LogStatus(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`);
             });
+        }
+    }
+
+    /**
+     * Creates a fresh BaseEntity owned by this engine's provider and populates it from the
+     * given source entity's field values. Used by applyImmediateMutation to avoid pinning
+     * the source entity's provider inside this engine's cache.
+     */
+    protected async cloneEntityForCache(source: BaseEntity, config: BaseEnginePropertyConfig): Promise<BaseEntity | null> {
+        try {
+            const provider = this.ProviderToUse;
+            if (!provider) {
+                return null;
+            }
+            const fresh = await provider.GetEntityObject<BaseEntity>(config.EntityName, this._contextUser);
+            if (!fresh) {
+                return null;
+            }
+            fresh.LoadFromData(source.GetAll());
+            return fresh;
+        }
+        catch (e) {
+            LogError(e);
+            return null;
         }
     }
 
@@ -1058,8 +1220,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the updated timestamp from the entity
-        const updatedAt = entity.Get('__mj_UpdatedAt') as string | null || new Date().toISOString();
+        // Get the updated timestamp from the entity and normalize to an ISO string.
+        // entity.Get returns Date|string|number|null depending on field hydration and the
+        // storage round-trip. The downstream cache and smart-cache-check protocol require
+        // an ISO string — without this normalization, a Date or numeric ms can leak into
+        // the GraphQL request as `cacheStatus.maxUpdatedAt` and crash the server's
+        // `new Date(...).toISOString()` with `RangeError: Invalid time value`.
+        const rawUpdatedAt = entity.Get('__mj_UpdatedAt') as Date | string | number | null;
+        const updatedAt = rawUpdatedAt
+            ? new Date(rawUpdatedAt).toISOString()
+            : new Date().toISOString();
 
         if (event.type === 'delete') {
             await LocalCacheManager.Instance.RemoveSingleEntity(
@@ -1125,16 +1295,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Loads the specified metadata configurations.
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses all server-side caching (RunView and dataset) to fetch fresh data
+     *   directly from the database. Passed through from {@link Load} when `forceRefresh` is true (i.e., `Config(true)`).
      */
-    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo): Promise<void> {
+    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
         const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser)),
-                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser)]);
+        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -1144,34 +1316,37 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Loads a single metadata configuration.
      * @param config - The metadata configuration to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        if (config.Type === 'dataset') 
-            return await this.LoadSingleDatasetConfig(config, contextUser);
+    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+        if (config.Type === 'dataset')
+            return await this.LoadSingleDatasetConfig(config, contextUser, bypassCache);
         else
-            return await this.LoadSingleEntityConfig(config, contextUser);
-    }    
+            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache);
+    }
 
     /**
      * Handles the process of loading a single config of type 'entity'.
      * @param config
      * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.RunViewProviderToUse;
         const rv = new RunView(p);
         const result = await rv.RunView({
             EntityName: config.EntityName,
-            ResultType: 'entity_object',
+            ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
-            CacheLocalTTL: config.CacheLocalTTL
+            CacheLocalTTL: config.CacheLocalTTL,
+            BypassCache: bypassCache
         }, contextUser);
 
-        this.HandleSingleViewResult(config, result);
+        this.HandleSingleViewResult(config, result, contextUser);
         this.emitPropertyChange(config.PropertyName);
     }
 
@@ -1180,12 +1355,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param config 
      * @param result 
      */
-    protected HandleSingleViewResult(config: BaseEnginePropertyConfig, result: RunViewResult) {
+    protected HandleSingleViewResult(config: BaseEnginePropertyConfig, result: RunViewResult, contextUser?: UserInfo) {
         if (result.Success) {
             if (config.AddToObject !== false) {
                 (this as any)[config.PropertyName] = result.Results;
             }
-            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results, loadedSuccessfully: true });
 
             // Notify listeners that this property's data has changed
             this.NotifyDataChange(config, result.Results);
@@ -1193,28 +1368,100 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
+        } else if (!this.ContextUserCanReadConfigEntity(config.EntityName, contextUser)) {
+            // PERMANENT failure: the user lacks Read on this entity, so a retry will
+            // never succeed for this role. Load the property empty and mark it loaded
+            // so a restricted / app-scoped user (e.g. a magic-link guest) doesn't hang
+            // the shell looping on "not marking as loaded". Security is unaffected —
+            // the user still gets no data. Logged at status level, not error, because
+            // for a restricted role this is expected, not a fault.
+            this.MarkConfigEmptyLoaded(config);
+            LogStatus(`BaseEngine: ${config.EntityName} not readable by current role — loaded empty (restricted-role degradation).`);
+        } else {
+            // TRANSIENT failure (network, MJAPI restart, etc.) — leave loadedSuccessfully
+            // false so EnsureLoaded()/Config() retries on the next attempt.
+            this._dataMap.set(config.PropertyName, {
+                entityName: config.EntityName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: result.ErrorMessage
+            });
+            LogError(`BaseEngine: Failed to load ${config.EntityName} into ${config.PropertyName}: ${result.ErrorMessage}`);
         }
+    }
+
+    /**
+     * Returns false ONLY when we can positively determine that the effective user
+     * lacks Read permission on `entityName`. Unknown cases (no entity name, no
+     * resolvable user, entity not in metadata) return true — so the default is to
+     * treat a failure as transient/retryable and server-side system-user loads
+     * (full access) are unaffected.
+     *
+     * Used by {@link HandleSingleViewResult} to classify a FAILED config load:
+     * a load that failed because the user can't read the entity is a PERMANENT
+     * condition (a retry will never succeed for this role), so the engine should
+     * load that property empty rather than loop on "not marking as loaded" — which
+     * is what hangs the Explorer shell for a restricted / app-scoped user (e.g. a
+     * magic-link guest). Security is unaffected: the user still receives no data.
+     *
+     * This is a classifier consulted AFTER a failure, never a predictive pre-skip —
+     * so a readable entity is always actually queried, and stale/late client
+     * permission metadata can never cause a readable entity to be silently skipped.
+     */
+    protected ContextUserCanReadConfigEntity(entityName: string | undefined, contextUser: UserInfo | undefined): boolean {
+        if (!entityName) {
+            return true;
+        }
+        // Engines on the client commonly load with a null contextUser (the server
+        // resolves the user from the token), so fall back to the provider's
+        // CurrentUser — otherwise the gate can't see a restricted role and would let
+        // the query through to a server-side permission denial.
+        const user = contextUser ?? this.ProviderToUse?.CurrentUser;
+        if (!user) {
+            return true;
+        }
+        const entityInfo = this.ProviderToUse?.EntityByName(entityName);
+        if (!entityInfo) {
+            return true; // unknown entity — let the normal not-found handling apply
+        }
+        return entityInfo.GetUserPermisions(user).CanRead;
+    }
+
+    /**
+     * Records a config as successfully loaded with an EMPTY result set. Used when a
+     * load failed permanently because the context user lacks Read on the entity:
+     * the engine exposes an empty array (not a hang) and is marked loaded so shell
+     * boot can complete for a restricted role.
+     */
+    protected MarkConfigEmptyLoaded(config: BaseEnginePropertyConfig): void {
+        if (config.AddToObject !== false) {
+            (this as any)[config.PropertyName] = [];
+        }
+        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: [], loadedSuccessfully: true });
+        this.NotifyDataChange(config, []);
     }
 
     /**
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
             const viewConfigs = configs.map(c => {
                 return <RunViewParams>{
                     EntityName: c.EntityName,
-                    ResultType: 'entity_object',
+                    ResultType: c.ResultType || this.EngineDefaultResultType,
                     ExtraFilter: c.Filter,
                     OrderBy: c.OrderBy,
                     IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
                     _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
                     CacheLocal: c.CacheLocal,
-                    CacheLocalTTL: c.CacheLocalTTL
+                    CacheLocalTTL: c.CacheLocalTTL,
+                    BypassCache: bypassCache
                 };
             });
             const results = await rv.RunViews(viewConfigs, contextUser);
@@ -1222,7 +1469,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Process results and record entity loads for redundancy detection
             const entityNames: string[] = [];
             for (let i = 0; i < configs.length; i++) {
-                this.HandleSingleViewResult(configs[i], results[i]);
+                this.HandleSingleViewResult(configs[i], results[i], contextUser);
                 this.emitPropertyChange(configs[i].PropertyName);
                 if (configs[i].EntityName) {
                     entityNames.push(configs[i].EntityName);
@@ -1240,14 +1487,44 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     /**
      * Handles the process of loading a single config of type 'dataset'.
-     * @param config 
-     * @param contextUser 
+     * @param config
+     * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database.
+     *   Uses {@link IMetadataProvider.GetDatasetByName} with `forceRefresh` to skip all cache reads,
+     *   then {@link IMetadataProvider.CacheDataset} to store fresh results for subsequent non-forced calls.
      */
-    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.ProviderToUse;
-        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
+        // When bypassing cache, use GetDatasetByName with forceRefresh to skip all cache reads,
+        // then CacheDataset to store the fresh results for subsequent non-forced calls.
+        // Otherwise, use GetAndCacheDatasetByName which validates staleness before returning cached data.
+        let result: DatasetResultType;
+        if (bypassCache) {
+            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
+            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+        } else {
+            result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+        }
         if (!result) {
-            LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
+            const errorMsg = `GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`;
+            LogError(`LoadSingleDatasetConfig: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
+            return;
+        }
+        if (!result.Success) {
+            const errorMsg = result.Status || `Dataset "${config.DatasetName}" load returned Success=false`;
+            LogError(`BaseEngine: Failed to load dataset ${config.DatasetName} into ${config.PropertyName}: ${errorMsg}`);
+            this._dataMap.set(config.PropertyName, {
+                datasetName: config.DatasetName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: errorMsg
+            });
             return;
         }
         if (result.Success) {
@@ -1255,7 +1532,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (config.DatasetResultHandling === 'single_property') {
                     const singleObject = {};
                     for (const item of result.Results) {
-                        //convert the results to entity objects before 
+                        //convert the results to entity objects before
                         //adding them to the singleObject
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {
@@ -1275,7 +1552,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     }
                 }
             }
-            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results, loadedSuccessfully: true });
 
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
@@ -1435,6 +1712,38 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     public get Loaded(): boolean {
         return this._loaded;
+    }
+
+    /**
+     * Returns true if the specified property loaded successfully during engine startup.
+     * Returns false if the property failed to load (e.g., RunView error) or was never loaded.
+     * Consumers can use this to detect partial load failures and trigger recovery.
+     */
+    public PropertyLoadedSuccessfully(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.loadedSuccessfully ?? false;
+    }
+
+    /**
+     * Returns true if ALL configured properties loaded successfully.
+     * Useful as a quick health check after engine startup.
+     */
+    public get AllPropertiesLoadedSuccessfully(): boolean {
+        if (this._dataMap.size === 0) return false;
+        for (const entry of this._dataMap.values()) {
+            if (!entry.loadedSuccessfully) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns a read-only snapshot of all engine property load states.
+     * Each entry maps a property name to its load status, including entity/dataset name,
+     * row count, success/failure flag, and error message if applicable.
+     * Used by dev tools for diagnostics and health monitoring.
+     */
+    public get DataMapEntries(): ReadonlyMap<string, EngineDataMapEntry> {
+        return this._dataMap;
     }
 
     /**

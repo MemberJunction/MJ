@@ -8,7 +8,7 @@
       "Status": "Active",
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
-      "PrefillFallbackMode": "SystemInstruction",
+      "PrefillFallbackMode": "Ignore",
       "StopSequences": "\n```",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -18,7 +18,8 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "EffortLevel": 1
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -40,7 +41,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 4
           },
@@ -48,8 +49,8 @@
             "ID": "1A11B0F7-E3D3-415B-B452-446F26A7B71A"
           },
           "sync": {
-            "lastModified": "2026-04-11T04:11:11.570Z",
-            "checksum": "456546ff62e16fa5bac477bd90c97c59a34b7e3f16aede23d4cfc9985d3ff0fd"
+            "lastModified": "2026-05-29T19:49:20.782Z",
+            "checksum": "1cc714ce453ddb29598e22ca8b95f06ea99afa85b37a178e4394652939025c48"
           }
         },
         {
@@ -96,6 +97,21 @@
             "lastModified": "2026-02-13T20:49:10.950Z",
             "checksum": "888a1042e910c9f502887d46024d39d3169c4c6d58ac51dc058896b8bdfc4909"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "000B0735-484D-4E5C-9B12-C6969F324D9B"
+          },
+          "sync": {
+            "lastModified": "2026-05-29T19:49:20.796Z",
+            "checksum": "0a856cd46a0e7e2c1891c0678b536005faa4ed96a1c28db4ee43361a4996b43f"
+          }
         }
       ]
     },
@@ -103,8 +119,8 @@
       "ID": "1F4C8B38-8419-40E2-A96F-3A6DC1243D42"
     },
     "sync": {
-      "lastModified": "2026-04-11T04:11:11.509Z",
-      "checksum": "2cc73c1cde8e3de71233c81273af2bc311ae89ec647a191916d808931162d05e"
+      "lastModified": "2026-05-29T19:49:20.752Z",
+      "checksum": "925def45b8dc9f52affba5b425d8bdc7e30440a80e363aa7d9895340f74b48b7"
     }
   }
 ]

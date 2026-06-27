@@ -1,0 +1,46 @@
+.cls-org-ctx {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface);
+    overflow: hidden;
+}
+.cls-org-ctx-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--mj-bg-surface-card);
+    border: none;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    text-align: left;
+}
+.cls-org-ctx-head > i:first-child { color: var(--mj-brand-primary); }
+.cls-org-ctx-title { flex: 1; }
+.cls-org-ctx-dirty {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--mj-status-warning-text);
+    background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-warning-border, var(--mj-border-default));
+    border-radius: 999px;
+    padding: 2px 8px;
+}
+.cls-org-ctx-body {
+    padding: 14px;
+    border-top: 1px solid var(--mj-border-subtle);
+}
+.cls-org-ctx-help {
+    margin: 0 0 10px;
+    font-size: 0.8rem;
+    color: var(--mj-text-muted);
+    line-height: 1.45;
+}
+.cls-org-ctx-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}

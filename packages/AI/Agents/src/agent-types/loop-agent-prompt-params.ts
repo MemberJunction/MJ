@@ -81,6 +81,20 @@ export interface ResponseTypeInclusionRules {
      * @default true
      */
     scratchpad?: boolean;
+
+    /**
+     * Include artifactToolCalls field in the response interface.
+     * Auto-aligns with includeArtifactToolsDocs unless explicitly set.
+     * @default true
+     */
+    artifactToolCalls?: boolean;
+
+    /**
+     * Include the pipeline field in the response interface.
+     * Auto-aligns with includePipelineDocs unless explicitly set.
+     * @default true
+     */
+    pipeline?: boolean;
 }
 
 /**
@@ -93,7 +107,9 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     commands: true,
     forEach: true,
     while: true,
-    scratchpad: true
+    scratchpad: true,
+    artifactToolCalls: true,
+    pipeline: true
 };
 
 /**
@@ -253,6 +269,23 @@ export interface LoopAgentTypePromptParams {
      */
     scratchpadMaxTasks?: number;
 
+    /**
+     * Include artifact tools documentation and artifact manifest in the prompt.
+     * Artifact tools allow agents to explore input artifacts on demand.
+     * Only emitted when artifacts are present in the run.
+     * Disable for agents that never work with artifacts.
+     * @default true
+     */
+    includeArtifactToolsDocs?: boolean;
+
+    /**
+     * Include tool-pipeline documentation in the prompt (the `_PIPELINE_TOOLS` block).
+     * Only emitted when at least one pipeline source — an Action or artifact tool — is available.
+     * Disable for agents that should never compose pipelines.
+     * @default true
+     */
+    includePipelineDocs?: boolean;
+
     // === Content Limiting ===
 
     /**
@@ -292,6 +325,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
     scratchpadMaxTasks: 50,
+    includeArtifactToolsDocs: true,
+    includePipelineDocs: true,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1
 };

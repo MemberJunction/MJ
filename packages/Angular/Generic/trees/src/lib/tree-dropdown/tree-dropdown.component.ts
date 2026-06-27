@@ -47,7 +47,8 @@ import {
 import { TreeComponent } from '../tree/tree.component';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -67,7 +68,15 @@ interface DropdownPosition {
     templateUrl: './tree-dropdown.component.html',
     styleUrls: ['./tree-dropdown.component.css']
 })
-export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TreeDropdownComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
+    /**
+     * Default minimum width (px) for the open dropdown panel when the consumer
+     * hasn't set `DropdownConfig.MinWidth`. Keeps node labels readable even when
+     * the trigger is narrow (e.g. a compact form field). The panel still grows to
+     * the trigger width when that is larger.
+     */
+    private static readonly DEFAULT_PANEL_MIN_WIDTH = 280;
+
     // ========================================
     // Tree Configuration (passed to inner tree)
     // ========================================
@@ -251,7 +260,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     constructor(
         private readonly cdr: ChangeDetectorRef,
         private readonly renderer: Renderer2
-    ) {}
+    ) { super(); }
 
     // ========================================
     // Lifecycle
@@ -842,10 +851,14 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             }
         }
 
-        // Calculate width
+        // Calculate width. When no explicit MinWidth is configured, fall back to a
+        // readable default (not the trigger width) so the panel doesn't collapse to
+        // a narrow column when the trigger is small — node labels need room. The
+        // panel never gets narrower than the trigger, and `left` below is computed
+        // from this width so a wider panel still avoids overflowing the viewport.
         const minWidth = this.DropdownConfig.MinWidth
             ? parseInt(this.DropdownConfig.MinWidth, 10)
-            : triggerRect.width;
+            : TreeDropdownComponent.DEFAULT_PANEL_MIN_WIDTH;
         const width = Math.max(minWidth, triggerRect.width);
 
         // Ensure dropdown doesn't go off screen horizontally
@@ -1094,15 +1107,17 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Fetch display text for value before tree loads using Metadata.GetEntityRecordName
      */
     private async fetchDisplayTextForValue(val: CompositeKey | CompositeKey[] | null): Promise<void> {
-        if (!val || !this.LeafConfig) {
+        // Determine which entity to look up: prefer LeafConfig, fall back to BranchConfig
+        // (branch-only dropdowns have no LeafConfig)
+        const entityName = this.LeafConfig?.EntityName ?? this.BranchConfig?.EntityName;
+        if (!val || !entityName) {
             this._pendingDisplayText = null;
             this.cdr.detectChanges();
             return;
         }
 
         try {
-            const md = new Metadata();
-            const entityName = this.LeafConfig.EntityName;
+            const md = this.ProviderToUse;
 
             if (Array.isArray(val)) {
                 // Multiple selection

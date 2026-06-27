@@ -2,6 +2,7 @@ import { Component, EventEmitter, Input, OnChanges, OnInit, Output, SimpleChange
 import { RunView } from '@memberjunction/core';
 import { MJAPIKeyEntity, MJAPIKeyScopeEntity, MJAPIScopeEntity } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Filter options for the list */
 export type APIKeyFilter = 'all' | 'active' | 'revoked' | 'expiring' | 'expired' | 'never-used';
@@ -29,7 +30,7 @@ interface KeyScopeInfo {
     templateUrl: './api-key-list.component.html',
     styleUrls: ['./api-key-list.component.css']
 })
-export class APIKeyListComponent implements OnInit, OnChanges {
+export class APIKeyListComponent extends BaseAngularComponent implements OnInit, OnChanges {
     @Input() Filter: APIKeyFilter = 'all';
     @Output() KeySelected = new EventEmitter<MJAPIKeyEntity>();
     @Output() CreateRequested = new EventEmitter<void>();
@@ -92,7 +93,7 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     public async loadKeys(): Promise<void> {
         this.IsLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const base = APIKeysEngineBase.Instance;
 
             // Load keys and key-scope assignments (scopes from cache)
@@ -315,6 +316,17 @@ export class APIKeyListComponent implements OnInit, OnChanges {
     public clearSearch(): void {
         this.SearchText = '';
         this.applyFilters();
+    }
+
+    /** Dynamic title for the empty state — reflects search vs filter vs truly-empty. */
+    public get EmptyStateTitle(): string {
+        if (this.SearchText) {
+            return `No keys matching "${this.SearchText}"`;
+        }
+        if (this.Filter !== 'all') {
+            return `No ${this.Filter} keys found`;
+        }
+        return 'No API keys created yet';
     }
 
     /**

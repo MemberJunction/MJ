@@ -316,5 +316,61 @@
       "lastModified": "2026-02-27T20:00:58.690Z",
       "checksum": "5f6cc666c29a2e6daee850de8b3f7da0c41341057d361d0346ff1dcf3e5a19f8"
     }
+  },
+  {
+    "fields": {
+      "Name": "Inception Labs",
+      "Description": "Inception Labs is an AI research company specializing in diffusion-based large language models. Creator of the Mercury family, which uses a diffusion architecture to deliver high-throughput reasoning at 1000+ tokens per second on commercial GPUs. Provides an OpenAI-compatible API.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "62E1A70D-66EA-4876-B96C-77289DC23713"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:49:53.104Z",
+      "checksum": "e55e2bee57f00a207a5d5c3916093ef0d6d27d0c7f591620ffff5c37e687eb10"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DeepSeek",
+      "Description": "DeepSeek is a Chinese AI research company that develops large language models including the V-series (V4 Pro/Flash) and R-series (reasoning) families. Models are released under permissive open-source licenses (MIT) with full open weights. The DeepSeek API offers OpenAI-compatible and Anthropic-compatible interfaces.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "D13D6306-2098-44B8-AEFA-9CE3694335EC"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:49.018Z",
+      "checksum": "41df91fd00c1ad43f8e226361ea0273229325341e37edc1d9a9e134fb4838576"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AssemblyAI",
+      "Description": "AI Vendor",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "255D7FB9-26CE-41AE-BCE0-59B53D68AD09"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:09.210Z",
+      "checksum": "7dd5843f33dd6940ac44193c3a96531983b41ad6b1bfd168b96a799fb6627470"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Inworld",
+      "Description": "Inworld AI is a real-time voice AI platform whose Realtime API is a single-WebSocket, full-duplex speech-to-speech stack. It brokers many underlying LLMs (selected per session via modelId, e.g. anthropic/claude-sonnet-4-6), runs server-side speech-to-text with voice profiling on input, and synthesizes output with its Realtime TTS-2 engine (supporting inline steering tags like [laugh]). Turn-taking uses semantic VAD with adjustable eagerness, handling true barge-in. Session components (model, instructions, audio, STT/TTS, tools, turn detection) are swappable mid-session without reconnect via session.update.",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "9C93ADFB-7EA3-4D3C-A591-D0F06112B689"
+    },
+    "sync": {
+      "lastModified": "2026-06-16T01:17:09.223Z",
+      "checksum": "f778175ea41a178814c7e66627508b37ba065f47c0b258b76e1978732fd43cf4"
+    }
   }
 ]

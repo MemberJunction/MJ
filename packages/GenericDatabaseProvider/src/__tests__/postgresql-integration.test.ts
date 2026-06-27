@@ -2,11 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
     QueryCache,
     QueryCacheConfig,
-    QueryInfo,
-    Metadata,
     UserInfo,
     DatabasePlatform
 } from '@memberjunction/core';
+import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 import { QueryCompositionEngine } from '../queryCompositionEngine';
 import { QueryPagingEngine } from '../queryPagingEngine';
 
@@ -30,30 +29,42 @@ function makeQueryInfo(overrides: Partial<{
     Reusable: boolean;
     Status: string;
     UserCanRun: boolean;
-}>): QueryInfo {
-    const q = new QueryInfo();
-    q.ID = overrides.ID ?? 'query-1';
-    q.Name = overrides.Name ?? 'Test Query';
-    q.SQL = overrides.SQL ?? 'SELECT 1';
-    q.Reusable = overrides.Reusable ?? true;
-    q.Status = (overrides.Status ?? 'Approved') as QueryInfo['Status'];
+}>): MJQueryEntityExtended {
+    const categoryPath = overrides.CategoryPath ?? '/Test/';
+    const normalizedPath = categoryPath.replace(/^\/|\/$/g, '');
+
+    const status = overrides.Status ?? 'Approved';
+
+    const canRun = overrides.UserCanRun ?? true;
+
+    const q: Record<string, unknown> = {
+        ID: overrides.ID ?? 'query-1',
+        Name: overrides.Name ?? 'Test Query',
+        SQL: overrides.SQL ?? 'SELECT 1',
+        Reusable: overrides.Reusable ?? true,
+        Status: status,
+        UsesTemplate: false,
+        UserCanRun: vi.fn().mockReturnValue({ canRun, deniedEntities: [] }),
+        GetPlatformSQL: vi.fn().mockReturnValue(overrides.SQL ?? 'SELECT 1'),
+    };
 
     Object.defineProperty(q, 'CategoryPath', {
-        get: () => overrides.CategoryPath ?? '/Test/',
-        configurable: true
+        get: () => normalizedPath,
+        configurable: true,
     });
 
-    q.UserCanRun = vi.fn().mockReturnValue(overrides.UserCanRun ?? true);
-    q.GetPlatformSQL = vi.fn().mockReturnValue(q.SQL);
+    Object.defineProperty(q, 'IsApproved', {
+        get: () => status === 'Approved',
+        configurable: true,
+    });
 
-    return q;
+    return q as unknown as MJQueryEntityExtended;
 }
 
-function mockMetadataQueries(queries: QueryInfo[]): void {
-    vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+function mockQueryEngineQueries(queries: MJQueryEntityExtended[]): void {
+    vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({
         Queries: queries,
-        QueryDependencies: []
-    } as ReturnType<typeof Metadata.Provider>);
+    } as unknown as QueryEngine);
 }
 
 // ---- D.5: PostgreSQL Integration Tests ----
@@ -89,7 +100,7 @@ describe('PostgreSQL Integration: Composition + Paging + Cache', () => {
                 Status: 'Approved'
             });
 
-            mockMetadataQueries([reusableQuery]);
+            mockQueryEngineQueries([reusableQuery]);
 
             const sql = 'SELECT * FROM {{query:"Sales/Active Customers"}} ac WHERE ac.Name LIKE \'%Smith%\'';
             const result = engine.ResolveComposition(sql, pgPlatform, mockUser);
@@ -109,7 +120,7 @@ describe('PostgreSQL Integration: Composition + Paging + Cache', () => {
                 Status: 'Approved'
             });
 
-            mockMetadataQueries([reusableQuery]);
+            mockQueryEngineQueries([reusableQuery]);
 
             const sql = 'SELECT * FROM {{query:"Sales/Active Customers"}} ac WHERE ac.Name LIKE \'%Smith%\'';
             const result = engine.ResolveComposition(sql, ssPlatform, mockUser);
@@ -133,7 +144,7 @@ describe('PostgreSQL Integration: Composition + Paging + Cache', () => {
                 Status: 'Approved'
             });
 
-            mockMetadataQueries([reusableQuery]);
+            mockQueryEngineQueries([reusableQuery]);
 
             // Step 1: Composition
             const sql = 'SELECT r.Region, r.Total FROM {{query:"Analytics/Revenue By Region"}} r ORDER BY r.Total DESC';
@@ -175,7 +186,7 @@ describe('PostgreSQL Integration: Composition + Paging + Cache', () => {
                 Status: 'Approved'
             });
 
-            mockMetadataQueries([customersQuery, ordersQuery]);
+            mockQueryEngineQueries([customersQuery, ordersQuery]);
 
             const sql = `SELECT c.Name, o.Total
 FROM {{query:"Sales/Active Customers"}} c
@@ -210,7 +221,7 @@ ORDER BY o.Total DESC`;
                 Status: 'Approved'
             });
 
-            mockMetadataQueries([reusableQuery]);
+            mockQueryEngineQueries([reusableQuery]);
 
             // Step 1: Compose
             const sql = 'SELECT m.Month, m.Revenue FROM {{query:"Analytics/Monthly Metrics"}} m ORDER BY m.Month';
@@ -280,7 +291,7 @@ ORDER BY o.Total DESC`;
                 Status: 'Approved'
             });
 
-            mockMetadataQueries([reusableQuery]);
+            mockQueryEngineQueries([reusableQuery]);
 
             const sql = 'SELECT * FROM {{query:"Test/Base Query"}} bq ORDER BY bq.Name';
 

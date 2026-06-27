@@ -1,132 +1,56 @@
-<div class="role-management-container">
-  <!-- Sticky Header Section -->
-  <div class="sticky-header">
-    <!-- Action Buttons -->
-    <div class="action-buttons" role="toolbar" aria-label="Role management actions">
-      <button
-        mjButton variant="secondary" class="mj-btn-icon-mobile"
-        (click)="refreshData()"
-        [disabled]="isLoading"
-        aria-label="Refresh role list"
-      >
-        <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading" aria-hidden="true"></i>
-        <span class="btn-text">Refresh</span>
-      </button>
-      <button
-        mjButton variant="primary" class="mj-btn-icon-mobile"
-        (click)="createNewRole()"
-        aria-label="Add new role"
-      >
-        <i class="fa-solid fa-plus" aria-hidden="true"></i>
-        <span class="btn-text">Add Role</span>
-      </button>
-    </div>
+<!--
+  Interior chrome — <mj-page-header-interior> is the body-level sibling of
+  <mj-page-header>. Same slot conventions ([toolbar] / [meta] / [actions]);
+  different visual shape (single-row card). See Section 10 of
+  explorer-chrome-conventions.
+-->
+<mj-page-header-interior
+  AriaLabel="Filter roles"
+  Title="Roles"
+  Subtitle="Define system and custom roles for permissions">
+  <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+       Partition badges (system/custom) stay dropped — they mirror the
+       System/Custom filter chips in [toolbar]. -->
+  <div meta>
+    <mj-stat-badge
+      [Count]="filteredRoles.length"
+      [Total]="roles.length"
+      Label="roles">
+    </mj-stat-badge>
+  </div>
+  <div toolbar>
+    <!-- Concise-chrome control bar: search · Filter. Type lives behind the one
+         Filter button; applied filters show as removable chips below the card.
+         On mobile the popover docks as a bottom sheet. -->
+    <mj-page-search
+      Placeholder="Search roles by name or description..."
+      [Value]="filters$.value.search"
+      (ValueChange)="updateFilter({ search: $event })">
+    </mj-page-search>
+    <mj-filter-popover
+      Label="Filters"
+      Icon="fa-solid fa-filter"
+      [ActiveCount]="TotalActiveFilterCount"
+      [ShowClearAll]="TotalActiveFilterCount > 0"
+      (ClearAllRequested)="clearAllAppliedFilters()">
+      <mj-filter-panel
+        [Fields]="filterFields"
+        [Values]="filterValues"
+        (ValuesChange)="onFilterPanelChange($event)"
+        (Reset)="clearAllAppliedFilters()">
+      </mj-filter-panel>
+    </mj-filter-popover>
+  </div>
+  <div actions>
+    <mj-refresh-button [Loading]="isLoading" (Clicked)="refreshData()"></mj-refresh-button>
+    <button mjButton variant="primary" size="sm" (click)="createNewRole()" aria-label="Add new role">
+      <i class="fa-solid fa-plus"></i> <span class="mj-action-label">Add Role</span>
+    </button>
+  </div>
+</mj-page-header-interior>
 
-    <!-- Stats Cards -->
-    <div class="mj-grid-4" role="region" aria-label="Role statistics">
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-total" aria-hidden="true">
-          <i class="fa-solid fa-user-tag"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Total roles count">{{ stats.totalRoles }}</div>
-          <div class="stat-label">Total Roles</div>
-        </div>
-      </div>
-
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-system" aria-hidden="true">
-          <i class="fa-solid fa-shield-halved"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="System roles count">{{ stats.systemRoles }}</div>
-          <div class="stat-label">System Roles</div>
-        </div>
-      </div>
-
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-custom" aria-hidden="true">
-          <i class="fa-solid fa-user-tag"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Custom roles count">{{ stats.customRoles }}</div>
-          <div class="stat-label">Custom Roles</div>
-        </div>
-      </div>
-
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-active" aria-hidden="true">
-          <i class="fa-solid fa-check-circle"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Active roles count">{{ stats.activeRoles }}</div>
-          <div class="stat-label">Active Roles</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Filters Section -->
-    <div class="filters-section" role="search" aria-label="Filter roles">
-      <div class="filters-row">
-        <!-- Mobile: Search + Filter Button Container -->
-        <div class="mobile-search-container">
-          <!-- Search - Enhanced prominent search box -->
-          <div class="mj-search">
-            <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
-            <input
-              type="text"
-              class="mj-search-input"
-              placeholder="Search roles by name or description..."
-              (input)="onSearchChange($event)"
-              [value]="filters$.value.search"
-              aria-label="Search roles by name or description"
-            />
-          </div>
-
-          <!-- Filter Button (Mobile Only) -->
-          <button
-            class="filter-button"
-            (click)="showMobileFilters = true"
-            aria-label="Open filters"
-          >
-            <i class="fa-solid fa-filter" aria-hidden="true"></i>
-            <span>Filters</span>
-          </button>
-        </div>
-
-        <!-- Type Filter (Desktop) -->
-        <div class="mj-filter-group">
-          <label class="mj-filter-label" id="type-filter-label">Type</label>
-          <div class="mj-filter-buttons" role="group" aria-labelledby="type-filter-label">
-            <button mjButton
-              [variant]="filters$.value.type === 'all' ? 'primary' : 'flat'"
-              (click)="onTypeFilterChange('all')"
-              [attr.aria-pressed]="filters$.value.type === 'all'"
-            >
-              All
-            </button>
-            <button mjButton
-              [variant]="filters$.value.type === 'system' ? 'primary' : 'flat'"
-              (click)="onTypeFilterChange('system')"
-              [attr.aria-pressed]="filters$.value.type === 'system'"
-            >
-              System
-            </button>
-            <button mjButton
-              [variant]="filters$.value.type === 'custom' ? 'primary' : 'flat'"
-              (click)="onTypeFilterChange('custom')"
-              [attr.aria-pressed]="filters$.value.type === 'custom'"
-            >
-              Custom
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div><!-- End Sticky Header -->
-
-  <!-- Scrollable Content Section -->
-  <div class="scrollable-content">
+<!-- Scrollable Content Section — owned by <mj-page-body-interior>. -->
+<mj-page-body-interior>
     <!-- Loading State -->
     @if (isLoading) {
       <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
@@ -148,10 +72,9 @@
       </div>
     }
 
-    <!-- Content Area -->
+    <!-- Roles List -->
     @if (!isLoading && !error) {
-      <div class="content-area">
-        <div class="roles-list" role="list" aria-label="Roles list">
+      <div class="roles-list" role="list" aria-label="Roles list">
           @for (role of filteredRoles; track role.ID) {
             <div
               class="role-card"
@@ -270,16 +193,18 @@
           }
 
           @if (filteredRoles.length === 0) {
-            <div class="empty-state" role="status">
-              <i class="fa-solid fa-user-tag empty-icon" aria-hidden="true"></i>
-              <p class="empty-text">No roles found</p>
-              <p class="empty-subtext">Try adjusting your filters or create a new role</p>
-            </div>
+            <mj-empty-state
+              [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-user-tag"
+              Title="No roles found"
+              Message="Try adjusting your filters or create a new role"
+              [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="resetAllFiltersAndSearch()" />
           }
         </div>
-      </div>
     }
-  </div><!-- End Scrollable Content -->
+  </mj-page-body-interior>
 
   <!-- Role Create/Edit Dialog -->
   <mj-role-dialog
@@ -342,99 +267,3 @@
     </div>
   }
 
-  <!-- Mobile Filter Modal -->
-  @if (showMobileFilters) {
-    <div
-      class="filter-modal-backdrop"
-      (click)="showMobileFilters = false"
-      role="presentation"
-    >
-      <div
-        class="filter-modal"
-        (click)="$event.stopPropagation()"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="filter-modal-title"
-      >
-        <div class="filter-modal-header">
-          <h3 class="filter-modal-title" id="filter-modal-title">
-            <i class="fa-solid fa-filter" aria-hidden="true"></i>
-            Filters
-          </h3>
-          <button
-            class="filter-modal-close"
-            (click)="showMobileFilters = false"
-            aria-label="Close filters"
-          >
-            <i class="fa-solid fa-times" aria-hidden="true"></i>
-          </button>
-        </div>
-
-        <div class="filter-modal-body">
-          <div class="filter-options-container">
-            <!-- Type Filter -->
-            <div class="filter-group">
-              <h4 class="filter-group-label">Type</h4>
-              <div class="filter-group-options">
-                <label
-                  class="filter-option"
-                  [class.selected]="filters$.value.type === 'all'"
-                >
-                  <input
-                    type="radio"
-                    name="type"
-                    value="all"
-                    [checked]="filters$.value.type === 'all'"
-                    (change)="onTypeFilterChange('all')"
-                  />
-                  <span class="filter-option-label">All Roles</span>
-                </label>
-                <label
-                  class="filter-option"
-                  [class.selected]="filters$.value.type === 'system'"
-                >
-                  <input
-                    type="radio"
-                    name="type"
-                    value="system"
-                    [checked]="filters$.value.type === 'system'"
-                    (change)="onTypeFilterChange('system')"
-                  />
-                  <span class="filter-option-label">System Roles</span>
-                </label>
-                <label
-                  class="filter-option"
-                  [class.selected]="filters$.value.type === 'custom'"
-                >
-                  <input
-                    type="radio"
-                    name="type"
-                    value="custom"
-                    [checked]="filters$.value.type === 'custom'"
-                    (change)="onTypeFilterChange('custom')"
-                  />
-                  <span class="filter-option-label">Custom Roles</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="filter-modal-footer">
-          <button
-            mjButton variant="primary"
-            (click)="showMobileFilters = false"
-          >
-            Apply Filters
-          </button>
-          <button
-            mjButton
-            (click)="showMobileFilters = false"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-</div>

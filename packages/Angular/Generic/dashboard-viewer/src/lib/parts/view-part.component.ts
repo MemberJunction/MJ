@@ -2,10 +2,9 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy } from '@angular
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { Metadata, EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
-import { MapRenderMode } from '@memberjunction/ng-map-view';
+import { RecordSelectedEvent, RecordOpenedEvent, ViewRelatedRecordNavigation } from '@memberjunction/ng-entity-viewer';
 
 /**
  * Runtime renderer for View dashboard parts.
@@ -26,32 +25,33 @@ import { MapRenderMode } from '@memberjunction/ng-map-view';
         
           <!-- Error state -->
           @if (ErrorMessage && !IsLoading) {
-            <div class="error-state">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>{{ ErrorMessage }}</span>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Variant="error"
+              Icon="fa-solid fa-triangle-exclamation"
+              Title="Couldn't load view"
+              [Message]="ErrorMessage"
+              Size="compact" />
           }
-        
+
           <!-- No view configured -->
           @if (!IsLoading && !ErrorMessage && !hasView) {
-            <div class="empty-state">
-              <i class="fa-solid fa-table"></i>
-              <h4>No View Selected</h4>
-              <p>Click the configure button to select a view for this part.</p>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Icon="fa-solid fa-table"
+              Title="No View Selected"
+              Message="Click the configure button to select a view for this part."
+              Size="compact" />
           }
         
           <!-- Entity Viewer -->
           @if (!IsLoading && !ErrorMessage && hasView && entityInfo) {
             <mj-entity-viewer
-              [entity]="entityInfo"
-              [viewEntity]="viewEntity"
-              [(viewMode)]="viewMode"
-              [mapRenderMode]="mapRenderMode"
-              [gridSelectionMode]="selectionMode"
-              [showGridToolbar]="false"
-              (recordSelected)="onRecordSelected($event)"
-              (recordOpened)="onRecordOpened($event)">
+              [Entity]="entityInfo"
+              [ViewEntity]="viewEntity"
+              (RecordSelected)="onRecordSelected($event)"
+              (RecordOpened)="onRecordOpened($event)"
+              (OpenRelatedRecordRequested)="onOpenRelatedRecordRequested($event)">
             </mj-entity-viewer>
           }
         </div>
@@ -71,9 +71,7 @@ import { MapRenderMode } from '@memberjunction/ng-map-view';
             background: var(--mj-bg-surface);
         }
 
-        .loading-state,
-        .error-state,
-        .empty-state {
+        .loading-state {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -84,25 +82,8 @@ import { MapRenderMode } from '@memberjunction/ng-map-view';
             padding: 24px;
         }
 
-        .error-state i,
-        .empty-state i {
-            font-size: 48px;
-            color: var(--mj-text-muted);
-            margin-bottom: 16px;
-        }
-
-        .error-state i {
-            color: var(--mj-status-error);
-        }
-
-        .empty-state h4 {
-            margin: 0 0 8px 0;
-            color: var(--mj-text-primary);
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 13px;
+        .part-placeholder {
+            height: 100%;
         }
 
         mj-entity-viewer {
@@ -115,9 +96,6 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
     public hasView = false;
     public viewEntity: MJUserViewEntityExtended | null = null;
     public entityInfo: EntityInfo | null = null;
-    public viewMode: EntityViewMode = 'grid';
-    public mapRenderMode: MapRenderMode = 'point';
-    public selectionMode: 'single' | 'multiple' = 'single';
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
@@ -143,16 +121,11 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         this.setLoading(true);
 
         try {
-            const md = new Metadata();
-
-            // Set view mode from config
-            this.viewMode = (config?.['displayMode'] as EntityViewMode) || 'grid';
-            this.mapRenderMode = (config?.['mapRenderMode'] as MapRenderMode) || 'point';
-            this.selectionMode = config?.['selectionMode'] === 'multiple' ? 'multiple' : 'single';
+            const p = this.ProviderToUse;
 
             if (viewId) {
                 // Load saved view by ID
-                const viewEntity = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
+                const viewEntity = await p.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', p.CurrentUser);
                 const loaded = await viewEntity.Load(viewId);
                 this.viewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
 
@@ -165,10 +138,10 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 if (viewEntity.ViewEntityInfo) {
                     this.entityInfo = viewEntity.ViewEntityInfo;
                 } else if (viewEntity.Entity) {
-                    this.entityInfo = md.Entities.find(e => e.Name === viewEntity!.Entity) || null;
+                    this.entityInfo = p.EntityByName(viewEntity!.Entity) || null;
                 } else if (viewEntity.EntityID) {
                     // Last resort: look up by EntityID
-                    this.entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
+                    this.entityInfo = p.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
                 }
 
                 if (!this.entityInfo) {
@@ -176,7 +149,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 }
             } else if (entityName) {
                 // Create dynamic view for entity (no saved view)
-                this.entityInfo = md.Entities.find(e => e.Name === entityName) || null;
+                this.entityInfo = p.EntityByName(entityName) || null;
 
                 if (!this.entityInfo) {
                     throw new Error(`Entity "${entityName}" not found`);
@@ -215,6 +188,24 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
             this.RequestOpenEntityRecord(
                 event.entity.Name,
                 event.compositeKey.ToURLSegment(),
+                'view',
+                false
+            );
+        }
+    }
+
+    /**
+     * Handle a plug-in renderer's request (bubbled up via the inner entity-viewer) to open a
+     * *related* record on a (possibly different) entity — e.g. a grid foreign-key drill-through.
+     * Requests navigation through the dashboard-part routing contract.
+     *
+     * @param nav the related-record navigation payload: the target entity name and the record's key.
+     */
+    public onOpenRelatedRecordRequested(nav: ViewRelatedRecordNavigation): void {
+        if (nav?.entityName && nav.recordKey != null) {
+            this.RequestOpenEntityRecord(
+                nav.entityName,
+                String(nav.recordKey),
                 'view',
                 false
             );

@@ -4,6 +4,8 @@ Client+server shared engine for the MemberJunction Tag taxonomy. Loads all `Tag`
 
 This package is safe to use on both client and server. For server-only capabilities (semantic embedding and `ResolveTag()`), see `@memberjunction/tag-engine`.
 
+> **Read first:** [Taxonomy & Tagging Guide](../../../../guides/TAXONOMY_TAGGING_GUIDE.md) — explains how Tag, TagScope, TagSynonym, TagSuggestion, ContentItemTag, and TaggedItem fit together, plus the scoping and governance model that this engine enforces. Highly recommended before extending or consuming this package.
+
 ## Installation
 
 ```bash
@@ -136,4 +138,4 @@ const taggedItem = await TagEngineBase.Instance.CreateTaggedItem(
 
 ## Integration with Content Autotagging
 
-`TagEngineBase` provides the foundational tag operations used by the autotagging pipeline. The taxonomy tree is serialized to JSON and injected into the LLM prompt so the model can prefer existing tags. See the [Content Autotagging Guide](/guides/CONTENT_AUTOTAGGING_GUIDE.md) for the full pipeline documentation.
+`TagEngineBase` provides the foundational tag operations used by the autotagging pipeline. The taxonomy tree is serialized to JSON and injected into the LLM prompt so the model can prefer existing tags. See the [Content Autotagging Guide](../../../../guides/CONTENT_AUTOTAGGING_GUIDE.md) for the full pipeline documentation.

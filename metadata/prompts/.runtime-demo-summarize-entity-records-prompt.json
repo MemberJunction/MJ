@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "Name": "Runtime Demo: Summarize Entity Records",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/runtime-demos/summarize-entity-records.template.md",
+    "ResponseFormat": "JSON",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "Prompt used by the 'Summarize Entity Records' Runtime action (demo). Takes a sample of entity records and returns a short natural-language summary, key themes, and follow-up questions. Ship alongside the matching Runtime action so agents have a known-good prompt to reference when building summary-style compositions."
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+          "Priority": 4
+        },
+        "primaryKey": {
+          "ID": "5ED51B4D-5058-49B2-9572-19D56748B2AD"
+        },
+        "sync": {
+          "lastModified": "2026-04-23T13:10:25.044Z",
+          "checksum": "50a7674c2a9589af0416f62b7eda7a736ab932ea483d77b3fa2b7993a7527afe"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+          "Priority": 3
+        },
+        "primaryKey": {
+          "ID": "C9EACAE2-B9AD-4636-B233-60D9D7236866"
+        },
+        "sync": {
+          "lastModified": "2026-04-23T13:10:25.060Z",
+          "checksum": "334a774b8652b293bbb3c34ead3602de3dbb2b9968f14157c4f727b1de064d53"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+          "Priority": 2
+        },
+        "primaryKey": {
+          "ID": "19FA34F6-7302-40C5-A3C7-933158C35D3F"
+        },
+        "sync": {
+          "lastModified": "2026-04-23T13:10:25.075Z",
+          "checksum": "00e9bb2738251bd056e8e08389ec2df93ced4be02502e816052e46773c1e8f92"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+          "Priority": 1
+        },
+        "primaryKey": {
+          "ID": "DBE2A0CE-31D9-40F3-BA8D-1AEA92BF1039"
+        },
+        "sync": {
+          "lastModified": "2026-04-23T13:10:25.087Z",
+          "checksum": "27c24599c2101f4c3e0d2813b7dfd3fbdcad2de8616dea292fd460535f9e5820"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "AAE015C8-2603-46D3-9E19-8786927A011D"
+  },
+  "sync": {
+    "lastModified": "2026-04-23T13:10:25.003Z",
+    "checksum": "52590ec08fc226d63d696b3cf441d029375eca5f8068d30020095b3662520dcb"
+  }
+}

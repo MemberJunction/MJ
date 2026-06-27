@@ -60,7 +60,7 @@ export class HelloMJComponent {
         this.display.emit('Loading Metadata...')
         
         // Get metadata from MemberJunction
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
         // Create a string with all entity names
         const entityListString = md.Entities.map((e) => e.Name).join('\n');
         // Store the count for display in the template

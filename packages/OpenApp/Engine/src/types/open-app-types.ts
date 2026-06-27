@@ -56,9 +56,44 @@ export interface InstallOptions {
     Source: string;
     /** Specific version to install (default: latest) */
     Version?: string;
+    /**
+     * Path within the repository to the app's `mj-app.json` (and its `migrations`/`metadata`
+     * directories). Defaults to the repo root. Enables multiple apps per repository
+     * (e.g. `CRM/HubSpot`). When omitted, falls back to any subpath embedded in `Source`.
+     * Per-app identity (like `Source`/`Version`) — NOT a passthrough option.
+     */
+    Subpath?: string;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    AllowDoubleUnderscoreSchema?: boolean;
+    /**
+     * @internal Set by the orchestrator when installing the pre-resolved members
+     * of a dependency graph in topological order — never set this directly. When
+     * true, the engine skips dependency resolution and installs ONLY this app,
+     * because each member's transitive dependencies were already resolved and
+     * installed ahead of it by the top-level call; re-resolving here would be
+     * redundant and (for cycles) could recurse without bound. Not exposed via the
+     * CLI. The leading underscore follows the same internal-use-only naming
+     * convention as `RunViewParams._fromEngine`.
+     */
+    _skipDependencyResolution?: boolean;
 }
+
+/**
+ * Subset of {@link InstallOptions} forwarded from a top-level `mj app install`
+ * to its recursive dependency installs. Behavior/environment flags that should
+ * govern the entire install run (the parent app and every dependency it pulls
+ * in) belong here. App-identity options (`Source`, `Version`) stay per-app and
+ * are NOT passthrough — each dependency has its own source and resolves its
+ * own latest release.
+ *
+ * Expand by adding fields to the `Pick` list when a new behavior flag is added
+ * to {@link InstallOptions} and should also apply to dependency installs.
+ * Adding a field here is the single place to wire passthrough semantics; the
+ * orchestrator and any caller pick it up automatically.
+ */
+export type PassthroughInstallOptions = Pick<InstallOptions, 'AllowDoubleUnderscoreSchema' | 'Verbose'>;
 
 /**
  * Options for the upgrade command.
@@ -70,6 +105,8 @@ export interface UpgradeOptions {
     Version?: string;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
+    AllowDoubleUnderscoreSchema?: boolean;
 }
 
 /**
@@ -84,6 +121,12 @@ export interface RemoveOptions {
     Force?: boolean;
     /** Enable verbose output */
     Verbose?: boolean;
+    /**
+     * Allow dropping schemas whose name starts with '__' (normally reserved for MJ internals).
+     * The exact-match reserved list (dbo/sys/guest/INFORMATION_SCHEMA/__mj) remains blocked.
+     * Dangerous; intended for MJ-internal apps only.
+     */
+    AllowDoubleUnderscoreSchema?: boolean;
 }
 
 /**
@@ -130,6 +173,8 @@ export interface InstalledAppInfo {
     PublisherURL: string | null;
     /** GitHub repository URL */
     RepositoryURL: string;
+    /** In-repo subpath to the app (for multi-app repos); null/undefined = repo root */
+    Subpath?: string | null;
     /** Database schema name (if the app uses one) */
     SchemaName: string | null;
     /** Semver range of compatible MJ versions */
@@ -160,6 +205,8 @@ export interface ResolvedDependency {
     VersionRange: string;
     /** GitHub repository URL */
     Repository: string;
+    /** In-repo subpath to the dependency app (for multi-app repos); undefined = repo root */
+    Subpath?: string;
     /** Whether this dependency is already installed */
     AlreadyInstalled: boolean;
     /** Currently installed version (if installed) */

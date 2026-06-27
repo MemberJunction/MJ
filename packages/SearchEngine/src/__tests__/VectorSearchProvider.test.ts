@@ -10,6 +10,14 @@ const { mockRunViewFn, mockAvailable } = vi.hoisted(() => {
 vi.mock('@memberjunction/core', () => {
     class MockMetadata {
         get Entities() { return []; }
+        EntityByName(_name: string) { return undefined; }
+        // Multi-provider migration: VectorSearchProvider uses this.Provider which falls back
+        // to Metadata.Provider when the SearchEngine doesn't supply one. Mirror the helper
+        // shape on the static so callers find the EntityByName/Entities API.
+        static Provider = {
+            Entities: [],
+            EntityByName: (_name: string) => undefined,
+        };
     }
     class MockRunView {
         RunView = mockRunViewFn;
@@ -76,7 +84,11 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 import { VectorSearchProvider } from '../generic/VectorSearchProvider';
+import { MJGlobal } from '@memberjunction/global';
 import type { UserInfo } from '@memberjunction/core';
+
+type CreateInstanceMock = { mockReturnValue: (v: unknown) => void };
+const createInstanceMock = MJGlobal.Instance.ClassFactory.CreateInstance as unknown as CreateInstanceMock;
 
 function createMockUser(): UserInfo {
     return {
@@ -292,6 +304,78 @@ describe('VectorSearchProvider', () => {
             ], 'test-index');
 
             expect(results[0].Score).toBe(0);
+        });
+    });
+
+    describe('queryOneIndex — colocated routing', () => {
+        type QueryOneIndex = (
+            vectorIndex: { Name: string; VectorDatabaseID: string },
+            queryVector: number[],
+            queryText: string,
+            topK: number,
+            filter: object | undefined,
+            contextUser: UserInfo
+        ) => Promise<Array<{ Score: number }>>;
+
+        it('routes a colocated provider through ColocatedQuery, passing the query text as the keyword', async () => {
+            // VectorDatabase lookup resolves to a colocated ClassKey
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ClassKey: 'PgVectorColocated', VectorDatabaseID: 'db-1' }],
+            });
+
+            const tryWire = vi.fn();
+            const colocatedQuery = vi.fn().mockResolvedValue({
+                matches: [{ id: 'r1', score: 0.91, metadata: { Entity: 'People', RecordID: 'r1' } }],
+            });
+            const queryIndex = vi.fn();
+            createInstanceMock.mockReturnValue({
+                SupportsColocatedQuery: true,
+                TryWireColocatedHost: tryWire,
+                ColocatedQuery: colocatedQuery,
+                QueryIndex: queryIndex,
+            });
+
+            const queryOneIndex = (provider as unknown as { queryOneIndex: QueryOneIndex }).queryOneIndex;
+            const results = await queryOneIndex.call(
+                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1, 0.2], 'climate policy', 5, undefined, contextUser
+            );
+
+            expect(tryWire).toHaveBeenCalledTimes(1);
+            expect(colocatedQuery).toHaveBeenCalledWith(
+                expect.objectContaining({ indexName: 'idx', keyword: 'climate policy', fusion: 'rrf' }),
+                contextUser
+            );
+            expect(queryIndex).not.toHaveBeenCalled();
+            expect(results[0].Score).toBe(0.91);
+        });
+
+        it('falls back to QueryIndex for a non-colocated provider', async () => {
+            mockRunViewFn.mockResolvedValue({
+                Success: true,
+                Results: [{ ClassKey: 'PgVectorDatabase', VectorDatabaseID: 'db-1' }],
+            });
+
+            const colocatedQuery = vi.fn();
+            const queryIndex = vi.fn().mockResolvedValue({
+                success: true,
+                data: { matches: [{ id: 'r2', score: 0.7, metadata: { Entity: 'People', RecordID: 'r2' } }] },
+            });
+            createInstanceMock.mockReturnValue({
+                SupportsColocatedQuery: false,
+                TryWireColocatedHost: vi.fn(),
+                ColocatedQuery: colocatedQuery,
+                QueryIndex: queryIndex,
+            });
+
+            const queryOneIndex = (provider as unknown as { queryOneIndex: QueryOneIndex }).queryOneIndex;
+            const results = await queryOneIndex.call(
+                provider, { Name: 'idx', VectorDatabaseID: 'db-1' }, [0.1], 'q', 5, undefined, contextUser
+            );
+
+            expect(queryIndex).toHaveBeenCalledTimes(1);
+            expect(colocatedQuery).not.toHaveBeenCalled();
+            expect(results[0].Score).toBe(0.7);
         });
     });
 });

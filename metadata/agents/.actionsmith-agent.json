@@ -1,0 +1,175 @@
+[
+  {
+    "_comments": [
+      "ActionSmith — top-level Runtime-action-builder agent.",
+      "ExposeAsAction=true so it's invokable from the action catalog.",
+      "Linked to Agent Manager via MJ: AI Agent Sub-Agents (the referenced-sub-agent",
+      "relationship, NOT ParentID, because ParentID+ExposeAsAction are mutually exclusive).",
+      "Links Codesmith Agent as a sub-agent for delegated code generation + iteration."
+    ],
+    "fields": {
+      "Name": "ActionSmith",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
+      "Description": "Meta-agent that builds new Runtime actions for the MemberJunction action catalog. Defines the contract (inputs, outputs, minimal permissions, result codes, test cases), delegates code generation to Codesmith, runs tests via the sandbox, and persists the action for human approval. Ship capability gaps into the catalog without a developer in the loop.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "DriverClass": "ActionSmithAgent",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": true,
+      "InvocationMode": "Any",
+      "IconClass": "fa-solid fa-wand-magic-sparkles",
+      "PayloadSelfWritePaths": "[\"name\", \"description\", \"inputSchema\", \"outputSchema\", \"permissions\", \"resultCodes\", \"testCases\", \"limits\", \"code\", \"testResults\", \"iterationsUsed\", \"actionId\", \"approvalStatus\", \"status\", \"message\"]",
+      "FinalPayloadValidation": "{\"status\": \"string:!empty\", \"actionId\": \"any\", \"testResults\": \"any\"}",
+      "FinalPayloadValidationMode": "Warn",
+      "MaxIterationsPerRun": 20
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=ActionSmith Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "99B60806-3423-4FED-B3AB-F57D5693D47C"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:10:28.073Z",
+            "checksum": "a30995e3c6c5786fd16e382c9a3d0ac4ee1bce37355ddd3ed4514ddbdf3ed96b"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Runtime Action",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0ACA82E3-93CB-44A0-B70E-0A659458BFB8"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:10:28.101Z",
+            "checksum": "f52094aefc3731ea8c03ecdcd68f53d55b0ab640a70e5eab54007c3fb719cbb0"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Test Runtime Action",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8B672328-53AF-42FB-9BA7-5BD86601023E"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:10:28.117Z",
+            "checksum": "dc680a2f72aa3f726d85f2b6b80580691728ce3197be612bd05725c682bbaf4e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Actions",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "64021A24-07CF-484A-838F-73ADC5A08642"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:10:28.133Z",
+            "checksum": "150413eed758e353aadcc3e6186c81a82876c19538ea49d97bd562cbfe8a2759"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Agents",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "67E272F0-64BA-4400-AC2B-0E3AF9A36229"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:10:28.149Z",
+            "checksum": "8594e4c41f8dafa6b3254ca8ede1a7094801a11ada29a9aa2a8738be0c309067"
+          }
+        },
+        {
+          "_comment": "Cached metadata enumeration — Name/Schema/Description for every entity. Used by ActionSmith at design time to pick which entities the new Runtime action will touch and to scope `permissions.allowedEntities` to real entity names that exist in this system.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Entity List",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "58E6DB09-B95C-428D-BDB6-1E335D9835F6"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T21:33:34.792Z",
+            "checksum": "6d5208ddfb69fc5db2c42c9277ec78b2da6b3503f2e58c5a366ba35703bc4253"
+          }
+        },
+        {
+          "_comment": "Deep-dive on a single entity — fields, types, descriptions, relationships, plus top 3 rows of real data. ActionSmith calls this after picking candidate entities from Get Entity List to understand field shape before drafting the code contract.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Entity Details",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5505FF0F-79A4-418A-BBC3-DCEE5BAB3AB9"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T21:33:34.810Z",
+            "checksum": "92455f8e2545c27c8abcae2c023f2fd838e5b780c9430bf238fe308effa4eccd"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "_comment": "Codesmith is a referenced sub-agent — it remains a top-level agent with its own ExposeAsAction=true, while also being callable from ActionSmith for delegated code generation. SubAgentOutputMapping pulls Codesmith's top-level `code` field directly into ActionSmith's payload under `code` — without this, ActionSmith has to manually re-read the Codesmith response text across multiple LLM iterations to extract the code, wasting tokens and iterations.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Codesmith Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{ \"code\": \"code\" }"
+          },
+          "primaryKey": {
+            "ID": "81449566-3E6D-4C65-9792-BB3B4115B52E"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T21:23:06.727Z",
+            "checksum": "885050bd1a45410eba10336ecb3f533caf224bee96cea15dddccdeb399a1d549"
+          }
+        },
+        {
+          "_comment": "Database Research Agent — escalation path for when the user's request is vague about which entities/fields are involved. ActionSmith should call this ONLY when Get Entity List + Get Entity Details aren't enough (e.g., 'build an action that analyzes customer revenue' when revenue could live on Orders, Invoices, LineItems, or a view). DRA runs open-ended SQL exploration and returns a synthesized schema summary. SubAgentOutputMapping pulls its findings into ActionSmith's payload under `schemaResearch` so ActionSmith can reference them when defining the contract.",
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:MJ: AI Agents.Name=Database Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{ \"*\": \"schemaResearch\" }"
+          },
+          "primaryKey": {
+            "ID": "F2609796-E2D2-44C0-AAF1-D519D61EA032"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T21:33:34.831Z",
+            "checksum": "913cc4254ee7a0a969b5bf5a069060aac35b7e18418b002360513066aaad2e17"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AF804075-E543-46E5-8D8F-2A0B8094628C"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T23:50:59.984Z",
+      "checksum": "7998c7f1c9b16a43b1971328f80d5d8cccaf136ac3712789da904fa466d25105"
+    }
+  }
+]

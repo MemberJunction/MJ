@@ -10,6 +10,7 @@ import {
   convertIdentifiers, convertDateFunctions, convertCharIndex, convertStuff,
   convertStringConcat, convertTopToLimit, convertCastTypes, convertIIF,
   convertConvertFunction, removeNPrefix, removeCollate, convertCommonFunctions,
+  convertBooleanLiteralComparisons,
 } from './ExpressionHelpers.js';
 
 /** SQL keywords that should NOT be quoted as column references */
@@ -42,6 +43,7 @@ export class ViewRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_VIEW'];
   Priority = 20;
   BypassSqlglot = true;
+  BypassJustification = 'CREATE VIEW handling needs DROP VIEW IF EXISTS CASCADE before CREATE OR REPLACE when DDL has changed (column lists may differ), topological sort of view dependencies, and WITH CHECK OPTION handling. sqlglot does not perform DDL-aware DROP+CREATE or dependency ordering.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = sql;
@@ -84,6 +86,10 @@ export class ViewRule implements IConversionRule {
     result = convertTopToLimit(result);
     result = removeCollate(result);
     result = convertDateFunctions(result);
+
+    // SS BIT comparisons (`bool_col = 1`) → PG boolean literals (`= TRUE`).
+    // Required for views: the boolean=integer mismatch errors at CREATE time.
+    result = convertBooleanLiteralComparisons(result, context.TableColumns);
 
     // Fix DATEDIFF TIME column casts — TIME columns can't be cast to TIMESTAMPTZ.
     // Remove ::TIMESTAMPTZ from references to columns known to be TIME type.
@@ -143,26 +149,24 @@ export class ViewRule implements IConversionRule {
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';
 
-    // Wrap in a DO block that tries CREATE OR REPLACE first, falling back to
-    // DROP VIEW ... CASCADE only when the column list changed (PG error 42P16).
-    // This avoids unnecessary CASCADE drops which would kill dependent functions
-    // (spCreate/spUpdate with RETURNS SETOF view_name) created in prior migrations.
+    // Wrap in a DO block that tries CREATE OR REPLACE first. If that fails
+    // because the column list changed (PG error 42P16 invalid_table_definition),
+    // we need to DROP CASCADE then CREATE. Plain CASCADE would also wipe out
+    // dependent baseline views (e.g., vwAIModels JOINs vwAIModelVendors — a
+    // v5.15 CASCADE-drop of vwAIModelVendors took down vwAIModels too, then
+    // later CREATE FUNCTION RETURNS SETOF vwAIModels crashed the migration).
+    //
+    // The solution: capture dependent-view definitions from pg_catalog BEFORE
+    // the cascade, run the cascade + recreate, then restore dependents in
+    // dependency order (shallowest first). pg_get_viewdef returns the SELECT
+    // body, which we wrap back in CREATE VIEW. Transitive dependents are
+    // captured via a recursive CTE over pg_depend → pg_rewrite → pg_class.
     const viewNameMatch = result.match(/\bCREATE\s+OR\s+REPLACE\s+VIEW\s+([\w.]+\."?\w+"?)/i);
     if (viewNameMatch) {
-      const viewName = viewNameMatch[1];
+      const viewName = viewNameMatch[1]; // e.g. __mj."vwAIModelVendors"
+      const { schema, name } = parseSchemaQualifiedName(viewName);
       const viewSQL = result.replace(/;\s*$/, '');
-      result = [
-        'DO $do$',
-        'DECLARE',
-        `  vsql CONSTANT TEXT := $vsql$${viewSQL}$vsql$;`,
-        'BEGIN',
-        '  EXECUTE vsql;',
-        'EXCEPTION WHEN invalid_table_definition THEN',
-        `  DROP VIEW IF EXISTS ${viewName} CASCADE;`,
-        '  EXECUTE vsql;',
-        'END;',
-        '$do$;',
-      ].join('\n');
+      result = buildViewDoBlock(schema, name, viewSQL);
     }
 
     return result + '\n';
@@ -207,11 +211,11 @@ export class ViewRule implements IConversionRule {
     return result.join('\n');
   }
 
-  /** Quote AS aliases: AS PascalAlias → AS "PascalAlias" */
+  /** Quote AS aliases: AS PascalAlias → AS "PascalAlias" (case-insensitive on the AS keyword) */
   private quoteAsAliases(sql: string): string {
-    return sql.replace(/\bAS\s+(?!")([A-Z][a-zA-Z]\w*)\b/g, (_match, alias: string) => {
-      if (SQL_KEYWORDS.has(alias.toUpperCase())) return `AS ${alias}`;
-      return `AS "${alias}"`;
+    return sql.replace(/\b(AS)\s+(?!")([A-Z][a-zA-Z]\w*)\b/gi, (_match, asKw: string, alias: string) => {
+      if (SQL_KEYWORDS.has(alias.toUpperCase())) return `${asKw} ${alias}`;
+      return `${asKw} "${alias}"`;
     });
   }
 
@@ -346,4 +350,103 @@ export class ViewRule implements IConversionRule {
     }
     return result.join('\n');
   }
+}
+
+/**
+ * Splits a view reference like `__mj."vwAIModelVendors"` or `"__mj"."X"` or `schema.View`
+ * into its schema and name parts.
+ */
+function parseSchemaQualifiedName(fullName: string): { schema: string; name: string } {
+  const cleaned = fullName.trim();
+  // Match `schema`.`name` variants — bracketed/double-quoted schema + quoted/unquoted name
+  const m = cleaned.match(/^"?([^".]+)"?\.(?:"([^"]+)"|(\w+))$/);
+  if (!m) {
+    // fallback — treat the whole thing as name and use __mj
+    return { schema: '__mj', name: cleaned.replace(/"/g, '') };
+  }
+  return { schema: m[1], name: m[2] ?? m[3] };
+}
+
+/**
+ * Builds a DO block that tries CREATE OR REPLACE VIEW first. On
+ * invalid_table_definition (PG error 42P16 — column list incompatible), it:
+ *   1. Captures definitions of every view that depends on this one (direct
+ *      or transitive) via pg_depend / pg_rewrite / pg_get_viewdef.
+ *   2. Runs DROP VIEW ... CASCADE.
+ *   3. Executes the new CREATE VIEW.
+ *   4. Restores each captured dependent in dependency order (shallowest first).
+ *
+ * Without this, CASCADE drops silently wipe baseline views (e.g. vwAIModels)
+ * that later migration statements (CREATE FUNCTION RETURNS SETOF vwAIModels)
+ * need — causing fresh installs to fail at v5.15 Prefill.
+ */
+function buildViewDoBlock(schema: string, name: string, viewSQL: string): string {
+  // Escape the SQL-literal for $vsql$ — the view def itself may contain $
+  // sequences but $vsql$ is unusual enough to collide only rarely.
+  return [
+    'DO $do$',
+    'DECLARE',
+    `  v_target_schema CONSTANT TEXT := ${sqlLiteral(schema)};`,
+    `  v_target_name CONSTANT TEXT := ${sqlLiteral(name)};`,
+    `  vsql CONSTANT TEXT := $vsql$${viewSQL}$vsql$;`,
+    '  v_target_oid OID;',
+    '  v_dep RECORD;',
+    '  v_captured JSONB[] := ARRAY[]::JSONB[];',
+    '  v_n INTEGER;',
+    'BEGIN',
+    '  EXECUTE vsql;',
+    'EXCEPTION WHEN invalid_table_definition THEN',
+    '  -- Column list changed; need CASCADE. Preserve dependent views first.',
+    '  SELECT c.oid INTO v_target_oid',
+    '  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid',
+    '  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = \'v\';',
+    '  IF v_target_oid IS NOT NULL THEN',
+    '    FOR v_dep IN',
+    '      WITH RECURSIVE deps AS (',
+    '        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth',
+    '        FROM pg_rewrite r',
+    '        JOIN pg_depend d ON d.objid = r.oid',
+    '        JOIN pg_class c ON c.oid = r.ev_class',
+    '        JOIN pg_namespace n ON c.relnamespace = n.oid',
+    '        WHERE d.refobjid = v_target_oid AND d.deptype = \'n\'',
+    '          AND c.oid <> v_target_oid AND c.relkind = \'v\'',
+    '        UNION',
+    '        SELECT c.oid, c.relname, n.nspname, p.depth + 1',
+    '        FROM deps p',
+    '        JOIN pg_rewrite r ON TRUE',
+    '        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid',
+    '        JOIN pg_class c ON c.oid = r.ev_class',
+    '        JOIN pg_namespace n ON c.relnamespace = n.oid',
+    '        WHERE c.relkind = \'v\' AND c.oid <> p.oid',
+    '      )',
+    '      SELECT oid, name, schema, MAX(depth) AS max_depth,',
+    '             pg_catalog.pg_get_viewdef(oid, true) AS viewdef',
+    '      FROM deps GROUP BY oid, name, schema',
+    '      ORDER BY MAX(depth) ASC',
+    '    LOOP',
+    '      v_captured := v_captured || jsonb_build_object(',
+    '        \'schema\', v_dep.schema, \'name\', v_dep.name, \'def\', v_dep.viewdef);',
+    '    END LOOP;',
+    '  END IF;',
+    '  EXECUTE format(\'DROP VIEW IF EXISTS %I.%I CASCADE\', v_target_schema, v_target_name);',
+    '  EXECUTE vsql;',
+    '  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN',
+    '    FOR v_n IN 1..array_length(v_captured, 1) LOOP',
+    '      BEGIN',
+    '        EXECUTE format(\'CREATE VIEW %I.%I AS %s\',',
+    '          v_captured[v_n]->>\'schema\', v_captured[v_n]->>\'name\', v_captured[v_n]->>\'def\');',
+    '      EXCEPTION WHEN others THEN',
+    '        RAISE WARNING \'Could not restore dependent view %.%: %\',',
+    '          v_captured[v_n]->>\'schema\', v_captured[v_n]->>\'name\', SQLERRM;',
+    '      END;',
+    '    END LOOP;',
+    '  END IF;',
+    'END;',
+    '$do$;',
+  ].join('\n');
+}
+
+/** Escape a string as a PG SQL literal (single-quoted, doubled quotes). */
+function sqlLiteral(s: string): string {
+  return `'${s.replace(/'/g, "''")}'`;
 }

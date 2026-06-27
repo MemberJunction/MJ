@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Taxonomy Admin · Option C — table-first</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .tax-tbl { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--mj-bg-surface); }
+  .tax-tbl th { text-align: left; padding: 10px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); font-weight: 700; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+  .tax-tbl td { padding: 8px 12px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .tax-tbl tr:hover td { background: var(--mj-bg-surface-hover); }
+  .tax-tbl tr.row-l1 td { font-weight: 700; background: var(--mj-bg-surface-card); }
+  .tax-tbl tr.row-l2 td.name-cell { padding-left: 26px; }
+  .tax-tbl tr.row-l3 td.name-cell { padding-left: 50px; color: var(--mj-text-secondary); }
+  .tax-tbl tr.row-l4 td.name-cell { padding-left: 74px; color: var(--mj-text-muted); }
+  .tax-tbl .twist { display: inline-block; width: 10px; color: var(--mj-text-muted); font-size: 10px; }
+  .tax-tbl .icons { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
+  .tax-tbl .icons span { font-size: 11px; }
+  .tax-tbl .editable { color: var(--mj-text-secondary); cursor: pointer; }
+  .tax-tbl .editable:hover { background: var(--mj-bg-surface-hover); }
+  .mini-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--mj-bg-surface-sunken);
+    font-size: 11px;
+    color: var(--mj-text-secondary);
+  }
+  .mini-toggle.on { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); font-weight: 600; }
+  .mini-toggle.off { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
+
+  .grid-wrap {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--mj-bg-surface);
+  }
+  .grid-toolbar {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--mj-border-default);
+    display: flex; gap: 10px; align-items: center;
+    background: var(--mj-bg-surface-card);
+    flex-wrap: wrap;
+  }
+  .grid-toolbar .filter-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 999px;
+    font-size: 12px; background: var(--mj-bg-surface);
+  }
+  .grid-toolbar .filter-pill .x { color: var(--mj-text-muted); margin-left: 2px; }
+  .num-cell { font-family: ui-monospace, monospace; text-align: center; }
+  .name-cell { display: flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup C:</strong> Taxonomy Admin — table-first (governance at scale)</span>
+  <span><a href="index.html">← Back to index</a> · <a href="taxonomy-a-classic-split.html">A</a> · <a href="taxonomy-b-card-galaxy.html">B</a> · <strong>C</strong></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span class="current">Taxonomy</span>
+  </div>
+  <div class="right">
+    <span><strong>1,247</strong> tags</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+  <div class="page-title">
+    <div>
+      <h1>Taxonomy</h1>
+      <div class="subtitle">Inline-editable grid · sort, filter and bulk-edit governance across the hierarchy</div>
+    </div>
+    <div class="flex gap-8">
+      <div class="segmented">
+        <span class="seg">Tree</span>
+        <span class="seg">Galaxy</span>
+        <span class="seg active">Table</span>
+      </div>
+      <button class="btn">Export CSV</button>
+      <button class="btn primary">+ New tag</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab">Sources</div>
+    <div class="tab active">Taxonomy <span class="count">1,247</span></div>
+    <div class="tab">Suggestions <span class="count">247</span></div>
+    <div class="tab">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="grid-wrap">
+    <div class="grid-toolbar">
+      <input class="input" style="width: 280px;" placeholder="Search tags…" />
+      <span class="filter-pill">Status: Active <span class="x">×</span></span>
+      <span class="filter-pill">Show: All levels <span class="x">×</span></span>
+      <button class="btn sm">+ Add filter</button>
+      <span class="grow"></span>
+      <span class="muted" style="font-size: 12px;">Showing <strong>1,247</strong> · 4 selected</span>
+      <button class="btn sm">Bulk freeze</button>
+      <button class="btn sm">Bulk set MaxChildren</button>
+    </div>
+
+    <div style="overflow-x: auto;">
+      <table class="tax-tbl">
+        <thead>
+          <tr>
+            <th style="width: 28px;"><input type="checkbox" /></th>
+            <th>Tag</th>
+            <th>Items</th>
+            <th>Children</th>
+            <th>Depth</th>
+            <th>Global</th>
+            <th>AutoGrow</th>
+            <th>Frozen</th>
+            <th>RequiresReview</th>
+            <th>MaxChildren</th>
+            <th>MaxDepth</th>
+            <th>MinWeight</th>
+            <th>Pending</th>
+            <th>Avg conf.</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="row-l1"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▼</span><strong>Technology</strong> <span class="icons"><span title="Global">🌐</span></span></td>
+            <td class="num-cell">412</td><td class="num-cell">8</td><td class="num-cell">0</td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">—</td><td class="num-cell editable">—</td><td class="num-cell editable">—</td>
+            <td class="num-cell">21</td><td class="num-cell">0.92</td><td class="muted">2d</td>
+          </tr>
+
+          <tr class="row-l2"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▼</span>AI / Machine Learning <span class="icons"><span>🔒</span></span></td>
+            <td class="num-cell">187</td><td class="num-cell">7</td><td class="num-cell">1</td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">10</td><td class="num-cell editable">3</td><td class="num-cell editable">0.80</td>
+            <td class="num-cell">14</td><td class="num-cell">0.91</td><td class="muted">3h</td>
+          </tr>
+
+          <tr class="row-l3" style="background: var(--mj-brand-primary-tint);"><td><input type="checkbox" checked /></td>
+            <td class="name-cell"><span class="twist">▶</span><strong>Generative AI</strong> <span class="icons"><span>🔒</span><span>❄</span></span></td>
+            <td class="num-cell">412</td><td class="num-cell">3</td><td class="num-cell">2</td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">10</td><td class="num-cell editable">2</td><td class="num-cell editable">0.85</td>
+            <td class="num-cell">7</td><td class="num-cell">0.91</td><td class="muted">3m</td>
+          </tr>
+          <tr class="row-l3"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▶</span>LLMs</td>
+            <td class="num-cell">891</td><td class="num-cell">12</td><td class="num-cell">2</td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">15</td><td class="num-cell editable">2</td><td class="num-cell editable">0.80</td>
+            <td class="num-cell">4</td><td class="num-cell">0.94</td><td class="muted">1d</td>
+          </tr>
+          <tr class="row-l3"><td><input type="checkbox" checked /></td>
+            <td class="name-cell"><span class="twist">▶</span>AI Agents</td>
+            <td class="num-cell">233</td><td class="num-cell">8</td><td class="num-cell">2</td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle on">on</span></td>
+            <td class="num-cell editable">12</td><td class="num-cell editable">2</td><td class="num-cell editable">0.85</td>
+            <td class="num-cell">11</td><td class="num-cell">0.88</td><td class="muted">2h</td>
+          </tr>
+          <tr class="row-l3"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▶</span>Prompt Engineering</td>
+            <td class="num-cell">156</td><td class="num-cell">5</td><td class="num-cell">2</td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">—</td><td class="num-cell editable">—</td><td class="num-cell editable">—</td>
+            <td class="num-cell">2</td><td class="num-cell">0.93</td><td class="muted">5d</td>
+          </tr>
+          <tr class="row-l3" style="background: #fff7ed;"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▶</span>RAG <span class="icons"><span title="Wide-node">⚠</span></span></td>
+            <td class="num-cell">312</td><td class="num-cell" style="color: var(--mj-status-warning-text); font-weight: 700;">47</td><td class="num-cell">2</td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">—</td><td class="num-cell editable">—</td><td class="num-cell editable">—</td>
+            <td class="num-cell">5</td><td class="num-cell">0.86</td><td class="muted">7h</td>
+          </tr>
+
+          <tr class="row-l2"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▶</span>Languages</td>
+            <td class="num-cell">38</td><td class="num-cell">7</td><td class="num-cell">1</td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">10</td><td class="num-cell editable">1</td><td class="num-cell editable">—</td>
+            <td class="num-cell">0</td><td class="num-cell">0.95</td><td class="muted">12d</td>
+          </tr>
+          <tr class="row-l2"><td><input type="checkbox" checked /></td>
+            <td class="name-cell"><span class="twist">▶</span>Security</td>
+            <td class="num-cell">94</td><td class="num-cell">6</td><td class="num-cell">1</td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td>
+            <td class="num-cell editable">—</td><td class="num-cell editable">—</td><td class="num-cell editable">0.85</td>
+            <td class="num-cell">3</td><td class="num-cell">0.93</td><td class="muted">4d</td>
+          </tr>
+
+          <tr class="row-l1"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▼</span><strong>Compliance</strong> <span class="icons"><span title="Frozen">❄</span></span></td>
+            <td class="num-cell">89</td><td class="num-cell">4</td><td class="num-cell">0</td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle off">off</span></td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td>
+            <td class="num-cell editable">—</td><td class="num-cell editable">2</td><td class="num-cell editable">0.90</td>
+            <td class="num-cell">0</td><td class="num-cell">0.96</td><td class="muted">3w</td>
+          </tr>
+          <tr class="row-l2"><td><input type="checkbox" /></td><td class="name-cell"><span class="twist">▶</span>PCI-DSS</td><td class="num-cell">23</td><td class="num-cell">8</td><td class="num-cell">1</td><td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td><td class="num-cell editable">—</td><td class="num-cell editable">1</td><td class="num-cell editable">0.90</td><td class="num-cell">0</td><td class="num-cell">0.97</td><td class="muted">8w</td></tr>
+          <tr class="row-l2"><td><input type="checkbox" /></td><td class="name-cell"><span class="twist">▶</span>SOC2</td><td class="num-cell">17</td><td class="num-cell">5</td><td class="num-cell">1</td><td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td><td class="num-cell editable">—</td><td class="num-cell editable">1</td><td class="num-cell editable">0.90</td><td class="num-cell">0</td><td class="num-cell">0.96</td><td class="muted">6w</td></tr>
+          <tr class="row-l2"><td><input type="checkbox" /></td><td class="name-cell"><span class="twist">▶</span>HIPAA</td><td class="num-cell">14</td><td class="num-cell">4</td><td class="num-cell">1</td><td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td><td class="num-cell editable">—</td><td class="num-cell editable">1</td><td class="num-cell editable">0.90</td><td class="num-cell">0</td><td class="num-cell">0.95</td><td class="muted">9w</td></tr>
+
+          <tr class="row-l1"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▶</span><strong>HR</strong> <span class="icons"><span>🔒</span><span>!</span></span></td>
+            <td class="num-cell">87</td><td class="num-cell">5</td><td class="num-cell">0</td>
+            <td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle on">on</span></td>
+            <td class="num-cell editable">15</td><td class="num-cell editable">3</td><td class="num-cell editable">0.85</td>
+            <td class="num-cell">2</td><td class="num-cell">0.89</td><td class="muted">5d</td>
+          </tr>
+
+          <tr class="row-l1"><td><input type="checkbox" /></td>
+            <td class="name-cell"><span class="twist">▶</span><strong>Vendors</strong> <span class="icons"><span title="Wide-node">⚠</span></span></td>
+            <td class="num-cell">47</td><td class="num-cell" style="color: var(--mj-status-warning-text); font-weight: 700;">47</td><td class="num-cell">0</td>
+            <td><span class="mini-toggle on">on</span></td><td><span class="mini-toggle on">on</span></td>
+            <td><span class="mini-toggle off">off</span></td><td><span class="mini-toggle off">off</span></td>
+            <td class="num-cell editable">—</td><td class="num-cell editable">—</td><td class="num-cell editable">—</td>
+            <td class="num-cell">2</td><td class="num-cell">0.84</td><td class="muted">1d</td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option C</h3>
+    <p>Spreadsheet-mode for taxonomy. Built around governance audits at scale: "show me every tag where AutoGrow is on
+    AND parent is frozen", "set MinWeight to 0.85 across all of Compliance". Inline-editable cells, multi-select,
+    indentation visible without losing tabular structure.</p>
+    <ul>
+      <li><strong>Strengths:</strong> highest density of governance information; bulk operations are first-class; sort by Pending or AvgConf surfaces problem tags fast; CSV export native.</li>
+      <li><strong>Weaknesses:</strong> intimidating; descriptions / synonyms hidden behind row-click; loses the visual "tree-ness" that B and A preserve.</li>
+      <li><strong>Best for:</strong> data-governance roles; quarterly audits; large taxonomies (1,000+ tags).</li>
+      <li><strong>Distinctive:</strong> indentation-as-row-padding to keep the tree shape; mini-toggle pills for boolean cells; inline-editable numeric cells; alert-row tinting for wide-node.</li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

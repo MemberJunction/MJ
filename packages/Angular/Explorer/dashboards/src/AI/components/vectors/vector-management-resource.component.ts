@@ -22,14 +22,15 @@ import {
     KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJScheduledActionEntity, MJScheduledActionParamEntity } from '@memberjunction/core-entities';
-import { CronToHumanReadable } from '../autotagging/autotagging-pipeline-resource.component';
+import { CronToHumanReadable } from '../autotagging/shared/classify.format';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -55,7 +56,7 @@ interface EmbeddingModelInfo {
 interface DocumentSuggestionResult {
     template: string;
     selectedFields: string[];
-    selectedRelationships: { name: string; fields: string[] }[];
+    selectedRelationships?: { name: string; fields: string[] }[];
     potentialMatchThreshold: number;
     absoluteMatchThreshold: number;
     reasoning: string;
@@ -70,6 +71,7 @@ interface DocumentSuggestionResult {
 })
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
+    private activityService = inject(ActivityService);
     protected override navigationService = inject(NavigationService);
     protected override destroy$ = new Subject<void>();
 
@@ -77,8 +79,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      *  'operations' = Option C (operations monitoring with real-time sync status) */
     public ViewMode: 'index' | 'operations' = 'index';
 
-    /** Whether this component is embedded inside the Knowledge Hub shell */
-    @Input() EmbeddedMode = false;
+    public readonly VectorViewOptions: ViewToggleOption[] = [
+        { key: 'index', icon: 'fa-solid fa-cubes', title: 'Index View' },
+        { key: 'operations', icon: 'fa-solid fa-gauge-high', title: 'Operations View' }
+    ];
+
+    /**
+     * When true, renders only the body content (no chrome). Set by parent shells
+     * that embed this resource. See plans/explorer-chrome-conventions.md Section 5.
+     */
+    @Input() HideToolbar = false;
 
     /** Toggle between view modes */
     public ToggleViewMode(): void {
@@ -99,6 +109,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // --- Sidebar data ---
     public VectorDBName = '';
     public VectorDBStatus: 'Healthy' | 'Degraded' | 'Offline' = 'Healthy';
+    /** Human-readable explanation of the current health status (shown as helper text / tooltip). */
+    public VectorDBStatusReason = '';
     public EmbeddingModel: EmbeddingModelInfo = { Name: '', Dimensions: null };
     public StorageUsagePercent = 0;
     public TotalVectors = 0;
@@ -154,7 +166,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async loadEditDocTemplate(templateId: string): Promise<void> {
         if (!templateId) return;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<{ TemplateText: string }>({
                 EntityName: 'MJ: Template Contents',
                 ExtraFilter: `TemplateID='${templateId}'`,
@@ -181,7 +193,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.IsEditSaving = true;
         this.cdr.detectChanges();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const doc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
             const loaded = await doc.Load(this.EditDocID);
             if (!loaded) throw new Error('Could not load entity document');
@@ -216,7 +228,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async saveEditDocTemplate(templateId: string): Promise<void> {
         if (!templateId || !this.EditDocTemplate) return;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: 'MJ: Template Contents',
                 ExtraFilter: `TemplateID='${templateId}'`,
@@ -268,7 +280,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.IsEditDeleting = true;
         this.cdr.detectChanges();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const doc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
             const loaded = await doc.Load(this.EditDocID);
             if (!loaded) throw new Error('Could not load entity document');
@@ -338,7 +350,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 return;
             }
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
 
             // Create ScheduledAction
             const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
@@ -380,9 +392,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Find the __VectorizeEntity action ID */
     private async findVectorizeActionID(): Promise<string | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
-            EntityName: 'Actions',
+            EntityName: 'MJ: Actions',
             ExtraFilter: `Name = '__VectorizeEntity'`,
             Fields: ['ID'],
             ResultType: 'simple',
@@ -396,9 +408,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Create a ScheduledActionParam linking the entity document ID */
     private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const paramResult = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'Action Params',
+            EntityName: 'MJ: Action Params',
             ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
             Fields: ['ID', 'Name'],
             ResultType: 'simple',
@@ -410,7 +422,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
         param.NewRecord();
         param.ScheduledActionID = scheduledActionID;
@@ -550,7 +562,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
         if (!doc) return;
 
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) return;
 
         this.addSyncingId(entityDocumentId);
@@ -604,7 +616,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Subscribe to PipelineProgress for a specific pipeline run */
     private subscribeToPipelineProgress(entityDocumentId: string, pipelineRunID: string, entityName: string): void {
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         const subscriptionQuery = `
             subscription PipelineProgress($pipelineRunID: String!) {
                 PipelineProgress(pipelineRunID: $pipelineRunID) {
@@ -619,10 +631,13 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         `;
 
         let idleTimer: ReturnType<typeof setTimeout> | null = null;
+        const activityID = this.activityService.Start('Vector sync', { icon: 'fa-solid fa-cubes', detail: entityName, progress: 0 });
 
         const finishSync = (success: boolean) => {
             if (idleTimer) clearTimeout(idleTimer);
             rxSub?.unsubscribe();
+            this.activityService.Complete(activityID, success ? 'success' : 'error',
+                success ? `${entityName} vectorized` : `Failed for ${entityName}`);
 
             // Use setTimeout to defer state changes to the next macrotask,
             // avoiding ExpressionChangedAfterItHasBeenCheckedError.
@@ -902,7 +917,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityDoc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
             entityDoc.NewRecord();
             entityDoc.Name = this.SaveDocumentName;
@@ -1011,6 +1026,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // updates from saves/deletes on the entities it tracks.
         const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(false);
+        // AIEngineBase is deferred at startup; ensure loaded before reading .VectorDatabases.
+        await AIEngineBase.Instance.EnsureLoaded();
 
         this.entityDocuments = engine.EntityDocuments;
         this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
@@ -1020,7 +1037,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // Each query fetches only the most recent row (MaxRows: 1) and uses
         // TotalRowCount for the actual vector count — avoids loading all rows.
         // AI Models come from a different domain — fetched in the same batch.
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const erdQueries = this.entityDocuments.map(doc => ({
             EntityName: 'MJ: Entity Record Documents',
             ExtraFilter: `EntityDocumentID='${doc.ID}' AND VectorID IS NOT NULL`,
@@ -1157,12 +1174,18 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (this.vectorDatabases.length > 0) {
             const db = this.vectorDatabases[0];
             this.VectorDBName = db.Name;
-            // Determine health based on whether we have records with vectors
+            // "Degraded" here doesn't mean the database is unhealthy — it means no
+            // records have been vectorized yet. Say that plainly so users don't
+            // chase a phantom outage.
             const hasVectors = this.TotalVectors > 0;
             this.VectorDBStatus = hasVectors ? 'Healthy' : 'Degraded';
+            this.VectorDBStatusReason = hasVectors
+                ? `${this.TotalVectors.toLocaleString()} vector(s) stored and queryable.`
+                : `Connected, but no records have been vectorized yet. Run a sync below to populate the index.`;
         } else {
             this.VectorDBName = 'Not configured';
             this.VectorDBStatus = 'Offline';
+            this.VectorDBStatusReason = 'No vector database is configured for this environment.';
         }
     }
 
@@ -1235,7 +1258,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
 
         // TypeID — look up 'Record Duplicate' entity document type
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const typeResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Entity Document Types',
             ExtraFilter: "Name = 'Record Duplicate'",
@@ -1271,7 +1294,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Create a Template + TemplateContent record for the entity document */
     private async createTemplateForDocument(entityDoc: MJEntityDocumentEntity): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const templateText = this.EditableTemplate || this.SuggestionResult?.template || '';
         if (!templateText) {
             throw new Error('No template content to save');
@@ -1292,7 +1315,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         entityDoc.TemplateID = template.ID;
 
         // Find 'Text' content type
-        const contentTypeResult = await new RunView().RunView<{ ID: string }>({
+        const contentTypeResult = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<{ ID: string }>({
             EntityName: 'MJ: Template Content Types',
             ExtraFilter: "Name = 'Text'",
             ResultType: 'simple',
@@ -1320,7 +1343,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Build grouped entity list from metadata, grouped by SchemaName */
     private loadEntityGroups(): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const groupMap = new Map<string, { Name: string; ID: string }[]>();
 
         for (const entity of md.Entities) {
@@ -1362,7 +1385,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
         if (!row) return;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ __mj_UpdatedAt: string }>({
             EntityName: 'MJ: Entity Record Documents',
             ExtraFilter: `EntityDocumentID='${entityDocumentId}' AND VectorID IS NOT NULL`,
@@ -1388,14 +1411,16 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      * a natural language template optimized for vector embeddings.
      */
     private async callSuggestionPrompt(entityName: string, useCase: string): Promise<DocumentSuggestionResult | null> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = md.Entities.find(e => e.Name === entityName);
         if (!entity) {
             throw new Error(`Entity "${entityName}" not found in metadata`);
         }
 
+        // AIEngineBase is deferred at startup; ensure loaded before findSuggestionPrompt reads .Prompts.
+        await AIEngineBase.Instance.EnsureLoaded();
         const prompt = this.findSuggestionPrompt();
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) {
             throw new Error('GraphQL provider not available');
         }
@@ -1446,7 +1471,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Description: f.Description || '',
         }));
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const relationships = entity.RelatedEntities
             .filter(r => r.Type === 'One to Many' || r.Type === 'Many to One')
             .slice(0, 20)

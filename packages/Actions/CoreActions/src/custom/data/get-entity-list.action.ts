@@ -52,7 +52,7 @@ export class GetEntityListAction extends BaseAction {
             const startTime = Date.now();
 
             // Get MJ metadata (cached, no DB queries)
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
             let entities = md.Entities;
 
             // Apply filters
@@ -73,8 +73,13 @@ export class GetEntityListAction extends BaseAction {
                 entities = entities.filter(e => !e.VirtualEntity);
             }
 
-            // Build lightweight entity list (name, schema, description only)
+            // Build lightweight entity list (id, name, schema, description).
+            // Including `ID` up front — matches the entity record's actual
+            // column name — so callers (especially AI agents building Runtime
+            // action permission blocks that need `{id, name}` pairs for every
+            // referenced entity) don't have to do a second DB lookup or guess.
             const entityList = entities.map(e => ({
+                ID: e.ID,
                 Name: e.Name,
                 SchemaName: e.SchemaName,
                 Description: e.Description || '',
@@ -115,7 +120,7 @@ export class GetEntityListAction extends BaseAction {
      * Build detailed message with entity list for agent consumption
      */
     private buildDetailedMessage(
-        entities: Array<{ Name: string; SchemaName: string; Description: string; IsVirtual: boolean }>,
+        entities: Array<{ ID: string; Name: string; SchemaName: string; Description: string; IsVirtual: boolean }>,
         schemaFilter?: string,
         scopeFilter?: string
     ): string {
@@ -143,7 +148,7 @@ export class GetEntityListAction extends BaseAction {
 
             for (const entity of schemaEntities) {
                 const virtualFlag = entity.IsVirtual ? ' [VIRTUAL]' : '';
-                lines.push(`- **${entity.Name}**${virtualFlag}`);
+                lines.push(`- **${entity.Name}**${virtualFlag} — \`${entity.ID}\``);
                 if (entity.Description) {
                     lines.push(`  ${entity.Description}`);
                 }

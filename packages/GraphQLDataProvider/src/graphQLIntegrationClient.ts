@@ -10,6 +10,34 @@ export interface DiscoveredObjectResult {
     SupportsWrite: boolean;
 }
 
+/** Full-catalog picker item — every object the source system exposes, merged with MJ-side flags. */
+export interface SourceObjectListItem {
+    Name: string;
+    Label: string;
+    Description?: string | null;
+    SupportsIncrementalSync: boolean;
+    SupportsWrite: boolean;
+    /** True when an IntegrationObject row already exists for this object. */
+    AlreadyPersisted: boolean;
+    /** IntegrationObject.ID — populated only when AlreadyPersisted is true. */
+    IntegrationObjectID?: string | null;
+    /** Vendor-flagged custom object (e.g. SF __c names). */
+    IsCustom: boolean;
+}
+
+/**
+ * Selection entry for ApplyAllBatch — supply either SourceObjectID (for
+ * objects already in the IntegrationObject table) or SourceObjectName (for
+ * freshly-picked objects from the full-catalog picker). When only Name is
+ * provided and the connector is Salesforce, the server describes and
+ * persists the object on the fly before building its schema.
+ */
+export interface SourceObjectSelectionInput {
+    SourceObjectID?: string;
+    SourceObjectName?: string;
+    Fields?: string[];
+}
+
 /** Describes a field on an external object */
 export interface DiscoveredFieldResult {
     Name: string;
@@ -613,11 +641,59 @@ export class GraphQLIntegrationClient {
     }
 
     /**
+     * Lists every source object the external system exposes (e.g. all ~1,800
+     * Salesforce sobjects), flagged with which ones already have
+     * IntegrationObject rows. Cheap — one global describe call, no per-object
+     * describes. Use this to populate a "pick any object" picker; per-object
+     * describe happens lazily in ApplyAllBatch when the user actually selects.
+     */
+    public async ListSourceObjects(
+        companyIntegrationID: string
+    ): Promise<DiscoveryResult<SourceObjectListItem[]>> {
+        try {
+            const query = gql`
+                query IntegrationListSourceObjects($companyIntegrationID: String!) {
+                    IntegrationListSourceObjects(companyIntegrationID: $companyIntegrationID) {
+                        Success
+                        Message
+                        Objects {
+                            Name
+                            Label
+                            Description
+                            SupportsIncrementalSync
+                            SupportsWrite
+                            AlreadyPersisted
+                            IntegrationObjectID
+                            IsCustom
+                        }
+                    }
+                }
+            `;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
+            const response = result?.IntegrationListSourceObjects;
+            if (!response) throw new Error('Invalid response from server');
+            return {
+                Success: response.Success,
+                Message: response.Message,
+                Data: response.Objects ?? [],
+            };
+        } catch (e) {
+            return this.handleError<SourceObjectListItem[]>(e, []);
+        }
+    }
+
+    /**
      * Batch Apply All: schema + entity maps + field maps + sync across one or more connectors.
      * Calls the IntegrationApplyAllBatch resolver.
+     *
+     * Each connector's SourceObjects entries can be ID-based (existing
+     * IntegrationObject rows — HubSpot, YM, etc.) or Name-based (Salesforce's
+     * full-catalog picker). For Salesforce Name-based selections the server
+     * runs a filtered describe on just those objects, seeds IntegrationObject/
+     * IntegrationObjectField rows from the describe output, then builds DDL.
      */
     public async ApplyAllBatch(
-        connectors: Array<{ CompanyIntegrationID: string; SourceObjectIDs: string[] }>,
+        connectors: Array<{ CompanyIntegrationID: string; SourceObjects: SourceObjectSelectionInput[] }>,
         startSync = true,
         fullSync = false,
         syncScope = 'created',
@@ -637,7 +713,11 @@ export class GraphQLIntegrationClient {
             const input = {
                 Connectors: connectors.map(c => ({
                     CompanyIntegrationID: c.CompanyIntegrationID,
-                    SourceObjects: c.SourceObjectIDs.map(id => ({ SourceObjectID: id }))
+                    SourceObjects: c.SourceObjects.map(so => ({
+                        SourceObjectID: so.SourceObjectID ?? null,
+                        SourceObjectName: so.SourceObjectName ?? null,
+                        Fields: so.Fields ?? null,
+                    })),
                 })),
                 StartSync: startSync,
                 FullSync: fullSync,
@@ -718,12 +798,12 @@ export class GraphQLIntegrationClient {
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 
-    public async CancelSync(runID: string): Promise<MutationResult> {
+    public async CancelSync(companyIntegrationID: string): Promise<MutationResult> {
         try {
-            const query = gql`mutation IntegrationCancelSync($runID: String!) {
-                IntegrationCancelSync(runID: $runID) { Success Message }
+            const query = gql`mutation IntegrationCancelSync($companyIntegrationID: String!) {
+                IntegrationCancelSync(companyIntegrationID: $companyIntegrationID) { Success Message }
             }`;
-            const result = await this._dataProvider.ExecuteGQL(query, { runID });
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
             return result?.IntegrationCancelSync ?? { Success: false, Message: 'No response' };
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }

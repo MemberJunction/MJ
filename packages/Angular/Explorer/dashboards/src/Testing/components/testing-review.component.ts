@@ -33,26 +33,37 @@ interface ReviewFormState {
   selector: 'app-testing-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Page Header -->
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Human Review"
+          Icon="fa-solid fa-clipboard-check"
+          Subtitle="Human-in-the-loop review for test outcomes">
+          <div meta>
+            @if (PendingCount > 0) {
+              <mj-stat-badge
+                Icon="fa-solid fa-hourglass-half"
+                [Count]="PendingCount"
+                Label="pending"
+                Variant="warning">
+              </mj-stat-badge>
+            }
+          </div>
+          <div actions>
+            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
+    <!-- Inner page content -->
     <div class="review-page">
-      <div class="page-header">
-        <div class="header-left">
-          <h2>
-            <i class="fa-solid fa-clipboard-check"></i>
-            Human Review
-          </h2>
-          @if (PendingCount > 0) {
-            <div class="pending-badge">
-              <span class="badge-count">{{ PendingCount }}</span>
-              <span class="badge-text">pending</span>
-            </div>
-          }
-        </div>
-        <button class="refresh-btn" (click)="Refresh()" [disabled]="IsRefreshing">
-          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsRefreshing"></i>
-          {{ IsRefreshing ? 'Refreshing...' : 'Refresh' }}
-        </button>
-      </div>
 
       <!-- KPI Summary Row -->
       @if (Metrics) {
@@ -114,11 +125,9 @@ interface ReviewFormState {
       @if (CurrentView === 'queue') {
         <div class="content-card">
           @if (PendingItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-circle-check"></i>
-              <h3>All caught up!</h3>
-              <p>No tests currently require human review.</p>
-            </div>
+            <mj-empty-state Variant="success"
+              Title="All caught up!"
+              Message="No tests currently require human review." />
           } @else {
             <div class="queue-list">
               @for (item of PendingItems; track item.testRunID) {
@@ -243,11 +252,9 @@ interface ReviewFormState {
           </div>
 
           @if (FilteredHistoryItems.length === 0) {
-            <div class="empty-state">
-              <i class="fa-solid fa-folder-open"></i>
-              <h3>No reviewed items</h3>
-              <p>Reviewed tests will appear here once feedback is submitted.</p>
-            </div>
+            <mj-empty-state Icon="fa-solid fa-folder-open"
+              Title="No reviewed items"
+              Message="Reviewed tests will appear here once feedback is submitted." />
           } @else {
             <div class="history-list">
               @for (item of FilteredHistoryItems; track item.id) {
@@ -331,6 +338,7 @@ interface ReviewFormState {
         </div>
       </div>
     </div>
+    </ng-template>
   `,
   styles: [`
     :host {
@@ -1011,31 +1019,6 @@ interface ReviewFormState {
       white-space: normal;
     }
 
-    /* Empty State */
-    .empty-state {
-      padding: 60px 20px;
-      text-align: center;
-    }
-
-    .empty-state i {
-      font-size: 52px;
-      margin-bottom: 16px;
-      color: var(--mj-status-success);
-    }
-
-    .empty-state h3 {
-      font-size: 18px;
-      color: var(--mj-text-primary);
-      margin: 0 0 8px 0;
-      font-weight: 600;
-    }
-
-    .empty-state p {
-      font-size: 14px;
-      color: var(--mj-text-disabled);
-      margin: 0;
-    }
-
     /* Calibration Section */
     .calibration-section {
       background: var(--mj-bg-surface);
@@ -1197,6 +1180,8 @@ interface ReviewFormState {
 })
 export class TestingReviewComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();

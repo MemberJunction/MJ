@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -26,6 +26,8 @@ import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -33,8 +35,14 @@ import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
   styleUrls: ['./explorer-app.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class MJExplorerAppComponent implements OnInit, OnDestroy {
-  private static readonly THEME_STORAGE_KEY = 'mj-login-theme';
+export class MJExplorerAppComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  /**
+   * Unified theme storage key. Same value the inline pre-paint script in
+   * index.html and ThemeService both read/write. Single source of truth so
+   * the login-screen toggle, the post-login ThemeService, and the inline
+   * first-paint script all stay in sync.
+   */
+  private static readonly THEME_STORAGE_KEY = 'mj-theme';
 
   public title = 'MJ Explorer';
   public initialPath = '/';
@@ -51,8 +59,31 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   /** Suppresses chat overlay during initial app load — set true after workspace initializes */
   public IsChatOverlayReady = false;
 
+  /** Component rendered by PreShellGuard (blocks the shell until dismissed) */
+  private _preShellOverlayRef: ComponentRef<unknown> | null = null;
+  /** Whether a pre-shell guard overlay is blocking the shell */
+  preShellBlocked = false;
+
   /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
   public AppContextSnapshot: AppContextSnapshot | null = null;
+
+  /** Shell-header height in pixels — matches `.shell-header { height: 60px }`. */
+  private static readonly SHELL_HEADER_PX = 60;
+
+  /**
+   * Top boundary (in px) the chat overlay bubble cannot be dragged past. The
+   * shell-header is 60px tall, but if the server-connectivity banner is showing
+   * it sits above the shell-header and pushes everything down. The banner
+   * component publishes its height to `--mj-connectivity-banner-height` on
+   * `<html>`, so we add it in. Re-evaluated on every change-detection pass —
+   * Angular's animation events fire CD when the banner show/hides finish.
+   */
+  public get ChatOverlayTopBoundaryPx(): number {
+    const bannerHeight = parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--mj-connectivity-banner-height')
+    ) || 0;
+    return MJExplorerAppComponent.SHELL_HEADER_PX + bannerHeight;
+  }
 
   private destroy$ = new Subject<void>();
 
@@ -67,10 +98,20 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
     private bridge: ConversationBridgeService,
+    // Injected (not just used statically) so the root singleton is constructed
+    // before handleLogin runs. Magic-link logs in instantly (token already in the
+    // URL hash, no redirect round-trip), so without this injection handleLogin can
+    // fire before anything else constructs MJNotificationService, leaving
+    // MJNotificationService.Instance undefined -> "ShouldSuppressToast" crash.
+    private notifications: MJNotificationService,
     private appManager: ApplicationManager,
     private workspaceState: WorkspaceStateManager,
     private cdr: ChangeDetectorRef,
+    @Optional() @Inject(MJ_PRE_SHELL_GUARD) private preShellGuard: PreShellGuard | null,
+    private environmentInjector: EnvironmentInjector,
+    private viewContainerRef: ViewContainerRef,
   ) {
+    super();
     this.registerClientTools();
   }
 
@@ -91,13 +132,13 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       if (result.success) {
         // Start the client tool session so agents can invoke browser-side tools.
         // Uses the GraphQLDataProvider's sessionId which is the PubSub correlation key.
-        const provider = Metadata.Provider as { sessionId?: string };
+        const provider = this.ProviderToUse as { sessionId?: string };
         if (provider.sessionId) {
           this.agentClient.StartSession(provider.sessionId);
         }
 
         // Suppress toast for agent completions when the user is actively viewing the conversation
-        MJNotificationService.Instance.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
+        this.notifications.ShouldSuppressToast = (statusObj: Record<string, unknown>) => {
           const convoId = statusObj['conversationId'] as string;
           if (!convoId) return false;
           const isViewingConvo = this.bridge.ActiveConversationID$.value === convoId
@@ -111,6 +152,17 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
         this.cdr.detectChanges();
+
+        // Check if a pre-shell guard wants to block the shell (e.g., onboarding wizard)
+        if (this.preShellGuard) {
+          const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
+          if (blockComponent) {
+            this.preShellBlocked = true;
+            this.cdr.detectChanges();
+            this.renderPreShellOverlay(blockComponent);
+            return;
+          }
+        }
 
         // Navigate to initial route
         if (this.initialPath === '/') {
@@ -126,6 +178,15 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       } else if (result.error) {
         // Handle errors based on type
         if (result.error.type === 'no_roles') {
+          // Check if a pre-shell guard wants to handle the no_roles case (e.g., onboarding wizard)
+          if (this.preShellGuard) {
+            const blockComponent = await this.preShellGuard.CheckPreShellBlock(userInfo);
+            if (blockComponent) {
+              this.preShellBlocked = true;
+              this.renderPreShellOverlay(blockComponent);
+              return;
+            }
+          }
           // Show validation banner instead of generic error
           this.showValidationOnly = true;
           this.HasError = true;
@@ -299,7 +360,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     if (conversationId) {
       params['conversationId'] = conversationId;
     }
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const chatApp = md.Applications.find(a => a.Name === 'Chat');
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
   }
@@ -322,7 +383,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       ? navItems.find(n => n.Label === activeNavItemName)
       : navItems.find(n => n.isDefault) || navItems[0];
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const currentUser = md.CurrentUser;
 
     this.AppContextSnapshot = {
@@ -343,6 +404,11 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
       }
     };
+    // Publish to any embedded chat-area subscribers (Form Builder
+    // cockpit, future domain dashboards). The floating overlay sees
+    // the change directly via its [AppContext] template binding; this
+    // observable channel is for chats mounted outside the overlay.
+    this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
     this.cdr.detectChanges();
 
     // Keep the bridge in sync with workspace visibility.
@@ -372,6 +438,11 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         ...this.AppContextSnapshot,
         AdditionalContext: update.AgentContext,
       };
+      // Republish so any embedded chat-area subscribers (Form Builder
+      // cockpit, future dashboards with their own AI pane) pick up the
+      // new dashboard slice — the floating overlay sees it via the
+      // [AppContext] template binding regardless.
+      this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
       this.cdr.detectChanges();
     }
 
@@ -416,7 +487,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       Handler: async (params) => {
         const entityName = String(params['EntityName']);
         const recordId = String(params['RecordID']);
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.Entities.find(e => e.Name === entityName);
         const pkey = new CompositeKey();
         if (entityInfo) {
@@ -453,7 +524,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         }
 
         // Resolve app ID and navigate
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
         if (!app) {
           return { Success: false, ErrorMessage: `Application '${appName}' not found` };
@@ -522,7 +593,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         const message = String(params['Message'] || '');
         const type = (String(params['Type'] || 'info')) as 'info' | 'success' | 'warning' | 'error';
         const duration = Number(params['DurationMs']) || 3000;
-        MJNotificationService.Instance.CreateSimpleNotification(message, type, duration);
+        this.notifications.CreateSimpleNotification(message, type, duration);
         return { Success: true, Data: { Shown: true } };
       }
     });
@@ -671,7 +742,11 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load saved theme preference from localStorage, falling back to OS preference
+   * Load saved theme preference from localStorage, falling back to OS preference.
+   *
+   * Reads the same THEME_STORAGE_KEY ('mj-theme') the inline pre-paint script
+   * reads, so both paths reach the same decision and Angular bootstrap doesn't
+   * override the script's correct first-paint setting.
    */
   private applyLoginTheme(): void {
     const saved = localStorage.getItem(MJExplorerAppComponent.THEME_STORAGE_KEY);
@@ -701,5 +776,34 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     this.IsDarkMode = !this.IsDarkMode;
     localStorage.setItem(MJExplorerAppComponent.THEME_STORAGE_KEY, this.IsDarkMode ? 'dark' : 'light');
     this.applyThemeToDOM();
+  }
+
+  /**
+   * Render a pre-shell guard component as a full-page overlay.
+   * The component should emit a 'completed' event when done.
+   */
+  private renderPreShellOverlay(componentType: Type<unknown>): void {
+    this._preShellOverlayRef = this.viewContainerRef.createComponent(componentType, {
+      environmentInjector: this.environmentInjector
+    });
+
+    // Listen for a 'completed' output if the component has one
+    const instance = this._preShellOverlayRef.instance as Record<string, unknown>;
+    if (instance['completed'] && typeof (instance['completed'] as { subscribe?: Function }).subscribe === 'function') {
+      (instance['completed'] as { subscribe: (fn: () => void) => void }).subscribe(() => {
+        this.dismissPreShellOverlay();
+      });
+    }
+  }
+
+  /**
+   * Dismiss the pre-shell overlay and proceed to normal shell rendering.
+   * Reloads the page first so the user never sees a flash of stale shell state
+   * (e.g., "No Applications") while the old context is still in memory.
+   */
+  private dismissPreShellOverlay(): void {
+    // Reload first — the shell needs a full bootstrap to pick up new roles/context.
+    // Cleanup happens implicitly when the page unloads.
+    window.location.href = '/';
   }
 }

@@ -1,0 +1,1583 @@
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html	2026-04-26 12:46:03
+@@ -166,50 +166,50 @@
+          RELATED ENTITY PANELS
+          ======================================== -->
+ 
+-    <!-- Company Integration Field Maps Section -->
++    <!-- Company Integration Sync Watermarks Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJCompanyIntegrationFieldMaps"
+-        SectionName="Company Integration Field Maps"
+-        Icon="fa fa-exchange-alt"
++        SectionKey="mJCompanyIntegrationSyncWatermarks"
++        SectionName="Company Integration Sync Watermarks"
++        Icon="fa fa-sync-alt"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationFieldMaps')"
++        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps')"
+-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationFieldMaps')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')"
++                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks')"
++                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Company Integration Sync Watermarks Section -->
++    <!-- Company Integration Field Maps Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJCompanyIntegrationSyncWatermarks"
+-        SectionName="Company Integration Sync Watermarks"
+-        Icon="fa fa-sync-alt"
++        SectionKey="mJCompanyIntegrationFieldMaps"
++        SectionName="Company Integration Field Maps"
++        Icon="fa fa-exchange-alt"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')"
++        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationFieldMaps')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks')"
+-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')"
++                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps')"
++                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationFieldMaps')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts	2026-04-26 12:46:03
+@@ -20,8 +20,8 @@
+             { sectionKey: 'syncControl', sectionName: 'Sync Control', isExpanded: true },
+             { sectionKey: 'engineConfiguration', sectionName: 'Engine Configuration', isExpanded: false },
+             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+-            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false },
+-            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false }
++            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false },
++            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false }
+         ]);
+     }
+ }
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html	2026-04-26 12:46:03
+@@ -1783,50 +1783,50 @@
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Tag Audit Logs Section -->
++    <!-- Knowledge Hub Saved Searches Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJTagAuditLogs"
+-        SectionName="Tag Audit Logs"
+-        Icon="fa fa-history"
++        SectionKey="mJKnowledgeHubSavedSearches"
++        SectionName="Knowledge Hub Saved Searches"
++        Icon="fa fa-search-plus"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
++        [BadgeCount]="GetSectionRowCount('mJKnowledgeHubSavedSearches')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
+-                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Knowledge Hub Saved Searches','UserID')"
++                [NewRecordValues]="NewRecordValues('MJ: Knowledge Hub Saved Searches')"
++                [AllowLoad]="IsSectionExpanded('mJKnowledgeHubSavedSearches')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJKnowledgeHubSavedSearches', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Knowledge Hub Saved Searches Section -->
++    <!-- Tag Audit Logs Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJKnowledgeHubSavedSearches"
+-        SectionName="Knowledge Hub Saved Searches"
+-        Icon="fa fa-search-plus"
++        SectionKey="mJTagAuditLogs"
++        SectionName="Tag Audit Logs"
++        Icon="fa fa-history"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJKnowledgeHubSavedSearches')"
++        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Knowledge Hub Saved Searches','UserID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Knowledge Hub Saved Searches')"
+-                [AllowLoad]="IsSectionExpanded('mJKnowledgeHubSavedSearches')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
++                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
++                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJKnowledgeHubSavedSearches', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts	2026-04-26 12:46:03
+@@ -83,8 +83,8 @@
+             { sectionKey: 'mJOpenApps', sectionName: 'Open Apps', isExpanded: false },
+             { sectionKey: 'mJContentItemDuplicates', sectionName: 'Content Item Duplicates', isExpanded: false },
+             { sectionKey: 'mJContentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },
+-            { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },
+             { sectionKey: 'mJKnowledgeHubSavedSearches', sectionName: 'Knowledge Hub Saved Searches', isExpanded: false },
++            { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },
+             { sectionKey: 'mJArchiveConfigurations', sectionName: 'Archive Configurations', isExpanded: false },
+             { sectionKey: 'mJMCPToolFavorites', sectionName: 'MCP Tool Favorites', isExpanded: false },
+             { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.html	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.html	2026-04-26 12:46:03
+@@ -142,50 +142,50 @@
+          RELATED ENTITY PANELS
+          ======================================== -->
+ 
+-    <!-- Chapter Officers Section -->
++    <!-- Chapter Memberships Section -->
+     <mj-collapsible-panel
+-        SectionKey="chapterOfficers"
+-        SectionName="Chapter Officers"
++        SectionKey="chapterMemberships"
++        SectionName="Chapter Memberships"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('chapterOfficers')"
++        [BadgeCount]="GetSectionRowCount('chapterMemberships')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Officers','ChapterID')"
+-                [NewRecordValues]="NewRecordValues('Chapter Officers')"
+-                [AllowLoad]="IsSectionExpanded('chapterOfficers')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Memberships','ChapterID')"
++                [NewRecordValues]="NewRecordValues('Chapter Memberships')"
++                [AllowLoad]="IsSectionExpanded('chapterMemberships')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('chapterOfficers', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('chapterMemberships', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Chapter Memberships Section -->
++    <!-- Chapter Officers Section -->
+     <mj-collapsible-panel
+-        SectionKey="chapterMemberships"
+-        SectionName="Chapter Memberships"
++        SectionKey="chapterOfficers"
++        SectionName="Chapter Officers"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('chapterMemberships')"
++        [BadgeCount]="GetSectionRowCount('chapterOfficers')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Memberships','ChapterID')"
+-                [NewRecordValues]="NewRecordValues('Chapter Memberships')"
+-                [AllowLoad]="IsSectionExpanded('chapterMemberships')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Officers','ChapterID')"
++                [NewRecordValues]="NewRecordValues('Chapter Officers')"
++                [AllowLoad]="IsSectionExpanded('chapterOfficers')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('chapterMemberships', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('chapterOfficers', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.ts	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoChapter/associationdemochapter.form.component.ts	2026-04-26 12:46:03
+@@ -17,8 +17,8 @@
+         await super.ngOnInit();
+         this.initSections([
+             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+-            { sectionKey: 'chapterOfficers', sectionName: 'Chapter Officers', isExpanded: false },
+-            { sectionKey: 'chapterMemberships', sectionName: 'Chapter Memberships', isExpanded: false }
++            { sectionKey: 'chapterMemberships', sectionName: 'Chapter Memberships', isExpanded: false },
++            { sectionKey: 'chapterOfficers', sectionName: 'Chapter Officers', isExpanded: false }
+         ]);
+     }
+ }
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.html	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.html	2026-04-26 12:46:03
+@@ -174,75 +174,75 @@
+          RELATED ENTITY PANELS
+          ======================================== -->
+ 
+-    <!-- Competition Judges Section -->
++    <!-- Competition Entries Section -->
+     <mj-collapsible-panel
+-        SectionKey="competitionJudges"
+-        SectionName="Competition Judges"
++        SectionKey="competitionEntries"
++        SectionName="Competition Entries"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('competitionJudges')"
++        [BadgeCount]="GetSectionRowCount('competitionEntries')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Competition Judges','CompetitionID')"
+-                [NewRecordValues]="NewRecordValues('Competition Judges')"
+-                [AllowLoad]="IsSectionExpanded('competitionJudges')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Competition Entries','CompetitionID')"
++                [NewRecordValues]="NewRecordValues('Competition Entries')"
++                [AllowLoad]="IsSectionExpanded('competitionEntries')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('competitionJudges', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('competitionEntries', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Competition Entries Section -->
++    <!-- Product Awards Section -->
+     <mj-collapsible-panel
+-        SectionKey="competitionEntries"
+-        SectionName="Competition Entries"
++        SectionKey="productAwards"
++        SectionName="Product Awards"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('competitionEntries')"
++        [BadgeCount]="GetSectionRowCount('productAwards')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Competition Entries','CompetitionID')"
+-                [NewRecordValues]="NewRecordValues('Competition Entries')"
+-                [AllowLoad]="IsSectionExpanded('competitionEntries')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Product Awards','CompetitionID')"
++                [NewRecordValues]="NewRecordValues('Product Awards')"
++                [AllowLoad]="IsSectionExpanded('productAwards')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('competitionEntries', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('productAwards', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Product Awards Section -->
++    <!-- Competition Judges Section -->
+     <mj-collapsible-panel
+-        SectionKey="productAwards"
+-        SectionName="Product Awards"
++        SectionKey="competitionJudges"
++        SectionName="Competition Judges"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('productAwards')"
++        [BadgeCount]="GetSectionRowCount('competitionJudges')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Product Awards','CompetitionID')"
+-                [NewRecordValues]="NewRecordValues('Product Awards')"
+-                [AllowLoad]="IsSectionExpanded('productAwards')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Competition Judges','CompetitionID')"
++                [NewRecordValues]="NewRecordValues('Competition Judges')"
++                [AllowLoad]="IsSectionExpanded('competitionJudges')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('productAwards', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('competitionJudges', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.ts	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoCompetition/associationdemocompetition.form.component.ts	2026-04-26 12:46:03
+@@ -17,9 +17,9 @@
+         await super.ngOnInit();
+         this.initSections([
+             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+-            { sectionKey: 'competitionJudges', sectionName: 'Competition Judges', isExpanded: false },
+             { sectionKey: 'competitionEntries', sectionName: 'Competition Entries', isExpanded: false },
+-            { sectionKey: 'productAwards', sectionName: 'Product Awards', isExpanded: false }
++            { sectionKey: 'productAwards', sectionName: 'Product Awards', isExpanded: false },
++            { sectionKey: 'competitionJudges', sectionName: 'Competition Judges', isExpanded: false }
+         ]);
+     }
+ }
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.html	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.html	2026-04-26 12:46:03
+@@ -171,50 +171,50 @@
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Post Reactions Section -->
++    <!-- Post Attachments Section -->
+     <mj-collapsible-panel
+-        SectionKey="postReactions"
+-        SectionName="Post Reactions"
++        SectionKey="postAttachments"
++        SectionName="Post Attachments"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('postReactions')"
++        [BadgeCount]="GetSectionRowCount('postAttachments')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Post Reactions','PostID')"
+-                [NewRecordValues]="NewRecordValues('Post Reactions')"
+-                [AllowLoad]="IsSectionExpanded('postReactions')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Post Attachments','PostID')"
++                [NewRecordValues]="NewRecordValues('Post Attachments')"
++                [AllowLoad]="IsSectionExpanded('postAttachments')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('postReactions', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('postAttachments', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Post Attachments Section -->
++    <!-- Post Reactions Section -->
+     <mj-collapsible-panel
+-        SectionKey="postAttachments"
+-        SectionName="Post Attachments"
++        SectionKey="postReactions"
++        SectionName="Post Reactions"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('postAttachments')"
++        [BadgeCount]="GetSectionRowCount('postReactions')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Post Attachments','PostID')"
+-                [NewRecordValues]="NewRecordValues('Post Attachments')"
+-                [AllowLoad]="IsSectionExpanded('postAttachments')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Post Reactions','PostID')"
++                [NewRecordValues]="NewRecordValues('Post Reactions')"
++                [AllowLoad]="IsSectionExpanded('postReactions')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('postAttachments', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('postReactions', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.ts	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoForumPost/associationdemoforumpost.form.component.ts	2026-04-26 12:46:03
+@@ -18,8 +18,8 @@
+         this.initSections([
+             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+             { sectionKey: 'postTags', sectionName: 'Post Tags', isExpanded: false },
+-            { sectionKey: 'postReactions', sectionName: 'Post Reactions', isExpanded: false },
+             { sectionKey: 'postAttachments', sectionName: 'Post Attachments', isExpanded: false },
++            { sectionKey: 'postReactions', sectionName: 'Post Reactions', isExpanded: false },
+             { sectionKey: 'forumModerations', sectionName: 'Forum Moderations', isExpanded: false },
+             { sectionKey: 'forumPosts', sectionName: 'Forum Posts', isExpanded: false }
+         ]);
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.html	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.html	2026-04-26 12:46:03
+@@ -215,350 +215,350 @@
+          RELATED ENTITY PANELS
+          ======================================== -->
+ 
+-    <!-- Forum Moderations (Reported By ID) Section -->
++    <!-- Event Registrations Section -->
+     <mj-collapsible-panel
+-        SectionKey="forumModerationsReportedByID"
+-        SectionName="Forum Moderations (Reported By ID)"
++        SectionKey="eventRegistrations"
++        SectionName="Event Registrations"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('forumModerationsReportedByID')"
++        [BadgeCount]="GetSectionRowCount('eventRegistrations')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Forum Moderations','ReportedByID')"
+-                [NewRecordValues]="NewRecordValues('Forum Moderations')"
+-                [AllowLoad]="IsSectionExpanded('forumModerationsReportedByID')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Event Registrations','MemberID')"
++                [NewRecordValues]="NewRecordValues('Event Registrations')"
++                [AllowLoad]="IsSectionExpanded('eventRegistrations')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('forumModerationsReportedByID', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('eventRegistrations', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Forum Threads (Author ID) Section -->
++    <!-- Continuing Educations Section -->
+     <mj-collapsible-panel
+-        SectionKey="forumThreadsAuthorID"
+-        SectionName="Forum Threads (Author ID)"
++        SectionKey="continuingEducations"
++        SectionName="Continuing Educations"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('forumThreadsAuthorID')"
++        [BadgeCount]="GetSectionRowCount('continuingEducations')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Forum Threads','AuthorID')"
+-                [NewRecordValues]="NewRecordValues('Forum Threads')"
+-                [AllowLoad]="IsSectionExpanded('forumThreadsAuthorID')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Continuing Educations','MemberID')"
++                [NewRecordValues]="NewRecordValues('Continuing Educations')"
++                [AllowLoad]="IsSectionExpanded('continuingEducations')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('forumThreadsAuthorID', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('continuingEducations', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Campaign Members Section -->
++    <!-- Enrollments Section -->
+     <mj-collapsible-panel
+-        SectionKey="campaignMembers"
+-        SectionName="Campaign Members"
++        SectionKey="enrollments"
++        SectionName="Enrollments"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('campaignMembers')"
++        [BadgeCount]="GetSectionRowCount('enrollments')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Campaign Members','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Campaign Members')"
+-                [AllowLoad]="IsSectionExpanded('campaignMembers')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Enrollments','MemberID')"
++                [NewRecordValues]="NewRecordValues('Enrollments')"
++                [AllowLoad]="IsSectionExpanded('enrollments')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('campaignMembers', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('enrollments', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Post Attachments Section -->
++    <!-- Forum Categories Section -->
+     <mj-collapsible-panel
+-        SectionKey="postAttachments"
+-        SectionName="Post Attachments"
++        SectionKey="forumCategories"
++        SectionName="Forum Categories"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('postAttachments')"
++        [BadgeCount]="GetSectionRowCount('forumCategories')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Post Attachments','UploadedByID')"
+-                [NewRecordValues]="NewRecordValues('Post Attachments')"
+-                [AllowLoad]="IsSectionExpanded('postAttachments')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Forum Categories','LastPostAuthorID')"
++                [NewRecordValues]="NewRecordValues('Forum Categories')"
++                [AllowLoad]="IsSectionExpanded('forumCategories')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('postAttachments', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('forumCategories', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Email Sends Section -->
++    <!-- Post Attachments Section -->
+     <mj-collapsible-panel
+-        SectionKey="emailSends"
+-        SectionName="Email Sends"
++        SectionKey="postAttachments"
++        SectionName="Post Attachments"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('emailSends')"
++        [BadgeCount]="GetSectionRowCount('postAttachments')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Email Sends','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Email Sends')"
+-                [AllowLoad]="IsSectionExpanded('emailSends')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Post Attachments','UploadedByID')"
++                [NewRecordValues]="NewRecordValues('Post Attachments')"
++                [AllowLoad]="IsSectionExpanded('postAttachments')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('emailSends', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('postAttachments', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Forum Categories Section -->
++    <!-- Products Section -->
+     <mj-collapsible-panel
+-        SectionKey="forumCategories"
+-        SectionName="Forum Categories"
++        SectionKey="products"
++        SectionName="Products"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('forumCategories')"
++        [BadgeCount]="GetSectionRowCount('products')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Forum Categories','LastPostAuthorID')"
+-                [NewRecordValues]="NewRecordValues('Forum Categories')"
+-                [AllowLoad]="IsSectionExpanded('forumCategories')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Products','MemberID')"
++                [NewRecordValues]="NewRecordValues('Products')"
++                [AllowLoad]="IsSectionExpanded('products')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('forumCategories', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('products', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Post Reactions Section -->
++    <!-- Certifications Section -->
+     <mj-collapsible-panel
+-        SectionKey="postReactions"
+-        SectionName="Post Reactions"
++        SectionKey="certifications"
++        SectionName="Certifications"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('postReactions')"
++        [BadgeCount]="GetSectionRowCount('certifications')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Post Reactions','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Post Reactions')"
+-                [AllowLoad]="IsSectionExpanded('postReactions')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Certifications','MemberID')"
++                [NewRecordValues]="NewRecordValues('Certifications')"
++                [AllowLoad]="IsSectionExpanded('certifications')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('postReactions', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('certifications', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Resource Versions Section -->
++    <!-- Forum Moderations (Moderated By ID) Section -->
+     <mj-collapsible-panel
+-        SectionKey="resourceVersions"
+-        SectionName="Resource Versions"
++        SectionKey="forumModerationsModeratedByID"
++        SectionName="Forum Moderations (Moderated By ID)"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('resourceVersions')"
++        [BadgeCount]="GetSectionRowCount('forumModerationsModeratedByID')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Resource Versions','CreatedByID')"
+-                [NewRecordValues]="NewRecordValues('Resource Versions')"
+-                [AllowLoad]="IsSectionExpanded('resourceVersions')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Forum Moderations','ModeratedByID')"
++                [NewRecordValues]="NewRecordValues('Forum Moderations')"
++                [AllowLoad]="IsSectionExpanded('forumModerationsModeratedByID')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('resourceVersions', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('forumModerationsModeratedByID', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Continuing Educations Section -->
++    <!-- Forum Posts (Edited By ID) Section -->
+     <mj-collapsible-panel
+-        SectionKey="continuingEducations"
+-        SectionName="Continuing Educations"
++        SectionKey="forumPostsEditedByID"
++        SectionName="Forum Posts (Edited By ID)"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('continuingEducations')"
++        [BadgeCount]="GetSectionRowCount('forumPostsEditedByID')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Continuing Educations','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Continuing Educations')"
+-                [AllowLoad]="IsSectionExpanded('continuingEducations')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Forum Posts','EditedByID')"
++                [NewRecordValues]="NewRecordValues('Forum Posts')"
++                [AllowLoad]="IsSectionExpanded('forumPostsEditedByID')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('continuingEducations', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('forumPostsEditedByID', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Enrollments Section -->
++    <!-- Memberships Section -->
+     <mj-collapsible-panel
+-        SectionKey="enrollments"
+-        SectionName="Enrollments"
++        SectionKey="memberships"
++        SectionName="Memberships"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('enrollments')"
++        [BadgeCount]="GetSectionRowCount('memberships')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Enrollments','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Enrollments')"
+-                [AllowLoad]="IsSectionExpanded('enrollments')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Memberships','MemberID')"
++                [NewRecordValues]="NewRecordValues('Memberships')"
++                [AllowLoad]="IsSectionExpanded('memberships')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('enrollments', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('memberships', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Resource Ratings Section -->
++    <!-- Chapter Officers Section -->
+     <mj-collapsible-panel
+-        SectionKey="resourceRatings"
+-        SectionName="Resource Ratings"
++        SectionKey="chapterOfficers"
++        SectionName="Chapter Officers"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('resourceRatings')"
++        [BadgeCount]="GetSectionRowCount('chapterOfficers')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Resource Ratings','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Resource Ratings')"
+-                [AllowLoad]="IsSectionExpanded('resourceRatings')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Officers','MemberID')"
++                [NewRecordValues]="NewRecordValues('Chapter Officers')"
++                [AllowLoad]="IsSectionExpanded('chapterOfficers')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('resourceRatings', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('chapterOfficers', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Member Follows Section -->
++    <!-- Email Sends Section -->
+     <mj-collapsible-panel
+-        SectionKey="memberFollows"
+-        SectionName="Member Follows"
++        SectionKey="emailSends"
++        SectionName="Email Sends"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('memberFollows')"
++        [BadgeCount]="GetSectionRowCount('emailSends')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Member Follows','FollowerID')"
+-                [NewRecordValues]="NewRecordValues('Member Follows')"
+-                [AllowLoad]="IsSectionExpanded('memberFollows')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Email Sends','MemberID')"
++                [NewRecordValues]="NewRecordValues('Email Sends')"
++                [AllowLoad]="IsSectionExpanded('emailSends')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('memberFollows', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('emailSends', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Products Section -->
++    <!-- Resource Downloads Section -->
+     <mj-collapsible-panel
+-        SectionKey="products"
+-        SectionName="Products"
++        SectionKey="resourceDownloads"
++        SectionName="Resource Downloads"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('products')"
++        [BadgeCount]="GetSectionRowCount('resourceDownloads')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Products','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Products')"
+-                [AllowLoad]="IsSectionExpanded('products')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Resource Downloads','MemberID')"
++                [NewRecordValues]="NewRecordValues('Resource Downloads')"
++                [AllowLoad]="IsSectionExpanded('resourceDownloads')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('products', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('resourceDownloads', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Event Registrations Section -->
++    <!-- Resource Ratings Section -->
+     <mj-collapsible-panel
+-        SectionKey="eventRegistrations"
+-        SectionName="Event Registrations"
++        SectionKey="resourceRatings"
++        SectionName="Resource Ratings"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('eventRegistrations')"
++        [BadgeCount]="GetSectionRowCount('resourceRatings')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Event Registrations','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Event Registrations')"
+-                [AllowLoad]="IsSectionExpanded('eventRegistrations')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Resource Ratings','MemberID')"
++                [NewRecordValues]="NewRecordValues('Resource Ratings')"
++                [AllowLoad]="IsSectionExpanded('resourceRatings')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('eventRegistrations', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('resourceRatings', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+@@ -590,375 +590,375 @@
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Board Members Section -->
++    <!-- Resource Versions Section -->
+     <mj-collapsible-panel
+-        SectionKey="boardMembers"
+-        SectionName="Board Members"
++        SectionKey="resourceVersions"
++        SectionName="Resource Versions"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('boardMembers')"
++        [BadgeCount]="GetSectionRowCount('resourceVersions')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Board Members','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Board Members')"
+-                [AllowLoad]="IsSectionExpanded('boardMembers')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Resource Versions','CreatedByID')"
++                [NewRecordValues]="NewRecordValues('Resource Versions')"
++                [AllowLoad]="IsSectionExpanded('resourceVersions')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('boardMembers', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('resourceVersions', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Committees Section -->
++    <!-- Board Members Section -->
+     <mj-collapsible-panel
+-        SectionKey="committees"
+-        SectionName="Committees"
++        SectionKey="boardMembers"
++        SectionName="Board Members"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('committees')"
++        [BadgeCount]="GetSectionRowCount('boardMembers')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Committees','ChairMemberID')"
+-                [NewRecordValues]="NewRecordValues('Committees')"
+-                [AllowLoad]="IsSectionExpanded('committees')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Board Members','MemberID')"
++                [NewRecordValues]="NewRecordValues('Board Members')"
++                [AllowLoad]="IsSectionExpanded('boardMembers')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('committees', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('boardMembers', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Resource Downloads Section -->
++    <!-- Chapter Memberships Section -->
+     <mj-collapsible-panel
+-        SectionKey="resourceDownloads"
+-        SectionName="Resource Downloads"
++        SectionKey="chapterMemberships"
++        SectionName="Chapter Memberships"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('resourceDownloads')"
++        [BadgeCount]="GetSectionRowCount('chapterMemberships')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Resource Downloads','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Resource Downloads')"
+-                [AllowLoad]="IsSectionExpanded('resourceDownloads')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Memberships','MemberID')"
++                [NewRecordValues]="NewRecordValues('Chapter Memberships')"
++                [AllowLoad]="IsSectionExpanded('chapterMemberships')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('resourceDownloads', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('chapterMemberships', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Resources Section -->
++    <!-- Member Follows Section -->
+     <mj-collapsible-panel
+-        SectionKey="resources"
+-        SectionName="Resources"
++        SectionKey="memberFollows"
++        SectionName="Member Follows"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('resources')"
++        [BadgeCount]="GetSectionRowCount('memberFollows')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Resources','AuthorID')"
+-                [NewRecordValues]="NewRecordValues('Resources')"
+-                [AllowLoad]="IsSectionExpanded('resources')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Member Follows','FollowerID')"
++                [NewRecordValues]="NewRecordValues('Member Follows')"
++                [AllowLoad]="IsSectionExpanded('memberFollows')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('resources', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('memberFollows', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Forum Moderations (Moderated By ID) Section -->
++    <!-- Resources Section -->
+     <mj-collapsible-panel
+-        SectionKey="forumModerationsModeratedByID"
+-        SectionName="Forum Moderations (Moderated By ID)"
++        SectionKey="resources"
++        SectionName="Resources"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('forumModerationsModeratedByID')"
++        [BadgeCount]="GetSectionRowCount('resources')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Forum Moderations','ModeratedByID')"
+-                [NewRecordValues]="NewRecordValues('Forum Moderations')"
+-                [AllowLoad]="IsSectionExpanded('forumModerationsModeratedByID')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Resources','AuthorID')"
++                [NewRecordValues]="NewRecordValues('Resources')"
++                [AllowLoad]="IsSectionExpanded('resources')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('forumModerationsModeratedByID', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('resources', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Forum Posts (Edited By ID) Section -->
++    <!-- Post Reactions Section -->
+     <mj-collapsible-panel
+-        SectionKey="forumPostsEditedByID"
+-        SectionName="Forum Posts (Edited By ID)"
++        SectionKey="postReactions"
++        SectionName="Post Reactions"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('forumPostsEditedByID')"
++        [BadgeCount]="GetSectionRowCount('postReactions')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Forum Posts','EditedByID')"
+-                [NewRecordValues]="NewRecordValues('Forum Posts')"
+-                [AllowLoad]="IsSectionExpanded('forumPostsEditedByID')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Post Reactions','MemberID')"
++                [NewRecordValues]="NewRecordValues('Post Reactions')"
++                [AllowLoad]="IsSectionExpanded('postReactions')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('forumPostsEditedByID', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('postReactions', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Memberships Section -->
++    <!-- Campaign Members Section -->
+     <mj-collapsible-panel
+-        SectionKey="memberships"
+-        SectionName="Memberships"
++        SectionKey="campaignMembers"
++        SectionName="Campaign Members"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('memberships')"
++        [BadgeCount]="GetSectionRowCount('campaignMembers')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Memberships','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Memberships')"
+-                [AllowLoad]="IsSectionExpanded('memberships')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Campaign Members','MemberID')"
++                [NewRecordValues]="NewRecordValues('Campaign Members')"
++                [AllowLoad]="IsSectionExpanded('campaignMembers')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('memberships', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('campaignMembers', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Advocacy Actions Section -->
++    <!-- Committee Memberships Section -->
+     <mj-collapsible-panel
+-        SectionKey="advocacyActions"
+-        SectionName="Advocacy Actions"
++        SectionKey="committeeMemberships"
++        SectionName="Committee Memberships"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('advocacyActions')"
++        [BadgeCount]="GetSectionRowCount('committeeMemberships')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Advocacy Actions','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Advocacy Actions')"
+-                [AllowLoad]="IsSectionExpanded('advocacyActions')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Committee Memberships','MemberID')"
++                [NewRecordValues]="NewRecordValues('Committee Memberships')"
++                [AllowLoad]="IsSectionExpanded('committeeMemberships')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('advocacyActions', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('committeeMemberships', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Forum Threads (Last Reply Author ID) Section -->
++    <!-- Committees Section -->
+     <mj-collapsible-panel
+-        SectionKey="forumThreadsLastReplyAuthorID"
+-        SectionName="Forum Threads (Last Reply Author ID)"
++        SectionKey="committees"
++        SectionName="Committees"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('forumThreadsLastReplyAuthorID')"
++        [BadgeCount]="GetSectionRowCount('committees')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Forum Threads','LastReplyAuthorID')"
+-                [NewRecordValues]="NewRecordValues('Forum Threads')"
+-                [AllowLoad]="IsSectionExpanded('forumThreadsLastReplyAuthorID')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Committees','ChairMemberID')"
++                [NewRecordValues]="NewRecordValues('Committees')"
++                [AllowLoad]="IsSectionExpanded('committees')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('forumThreadsLastReplyAuthorID', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('committees', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Certifications Section -->
++    <!-- Competition Judges Section -->
+     <mj-collapsible-panel
+-        SectionKey="certifications"
+-        SectionName="Certifications"
++        SectionKey="competitionJudges"
++        SectionName="Competition Judges"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('certifications')"
++        [BadgeCount]="GetSectionRowCount('competitionJudges')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Certifications','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Certifications')"
+-                [AllowLoad]="IsSectionExpanded('certifications')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Competition Judges','MemberID')"
++                [NewRecordValues]="NewRecordValues('Competition Judges')"
++                [AllowLoad]="IsSectionExpanded('competitionJudges')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('certifications', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('competitionJudges', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Chapter Officers Section -->
++    <!-- Advocacy Actions Section -->
+     <mj-collapsible-panel
+-        SectionKey="chapterOfficers"
+-        SectionName="Chapter Officers"
++        SectionKey="advocacyActions"
++        SectionName="Advocacy Actions"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('chapterOfficers')"
++        [BadgeCount]="GetSectionRowCount('advocacyActions')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Officers','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Chapter Officers')"
+-                [AllowLoad]="IsSectionExpanded('chapterOfficers')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Advocacy Actions','MemberID')"
++                [NewRecordValues]="NewRecordValues('Advocacy Actions')"
++                [AllowLoad]="IsSectionExpanded('advocacyActions')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('chapterOfficers', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('advocacyActions', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Competition Judges Section -->
++    <!-- Forum Threads (Last Reply Author ID) Section -->
+     <mj-collapsible-panel
+-        SectionKey="competitionJudges"
+-        SectionName="Competition Judges"
++        SectionKey="forumThreadsLastReplyAuthorID"
++        SectionName="Forum Threads (Last Reply Author ID)"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('competitionJudges')"
++        [BadgeCount]="GetSectionRowCount('forumThreadsLastReplyAuthorID')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Competition Judges','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Competition Judges')"
+-                [AllowLoad]="IsSectionExpanded('competitionJudges')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Forum Threads','LastReplyAuthorID')"
++                [NewRecordValues]="NewRecordValues('Forum Threads')"
++                [AllowLoad]="IsSectionExpanded('forumThreadsLastReplyAuthorID')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('competitionJudges', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('forumThreadsLastReplyAuthorID', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Committee Memberships Section -->
++    <!-- Forum Moderations (Reported By ID) Section -->
+     <mj-collapsible-panel
+-        SectionKey="committeeMemberships"
+-        SectionName="Committee Memberships"
++        SectionKey="forumModerationsReportedByID"
++        SectionName="Forum Moderations (Reported By ID)"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('committeeMemberships')"
++        [BadgeCount]="GetSectionRowCount('forumModerationsReportedByID')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Committee Memberships','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Committee Memberships')"
+-                [AllowLoad]="IsSectionExpanded('committeeMemberships')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Forum Moderations','ReportedByID')"
++                [NewRecordValues]="NewRecordValues('Forum Moderations')"
++                [AllowLoad]="IsSectionExpanded('forumModerationsReportedByID')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('committeeMemberships', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('forumModerationsReportedByID', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Chapter Memberships Section -->
++    <!-- Forum Posts (Author ID) Section -->
+     <mj-collapsible-panel
+-        SectionKey="chapterMemberships"
+-        SectionName="Chapter Memberships"
++        SectionKey="forumPostsAuthorID"
++        SectionName="Forum Posts (Author ID)"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('chapterMemberships')"
++        [BadgeCount]="GetSectionRowCount('forumPostsAuthorID')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Chapter Memberships','MemberID')"
+-                [NewRecordValues]="NewRecordValues('Chapter Memberships')"
+-                [AllowLoad]="IsSectionExpanded('chapterMemberships')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Forum Posts','AuthorID')"
++                [NewRecordValues]="NewRecordValues('Forum Posts')"
++                [AllowLoad]="IsSectionExpanded('forumPostsAuthorID')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('chapterMemberships', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('forumPostsAuthorID', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Forum Posts (Author ID) Section -->
++    <!-- Forum Threads (Author ID) Section -->
+     <mj-collapsible-panel
+-        SectionKey="forumPostsAuthorID"
+-        SectionName="Forum Posts (Author ID)"
++        SectionKey="forumThreadsAuthorID"
++        SectionName="Forum Threads (Author ID)"
+         Icon="fa fa-table"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('forumPostsAuthorID')"
++        [BadgeCount]="GetSectionRowCount('forumThreadsAuthorID')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('Forum Posts','AuthorID')"
+-                [NewRecordValues]="NewRecordValues('Forum Posts')"
+-                [AllowLoad]="IsSectionExpanded('forumPostsAuthorID')"
++                [Params]="BuildRelationshipViewParamsByEntityName('Forum Threads','AuthorID')"
++                [NewRecordValues]="NewRecordValues('Forum Threads')"
++                [AllowLoad]="IsSectionExpanded('forumThreadsAuthorID')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('forumPostsAuthorID', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('forumThreadsAuthorID', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.ts	2026-04-26 12:44:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJExplorer/src/app/generated/Entities/AssociationDemoMember/associationdemomember.form.component.ts	2026-04-26 12:46:03
+@@ -17,36 +17,36 @@
+         await super.ngOnInit();
+         this.initSections([
+             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+-            { sectionKey: 'forumModerationsReportedByID', sectionName: 'Forum Moderations (Reported By ID)', isExpanded: false },
+-            { sectionKey: 'forumThreadsAuthorID', sectionName: 'Forum Threads (Author ID)', isExpanded: false },
+-            { sectionKey: 'campaignMembers', sectionName: 'Campaign Members', isExpanded: false },
+-            { sectionKey: 'postAttachments', sectionName: 'Post Attachments', isExpanded: false },
+-            { sectionKey: 'emailSends', sectionName: 'Email Sends', isExpanded: false },
+-            { sectionKey: 'forumCategories', sectionName: 'Forum Categories', isExpanded: false },
+-            { sectionKey: 'postReactions', sectionName: 'Post Reactions', isExpanded: false },
+-            { sectionKey: 'resourceVersions', sectionName: 'Resource Versions', isExpanded: false },
++            { sectionKey: 'eventRegistrations', sectionName: 'Event Registrations', isExpanded: false },
+             { sectionKey: 'continuingEducations', sectionName: 'Continuing Educations', isExpanded: false },
+             { sectionKey: 'enrollments', sectionName: 'Enrollments', isExpanded: false },
+-            { sectionKey: 'resourceRatings', sectionName: 'Resource Ratings', isExpanded: false },
+-            { sectionKey: 'memberFollows', sectionName: 'Member Follows', isExpanded: false },
++            { sectionKey: 'forumCategories', sectionName: 'Forum Categories', isExpanded: false },
++            { sectionKey: 'postAttachments', sectionName: 'Post Attachments', isExpanded: false },
+             { sectionKey: 'products', sectionName: 'Products', isExpanded: false },
+-            { sectionKey: 'eventRegistrations', sectionName: 'Event Registrations', isExpanded: false },
+-            { sectionKey: 'invoices', sectionName: 'Invoices', isExpanded: false },
+-            { sectionKey: 'boardMembers', sectionName: 'Board Members', isExpanded: false },
+-            { sectionKey: 'committees', sectionName: 'Committees', isExpanded: false },
+-            { sectionKey: 'resourceDownloads', sectionName: 'Resource Downloads', isExpanded: false },
+-            { sectionKey: 'resources', sectionName: 'Resources', isExpanded: false },
++            { sectionKey: 'certifications', sectionName: 'Certifications', isExpanded: false },
+             { sectionKey: 'forumModerationsModeratedByID', sectionName: 'Forum Moderations (Moderated By ID)', isExpanded: false },
+             { sectionKey: 'forumPostsEditedByID', sectionName: 'Forum Posts (Edited By ID)', isExpanded: false },
+             { sectionKey: 'memberships', sectionName: 'Memberships', isExpanded: false },
+-            { sectionKey: 'advocacyActions', sectionName: 'Advocacy Actions', isExpanded: false },
+-            { sectionKey: 'forumThreadsLastReplyAuthorID', sectionName: 'Forum Threads (Last Reply Author ID)', isExpanded: false },
+-            { sectionKey: 'certifications', sectionName: 'Certifications', isExpanded: false },
+             { sectionKey: 'chapterOfficers', sectionName: 'Chapter Officers', isExpanded: false },
+-            { sectionKey: 'competitionJudges', sectionName: 'Competition Judges', isExpanded: false },
+-            { sectionKey: 'committeeMemberships', sectionName: 'Committee Memberships', isExpanded: false },
++            { sectionKey: 'emailSends', sectionName: 'Email Sends', isExpanded: false },
++            { sectionKey: 'resourceDownloads', sectionName: 'Resource Downloads', isExpanded: false },
++            { sectionKey: 'resourceRatings', sectionName: 'Resource Ratings', isExpanded: false },
++            { sectionKey: 'invoices', sectionName: 'Invoices', isExpanded: false },
++            { sectionKey: 'resourceVersions', sectionName: 'Resource Versions', isExpanded: false },
++            { sectionKey: 'boardMembers', sectionName: 'Board Members', isExpanded: false },
+             { sectionKey: 'chapterMemberships', sectionName: 'Chapter Memberships', isExpanded: false },
+-            { sectionKey: 'forumPostsAuthorID', sectionName: 'Forum Posts (Author ID)', isExpanded: false }
++            { sectionKey: 'memberFollows', sectionName: 'Member Follows', isExpanded: false },
++            { sectionKey: 'resources', sectionName: 'Resources', isExpanded: false },
++            { sectionKey: 'postReactions', sectionName: 'Post Reactions', isExpanded: false },
++            { sectionKey: 'campaignMembers', sectionName: 'Campaign Members', isExpanded: false },
++            { sectionKey: 'committeeMemberships', sectionName: 'Committee Memberships', isExpanded: false },
++            { sectionKey: 'committees', sectionName: 'Committees', isExpanded: false },
++            { sectionKey: 'competitionJudges', sectionName: 'Competition Judges', isExpanded: false },
++            { sectionKey: 'advocacyActions', sectionName: 'Advocacy Actions', isExpanded: false },
++            { sectionKey: 'forumThreadsLastReplyAuthorID', sectionName: 'Forum Threads (Last Reply Author ID)', isExpanded: false },
++            { sectionKey: 'forumModerationsReportedByID', sectionName: 'Forum Moderations (Reported By ID)', isExpanded: false },
++            { sectionKey: 'forumPostsAuthorID', sectionName: 'Forum Posts (Author ID)', isExpanded: false },
++            { sectionKey: 'forumThreadsAuthorID', sectionName: 'Forum Threads (Author ID)', isExpanded: false }
+         ]);
+     }
+ }
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJServer/src/generated/generated.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJServer/src/generated/generated.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/next/packages/MJServer/src/generated/generated.ts	2026-04-26 12:44:38
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/02-association-db/branch/packages/MJServer/src/generated/generated.ts	2026-04-26 12:46:00
+@@ -25366,12 +25366,12 @@
+     @MaxLength(255)
+     Entity: string;
+         
+-    @Field(() => [MJCompanyIntegrationFieldMap_])
+-    MJCompanyIntegrationFieldMaps_EntityMapIDArray: MJCompanyIntegrationFieldMap_[]; // Link to MJCompanyIntegrationFieldMaps
+-    
+     @Field(() => [MJCompanyIntegrationSyncWatermark_])
+     MJCompanyIntegrationSyncWatermarks_EntityMapIDArray: MJCompanyIntegrationSyncWatermark_[]; // Link to MJCompanyIntegrationSyncWatermarks
+     
++    @Field(() => [MJCompanyIntegrationFieldMap_])
++    MJCompanyIntegrationFieldMaps_EntityMapIDArray: MJCompanyIntegrationFieldMap_[]; // Link to MJCompanyIntegrationFieldMaps
++    
+ }
+ 
+ //****************************************************************************
+@@ -25531,16 +25531,6 @@
+         return result;
+     }
+     
+-    @FieldResolver(() => [MJCompanyIntegrationFieldMap_])
+-    async MJCompanyIntegrationFieldMaps_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+-        this.CheckUserReadPermissions('MJ: Company Integration Field Maps', userPayload);
+-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationFieldMaps')} WHERE ${provider.QuoteIdentifier('EntityMapID')}='${mjcompanyintegrationentitymap_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Field Maps', userPayload, EntityPermissionType.Read, 'AND');
+-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Field Maps', rows, this.GetUserFromPayload(userPayload));
+-        return result;
+-    }
+-        
+     @FieldResolver(() => [MJCompanyIntegrationSyncWatermark_])
+     async MJCompanyIntegrationSyncWatermarks_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+         this.CheckUserReadPermissions('MJ: Company Integration Sync Watermarks', userPayload);
+@@ -25551,6 +25541,16 @@
+         return result;
+     }
+         
++    @FieldResolver(() => [MJCompanyIntegrationFieldMap_])
++    async MJCompanyIntegrationFieldMaps_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
++        this.CheckUserReadPermissions('MJ: Company Integration Field Maps', userPayload);
++        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
++        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationFieldMaps')} WHERE ${provider.QuoteIdentifier('EntityMapID')}='${mjcompanyintegrationentitymap_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Field Maps', userPayload, EntityPermissionType.Read, 'AND');
++        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
++        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Field Maps', rows, this.GetUserFromPayload(userPayload));
++        return result;
++    }
++        
+     @Mutation(() => MJCompanyIntegrationEntityMap_)
+     async CreateMJCompanyIntegrationEntityMap(
+         @Arg('input', () => CreateMJCompanyIntegrationEntityMapInput) input: CreateMJCompanyIntegrationEntityMapInput,
+@@ -74221,12 +74221,12 @@
+     @Field(() => [MJContentProcessRun_])
+     MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
+     
+-    @Field(() => [MJTagAuditLog_])
+-    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+-    
+     @Field(() => [MJKnowledgeHubSavedSearch_])
+     MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
+     
++    @Field(() => [MJTagAuditLog_])
++    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
++    
+     @Field(() => [MJArchiveConfiguration_])
+     MJArchiveConfigurations_CreatedByUserIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
+     
+@@ -75103,16 +75103,6 @@
+         return result;
+     }
+         
+-    @FieldResolver(() => [MJTagAuditLog_])
+-    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+-        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+-        return result;
+-    }
+-        
+     @FieldResolver(() => [MJKnowledgeHubSavedSearch_])
+     async MJKnowledgeHubSavedSearches_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+         this.CheckUserReadPermissions('MJ: Knowledge Hub Saved Searches', userPayload);
+@@ -75120,6 +75110,16 @@
+         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwKnowledgeHubSavedSearches')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Knowledge Hub Saved Searches', userPayload, EntityPermissionType.Read, 'AND');
+         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Knowledge Hub Saved Searches', rows, this.GetUserFromPayload(userPayload));
++        return result;
++    }
++        
++    @FieldResolver(() => [MJTagAuditLog_])
++    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
++        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
++        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
++        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
++        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
++        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+         return result;
+     }
+         

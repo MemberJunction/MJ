@@ -6,7 +6,7 @@ import { Metadata, RunView, RunQuery, LogError } from '@memberjunction/core';
 // See: https://nodejs.org/api/module.html#modulecreaterequirefilename
 const _require = createRequire(import.meta.url);
 import type { RunViewParams, RunQueryParams, UserInfo, RunViewResult, RunQueryResult, BaseEntity, EntityInfo } from '@memberjunction/core';
-import { ComponentLinter, Violation } from './component-linter';
+import { ComponentLinter, Violation, type LinterOptions } from '@memberjunction/react-linter';
 import {
   ComponentSpec,
   ComponentUtilities,
@@ -52,7 +52,15 @@ async function preResolveComponentSpec(
   return spec;
 }
 
-export interface ComponentExecutionOptions {
+/**
+ * Browser-execution options for {@link ComponentRunner}. Extends {@link LinterOptions}
+ * (which carries `componentSpec`, `contextUser`, `entityMetadata`, `utilities` —
+ * the fields the static linter reads) with Playwright-specific runtime fields
+ * (timeouts, page-ready hooks, screenshot mode). The browser harness happens
+ * to run the linter as a prelude, so accepting a superset keeps the call sites
+ * tidy without leaking browser concerns into the linter package.
+ */
+export interface ComponentExecutionOptions extends LinterOptions {
   componentSpec: ComponentSpec;
   props?: Record<string, any>;
   setupCode?: string;
@@ -64,26 +72,50 @@ export interface ComponentExecutionOptions {
   contextUser: UserInfo;
   isRootComponent?: boolean;
   debug?: boolean;
-  utilities?: ComponentUtilities;
 
   /**
-   * Optional array of entity metadata providing complete field lists per entity.
-   * Used by the linter to validate field usage with two-tier severity:
-   * - Medium: Field exists in entity but not declared in dataRequirements
-   * - Critical: Field does not exist in entity at all
+   * Initial per-user settings to seed the component's `savedUserSettings` prop
+   * with. Mirrors what the production host loads from `UserInfoEngine`. The
+   * component's `onSaveUserSettings` callback merges each payload into this
+   * snapshot in place (null/undefined values remove the key — same semantics as
+   * the production host) so tests can inspect persisted preferences after
+   * interactions. Defaults to `{}`.
+   */
+  savedUserSettings?: Record<string, unknown>;
+
+  /**
+   * Optional callback invoked with the live Playwright page after the component
+   * has rendered successfully. The page remains open until this callback resolves,
+   * allowing the caller to perform interactions (clicks, form fills, etc.) and
+   * inspect the post-interaction state.
    *
-   * If not provided, linter only checks against dataRequirements.fieldMetadata
-   * which may cause false-positive critical errors for valid but undeclared fields.
+   * The callback receives the Playwright Page object and the execution result
+   * captured so far. Any errors thrown inside the callback are caught and added
+   * to the result's error array — they do not prevent the result from being returned.
    *
    * @example
-   * // Caller provides metadata for entities used in component
-   * const md = new Metadata();
-   * const entityNames = spec.dataRequirements.entities.map(e => e.name);
-   * const entityMetadata = md.Entities
-   *   .filter(e => entityNames.includes(e.Name))
-   *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
+   * const result = await harness.testComponent({
+   *   ...options,
+   *   onPageReady: async (page, result) => {
+   *     const buttons = await page.locator('button').all();
+   *     for (const btn of buttons) {
+   *       await btn.click();
+   *       await page.waitForTimeout(500);
+   *     }
+   *   }
+   * });
    */
-  entityMetadata?: SimpleEntityInfo[];
+  onPageReady?: (page: any, result: ComponentExecutionResult) => Promise<void>;
+
+  /**
+   * When true, the final screenshot captures the entire scrollable page content
+   * (Playwright's `fullPage: true`) instead of only the viewport. Use this when
+   * testing tall components (dashboards, long forms) where viewport-only
+   * screenshots can cut off content below the fold.
+   *
+   * Defaults to false to preserve existing behavior for other harness users.
+   */
+  fullPageScreenshot?: boolean;
 }
 
 export interface ComponentExecutionResult {
@@ -96,6 +128,12 @@ export interface ComponentExecutionResult {
   executionTime: number;
   renderCount?: number;
   lintViolations?: Violation[];
+  /**
+   * Raw Babel sourcemaps keyed by component name. Populated when `debug: true`
+   * (which enables Babel sourcemap generation in the compiler). Used by callers
+   * to translate runtime stack frame line numbers back to original JSX positions.
+   */
+  sourceMaps?: Record<string, any>;
   /**
    * If true, the browser/page crashed during execution or cleanup.
    * This is an infrastructure issue, not a code issue.
@@ -135,9 +173,10 @@ export class ComponentRunner {
   ];
 
   // Note: This counts React.createElement calls, not component re-renders
-  // A complex dashboard can easily have 5000+ createElement calls on initial mount
-  // Only flag if it's likely an infinite loop (10000+ is suspicious)
-  private static readonly MAX_RENDER_COUNT = 10000;
+  // Complex components with registry children (e.g. EntityDataGrid) can legitimately
+  // create 15,000-21,000 elements. We use a raised hard ceiling plus rate-of-growth
+  // detection to distinguish real infinite loops from large but finite renders.
+  private static readonly MAX_RENDER_COUNT = 50000;
 
   // Browser/page crash patterns - these are infrastructure issues, not code errors
   private static readonly BROWSER_CRASH_PATTERNS = [
@@ -339,7 +378,7 @@ export class ComponentRunner {
       // }
 
       // Execute the component using the real React runtime with timeout (Recommendation #1)
-      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries }: { spec: any; props: any; debug: boolean; componentLibraries: any[] }) => {
+      const executionPromise = page.evaluate(async ({ spec, props, debug, componentLibraries, savedUserSettings }: { spec: any; props: any; debug: boolean; componentLibraries: any[]; savedUserSettings: Record<string, unknown> }) => {
         if (debug) {
           console.log('🎯 Starting component execution');
           console.log('📚 BROWSER: Component libraries available for loading:', componentLibraries?.length || 0);
@@ -556,6 +595,17 @@ export class ComponentRunner {
               warnings: [],
               resolvedSpec: loadResult.resolvedSpec
             };
+
+            // Stash each compiled component's sourcemap so the Node-side error
+            // formatter can translate runtime stack frames back to original JSX lines.
+            (window as any).__testHarnessSourceMaps = (window as any).__testHarnessSourceMaps || {};
+            if (loadResult.loadedComponents) {
+              for (const c of loadResult.loadedComponents) {
+                if (c?.name && c?.sourceMap) {
+                  (window as any).__testHarnessSourceMaps[c.name] = c.sourceMap;
+                }
+              }
+            }
           } catch (registrationError: any) {
             // Capture the actual error before it gets obscured
             console.error('🔴 Component registration error:', registrationError);
@@ -751,21 +801,48 @@ export class ComponentRunner {
 
           const root = (window as any).ReactDOM.createRoot(rootElement);
           
-          // Set up render count protection
-          // This is for detecting infinite loops during execution
-          // Note: counts createElement calls, not re-renders
-          const MAX_RENDERS_ALLOWED = 10000; // Complex dashboards can have many createElement calls
-          
+          // Set up render count protection with rate-of-growth detection.
+          // Counts createElement calls, not re-renders.
+          // Strategy:
+          //   - Hard ceiling (50,000) triggers immediate failure at any time
+          //   - After a 3-second settling period, rapid sustained growth
+          //     (>1000 new calls per 100ms) combined with a moderate count (>15,000)
+          //     is flagged as a render loop. This avoids false positives for
+          //     large-but-finite components like EntityDataGrid (15k-21k elements).
+          const HARD_CEILING = 50000;          // must match ComponentRunner.MAX_RENDER_COUNT
+          const RATE_THRESHOLD = 1000;        // new calls per 100ms that indicate a loop
+          const RATE_COUNT_FLOOR = 15000;     // min count before rate detection kicks in
+          const SETTLING_CHECKS = 30;         // 30 × 100ms = 3 seconds settling period
+          let previousCount = 0;
+          let checkIndex = 0;
+
           if (typeof window !== 'undefined') {
             renderCheckInterval = setInterval(() => {
               const currentRenderCount = (window as any).__testHarnessRenderCount || 0;
-              if (currentRenderCount > MAX_RENDERS_ALLOWED) {
+              const delta = currentRenderCount - previousCount;
+              previousCount = currentRenderCount;
+              checkIndex++;
+
+              // Hard ceiling — always enforced
+              const exceededHardCeiling = currentRenderCount > HARD_CEILING;
+
+              // Rate-of-growth — only after settling period
+              const exceededRate = checkIndex > SETTLING_CHECKS &&
+                                   delta > RATE_THRESHOLD &&
+                                   currentRenderCount > RATE_COUNT_FLOOR;
+
+              if (exceededHardCeiling || exceededRate) {
                 clearInterval(renderCheckInterval);
+                const reason = exceededHardCeiling
+                  ? `exceeded hard ceiling of ${HARD_CEILING}`
+                  : `sustained rapid growth (${delta} calls/100ms after ${checkIndex * 100}ms)`;
+                const msg = `Likely infinite render loop: ${currentRenderCount} createElement calls (${reason})`;
+
                 // Mark test as failed due to excessive renders
                 (window as any).__testHarnessTestFailed = true;
                 (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
                 (window as any).__testHarnessRuntimeErrors.push({
-                  message: `Likely infinite render loop: ${currentRenderCount} createElement calls (max: ${MAX_RENDERS_ALLOWED})`,
+                  message: msg,
                   type: 'render-loop',
                   source: 'test-harness'
                 });
@@ -775,20 +852,39 @@ export class ComponentRunner {
                 } catch (e) {
                   console.error('Failed to unmount after render loop:', e);
                 }
-                throw new Error(`Likely infinite render loop: ${currentRenderCount} createElement calls detected`);
+                throw new Error(msg);
               }
             }, 100); // Check every 100ms
           }
           
+          // Per-user settings: seed from the caller-supplied snapshot and let the
+          // component's onSaveUserSettings callback mutate it in place, mirroring
+          // the production host's persist behavior so tests can inspect prefs.
+          const userSettingsState: Record<string, unknown> = { ...(savedUserSettings || {}) };
+
           // Build complete props
           const componentProps = {
             ...props,
             utilities,
             styles,
             components,
-            savedUserSettings: {},
+            savedUserSettings: userSettingsState,
             onSaveUserSettings: (settings: any) => {
-              console.log('User settings saved:', settings);
+              // Merge (don't replace) in place, keeping the same reference —
+              // mirrors the production host (applyUserSettingsUpdate in
+              // @memberjunction/react-runtime, inlined here because this code
+              // runs inside page.evaluate): a delta-only payload must not wipe
+              // other preferences; an explicit null/undefined value removes the key.
+              Object.entries((settings as Record<string, unknown>) || {}).forEach(([k, v]) => {
+                if (v === null || v === undefined) {
+                  delete userSettingsState[k];
+                } else {
+                  userSettingsState[k] = v;
+                }
+              });
+              if (debug) {
+                console.log('User settings saved:', settings);
+              }
             },
             callbacks: {
               OpenEntityRecord: (entityName: string, key: any) => {
@@ -913,11 +1009,12 @@ export class ComponentRunner {
             error: error.message || String(error)
           };
         }
-      }, { 
-        spec: options.componentSpec, 
-        props: options.props, 
+      }, {
+        spec: options.componentSpec,
+        props: options.props,
         debug,
-        componentLibraries: allLibraries || []
+        componentLibraries: allLibraries || [],
+        savedUserSettings: options.savedUserSettings || {}
       }) as Promise<{ success: boolean; error?: string; componentCount?: number }>;
       
       // Create timeout promise (Recommendation #1)
@@ -1068,9 +1165,11 @@ export class ComponentRunner {
         }
       }
 
-      // Take screenshot with size protection
+      // Take screenshot with size protection. fullPage:true captures the entire
+      // scrollable content instead of just the viewport — required for tall
+      // components (dashboards, long forms) where the viewport cuts off content.
       try {
-        screenshot = await page.screenshot();
+        screenshot = await page.screenshot({ fullPage: options.fullPageScreenshot === true });
 
         // Check screenshot size (should be reasonable)
         const screenshotSize = screenshot.length;
@@ -1123,8 +1222,19 @@ export class ComponentRunner {
           rule: e.rule || 'runtime-error',  // Use specific rule from collectRuntimeErrors
           line: 0,
           column: 0,
-          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined)
-        }));
+          source: e.source as ('user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness' | undefined),
+          stack: (e as any).stack as string | undefined,
+          componentStack: (e as any).componentStack as string | undefined,
+        })) as Array<{
+          message: string;
+          severity: 'critical';
+          rule: string;
+          line: number;
+          column: number;
+          source?: 'user-component' | 'runtime-wrapper' | 'react-framework' | 'test-harness';
+          stack?: string;
+          componentStack?: string;
+        }>;
       
       // Add timeout error if detected
       if (hasTimeout) {
@@ -1213,11 +1323,31 @@ export class ComponentRunner {
         screenshot,
         executionTime: Date.now() - startTime,
         renderCount,
-        codeExecutionSuccess
+        codeExecutionSuccess,
+        sourceMaps: (this as any)._lastSourceMaps,
       };
 
       if (debug) {
         this.dumpDebugInfo(result);
+      }
+
+      // Call onPageReady callback if provided, giving the caller access to the live page
+      if (options.onPageReady) {
+        try {
+          await options.onPageReady(page, result);
+        } catch (callbackError) {
+          const callbackMessage = callbackError instanceof Error ? callbackError.message : String(callbackError);
+          if (debug) {
+            console.log(`\n⚠️ onPageReady callback error: ${callbackMessage}`);
+          }
+          result.errors.push({
+            message: `onPageReady callback error: ${callbackMessage}`,
+            severity: 'medium' as const,
+            rule: 'page-ready-callback',
+            line: 0,
+            column: 0
+          });
+        }
       }
 
       return result;
@@ -1602,13 +1732,36 @@ export class ComponentRunner {
       // Override console.error
       const originalConsoleError = console.error;
       console.error = function(...args: any[]) {
-        const errorText = args.map(arg => 
+        const errorText = args.map(arg =>
           typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
-        
+
+        // React dev-mode emits Rules-of-Hooks violations as "Warning:" messages.
+        // Promote these to test-failing errors so the Code Fixer sees them directly.
+        const hookRuleMessages = [
+          'Rendered more hooks than during the previous render',
+          'Rendered fewer hooks than expected',
+          'change in the order of Hooks called',
+          'Hooks can only be called inside the body of a function component',
+        ];
+        const isHookRuleViolation = hookRuleMessages.some(m => errorText.includes(m));
+
+        if (isHookRuleViolation) {
+          (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
+          (window as any).__testHarnessRuntimeErrors.push({
+            message: errorText,
+            stack: new Error().stack,
+            type: 'react-hooks-rules',
+            source: 'react-framework',
+          });
+          (window as any).__testHarnessTestFailed = true;
+          originalConsoleError.apply(console, args);
+          return;
+        }
+
         // Check if this is a warning rather than an error
         // React warnings typically start with "Warning:" or contain warning-related text
-        const isWarning = 
+        const isWarning =
           errorText.includes('Warning:') ||
           errorText.includes('DevTools') ||
           errorText.includes('deprecated') ||
@@ -1618,7 +1771,7 @@ export class ComponentRunner {
           errorText.includes('Please update') ||
           (errorText.includes('React') && errorText.includes('recognize the')) || // Prop warnings
           (errorText.includes('React') && errorText.includes('Invalid'));
-        
+
         if (isWarning) {
           // Track as warning, don't fail the test
           (window as any).__testHarnessConsoleWarnings.push(errorText);
@@ -1627,7 +1780,7 @@ export class ComponentRunner {
           (window as any).__testHarnessConsoleErrors.push(errorText);
           (window as any).__testHarnessTestFailed = true;
         }
-        
+
         originalConsoleError.apply(console, args);
       };
 
@@ -1766,9 +1919,13 @@ export class ComponentRunner {
       return {
         runtimeErrors: (window as any).__testHarnessRuntimeErrors || [],
         consoleErrors: (window as any).__testHarnessConsoleErrors || [],
-        testFailed: (window as any).__testHarnessTestFailed || false
+        testFailed: (window as any).__testHarnessTestFailed || false,
+        sourceMaps: (window as any).__testHarnessSourceMaps || {}
       };
     });
+
+    // Store sourcemaps on the instance so executeComponent can attach them to the result.
+    (this as any)._lastSourceMaps = errorData.sourceMaps;
 
     // Track unique errors and their counts
     const errorMap = new Map<string, {error: any; count: number}>();
@@ -1803,6 +1960,9 @@ export class ComponentRunner {
         case 'react-render-error':
           rule = 'react-render-error';
           break;
+        case 'react-hooks-rules':
+          rule = 'react-hooks-rules';
+          break;
         case 'render-loop':
           rule = 'infinite-render-loop';
           break;
@@ -1831,6 +1991,8 @@ export class ComponentRunner {
         errorMap.set(key, {
           error: {
             message: error.message,
+            stack: error.stack,
+            componentStack: error.componentStack,
             source: error.source,
             type: error.type,
             rule: rule
@@ -1843,7 +2005,7 @@ export class ComponentRunner {
     // Process console errors
     errorData.consoleErrors.forEach((error: string) => {
       const key = `console-error:${error}`;
-      
+
       if (errorMap.has(key)) {
         errorMap.get(key)!.count++;
       } else {
@@ -1860,13 +2022,20 @@ export class ComponentRunner {
     });
 
     // Convert map to array with occurrence counts
-    const errors: Array<{message: string; source?: string; type?: string; rule?: string}> = [];
+    const errors: Array<{
+      message: string;
+      stack?: string;
+      componentStack?: string;
+      source?: string;
+      type?: string;
+      rule?: string;
+    }> = [];
     errorMap.forEach(({error, count}) => {
       // Append count if > 1
-      const message = count > 1 
+      const message = count > 1
         ? `${error.message} (occurred ${count} times)`
         : error.message;
-      
+
       errors.push({
         ...error,
         message
@@ -1929,7 +2098,7 @@ export class ComponentRunner {
     console.log("   Building local MJ utilities");
     const rv = new RunView();
     const rq = new RunQuery();
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
     return {
       rv: {
         RunView: rv.RunView,
@@ -2408,7 +2577,7 @@ export class ComponentRunner {
         // Created global Metadata mock with Provider (late)
       } else {
         // Update the existing one to ensure it has the latest mock data
-        (window as any).Metadata.Provider = mockMd;
+        (window as any).Metadata.Provider = mockMd; // global-provider-ok: test/demo harness, single-provider context
         // Updated existing Metadata.Provider with mock data
       }
     });

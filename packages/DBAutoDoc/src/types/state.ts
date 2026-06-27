@@ -5,6 +5,7 @@
 
 import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
+import { OrganicKeyCluster, OrganicKeyDetectionPhase } from './organic-keys.js';
 
 export interface DatabaseDocumentation {
   version: string;
@@ -14,6 +15,11 @@ export interface DatabaseDocumentation {
   phases: AnalysisPhases; // Multi-phase workflow organization
   schemas: SchemaDefinition[]; // Deliverable: Database structure with descriptions
   sampleQueries?: SampleQueriesDeliverable; // Deliverable: Training queries generated from schemas
+  /**
+   * Deliverable: organic-key clusters detected by the optional organic-key
+   * detection phase. Empty/absent when that phase didn't run.
+   */
+  organicKeyClusters?: OrganicKeyCluster[];
   resumedFromFile?: string; // Path to the state file this analysis resumed from
 }
 
@@ -62,6 +68,7 @@ export interface AnalysisPhases {
   keyDetection?: RelationshipDiscoveryPhase; // Primary key and foreign key detection
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
   queryGeneration?: QueryGenerationPhase; // Metadata about query generation process
+  organicKeyDetection?: OrganicKeyDetectionPhase; // Optional organic-key cluster detection (runs after description + PK/FK)
 }
 
 /**
@@ -130,6 +137,33 @@ export interface ColumnDefinition {
   descriptionIterations: DescriptionIteration[];
   userDescription?: string;
   userApproved?: boolean;
+  /** LLM-driven enum/value-list verdict for this column */
+  valueListVerdict?: ValueListVerdict;
+}
+
+/**
+ * LLM verdict on whether a column represents a finite value list (enum).
+ * Persisted on ColumnDefinition for downstream emission into additionalSchemaInfo.
+ */
+export interface ValueListVerdict {
+  /** Whether the LLM determined this column is an enum */
+  isEnum: boolean;
+  /** 'List' = closed set, 'ListOrUserEntry' = dropdown that also accepts new values */
+  type: 'List' | 'ListOrUserEntry';
+  /** LLM confidence 0–1 */
+  confidence: number;
+  /** The enum values the LLM confirmed */
+  values: string[];
+  /** LLM reasoning for the verdict */
+  reasoning: string;
+  /** How the verdict was produced */
+  source: 'llm' | 'check_constraint' | 'user_override';
+  /** Cardinality snapshot at decision time for audit on re-run */
+  cardinalityAtDecision?: { distinct: number; total: number };
+  /** ISO timestamp when the verdict was made */
+  decidedAt: string;
+  /** Which model produced the verdict */
+  modelUsed?: string;
 }
 
 export interface ForeignKeyReference {

@@ -57,7 +57,7 @@ export function getLibrarySource(moduleName: string): string | null {
 
     switch (moduleName) {
         case 'lodash':
-            return getLodashSource();
+            return getBundledLodashSource();
         case 'date-fns':
             return getDateFnsSource();
         case 'mathjs':
@@ -102,6 +102,56 @@ function getLodashSource(): string {
 
         uniq: function(array) {
             return [...new Set(array)];
+        },
+
+        // Min/Max — commonly reached for in numeric-summary style Runtime
+        // actions. Return undefined for empty arrays (matches real lodash).
+        min: function(array) {
+            if (!array || array.length === 0) return undefined;
+            let m = array[0];
+            for (let i = 1; i < array.length; i++) {
+                if (array[i] < m) m = array[i];
+            }
+            return m;
+        },
+
+        max: function(array) {
+            if (!array || array.length === 0) return undefined;
+            let m = array[0];
+            for (let i = 1; i < array.length; i++) {
+                if (array[i] > m) m = array[i];
+            }
+            return m;
+        },
+
+        minBy: function(array, iteratee) {
+            if (!array || array.length === 0) return undefined;
+            const fn = typeof iteratee === 'function' ? iteratee : (x) => x[iteratee];
+            let best = array[0];
+            let bestScore = fn(best);
+            for (let i = 1; i < array.length; i++) {
+                const score = fn(array[i]);
+                if (score < bestScore) {
+                    best = array[i];
+                    bestScore = score;
+                }
+            }
+            return best;
+        },
+
+        maxBy: function(array, iteratee) {
+            if (!array || array.length === 0) return undefined;
+            const fn = typeof iteratee === 'function' ? iteratee : (x) => x[iteratee];
+            let best = array[0];
+            let bestScore = fn(best);
+            for (let i = 1; i < array.length; i++) {
+                const score = fn(array[i]);
+                if (score > bestScore) {
+                    best = array[i];
+                    bestScore = score;
+                }
+            }
+            return best;
         },
 
         difference: function(array, ...values) {
@@ -150,6 +200,26 @@ function getLodashSource(): string {
                     const aVal = iteratee(a);
                     const bVal = iteratee(b);
                     if (aVal !== bVal) return aVal < bVal ? -1 : 1;
+                }
+                return 0;
+            });
+        },
+
+        // orderBy is like sortBy but supports per-iteratee asc/desc direction.
+        // Signature: orderBy(collection, iteratees, orders) where iteratees
+        // and orders are parallel arrays (or both scalars). Direction strings
+        // default to 'asc' when not supplied.
+        orderBy: function(collection, iteratees, orders) {
+            const itList = Array.isArray(iteratees) ? iteratees : [iteratees];
+            const orderList = Array.isArray(orders) ? orders : (orders ? [orders] : []);
+            const resolveFn = (it) => typeof it === 'function' ? it : x => x[it];
+            return [...collection].sort((a, b) => {
+                for (let i = 0; i < itList.length; i++) {
+                    const fn = resolveFn(itList[i]);
+                    const dir = (orderList[i] ?? 'asc') === 'desc' ? -1 : 1;
+                    const aVal = fn(a);
+                    const bVal = fn(b);
+                    if (aVal !== bVal) return aVal < bVal ? -1 * dir : 1 * dir;
                 }
                 return 0;
             });
@@ -242,15 +312,34 @@ function getDateFnsSource(): string {
     const dateFns = {
         format: function(date, formatStr) {
             const d = new Date(date);
+            const monthsLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+            const monthsShort = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            const daysLong = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            const daysShort = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const month = d.getMonth();
+            const dow = d.getDay();
+            // Supported tokens are listed longest-first in the regex so that
+            // e.g. 'MMMM' is matched before 'MMM' / 'MM' / 'M'.
+            // NOTE: this shim has no literal-escape support, so we deliberately
+            // omit ambiguous single-letter tokens from real date-fns (a/h/H/m/s
+            // bare) that collide with common English letters in format strings.
+            // Users who need time formatting can use the padded HH:mm:ss forms.
             const tokens = {
                 'yyyy': d.getFullYear(),
-                'MM': String(d.getMonth() + 1).padStart(2, '0'),
-                'dd': String(d.getDate()).padStart(2, '0'),
-                'HH': String(d.getHours()).padStart(2, '0'),
-                'mm': String(d.getMinutes()).padStart(2, '0'),
-                'ss': String(d.getSeconds()).padStart(2, '0')
+                'yy':   String(d.getFullYear()).slice(-2),
+                'MMMM': monthsLong[month],
+                'MMM':  monthsShort[month],
+                'MM':   String(month + 1).padStart(2, '0'),
+                'M':    String(month + 1),
+                'dd':   String(d.getDate()).padStart(2, '0'),
+                'd':    String(d.getDate()),
+                'EEEE': daysLong[dow],
+                'EEE':  daysShort[dow],
+                'HH':   String(d.getHours()).padStart(2, '0'),
+                'mm':   String(d.getMinutes()).padStart(2, '0'),
+                'ss':   String(d.getSeconds()).padStart(2, '0')
             };
-            return formatStr.replace(/yyyy|MM|dd|HH|mm|ss/g, match => tokens[match]);
+            return formatStr.replace(/yyyy|yy|MMMM|MMM|MM|M|dd|d|EEEE|EEE|HH|mm|ss/g, match => tokens[match]);
         },
 
         addDays: function(date, days) {
@@ -381,6 +470,39 @@ function getValidatorSource(): string {
     return validator;
 })()
     `.trim();
+}
+
+/**
+ * Load the bundled full lodash UMD build (~73KB). We used to hand-roll
+ * a tiny subset here, but the subset was missing the most foundational
+ * helpers (`map`, `filter`, `forEach`, `reduce`, `find`, `some`, `every`,
+ * `keys`, `values`, `each`, `includes`) — so any Runtime action that
+ * called `_.map(...)` crashed with "_.map is not a function". The inline
+ * subset stays in this file below as `getLodashSource()` for reference /
+ * fallback only; it is no longer wired up.
+ *
+ * Lodash's UMD epilogue looks for `module.exports` before falling back to
+ * a global. We provide a shim `module` and return `module.exports` so the
+ * sandbox gets the full lodash object exactly as `require('lodash')` would
+ * hand back in node.
+ */
+function getBundledLodashSource(): string {
+    const libPath = path.join(__dirname, 'bundled-libs', 'lodash.js');
+    const source = fs.readFileSync(libPath, 'utf8');
+    // Lodash's UMD defines `ue` (the module-exports branch it actually writes
+    // to) as `ee && typeof module == "object" && ... && module`, where
+    // `ee = typeof exports == "object" && exports && ...`. So it short-circuits
+    // to the global branch (`re._=be`, synthesized root) if `exports` is
+    // undefined in scope — even when `module` is present. Both shims are
+    // required, and they must share storage (`const exports = module.exports`)
+    // so whichever path lodash picks, `module.exports` ends up holding the
+    // real lodash object.
+    return `(function() {
+        const module = { exports: {} };
+        const exports = module.exports;
+        ${source}
+        return module.exports;
+    })()`;
 }
 
 /**

@@ -11,6 +11,8 @@ export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
+export * from './DevTools';
+export * from './Admin';
 export * from './Lists';
 
 // Export AI components as resources (BaseResourceComponent-based)
@@ -26,6 +28,8 @@ export {
   PerformanceHeatmapComponent,
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
+  TagsResourceComponent,
+  LoadTagsResource,
   VectorManagementResourceComponent,
   DuplicateDetectionResourceComponent,
   AIAnalyticsResourceComponent,
@@ -60,9 +64,25 @@ export {
   LoadClusterVisualizationResource
 } from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
 export {
+  VisualizeResourceComponent,
+  LoadVisualizeResource
+} from './KnowledgeHub/components/visualize/visualize-resource.component';
+export { TagCloudComponent } from './KnowledgeHub/components/visualize/tag-cloud/tag-cloud.component';
+export { RecordDrilldownComponent } from './KnowledgeHub/components/visualize/record-drilldown/record-drilldown.component';
+export {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+
+// Archiving components
+export {
+  ArchiveConfigResourceComponent,
+  LoadArchiveConfigResource
+} from './Archiving/components/archive-config-resource.component';
+export {
+  ArchiveRunsResourceComponent,
+  LoadArchiveRunsResource
+} from './Archiving/components/archive-runs-resource.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {
@@ -74,7 +94,6 @@ export {
   // Action Explorer components
   ActionExplorerComponent,
   ActionTreePanelComponent,
-  ActionToolbarComponent,
   ActionBreadcrumbComponent,
   ActionCardComponent,
   ActionListItemComponent,
@@ -84,8 +103,8 @@ export {
   ActionExplorerStateService
 } from './Actions';
 
-// Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
-export { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
+// Re-export Actions ExecutionMonitoringComponent (renamed to avoid conflict with AI version)
+export { ActionExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 
 // Export Scheduling components as resources (BaseResourceComponent-based)
 export {
@@ -110,6 +129,10 @@ export {
 export {
   CommunicationTemplatesResourceComponent
 } from './Communication/communication-templates-resource.component';
+export {
+  CommunicationsNewMessageResource,
+  LoadCommunicationsNewMessageResource
+} from './Communication/communication-new-message-resource.component';
 
 // Export Testing components as resources (BaseResourceComponent-based)
 export {
@@ -131,7 +154,6 @@ export {
 } from './DashboardBrowser/dashboard-browser-resource.component';
 export {
   DashboardShareDialogComponent,
-  UserSharePermission,
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
@@ -141,6 +163,23 @@ export { HomeDashboardComponent } from './Home/home-dashboard.component';
 
 // Application Roles
 export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
+
+// Realtime Recordings — review & replay recorded realtime sessions (audio + transcript)
+export { RealtimeRecordingsDashboardComponent, LoadRealtimeRecordingsDashboard } from './RealtimeRecordings/realtime-recordings-dashboard.component';
+
+// Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
+export {
+    PermissionsUserAccessResourceComponent,
+    LoadPermissionsUserAccessResource,
+} from './Permissions/user-access-resource.component';
+export {
+    PermissionsResourceAccessResourceComponent,
+    LoadPermissionsResourceAccessResource,
+} from './Permissions/resource-access-resource.component';
+export {
+    PermissionsAuditLogResourceComponent,
+    LoadPermissionsAuditLogResource,
+} from './Permissions/audit-log-resource.component';
 
 // API Keys
 export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
@@ -175,4 +214,7 @@ export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
+export * from './DatabaseDesigner/database-designer-dashboards.module';
+export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';
+export * from './archiving-dashboards.module';

@@ -15,7 +15,10 @@ export * from './types/controller.js';
 // ─── Browser Adapter Exports ───────────────────────────────
 export * from './browser/BaseBrowserAdapter.js';
 export * from './browser/PlaywrightBrowserAdapter.js';
+export * from './browser/SharedContextBrowserAdapter.js';
+export * from './browser/HeadlessBrowserEngine.js';
 export * from './browser/NavigationGuard.js';
+export * from './browser/connect-endpoint.js';
 
 // ─── Auth Exports ──────────────────────────────────────────
 export * from './auth/AuthHandler.js';

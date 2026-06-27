@@ -12,8 +12,10 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { TagEngineBase } from '@memberjunction/tag-engine-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 
 // ================================================================
 // Interfaces
@@ -288,7 +290,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.Entities.find(e => e.Name === entityName);
         const pkey = new CompositeKey();
         if (entityInfo) {
@@ -493,6 +495,18 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // Public Methods
     // ================================================================
 
+    /** Wraps `NavItems` for `<mj-left-nav>`. */
+    public get navSections(): MJLeftNavSection[] {
+        return [{
+            items: this.NavItems.map(n => ({ id: n.ID, label: n.Label, icon: n.Icon }))
+        }];
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        this.SelectTab(item.id);
+    }
+
     public SelectTab(tabId: string): void {
         this.ActiveTab = tabId;
         this.CloseDrillDown();
@@ -630,9 +644,12 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            // Tags come from the TagEngineBase cache (browser-safe BaseEngine that
+            // caches MJ: Tags) — no need to RunView them here.
+            await TagEngineBase.Instance.Config(false, undefined, this.ProviderToUse);
+
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunViews([
-                { EntityName: 'MJ: Tags', ExtraFilter: '', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Item Tags', ExtraFilter: '', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Items', ExtraFilter: '', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Process Runs', ExtraFilter: '', ResultType: 'simple' },
@@ -641,13 +658,13 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
                 { EntityName: 'MJ: Content Process Run Details', ExtraFilter: '', ResultType: 'simple' },
             ]);
 
-            this.rawTags = results[0]?.Success ? results[0].Results : [];
-            this.rawContentItemTags = results[1]?.Success ? results[1].Results : [];
-            this.rawContentItems = results[2]?.Success ? results[2].Results : [];
-            this.rawProcessRuns = results[3]?.Success ? results[3].Results : [];
-            this.rawContentSources = results[4]?.Success ? results[4].Results : [];
-            this.rawContentTypes = results[5]?.Success ? results[5].Results : [];
-            this.rawRunDetails = results[6]?.Success ? results[6].Results : [];
+            this.rawTags = TagEngineBase.Instance.Tags.map(t => t.GetAll());
+            this.rawContentItemTags = results[0]?.Success ? results[0].Results : [];
+            this.rawContentItems = results[1]?.Success ? results[1].Results : [];
+            this.rawProcessRuns = results[2]?.Success ? results[2].Results : [];
+            this.rawContentSources = results[3]?.Success ? results[3].Results : [];
+            this.rawContentTypes = results[4]?.Success ? results[4].Results : [];
+            this.rawRunDetails = results[5]?.Success ? results[5].Results : [];
 
             this.buildEntityFilterOptions();
             this.rebuildAllAggregations();
@@ -665,7 +682,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
 
     private buildEntityFilterOptions(): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityNames = new Set<string>();
         for (const item of this.rawContentItems) {
             const ctid = String(item['ContentTypeID'] || '');
@@ -2302,7 +2319,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
      */
     private async loadCoOccurrenceData(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<{
                 TagA: string; TagB: string; CoOccurrenceCount: number; LastComputedAt: string | null;
             }>({
@@ -2348,7 +2365,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.cdr.detectChanges();
 
         try {
-            const provider = Metadata.Provider as unknown;
+            const provider = this.ProviderToUse as unknown;
             const gql = `
                 mutation RecomputeTagCoOccurrence {
                     RecomputeTagCoOccurrence {

@@ -1,0 +1,283 @@
+/*
+  Database Designer entity-list — sub-page of Admin → Data & Schema. Host is a
+  flex column so <mj-page-header-interior> pins at the top and <mj-page-body-interior>
+  fills the rest. The body primitive owns its own flex/scroll/padding — this
+  component just needs the host-level layout. See Section 10 of
+  plans/explorer-chrome-conventions.md.
+*/
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mj-bg-page);
+}
+
+/* Schema filter used in the [toolbar] slot. */
+.schema-filter {
+  width: auto;
+  min-width: 160px;
+  max-width: 220px;
+  flex-shrink: 0;
+}
+
+/* ── Error banner ────────────────────────────────────────────────────────── */
+
+.entity-list-error {
+  margin: 12px 24px;
+  padding: 10px 14px;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border: 1px solid var(--mj-status-error-border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+/* ── Skeleton loader ─────────────────────────────────────────────────────── */
+
+.skeleton-table {
+  padding: 0 24px;
+  margin-top: 8px;
+}
+
+.skeleton-row {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.skeleton-cell {
+  height: 18px;
+  border-radius: 4px;
+  background: var(--mj-bg-surface-sunken);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-cell.wide   { flex: 3; }
+.skeleton-cell.medium { flex: 2; }
+.skeleton-cell.narrow { flex: 1; }
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.45; }
+}
+
+/* ── Table wrap ──────────────────────────────────────────────────────────── */
+
+.table-wrap {
+  flex: 1;
+  overflow: auto;
+  padding: 0 24px;
+}
+
+/* ── Entity table ────────────────────────────────────────────────────────── */
+
+.entity-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.entity-table thead tr {
+  border-bottom: 2px solid var(--mj-border-default);
+}
+
+.entity-table th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.entity-table th.sortable {
+  cursor: pointer;
+}
+
+.entity-table th.sortable:hover {
+  color: var(--mj-text-primary);
+}
+
+.sort-icon {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 0.75rem;
+  vertical-align: middle;
+  min-width: 14px;
+}
+
+.sort-icon .muted {
+  opacity: 0.3;
+}
+
+.entity-row {
+  border-bottom: 1px solid var(--mj-border-subtle);
+  transition: background 0.1s;
+}
+
+.entity-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.entity-table td {
+  padding: 12px 12px;
+  color: var(--mj-text-primary);
+  vertical-align: middle;
+}
+
+/* ── Column sizing ───────────────────────────────────────────────────────── */
+/* Fixed layout — percentages for content columns, px only for utility columns */
+
+.entity-table {
+  table-layout: fixed;
+}
+
+.col-name    { width: 28%; }
+.col-schema  { width: 14%; }
+.col-table   { width: 18%; }
+.col-owner   { width: 15%; }
+.col-created { width: 13%; white-space: nowrap; }
+.col-actions { width: 12%; }
+
+/* ── Cell content ────────────────────────────────────────────────────────── */
+
+.entity-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.entity-name {
+  font-weight: 500;
+  color: var(--mj-text-primary);
+}
+
+.owner-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.owner-badge.owner-you {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.schema-badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-family: monospace;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-subtle);
+}
+
+code.table-name {
+  font-size: 0.8rem;
+  font-family: monospace;
+  color: var(--mj-text-secondary);
+}
+
+.owner-self {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--mj-brand-primary);
+  font-size: 0.875rem;
+}
+
+.owner-self i {
+  font-size: 0.8rem;
+}
+
+.owner-other {
+  color: var(--mj-text-secondary);
+  font-size: 0.875rem;
+}
+
+.owner-other.muted {
+  color: var(--mj-text-muted);
+}
+
+/* ── Row actions ─────────────────────────────────────────────────────────── */
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-btn {
+  font-size: 0.8125rem;
+  padding: 6px 12px;
+}
+
+/* ── Row count footer ────────────────────────────────────────────────────── */
+
+.entity-count {
+  padding: 10px 24px;
+  font-size: 0.8rem;
+  color: var(--mj-text-muted);
+  border-top: 1px solid var(--mj-border-subtle);
+  flex-shrink: 0;
+}
+
+/* ── Zero state ──────────────────────────────────────────────────────────── */
+
+.zero-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  text-align: center;
+  gap: 16px;
+}
+
+.zero-state-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--mj-bg-surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zero-state-icon i {
+  font-size: 2rem;
+  color: var(--mj-text-muted);
+}
+
+.zero-state-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.zero-state-body {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--mj-text-secondary);
+  max-width: 420px;
+  line-height: 1.6;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}

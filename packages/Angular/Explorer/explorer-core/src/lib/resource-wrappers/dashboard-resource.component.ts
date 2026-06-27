@@ -219,12 +219,12 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 2px 4px rgba(92, 107, 192, 0.3);
+            box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
         }
         .btn-add-part:hover {
             background: var(--mj-brand-primary-hover);
             transform: translateY(-1px);
-            box-shadow: 0 3px 6px rgba(92, 107, 192, 0.4);
+            box-shadow: 0 3px 6px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
         }
         .btn-add-part i { font-size: 12px; }
 
@@ -232,7 +232,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         .header-separator {
             width: 1px;
             height: 28px;
-            background: rgba(92, 107, 192, 0.3);
+            background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
             margin: 0 4px;
         }
 
@@ -311,7 +311,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         .dashboard-name-input:focus {
             background: var(--mj-bg-surface-card);
             border-color: var(--mj-brand-primary);
-            box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
         }
         .dashboard-description-input {
             border: 1px solid transparent;
@@ -330,7 +330,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         .dashboard-description-input:focus {
             background: var(--mj-bg-surface-card);
             border-color: var(--mj-brand-primary);
-            box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
         }
         .dashboard-description-input::placeholder {
             color: var(--mj-text-muted);
@@ -350,7 +350,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
         }
         .error-icon {
             font-size: 64px;
-            color: #f44336;
+            color: var(--mj-status-error);
             margin-bottom: 24px;
             opacity: 0.8;
         }
@@ -385,7 +385,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
             margin: 0;
             white-space: pre-wrap;
             word-break: break-word;
-            color: #d32f2f;
+            color: var(--mj-status-error-text);
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 12px;
         }
@@ -615,7 +615,7 @@ export class DashboardResource extends BaseResourceComponent {
 
         if (result.Action === 'save' && this.configDashboard) {
             // Recompute permissions after sharing changes
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 this.configDashboard.ID,
                 md.CurrentUser.ID
@@ -822,7 +822,7 @@ export class DashboardResource extends BaseResourceComponent {
 
     protected async loadDashboardUserState(dashboardId: string): Promise<MJDashboardUserStateEntity> {
         // handle user state changes for the dashboard
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => UUIDsEqual(dus.DashboardID, dashboardId) && UUIDsEqual(dus.UserID, md.CurrentUser.ID));
         let stateObject: MJDashboardUserStateEntity;
         if (stateResult && stateResult.length > 0) {
@@ -852,7 +852,7 @@ export class DashboardResource extends BaseResourceComponent {
             this.configDashboard = dashboard;
 
             // Compute user permissions for this dashboard
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 dashboard.ID,
                 md.CurrentUser.ID
@@ -920,7 +920,28 @@ export class DashboardResource extends BaseResourceComponent {
         switch (request.type) {
             case 'OpenEntityRecord': {
                 const entityRequest = request as { type: 'OpenEntityRecord'; entityName: string; recordId: string };
-                const pkey = new CompositeKey([{ FieldName: 'ID', Value: entityRequest.recordId }]);
+                // `recordId` is documented as URL-segment format (see OpenEntityRecordNavRequest in
+                // @memberjunction/ng-dashboard-viewer). E.g. a single-PK record is `"ID|11055"`; a
+                // composite-PK record is `"Field1|Value1||Field2|Value2"`. Senders in
+                // dashboard-viewer (artifact-part, view-part) intentionally call
+                // `compositeKey.ToURLSegment()` to produce this shape.
+                //
+                // Wrapping that string verbatim into `{ FieldName: 'ID', Value: <segment> }` makes
+                // ToURLSegment serialize it a second time as `ID|<segment>` and produces a
+                // malformed `Field|Field|Value` URL the host parser silently mis-reads (manifesting
+                // downstream as `BaseEntity.Load(... Key: ID=ID)` and `Primary Key value is not a
+                // valid number`). Parse the segment with `LoadFromURLSegment` against the entity's
+                // PK metadata instead, so single-PK and composite-PK both round-trip correctly.
+                const md = this.ProviderToUse;
+                const entityInfo = md.EntityByName(entityRequest.entityName);
+                const pkey = new CompositeKey();
+                if (entityInfo) {
+                    pkey.LoadFromURLSegment(entityInfo, entityRequest.recordId);
+                } else {
+                    // Last-resort fallback when entity metadata isn't resolvable — preserves
+                    // pre-fix behavior so we don't NRE on an unknown entity name.
+                    pkey.KeyValuePairs = [{ FieldName: 'ID', Value: entityRequest.recordId }];
+                }
                 this.navigationService.OpenEntityRecord(entityRequest.entityName, pkey);
                 break;
             }
@@ -950,7 +971,7 @@ export class DashboardResource extends BaseResourceComponent {
         try {
             // Try to load dashboard metadata if we have the record ID
             if (data.ResourceRecordID && data.ResourceRecordID.length > 0) {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
                 const name = await md.GetEntityRecordName('Dashboards', compositeKey);
                 if (name) {

@@ -26,9 +26,9 @@
 /* Text Colors */
 .text-primary { color: var(--mj-brand-primary) !important; }
 .text-secondary { color: var(--mj-brand-secondary) !important; }
-.text-success { color: #28a745 !important; }
-.text-danger { color: #dc3545 !important; }
-.text-warning { color: #ffc107 !important; }
+.text-success { color: var(--mj-status-success) !important; }
+.text-danger { color: var(--mj-status-error) !important; }
+.text-warning { color: var(--mj-status-warning) !important; }
 .text-info { color: var(--mj-brand-accent) !important; }
 .text-light { color: var(--mj-text-muted) !important; }
 .text-dark { color: var(--mj-text-primary) !important; }
@@ -45,15 +45,15 @@
     color: var(--mj-text-inverse) !important;
 }
 .bg-success {
-    background-color: #28a745 !important;
+    background-color: var(--mj-status-success) !important;
     color: var(--mj-text-inverse) !important;
 }
 .bg-danger {
-    background-color: #dc3545 !important;
+    background-color: var(--mj-status-error) !important;
     color: var(--mj-text-inverse) !important;
 }
 .bg-warning {
-    background-color: #ffc107 !important;
+    background-color: var(--mj-status-warning) !important;
     color: var(--mj-text-primary) !important;
 }
 .bg-info {
@@ -346,9 +346,9 @@
 /* Border Colors */
 .border-primary { border-color: var(--mj-brand-primary) !important; }
 .border-secondary { border-color: var(--mj-brand-secondary) !important; }
-.border-success { border-color: #28a745 !important; }
-.border-danger { border-color: #dc3545 !important; }
-.border-warning { border-color: #ffc107 !important; }
+.border-success { border-color: var(--mj-status-success) !important; }
+.border-danger { border-color: var(--mj-status-error) !important; }
+.border-warning { border-color: var(--mj-status-warning) !important; }
 .border-info { border-color: var(--mj-brand-accent) !important; }
 .border-light { border-color: var(--mj-border-default) !important; }
 .border-dark { border-color: var(--mj-border-strong) !important; }
@@ -382,9 +382,9 @@
 
 /* Shadow Utilities */
 .shadow-none { box-shadow: none !important; }
-.shadow-sm { box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075) !important; }
-.shadow { box-shadow: var(--shadow) !important; }
-.shadow-lg { box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175) !important; }
+.shadow-sm { box-shadow: var(--mj-shadow-sm) !important; }
+.shadow { box-shadow: var(--mj-shadow-md) !important; }
+.shadow-lg { box-shadow: var(--mj-shadow-lg) !important; }
 
 /* Overflow Utilities */
 .overflow-auto { overflow: auto !important; }

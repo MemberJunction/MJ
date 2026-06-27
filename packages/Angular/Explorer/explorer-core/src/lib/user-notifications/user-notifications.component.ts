@@ -6,6 +6,7 @@ import { SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Radio button filter options for notification read status
  */
@@ -52,7 +53,7 @@ interface NotificationUrlInfo {
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
 })
-export class UserNotificationsComponent implements OnInit, AfterViewInit {
+export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
   @ViewChild('allRadio') allRadio!: ElementRef<HTMLInputElement>;
   @ViewChild('unreadRadio') unreadRadio!: ElementRef<HTMLInputElement>;
   @ViewChild('readRadio') readRadio!: ElementRef<HTMLInputElement>;
@@ -67,7 +68,8 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     public sharedService: SharedService,
     private navigationService: NavigationService,
     private appManager: ApplicationManager
-  ) {}
+  ) {
+    super();}
 
   async ngOnInit() {
     this.loadNotificationTypes();
@@ -122,10 +124,14 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
   }
 
   public isNotificationClickable(notification: MJUserNotificationEntity): boolean {
-    // Check for agent-request type (navigated via NavigationService, not URL)
+    // Check for special types navigated via NavigationService (not a URL)
     if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
       const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
       if (config && config.type?.trim().toLowerCase() === 'agent-request' && config.requestId) {
+        return true;
+      }
+      const typeName = SafeJSONParse<{ type?: string }>(notification.ResourceConfiguration)?.type?.trim().toLowerCase();
+      if (typeName === 'meet-room') {
         return true;
       }
     }
@@ -252,7 +258,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       }
       else {
         // the passed in param is just a plain object, so we need to load the entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         notificationEntity = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications');
         await notificationEntity.Load(notificationId);  
         notificationEntity.Unread = !bRead;  
@@ -285,7 +291,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
   }
 
   public async TestTransactionGroupVariables() {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations');
@@ -324,7 +330,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   public async markAll(bRead: boolean) {
     // Use transaction group for batching - all saves are queued and sent in one round-trip
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
     // Queue all saves - no need to await individual saves since transaction group queues them
@@ -354,9 +360,37 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       if (this.navigateToConversation(notification)) {
         return;
       }
+      if (this.navigateToMeetRoom(notification)) {
+        return;
+      }
 
       this.navigateToResource(notification);
     }
+  }
+
+  /**
+   * Opens the Meet app's Live Room in JOIN mode for a `meet-room` invite notification (the
+   * `{ type:'meet-room', room }` ResourceConfiguration), mirroring {@link navigateToConversation}.
+   * Returns `false` (not handled) when the config isn't a meet-room invite or the Meet app is absent.
+   */
+  private navigateToMeetRoom(notification: MJUserNotificationEntity): boolean {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return false;
+    }
+    const config = SafeJSONParse<{ type?: string; room?: string }>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'meet-room') {
+      return false;
+    }
+    const meetApp = this.appManager.GetAppByName('Meet');
+    if (!meetApp) {
+      return false;
+    }
+    const navConfig: Record<string, string> = {};
+    if (config.room) {
+      navConfig['room'] = config.room;
+    }
+    this.navigationService.OpenNavItemByName('Live Room', navConfig, meetApp.ID);
+    return true;
   }
 
   /**

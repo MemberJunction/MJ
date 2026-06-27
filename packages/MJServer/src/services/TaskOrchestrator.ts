@@ -1,4 +1,4 @@
-import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
@@ -53,8 +53,13 @@ export class TaskOrchestrator {
         private sessionId?: string,
         private userPayload?: UserPayload,
         private createNotifications: boolean = false,
-        private conversationDetailId?: string
+        private conversationDetailId?: string,
+        private provider?: IMetadataProvider
     ) {}
+
+    private getMetadata(): IMetadataProvider {
+        return this.provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
 
     /**
      * Initialize the orchestrator by finding/creating the AI Agent Task type
@@ -77,7 +82,7 @@ export class TaskOrchestrator {
         }
 
         // Create the task type if it doesn't exist
-        const md = new Metadata();
+        const md = this.getMetadata();
         const taskType = await md.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', this.contextUser);
         taskType.Name = 'AI Agent Execution';
         taskType.Description = 'Task executed by an AI agent as part of conversation workflow';
@@ -104,27 +109,21 @@ export class TaskOrchestrator {
         environmentId: string
     ): Promise<{ parentTaskId: string; taskIdMap: Map<string, string> }> {
         const taskTypeId = await this.ensureTaskType();
-        const md = new Metadata();
+        const md = this.getMetadata();
         const tempIdToRealId = new Map<string, string>();
 
-        // Create parent workflow task
+        // Build the parent task, deduplicate the incoming task defs, and resolve agents
+        // BEFORE opening the transaction so all preparatory work (cache lookups, agent
+        // resolution RunViews) happens outside the critical section.
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         parentTask.Name = taskGraph.workflowName;
         parentTask.Description = taskGraph.reasoning || 'AI-orchestrated workflow';
         parentTask.TypeID = taskTypeId;
         parentTask.EnvironmentID = environmentId;
-        parentTask.ConversationDetailID = conversationDetailId; // Parent links to conversation
-        parentTask.Status = 'In Progress'; // Workflow is in progress
+        parentTask.ConversationDetailID = conversationDetailId;
+        parentTask.Status = 'In Progress';
         parentTask.PercentComplete = 0;
 
-        const parentSaved = await parentTask.Save();
-        if (!parentSaved) {
-            throw new Error('Failed to create parent workflow task');
-        }
-
-        LogStatus(`Created parent workflow task: ${parentTask.Name} (${parentTask.ID})`);
-
-        // Deduplicate tasks by tempId (LLM sometimes returns duplicates)
         const seenTempIds = new Set<string>();
         const uniqueTasks = taskGraph.tasks.filter(task => {
             if (seenTempIds.has(task.tempId)) {
@@ -135,66 +134,81 @@ export class TaskOrchestrator {
             return true;
         });
 
-        LogStatus(`Creating ${uniqueTasks.length} unique child tasks (${taskGraph.tasks.length - uniqueTasks.length} duplicates filtered)`);
+        LogStatus(`Preparing parent + ${uniqueTasks.length} unique child tasks (${taskGraph.tasks.length - uniqueTasks.length} duplicates filtered)`);
 
-        // Create all child tasks
+        const resolvedTasks: Array<{ def: TaskDefinition; agentId: string }> = [];
         for (const taskDef of uniqueTasks) {
-            const task = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
-
-            // Find agent by name
             const agent = await this.findAgentByName(taskDef.agentName);
             if (!agent) {
                 LogError(`Agent not found: ${taskDef.agentName}`);
                 continue;
             }
-
-            task.Name = taskDef.name;
-            task.Description = taskDef.description;
-            task.TypeID = taskTypeId;
-            task.EnvironmentID = environmentId;
-            task.ParentID = parentTask.ID; // Link to parent task
-            task.ConversationDetailID = conversationDetailId; // Link to conversation so agent runs can be tracked
-            task.AgentID = agent.ID;
-            task.Status = 'Pending';
-            task.PercentComplete = 0;
-
-            // Store input payload if provided
-            if (taskDef.inputPayload) {
-                const metadata = {
-                    inputPayload: taskDef.inputPayload,
-                    tempId: taskDef.tempId
-                };
-                // Store in a well-known format at the end of description
-                task.Description = `${taskDef.description}\n\n__TASK_METADATA__\n${JSON.stringify(metadata)}`;
-            }
-
-            const saved = await task.Save();
-            if (saved) {
-                tempIdToRealId.set(taskDef.tempId, task.ID);
-                LogStatus(`Created child task: ${task.Name} (${task.ID}) under parent ${parentTask.ID}`);
-            }
+            resolvedTasks.push({ def: taskDef, agentId: agent.ID });
         }
 
-        // Create dependencies between child tasks
-        for (const taskDef of uniqueTasks) {
-            const taskId = tempIdToRealId.get(taskDef.tempId);
-            if (!taskId) continue;
+        // Persist parent + children + dependency graph in one transaction
+        const provider = (this.provider ?? Metadata.Provider) as DatabaseProviderBase;
+        await provider.BeginTransaction();
+        try {
+            if (!await parentTask.Save()) {
+                throw new Error(`Failed to create parent workflow task: ${parentTask.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+            LogStatus(`Created parent workflow task: ${parentTask.Name} (${parentTask.ID})`);
 
-            for (const dependsOnTempId of taskDef.dependsOn) {
-                const dependsOnId = tempIdToRealId.get(dependsOnTempId);
-                if (!dependsOnId) {
-                    LogError(`Dependency not found: ${dependsOnTempId}`);
-                    continue;
+            for (const { def, agentId } of resolvedTasks) {
+                const task = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
+                task.Name = def.name;
+                task.Description = def.description;
+                task.TypeID = taskTypeId;
+                task.EnvironmentID = environmentId;
+                task.ParentID = parentTask.ID;
+                task.ConversationDetailID = conversationDetailId;
+                task.AgentID = agentId;
+                task.Status = 'Pending';
+                task.PercentComplete = 0;
+
+                if (def.inputPayload) {
+                    const metadata = {
+                        inputPayload: def.inputPayload,
+                        tempId: def.tempId
+                    };
+                    task.Description = `${def.description}\n\n__TASK_METADATA__\n${JSON.stringify(metadata)}`;
                 }
 
-                const dependency = await md.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', this.contextUser);
-                dependency.TaskID = taskId;
-                dependency.DependsOnTaskID = dependsOnId;
-                dependency.DependencyType = 'Prerequisite';
-
-                await dependency.Save();
-                LogStatus(`Created dependency: Task ${taskId} depends on ${dependsOnId}`);
+                if (!await task.Save()) {
+                    throw new Error(`Failed to create child task '${def.name}': ${task.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+                tempIdToRealId.set(def.tempId, task.ID);
+                LogStatus(`Created child task: ${task.Name} (${task.ID}) under parent ${parentTask.ID}`);
             }
+
+            for (const { def } of resolvedTasks) {
+                const taskId = tempIdToRealId.get(def.tempId);
+                if (!taskId) continue;
+
+                for (const dependsOnTempId of def.dependsOn) {
+                    const dependsOnId = tempIdToRealId.get(dependsOnTempId);
+                    if (!dependsOnId) {
+                        LogError(`Dependency not found: ${dependsOnTempId}`);
+                        continue;
+                    }
+
+                    const dependency = await md.GetEntityObject<MJTaskDependencyEntity>('MJ: Task Dependencies', this.contextUser);
+                    dependency.TaskID = taskId;
+                    dependency.DependsOnTaskID = dependsOnId;
+                    dependency.DependencyType = 'Prerequisite';
+
+                    if (!await dependency.Save()) {
+                        throw new Error(`Failed to create task dependency (${taskId} -> ${dependsOnId}): ${dependency.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
+                    LogStatus(`Created dependency: Task ${taskId} depends on ${dependsOnId}`);
+                }
+            }
+
+            await provider.CommitTransaction();
+        } catch (txErr) {
+            await provider.RollbackTransaction();
+            throw txErr;
         }
 
         return {
@@ -293,7 +307,7 @@ export class TaskOrchestrator {
         let hasMore = true;
 
         // Get parent task for progress updates
-        const md = new Metadata();
+        const md = this.getMetadata();
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         await parentTask.Load(parentTaskId);
 
@@ -372,7 +386,7 @@ export class TaskOrchestrator {
      * Update parent task progress based on child task completion
      */
     private async updateParentTaskProgress(parentTaskId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.getMetadata();
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await parentTask.Load(parentTaskId);
         if (!loaded) return;
@@ -405,7 +419,7 @@ export class TaskOrchestrator {
      * Mark parent task as complete when all children are done
      */
     private async completeParentTask(parentTaskId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.getMetadata();
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await parentTask.Load(parentTaskId);
         if (!loaded) return;
@@ -455,7 +469,7 @@ export class TaskOrchestrator {
      * Load a task by ID
      */
     private async loadTask(taskId: string): Promise<MJTaskEntity | null> {
-        const md = new Metadata();
+        const md = this.getMetadata();
         const task = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await task.Load(taskId);
         return loaded ? task : null;
@@ -474,7 +488,7 @@ export class TaskOrchestrator {
             await task.Save();
 
             // Load the agent entity
-            const md = new Metadata();
+            const md = this.getMetadata();
             const agentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', this.contextUser);
             const loaded = await agentEntity.Load(task.AgentID!);
             if (!loaded) {
@@ -698,23 +712,22 @@ export class TaskOrchestrator {
         agent: MJAIAgentEntityExtended,
         taskName: string
     ): Promise<void> {
-        try {
-            const md = new Metadata();
+        const md = this.getMetadata();
+        const provider = (this.provider ?? Metadata.Provider) as DatabaseProviderBase;
 
+        await provider.BeginTransaction();
+        try {
             // Create Artifact header
             const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.contextUser);
             artifact.Name = `${agent.Name} - ${taskName} - ${new Date().toLocaleString()}`;
             artifact.Description = `Artifact generated by ${agent.Name} for task: ${taskName} (${output.type})`;
 
-            // Use agent's DefaultArtifactTypeID if available, otherwise fall back to JSON
             const defaultArtifactTypeId = (agent as any).DefaultArtifactTypeID;
             artifact.TypeID = defaultArtifactTypeId || this.JSON_ARTIFACT_TYPE_ID;
 
             artifact.UserID = this.contextUser.ID;
             artifact.EnvironmentID = (this.contextUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
-            // Set visibility based on agent's ArtifactCreationMode
-            // Will compile after CodeGen adds the new fields
             const creationMode = agent.ArtifactCreationMode;
             if (creationMode === 'System Only') {
                 artifact.Visibility = 'System Only';
@@ -723,51 +736,36 @@ export class TaskOrchestrator {
                 artifact.Visibility = 'Always';
             }
 
-            const artifactSaved = await artifact.Save();
-            if (!artifactSaved) {
-                LogError('Failed to save artifact');
-                return;
+            if (!await artifact.Save()) {
+                throw new Error(`Failed to save artifact: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
-
             LogStatus(`Created artifact: ${artifact.Name} (${artifact.ID})`);
 
             // Create Artifact Version with content
             const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.contextUser);
             version.ArtifactID = artifact.ID;
             version.VersionNumber = 1;
-
-            // Store content based on output type
-            if (output.type === 'message') {
-                version.Content = output.content;
-            } else {
-                version.Content = JSON.stringify(output.content, null, 2);
-            }
-
+            version.Content = output.type === 'message' ? output.content : JSON.stringify(output.content, null, 2);
             version.UserID = this.contextUser.ID;
 
-            const versionSaved = await version.Save();
-            if (!versionSaved) {
-                LogError('Failed to save artifact version');
-                return;
+            if (!await version.Save()) {
+                throw new Error(`Failed to save artifact version: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
-
             LogStatus(`Created artifact version: ${version.ID}`);
 
-            // Check for extracted Name attribute and update artifact with better name
+            // If extraction produced a better name, update the artifact in the same transaction
             const nameAttr = (version as any).Attributes?.find((attr: any) =>
                 attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
             );
 
-            // Check for valid name value (not null, not empty, not string "null")
             let extractedName = nameAttr?.Value?.trim();
             if (extractedName && extractedName.toLowerCase() !== 'null') {
-                // Strip surrounding quotes (double or single) from start and end
                 extractedName = extractedName.replace(/^["']|["']$/g, '');
-
                 artifact.Name = extractedName;
-                if (await artifact.Save()) {
-                    LogStatus(`✨ Updated artifact name to: ${artifact.Name}`);
+                if (!await artifact.Save()) {
+                    throw new Error(`Failed to update artifact name: ${artifact.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
+                LogStatus(`✨ Updated artifact name to: ${artifact.Name}`);
             }
 
             // Create M2M relationship linking artifact to conversation detail
@@ -777,17 +775,17 @@ export class TaskOrchestrator {
             );
             junction.ConversationDetailID = conversationDetailId;
             junction.ArtifactVersionID = version.ID;
-            junction.Direction = 'Output'; // Artifact produced as output from task
+            junction.Direction = 'Output';
 
-            const junctionSaved = await junction.Save();
-            if (!junctionSaved) {
-                LogError('Failed to create artifact-conversation association');
-                return;
+            if (!await junction.Save()) {
+                throw new Error(`Failed to create artifact-conversation association: ${junction.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
-
             LogStatus(`Linked artifact ${artifact.ID} to conversation detail ${conversationDetailId}`);
+
+            await provider.CommitTransaction();
         } catch (error) {
-            LogError(`Error creating artifact from output: ${error}`);
+            await provider.RollbackTransaction();
+            LogError(`Error creating artifact from output — all changes rolled back: ${error}`);
         }
     }
 
@@ -802,7 +800,7 @@ export class TaskOrchestrator {
                 return;
             }
 
-            const md = new Metadata();
+            const md = this.getMetadata();
 
             // Load conversation detail to get conversation ID
             const detail = await md.GetEntityObject<MJConversationDetailEntity>(

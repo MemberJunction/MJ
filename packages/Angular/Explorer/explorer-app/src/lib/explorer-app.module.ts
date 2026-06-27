@@ -10,13 +10,15 @@
  *   ]
  */
 
-import { NgModule, ModuleWithProviders } from '@angular/core';
+import { NgModule, ModuleWithProviders, enableProdMode, isDevMode } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@memberjunction/ng-bootstrap';
 import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
+import { FeedbackModule } from '@memberjunction/ng-feedback';
+import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunction/ng-explorer-service-worker';
 
 @NgModule({
   declarations: [
@@ -28,7 +30,29 @@ import { ConversationsModule } from '@memberjunction/ng-conversations';
     ShellModule,
     SystemValidationBannerComponent,  // Standalone component
     ServerConnectivityBannerComponent,  // Standalone component
-    ConversationsModule
+    ConversationsModule,
+    UpdateNotificationComponent,  // Standalone — bottom-right "Update available" toast (no-op when SW disabled)
+    FeedbackModule.forRoot({
+      appName: 'MemberJunction Explorer',
+      title: 'Report an Issue',
+      subtitle: 'Help us improve MemberJunction Explorer',
+      fields: {
+        showSeverity: true,
+        showEnvironment: true,
+        affectedAreas: [
+          'Entities',
+          'Views',
+          'Queries',
+          'Reports',
+          'Dashboards',
+          'User Management',
+          'Admin Settings',
+          'Navigation',
+          'Search',
+          'Other'
+        ]
+      }
+    })
   ],
   exports: [
     MJExplorerAppComponent
@@ -40,6 +64,27 @@ export class MJExplorerAppModule {
    * Should be called once in the root application module.
    */
   static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
+    // Enable Angular's production mode before bootstrap completes. This
+    // disables development-only assertions (extra change-detection passes,
+    // assert-equality checks) and shaves real time off every digest cycle.
+    // Safe to call from forRoot() because @NgModule decorator metadata for
+    // the consumer's AppModule is evaluated BEFORE platformBrowserDynamic()
+    // .bootstrapModule() runs, so this lands in time. enableProdMode() is
+    // idempotent and guards against being called twice — also why we gate
+    // on `isDevMode()` (avoids the "called too late" warning if bootstrap
+    // somehow already ran in a hot-reload scenario).
+    if (environment.production && isDevMode()) {
+      enableProdMode();
+    }
+
+    // Pull in the SW providers conditionally based on the environment kill
+    // switch. The module is always loaded (so the toast component injection
+    // works), but `enabled: false` means no actual worker is registered and
+    // SwUpdate.isEnabled returns false.
+    const swModule = MJServiceWorkerModule.forRoot({
+      enabled: !!(environment.production && environment.enableServiceWorker)
+    });
+
     return {
       ngModule: MJExplorerAppModule,
       providers: [
@@ -50,7 +95,8 @@ export class MJExplorerAppModule {
         {
           provide: MJ_STARTUP_VALIDATION,
           useClass: StartupValidationService
-        }
+        },
+        ...(swModule.providers ?? [])
       ]
     };
   }

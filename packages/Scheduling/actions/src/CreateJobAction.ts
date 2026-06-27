@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
@@ -101,7 +101,7 @@ export class CreateScheduledJobAction extends BaseJobAction {
             }
 
             // Create entity object
-            const md = new Metadata();
+            const md = (params.Provider ?? new Metadata()) as unknown as IMetadataProvider;
             const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', params.ContextUser);
 
             // Set required fields

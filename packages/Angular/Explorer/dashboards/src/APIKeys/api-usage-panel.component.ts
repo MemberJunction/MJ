@@ -1,6 +1,7 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJAPIKeyEntity, MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /** Time bucket for aggregation */
 interface TimeBucket {
     label: string;
@@ -58,8 +59,8 @@ interface UsageLogItem {
     templateUrl: './api-usage-panel.component.html',
     styleUrls: ['./api-usage-panel.component.css']
 })
-export class APIUsagePanelComponent implements OnInit {
-    private md = new Metadata();
+export class APIUsagePanelComponent extends BaseAngularComponent implements OnInit {
+    private get md() { return this.ProviderToUse; }
     private cdr: ChangeDetectorRef;
 
     // Loading states
@@ -104,6 +105,7 @@ export class APIUsagePanelComponent implements OnInit {
     public Math = Math;
 
     constructor(cdr: ChangeDetectorRef) {
+        super();
         this.cdr = cdr;
     }
 
@@ -133,7 +135,7 @@ export class APIUsagePanelComponent implements OnInit {
      * Load API keys for label lookup
      */
     private async loadKeys(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             Fields: ['ID', 'Label'],
@@ -150,7 +152,7 @@ export class APIUsagePanelComponent implements OnInit {
      * Load usage statistics based on time range
      */
     private async loadUsageStats(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = this.getTimeFilter();
 
         const result = await rv.RunView<MJAPIKeyUsageLogEntity>({
@@ -437,7 +439,7 @@ export class APIUsagePanelComponent implements OnInit {
      */
     private async loadFilteredLogs(): Promise<void> {
         this.IsLoadingLogs = true;
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         let filter = this.getTimeFilter();
 
         if (this.LogsFilter.endpoint) {
