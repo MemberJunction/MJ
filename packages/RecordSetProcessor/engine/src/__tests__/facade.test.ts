@@ -3,13 +3,15 @@
  * and the output-mapping write-back applier. No database — providers/entities are faked.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
     FilterSource,
+    IRecordProcessor,
     ListSource,
+    RecordProcessorRegistry,
     RecordRef,
     ViewSource,
 } from '@memberjunction/record-set-processor-base';
@@ -123,6 +125,48 @@ describe('RecordProcessExecutor.buildProcessor', () => {
         });
         it('throws when Configuration has no Rules array', () => {
             expect(() => exec.buildProcessor(rp({ WorkType: 'FieldRules', Configuration: '{"foo":1}' }))).toThrow(/Rules array/);
+        });
+    });
+
+    // The pluggable registry seam: a work type the built-in switch doesn't know about is resolved via
+    // the RecordProcessorRegistry (how external packages — e.g. Predictive Studio's 'ML Model' scoring —
+    // teach the substrate a new work type without this package depending on them).
+    describe('pluggable processor registry', () => {
+        class CustomProcessor implements IRecordProcessor {
+            constructor(public readonly workType: string) {}
+            async ProcessRecord() { return { Status: 'Succeeded' as const }; }
+        }
+
+        afterEach(() => RecordProcessorRegistry.Instance.Unregister('My Custom Work'));
+
+        it('resolves a registered processor for a non-built-in work type', () => {
+            RecordProcessorRegistry.Instance.Register('My Custom Work', (c) => new CustomProcessor(c.WorkType));
+            const proc = exec.buildProcessor(rp({ WorkType: 'My Custom Work' }));
+            expect(proc).toBeInstanceOf(CustomProcessor);
+            expect((proc as CustomProcessor).workType).toBe('My Custom Work');
+        });
+
+        it('passes the Record Process config through the build context to the factory', () => {
+            let seenConfig: string | null | undefined;
+            RecordProcessorRegistry.Instance.Register('My Custom Work', (c) => {
+                seenConfig = c.Configuration;
+                return new CustomProcessor(c.WorkType);
+            });
+            exec.buildProcessor(rp({ WorkType: 'My Custom Work', Configuration: '{"modelId":"m1"}' }));
+            expect(seenConfig).toBe('{"modelId":"m1"}');
+        });
+
+        it('wraps a registered processor with WriteBackProcessor when OutputMapping is set', () => {
+            RecordProcessorRegistry.Instance.Register('My Custom Work', (c) => new CustomProcessor(c.WorkType));
+            const proc = exec.buildProcessor(rp({
+                WorkType: 'My Custom Work',
+                OutputMapping: JSON.stringify({ fields: { S: '$.s' } }),
+            }));
+            expect(proc).toBeInstanceOf(WriteBackProcessor);
+        });
+
+        it('still throws "unsupported WorkType" when nothing is registered for the work type', () => {
+            expect(() => exec.buildProcessor(rp({ WorkType: 'Totally Unknown' }))).toThrow(/unsupported WorkType/);
         });
     });
 });

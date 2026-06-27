@@ -13,3 +13,5 @@ export * from './sidecar-contract';
 export * from './pipeline-spec';
 export * from './feature-steps';
 export * from './modeling-plan-spec';
+export * from './modeling-plan-schema';
+export * from './metrics-util';

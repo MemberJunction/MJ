@@ -44,9 +44,23 @@ import type {
 } from '@memberjunction/predictive-studio-core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
+import type { AIPromptParams } from '@memberjunction/ai-core-plus';
+import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
+
 import { type IFeatureDataAccess, RunViewDataAccess, type SourceRow } from './data-access';
 import { type DatedRow, resolveAsOfDate, daysSinceLastActivityAsOf, activityCountAsOf } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
+import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
+
+/**
+ * Resolves a {@link VisionLLMFeatureStep}'s `Prompt` (id/name/inline) into the
+ * prompt entity the injected runner executes. Supplied by the caller so the
+ * executor stays decoupled from `MJ: AI Prompts` loading; tests provide a stub.
+ *
+ * @param step the vision-llm step whose prompt to resolve
+ * @returns the prompt entity to run
+ */
+export type VisionPromptResolver = (step: VisionLLMFeatureStep) => Promise<AIPromptParams['prompt']> | AIPromptParams['prompt'];
 
 /**
  * Which of the three contexts the executor is running in. The value is purely a
@@ -136,6 +150,19 @@ export interface FeatureAssemblyParams {
    * without a DB. When omitted, a {@link RunViewDataAccess} is used.
    */
   dataAccess?: IFeatureDataAccess;
+  /**
+   * Optional injected prompt-runner seam for `vision-llm` steps (plan §11). When
+   * a pipeline contains a `vision-llm` step, this is REQUIRED — unit tests mock
+   * it so the step assembles without a live model. When omitted, vision steps
+   * yield null feature values (no model call).
+   */
+  visionRunner?: IVisionPromptRunner;
+  /**
+   * Optional resolver turning a `vision-llm` step's `Prompt` reference into the
+   * prompt entity the runner executes. Required alongside {@link visionRunner}
+   * when vision steps are present.
+   */
+  visionPromptResolver?: VisionPromptResolver;
 }
 
 /**
@@ -231,6 +258,7 @@ export class FeatureAssemblyExecutor {
         case 'embedding':
         case 'llm-derived':
         case 'flow-agent':
+        case 'vision-llm':
           dataSteps.push(step);
           break;
         case 'impute':
@@ -278,8 +306,9 @@ export class FeatureAssemblyExecutor {
         if (!guard.isFieldAllowed(step.Column)) {
           return null;
         }
-        // Bin count travels in the recipe; the sidecar fits the edges.
-        return { op: 'bin', col: step.Column, strategy: 'constant', fillValue: step.Bins };
+        // Bin count travels in the recipe via the dedicated `bins` field; the
+        // sidecar's `_fit_bin` reads `op.get("bins")` and fits the edges.
+        return { op: 'bin', col: step.Column, bins: step.Bins };
       default:
         return null;
     }
@@ -318,6 +347,10 @@ export class FeatureAssemblyExecutor {
           // INTEGRATION SEAM (§5.4): resolve from a persisted attribute when present;
           // otherwise leave a clearly-commented per-record agent-invocation point.
           this.planFlowAgentColumns(step, guard, schema, emitters);
+          break;
+        case 'vision-llm':
+          // §11/§5.6: per-row, stateless vision extraction → one RAW feature column.
+          this.planVisionLLMColumn(step, guard, schema, emitters);
           break;
         default:
           break;
@@ -410,6 +443,30 @@ export class FeatureAssemblyExecutor {
   }
 
   /**
+   * Plan a `vision-llm` column (plan §11/§5.6). Produces one RAW feature column
+   * named by the step's `Output.FeatureName`. The feature is derived from the
+   * row's OWN image, so the leakage guard ALLOWS it (it's a property of the
+   * record, not a future-label proxy); the output name is still passed through
+   * the guard so an operator can deny-list a specific vision feature if it proves
+   * leaky post-train.
+   */
+  private planVisionLLMColumn(
+    step: Extract<FeatureStep, { Kind: 'vision-llm' }>,
+    guard: LeakageGuardEnforcer,
+    schema: FeatureSchemaEntry[],
+    emitters: ColumnEmitter[],
+  ): void {
+    const col = step.Output.FeatureName;
+    if (!guard.isFieldAllowed(col)) {
+      return;
+    }
+    // Scalar → numeric matrix column; category → categorical (raw label, typically
+    // one-hot encoded by a downstream preprocessing step).
+    schema.push({ Name: col, Kind: step.Output.Kind === 'scalar' ? 'numeric' : 'categorical' });
+    emitters.push({ column: col, kind: 'vision-llm', step });
+  }
+
+  /**
    * Build an index of dated rows grouped by target-record primary key, for as-of
    * feature computation. Filtered through the source deny-list.
    */
@@ -466,6 +523,9 @@ export class FeatureAssemblyExecutor {
       columns.push(params.targetVariable);
     }
 
+    // Vision extraction context — built once, only when a vision runner is wired.
+    const vision = this.buildVisionContext(params);
+
     const rows: Array<Array<string | number | boolean | null>> = [];
     for (const record of records) {
       const recordId = String(record[pkField] ?? '');
@@ -473,7 +533,7 @@ export class FeatureAssemblyExecutor {
 
       const rowValues: Array<string | number | boolean | null> = [];
       for (const emitter of plan.emitters) {
-        rowValues.push(await this.emitValue(emitter, record, recordId, asOfDate, datedIndex, dataAccess));
+        rowValues.push(await this.emitValue(emitter, record, recordId, asOfDate, datedIndex, dataAccess, vision));
       }
       if (params.targetVariable) {
         rowValues.push(normalizeValue(record[params.targetVariable]));
@@ -481,6 +541,22 @@ export class FeatureAssemblyExecutor {
       rows.push(rowValues);
     }
     return { columns, rows };
+  }
+
+  /**
+   * Build the vision-extraction context (extractor + prompt resolver) once per
+   * assembly when a `visionRunner` is supplied. Returns `null` when no runner is
+   * wired — vision emitters then yield null (no model call).
+   */
+  private buildVisionContext(params: FeatureAssemblyParams): VisionContext | null {
+    if (!params.visionRunner) {
+      return null;
+    }
+    return {
+      extractor: new VisionFeatureExtractor(params.visionRunner, params.contextUser),
+      resolver: params.visionPromptResolver,
+      promptCache: new Map<string, AIPromptParams['prompt']>(),
+    };
   }
 
   /** Produce the value for a single planned column on a single record. */
@@ -491,10 +567,13 @@ export class FeatureAssemblyExecutor {
     asOfDate: Date | null,
     datedIndex: DatedIndex,
     dataAccess: IFeatureDataAccess,
+    vision: VisionContext | null,
   ): Promise<string | number | boolean | null> {
     switch (emitter.kind) {
       case 'select':
         return normalizeValue(record[emitter.sourceColumn]);
+      case 'vision-llm':
+        return this.emitVisionValue(emitter.step, record, vision);
       case 'embedding': {
         const vector = await dataAccess.fetchEmbedding(emitter.embeddingEntity, recordId, emitter.embeddingModelRef, emitter.embeddingTotalDims);
         // No persisted vector → zero-fill (never regenerate inline; §6.5).
@@ -520,6 +599,43 @@ export class FeatureAssemblyExecutor {
         return null;
     }
   }
+
+  /**
+   * Emit a `vision-llm` feature value for one record (plan §11). Resolves the
+   * step's prompt (memoized per step) and runs the per-row extractor over the
+   * row's OWN image. When no vision runner/resolver is wired, yields `null`
+   * (no model call) so the rest of the matrix still assembles.
+   */
+  private async emitVisionValue(
+    step: VisionLLMFeatureStep,
+    record: SourceRow,
+    vision: VisionContext | null,
+  ): Promise<string | number | null> {
+    if (!vision || !vision.resolver) {
+      return null;
+    }
+    const prompt = await this.resolveVisionPrompt(step, vision);
+    const { value } = await vision.extractor.extract(step, record, prompt);
+    return value;
+  }
+
+  /** Resolve (and memoize) the prompt entity for a vision step via the injected resolver. */
+  private async resolveVisionPrompt(step: VisionLLMFeatureStep, vision: VisionContext): Promise<AIPromptParams['prompt']> {
+    const cached = vision.promptCache.get(step.Id);
+    if (cached) {
+      return cached;
+    }
+    const resolved = await vision.resolver!(step);
+    vision.promptCache.set(step.Id, resolved);
+    return resolved;
+  }
+}
+
+/** Internal — per-assembly vision-extraction context (built once when a runner is wired). */
+interface VisionContext {
+  extractor: VisionFeatureExtractor;
+  resolver?: VisionPromptResolver;
+  promptCache: Map<string, AIPromptParams['prompt']>;
 }
 
 /** Internal — the ordered schema + per-column emitters produced by planning. */
@@ -531,6 +647,7 @@ interface ColumnPlan {
 /** Internal — a per-record value producer for one matrix column. */
 type ColumnEmitter =
   | { column: string; kind: 'select'; sourceColumn: string }
+  | { column: string; kind: 'vision-llm'; step: VisionLLMFeatureStep }
   | {
       column: string;
       kind: 'embedding';

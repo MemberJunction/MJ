@@ -447,46 +447,6 @@
   },
   {
     "fields": {
-      "Name": "template",
-      "FullPath": "template",
-      "ParentID": null,
-      "Category": "Templates",
-      "Description": "Parent scope for template operations",
-      "ResourceType": null,
-      "IsActive": true,
-      "UIConfig": {
-        "icon": "fa-solid fa-file-code",
-        "color": "#a855f7"
-      }
-    },
-    "primaryKey": {
-      "ID": "088DF604-0322-4F1F-9565-3F0BF810A4A2"
-    },
-    "sync": {
-      "lastModified": "2026-06-27T01:23:04.931Z",
-      "checksum": "d51c18972638954db6899314653dc2f78c158bf714416dc7fed17326f6df32e1"
-    }
-  },
-  {
-    "fields": {
-      "Name": "execute",
-      "FullPath": "template:execute",
-      "ParentID": "@lookup:MJ: API Scopes.FullPath=template",
-      "Category": "Templates",
-      "Description": "Render/execute templates",
-      "ResourceType": "Template",
-      "IsActive": true
-    },
-    "primaryKey": {
-      "ID": "3FD0E2CF-4BEC-4982-83D1-346F33260169"
-    },
-    "sync": {
-      "lastModified": "2026-06-27T01:23:04.954Z",
-      "checksum": "579242f3e28ca5425b1f8bab82cae0310f51a0acd4bc046bef1673edcdaeb817"
-    }
-  },
-  {
-    "fields": {
       "Name": "dataset",
       "FullPath": "dataset",
       "ParentID": null,

@@ -116,6 +116,40 @@ def test_impute_fill_values_frozen():
     np.testing.assert_array_almost_equal(v_missing, v_present, decimal=12)
 
 
+def _bin_edges(fitted, col):
+    """Pull the fitted bin edges for a column out of the fitted-ops payload."""
+    for op in fitted["ops"]:
+        if op.get("op") == "bin" and op.get("col") == col:
+            return op["edges"]
+    raise AssertionError(f"no fitted bin op for column {col!r}")
+
+
+def test_bin_count_honors_configured_bins():
+    """C1 — the configured ``bins`` count must drive the number of bin edges, NOT
+    the hard-coded default of 4. A quantile binning into N bins produces N+1 edges
+    (on distinct data). With score = 1..6 and bins=3 we expect 4 edges."""
+    columns = ["score", "label"]
+    rows = [[1.0, 1], [2.0, 0], [3.0, 1], [4.0, 0], [5.0, 1], [6.0, 0]]
+    feature_cols = ["score"]
+
+    _, _, fitted3 = preprocessing.fit_transform(
+        columns, rows, [{"op": "bin", "col": "score", "bins": 3}], feature_cols
+    )
+    assert len(_bin_edges(fitted3, "score")) == 4  # 3 bins -> 4 edges
+
+    # A different configured count must change the edge count (proves it isn't fixed at 4).
+    _, _, fitted2 = preprocessing.fit_transform(
+        columns, rows, [{"op": "bin", "col": "score", "bins": 2}], feature_cols
+    )
+    assert len(_bin_edges(fitted2, "score")) == 3  # 2 bins -> 3 edges
+
+    # Omitting bins falls back to the documented default of 4 bins -> 5 edges.
+    _, _, fitted_default = preprocessing.fit_transform(
+        columns, rows, [{"op": "bin", "col": "score"}], feature_cols
+    )
+    assert len(_bin_edges(fitted_default, "score")) == 5  # default 4 bins -> 5 edges
+
+
 def test_output_column_order_stable():
     """Output column order is deterministic: onehot indicators then passthrough."""
     columns, rows, feature_cols = _training_frame()

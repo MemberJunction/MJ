@@ -79,6 +79,8 @@ export interface ScoreRecordSetResult {
   scoredCount: number;
   /** Number of records that failed to score. */
   failedCount: number;
+  /** Number of records the processor skipped (e.g. ineligible / filtered out). */
+  skippedCount: number;
   /** Ephemeral predictions (present when write-back was NOT requested). */
   predictions?: EphemeralPrediction[];
   /** True when the runner applied a write-back instead of returning predictions. */
@@ -109,6 +111,13 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
       const modelId = this.getStringParam(params, 'ModelID');
       if (!modelId) {
         return this.fail('VALIDATION_ERROR', 'ModelID parameter is required');
+      }
+
+      // Scoring runs server-side and resolves/scores records on behalf of a user
+      // — a ContextUser is mandatory for data isolation + audit (CLAUDE.md). Fail
+      // loudly rather than letting the runner force-cast an absent user.
+      if (!params.ContextUser) {
+        return this.fail('VALIDATION_ERROR', 'ContextUser is required to score records (server-side data access is user-scoped)');
       }
 
       const scope = this.parseScope(params);
@@ -146,6 +155,8 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
   /** Map the runner result onto output params + a human-readable message. */
   protected mapResult(params: RunActionParams, result: ScoreRecordSetResult): ActionResultSimple {
     this.addOutputParam(params, 'ScoredCount', result.scoredCount);
+    this.addOutputParam(params, 'FailedCount', result.failedCount);
+    this.addOutputParam(params, 'SkippedCount', result.skippedCount);
     this.addOutputParam(params, 'WroteBack', result.wroteBack);
     if (result.wroteBack) {
       return this.ok(params, `Scored ${result.scoredCount} record(s); predictions written back to the target.`);
@@ -162,15 +173,24 @@ export class PredictiveStudioScoreRecordSetAction extends BasePredictiveStudioAc
     return raw ? (raw as ScoringScope) : undefined;
   }
 
-  /** Whether the scope populates at least one selector. */
+  /**
+   * Whether the scope populates EXACTLY ONE selector. More than one is ambiguous
+   * (which would the runner honor?) and is rejected the same as none, so the
+   * caller's intent is always unambiguous.
+   */
   protected scopeHasTarget(scope: ScoringScope): boolean {
-    return Boolean(
-      (Array.isArray(scope.records) && scope.records.length > 0) ||
-        scope.viewId ||
-        scope.listId ||
-        scope.filter ||
-        scope.single,
-    );
+    return this.countScopeSelectors(scope) === 1;
+  }
+
+  /** Count how many of the mutually-exclusive scope selectors are populated. */
+  protected countScopeSelectors(scope: ScoringScope): number {
+    let count = 0;
+    if (Array.isArray(scope.records) && scope.records.length > 0) count++;
+    if (scope.viewId) count++;
+    if (scope.listId) count++;
+    if (scope.filter) count++;
+    if (scope.single) count++;
+    return count;
   }
 
   /**

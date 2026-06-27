@@ -3,9 +3,18 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, LogError } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { PredictiveStudioEngine } from './engine/predictive-studio.engine';
 import { PSPanelKey } from './predictive-studio.types';
+
+/**
+ * Display name of the Model Development Agent that powers the embedded copilot chat. The agent ID is
+ * resolved at runtime from the AIEngineBase agent cache by this name (see {@link resolveModelDevAgentId})
+ * rather than hardcoding a UUID — keeping the dashboard correct across environments where the agent is
+ * (re)seeded with a different ID.
+ */
+const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
 
 interface NavItem {
   key: PSPanelKey;
@@ -13,17 +22,6 @@ interface NavItem {
   icon: string;
   group: string;
 }
-
-/**
- * AI Agent ID for the Model Development Agent that powers the embedded copilot chat. The agent is
- * seeded via metadata (see plans/predictive-studio.md §9). Until the seed lands in the target
- * environment, this stays null and the chat falls back to default-agent resolution (app-scoped →
- * global). Wire the seeded ID here when available.
- *
- * TODO(PS-AGENT-6): replace with the seeded Model Development Agent ID once the agent metadata is
- * pushed, OR resolve it dynamically from the application's default agent.
- */
-const MODEL_DEV_AGENT_ID: string | null = null;
 
 /**
  * Predictive Studio — the world-class, lazy-loaded MJ Explorer dashboard for feature engineering,
@@ -48,10 +46,20 @@ const MODEL_DEV_AGENT_ID: string | null = null;
 export class PredictiveStudioDashboardComponent extends BaseDashboard {
   private cdr = inject(ChangeDetectorRef);
 
-  public engine = PredictiveStudioEngine.Instance;
+  /**
+   * Provider-scoped Predictive Studio engine. Resolved in {@link loadData} via
+   * {@link PredictiveStudioEngine.GetProviderInstance} so a multi-provider client (or an embedded
+   * non-default provider) reads the right server's PS reference data — never the process-global
+   * singleton. The panel host is gated behind {@link isLoading}, so this is assigned before any
+   * panel renders.
+   */
+  public engine: PredictiveStudioEngine = PredictiveStudioEngine.Instance;
   public isLoading = true;
   public activePanel: PSPanelKey = 'home';
   public chatOpen = false;
+
+  /** Resolved at runtime from the agent cache by name; null until resolved (chat falls back to default-agent routing). */
+  private _modelDevAgentId: string | null = null;
 
   public readonly navItems: NavItem[] = [
     { key: 'home', label: 'Home', icon: 'fa-solid fa-gauge-high', group: 'Build' },
@@ -76,12 +84,36 @@ export class PredictiveStudioDashboardComponent extends BaseDashboard {
     this.isLoading = true;
     try {
       const provider = this.ProviderToUse;
-      await this.engine.Config(false, provider?.CurrentUser ?? undefined, provider);
+      // Provider-scoped engine (multi-provider correctness) — not the process-global singleton.
+      this.engine = <PredictiveStudioEngine>PredictiveStudioEngine.GetProviderInstance(provider, PredictiveStudioEngine);
+      await this.engine.Config(false, provider.CurrentUser ?? undefined, provider);
+      await this.resolveModelDevAgentId();
     } catch (e) {
       this.Error.emit(e instanceof Error ? e : new Error(String(e)));
     } finally {
       this.isLoading = false;
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Resolve the Model Development Agent's ID at runtime from the AIEngineBase agent cache (loaded on
+   * app boot) by {@link MODEL_DEV_AGENT_NAME} — instead of pinning a literal UUID that breaks when the
+   * agent is (re)seeded with a different ID across environments. Leaves the ID null (chat then falls
+   * back to default-agent routing) if the agent isn't found.
+   */
+  private async resolveModelDevAgentId(): Promise<void> {
+    try {
+      await AIEngineBase.Instance.Config(false);
+      const agent = AIEngineBase.Instance.Agents?.find(
+        (a) => a.Name?.trim().toLowerCase() === MODEL_DEV_AGENT_NAME.toLowerCase(),
+      );
+      this._modelDevAgentId = agent?.ID ?? null;
+      if (!agent) {
+        LogError(`PredictiveStudioDashboard: '${MODEL_DEV_AGENT_NAME}' not found in AIEngineBase cache — chat will use default-agent routing.`);
+      }
+    } catch (err) {
+      LogError(`PredictiveStudioDashboard.resolveModelDevAgentId: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -141,7 +173,7 @@ export class PredictiveStudioDashboardComponent extends BaseDashboard {
   }
 
   public get modelDevAgentId(): string | null {
-    return MODEL_DEV_AGENT_ID;
+    return this._modelDevAgentId;
   }
 
   /** App context passed to the agent so it can act on the current panel. */

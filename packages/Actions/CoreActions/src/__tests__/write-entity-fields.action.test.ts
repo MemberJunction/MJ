@@ -192,7 +192,7 @@ describe('WriteEntityFieldsAction', () => {
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const outParams = (params as any).Params as Array<{ Name: string; Value: unknown }>;
-            const pkOut = outParams.find(p => p.Name === 'PrimaryKey' && (p as { Type: string }).Type === 'Output');
+            const pkOut = outParams.find(p => p.Name === 'AffectedPrimaryKey' && (p as { Type: string }).Type === 'Output');
             const savedOut = outParams.find(p => p.Name === 'Saved');
             expect(pkOut?.Value).toEqual({ ID: 'abc-123' });
             expect(savedOut?.Value).toBe(true);
@@ -260,7 +260,7 @@ describe('WriteEntityFieldsAction', () => {
 
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const outParams = (params as any).Params as Array<{ Name: string; Value: unknown }>;
-            const pkOut = outParams.find(p => p.Name === 'PrimaryKey' && (p as { Type: string }).Type === 'Output');
+            const pkOut = outParams.find(p => p.Name === 'AffectedPrimaryKey' && (p as { Type: string }).Type === 'Output');
             expect(pkOut?.Value).toEqual({ ID: 'new-999' });
         });
 

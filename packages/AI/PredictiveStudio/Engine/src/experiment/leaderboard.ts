@@ -31,13 +31,20 @@ export function rankLeaderboard(entries: LeaderboardEntry[]): LeaderboardEntry[]
 }
 
 /**
- * The best entry on the leaderboard, or `null` when empty.
+ * The best entry on the leaderboard, or `null` when empty. Single-pass O(n) max
+ * (no full sort) using the SAME ordering as {@link rankLeaderboard}: higher
+ * `Metric` wins, ties broken by the lexicographically-smaller `IterationID`.
  *
  * @param entries the (unranked or ranked) entries
  */
 export function bestEntry(entries: LeaderboardEntry[]): LeaderboardEntry | null {
-  const ranked = rankLeaderboard(entries);
-  return ranked.length > 0 ? ranked[0] : null;
+  let best: LeaderboardEntry | null = null;
+  for (const entry of entries) {
+    if (best === null || entry.Metric > best.Metric || (entry.Metric === best.Metric && entry.IterationID.localeCompare(best.IterationID) < 0)) {
+      best = entry;
+    }
+  }
+  return best;
 }
 
 /**

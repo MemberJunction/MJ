@@ -16,7 +16,7 @@
  * standard 0.6). This is deterministic and needs no extra state on the model.
  */
 
-import { RunView, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { RunView, LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { FeatureImportance, LeakageGuard } from '@memberjunction/predictive-studio-core';
 
@@ -30,6 +30,14 @@ import type {
 /** Default single-feature-dominance threshold when a pipeline doesn't specify one. */
 const DEFAULT_DOMINANCE_THRESHOLD = 0.6;
 
+/** Canonical UUID shape (8-4-4-4-12 hex), case-insensitive. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Whether a string is a well-formed UUID (the only legal `MJ: ML Models` / pipeline id shape). */
+function isUuid(value: string | null | undefined): value is string {
+  return typeof value === 'string' && UUID_RE.test(value.trim());
+}
+
 /**
  * Loads a model, enforces the leakage sign-off gate, and transitions its status.
  */
@@ -41,14 +49,47 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
       return { kind: 'not-found' };
     }
 
-    if (!request.signOff) {
-      const leakage = await this.detectLeakage(model, request.contextUser, request.provider);
-      if (leakage.flagged) {
+    // Always evaluate leakage so a sign-off override of a FLAGGED model can be
+    // audited. A clean (non-flagged) model needs neither a sign-off nor a reason.
+    const leakage = await this.detectLeakage(model, request.contextUser, request.provider);
+    let signOffNote: string | undefined;
+    if (leakage.flagged) {
+      if (!request.signOff) {
         return { kind: 'refused-leakage', topFeature: leakage.topFeature, topShare: leakage.topShare };
       }
+      // Sign-off overriding a FLAGGED model REQUIRES a non-empty justification.
+      const reason = request.reason?.trim();
+      if (!reason) {
+        return { kind: 'signoff-reason-required', topFeature: leakage.topFeature, topShare: leakage.topShare };
+      }
+      signOffNote = this.recordSignOff(model, request, leakage, reason);
     }
 
-    return this.transition(model, request.targetStatus);
+    return this.transition(model, request.targetStatus, signOffNote);
+  }
+
+  /**
+   * Persist an auditable sign-off note for a leakage override. The model is
+   * immutable (no free-text column to write), so the override is recorded via the
+   * platform log (an operator-visible audit line) and returned in the outcome so
+   * the calling Action surfaces it. The note captures who/when/what-was-overridden
+   * and the supplied reason.
+   */
+  protected recordSignOff(
+    model: MJMLModelEntity,
+    request: PromoteModelRequest,
+    leakage: { topFeature?: string; topShare?: number },
+    reason: string,
+  ): string {
+    const who = request.contextUser?.Email ?? request.contextUser?.Name ?? 'unknown user';
+    const when = new Date().toISOString();
+    const share = leakage.topShare != null ? ` (${(leakage.topShare * 100).toFixed(0)}% share)` : '';
+    const feature = leakage.topFeature ? ` on feature "${leakage.topFeature}"${share}` : '';
+    const note =
+      `Leakage sign-off override for ML Model '${model.ID}' by ${who} at ${when}: ` +
+      `leakage flag${feature} overridden to ${request.targetStatus}. Reason: ${reason}`;
+    LogStatus(note);
+    return note;
   }
 
   // ----- model load ----------------------------------------------------------
@@ -59,6 +100,11 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<MJMLModelEntity | null> {
+    // The model id is interpolated into a SQL filter — it MUST be a UUID. A
+    // non-UUID can't match a real row and is refused rather than concatenated.
+    if (!isUuid(modelId)) {
+      return null;
+    }
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
     const result = await rv.RunView<MJMLModelEntity>(
       {
@@ -99,7 +145,9 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
   ): Promise<number> {
-    if (!pipelineId) {
+    // pipelineId is interpolated into a SQL filter — only a UUID is valid. A
+    // missing/malformed id falls back to the default threshold (never concatenated).
+    if (!isUuid(pipelineId)) {
       return DEFAULT_DOMINANCE_THRESHOLD;
     }
     const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
@@ -126,17 +174,41 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
 
   // ----- transition ----------------------------------------------------------
 
-  /** Set ONLY the lifecycle status and save; never touches metrics/artifact. */
+  /**
+   * Allowed lifecycle transitions keyed on the model's CURRENT status. The
+   * lifecycle is `Draft → Validated → Published → Archived`, with the
+   * conservative reversible edges `Validated → Archived` (abandon a candidate)
+   * and `Archived ↔ Published` (un-archive / re-archive). Anything not listed
+   * (e.g. `Draft → Published`) is rejected as an invalid jump.
+   */
+  protected static readonly ALLOWED_TRANSITIONS: Readonly<Record<string, readonly PromoteModelRequest['targetStatus'][]>> = {
+    Draft: ['Validated'],
+    Validated: ['Published', 'Archived'],
+    Published: ['Archived'],
+    Archived: ['Published'],
+  };
+
+  /**
+   * Set ONLY the lifecycle status and save; never touches metrics/artifact.
+   * Enforces the {@link ALLOWED_TRANSITIONS} state machine first — an illegal
+   * jump (e.g. Draft → Published) is refused before any mutation/save.
+   */
   protected async transition(
     model: MJMLModelEntity,
     targetStatus: PromoteModelRequest['targetStatus'],
+    signOffNote?: string,
   ): Promise<PromoteModelOutcome> {
+    const currentStatus = model.Status ?? 'Draft';
+    const allowed = ProductionModelPromotionGate.ALLOWED_TRANSITIONS[currentStatus] ?? [];
+    if (!allowed.includes(targetStatus)) {
+      return { kind: 'invalid-transition', currentStatus, targetStatus };
+    }
     model.Status = targetStatus;
     const saved = await model.Save();
     if (!saved) {
       return { kind: 'save-failed', message: model.LatestResult?.CompleteMessage ?? 'unknown error' };
     }
-    return { kind: 'promoted', newStatus: targetStatus };
+    return { kind: 'promoted', newStatus: targetStatus, signOffNote };
   }
 
   // ----- helpers -------------------------------------------------------------

@@ -24,6 +24,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Id of the MJ: ML Training Pipelines row to train."
+          },
+          "primaryKey": {
+            "ID": "BD37E7F7-79A6-4CF9-B815-66A19BB26C99"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.865Z",
+            "checksum": "01a7a9a11f29823f61fafa4e0ddb25b9cf34eb1b430bdda8dad6ebf5a7c7f718"
           }
         },
         {
@@ -35,6 +42,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional cap on the number of training rows pulled from the target entity."
+          },
+          "primaryKey": {
+            "ID": "1AEC4C95-D252-462D-9DD7-F287F8B5D6F5"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.886Z",
+            "checksum": "8c7bd2acf754e785678508c38da9c18ddd9593bdd1160e4a5e6d936a8f9f20f3"
           }
         },
         {
@@ -46,6 +60,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Id of the produced (Draft) MJ: ML Models row."
+          },
+          "primaryKey": {
+            "ID": "E682EE84-2051-4D3F-B892-39CFE781BBA1"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.905Z",
+            "checksum": "05d01546a1b2860916a96cda0e4e761ff4a0c5a033666b9d089583c9da7d15d9"
           }
         },
         {
@@ -57,6 +78,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "JSON of the metrics scored once on the locked holdout set the search never saw (the honest performance number)."
+          },
+          "primaryKey": {
+            "ID": "55F8564C-CBAF-40FE-A32A-1B3876137CF1"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.924Z",
+            "checksum": "783c7c3509082b9f0bb92ad10b70f17259bfb28f749a334fb0dbc6d5ff03f600"
           }
         },
         {
@@ -68,6 +96,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "True when one feature dominates the model's predictions (possible target leakage). A flagged model stays Draft and needs human sign-off before promotion."
+          },
+          "primaryKey": {
+            "ID": "86E3BD18-DAA3-4B59-A0C6-80FBEADBCF52"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.942Z",
+            "checksum": "b98ee9aa7419dbf70f6ba0595fcfce238586825150e03cf750273d7a6e6b7713"
           }
         }
       ],
@@ -78,6 +113,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Model trained and persisted (Draft)."
+          },
+          "primaryKey": {
+            "ID": "030CA913-F3CA-4A8B-8B29-F6F16F07807B"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.960Z",
+            "checksum": "106e0ffae26879497096d34f643ba7d00395b44dfe6c8445938cb2bc433ce092"
           }
         },
         {
@@ -86,6 +128,13 @@
             "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
             "Description": "PipelineID is missing."
+          },
+          "primaryKey": {
+            "ID": "BB6DC8EE-7624-4CC9-BE9A-A73E02102CDA"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.974Z",
+            "checksum": "95ff62c977bd56d643662c189b027f0579d304b8f8a67b2debf01e1887857981"
           }
         },
         {
@@ -94,9 +143,23 @@
             "ResultCode": "TRAINING_FAILED",
             "IsSuccess": false,
             "Description": "The training engine failed (pipeline not found, sidecar error, or a save failure)."
+          },
+          "primaryKey": {
+            "ID": "3D57A26B-CAD2-430C-BF17-54A5798D96BA"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:15:59.988Z",
+            "checksum": "ac4d7db737c1a1d30ccf3e9f2606eb6b0b42315a264022637d8273276bdd3b37"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "4D328FBC-E038-45FF-BD94-BED4C2132CA0"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T15:15:59.781Z",
+      "checksum": "f6f18b2bf56a03dbc7a7417885b34f4161c2e6ac5cdbb479dcd128f7c1174b06"
     }
   },
   {
@@ -124,6 +187,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Id of the MJ: ML Models row to score with."
+          },
+          "primaryKey": {
+            "ID": "6F19D83B-28C9-4376-9F85-369075172793"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.003Z",
+            "checksum": "144e621bbb13ac7c3b79f5711b9c42457f9528abca0598c2ded39641c6c317e0"
           }
         },
         {
@@ -135,6 +205,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "JSON describing the records to score. Populate exactly one of: records (id/pk array), viewId, listId, filter ({entityName, extraFilter, maxRows}), single ({entityName, primaryKey})."
+          },
+          "primaryKey": {
+            "ID": "4BD7614C-CF5C-4D37-BAE1-75957EF88B3C"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.022Z",
+            "checksum": "70eb218dd5215dfad316ac74f0762500a9c16c0c6959cfa8885268437bda5b1c"
           }
         },
         {
@@ -146,6 +223,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional. true to write scores back with the model's default mapping, or an object { OutputMapping: ... } to write to a specific column/child record. When omitted, predictions are returned ephemerally."
+          },
+          "primaryKey": {
+            "ID": "313EF2E8-3BE2-475D-ADF3-E0226585B6E9"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.045Z",
+            "checksum": "5c891c2c4e5fe3d8d32f85a465d4226d7d6e910e60aaa96191aa6e20f4e4d3a7"
           }
         },
         {
@@ -157,6 +241,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Number of records successfully scored."
+          },
+          "primaryKey": {
+            "ID": "03512976-A3F7-4762-9314-1648B6DE09FF"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.063Z",
+            "checksum": "21c6fc591beca4847d753a6e8e3cba2d4c53d966ad7432c2bd4c8b8032e4ad16"
           }
         },
         {
@@ -168,6 +259,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "True when scores were written back to the target (predictions are then NOT returned ephemerally)."
+          },
+          "primaryKey": {
+            "ID": "B0B84CDE-8583-4EF6-B9C0-6EA7EC20BE93"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.081Z",
+            "checksum": "8a8234afa9fc5546ebdc9280a4343a3e1f25a7b92765517f81f0fcfdc67c299f"
           }
         },
         {
@@ -179,6 +277,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "JSON array of ephemeral predictions ({recordId, score, class}), present only when WriteBack was not requested."
+          },
+          "primaryKey": {
+            "ID": "65484624-5507-45BC-AE89-3F5443E93C10"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.098Z",
+            "checksum": "b024c8bacfc720ab99c73336f097e88669e7020b4769e34fd40433383d0bd288"
           }
         }
       ],
@@ -189,6 +294,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Records scored (predictions returned or written back)."
+          },
+          "primaryKey": {
+            "ID": "B7548FE0-57A0-4435-B90D-BE1D37E8A7CB"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.114Z",
+            "checksum": "ad110e492d3c3a0640c41d344d2d3933ba0bc03664e80b797924d4fc3388e99f"
           }
         },
         {
@@ -197,6 +309,13 @@
             "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
             "Description": "ModelID is missing, or Scope is missing/empty/populates no selector."
+          },
+          "primaryKey": {
+            "ID": "F7968FF1-C48E-4F5D-A9E8-4E7E8DB49B25"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.128Z",
+            "checksum": "c1a6c27df6f5e2f9a2fd25a4d8cb4206edbd09b92f8acb1e29ddda70d347dc11"
           }
         },
         {
@@ -205,9 +324,23 @@
             "ResultCode": "SCORING_FAILED",
             "IsSuccess": false,
             "Description": "Scope resolution or the scoring run failed (model/artifact not found, sidecar error)."
+          },
+          "primaryKey": {
+            "ID": "9367D04E-E995-4D28-BF5A-F7F3EBFD5FC4"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.144Z",
+            "checksum": "871358e050276f2ea70e3171f7395ea7dc28b2c4cf8646362baa368555c77cf2"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "745B8BDC-B748-42F0-82E2-25C5E0615777"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T15:15:59.804Z",
+      "checksum": "2a335dd1a3f3db5f3826923f199f61d4dbea1da2483851467965d840e90f181c"
     }
   },
   {
@@ -234,6 +367,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The approved modeling plan (ModelingPlanSpec JSON) to execute. Must have Approved=true — execution is gated on user approval."
+          },
+          "primaryKey": {
+            "ID": "C12A0A43-AD7E-4417-A519-7B21877170C5"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.159Z",
+            "checksum": "350f13ad980c69bc8f1c894608d0ac9f3e4162c284270d217632c6f6a809010b"
           }
         },
         {
@@ -245,6 +385,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional id of an existing MJ: Experiments definition to attach the session to. When omitted, a new durable Experiment is created from the plan."
+          },
+          "primaryKey": {
+            "ID": "F163D495-934C-4978-9243-3814DDF0E1AA"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.177Z",
+            "checksum": "5f6d0e5aafd857beba718e4475a5a544cf08a93703c9a85c5ad2a1bb4ed3ba96"
           }
         },
         {
@@ -256,6 +403,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional budget override ({ MaxRuns, MaxComputeCost, MaxWallclockMinutes }). When omitted, the plan's ProposedBudget is used."
+          },
+          "primaryKey": {
+            "ID": "E595E43F-BBD7-4A29-A359-2F8FAD76ED73"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.193Z",
+            "checksum": "26b96010e1675053be28636faa980556d1be1e0b38553a36b9896545650b73c8"
           }
         },
         {
@@ -267,6 +421,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Id of the MJ: Experiment Sessions row that was executed."
+          },
+          "primaryKey": {
+            "ID": "43BD90FC-883A-49D8-B0B1-00E4B1925997"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.215Z",
+            "checksum": "438ac9200d4c27001b3b502ac8f069cf22e2cabb46a1a046d162c5b03ba7ec4b"
           }
         },
         {
@@ -278,6 +439,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Id of the best (winning) model produced, or null when no iteration produced one."
+          },
+          "primaryKey": {
+            "ID": "A048729F-6DAF-4844-86AE-377ED0A0950E"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.233Z",
+            "checksum": "71268dde9be1b615aaae60d11a5be3c78cb4049edf8f75de94885ecd961b20c5"
           }
         },
         {
@@ -289,6 +457,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "JSON of the final leaderboard, best-first ({ IterationID, Metric, ModelID })."
+          },
+          "primaryKey": {
+            "ID": "BF041DDA-0CC0-469D-80CB-360C0C4645F5"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.252Z",
+            "checksum": "833d228e873953d239098803ab41ba2c89f44c71e76d68930d3e946d9b2547a9"
           }
         },
         {
@@ -300,6 +475,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Why the session stopped: completed, or a clean budget pause (budget-maxRuns / budget-maxComputeCost / budget-maxWallclock)."
+          },
+          "primaryKey": {
+            "ID": "BF5C5520-75CF-4FD2-AC0B-6A91F3589BF0"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.274Z",
+            "checksum": "be8eb96eba5101c9ccb3b56219d8234a943a6bc1a34a8a6791e1024cff0ffb21"
           }
         }
       ],
@@ -310,6 +492,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Experiment session ran to completion or paused cleanly on the budget."
+          },
+          "primaryKey": {
+            "ID": "EFEE8828-8852-4B8E-8225-320A14499992"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.292Z",
+            "checksum": "f90b92e72e2ea97d20f9ff2d282efd36b28aa0a5092d8a535e14a9fb1c656db1"
           }
         },
         {
@@ -318,6 +507,13 @@
             "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
             "Description": "PlanSpec is missing or not a valid modeling plan."
+          },
+          "primaryKey": {
+            "ID": "94058BF3-BE98-4E15-8CBC-C368A0FD5BD2"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.307Z",
+            "checksum": "51908189685919e35e400340aa0c3f005617f6408c611bdb78d38d417fa923f0"
           }
         },
         {
@@ -326,6 +522,13 @@
             "ResultCode": "PLAN_NOT_APPROVED",
             "IsSuccess": false,
             "Description": "The PlanSpec is not approved (Approved is not true) — execution is gated on user approval."
+          },
+          "primaryKey": {
+            "ID": "8B6F8833-0638-4CF8-95FC-C792C4A44B33"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.323Z",
+            "checksum": "32cd965f7a41f4824a77dfe91ebf55deaeac20dc3568ec70ee025b0693b7f09b"
           }
         },
         {
@@ -334,9 +537,23 @@
             "ResultCode": "EXPERIMENT_FAILED",
             "IsSuccess": false,
             "Description": "The orchestrator failed during execution."
+          },
+          "primaryKey": {
+            "ID": "E4863040-5746-42BF-AD82-12AF30D28994"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.338Z",
+            "checksum": "394b48a26dab19517dc7881cac75b3b2a45a59c747ec5c199d8bd54ffadfa50c"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "B4F6985F-FCAF-4EF6-91F5-F3DE98715025"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T15:15:59.827Z",
+      "checksum": "f3a5ebb264fb4727785fc7d0b0079c0e01c9e607887fd1dbc3445d69a9aa4518"
     }
   },
   {
@@ -364,6 +581,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Id of the MJ: ML Models row to transition."
+          },
+          "primaryKey": {
+            "ID": "9CBB3CC3-3BAD-4B31-A82F-469192C52CF3"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.354Z",
+            "checksum": "fca5b05b4f6cb09ebe9a1f4f4cc876aac3d0941ae431eb9517846ee83db942ef"
           }
         },
         {
@@ -375,6 +599,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The lifecycle status to move the model to: Validated, Published, or Archived."
+          },
+          "primaryKey": {
+            "ID": "D70D7ADE-5394-40B5-97B1-DADCFE9A173F"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.371Z",
+            "checksum": "89ec7284b8b922dbd92f8bd6806fdc5740c1483d10f9fd15c1b90e0ea6d3383e"
           }
         },
         {
@@ -386,6 +617,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Human/agent sign-off that overrides the leakage gate. Required (true) to promote a leakage-flagged model; ignored for clean models."
+          },
+          "primaryKey": {
+            "ID": "556E4BEE-7D99-429A-84F0-B29C61C96C94"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.394Z",
+            "checksum": "5a65b90600c42455e387eeb127ee001aca7823c18c817ae163f63d0a49008bad"
           }
         },
         {
@@ -397,6 +635,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The model's new lifecycle status, on success."
+          },
+          "primaryKey": {
+            "ID": "9C746486-F0B1-47D3-9613-7E0892049027"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.412Z",
+            "checksum": "0f597c288fd4298799408f8b562eec9037cd11bf9ce8f8521b93463fd8b41b84"
           }
         }
       ],
@@ -407,6 +652,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Model transitioned to the target status."
+          },
+          "primaryKey": {
+            "ID": "8B1C4AEC-D5AF-4202-90B7-6B03F666DAAC"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.427Z",
+            "checksum": "e7a0a254a6e53cc0c43e7c17cd60f2ef79a08d5d293ccdd312a8b391ce0257c0"
           }
         },
         {
@@ -415,6 +667,13 @@
             "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
             "Description": "ModelID is missing, or TargetStatus is missing/not one of Validated/Published/Archived."
+          },
+          "primaryKey": {
+            "ID": "408C3D81-C59E-4CA0-9B26-2F92A3F9494B"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.442Z",
+            "checksum": "13fc440195503ea507161400a438d80a7ae37e9884dabc03aab40a0c5c631a9f"
           }
         },
         {
@@ -423,6 +682,13 @@
             "ResultCode": "LEAKAGE_SIGNOFF_REQUIRED",
             "IsSuccess": false,
             "Description": "The model was flagged for possible target leakage and cannot be promoted without SignOff=true."
+          },
+          "primaryKey": {
+            "ID": "4F4E1851-A9A2-4D76-8668-71E3A5FA3A58"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.456Z",
+            "checksum": "e90b767991f271c85addda28eac847e3c19696f32a8141701fee289c25a9c329"
           }
         },
         {
@@ -431,6 +697,13 @@
             "ResultCode": "MODEL_NOT_FOUND",
             "IsSuccess": false,
             "Description": "No ML Model exists with the provided ModelID."
+          },
+          "primaryKey": {
+            "ID": "FFFA9E1F-D0CE-481C-A38C-01FCD0CF773C"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.470Z",
+            "checksum": "973448b905e1db9c878d906780ed66caae530304b98646b6ab9efb8f747f92ea"
           }
         },
         {
@@ -439,6 +712,13 @@
             "ResultCode": "SAVE_FAILED",
             "IsSuccess": false,
             "Description": "The status transition failed to save."
+          },
+          "primaryKey": {
+            "ID": "52D24616-B50F-4660-8775-198FEC5D295A"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.484Z",
+            "checksum": "96cf14fb68c01f230d363e01e2f3e30aa1ca0cc048d074dffb83b3054ed17040"
           }
         },
         {
@@ -447,9 +727,23 @@
             "ResultCode": "PROMOTION_FAILED",
             "IsSuccess": false,
             "Description": "An unexpected error occurred while promoting the model."
+          },
+          "primaryKey": {
+            "ID": "896E1F71-8A61-480B-807E-0CCE7CF04D49"
+          },
+          "sync": {
+            "lastModified": "2026-06-27T15:16:00.497Z",
+            "checksum": "c17d3d3fa656d3b4c2c44d2cec56734c8a4281b13e1360172354bddbf94aa9b5"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "FD787F18-C8C4-4C50-8735-A029F41BC478"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T15:15:59.844Z",
+      "checksum": "ddd2a0ae24a426c548e308b6b9ceb773289f88f88a50620cc95b5b2e8ae2d2f0"
     }
   }
 ]

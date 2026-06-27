@@ -45,7 +45,7 @@ const USE_CASE_ICONS: Record<string, string> = {
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.scss', './ps-catalog.component.scss'],
   template: `
-    <div class="ps-panel ps-catalog">
+    <div class="ps-panel ps-catalog" data-testid="ps-catalog-panel">
       <!-- Guide me scenario picker -->
       <div class="ps-card guide-card">
         <div class="ps-card-body">
@@ -60,9 +60,9 @@ const USE_CASE_ICONS: Record<string, string> = {
             </div>
           </div>
           <div class="chips-row">
-            <div class="chips">
+            <div class="chips" data-testid="ps-catalog-scenarios">
               @for (uc of useCases; track uc.ID) {
-                <button class="chip" [class.on]="isSelected(uc.ID)" (click)="toggleUseCase(uc.ID)">
+                <button class="chip" [class.on]="isSelected(uc.ID)" data-testid="ps-catalog-scenario-chip" (click)="toggleUseCase(uc.ID)">
                   <i [class]="useCaseIcon(uc)"></i> {{ uc.Name }}
                 </button>
               }
@@ -72,9 +72,15 @@ const USE_CASE_ICONS: Record<string, string> = {
             }
           </div>
           @if (selectedUseCaseIds.length > 0) {
-            <div class="ps-callout info reco-banner">
+            <div class="ps-callout info reco-banner" data-testid="ps-catalog-reco-banner">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
-              <div [innerHTML]="recommendationText"></div>
+              @if (recommendation.primaries.length > 0) {
+                <div>For <strong>{{ recommendation.scenarioLabel }}</strong>, your top pick(s):
+                  <strong>{{ recommendation.primaries.join(' & ') }}</strong>. Stronger fits are pulled to the front.</div>
+              } @else {
+                <div>For <strong>{{ recommendation.scenarioLabel }}</strong>, no single primary stands out —
+                  review the strong fits at the top.</div>
+              }
             </div>
           }
         </div>
@@ -84,9 +90,9 @@ const USE_CASE_ICONS: Record<string, string> = {
       @if (cards.length === 0) {
         <div class="ps-card"><div class="ps-card-body ps-muted">No algorithms in the catalog yet.</div></div>
       } @else {
-        <div class="gallery">
+        <div class="gallery" data-testid="ps-catalog-gallery">
           @for (card of cards; track card.algo.ID) {
-            <div class="acard"
+            <div class="acard" data-testid="ps-catalog-card"
               [class.hit]="card.bestLevel === 'Primary'"
               [class.dim]="card.bestLevel && rank(card.bestLevel) <= 1">
               @if (card.bestLevel === 'Primary') {
@@ -190,17 +196,19 @@ export class PSCatalogComponent implements OnInit {
     }
   }
 
-  public get recommendationText(): string {
+  /**
+   * Structured recommendation data for the "Guide me" banner — rendered with plain template
+   * interpolation + `<strong>` markup (no `[innerHTML]`). `scenarioLabel` is the human-readable
+   * scenario name(s); `primaries` is the list of Primary-fit algorithm names.
+   */
+  public get recommendation(): { scenarioLabel: string; primaries: string[] } {
     const levels = this.engine.BestLevelsForScenarios(this.selectedUseCaseIds);
     const primaries = this.engine.Algorithms.filter((a) => levels.get(a.ID) === 'Primary').map((a) => a.Name);
-    const names =
+    const scenarioLabel =
       this.selectedUseCaseIds.length === 1
         ? this.useCases.find((u) => UUIDsEqual(u.ID, this.selectedUseCaseIds[0]))?.Name ?? 'your scenario'
         : `${this.selectedUseCaseIds.length} scenarios`;
-    if (primaries.length > 0) {
-      return `For <strong>${names}</strong>, your top pick(s): <strong>${primaries.join(' & ')}</strong>. Stronger fits are pulled to the front.`;
-    }
-    return `For <strong>${names}</strong>, no single primary stands out — review the strong fits at the top.`;
+    return { scenarioLabel, primaries };
   }
 
   private rebuildCards(): void {

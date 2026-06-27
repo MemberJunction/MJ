@@ -102,7 +102,8 @@
     "test:analytics": "node unit-testing/tools/run-all-tests.js",
     "test:aggregate": "node unit-testing/tools/aggregate-results.js ",
     "test:markdown": "node unit-testing/tools/generate-markdown.js ",
-    "test:integration": "tsx packages/MJServer/integration-test-scripts/run-all.ts"
+    "test:integration": "tsx packages/MJServer/integration-test-scripts/run-all.ts",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts"
   },
   "repository": {
     "type": "git",

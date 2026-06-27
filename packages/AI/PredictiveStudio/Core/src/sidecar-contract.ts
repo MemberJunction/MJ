@@ -59,6 +59,8 @@ export interface PreprocessingOp {
   strategy?: 'mean' | 'median' | 'mode' | 'constant';
   /** Fill value when `strategy` is `constant`. */
   fillValue?: string | number;
+  /** Number of bins to fit when `op` is `bin`. The sidecar fits the edges; absent ⇒ sidecar default. */
+  bins?: number;
 }
 
 /**

@@ -94,7 +94,7 @@ export const SAMPLE_ACTIVITY: PSActivityItem[] = [
     icon: 'fa-solid fa-arrow-up',
     title: 'Renewal Propensity v4 promoted to Published',
     detail: 'XGBoost · holdout AUC 0.864 · now serving production scoring',
-    when: '22 minutes ago · by Amith N.',
+    when: '22 minutes ago',
   },
   {
     kind: 'run',

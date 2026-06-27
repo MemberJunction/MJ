@@ -105,6 +105,28 @@ describe('FeatureAssemblyExecutor — member retention assembly', () => {
     expect(result.assembledAsOf).toBeDefined();
   });
 
+  it('emits a bin op carrying the configured bin count (NOT the sidecar default)', async () => {
+    const members: SourceRow[] = [{ ID: 'm1', score: 5, Renewed: 1 }];
+    const dataAccess = new InMemoryDataAccess({ Members: members });
+    const result = await new FeatureAssemblyExecutor().assemble({
+      targetEntityName: 'Members',
+      records: members,
+      sources,
+      steps: {
+        Steps: [
+          { Id: 's', Kind: 'select', Columns: ['score'] },
+          { Id: 'b', Kind: 'bin', Column: 'score', Bins: 7 },
+        ],
+      },
+      asOf: { Mode: 'none' },
+      leakageGuard: noLeakGuard,
+      targetVariable: 'Renewed',
+      dataAccess,
+    });
+    // The configured count (7) must travel in `bins` — the sidecar otherwise defaults to 4.
+    expect(result.preprocessing).toEqual([{ op: 'bin', col: 'score', bins: 7 }]);
+  });
+
   it('zero-fills embedding dims when no persisted vector exists (never regenerates)', async () => {
     const members: SourceRow[] = [{ ID: 'm1', tenure: 5 }];
     const dataAccess = new InMemoryDataAccess({ Members: members }, {}); // no embeddings

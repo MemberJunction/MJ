@@ -9,4 +9,5 @@
 export * from './data-access';
 export * from './as-of';
 export * from './leakage-guard';
+export * from './vision-llm';
 export * from './feature-assembly-executor';

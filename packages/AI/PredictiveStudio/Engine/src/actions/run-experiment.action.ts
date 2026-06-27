@@ -22,7 +22,8 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import type { ModelingPlanSpec, Budget } from '@memberjunction/predictive-studio-core';
+import type { Budget } from '@memberjunction/predictive-studio-core';
+import { validateModelingPlanSpec, validateBudget } from '@memberjunction/predictive-studio-core';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
 import type { ExperimentDeps, ExperimentRunOptions, ExperimentSessionResult } from '../experiment/types';
@@ -42,13 +43,20 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
   /** @inheritdoc */
   protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
     try {
-      const plan = this.parsePlan(params);
-      if (!plan) {
+      const rawPlan = this.getJsonObjectParam(params, 'PlanSpec');
+      if (!rawPlan) {
         return this.fail(
           'VALIDATION_ERROR',
           'PlanSpec parameter is required and must be a JSON modeling plan (the approved plan to execute)',
         );
       }
+      // Validate the untrusted JSON against the Core schema BEFORE delegating —
+      // no blind double-cast of an arbitrary object into a ModelingPlanSpec.
+      const validation = validateModelingPlanSpec(rawPlan);
+      if (!validation.ok) {
+        return this.fail('VALIDATION_ERROR', `PlanSpec is not a valid modeling plan: ${validation.error}`);
+      }
+      const plan = validation.value;
       if (plan.Approved !== true) {
         return this.fail(
           'PLAN_NOT_APPROVED',
@@ -84,16 +92,19 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
 
   // ----- param parsing -------------------------------------------------------
 
-  /** Parse the `PlanSpec` JSON param into a {@link ModelingPlanSpec}. */
-  protected parsePlan(params: RunActionParams): ModelingPlanSpec | undefined {
-    const raw = this.getJsonObjectParam(params, 'PlanSpec');
-    return raw ? (raw as unknown as ModelingPlanSpec) : undefined;
-  }
-
-  /** Parse the optional `Budget` JSON param into a {@link Budget}. */
+  /**
+   * Parse + VALIDATE the optional `Budget` JSON param into a {@link Budget}.
+   * Returns `undefined` when absent OR malformed (a malformed budget is not a hard
+   * failure — the plan's `ProposedBudget` is used as the fallback downstream), but
+   * never a blind cast of an arbitrary object.
+   */
   protected parseBudget(params: RunActionParams): Budget | undefined {
     const raw = this.getJsonObjectParam(params, 'Budget');
-    return raw ? (raw as Budget) : undefined;
+    if (!raw) {
+      return undefined;
+    }
+    const validation = validateBudget(raw);
+    return validation.ok ? validation.value : undefined;
   }
 
   /**

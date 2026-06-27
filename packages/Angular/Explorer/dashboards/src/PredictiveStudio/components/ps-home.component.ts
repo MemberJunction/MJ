@@ -16,9 +16,9 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.scss', './ps-home.component.scss'],
   template: `
-    <div class="ps-panel ps-home">
+    <div class="ps-panel ps-home" data-testid="ps-home-panel">
       <!-- Hero -->
-      <div class="hero">
+      <div class="hero" data-testid="ps-home-hero">
         <h2>Build a predictive model</h2>
         <div class="sub">
           Predict which members will renew this cycle. Bring your data, start from a proven template,
@@ -28,7 +28,7 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
           <div class="s"><div class="n">{{ publishedCount }}</div><div class="l">Published</div></div>
           <div class="s"><div class="n">{{ activeExperiments }}</div><div class="l">Active Experiments</div></div>
           <div class="s"><div class="n">{{ bestHoldout }}</div><div class="l">Best Holdout AUC</div></div>
-          <div class="s"><div class="n">48,210</div><div class="l">Scored this week</div></div>
+          <div class="s"><div class="n">{{ scoredThisWeek }}</div><div class="l">Scored this week</div></div>
         </div>
         <div class="hero-actions">
           <button mjButton variant="secondary" size="sm" (click)="navigate.emit('pipelines')">
@@ -41,20 +41,20 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
       </div>
 
       <!-- Entry paths -->
-      <div class="paths">
-        <div class="path" (click)="navigate.emit('pipelines')">
+      <div class="paths" data-testid="ps-home-paths">
+        <div class="path" data-testid="ps-home-path-data" (click)="navigate.emit('pipelines')">
           <div class="ic"><i class="fa-solid fa-table-cells-large"></i></div>
           <h4>Start from data</h4>
           <p>Point Studio at a Member view, pick your renewal target, and we'll profile features automatically.</p>
           <button mjButton variant="primary" size="sm"><i class="fa-solid fa-arrow-right-to-bracket"></i> Choose dataset</button>
         </div>
-        <div class="path" (click)="navigate.emit('catalog')">
+        <div class="path" data-testid="ps-home-path-template" (click)="navigate.emit('catalog')">
           <div class="ic green"><i class="fa-solid fa-layer-group"></i></div>
           <h4>Use a template</h4>
           <p>Renewal Propensity (XGBoost) is pre-wired with cohort filters and the standard FY holdout split.</p>
           <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-clone"></i> Browse templates</button>
         </div>
-        <div class="path" (click)="askAgent.emit()">
+        <div class="path" data-testid="ps-home-path-agent" (click)="askAgent.emit()">
           <div class="ic purple"><i class="fa-solid fa-robot"></i></div>
           <h4>Ask the agent</h4>
           <p>Describe the goal in plain English. The agent proposes algorithms, features, and a budget.</p>
@@ -93,7 +93,7 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
               <h3>This Week</h3>
             </div>
             <div class="ps-card-body">
-              <div class="mini-kpi"><div class="ps-muted ps-small">Records scored</div><div class="v">48,210</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Records scored</div><div class="v">{{ scoredThisWeek }}</div></div>
               <div class="mini-kpi"><div class="ps-muted ps-small">Best holdout AUC</div><div class="v">{{ bestHoldout }}</div></div>
               <div class="mini-kpi"><div class="ps-muted ps-small">Experiment runs</div><div class="v">{{ engine.TrainingRuns.length || 12 }}</div></div>
               <div class="mini-kpi"><div class="ps-muted ps-small">Open review items</div><div class="v">1 <span class="ps-badge amber">leakage</span></div></div>
@@ -134,7 +134,13 @@ export class PSHomeComponent {
     return live || 2;
   }
 
+  // TODO: bind to live data — no holdout-metric / weekly-scoring-volume surface is wired into
+  // PredictiveStudioEngine yet, so these two headline figures are representative demo values.
   public get bestHoldout(): string {
     return '0.864';
+  }
+
+  public get scoredThisWeek(): string {
+    return '48,210';
   }
 }

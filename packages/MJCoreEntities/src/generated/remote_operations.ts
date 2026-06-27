@@ -11,6 +11,273 @@
 **************************************************/
 import { BaseRemotableOperation } from "@memberjunction/core";
 
+/** The control action to apply to a running/paused experiment session. */
+export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
+
+/** Input for `PredictiveStudio.ControlExperimentSession`. */
+export interface PredictiveStudioControlExperimentSessionInput {
+    /** Id of the `MJ: Experiment Sessions` row to control. */
+    sessionId: string;
+    /** The control action: pause a running session, resume a paused one, or cancel. */
+    action: PredictiveStudioExperimentSessionAction;
+}
+
+/** Output of `PredictiveStudio.ControlExperimentSession` — the session's status after the control action. */
+export interface PredictiveStudioControlExperimentSessionOutput {
+    /** The session's status after the control action (e.g. `Paused` / `Running` / `Cancelled`). */
+    status: string;
+}
+
+/** The lifecycle status to transition an ML Model to. */
+export type PredictiveStudioModelTargetStatus = 'Validated' | 'Published' | 'Archived';
+
+/** Input for `PredictiveStudio.PromoteModel`. */
+export interface PredictiveStudioPromoteModelInput {
+    /** Id of the `MJ: ML Models` row to transition. */
+    modelId: string;
+    /** The lifecycle status to move the model to. */
+    targetStatus: PredictiveStudioModelTargetStatus;
+    /** Human/agent sign-off that overrides the leakage gate. Required (true) to promote a leakage-flagged model; ignored for clean models. */
+    signOff?: boolean;
+    /** Optional human-readable reason recorded with the promotion. */
+    reason?: string;
+}
+
+/** Output of `PredictiveStudio.PromoteModel` — whether the transition was applied + the new status. */
+export interface PredictiveStudioPromoteModelOutput {
+    /** True when the model was transitioned to the target status. */
+    promoted: boolean;
+    /** The model's new lifecycle status on success (the target status); the unchanged current status when not promoted. */
+    status: string;
+}
+
+/**
+ * Runtime scope override for a Feature Pipeline run. A Feature Pipeline is a
+ * categorized `MJ: Record Processes` row, so this mirrors the Record Process
+ * runtime scope shapes (records / view / list / filter). When omitted, the
+ * pipeline's stored scope is used.
+ */
+export type PredictiveStudioFeaturePipelineScope =
+    | { Kind: 'records'; RecordIDs: string[] }
+    | { Kind: 'view'; ViewID: string }
+    | { Kind: 'list'; ListID: string }
+    | { Kind: 'filter'; Filter?: string };
+
+/** Input for `PredictiveStudio.RunFeaturePipeline`. */
+export interface PredictiveStudioRunFeaturePipelineInput {
+    /** Id of the `MJ: Record Processes` row (a Feature Pipeline) to run. */
+    featurePipelineID: string;
+    /** When set, processes just this single record instead of the configured/scope rows. */
+    singleRecordID?: string;
+    /** Compute the per-record feature values WITHOUT writing them back (preview). */
+    dryRun?: boolean;
+    /** Runtime scope override (selected rows / a view / list / filter), used instead of the stored scope. */
+    scope?: PredictiveStudioFeaturePipelineScope;
+}
+
+/** Output of `PredictiveStudio.RunFeaturePipeline` — the underlying Record Process run summary. */
+export interface PredictiveStudioRunFeaturePipelineOutput {
+    /** Id of the persisted `MJ: Process Runs` row produced by the underlying Record Process. */
+    processRunID?: string;
+    /** Run-level status (`Completed` / `Failed` / `Cancelled` / …). */
+    status: string;
+    /** Records the run touched. */
+    processed: number;
+    /** Records whose features were written back (0 in dry-run). */
+    written: number;
+    /** Records skipped (no rule matched / nothing changed). */
+    skipped: number;
+    /** Records that errored. */
+    error: number;
+    /** Run-level error detail when `status` is not `Completed`. */
+    errorMessage?: string;
+}
+
+/**
+ * The scope of records to score. Mirrors the Record Set Processing scope shapes
+ * (records / view / list / filter / single). Exactly one shape should be populated;
+ * the runner resolves it into a concrete record set.
+ */
+export interface PredictiveStudioScoringScope {
+    /** Explicit record ids / primary-key objects to score. */
+    records?: Array<string | Record<string, unknown>>;
+    /** A `User Views` id whose rows are scored. */
+    viewId?: string;
+    /** A `Lists` id whose member rows are scored. */
+    listId?: string;
+    /** An entity name + SQL filter selecting the rows to score. */
+    filter?: { entityName: string; extraFilter?: string; maxRows?: number };
+    /** A single record (entity + primary key) to score. */
+    single?: { entityName: string; primaryKey: Record<string, unknown> };
+}
+
+/**
+ * Optional write-back directive. `true` enables write-back with the model's default
+ * mapping; an object supplies an explicit `OutputMapping` (target column / child
+ * record). When omitted, predictions are returned ephemerally.
+ */
+export type PredictiveStudioWriteBackDirective = boolean | { OutputMapping: Record<string, unknown> };
+
+/** Input for `PredictiveStudio.ScoreRecordSet`. */
+export interface PredictiveStudioScoreRecordSetInput {
+    /** Id of the `MJ: ML Models` row to score with. */
+    modelId: string;
+    /** The records to score — populate exactly one selector on the scope. */
+    scope: PredictiveStudioScoringScope;
+    /** Compute the predictions WITHOUT writing them back (preview) when true/omitted with no write-back. */
+    dryRun?: boolean;
+    /** Optional write-back directive; when omitted (or false) predictions are returned ephemerally. */
+    writeBack?: PredictiveStudioWriteBackDirective;
+}
+
+/** A single ephemeral prediction surfaced when write-back is NOT requested. */
+export interface PredictiveStudioEphemeralPrediction {
+    /** The scored record's id (when known). */
+    recordId?: string;
+    /** Numeric model output (probability or value). */
+    score: number;
+    /** Predicted class (classification only). */
+    class?: string;
+}
+
+/** Output of `PredictiveStudio.ScoreRecordSet` — the run summary. */
+export interface PredictiveStudioScoreRecordSetOutput {
+    /** Number of records successfully scored. */
+    scored: number;
+    /** Number of records that failed to score. */
+    failed: number;
+    /** Number of records skipped (no selector matched / nothing to score). */
+    skipped: number;
+    /** True when the runner wrote scores back to the target (predictions are then NOT returned ephemerally). */
+    wroteBack: boolean;
+    /** Ephemeral predictions, present only when `wroteBack` is false. */
+    predictions?: PredictiveStudioEphemeralPrediction[];
+}
+
+/**
+ * Explicit resource budget for an experiment session — the bounded-autonomy
+ * guardrail. Mirrors `Budget` from `@memberjunction/predictive-studio-core`.
+ */
+export interface PredictiveStudioBudget {
+    /** Max total compute cost the session may spend. */
+    MaxComputeCost?: number;
+    /** Max number of training runs/iterations the session may execute. */
+    MaxRuns?: number;
+    /** Max wall-clock minutes the session may run. */
+    MaxWallclockMinutes?: number;
+}
+
+/**
+ * The strongly-typed modeling plan to execute. Mirrors `ModelingPlanSpec` from
+ * `@memberjunction/predictive-studio-core` — the deterministic orchestrator runs
+ * its `ProposedExperiments` as waves. Must be approved (`Approved=true`) — execution
+ * is gated on user approval.
+ */
+export interface PredictiveStudioModelingPlanSpec {
+    /** Business objective, refined from the user's initial goal. */
+    Goal: string;
+    /** Precise definition of what is being predicted. */
+    TargetDefinition: {
+        /** Training-unit entity (e.g. "Members"). */
+        EntityName: string;
+        /** Label expression/column. */
+        TargetVariable: string;
+        /** Classification or regression. */
+        ProblemType: 'classification' | 'regression';
+        /** The deterministic success metric driving the search (e.g. AUC / F1 / Accuracy / RMSE). */
+        SuccessMetric: string;
+        /** Optional point-in-time assembly strategy. */
+        AsOfStrategy?: { Mode: 'none' | 'column' | 'offset'; Column?: string; OffsetDays?: number };
+    };
+    /** Candidate feed-in sources proposed by the Data Scout, each with rationale. */
+    CandidateSources: Array<{ Kind: 'Entity' | 'Query' | 'ExternalEntity' | 'VectorSet' | 'FeaturePipeline'; Ref: string; Why: string }>;
+    /** Candidate features proposed by the Data Scout, each with rationale. */
+    CandidateFeatures: Array<{ Name: string; SourceRef: string; Kind: 'numeric' | 'categorical' | 'embedding' | 'llm-derived'; Why: string }>;
+    /** Leakage risks identified by the Data Scout and the chosen action per field. */
+    LeakageNotes: Array<{ Field: string; Risk: string; Action: 'exclude' | 'allow' }>;
+    /** Ranked experiments proposed by the Experiment Designer (feature combos × algorithms × hyperparameters). */
+    ProposedExperiments: Array<{
+        Label: string;
+        AlgorithmName: string;
+        FeatureSet: string[];
+        Hyperparameters?: Record<string, unknown>;
+        Rationale: string;
+        Priority: number;
+    }>;
+    /** Validation strategy for the search. */
+    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
+    /** Proposed resource budget for the experiment session. */
+    ProposedBudget: PredictiveStudioBudget;
+    /** User approval gate — execution does not begin until this is true. */
+    Approved?: boolean;
+}
+
+/** Input for `PredictiveStudio.StartExperimentSession`. */
+export interface PredictiveStudioStartExperimentSessionInput {
+    /** Optional id of an existing `MJ: Experiments` definition to attach the session to. When omitted, a new durable Experiment is created from the plan. */
+    experimentId?: string;
+    /** The approved modeling plan to execute. Must have `Approved=true`. */
+    planSpec: PredictiveStudioModelingPlanSpec;
+    /** Optional budget override; when omitted the plan's `ProposedBudget` is used. */
+    budget?: PredictiveStudioBudget;
+    /** Optional human-readable session name (defaults to one derived from the plan goal). */
+    sessionName?: string;
+}
+
+/** Output of `PredictiveStudio.StartExperimentSession` — the created/executed session. */
+export interface PredictiveStudioStartExperimentSessionOutput {
+    /** Id of the `MJ: Experiment Sessions` row that was started. */
+    sessionId: string;
+    /** Id of the durable `MJ: Experiments` definition the session runs under. */
+    experimentId: string;
+    /** The session's status after starting (`Running`, or `Completed`/`Paused` if it ran to a bound synchronously). */
+    status: string;
+}
+
+/** Optional point-in-time assembly strategy for the train (mirrors the pipeline's stored AsOfStrategy). */
+export interface PredictiveStudioTrainAsOf {
+    /** How to anchor feature assembly in time: no anchoring, a column on the row, or an offset before the label event. */
+    Mode: 'none' | 'column' | 'offset';
+    /** Column carrying the as-of timestamp (when `Mode` is `column`). */
+    Column?: string;
+    /** Days before the label event to assemble features (when `Mode` is `offset`). */
+    OffsetDays?: number;
+}
+
+/** Input for `PredictiveStudio.TrainModel`. */
+export interface PredictiveStudioTrainModelInput {
+    /** Id of the `MJ: ML Training Pipelines` row to train. */
+    pipelineId: string;
+    /** Optional `MJ: Experiment Session Iterations` id this run belongs to (NULL for a one-off standalone train). */
+    experimentSessionIterationId?: string;
+    /** Optional cap on the number of training rows pulled from the target entity. */
+    maxRows?: number;
+    /** Optional primary-key field on the target entity (defaults to `ID`). */
+    primaryKeyField?: string;
+    /** Optional per-record label-event dates (keyed by record primary key), required when `asOf.Mode` is `offset`. */
+    labelEventDates?: Record<string, string>;
+    /** Optional as-of strategy override; when omitted the pipeline's stored `AsOfStrategy` is used. */
+    asOf?: PredictiveStudioTrainAsOf;
+    /** Sidecar version string recorded in the model lineage for provenance. */
+    sidecarVersion?: string;
+}
+
+/** Output of `PredictiveStudio.TrainModel` — the produced (Draft) model + its honest metrics. */
+export interface PredictiveStudioTrainModelOutput {
+    /** Id of the produced (Draft) `MJ: ML Models` row. */
+    modelId: string;
+    /** Id of the `MJ: ML Training Runs` row recording this attempt. */
+    trainingRunId: string;
+    /** Monotonic model version under the pipeline (`max(Version)+1`). */
+    version: number;
+    /** JSON of the metrics scored exactly once on the locked holdout the search never saw (the honest performance number). */
+    holdoutMetrics?: string;
+    /** True when one feature dominates the model's predictions (possible target leakage). A flagged model stays Draft and needs human sign-off before promotion. */
+    leakageFlagged: boolean;
+    /** Lifecycle status of the produced model (always `Draft` immediately after training). */
+    status: string;
+}
+
 /** Input for the pause / resume / cancel control operations. */
 export interface ProcessRunControlInput {
     /** The `MJ: Process Runs` row to control. */
@@ -90,6 +357,102 @@ export interface TemplateRunOutput {
     output: string;
     /** Wall-clock render time in milliseconds. */
     executionTimeMs?: number;
+}
+
+// ============================================================
+// PredictiveStudio.ControlExperimentSession — Control Experiment Session
+// ============================================================
+/**
+ * Control Experiment Session
+ * Pause, resume, or cancel an MJ: Experiment Sessions run (honored at the next wave checkpoint). Returns the session's status after the control action. A quick lifecycle transition over the experiment orchestrator's session state.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.ControlExperimentSession'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioControlExperimentSessionOperation extends BaseRemotableOperation<PredictiveStudioControlExperimentSessionInput, PredictiveStudioControlExperimentSessionOutput> {
+    public readonly OperationKey = "PredictiveStudio.ControlExperimentSession";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// PredictiveStudio.PromoteModel — Promote ML Model
+// ============================================================
+/**
+ * Promote ML Model
+ * Transition an MJ: ML Models row through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless signOff=true. Lifecycle-only: never edits metrics or artifact, only Status. Returns whether the model was promoted and its new status. Delegates to the ProductionModelPromotionGate in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.PromoteModel'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioPromoteModelOperation extends BaseRemotableOperation<PredictiveStudioPromoteModelInput, PredictiveStudioPromoteModelOutput> {
+    public readonly OperationKey = "PredictiveStudio.PromoteModel";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// PredictiveStudio.RunFeaturePipeline — Run Feature Pipeline
+// ============================================================
+/**
+ * Run Feature Pipeline
+ * Run a Feature Pipeline — a categorized MJ: Record Processes row — over an optional runtime scope (selected records / view / list / filter), optionally as a dry-run preview that computes feature values without writing. Returns processed/written/skipped/error counts plus the MJ: Process Runs id. Runs the underlying Record Process (no dedicated entity); delegates to the Record Process substrate.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.RunFeaturePipeline'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioRunFeaturePipelineOperation extends BaseRemotableOperation<PredictiveStudioRunFeaturePipelineInput, PredictiveStudioRunFeaturePipelineOutput> {
+    public readonly OperationKey = "PredictiveStudio.RunFeaturePipeline";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// PredictiveStudio.ScoreRecordSet — Score Record Set
+// ============================================================
+/**
+ * Score Record Set
+ * Score a set of records with a trained MJ: ML Models row. The scope selects records (explicit ids / a saved view / a list / an entity+filter / a single record). Optionally a dry-run preview, or a write-back to the target. Returns scored/failed/skipped counts plus either the ephemeral predictions or write-back confirmation. Delegates to the MLModelInferenceProcessor scoring work type in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.ScoreRecordSet'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioScoreRecordSetOperation extends BaseRemotableOperation<PredictiveStudioScoreRecordSetInput, PredictiveStudioScoreRecordSetOutput> {
+    public readonly OperationKey = "PredictiveStudio.ScoreRecordSet";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// PredictiveStudio.StartExperimentSession — Start Experiment Session
+// ============================================================
+/**
+ * Start Experiment Session
+ * Start an experiment session from an approved ModelingPlanSpec — running its proposed experiments in waves under a Budget, maintaining a leaderboard. Optionally attaches to an existing MJ: Experiments definition or creates a new one. Returns the session id, experiment id, and initial status. Delegates to ExperimentOrchestrator.runSession in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.StartExperimentSession'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotableOperation<PredictiveStudioStartExperimentSessionInput, PredictiveStudioStartExperimentSessionOutput> {
+    public readonly OperationKey = "PredictiveStudio.StartExperimentSession";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// PredictiveStudio.TrainModel — Train ML Model
+// ============================================================
+/**
+ * Train ML Model
+ * Train a predictive model from an MJ: ML Training Pipelines definition. Carves a locked holdout (point-in-time/as-of aware), trains via the sidecar, persists an immutable Draft MJ: ML Models row, and flags single-feature dominance (possible target leakage). Returns the new model id, its honest holdout metrics, the leakage flag, and the model version. Delegates to TrainingEngine.trainModel in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.TrainModel'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<PredictiveStudioTrainModelInput, PredictiveStudioTrainModelOutput> {
+    public readonly OperationKey = "PredictiveStudio.TrainModel";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
 }
 
 // ============================================================

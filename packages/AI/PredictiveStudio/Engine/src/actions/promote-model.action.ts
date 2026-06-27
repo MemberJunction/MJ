@@ -38,14 +38,23 @@ export interface PromoteModelRequest {
   modelId: string;
   targetStatus: PromotableStatus;
   signOff: boolean;
+  /**
+   * Justification for a sign-off override. REQUIRED (non-empty) when `signOff`
+   * overrides a leakage-FLAGGED model — the gate refuses the override without a
+   * reason, then persists a sign-off audit note. Ignored when the model isn't
+   * flagged (sign-off has nothing to override).
+   */
+  reason?: string;
   contextUser?: UserInfo;
   provider?: IMetadataProvider;
 }
 
 /** Outcome of a promotion attempt. */
 export type PromoteModelOutcome =
-  | { kind: 'promoted'; newStatus: PromotableStatus }
+  | { kind: 'promoted'; newStatus: PromotableStatus; signOffNote?: string }
   | { kind: 'refused-leakage'; topFeature?: string; topShare?: number }
+  | { kind: 'signoff-reason-required'; topFeature?: string; topShare?: number }
+  | { kind: 'invalid-transition'; currentStatus: string; targetStatus: PromotableStatus }
   | { kind: 'not-found' }
   | { kind: 'save-failed'; message: string };
 
@@ -84,12 +93,14 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
       }
 
       const signOff = this.getBooleanParam(params, 'SignOff', false);
+      const reason = this.getStringParam(params, 'Reason');
 
       const gate = this.createGate();
       const outcome = await gate.promote({
         modelId,
         targetStatus,
         signOff,
+        reason,
         contextUser: params.ContextUser,
         provider: params.Provider,
       });
@@ -106,9 +117,25 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
     switch (outcome.kind) {
       case 'promoted':
         this.addOutputParam(params, 'Status', outcome.newStatus);
-        return this.ok(params, `Model ${modelId} transitioned to ${outcome.newStatus}.`);
+        if (outcome.signOffNote) {
+          this.addOutputParam(params, 'SignOffNote', outcome.signOffNote);
+        }
+        return this.ok(
+          params,
+          outcome.signOffNote
+            ? `Model ${modelId} transitioned to ${outcome.newStatus}. ${outcome.signOffNote}`
+            : `Model ${modelId} transitioned to ${outcome.newStatus}.`,
+        );
       case 'refused-leakage':
         return this.fail('LEAKAGE_SIGNOFF_REQUIRED', this.leakageRefusalMessage(modelId, outcome));
+      case 'signoff-reason-required':
+        return this.fail('SIGNOFF_REASON_REQUIRED', this.signOffReasonRequiredMessage(modelId, outcome));
+      case 'invalid-transition':
+        return this.fail(
+          'INVALID_TRANSITION',
+          `Model ${modelId} cannot move from '${outcome.currentStatus}' to '${outcome.targetStatus}'. ` +
+            'Allowed lifecycle: Draft → Validated → Published → Archived (with Published ↔ Archived).',
+        );
       case 'not-found':
         return this.fail('MODEL_NOT_FOUND', `ML Model '${modelId}' was not found.`);
       case 'save-failed':
@@ -128,6 +155,26 @@ export class PredictiveStudioPromoteModelAction extends BasePredictiveStudioActi
     return (
       `Model ${modelId} was flagged for possible target leakage and cannot be promoted without sign-off.${detail} ` +
       'A human must review the model and re-run this action with SignOff=true to confirm the result is legitimate.'
+    );
+  }
+
+  /**
+   * Compose the message when a sign-off override of a leakage-flagged model was
+   * requested WITHOUT a justification reason — the override is refused until one is
+   * supplied so the audit trail is never empty.
+   */
+  protected signOffReasonRequiredMessage(
+    modelId: string,
+    outcome: Extract<PromoteModelOutcome, { kind: 'signoff-reason-required' }>,
+  ): string {
+    const detail =
+      outcome.topFeature != null
+        ? ` (one feature, "${outcome.topFeature}", dominates this model's predictions)`
+        : '';
+    return (
+      `Model ${modelId} is leakage-flagged${detail} and SignOff=true was supplied without a Reason. ` +
+      'Overriding a leakage flag requires a non-empty Reason so the sign-off is auditable. ' +
+      'Re-run this action with both SignOff=true and a Reason explaining why the result is legitimate.'
     );
   }
 

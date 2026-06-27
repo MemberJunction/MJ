@@ -39,7 +39,7 @@ const NODE_H = 78;
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.scss', './ps-pipelines.component.scss'],
   template: `
-    <div class="ps-panel ps-pipelines">
+    <div class="ps-panel ps-pipelines" data-testid="ps-pipelines-panel">
       <div class="builder">
         <!-- Canvas column -->
         <div class="canvas-wrap">
@@ -54,14 +54,15 @@ const NODE_H = 78;
             <span class="ps-small ps-muted"><i class="fa-solid fa-circle-nodes"></i> {{ nodes.length }} nodes</span>
           </div>
 
-          <div class="ps-flow big">
-            <svg class="ps-edges" [attr.viewBox]="'0 0 ' + canvasW + ' ' + canvasH" preserveAspectRatio="none">
+          <div class="ps-flow big" data-testid="ps-pipelines-canvas">
+            <svg class="ps-edges" data-testid="ps-pipelines-edges" [attr.viewBox]="'0 0 ' + canvasW + ' ' + canvasH" preserveAspectRatio="none">
               @for (edge of edges; track edge.from + edge.to) {
                 <path [attr.d]="edgePath(edge)"></path>
               }
             </svg>
             @for (node of nodes; track node.id) {
-              <div class="ps-node" [class]="node.type" [class.selected]="node.id === selectedId"
+              <div class="ps-node" data-testid="ps-pipelines-node" [attr.data-node-id]="node.id"
+                [class]="node.type" [class.selected]="node.id === selectedId"
                 [style.left.px]="node.x" [style.top.px]="node.y" (click)="selectNode(node.id)">
                 <div class="nh">
                   <i class="tile" [class]="node.icon"></i>
@@ -95,12 +96,12 @@ const NODE_H = 78;
         </div>
 
         <!-- Inspector column -->
-        <div class="ps-col inspector">
+        <div class="ps-col inspector" data-testid="ps-pipelines-inspector">
           <div class="ps-card insp">
             <div class="ihead">
               <i class="tile" [class]="selectedNode.icon" [attr.data-type]="selectedNode.type"></i>
               <div>
-                <h3>{{ selectedNode.title }}</h3>
+                <h3 data-testid="ps-pipelines-inspector-title">{{ selectedNode.title }}</h3>
                 <div class="ps-small ps-muted">{{ nodeTypeLabel(selectedNode.type) }} · selected</div>
               </div>
             </div>

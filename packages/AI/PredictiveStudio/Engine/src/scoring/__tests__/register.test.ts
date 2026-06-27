@@ -1,4 +1,5 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
+import { RecordProcessorRegistry } from '@memberjunction/record-set-processor-base';
 
 import {
   MLModelInferenceProcessor,
@@ -8,6 +9,7 @@ import {
 import {
   resolveMLInferenceProcessor,
   isMLInferenceWorkType,
+  registerMLScoringProcessor,
   ML_INFERENCE_WORK_TYPES,
 } from '../register';
 import { InMemoryArtifactLoader } from '../artifact-loader';
@@ -60,5 +62,44 @@ describe('resolveMLInferenceProcessor', () => {
   it('returns null for a non-ML work type (caller falls through to built-in processors)', () => {
     expect(resolveMLInferenceProcessor('Action', { modelId: 'model-1', deps })).toBeNull();
     expect(resolveMLInferenceProcessor(undefined, { modelId: 'model-1', deps })).toBeNull();
+  });
+});
+
+describe('registerMLScoringProcessor', () => {
+  afterEach(() => {
+    for (const wt of ML_INFERENCE_WORK_TYPES) {
+      RecordProcessorRegistry.Instance.Unregister(wt);
+    }
+  });
+
+  it('registers the ML scorer into the Record Set Processing registry for both work-type keys', () => {
+    registerMLScoringProcessor(deps);
+    expect(RecordProcessorRegistry.Instance.Has(ML_INFERENCE_WORK_TYPE)).toBe(true);
+    expect(RecordProcessorRegistry.Instance.Has(ML_INFERENCE_WORK_TYPE_ALIAS)).toBe(true);
+  });
+
+  it('makes the registry resolve an MLModelInferenceProcessor for the ML work type (modelId from Configuration)', () => {
+    registerMLScoringProcessor(deps);
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE,
+      Configuration: JSON.stringify({ modelId: 'model-1' }),
+    });
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+  });
+
+  it('resolves via the alias work-type key too', () => {
+    registerMLScoringProcessor(deps);
+    const proc = RecordProcessorRegistry.Instance.Resolve({
+      WorkType: ML_INFERENCE_WORK_TYPE_ALIAS,
+      Configuration: JSON.stringify({ modelId: 'model-1' }),
+    });
+    expect(proc).toBeInstanceOf(MLModelInferenceProcessor);
+  });
+
+  it('throws when the Configuration is missing a modelId', () => {
+    registerMLScoringProcessor(deps);
+    expect(() =>
+      RecordProcessorRegistry.Instance.Resolve({ WorkType: ML_INFERENCE_WORK_TYPE, Configuration: '{}' }),
+    ).toThrow(/modelId/);
   });
 });

@@ -33,6 +33,11 @@ export * from './experiment';
 // score / experiment / promote), so agents / UI / workflows can invoke them (§12).
 export * from './actions';
 
+// Maintenance — MaintenanceEngine (staleness detection / scheduled re-scoring /
+// retraining triggers + challenger-vs-incumbent promotion recommendation), the
+// RetrainingPolicy model, its DI seams, and the default honest drift detector (§12 / SP10).
+export * from './maintenance';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.

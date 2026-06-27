@@ -13,7 +13,7 @@ Endpoints:
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
@@ -97,17 +97,27 @@ def _feature_columns(req: TrainRequest) -> List[str]:
     return [c for c in req.data.columns if c != req.target]
 
 
-def _split_holdout(
-    matrix: np.ndarray, y: np.ndarray, holdout_size, random_state: int
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def _split_holdout_indices(
+    matrix: np.ndarray,
+    y: np.ndarray,
+    holdout_size,
+    random_state: int,
+    is_classification: bool,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Split row INDICES into (dev, holdout). Index-based so the caller can carry
+    the raw dev rows alongside the transformed matrix (needed for the anti-skew
+    validation split). When no holdout is configured, all rows are dev."""
     from sklearn.model_selection import train_test_split
 
+    n = matrix.shape[0]
+    all_idx = np.arange(n)
     if not holdout_size or holdout_size <= 0 or holdout_size >= 1:
-        return matrix, np.empty((0, matrix.shape[1])), y, np.empty((0,), dtype=y.dtype)
-    stratify = y if _looks_like_classes(y) and len(np.unique(y)) > 1 else None
-    return train_test_split(
-        matrix, y, test_size=holdout_size, random_state=random_state, stratify=stratify
+        return all_idx, np.empty((0,), dtype=int)
+    stratify = y if (is_classification or _looks_like_classes(y)) and len(np.unique(y)) > 1 else None
+    dev_idx, hold_idx = train_test_split(
+        all_idx, test_size=holdout_size, random_state=random_state, stratify=stratify
     )
+    return dev_idx, hold_idx
 
 
 def _looks_like_classes(y: np.ndarray) -> bool:
@@ -159,19 +169,32 @@ def _run_training(req: TrainRequest) -> Dict[str, Any]:
     #   2. Else `validation.holdout_size` — the sidecar re-carves from `matrix`
     #      (fallback used by the sidecar's own fixtures).
     # When (1) is used, `data` already excludes the holdout, so we DON'T re-carve.
+    # We carve by ROW INDEX so the raw dev rows are available for an anti-skew
+    # validation split (preprocessing fit on the train fold only — see below).
     forwarded_holdout = _prepare_forwarded_holdout(
         req, fitted, feature_cols, is_classification, encoder
     )
     if forwarded_holdout is not None:
         X_dev, y_dev = matrix, y
+        dev_rows = rows
         X_hold, y_hold = forwarded_holdout
     else:
-        X_dev, X_hold, y_dev, y_hold = _split_holdout(
-            matrix, y, req.validation.holdout_size, rng
+        dev_idx, hold_idx = _split_holdout_indices(
+            matrix, y, req.validation.holdout_size, rng, is_classification
         )
+        X_dev, y_dev = matrix[dev_idx], y[dev_idx]
+        X_hold, y_hold = matrix[hold_idx], y[hold_idx]
+        dev_rows = [rows[i] for i in dev_idx]
 
-    # Train/validation split (or full-fit fallback for kfold/none).
-    train_metrics, estimator = _fit_and_score(req, X_dev, y_dev, is_classification, rng)
+    # Train/validation split (or full-fit fallback for kfold/none). The validation
+    # metric fits preprocessing on the TRAIN fold ONLY (no val-fold leakage), so the
+    # reported `metrics` are an honest estimate; the production `estimator` + the
+    # FROZEN `fitted` payload remain fit on ALL dev data.
+    train_metrics, estimator = _fit_and_score(
+        req, X_dev, y_dev, is_classification, rng,
+        dev_rows=dev_rows, columns=columns, feature_cols=feature_cols, ops_spec=ops_spec,
+        target_idx=target_idx, encoder=encoder,
+    )
 
     # Stash decode map so the serialized model can map int predictions -> labels.
     if is_classification:
@@ -243,11 +266,25 @@ def _fit_and_score(
     y: np.ndarray,
     is_classification: bool,
     random_state: int,
+    *,
+    dev_rows: List[Sequence[Any]],
+    columns: List[str],
+    feature_cols: List[str],
+    ops_spec: List[Dict[str, Any]],
+    target_idx: int,
+    encoder: Any,
 ) -> Tuple[Dict[str, float], Any]:
     """Fit the estimator using the configured validation strategy.
 
-    Returns the validation metrics plus the FINAL estimator (re-fit on all dev
-    data so the shipped model uses every available row).
+    For ``train_test_split`` the validation metric is computed with preprocessing
+    fit on the TRAIN fold ONLY — the raw dev rows are split first, preprocessing is
+    fit on the training fold and APPLIED (never re-fit) to the validation fold, and
+    only then is the estimator scored. This prevents the validation fold from
+    leaking into the fitted preprocessing (which would make ``metrics`` optimistic).
+
+    Returns the (honest) validation metrics plus the FINAL estimator, re-fit on the
+    full transformed dev matrix ``X`` (which carries the frozen, fit-on-all-dev
+    preprocessing) so the shipped model uses every available row.
     """
     from sklearn.model_selection import train_test_split
 
@@ -260,14 +297,17 @@ def _fit_and_score(
 
     if strategy == "train_test_split" and X.shape[0] >= 4:
         test_size = req.validation.test_size or 0.2
+        idx = np.arange(X.shape[0])
         stratify = y if is_classification and len(np.unique(y)) > 1 else None
-        X_tr, X_te, y_tr, y_te = train_test_split(
-            X, y, test_size=test_size, random_state=random_state, stratify=stratify
+        tr_idx, te_idx = train_test_split(
+            idx, test_size=test_size, random_state=random_state, stratify=stratify
         )
-        est = build()
-        est.fit(X_tr, y_tr)
-        val_metrics = _score(est, X_te, y_te, is_classification)
-        # re-fit on all dev data for the production model
+        val_metrics = _anti_skew_val_metrics(
+            req, dev_rows, columns, feature_cols, ops_spec, target_idx,
+            tr_idx, te_idx, y, is_classification, encoder, build,
+        )
+        # re-fit on all dev data (with the frozen, fit-on-all-dev preprocessing)
+        # for the production model.
         final = build()
         final.fit(X, y)
         return val_metrics, final
@@ -276,6 +316,47 @@ def _fit_and_score(
     est = build()
     est.fit(X, y)
     return _score(est, X, y, is_classification), est
+
+
+def _anti_skew_val_metrics(
+    req: TrainRequest,
+    dev_rows: List[Sequence[Any]],
+    columns: List[str],
+    feature_cols: List[str],
+    ops_spec: List[Dict[str, Any]],
+    target_idx: int,
+    tr_idx: np.ndarray,
+    te_idx: np.ndarray,
+    y_dev: np.ndarray,
+    is_classification: bool,
+    encoder: Any,
+    build,
+) -> Dict[str, float]:
+    """Compute validation metrics with preprocessing fit on the TRAIN fold only.
+
+    The raw dev rows are split by ``tr_idx``/``te_idx``; preprocessing is FIT on the
+    train fold and APPLIED to the validation fold (fit-once / apply-everywhere within
+    the split), so the validation fold never leaks into the fitted params.
+    """
+    tr_rows = [list(dev_rows[i]) for i in tr_idx]
+    te_rows = [list(dev_rows[i]) for i in te_idx]
+
+    # Fit preprocessing on the train fold ONLY, then apply to the validation fold.
+    X_tr, _, fold_fitted = preprocessing.fit_transform(
+        columns, tr_rows, ops_spec, feature_cols
+    )
+    te_feature_dicts = [
+        {c: r[i] for i, c in enumerate(columns) if i != target_idx}
+        for r in te_rows
+    ]
+    X_te = preprocessing.transform(te_feature_dicts, fold_fitted, feature_cols)
+
+    y_tr = y_dev[tr_idx]
+    y_te = y_dev[te_idx]
+
+    est = build()
+    est.fit(X_tr, y_tr)
+    return _score(est, X_te, y_te, is_classification)
 
 
 def _score(

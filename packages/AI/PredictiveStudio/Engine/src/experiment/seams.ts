@@ -16,6 +16,7 @@ import {
   type UserInfo,
   type IMetadataProvider,
 } from '@memberjunction/core';
+import { isErrorMetric } from '@memberjunction/predictive-studio-core';
 
 import { TrainingEngine } from '../training';
 import type { TrainingDeps } from '../training';
@@ -40,19 +41,19 @@ export class SystemClock implements IClock {
  * bound to a specific provider for multi-provider correctness.
  */
 export class MetadataExperimentEntityFactory implements IExperimentEntityFactory {
-  private readonly md: Metadata;
-
   /**
-   * @param _provider optional provider; the global default is used when omitted
-   *   (`Metadata.GetEntityObject` resolves the active provider per call)
+   * @param provider optional provider; when supplied it (and its `CurrentUser`)
+   *   is honored so multi-provider callers create entities on the RIGHT server.
+   *   When omitted the global default `Metadata` provider is used.
    */
-  constructor(private readonly _provider?: IMetadataProvider) {
-    this.md = new Metadata();
-  }
+  constructor(private readonly provider?: IMetadataProvider) {}
 
   /** @inheritdoc */
   public async getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> {
-    return this.md.GetEntityObject<T>(entityName, contextUser);
+    if (this.provider) {
+      return this.provider.GetEntityObject<T>(entityName, contextUser ?? this.provider.CurrentUser);
+    }
+    return new Metadata().GetEntityObject<T>(entityName, contextUser);
   }
 }
 
@@ -147,12 +148,11 @@ export function extractNormalizedScore(
   if (raw == null || !Number.isFinite(raw)) {
     return 0;
   }
-  return isErrorMetric(key, problemType) ? -raw : raw;
-}
-
-/** Lower-is-better metrics whose sign must flip so "higher Score = better". */
-function isErrorMetric(metricKey: string, _problemType: 'classification' | 'regression'): boolean {
-  return metricKey === 'rmse' || metricKey === 'mae' || metricKey === 'mse' || metricKey === 'loss' || metricKey === 'logloss';
+  // `problemType` is retained on the signature for callers/back-compat; the
+  // error-metric direction is metric-name driven (shared with maintenance via
+  // the Core `isErrorMetric`) so the two consumers can never drift apart.
+  void problemType;
+  return isErrorMetric(key) ? -raw : raw;
 }
 
 /** Parse a metrics JSON column into a lower-cased numeric record, or null. */

@@ -148,7 +148,7 @@ export class ExperimentOrchestrator {
       sequence += trimmedWave.length;
       stopReason = waveResult.stopReason;
 
-      this.applyPruning(leaderboard, iterations, options, deps);
+      await this.applyPruning(leaderboard, iterations, options, deps);
       await this.snapshotLeaderboard(session, leaderboard, deps);
 
       if (waveResult.stopReason !== 'completed') {
@@ -275,13 +275,18 @@ export class ExperimentOrchestrator {
       created.push({ iteration, experiment: wave[i] });
     }
 
-    const tasks = created.map(({ iteration, experiment }) => () =>
-      this.trainIteration(iteration, experiment, plan, session, deps),
-    );
-    const outcomes = await runBounded(tasks, concurrency);
-
+    // Fold each completed train into the leaderboard + budget IMMEDIATELY as it
+    // finishes (not after the whole wave) so the `shouldStop` predicate below sees
+    // up-to-date budget state and can halt further dispatch the instant a bound
+    // trips — no in-flight overrun (plan §8.4).
     let stopReason: SessionStopReason = 'completed';
-    for (const outcome of outcomes) {
+    const foldOutcome = (outcome: {
+      iterationId: string;
+      scored: boolean;
+      score: number;
+      computeCost: number;
+      model: MJMLModelEntity | null;
+    }): void => {
       if (outcome.model) {
         modelsByIteration.set(outcome.iterationId, outcome.model);
       }
@@ -294,7 +299,17 @@ export class ExperimentOrchestrator {
       if (gate.exceeded) {
         stopReason = gate.reason ?? 'budget-maxRuns';
       }
-    }
+    };
+
+    const tasks = created.map(({ iteration, experiment }) => async () => {
+      const outcome = await this.trainIteration(iteration, experiment, plan, session, deps);
+      foldOutcome(outcome);
+      return outcome;
+    });
+
+    // Stop pulling new iterations the moment a budget bound has tripped — workers
+    // consult this before claiming their next task, so no extra train is dispatched.
+    await runBounded(tasks, concurrency, { shouldStop: () => stopReason !== 'completed' });
     return { stopReason };
   }
 
@@ -361,7 +376,12 @@ export class ExperimentOrchestrator {
     try {
       iteration.Status = 'Failed';
       iteration.Rationale = `${iteration.Rationale ?? ''}\nTraining failed: ${err instanceof Error ? err.message : String(err)}`.trim();
-      await iteration.Save();
+      const ok = await iteration.Save();
+      if (!ok) {
+        LogError(
+          `ExperimentOrchestrator: failed to record iteration failure for ${iteration.ID}: ${iteration.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+      }
     } catch (saveErr) {
       LogError(`ExperimentOrchestrator: failed to record iteration failure: ${saveErr instanceof Error ? saveErr.message : String(saveErr)}`);
     }
@@ -375,12 +395,12 @@ export class ExperimentOrchestrator {
    * a recorded rationale; their entries leave the leaderboard so they aren't
    * surfaced as winners.
    */
-  private applyPruning(
+  private async applyPruning(
     leaderboard: LeaderboardEntry[],
     iterations: MJExperimentSessionIterationEntity[],
     options: ExperimentRunOptions,
     deps: ExperimentDeps,
-  ): void {
+  ): Promise<void> {
     const prunedIds = selectPrunedIterationIds(leaderboard, {
       keepTopK: options.keepTopK,
       relativePruneThreshold: options.relativePruneThreshold,
@@ -389,30 +409,49 @@ export class ExperimentOrchestrator {
       return;
     }
     const best = bestEntry(leaderboard);
+    // Only entries whose `Pruned` status PERSISTED are dropped from the in-memory
+    // leaderboard. If a save fails, the entry stays so the iteration isn't silently
+    // lost (it remains a candidate winner with its DB Status still `Completed`).
+    const persisted = new Set<string>();
     for (const id of prunedIds) {
       const iteration = iterations.find((it) => it.ID === id);
       if (iteration && iteration.Status === 'Completed') {
-        this.markPruned(iteration, best, deps);
+        const saved = await this.markPruned(iteration, best, deps);
+        if (saved) {
+          persisted.add(id);
+        }
+      } else {
+        // No completed iteration row to persist (already pruned/failed) — safe to drop.
+        persisted.add(id);
       }
     }
-    // Drop pruned entries from the in-memory leaderboard so they don't win.
     for (let i = leaderboard.length - 1; i >= 0; i--) {
-      if (prunedIds.has(leaderboard[i].IterationID)) {
+      if (persisted.has(leaderboard[i].IterationID)) {
         leaderboard.splice(i, 1);
       }
     }
   }
 
-  /** Mark a single iteration `Pruned` with a deterministic rationale (best-effort save). */
-  private markPruned(iteration: MJExperimentSessionIterationEntity, best: LeaderboardEntry | null, _deps: ExperimentDeps): void {
+  /**
+   * Mark a single iteration `Pruned` with a deterministic rationale and persist it.
+   * Returns whether the save succeeded so the caller can keep the leaderboard entry
+   * when the persist fails (never silently drop an iteration whose status didn't stick).
+   */
+  private async markPruned(
+    iteration: MJExperimentSessionIterationEntity,
+    best: LeaderboardEntry | null,
+    _deps: ExperimentDeps,
+  ): Promise<boolean> {
     iteration.Status = 'Pruned';
     const bestNote = best ? ` (best so far scored ${best.Metric})` : '';
     iteration.Rationale = `${iteration.Rationale ?? ''}\nPruned: dominated branch, scored ${iteration.Score ?? 'n/a'}${bestNote}.`.trim();
-    void iteration.Save().then((ok) => {
-      if (!ok) {
-        LogError(`ExperimentOrchestrator: failed to persist Pruned status for iteration ${iteration.ID}: ${iteration.LatestResult?.CompleteMessage ?? 'unknown error'}`);
-      }
-    });
+    const ok = await iteration.Save();
+    if (!ok) {
+      LogError(
+        `ExperimentOrchestrator: failed to persist Pruned status for iteration ${iteration.ID}: ${iteration.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+      );
+    }
+    return ok;
   }
 
   // region: budget gate ---------------------------------------------------------

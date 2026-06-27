@@ -69,7 +69,7 @@ export class WriteEntityFieldsAction extends BaseAction {
      *   - ResultCode: SUCCESS, VALIDATION_ERROR, ENTITY_NOT_FOUND, RECORD_NOT_FOUND,
      *                 PERMISSION_DENIED, SAVE_FAILED, FAILED
      *   - Message: details about the operation (includes LatestResult.CompleteMessage on failure)
-     *   - Params: output params `PrimaryKey` (the affected record's PK object) and `Saved` (boolean)
+     *   - Params: output params `AffectedPrimaryKey` (the affected record's PK object) and `Saved` (boolean)
      */
     public async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -91,6 +91,18 @@ export class WriteEntityFieldsAction extends BaseAction {
                 return resolved.error;
             }
             const { entityInfo } = resolved;
+
+            // Reject unknown field names BEFORE any mutation — a typo'd field that
+            // is silently skipped while the action still reports SUCCESS is a
+            // correctness trap (the caller believes the write landed). Fail with the
+            // offending names so the mistake is visible and actionable.
+            const unknownFields = this.findUnknownFields(entityInfo, fields);
+            if (unknownFields.length > 0) {
+                return this.fail(
+                    'VALIDATION_ERROR',
+                    `The following field(s) do not exist on entity '${entityName}': ${unknownFields.join(', ')}`
+                );
+            }
 
             const md = params.Provider ?? new Metadata();
             const entity = await md.GetEntityObject<BaseEntity>(entityName, params.ContextUser);
@@ -115,7 +127,7 @@ export class WriteEntityFieldsAction extends BaseAction {
                 }
             }
 
-            this.applyFieldMap(entity, entityInfo, fields, entityName);
+            this.applyFieldMap(entity, entityInfo, fields);
 
             const saved = await entity.Save();
             if (!saved) {
@@ -123,7 +135,7 @@ export class WriteEntityFieldsAction extends BaseAction {
             }
 
             const pk = this.extractPrimaryKey(entity, entityInfo);
-            this.addOutputParam(params, 'PrimaryKey', pk);
+            this.addOutputParam(params, 'AffectedPrimaryKey', pk);
             this.addOutputParam(params, 'Saved', true);
 
             return {
@@ -184,21 +196,35 @@ export class WriteEntityFieldsAction extends BaseAction {
     }
 
     /**
+     * Return the supplied field names that do NOT exist on the target entity
+     * (case-insensitive, whitespace-tolerant match against `entityInfo.Fields`).
+     * Used to reject the whole write up-front rather than silently skipping typos.
+     */
+    private findUnknownFields(entityInfo: EntityInfo, fields: FieldMap): string[] {
+        const unknown: string[] = [];
+        for (const fieldName of Object.keys(fields)) {
+            const field = entityInfo.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+            if (!field) {
+                unknown.push(fieldName);
+            }
+        }
+        return unknown;
+    }
+
+    /**
      * Apply each entry of the dynamic field map to the entity.
      *
      * This is the one legitimately-dynamic write path: the field set is supplied
      * by the caller at runtime against an entity that is itself a parameter, so
-     * there is no generated typed setter to bind to. We validate each field
-     * exists on the entity (so typos surface as logged errors instead of silent
-     * no-ops) and then write it via `Set()`.
+     * there is no generated typed setter to bind to. Every field has already been
+     * validated to exist by {@link findUnknownFields} (unknown names reject the
+     * write before this runs), so here we just write each via `Set()`.
      */
-    private applyFieldMap(entity: BaseEntity, entityInfo: EntityInfo, fields: FieldMap, entityName: string): void {
+    private applyFieldMap(entity: BaseEntity, entityInfo: EntityInfo, fields: FieldMap): void {
         for (const [fieldName, fieldValue] of Object.entries(fields)) {
             const field = entityInfo.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
             if (field) {
                 entity.Set(field.Name, fieldValue);
-            } else {
-                LogError(`Field '${fieldName}' does not exist on entity '${entityName}' — skipping`);
             }
         }
     }
@@ -310,7 +336,19 @@ export class WriteEntityFieldsAction extends BaseAction {
         return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 
+    /**
+     * Set an output param, overwriting an existing same-named param in place rather
+     * than pushing a duplicate (mirrors the Predictive Studio base helper). An
+     * existing Input param is promoted to Both so its inbound value is preserved.
+     */
     private addOutputParam(params: RunActionParams, name: string, value: unknown): void {
+        const target = name.trim().toLowerCase();
+        const existing = params.Params.find(p => p.Name.trim().toLowerCase() === target);
+        if (existing) {
+            existing.Value = value;
+            existing.Type = existing.Type === 'Input' ? 'Both' : 'Output';
+            return;
+        }
         params.Params.push({ Name: name, Type: 'Output', Value: value });
     }
 

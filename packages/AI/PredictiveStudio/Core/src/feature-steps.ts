@@ -21,7 +21,8 @@ export type FeatureStepKind =
   | 'bin'
   | 'embedding'
   | 'llm-derived'
-  | 'flow-agent';
+  | 'flow-agent'
+  | 'vision-llm';
 
 /**
  * Fields shared by every step in the DAG. `Inputs` lists the ids of upstream
@@ -137,6 +138,90 @@ export interface FlowAgentFeatureStep extends FeatureStepBase {
 }
 
 /**
+ * The structured output kind a {@link VisionLLMFeatureStep} extracts — the model
+ * emits exactly one named value of this shape per row, which becomes the feature
+ * column's value:
+ *
+ * - `category` → a single categorical label (e.g. `condition='damaged'`); the
+ *   produced column is a categorical raw value (typically one-hot encoded by a
+ *   downstream preprocessing step).
+ * - `scalar` → a single numeric value the model reads off the image (e.g. an
+ *   estimated count); the produced column is numeric.
+ */
+export type VisionLLMOutputKind = 'category' | 'scalar';
+
+/**
+ * `vision-llm` — **multimodal vision-LLM-as-feature** (plan §11 / §5.6, PS-MM-1).
+ * For each row, a vision prompt is run over the row's image (URL or binary ref)
+ * and its single structured output (a named category or scalar) becomes the
+ * feature column's value.
+ *
+ * Unlike preprocessing steps (`impute`/`standardize`/`onehot`/`bin`), this step
+ * is a **per-row, stateless extraction**: there is no fitted state — the same
+ * prompt is applied to each row independently — so it is exempt from the
+ * fit-once/apply-everywhere split and produces a RAW column directly, exactly
+ * like `select`/`embedding` (see the executor for the full reasoning).
+ */
+export interface VisionLLMFeatureStep extends FeatureStepBase {
+  Kind: 'vision-llm';
+  /**
+   * The row field holding the image to analyze — either a fully-qualified image
+   * URL or a binary/data reference (e.g. a `data:image/...;base64,...` data URL).
+   * Resolved per-row at assembly time; rows with a null/missing value yield a
+   * null feature (no prompt is run).
+   */
+  ImageColumn: string;
+  /**
+   * The vision prompt to run over the image. Either a reference to a stored
+   * `MJ: AI Prompts` row (id or name) or an inline prompt body. Exactly one form
+   * is used; when both are set the inline body takes precedence.
+   */
+  Prompt: VisionPromptRef;
+  /**
+   * The expected structured output the model emits — the named scalar/category
+   * that becomes this step's feature column.
+   */
+  Output: VisionLLMOutput;
+  /**
+   * Optional model override (an `MJ: AI Models` id/name) forcing a specific
+   * vision-capable model. When omitted, the prompt's own model selection applies.
+   * Pinned into the model's Lineage so scoring uses the same vision model.
+   */
+  ModelRef?: string;
+}
+
+/**
+ * Reference to the vision prompt a {@link VisionLLMFeatureStep} runs. Exactly one
+ * of `PromptRef` / `InlinePrompt` is used (inline wins when both are present).
+ */
+export interface VisionPromptRef {
+  /** Reference to a stored `MJ: AI Prompts` row (id or name). */
+  PromptRef?: string;
+  /** Inline vision prompt body (used when no stored prompt is referenced). */
+  InlinePrompt?: string;
+}
+
+/**
+ * The structured output contract for a {@link VisionLLMFeatureStep} — names the
+ * single value the model emits and the shape it takes.
+ */
+export interface VisionLLMOutput {
+  /**
+   * The feature column name produced from the model's output (also the key the
+   * model is asked to emit in its structured response).
+   */
+  FeatureName: string;
+  /** Whether the emitted value is a categorical label or a numeric scalar. */
+  Kind: VisionLLMOutputKind;
+  /**
+   * Optional closed set of allowed categories (only meaningful when
+   * `Kind === 'category'`). When provided, an out-of-set model response is
+   * coerced to null so an unexpected label never silently enters the matrix.
+   */
+  AllowedCategories?: string[];
+}
+
+/**
  * A single node in the FeatureStep DAG — a discriminated union over `Kind`.
  */
 export type FeatureStep =
@@ -147,7 +232,8 @@ export type FeatureStep =
   | BinFeatureStep
   | EmbeddingFeatureStep
   | LLMDerivedFeatureStep
-  | FlowAgentFeatureStep;
+  | FlowAgentFeatureStep
+  | VisionLLMFeatureStep;
 
 /**
  * The whole feature-engineering DAG for a pipeline — the frozen spec the

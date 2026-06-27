@@ -89,7 +89,7 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     if (scope.single) {
       return this.resolveFilter(
         scope.single.entityName,
-        this.primaryKeyFilter(scope.single.primaryKey),
+        this.primaryKeyFilter(scope.single.entityName, scope.single.primaryKey, provider),
         1,
         contextUser,
         provider,
@@ -108,13 +108,60 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       return this.resolveView({ ViewID: scope.viewId }, contextUser, provider);
     }
     if (scope.listId) {
-      // A List is resolved by its backing view's id contract; the substrate's
-      // ListSource owns full list semantics. Here we resolve via RunView's ViewID
-      // path using the list's entity rows — the thin Action path scores the
-      // materialized rows the view returns.
-      return this.resolveView({ ViewID: scope.listId }, contextUser, provider);
+      return this.resolveList(scope.listId, contextUser, provider);
     }
     return [];
+  }
+
+  /**
+   * Resolve a `MJ: Lists` id into its member records as entity objects. Mirrors
+   * the substrate's `ListSource` membership contract — a List's members live in
+   * `MJ: List Details` (which store a composite-key-safe `RecordID`), NOT in a
+   * backing User View. We (1) read the list's target `EntityID`/name, (2) read its
+   * member `RecordID`s from `MJ: List Details`, then (3) load those target rows as
+   * `entity_object`s so the inference processor gets the same preloaded-row shape
+   * as the other scopes.
+   */
+  protected async resolveList(
+    listId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<RecordRef[]> {
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+
+    const listResult = await rv.RunView<{ EntityID: string }>(
+      { EntityName: 'MJ: Lists', ExtraFilter: `ID='${listId}'`, Fields: ['EntityID'], ResultType: 'simple', MaxRows: 1 },
+      contextUser,
+    );
+    if (!listResult.Success) {
+      throw new Error(`Score Record Set: failed to load list '${listId}': ${listResult.ErrorMessage}`);
+    }
+    const entityId = listResult.Results[0]?.EntityID;
+    if (!entityId) {
+      throw new Error(`Score Record Set: list '${listId}' not found.`);
+    }
+    const entityName = (provider ?? Metadata.Provider)?.Entities.find((e) => e.ID === entityId)?.Name;
+    if (!entityName) {
+      throw new Error(`Score Record Set: list '${listId}' targets an unknown entity (id '${entityId}').`);
+    }
+
+    const memberResult = await rv.RunView<{ RecordID: string }>(
+      { EntityName: 'MJ: List Details', ExtraFilter: `ListID='${listId}'`, Fields: ['RecordID'], OrderBy: 'ID', ResultType: 'simple' },
+      contextUser,
+    );
+    if (!memberResult.Success) {
+      throw new Error(`Score Record Set: failed to load members for list '${listId}': ${memberResult.ErrorMessage}`);
+    }
+    const recordIds = memberResult.Results.map((r) => String(r.RecordID)).filter((id) => id.length > 0);
+    if (recordIds.length === 0) {
+      return [];
+    }
+
+    // Load the member rows of the target entity as entity objects, keyed by their
+    // single-column PK (List Details store the PK string in RecordID).
+    const pkName = (provider ?? Metadata.Provider)?.EntityByName(entityName)?.FirstPrimaryKey?.Name ?? 'ID';
+    const inList = recordIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
+    return this.resolveFilter(entityName, `${pkName} IN (${inList})`, undefined, contextUser, provider);
   }
 
   /** Resolve an entity + filter into entity-object record refs. */
@@ -161,12 +208,20 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
 
   // ----- helpers ---------------------------------------------------------------
 
-  /** Build the per-record execution context for the processor. */
+  /**
+   * Build the per-record execution context for the processor. A `contextUser` is
+   * required (server-side scoring is user-scoped); the Action validates it before
+   * delegating, but we also assert here so this runner can't be driven without one
+   * (no silent force-cast of an absent user).
+   */
   protected buildContext(request: ScoreRecordSetRequest): RecordProcessorContext {
-    const provider = request.provider ?? Metadata.Provider;
+    if (!request.contextUser) {
+      throw new Error('Score Record Set: a ContextUser is required to score records (server-side data access is user-scoped).');
+    }
+    const provider: IMetadataProvider = request.provider ?? Metadata.Provider;
     return {
-      contextUser: request.contextUser as UserInfo,
-      provider: provider as IMetadataProvider,
+      contextUser: request.contextUser,
+      provider,
     };
   }
 
@@ -218,10 +273,30 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     };
   }
 
-  /** Build a `Field='value'`-style filter from a primary-key object. */
-  protected primaryKeyFilter(primaryKey: JsonObject): string {
-    return Object.entries(primaryKey)
-      .map(([k, v]) => `${k}='${String(v).replace(/'/g, "''")}'`)
+  /**
+   * Build a `Field='value'`-style filter from a primary-key object. Each KEY is
+   * validated against the entity's real fields BEFORE interpolation — an unknown
+   * field name is rejected (SQL-injection defense for the untrusted key names,
+   * mirroring how the write-entity-fields action validates field names). Values
+   * are still single-quote-escaped.
+   */
+  protected primaryKeyFilter(entityName: string, primaryKey: JsonObject, provider?: IMetadataProvider): string {
+    const entity = (provider ?? Metadata.Provider)?.EntityByName(entityName);
+    if (!entity) {
+      throw new Error(`Score Record Set: entity '${entityName}' not found in metadata; cannot resolve a single-record scope.`);
+    }
+    const entries = Object.entries(primaryKey);
+    if (entries.length === 0) {
+      throw new Error(`Score Record Set: single-record scope for '${entityName}' supplied no primary-key fields.`);
+    }
+    return entries
+      .map(([k, v]) => {
+        const field = entity.Fields.find((f) => f.Name.trim().toLowerCase() === k.trim().toLowerCase());
+        if (!field) {
+          throw new Error(`Score Record Set: '${k}' is not a field on entity '${entityName}'; refusing to build a filter from an unknown key.`);
+        }
+        return `${field.Name}='${String(v).replace(/'/g, "''")}'`;
+      })
       .join(' AND ');
   }
 
@@ -243,7 +318,15 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
 
   // ----- result summarization --------------------------------------------------
 
-  /** Fold per-record results into the run summary (counts + predictions / write-back). */
+  /**
+   * Fold per-record results into the run summary (counts + predictions /
+   * write-back). The `MLModelInferenceProcessor.ProcessBatch` contract returns
+   * results 1:1 with the input `records` in the SAME order, so we pair each
+   * result with its record by walking both together and key each prediction off
+   * the PAIRED record's `RecordID` (record-correlated, not a bare positional
+   * lookup that would silently misalign if the lengths ever diverged). All three
+   * outcome buckets — Succeeded / Failed / Skipped — are tallied.
+   */
   protected summarize(
     records: RecordRef[],
     results: RecordResult[],
@@ -251,24 +334,31 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
   ): ScoreRecordSetResult {
     let scoredCount = 0;
     let failedCount = 0;
+    let skippedCount = 0;
     const predictions: EphemeralPrediction[] = [];
 
-    results.forEach((result, i) => {
+    const pairCount = Math.min(records.length, results.length);
+    for (let i = 0; i < pairCount; i++) {
+      const record = records[i];
+      const result = results[i];
       if (result.Status === 'Succeeded') {
         scoredCount++;
         const payload = result.ResultPayload as MLInferenceResultPayload | undefined;
         if (payload) {
-          predictions.push({ recordId: records[i]?.RecordID, score: payload.score, class: payload.class });
+          predictions.push({ recordId: record.RecordID, score: payload.score, class: payload.class });
         }
       } else if (result.Status === 'Failed') {
         failedCount++;
+      } else if (result.Status === 'Skipped') {
+        skippedCount++;
       }
-    });
+    }
 
     const wroteBack = Boolean(request.writeBack);
     return {
       scoredCount,
       failedCount,
+      skippedCount,
       wroteBack,
       // Predictions are ephemeral — only surfaced when NOT writing back.
       predictions: wroteBack ? undefined : predictions,

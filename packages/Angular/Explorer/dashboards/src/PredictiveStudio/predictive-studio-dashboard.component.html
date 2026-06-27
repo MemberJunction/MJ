@@ -20,25 +20,27 @@
     @if (isLoading) {
       <div class="ps-loading"><mj-loading text="Loading Predictive Studio..." size="medium"></mj-loading></div>
     } @else {
-      <div class="ps-shell" [class.chat-open]="chatOpen">
+      <div class="ps-shell" [class.chat-open]="chatOpen" data-testid="ps-shell">
         <!-- left nav -->
         <aside class="ps-leftnav">
           @for (group of groups; track group) {
             <div class="ps-nav-group">{{ group }}</div>
             @for (item of itemsForGroup(group); track item.key) {
-              <button class="ps-nav-item" [class.active]="activePanel === item.key" (click)="selectPanel(item.key)">
+              <button class="ps-nav-item" [class.active]="activePanel === item.key"
+                [attr.data-testid]="'ps-nav-' + item.key" (click)="selectPanel(item.key)">
                 <i [class]="item.icon"></i> <span>{{ item.label }}</span>
               </button>
             }
           }
           <div class="ps-nav-group">Assist</div>
-          <button class="ps-nav-item assist" [class.active]="chatOpen" (click)="toggleChat()">
+          <button class="ps-nav-item assist" [class.active]="chatOpen"
+            data-testid="ps-nav-copilot" (click)="toggleChat()">
             <i class="fa-solid fa-robot"></i> <span>Model Dev Agent</span>
           </button>
         </aside>
 
         <!-- panel host -->
-        <section class="ps-content">
+        <section class="ps-content" [attr.data-testid]="'ps-panel-' + activePanel">
           @switch (activePanel) {
             @case ('home') { <ps-home [engine]="engine" (navigate)="selectPanel($event)" (askAgent)="openChat()"></ps-home> }
             @case ('catalog') { <ps-catalog [engine]="engine"></ps-catalog> }
@@ -51,7 +53,7 @@
 
         <!-- docked copilot chat -->
         @if (chatOpen) {
-          <aside class="ps-copilot">
+          <aside class="ps-copilot" data-testid="ps-copilot">
             <div class="ps-copilot-head">
               <div class="ps-copilot-title"><i class="fa-solid fa-robot"></i> Model Dev Agent</div>
               <button class="ps-copilot-close" (click)="toggleChat()" aria-label="Close copilot"><i class="fa-solid fa-xmark"></i></button>
@@ -73,7 +75,7 @@
                   [defaultAgentId]="modelDevAgentId"
                   [applicationScope]="'Application'"
                   [applicationId]="applicationId"
-                  [appContext]="$any(chatAppContext)"
+                  [appContext]="chatAppContext"
                   emptyStateGreeting="Describe a prediction goal and I'll design the pipeline.">
                 </mj-conversation-chat-area>
               } @else {

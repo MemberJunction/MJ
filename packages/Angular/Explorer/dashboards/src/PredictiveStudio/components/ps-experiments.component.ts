@@ -20,7 +20,7 @@ import {
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.scss', './ps-experiments.component.scss'],
   template: `
-    <div class="ps-panel ps-experiments">
+    <div class="ps-panel ps-experiments" data-testid="ps-experiments-panel">
       <!-- session header strip -->
       <div class="sess-head">
         <div>
@@ -34,7 +34,7 @@ import {
       </div>
 
       <!-- Leaderboard strip -->
-      <div class="ps-card">
+      <div class="ps-card" data-testid="ps-experiments-leaderboard">
         <div class="ps-card-body lead-strip">
           <div class="lead-lbl">
             <div class="t"><i class="fa-solid fa-trophy" style="color:var(--mj-status-warning)"></i> Leaderboard</div>
@@ -70,28 +70,28 @@ import {
       </div>
 
       <!-- Kanban -->
-      <div class="kanban">
-        <div class="kcol run">
+      <div class="kanban" data-testid="ps-experiments-kanban">
+        <div class="kcol run" data-testid="ps-kanban-col-running">
           <div class="kcol-head"><i class="fa-solid fa-spinner"></i><h3>Running</h3><span class="cnt">{{ running.length }}</span></div>
           <div class="kbody">
             @for (c of running; track c.iteration) {
-              <ng-container *ngTemplateOutlet="iterCard; context: { c: c }"></ng-container>
+              <ng-container [ngTemplateOutlet]="iterCard" [ngTemplateOutletContext]="{ c: c }"></ng-container>
             }
           </div>
         </div>
-        <div class="kcol done">
+        <div class="kcol done" data-testid="ps-kanban-col-completed">
           <div class="kcol-head"><i class="fa-solid fa-circle-check"></i><h3>Completed</h3><span class="cnt">{{ completed.length }}</span></div>
           <div class="kbody">
             @for (c of completed; track c.iteration) {
-              <ng-container *ngTemplateOutlet="iterCard; context: { c: c }"></ng-container>
+              <ng-container [ngTemplateOutlet]="iterCard" [ngTemplateOutletContext]="{ c: c }"></ng-container>
             }
           </div>
         </div>
-        <div class="kcol prune">
+        <div class="kcol prune" data-testid="ps-kanban-col-pruned">
           <div class="kcol-head"><i class="fa-solid fa-scissors"></i><h3>Pruned</h3><span class="cnt">{{ pruned.length }}</span></div>
           <div class="kbody">
             @for (c of pruned; track c.iteration) {
-              <ng-container *ngTemplateOutlet="iterCard; context: { c: c }"></ng-container>
+              <ng-container [ngTemplateOutlet]="iterCard" [ngTemplateOutletContext]="{ c: c }"></ng-container>
             }
           </div>
         </div>
@@ -135,6 +135,9 @@ export class PSExperimentsComponent {
     return this.engine?.Sessions[0]?.Status ?? 'Running';
   }
 
+  // TODO: bind to live data — sessionName/sessionStatus already read the live Experiment Session when
+  // present, but the leaderboard / budget gauges / kanban columns below have no live Experiment Session
+  // Iteration surface wired into PredictiveStudioEngine yet, so they render representative demo values.
   public get leaderboard(): PSLeaderboardEntry[] {
     return SAMPLE_LEADERBOARD;
   }

@@ -40,5 +40,19 @@
       "lastModified": "2026-06-26T21:32:07.702Z",
       "checksum": "6222e90ca9346d966983e89311fbddcfe3960777285fdc7ce0eda37eab3a51f6"
     }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio",
+      "Description": "Train / score / experiment / promote operations for Predictive Studio (MJ: ML Models, ML Training Pipelines, Experiments).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "DCC1F296-CCE9-490A-8669-2F58D9AD9F33"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:36:19.763Z",
+      "checksum": "a7703ce7ffa1decc41eec8708f2e6984586b6fbaa0d06e8013b36a65f5021c97"
+    }
   }
 ]

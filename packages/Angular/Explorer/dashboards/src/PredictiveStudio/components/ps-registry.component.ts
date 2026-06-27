@@ -29,14 +29,14 @@ interface ModelRowVM {
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.scss', './ps-registry.component.scss'],
   template: `
-    <div class="ps-panel ps-registry">
+    <div class="ps-panel ps-registry" data-testid="ps-registry-panel">
       <div class="md-layout">
         <!-- master list -->
-        <div class="ps-card mlist">
+        <div class="ps-card mlist" data-testid="ps-registry-list">
           <div class="ps-card-head"><h3>ML Models</h3><span class="ps-badge gray">{{ models.length }}</span></div>
           <div class="ps-card-body" style="padding:8px">
             @for (m of models; track m.id) {
-              <div class="mrow" [class.sel]="m.id === selectedId" [class.arc]="m.status === 'Archived'" (click)="select(m.id)">
+              <div class="mrow" data-testid="ps-registry-row" [class.sel]="m.id === selectedId" [class.arc]="m.status === 'Archived'" (click)="select(m.id)">
                 <div class="ico" [class]="m.iconClass"><i class="fa-solid fa-cube"></i></div>
                 <div style="flex:1;min-width:0">
                   <div class="nm">{{ m.name }}</div>
@@ -52,12 +52,12 @@ interface ModelRowVM {
         </div>
 
         <!-- detail -->
-        <div class="ps-col detail">
+        <div class="ps-col detail" data-testid="ps-registry-detail">
           <div class="ps-card">
             <div class="ps-card-body dh">
               <div class="big-ico"><i class="fa-solid fa-cube"></i></div>
               <div style="flex:1">
-                <h2>{{ selected.name }} <span class="ps-tag ps-mono">v{{ selected.version }}</span></h2>
+                <h2 data-testid="ps-registry-detail-name">{{ selected.name }} <span class="ps-tag ps-mono">v{{ selected.version }}</span></h2>
                 <div class="ps-muted ps-small sub">{{ selected.algorithm }} · renewal probability · immutable snapshot</div>
               </div>
               <span class="ps-badge green">✓ {{ selected.status }}</span>
@@ -124,7 +124,7 @@ interface ModelRowVM {
             <div>
               <strong>Leakage gate clear.</strong> No single feature dominates — top importance is
               <strong>tenure at 0.22</strong>, well below the <strong>0.60</strong> dominance threshold.
-              <div class="ps-small" style="margin-top:6px"><i class="fa-solid fa-check"></i> Signed off by Amith N. — required before any Validated → Published promotion.</div>
+              <div class="ps-small" style="margin-top:6px"><i class="fa-solid fa-check"></i> Sign-off required before any Validated → Published promotion.</div>
             </div>
           </div>
 
@@ -167,6 +167,9 @@ export class PSRegistryComponent implements OnInit {
     this.selectedId = this.models[0]?.id ?? '';
   }
 
+  // TODO: bind to live data — the detail pane's feature-importance bars and the inline performance
+  // metrics (train/holdout AUC, precision/recall/F1, lineage) are representative demo values until a
+  // per-model metrics + feature-importance surface is exposed by PredictiveStudioEngine.
   public get importance(): PSFeatureBar[] {
     return SAMPLE_REGISTRY_IMPORTANCE;
   }

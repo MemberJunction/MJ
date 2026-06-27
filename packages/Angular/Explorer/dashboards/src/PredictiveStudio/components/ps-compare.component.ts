@@ -27,13 +27,13 @@ interface MetricRow {
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.scss', './ps-compare.component.scss'],
   template: `
-    <div class="ps-panel ps-compare">
+    <div class="ps-panel ps-compare" data-testid="ps-compare-panel">
       <!-- toolbar: view toggle + promote -->
       <div class="cmp-toolbar">
-        <div class="ps-seg">
-          <button [class.on]="mode === 'side'" (click)="mode = 'side'"><i class="fa-solid fa-table-columns"></i> Side-by-side</button>
-          <button [class.on]="mode === 'overlay'" (click)="mode = 'overlay'"><i class="fa-solid fa-chart-line"></i> Overlay</button>
-          <button [class.on]="mode === 'champion'" (click)="mode = 'champion'"><i class="fa-solid fa-code-compare"></i> Champion / Challenger</button>
+        <div class="ps-seg" data-testid="ps-compare-modes">
+          <button data-testid="ps-compare-mode-side" [class.on]="mode === 'side'" (click)="mode = 'side'"><i class="fa-solid fa-table-columns"></i> Side-by-side</button>
+          <button data-testid="ps-compare-mode-overlay" [class.on]="mode === 'overlay'" (click)="mode = 'overlay'"><i class="fa-solid fa-chart-line"></i> Overlay</button>
+          <button data-testid="ps-compare-mode-champion" [class.on]="mode === 'champion'" (click)="mode = 'champion'"><i class="fa-solid fa-code-compare"></i> Champion / Challenger</button>
         </div>
         <span class="ps-spacer"></span>
         <span class="ps-small ps-muted">3 runs · FY25 holdout</span>
@@ -52,7 +52,7 @@ interface MetricRow {
 
       <!-- ========== SIDE-BY-SIDE ========== -->
       @if (mode === 'side') {
-        <div class="ps-card">
+        <div class="ps-card" data-testid="ps-compare-layout-side">
           <div class="ps-card-head"><h3>Side-by-side comparison</h3><span class="ps-muted ps-small">Best value in each row highlighted</span></div>
           <div class="ps-card-body" style="overflow-x:auto">
             <div class="cmp-grid">
@@ -88,7 +88,7 @@ interface MetricRow {
 
       <!-- ========== OVERLAY ========== -->
       @if (mode === 'overlay') {
-        <div class="ps-card">
+        <div class="ps-card" data-testid="ps-compare-layout-overlay">
           <div class="ps-card-body legend-row">
             @for (r of runs; track r.key) {
               <span class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} — {{ r.algorithm }} ({{ r.descriptor }})</span>
@@ -155,7 +155,7 @@ interface MetricRow {
 
       <!-- ========== CHAMPION / CHALLENGER ========== -->
       @if (mode === 'champion') {
-        <div class="ps-callout warn reco">
+        <div class="ps-callout warn reco" data-testid="ps-compare-layout-champion">
           <i class="fa-solid fa-hand"></i>
           <div>
             <strong>Hold — gain is within noise; keep the champion.</strong>
@@ -206,6 +206,8 @@ interface MetricRow {
 })
 export class PSCompareComponent {
   public mode: CompareMode = 'side';
+  // TODO: bind to live data — Compare Runs has no live multi-run-selection surface in
+  // PredictiveStudioEngine yet, so this panel renders a representative demo comparison.
   public runs: PSCompareRun[] = SAMPLE_COMPARE_RUNS;
   public featureNames = ['tenure', 'days_since_act', 'engagement', 'events_signup', 'emb_aggregate', 'city'];
 

@@ -114,6 +114,48 @@ describe('PredictiveStudioPromoteModelAction — outcome mapping', () => {
     expect(out(p, 'Status')).toBeUndefined();
   });
 
+  it('threads SignOff + Reason through and surfaces the audit note on success (string "true"/"1")', async () => {
+    const gate = new MockGate({ kind: 'promoted', newStatus: 'Validated', signOffNote: 'override audit note' });
+    const p = params([
+      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
+      { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
+      { Name: 'SignOff', Type: 'Input', Value: 'true' }, // string coercion → true
+      { Name: 'Reason', Type: 'Input', Value: 'legitimate feature' },
+    ]);
+    const result = await new TestablePromoteAction(gate).run(p);
+
+    expect(gate.LastRequest).toMatchObject({ modelId: 'model-1', signOff: true, reason: 'legitimate feature' });
+    expect(result.Success).toBe(true);
+    expect(out(p, 'SignOffNote')).toBe('override audit note');
+    expect(result.Message).toContain('override audit note');
+  });
+
+  it('coerces SignOff="1" to true', async () => {
+    const gate = new MockGate({ kind: 'promoted', newStatus: 'Validated' });
+    const p = params([
+      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
+      { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
+      { Name: 'SignOff', Type: 'Input', Value: '1' },
+      { Name: 'Reason', Type: 'Input', Value: 'ok' },
+    ]);
+    await new TestablePromoteAction(gate).run(p);
+    expect(gate.LastRequest?.signOff).toBe(true);
+  });
+
+  it('maps a signoff-reason-required outcome to SIGNOFF_REASON_REQUIRED', async () => {
+    const gate = new MockGate({ kind: 'signoff-reason-required', topFeature: 'cancelled_flag', topShare: 0.92 });
+    const p = params([
+      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
+      { Name: 'TargetStatus', Type: 'Input', Value: 'Validated' },
+      { Name: 'SignOff', Type: 'Input', Value: true },
+    ]);
+    const result = await new TestablePromoteAction(gate).run(p);
+    expect(result.Success).toBe(false);
+    expect(result.ResultCode).toBe('SIGNOFF_REASON_REQUIRED');
+    expect(result.Message).toContain('Reason');
+    expect(out(p, 'Status')).toBeUndefined();
+  });
+
   it('maps not-found and save-failed outcomes', async () => {
     const notFound = await new TestablePromoteAction(new MockGate({ kind: 'not-found' })).run(
       params([
@@ -202,25 +244,66 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
     expect(model.Status).toBe('Draft');
   });
 
-  it('allows a leakage-flagged model when SignOff is true — lifecycle only', async () => {
+  it('allows a leakage-flagged model when SignOff is true WITH a reason — lifecycle only + audit note', async () => {
     const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
-    const outcome = await new TestableGate(model).promote(req({ signOff: true, targetStatus: 'Validated' }));
+    const outcome = await new TestableGate(model).promote(
+      req({ signOff: true, reason: 'Reviewed; cancelled_flag is a legitimate feature here.', targetStatus: 'Validated' }),
+    );
 
     expect(outcome.kind).toBe('promoted');
     if (outcome.kind === 'promoted') {
       expect(outcome.newStatus).toBe('Validated');
+      // The audit note captures the override + the supplied reason.
+      expect(outcome.signOffNote).toBeTruthy();
+      expect(outcome.signOffNote).toContain('overridden');
+      expect(outcome.signOffNote).toContain('legitimate feature');
     }
     expect(model.Status).toBe('Validated'); // only Status changed
     expect(model.SaveCallCount).toBe(1);
   });
 
+  it('refuses a sign-off override of a flagged model when no reason is supplied (audit trail required)', async () => {
+    const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
+    const outcome = await new TestableGate(model).promote(req({ signOff: true, targetStatus: 'Validated' }));
+
+    expect(outcome.kind).toBe('signoff-reason-required');
+    if (outcome.kind === 'signoff-reason-required') {
+      expect(outcome.topFeature).toBe('cancelled_flag');
+    }
+    // Never transitioned — no reason means no auditable override.
+    expect(model.SaveCallCount).toBe(0);
+    expect(model.Status).toBe('Draft');
+  });
+
+  it('refuses the override when the reason is whitespace-only', async () => {
+    const model = new FakeModel({ cancelled_flag: 0.92, tenure: 0.05, city: 0.03 });
+    const outcome = await new TestableGate(model).promote(req({ signOff: true, reason: '   ', targetStatus: 'Validated' }));
+    expect(outcome.kind).toBe('signoff-reason-required');
+    expect(model.SaveCallCount).toBe(0);
+  });
+
   it('promotes a clean (non-flagged) model without requiring sign-off', async () => {
-    // Balanced importances → not dominant.
+    // Balanced importances → not dominant. Draft → Validated is a legal step.
+    const model = new FakeModel({ tenure: 0.3, events: 0.25, city: 0.25, recency: 0.2 });
+    const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Validated' }));
+
+    expect(outcome.kind).toBe('promoted');
+    expect(model.Status).toBe('Validated');
+  });
+
+  it('rejects an illegal lifecycle jump (Draft → Published) without mutating/saving', async () => {
+    // Clean model so leakage doesn't short-circuit; Draft → Published skips Validated.
     const model = new FakeModel({ tenure: 0.3, events: 0.25, city: 0.25, recency: 0.2 });
     const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Published' }));
 
-    expect(outcome.kind).toBe('promoted');
-    expect(model.Status).toBe('Published');
+    expect(outcome.kind).toBe('invalid-transition');
+    if (outcome.kind === 'invalid-transition') {
+      expect(outcome.currentStatus).toBe('Draft');
+      expect(outcome.targetStatus).toBe('Published');
+    }
+    // No mutation, no save.
+    expect(model.Status).toBe('Draft');
+    expect(model.SaveCallCount).toBe(0);
   });
 
   it('returns not-found when the model does not load', async () => {
@@ -230,6 +313,7 @@ describe('ProductionModelPromotionGate — leakage sign-off gate', () => {
 
   it('returns save-failed and surfaces the CompleteMessage', async () => {
     const model = new FakeModel({ tenure: 0.5, city: 0.5 }, false);
+    model.Status = 'Published'; // Published → Archived is a legal transition that then fails on Save
     const outcome = await new TestableGate(model).promote(req({ signOff: false, targetStatus: 'Archived' }));
     expect(outcome.kind).toBe('save-failed');
     if (outcome.kind === 'save-failed') {

@@ -26,18 +26,19 @@ import type { IEntityFactory, IRecordLoader, ISidecarTrainer } from './types';
  * specific provider for multi-provider correctness.
  */
 export class MetadataEntityFactory implements IEntityFactory {
-  private readonly md: Metadata;
-
   /**
-   * @param provider optional provider; when omitted the global default is used
+   * @param provider optional provider; when supplied it (and its `CurrentUser`)
+   *   is honored so multi-provider callers create entities on the RIGHT server.
+   *   When omitted the global default `Metadata` provider is used.
    */
-  constructor(private readonly provider?: IMetadataProvider) {
-    this.md = new Metadata();
-  }
+  constructor(private readonly provider?: IMetadataProvider) {}
 
   /** @inheritdoc */
   public async getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> {
-    return this.md.GetEntityObject<T>(entityName, contextUser);
+    if (this.provider) {
+      return this.provider.GetEntityObject<T>(entityName, contextUser ?? this.provider.CurrentUser);
+    }
+    return new Metadata().GetEntityObject<T>(entityName, contextUser);
   }
 }
 
