@@ -24,7 +24,8 @@ import {
     MJPageSearchComponent,
     MJRefreshButtonComponent,
     MJStatBadgeComponent,
-    MjSlidePanelComponent
+    MjSlidePanelComponent,
+    MJEmptyStateComponent
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -81,6 +82,7 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         MJRefreshButtonComponent,
         MJStatBadgeComponent,
         MjSlidePanelComponent,
+        MJEmptyStateComponent,
         SharedGenericModule,
         MarkdownModule,
         CodeEditorModule,

@@ -140,27 +140,6 @@
     border-color: var(--mj-border-strong);
 }
 
-/* --- Empty state --- */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px 24px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 36px;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 14px;
-}
-
 /* --- Table --- */
 .table-wrapper {
     overflow-x: auto;

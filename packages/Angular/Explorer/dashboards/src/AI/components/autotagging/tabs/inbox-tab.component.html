@@ -56,10 +56,8 @@
         <!-- ── (2) SUGGESTION LIST ── -->
         <div class="ci-col ci-list">
           @if (FilteredSuggestions.length === 0) {
-            <div class="at-empty-state">
-              <i class="fa-solid fa-check-circle"></i>
-              <p>No {{ StatusFilter | lowercase }} suggestions{{ ReasonFilter ? ' for this reason' : '' }}.</p>
-            </div>
+            <mj-empty-state Variant="success" Size="compact"
+              [Title]="NoSuggestionsMessage" />
           } @else {
             @for (s of FilteredSuggestions; track s.ID) {
               <div class="ci-row" [class.ci-sel]="Selected?.ID === s.ID" (click)="SelectSuggestion(s)">
@@ -81,10 +79,8 @@
         <!-- ── (3) READING PANE ── -->
         <div class="ci-col ci-read">
           @if (!Selected) {
-            <div class="at-empty-state">
-              <i class="fa-solid fa-hand-pointer"></i>
-              <p>Select a suggestion to review it.</p>
-            </div>
+            <mj-empty-state class="at-fill" Icon="fa-solid fa-hand-pointer"
+              Title="Select a suggestion to review it." />
           } @else {
             <div class="ci-read-head">
               <div>

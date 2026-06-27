@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-teams",
   "type": "module",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "MemberJunction: Microsoft Teams Realtime Bridge driver. Connects the realtime agent engine to a Teams meeting (audio in/out, diarized roster, participant mute, Teams meeting chat) via an injectable Teams calling-bot SDK seam (Azure Communication Services / Microsoft Graph cloud-communications), and contributes a Meeting Controls facilitator channel.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.42.0",
-    "@memberjunction/global": "5.42.0",
-    "@memberjunction/core-entities": "5.42.0",
-    "@memberjunction/ai-bridge-base": "5.42.0"
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/ai-bridge-base": "5.43.0"
   },
   "//optionalDependencies": "@microsoft/microsoft-graph-client and @azure/communication-call-automation are OPTIONAL PEER SDKs (CLAUDE rule 8, category 2): the package never statically imports either. @microsoft/microsoft-graph-client is the Graph cloud-communications CONTROL plane — production wires RealTeamsBindings.IGraphCallsLike over Client.api('/communications/calls').post(...) for join/roster/chat/mute/hangup. @azure/communication-call-automation is the ACS application-hosted-media AUDIO plane — production wires RealTeamsBindings.IAcsMediaLike (inbound per-participant + outbound PCM sockets) over it. Both are injected behind structural surfaces so the package builds and unit-tests with no install and no network, and are loaded only when the Teams provider is configured at deployment.",
   "optionalDependencies": {

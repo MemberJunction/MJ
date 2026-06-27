@@ -1,5 +1,20 @@
 # @memberjunction/ng-feedback
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+
 ## 5.42.0
 
 ### Patch Changes

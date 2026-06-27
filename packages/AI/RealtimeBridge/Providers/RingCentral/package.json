@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-ringcentral",
   "type": "module",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "MemberJunction: RingCentral Realtime Bridge driver (telephony). Connects the realtime agent engine to a phone call over the RingCentral Voice / Call Control API — outbound dial (RingOut / Call Control sessions), inbound webhook routing, single-party audio in/out, DTMF send/receive, and call transfer (supervise/transfer) — via an injectable telephony call SDK seam. Audio only: no video, no screen, no Meeting Controls.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,10 +17,10 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.42.0",
-    "@memberjunction/global": "5.42.0",
-    "@memberjunction/core-entities": "5.42.0",
-    "@memberjunction/ai-bridge-base": "5.42.0"
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/ai-bridge-base": "5.43.0"
   },
   "//optionalDependencies": "@ringcentral/sdk is an OPTIONAL PEER SDK (CLAUDE rule 8, category 2): the package never statically imports it. Production wires RealRingCentralBindings over the real @ringcentral/sdk Call Control REST client + a media stream through the injected IRingCentralCallControlLike/IRingCentralMediaPump surfaces, so the package builds and unit-tests with no @ringcentral/sdk install and no network. Loaded only when the RingCentral provider is configured at deployment.",
   "optionalDependencies": {

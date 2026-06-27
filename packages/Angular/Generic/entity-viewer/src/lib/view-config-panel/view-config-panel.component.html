@@ -163,10 +163,10 @@
               }
             }
             @if (VisibleColumns.length === 0) {
-              <div class="empty-list">
-                <i class="fa-solid fa-info-circle"></i>
-                <span>No columns visible. Add columns from below.</span>
-              </div>
+              <mj-empty-state
+                Size="compact"
+                Variant="warning"
+                Title="No columns visible. Add columns from below." />
             }
           </div>
         </div>
@@ -201,10 +201,10 @@
               </div>
             }
             @if (HiddenColumns.length === 0) {
-              <div class="empty-list">
-                <i class="fa-solid fa-check-circle"></i>
-                <span>All columns are visible</span>
-              </div>
+              <mj-empty-state
+                Size="compact"
+                Variant="success"
+                Title="All columns are visible" />
             }
           </div>
         </div>
@@ -573,11 +573,11 @@
               </div>
             }
           } @else {
-            <div class="sort-empty-state">
-              <i class="fa-solid fa-arrow-up-wide-short"></i>
-              <span>No sorting configured</span>
-              <p class="sort-empty-hint">Click "Add Sort Level" to define how records should be ordered</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-arrow-up-wide-short"
+              Title="No sorting configured"
+              Message='Click "Add Sort Level" to define how records should be ordered' />
           }
         </div>
       </div>
@@ -836,11 +836,11 @@
               </div>
             </div>
           } @else {
-            <div class="aggregates-empty-state">
-              <i class="fa-solid fa-chart-simple"></i>
-              <span>No aggregates configured</span>
-              <p class="empty-hint">Click "Add Aggregate" to create summary calculations</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-chart-simple"
+              Title="No aggregates configured"
+              Message='Click "Add Aggregate" to create summary calculations' />
           }
 
           <!-- Info Tip -->

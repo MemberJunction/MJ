@@ -1,5 +1,42 @@
 # @memberjunction/ng-conversations
 
+## 5.43.0
+
+### Patch Changes
+
+- 3eaa05a: Surface runnable queries under the '#' mention trigger alongside entities in the conversations autocomplete, dropdown, editor chips, and rendered message badges. Queries are permission-filtered via QueryInfo.UserCanRun, and entity mentions now render with their display name and configured icon.
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ai-agent-client@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/ng-testing@5.43.0
+  - @memberjunction/ng-artifacts@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-code-editor@5.43.0
+  - @memberjunction/ng-container-directives@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-resource-permissions@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/ng-tasks@5.43.0
+  - @memberjunction/conversations-runtime@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/ai-realtime-client@5.43.0
+  - @memberjunction/ng-agent-client@5.43.0
+  - @memberjunction/ng-whiteboard@5.43.0
+  - @memberjunction/ng-forms@5.43.0
+  - @memberjunction/ng-markdown@5.43.0
+
 ## 5.42.0
 
 ### Minor Changes

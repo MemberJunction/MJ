@@ -64,9 +64,8 @@
             </div>
           }
           @if (FilteredEntities.length === 0) {
-            <div class="empty-list">
-              <p>No entities match your search.</p>
-            </div>
+            <mj-empty-state Variant="no-results" Size="compact"
+              Title="No entities match your search." />
           }
         </div>
       </div>
@@ -106,9 +105,8 @@
               </div>
             }
             @if (ReferencedByEntities.length === 0) {
-              <div class="empty-relationships">
-                <p>No entities reference this entity.</p>
-              </div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-link-slash"
+                Title="No entities reference this entity." />
             }
           </div>
           <!-- Depends On (entities this entity has FKs to) -->
@@ -137,17 +135,14 @@
               </div>
             }
             @if (DependsOnEntities.length === 0) {
-              <div class="empty-relationships">
-                <p>This entity has no foreign key dependencies.</p>
-              </div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-link-slash"
+                Title="This entity has no foreign key dependencies." />
             }
           </div>
         } @else {
-          <div class="no-selection">
-            <i class="fa-solid fa-diagram-project no-selection-icon"></i>
-            <h3>Select an Entity</h3>
-            <p>Choose an entity from the list to explore its dependency relationships.</p>
-          </div>
+          <mj-empty-state class="graph-detail-empty" Icon="fa-solid fa-diagram-project"
+            Title="Select an Entity"
+            Message="Choose an entity from the list to explore its dependency relationships." />
         }
       </div>
     </div>

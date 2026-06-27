@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-bridge-server",
   "type": "module",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "MemberJunction: Server-tier coordination + execution for Realtime Bridges — completes the unified media-transport seam (the bridge ↔ IRealtimeSession pipe), bot-session lifecycle, host affinity + janitor, participant tracking, and turn-taking integration. Mirrors the AIEngineBase/AIEngine pair.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,11 +17,11 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/core": "5.42.0",
-    "@memberjunction/global": "5.42.0",
-    "@memberjunction/core-entities": "5.42.0",
-    "@memberjunction/ai": "5.42.0",
-    "@memberjunction/ai-bridge-base": "5.42.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/ai": "5.43.0",
+    "@memberjunction/ai-bridge-base": "5.43.0",
     "rxjs": "^7.8.2"
   },
   "//optionalDependencies": "@microsoft/microsoft-graph-client and googleapis are OPTIONAL PEER SDKs (CLAUDE rule 8, category 2): this package never statically imports either. They back the calendar + identity-provisioner seams only. GraphCalendarSource/GraphAdmin provisioning wire IGraphCalendarLike/IGraphAdminLike over @microsoft/microsoft-graph-client (calendarView delta + POST /users); GoogleCalendarSource/Google Workspace provisioning wire IGoogleCalendarLike/IGoogleWorkspaceAdminLike over googleapis (calendar.events.list syncToken + admin.users.insert). The telephony-carrier number-order path is injected via ITelephonyCarrierLike (the carrier SDK is declared by each telephony provider package, not here). All surfaces are injected behind structural interfaces so the package builds + unit-tests with no install and no network, and are loaded only when a Graph/Google-backed identity is configured at deployment.",

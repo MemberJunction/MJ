@@ -1,6 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 import { FilterBuilderComponent } from './filter-builder/filter-builder.component';
 import { FilterGroupComponent } from './filter-group/filter-group.component';
@@ -41,7 +42,8 @@ import { FilterRuleComponent } from './filter-rule/filter-rule.component';
   ],
   imports: [
     CommonModule,
-    FormsModule
+    FormsModule,
+    MJEmptyStateComponent
   ],
   exports: [
     FilterBuilderComponent,

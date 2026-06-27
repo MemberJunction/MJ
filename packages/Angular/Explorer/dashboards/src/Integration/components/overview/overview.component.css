@@ -56,28 +56,6 @@
 /* ==========================================================================
    Empty State
    ========================================================================== */
-.empty-state {
-  text-align: center;
-  padding: 100px 20px;
-  color: var(--mj-text-disabled);
-}
-.empty-state i {
-  font-size: 64px;
-  margin-bottom: 20px;
-  display: block;
-  color: var(--mj-color-neutral-300);
-}
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  font-size: 20px;
-  color: var(--mj-text-secondary);
-}
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-  max-width: 400px;
-  margin-inline: auto;
-}
 
 /* ==========================================================================
    SECTION 1: Metric Strip

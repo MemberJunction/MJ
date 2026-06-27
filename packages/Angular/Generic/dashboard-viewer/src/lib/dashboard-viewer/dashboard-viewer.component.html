@@ -88,18 +88,13 @@
 
   <!-- Empty State -->
   @if (!hasPanels && !isLoading) {
-    <div class="empty-state">
-      <div class="empty-icon">
-        <i class="fa-solid fa-layer-group"></i>
-      </div>
-      <h3>No parts configured</h3>
-      <p>This dashboard has no parts yet. Add your first part to start visualizing your data.</p>
-      @if (isEditing) {
-        <button class="add-part-button" (click)="onAddPanelClick()">
-          <i class="fa-solid fa-plus"></i>
-          Add Your First Part
-        </button>
-      }
-    </div>
+    <mj-empty-state
+      class="dashboard-empty"
+      Icon="fa-solid fa-layer-group"
+      Title="No parts configured"
+      Message="This dashboard has no parts yet. Add your first part to start visualizing your data."
+      [ActionText]="isEditing ? 'Add Your First Part' : ''"
+      ActionIcon="fa-solid fa-plus"
+      (Action)="onAddPanelClick()" />
   }
 </div>

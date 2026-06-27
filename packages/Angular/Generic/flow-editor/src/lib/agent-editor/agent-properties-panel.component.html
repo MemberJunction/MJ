@@ -2,10 +2,10 @@
 
   <!-- Empty State -->
   @if (!isStepSelected && !isConnectionSelected) {
-    <div class="mj-agent-props-empty">
-      <i class="fa-solid fa-mouse-pointer"></i>
-      <p>Select a step or connection to view its properties</p>
-    </div>
+    <mj-empty-state class="mj-agent-props-empty"
+      Icon="fa-solid fa-arrow-pointer"
+      Title="No selection"
+      Message="Select a step or connection to view its properties" />
   }
 
   <!-- ============================================ -->

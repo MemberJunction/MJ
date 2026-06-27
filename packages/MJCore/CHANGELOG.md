@@ -1,5 +1,40 @@
 # Change Log - @memberjunction/core
 
+## 5.43.0
+
+### Minor Changes
+
+- 40eb4e0: Remove leftover integration metadata folders that survived the connector-metadata removal (#2942). Connectors are now managed in the `MemberJunction/Integrations` repo, so MJ carries none of this:
+  - `metadata/integration-object-deletes/` — stale one-time `deleteRecord` marker files (`.old-<vendor>-seed.deletes.json` for growthzone/imis/netforum/nimble/propfuel/salesforce/sharepoint) from an earlier connector rebuild; already applied, pure cruft.
+  - `metadata/integrations/` — the remaining orphaned files: `.betty.json`, `.mjtomj.json`, `.integrations.json` (File Feed), `.mj-sync.json`, and `additionalSchemaInfo.json`.
+
+  File-level cleanup only — no schema change. Note: the `File Feed` and `Betty AI` Integration **rows** that #2942's migration intentionally retained are not deleted here; their DB removal (and Betty/MJtoMJ repo seeding) is handled by their respective connector PRs.
+
+- 9f6aa87: Generic fire-and-forget save queue, realtime multi-agent floor control, and telemetry fixes.
+
+  **Generic fire-and-forget save queue** (`@memberjunction/global`, `@memberjunction/core`, + adopters) — de-duplicates the hand-rolled "INSERT (fire-and-forget) → chained UPDATE" persistence pattern and makes the "stuck at Running" race structurally impossible:
+  - `KeyedSerialTaskQueue` (`@memberjunction/global`) — entity-agnostic per-key serial task chain: same-key tasks serialize, different keys run concurrently, failures are tallied for `flush()` and never propagate. Self-bounding (in-flight set + failure counters), so a long-lived queue that never flushes doesn't grow.
+  - `BaseEntitySaveQueue` (`@memberjunction/core`) — entity façade: `Insert` / `Update(entity, applyMutation?)` / `Flush`, with an optional `onError` hook for structured logging. `Update`'s mutation runs _inside_ the post-INSERT task, so it can never be reverted by the INSERT's reload.
+  - Adopted in all three hand-rolled copies + the new consumer: `GenericProcessRunTracker` (`@memberjunction/record-set-processor`), `AgentRunStepSaveQueue` (`@memberjunction/ai-core-plus`), `ActionEngine`'s execution log (`@memberjunction/actions`), and `AIPromptRunner` / `AIModelRunner` (`@memberjunction/ai-prompts`). Also fixes a pre-existing `MJLruCache` mock gap in the Actions/Engine test suite.
+
+  **Realtime** (`@memberjunction/ai`, `@memberjunction/ai-bridge-server`, `@memberjunction/ai-gemini`, `@memberjunction/ai-openai`, `@memberjunction/livekit-room-server`, `@memberjunction/ng-livekit-room`) — multi-agent floor control, Gemini meeting mode, the session capability surface with first-agent re-gating, and an idle reaper.
+
+  **Telemetry / core** (`@memberjunction/core`, `@memberjunction/server`) — cacheability-aware duplicate-RunView suggestion for `AllowCaching=false` entities; fixes the telemetry pagination-fingerprint false-duplicate and batches the janitor channel reads.
+
+- ad8d8f1: Remove connector-specific Integration metadata from core MemberJunction. Each connector (Salesforce, NetSuite, MemberSuite, GrowthZone, Pheedloop, etc.) now ships its own Integration + Integration Object/Field rows and credential type from the `MemberJunction/Integrations` repo as an installable Open App, rather than being seeded natively by MJ.
+  - Deletes the connector-specific `metadata/integrations/<connector>/` folders, the single-file `.<connector>.json` definitions, and the 22 connector-specific credential-type files (and their schemas) from `metadata/credential-types/`. Only generic integration/credential metadata remains in core.
+  - Adds migration `V202606251241__v5.43.x__Remove_Connector_Integration_Metadata.sql`, which deletes the corresponding `Integration` / `Integration Object` / `Integration Object Field` / `IntegrationURLFormat` rows and the 22 `Credential Type` rows from the database, and nulls `RecordChange.IntegrationID` for the removed integrations.
+
+  The migration is a data-only (record) change — no schema change, so no CodeGen run is required. It is guarded so it never touches an integration that has a live `CompanyIntegration` connection, and never deletes a credential type still referenced by an `Integration`, `AIVendor`, `MCPServer`, or `Credential` row. "File Feed" and "Betty AI" are retained (not yet moved to the repo).
+
+### Patch Changes
+
+- a4cdfb0: Restore `metadata/credential-types/schemas/oauth2-client-credentials.schema.json`, which was inadvertently deleted in #2942 alongside the connector-specific credential-type schemas. It is a **generic** OAuth2 client-credentials schema still referenced (via `@file:`) by a retained credential type in `.credential-types.json`, so its removal broke `mj sync push --dir metadata` with a "File reference not found" validation error. No other `@file:` references are dangling.
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+
 ## 5.42.0
 
 ### Minor Changes

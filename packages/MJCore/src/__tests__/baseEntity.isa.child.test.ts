@@ -363,6 +363,96 @@ describe('BaseEntity NewRecord clears child entity', () => {
     });
 });
 
+// ─── Shared Primary Key on NewRecord (FK_ACP_Company regression) ──────────
+//
+// The Product→Meeting→Webinar mock gives child levels no PK of their own, so it
+// exercises parent FIELD routing but not shared-PK-on-NewRecord. These tests
+// build a minimal self-contained IS-A chain where EACH level has its own 'ID'
+// uniqueidentifier PK (mirroring the real AccountingCompanyProfile-IS-A-Company
+// shape) to lock the shared-key invariant the FK_ACP_Company bug violated:
+// after NewRecord, every level's OWN PK field must equal the single key minted
+// at the root. (Pre-fix, the child's own field held a stale/throwaway UUID that
+// then got INSERTed and broke the shared-PK FK.)
+
+function makePkEntityData(entityId: string, name: string, parentId: string | null) {
+    return {
+        ID: entityId, Name: name, BaseTable: name, BaseView: `vw${name}`, SchemaName: 'dbo',
+        VirtualEntity: false, AllowCreateAPI: true, AllowUpdateAPI: true, AllowDeleteAPI: true,
+        IncludeInAPI: true, ParentID: parentId, Status: 'Active',
+        EntityFields: [
+            { ID: `f-${entityId}-id`, EntityID: entityId, Name: 'ID', Type: 'uniqueidentifier',
+              IsPrimaryKey: true, IsSoftPrimaryKey: false, IsSoftForeignKey: false, AllowsNull: false,
+              AutoIncrement: false, IsVirtual: false, IsNameField: false, AllowUpdateAPI: false,
+              ValueListType: 'None', Sequence: 1, Status: 'Active', Entity: name, EntityFieldValues: [] },
+            { ID: `f-${entityId}-name`, EntityID: entityId, Name: 'Name', Type: 'nvarchar', Length: 255,
+              IsPrimaryKey: false, IsSoftPrimaryKey: false, IsSoftForeignKey: false, AllowsNull: true,
+              AutoIncrement: false, IsVirtual: false, IsNameField: true, AllowUpdateAPI: true,
+              ValueListType: 'None', Sequence: 2, Status: 'Active', Entity: name, EntityFieldValues: [] },
+        ],
+        EntityPermissions: [], EntityRelationships: [], EntitySettings: [],
+    };
+}
+
+// Reads an entity's OWN 'ID' field (the value the save-SQL builder reads via
+// theField.Value) — NOT routed Get — so a stale/divergent own field is caught.
+const ownPK = (e: BaseEntity): unknown => e.Fields.find(f => f.Name === 'ID')?.Value;
+
+function wireChild(child: MJTestEntity, parent: MJTestEntity): void {
+    child.SetTestParentEntity(parent);
+    child.SetTestParentFieldNames(new Set(['ID', 'Name'])); // shared PK routes to parent
+}
+
+describe('BaseEntity NewRecord shares ONE primary key across an IS-A chain', () => {
+    it('2-level: child.own PK === parent PK after NewRecord (no stale/divergent key)', () => {
+        const root = createEntity(new EntityInfo(makePkEntityData('e-isa-root', 'IsaRoot', null)));
+        const child = createEntity(new EntityInfo(makePkEntityData('e-isa-child', 'IsaChild', 'e-isa-root')));
+        wireChild(child, root);
+
+        child.NewRecord();
+
+        const sharedId = root.Get('ID');
+        expect(sharedId).toBeTruthy();
+        expect(child.Get('ID')).toBe(sharedId);   // routed read agrees
+        expect(ownPK(child)).toBe(sharedId);        // child's OWN field == shared key (the bug)
+        expect(ownPK(root)).toBe(sharedId);
+    });
+
+    it('3-level: leaf/mid/root all share one PK in their OWN fields', () => {
+        const root = createEntity(new EntityInfo(makePkEntityData('e-isa-r', 'IsaR', null)));
+        const mid = createEntity(new EntityInfo(makePkEntityData('e-isa-m', 'IsaM', 'e-isa-r')));
+        const leaf = createEntity(new EntityInfo(makePkEntityData('e-isa-l', 'IsaL', 'e-isa-m')));
+        wireChild(mid, root);
+        wireChild(leaf, mid);
+
+        leaf.NewRecord();
+
+        const sharedId = root.Get('ID');
+        expect(sharedId).toBeTruthy();
+        expect(ownPK(root)).toBe(sharedId);
+        expect(ownPK(mid)).toBe(sharedId);
+        expect(ownPK(leaf)).toBe(sharedId);
+        expect(leaf.Get('ID')).toBe(sharedId);      // routed read from the leaf resolves to the root
+    });
+
+    it('re-setting the shared PK after NewRecord stays in sync on the child OWN field', () => {
+        // Proves the adopt-loop ResetNeverSetFlag is load-bearing: the child PK is
+        // ReadOnly, so SetLocal only writes it while _NeverSet=true. Adopt consumes
+        // that one-time set; without the reset, a later Set('ID',x) updates the
+        // parent but the child's ReadOnly mirror is silently locked -> divergence.
+        const root = createEntity(new EntityInfo(makePkEntityData('e-isa-root2', 'IsaRoot2', null)));
+        const child = createEntity(new EntityInfo(makePkEntityData('e-isa-child2', 'IsaChild2', 'e-isa-root2')));
+        wireChild(child, root);
+        child.NewRecord();
+
+        const explicit = '11111111-2222-3333-4444-555555555555';
+        child.Set('ID', explicit); // routes to parent + mirrors to child OWN field
+
+        expect(root.Get('ID')).toBe(explicit);
+        expect(ownPK(child)).toBe(explicit); // OWN field must track the parent, not stay stale
+        expect(child.Get('ID')).toBe(explicit);
+    });
+});
+
 // ─── Shared Instance Chain Data Integrity ────────────────────────────────
 
 describe('Shared instance chain data integrity', () => {

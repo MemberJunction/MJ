@@ -630,42 +630,6 @@
     text-align: right;
 }
 
-/* Empty States */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 32px 20px;
-    color: var(--mj-text-muted);
-    text-align: center;
-}
-
-.empty-state i {
-    font-size: 32px;
-    margin-bottom: 8px;
-    opacity: 0.5;
-}
-
-.empty-state span {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-}
-
-.empty-state.large {
-    padding: 48px 24px;
-}
-
-.empty-state.large i {
-    font-size: 48px;
-}
-
-.empty-state p {
-    margin: 8px 0 0 0;
-    font-size: 12px;
-}
-
 /* Drill-down Window */
 .drilldown-title {
     display: flex;

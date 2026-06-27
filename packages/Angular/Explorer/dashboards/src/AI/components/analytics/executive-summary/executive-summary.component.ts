@@ -100,7 +100,8 @@ interface ErrorHotspot {
         </div>
         <div class="panel-body">
           @if (TopConsumers.length === 0) {
-            <div class="panel-empty">No data for selected period</div>
+            <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-ranking-star"
+              Title="No data for selected period" />
           }
           @for (item of TopConsumers; track item.Name) {
             <div
@@ -144,7 +145,8 @@ interface ErrorHotspot {
         </div>
         <div class="panel-body">
           @if (ErrorHotspots.length === 0) {
-            <div class="panel-empty">No errors in selected period</div>
+            <mj-empty-state Size="compact" Variant="success" Icon="fa-solid fa-circle-check"
+              Title="No errors in selected period" />
           }
           @for (item of ErrorHotspots; track item.Source) {
             <div class="error-item">
@@ -307,12 +309,6 @@ interface ErrorHotspot {
     }
     .panel-body {
       padding: 8px 0;
-    }
-    .panel-empty {
-      padding: 24px 18px;
-      text-align: center;
-      font-size: 13px;
-      color: var(--mj-text-disabled);
     }
 
     /* ─── Consumer Item ───────────────────────────────────────── */

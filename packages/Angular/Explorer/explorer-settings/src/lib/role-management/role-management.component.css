@@ -478,14 +478,6 @@
     padding: 1rem;
   }
 
-  .empty-state {
-    padding: 3rem 1.5rem;
-  }
-
-  .empty-state .empty-icon {
-    font-size: 3rem;
-  }
-
   .loading-container {
     padding: 3rem 1.5rem;
   }

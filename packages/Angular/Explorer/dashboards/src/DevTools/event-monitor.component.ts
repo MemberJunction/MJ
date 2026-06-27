@@ -158,6 +158,25 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
         } catch { /* clipboard unavailable */ }
     }
 
+    /** Empty-state presentation for the event list — varies by capture state. */
+    public get EmptyVariant(): 'empty' | 'warning' | 'no-results' {
+        if (this.Stats.captured === 0) return 'empty';
+        return this.Paused ? 'warning' : 'no-results';
+    }
+    public get EmptyIcon(): string {
+        if (this.Stats.captured === 0) return 'fa-solid fa-radio';
+        return this.Paused ? 'fa-solid fa-pause' : 'fa-solid fa-filter';
+    }
+    public get EmptyTitle(): string {
+        if (this.Stats.captured === 0) return 'Listening for events…';
+        return this.Paused ? 'Capture is paused' : 'No events match your filter';
+    }
+    public get EmptyMessage(): string {
+        if (this.Stats.captured === 0) return 'Trigger an action — saves, navigation, AI events all show up here.';
+        if (this.Paused) return `${this.Stats.captured} events fired since you paused. Click Resume to start collecting again.`;
+        return `${this.Stats.kept} events in buffer · clear filters to see them.`;
+    }
+
     public get FilteredEvents(): EventRow[] {
         let list = this.Events;
         if (this.TypeFilter) list = list.filter(e => e.type === this.TypeFilter);

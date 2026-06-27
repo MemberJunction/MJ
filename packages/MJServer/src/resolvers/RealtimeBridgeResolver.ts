@@ -9,6 +9,7 @@ import { CreateBridgeRealtimeSession, FinalizeBridgeCoAgentRuns, GetRealtimeMode
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { SessionManager } from '../agentSessions/SessionManager.js';
 import { NotificationEngine } from '@memberjunction/notifications';
+import { registerMeetingRecordingFile, correlateRecordingStart } from './meetingRecordingRegistration.js';
 
 /**
  * Binds the agent realtime-session factory onto the LiveKit room coordinator's model-session creation seam.
@@ -174,6 +175,10 @@ export class LiveKitRecordingResult {
 
   @Field(() => String)
   Status: string;
+
+  /** The `MJ: Files` row id of the registered recording (set on stop, once the egress MP4 is registered). */
+  @Field(() => String, { nullable: true })
+  RecordingFileID?: string;
 }
 
 /** A selectable provider-native voice for the dev voice picker. */
@@ -444,10 +449,17 @@ export class RealtimeBridgeResolver extends ResolverBase {
     @Ctx() context: AppContext = {} as AppContext,
   ): Promise<LiveKitRecordingResult> {
     try {
-      if (!this.GetUserFromPayload(context.userPayload)) {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: '', Status: '' };
       }
       const info = await new LiveKitEgressService().StartRoomRecording({ RoomName: input.RoomName, Layout: input.Layout });
+
+      // Best-effort: correlate the live recording with the room's Meeting-Room Conversation (if it exists
+      // yet) by stamping its EgressID. Never fail the start on this — the stop-flow resolves/creates it.
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+      void correlateRecordingStart(input.RoomName, info.EgressID, user, provider);
+
       return { Success: true, EgressID: info.EgressID, Status: info.Status };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -456,15 +468,35 @@ export class RealtimeBridgeResolver extends ResolverBase {
     }
   }
 
-  /** Stops a recording by egress id. */
+  /**
+   * Stops a recording by egress id, then REGISTERS the completed egress MP4 into MJStorage as an
+   * `MJ: Files` row linked to the room's Meeting-Room Conversation (`Conversation.RecordingFileID`).
+   * Registration is best-effort: a missing storage config or any failure returns the stop result with no
+   * `RecordingFileID` (the recording still stopped) — it never throws.
+   */
   @Mutation(() => LiveKitRecordingResult)
   async StopLiveKitRecording(@Arg('egressID', () => String) egressID: string, @Ctx() context: AppContext = {} as AppContext): Promise<LiveKitRecordingResult> {
     try {
-      if (!this.GetUserFromPayload(context.userPayload)) {
+      const user = this.GetUserFromPayload(context.userPayload);
+      if (!user) {
         return { Success: false, ErrorMessage: 'Unable to determine current user.', EgressID: egressID, Status: '' };
       }
       const info = await new LiveKitEgressService().StopRecording(egressID);
-      return { Success: true, EgressID: info.EgressID, Status: info.Status };
+      const provider = GetReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+
+      // Register the completed egress MP4 as a Files row on the Meeting-Room Conversation. Best-effort:
+      // any failure (e.g. storage provider not configured) leaves RecordingFileID unset but still
+      // returns the successful stop result.
+      const registration = await registerMeetingRecordingFile(
+        { EgressID: info.EgressID, RoomName: info.RoomName, OutputLocation: info.OutputLocation, OutputSizeBytes: info.OutputSizeBytes },
+        user,
+        provider,
+      );
+      if (!registration.Success) {
+        LogError(`StopLiveKitRecording: recording stopped but registration did not complete: ${registration.ErrorMessage ?? 'unknown'}`);
+      }
+
+      return { Success: true, EgressID: info.EgressID, Status: info.Status, RecordingFileID: registration.RecordingFileID };
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       LogError(`StopLiveKitRecording failed: ${msg}`);
