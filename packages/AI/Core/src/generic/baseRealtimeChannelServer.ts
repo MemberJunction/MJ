@@ -50,8 +50,12 @@ export interface RealtimeChannelServerContext {
      * `mediaCollectionID` override here. Kept as a plain string (not a typed bag) so the base contract
      * stays free of `@memberjunction/core` and channel-agnostic; `null`/absent when the session carries
      * no config. Channels MUST treat it as untrusted input (validate ids before use).
+     *
+     * NOTE: deliberately named `AgentSessionConfig` (not `SessionConfig`) to avoid confusion with the
+     * unrelated {@link import('./baseRealtime').ClientRealtimeSessionConfig.SessionConfig} — the
+     * provider-driver "private pact" config bag. This field is the persisted `AIAgentSession.Config_`.
      */
-    SessionConfig?: string | null;
+    AgentSessionConfig?: string | null;
 
     /**
      * **Optional perception sink** — feeds a background context note into the live realtime model

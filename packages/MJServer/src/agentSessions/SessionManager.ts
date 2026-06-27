@@ -183,7 +183,7 @@ export class SessionManager {
                     ConversationID: session.ConversationID ?? null,
                     // Hand the verbatim per-session config blob to data-aware channels (e.g. the Media
                     // channel reads a per-session mediaCollectionID override from it). Opaque here.
-                    SessionConfig: session.Config_ ?? null,
+                    AgentSessionConfig: session.Config_ ?? null,
                 },
                 contextUser,
                 provider,

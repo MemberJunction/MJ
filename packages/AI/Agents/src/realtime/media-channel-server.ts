@@ -79,11 +79,11 @@ export class MediaChannelServer extends BaseRealtimeChannelServer implements IRe
 
     /**
      * Reads the per-session media-kit override (`mediaCollectionID`) from the session config blob the
-     * host handed over on {@link RealtimeChannelServerContext.SessionConfig}. Returns `null` when there
-     * is no config, it does not parse, or it carries no override — the agent default kit then applies.
+     * host handed over on {@link RealtimeChannelServerContext.AgentSessionConfig}. Returns `null` when
+     * there is no config, it does not parse, or it carries no override — the agent default kit applies.
      */
     private readMediaCollectionOverride(): string | null {
-        const raw = this.Context?.SessionConfig;
+        const raw = this.Context?.AgentSessionConfig;
         if (!raw) {
             return null;
         }
