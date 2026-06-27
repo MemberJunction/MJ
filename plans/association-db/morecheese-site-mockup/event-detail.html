@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICF Annual Conference 2026 · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .event-hero { background: linear-gradient(135deg, var(--mc-rind-500) 0%, var(--mc-rind-700) 100%); color: var(--mc-cream); padding: var(--mc-space-9) 0 var(--mc-space-8); position: relative; overflow: hidden; }
+    .event-hero::before { content: ''; position: absolute; top: -50%; right: -10%; width: 60%; height: 200%; background: radial-gradient(circle, rgba(212,168,46,0.15) 0%, transparent 60%); }
+    .event-hero h1 { color: var(--mc-cream); font-size: clamp(var(--mc-fs-3xl), 5vw, var(--mc-fs-5xl)); }
+    .event-hero .crumbs a, .event-hero .crumbs span { color: var(--mc-gold-200); }
+    .event-meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--mc-space-5); margin-top: var(--mc-space-6); padding-top: var(--mc-space-6); border-top: 1px solid rgba(255,255,255,0.15); }
+    .event-meta-item { display: flex; flex-direction: column; gap: var(--mc-space-1); }
+    .event-meta-label { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-gold-200); }
+    .event-meta-value { font-size: var(--mc-fs-base); color: var(--mc-cream); font-weight: var(--mc-fw-medium); }
+    .tab-bar { display: flex; gap: var(--mc-space-6); border-bottom: 1px solid var(--mc-border-default); position: sticky; top: 73px; background: var(--mc-bg-page); z-index: 50; padding-top: var(--mc-space-3); }
+    .tab { padding: var(--mc-space-4) 0; font-weight: var(--mc-fw-medium); color: var(--mc-text-secondary); border-bottom: 2px solid transparent; transition: all var(--mc-dur-fast); }
+    .tab.active { color: var(--mc-rind-500); border-bottom-color: var(--mc-gold-500); }
+    .tab:hover { color: var(--mc-text-primary); }
+    .layout-2col { display: grid; grid-template-columns: 1fr 360px; gap: var(--mc-space-8); align-items: start; }
+    @media (max-width: 900px) { .layout-2col { grid-template-columns: 1fr; } .event-meta-grid { grid-template-columns: repeat(2, 1fr); } }
+    .reg-sidebar { position: sticky; top: 140px; background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); padding: var(--mc-space-5); box-shadow: var(--mc-shadow-md); }
+    .reg-tier { padding: var(--mc-space-4); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-md); cursor: pointer; transition: all var(--mc-dur-fast); display: flex; justify-content: space-between; align-items: center; gap: var(--mc-space-3); }
+    .reg-tier:hover { border-color: var(--mc-gold-500); }
+    .reg-tier.selected { border-color: var(--mc-rind-500); background: var(--mc-gold-50); }
+    .reg-tier-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); }
+    .reg-tier-desc { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); margin-top: 2px; }
+    .reg-tier-price { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); }
+    .session-card { padding: var(--mc-space-4) 0; border-bottom: 1px solid var(--mc-border-subtle); display: grid; grid-template-columns: 100px 1fr auto; gap: var(--mc-space-5); align-items: start; }
+    .session-card:last-child { border-bottom: 0; }
+    .session-time { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); color: var(--mc-text-muted); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+    .session-title { font-weight: var(--mc-fw-semi); margin-bottom: var(--mc-space-1); }
+    .session-meta { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); }
+    .day-header { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); margin: var(--mc-space-6) 0 var(--mc-space-3); padding-bottom: var(--mc-space-3); border-bottom: 2px solid var(--mc-gold-500); display: flex; justify-content: space-between; align-items: baseline; }
+    .day-header small { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); color: var(--mc-text-muted); font-weight: var(--mc-fw-regular); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+    .speaker-card { display: flex; gap: var(--mc-space-4); align-items: flex-start; padding: var(--mc-space-4); background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-md); }
+    .speaker-avatar { width: 56px; height: 56px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-gold-300), var(--mc-rind-400)); flex-shrink: 0; display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html" class="active">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- EVENT HERO -->
+    <section class="event-hero">
+      <div class="container" style="position: relative;">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><a href="events.html">Events</a><span>/</span><span>ICF Annual Conference 2026</span></nav>
+        <p class="eyebrow on-dark mt-4">Flagship · 79th Annual · Open to members and public</p>
+        <h1>ICF Annual Conference 2026</h1>
+        <p class="lede" style="color: var(--mc-gold-100); max-width: 52rem;">Four days at the Monona Terrace. The Standards Plenary. The Awards Gala. The Producer-Only Forum. The Apprentice Showcase. The only time all 15 chapter chairs gather in person — and the only event most of our members attend every single year.</p>
+
+        <div class="event-meta-grid">
+          <div class="event-meta-item"><span class="event-meta-label"><i class="fa-solid fa-calendar"></i> Dates</span><span class="event-meta-value">September 18–21, 2026</span></div>
+          <div class="event-meta-item"><span class="event-meta-label"><i class="fa-solid fa-location-dot"></i> Venue</span><span class="event-meta-value">Monona Terrace, Madison WI</span></div>
+          <div class="event-meta-item"><span class="event-meta-label"><i class="fa-solid fa-users"></i> Registered</span><span class="event-meta-value">1,247 of 2,000 (62%)</span></div>
+          <div class="event-meta-item"><span class="event-meta-label"><i class="fa-solid fa-tag"></i> Member rate</span><span class="event-meta-value">From $245</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TABS -->
+    <div class="container">
+      <nav class="tab-bar" aria-label="Event sections">
+        <a href="#overview" class="tab active">Overview</a>
+        <a href="#schedule" class="tab">Schedule</a>
+        <a href="#speakers" class="tab">Speakers</a>
+        <a href="#venue" class="tab">Venue & Travel</a>
+        <a href="#sponsors" class="tab">Sponsors</a>
+        <a href="#faq" class="tab">FAQ</a>
+      </nav>
+
+      <div class="layout-2col" style="padding: var(--mc-space-7) 0;">
+        <!-- LEFT: Content -->
+        <div>
+          <section id="overview">
+            <p class="eyebrow">Overview</p>
+            <h2 style="font-size: var(--mc-fs-2xl);">A federation gathered.</h2>
+            <p>The Annual Conference is the only time the federation gathers in one place. Members come for the Standards Plenary (the only forum where formal votes are taken), the National Cheese Awards gala (110 finalists this year, 29 judges, 12 categories), the Producer-Only Forum (closed-door, members-only business sessions), and the four parallel workshop tracks running across all four days.</p>
+            <p>If this is your first ICF Annual, plan to attend the Newcomer Reception on Wednesday night — chapter chairs and committee leadership host an informal welcome over a flight of award nominees.</p>
+
+            <h3 class="mt-7" style="font-size: var(--mc-fs-xl);">Four parallel tracks</h3>
+            <div class="grid grid-2 mt-4">
+              <div class="card" style="padding: var(--mc-space-5);"><strong>Production & Technique</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Hands-on workshops on washed rinds, bloomy rinds, alpines, hard cheeses, fresh cheeses. Bring an apron.</p></div>
+              <div class="card" style="padding: var(--mc-space-5);"><strong>Science & Research</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Microbiology, aging-cave engineering, terroir science, sensory methodology, food-safety research.</p></div>
+              <div class="card" style="padding: var(--mc-space-5);"><strong>Business & Operations</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Scaling, distribution, FDA tier transitions, retail, financing, succession planning.</p></div>
+              <div class="card" style="padding: var(--mc-space-5);"><strong>Standards & Policy</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">The Plenary itself, plus policy workshops on labeling, advocacy, regulation, and international harmonization.</p></div>
+            </div>
+          </section>
+
+          <section id="schedule" class="mt-8">
+            <p class="eyebrow">Schedule</p>
+            <h2 style="font-size: var(--mc-fs-2xl);">4 days · 80+ sessions</h2>
+            <p class="muted">All sessions in Central Time. Add to your portal calendar to receive room assignments closer to the date.</p>
+
+            <h3 class="day-header">Wednesday, September 18 <small>Day 1 · Opening</small></h3>
+            <div class="session-card"><span class="session-time">3:00 PM</span><div><div class="session-title">Registration & Check-In</div><div class="session-meta">Monona Terrace · Main Lobby</div></div><span class="muted mono upper">Open</span></div>
+            <div class="session-card"><span class="session-time">5:30 PM</span><div><div class="session-title">Opening Reception & Newcomer Welcome</div><div class="session-meta">Sponsored by Foggy Valley Creamery · Flight tasting of all 110 award finalists</div></div><span class="muted mono upper">All</span></div>
+            <div class="session-card"><span class="session-time">7:00 PM</span><div><div class="session-title">President's Address — "Standards as a Public Good"</div><div class="session-meta">Maria Castillo, ICF President · Lecture Hall A · Open to public</div></div><span class="muted mono upper">Featured</span></div>
+
+            <h3 class="day-header">Thursday, September 19 <small>Day 2 · Plenary</small></h3>
+            <div class="session-card"><span class="session-time">8:30 AM</span><div><div class="session-title">Standards Plenary — Morning Session</div><div class="session-meta">Voting members only · Robert's Rules · Items: 7 standard revisions, 3 new standards</div></div><span class="muted mono upper">Voting</span></div>
+            <div class="session-card"><span class="session-time">10:30 AM</span><div><div class="session-title">Workshop · Washed-Rind Cultures: Backslops vs Commercial</div><div class="session-meta">Marcel Touraine · Production track · 90 min · Limit 32</div></div><span class="muted mono upper">28 / 32</span></div>
+            <div class="session-card"><span class="session-time">10:30 AM</span><div><div class="session-title">Workshop · Cave Humidity Engineering Beyond Sensors</div><div class="session-meta">Dr. Sarah Henderson · Science track · 90 min</div></div><span class="muted mono upper">Open</span></div>
+            <div class="session-card"><span class="session-time">1:00 PM</span><div><div class="session-title">Producer-Only Forum (closed)</div><div class="session-meta">Producer-tier members only · Business sessions · NDA in effect</div></div><span class="muted mono upper">Closed</span></div>
+            <div class="session-card"><span class="session-time">4:00 PM</span><div><div class="session-title">Standards Plenary — Afternoon Session</div><div class="session-meta">Continued voting · Closing remarks at 6 PM</div></div><span class="muted mono upper">Voting</span></div>
+
+            <h3 class="day-header">Friday, September 20 <small>Day 3 · Awards day</small></h3>
+            <div class="session-card"><span class="session-time">9:00 AM</span><div><div class="session-title">Workshops · 12 sessions across all 4 tracks</div><div class="session-meta">Full slate · See portal for details</div></div><span class="muted mono upper">Various</span></div>
+            <div class="session-card"><span class="session-time">3:00 PM</span><div><div class="session-title">Apprentice Showcase</div><div class="session-meta">First-year apprentices present a wheel they made under their mentor's supervision · Public welcome</div></div><span class="muted mono upper">Featured</span></div>
+            <div class="session-card"><span class="session-time">7:00 PM</span><div><div class="session-title">National Cheese Awards Gala</div><div class="session-meta">Black tie · Monona Ballroom · Separate ticket ($185 / $295 member / public)</div></div><span class="muted mono upper">Gala</span></div>
+
+            <h3 class="day-header">Saturday, September 21 <small>Day 4 · Closing</small></h3>
+            <div class="session-card"><span class="session-time">9:00 AM</span><div><div class="session-title">Chapter Chair Roundtable</div><div class="session-meta">All 15 chapter chairs · Open to all chapter members</div></div><span class="muted mono upper">Open</span></div>
+            <div class="session-card"><span class="session-time">11:00 AM</span><div><div class="session-title">Workshops · Final round</div><div class="session-meta">8 sessions · Hands-on focus</div></div><span class="muted mono upper">Various</span></div>
+            <div class="session-card"><span class="session-time">2:30 PM</span><div><div class="session-title">Closing Plenary — State of the Federation</div><div class="session-meta">Treasurer's report · Membership growth · Next year preview</div></div><span class="muted mono upper">All</span></div>
+          </section>
+
+          <section id="speakers" class="mt-8">
+            <p class="eyebrow">Featured speakers</p>
+            <h2 style="font-size: var(--mc-fs-2xl);">85+ presenters across the four days</h2>
+            <div class="grid grid-3 mt-5">
+              <div class="speaker-card"><div class="speaker-avatar">MC</div><div><strong>Maria Castillo</strong><div class="muted" style="font-size: var(--mc-fs-sm);">President, ICF · Master Cheesemaker · Castillo Family Dairy</div></div></div>
+              <div class="speaker-card"><div class="speaker-avatar">ER</div><div><strong>Elena Rodriguez</strong><div class="muted" style="font-size: var(--mc-fs-sm);">Master Cheesemaker · Foggy Valley Creamery · Standards Committee</div></div></div>
+              <div class="speaker-card"><div class="speaker-avatar">MT</div><div><strong>Marcel Touraine</strong><div class="muted" style="font-size: var(--mc-fs-sm);">Affineur · Pays de la Loire · MoF (Meilleur Ouvrier de France)</div></div></div>
+              <div class="speaker-card"><div class="speaker-avatar">SH</div><div><strong>Dr. Sarah Henderson</strong><div class="muted" style="font-size: var(--mc-fs-sm);">Cornell Food Science · Research Council Vice-Chair</div></div></div>
+              <div class="speaker-card"><div class="speaker-avatar">JW</div><div><strong>Jamie Wu</strong><div class="muted" style="font-size: var(--mc-fs-sm);">Cheesemonger · Murray's Cheese NYC · Education Committee</div></div></div>
+              <div class="speaker-card"><div class="speaker-avatar">TW</div><div><strong>Tom Whitaker</strong><div class="muted" style="font-size: var(--mc-fs-sm);">Whitaker Mountain Dairy · Business & Operations track lead</div></div></div>
+            </div>
+          </section>
+        </div>
+
+        <!-- RIGHT: Registration sidebar -->
+        <aside class="reg-sidebar">
+          <p class="eyebrow">Register</p>
+          <h3 style="font-size: var(--mc-fs-xl); margin-bottom: var(--mc-space-2);">Choose your pass</h3>
+          <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-5);">All passes include conference proceedings, lunch all 4 days, and access to the Newcomer Reception.</p>
+
+          <div style="display: grid; gap: var(--mc-space-3);">
+            <div class="reg-tier">
+              <div><div class="reg-tier-name">Apprentice member</div><div class="reg-tier-desc">All 4 days · Apprentice tier only</div></div>
+              <div class="reg-tier-price">$245</div>
+            </div>
+            <div class="reg-tier selected">
+              <div><div class="reg-tier-name">Professional / Producer member</div><div class="reg-tier-desc">All 4 days · Member rate</div></div>
+              <div class="reg-tier-price">$695</div>
+            </div>
+            <div class="reg-tier">
+              <div><div class="reg-tier-name">Public / Non-member</div><div class="reg-tier-desc">All 4 days · No member discount</div></div>
+              <div class="reg-tier-price">$1,150</div>
+            </div>
+            <div class="reg-tier">
+              <div><div class="reg-tier-name">Single-day pass</div><div class="reg-tier-desc">Pick any one day</div></div>
+              <div class="reg-tier-price">$285</div>
+            </div>
+          </div>
+
+          <div style="margin-top: var(--mc-space-5); padding-top: var(--mc-space-5); border-top: 1px solid var(--mc-border-subtle);">
+            <label style="display: flex; align-items: center; gap: var(--mc-space-2); font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-3);"><input type="checkbox" checked /> Awards Gala ticket (+$185)</label>
+            <label style="display: flex; align-items: center; gap: var(--mc-space-2); font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-3);"><input type="checkbox" /> Pre-conference aging-cave tour (+$95)</label>
+            <label style="display: flex; align-items: center; gap: var(--mc-space-2); font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-3);"><input type="checkbox" /> Hotel-block reservation assistance</label>
+          </div>
+
+          <div style="margin-top: var(--mc-space-5); padding-top: var(--mc-space-5); border-top: 1px solid var(--mc-border-subtle); display: flex; justify-content: space-between; align-items: baseline;">
+            <span class="muted">Subtotal</span>
+            <span class="serif" style="font-size: var(--mc-fs-2xl); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500);">$880</span>
+          </div>
+          <button class="btn btn-rind btn-lg" style="width: 100%; margin-top: var(--mc-space-4);">Continue to checkout <i class="fa-solid fa-arrow-right"></i></button>
+          <p class="muted center mt-3" style="font-size: var(--mc-fs-xs);">Stripe · Apple Pay · Google Pay · Invoice for Institutional</p>
+
+          <div style="margin-top: var(--mc-space-5); padding: var(--mc-space-4); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-xs); color: var(--mc-text-secondary);">
+            <strong style="color: var(--mc-text-primary);"><i class="fa-solid fa-info-circle"></i> Need help deciding?</strong><br/>
+            Ask Betty: "Which day is best if I can only attend one?" or "Is the Producer Forum worth it for a 50,000 lb/yr dairy?"
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

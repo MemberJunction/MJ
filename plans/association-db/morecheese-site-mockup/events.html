@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Events · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .filter-bar { display: flex; gap: var(--mc-space-3); flex-wrap: wrap; padding: var(--mc-space-4) 0; border-top: 1px solid var(--mc-border-subtle); border-bottom: 1px solid var(--mc-border-subtle); margin-bottom: var(--mc-space-7); align-items: center; }
+    .filter-chip { padding: var(--mc-space-2) var(--mc-space-4); background: var(--mc-bg-surface); border: 1px solid var(--mc-border-default); border-radius: var(--mc-radius-pill); font-size: var(--mc-fs-sm); cursor: pointer; transition: all var(--mc-dur-fast); }
+    .filter-chip:hover { border-color: var(--mc-gold-500); }
+    .filter-chip.active { background: var(--mc-rind-500); color: var(--mc-cream); border-color: var(--mc-rind-500); }
+    .filter-label { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-right: var(--mc-space-2); }
+    .event-featured { display: grid; grid-template-columns: 1.2fr 1fr; gap: var(--mc-space-7); background: var(--mc-bg-surface); border-radius: var(--mc-radius-xl); overflow: hidden; box-shadow: var(--mc-shadow-md); margin-bottom: var(--mc-space-8); }
+    .event-featured-img { aspect-ratio: 4/3; background: linear-gradient(135deg, var(--mc-gold-400) 0%, var(--mc-rind-500) 100%); position: relative; }
+    .event-featured-body { padding: var(--mc-space-7); display: flex; flex-direction: column; justify-content: center; }
+    @media (max-width: 900px) { .event-featured { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary" aria-label="Primary">
+        <a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html" class="active">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a>
+      </nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Events</span></nav>
+        <p class="eyebrow">Events</p>
+        <h1>Workshops, summits, gatherings, gala.</h1>
+        <p class="lede">From a one-day aging-cave tour in Vermont to the Annual Conference in Madison — 87 events scheduled over the next 12 months across all 15 chapters. Filter by format, region, or your interests.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <!-- Filters -->
+        <div class="filter-bar">
+          <span class="filter-label">Format</span>
+          <button class="filter-chip active">All</button>
+          <button class="filter-chip">Workshop</button>
+          <button class="filter-chip">Conference</button>
+          <button class="filter-chip">Online course</button>
+          <button class="filter-chip">Tour</button>
+          <button class="filter-chip">Summit</button>
+          <button class="filter-chip">Gala</button>
+          <span style="margin-left: auto;">
+            <span class="filter-label">Region</span>
+            <select style="padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm);">
+              <option>All regions</option><option>Pacific Northwest</option><option>California</option><option>Mountain West</option><option>Great Lakes</option><option>Northeast</option><option>European Alpine</option><option>European Mediterranean</option>
+            </select>
+          </span>
+        </div>
+
+        <!-- Featured -->
+        <article class="event-featured">
+          <div class="event-featured-img" aria-hidden="true">
+            <div style="position: absolute; inset: 0; padding: var(--mc-space-7); display: flex; flex-direction: column; justify-content: space-between; color: var(--mc-cream);">
+              <span class="hero-visual-badge">Flagship · 79th Annual</span>
+              <div>
+                <p class="hero-visual-text">Where the federation meets in person.</p>
+                <p class="hero-visual-attr">September 18–21, 2026 · Monona Terrace, Madison WI</p>
+              </div>
+            </div>
+          </div>
+          <div class="event-featured-body">
+            <p class="eyebrow">Sep 18–21 · Madison, WI</p>
+            <h2 style="font-size: var(--mc-fs-3xl); margin-bottom: var(--mc-space-4);">ICF Annual Conference 2026</h2>
+            <p>The flagship gathering. Four days of workshops, the Standards Plenary, the National Cheese Awards gala, the Producer-Only Forum, the Apprentice Showcase, and the only place all 15 chapter chairs gather in person.</p>
+            <ul style="display: grid; gap: var(--mc-space-2); margin: var(--mc-space-4) 0; font-size: var(--mc-fs-sm);">
+              <li><i class="fa-solid fa-users" style="color: var(--mc-gold-600); margin-right: var(--mc-space-2);"></i> 1,247 currently registered · capacity 2,000</li>
+              <li><i class="fa-solid fa-clipboard-list" style="color: var(--mc-gold-600); margin-right: var(--mc-space-2);"></i> 4 tracks · 80+ sessions · 110 award finalists</li>
+              <li><i class="fa-solid fa-ticket" style="color: var(--mc-gold-600); margin-right: var(--mc-space-2);"></i> Member rate $695 · Public $1,150 · Apprentice $245</li>
+            </ul>
+            <div class="flex gap-3">
+              <a href="event-detail.html" class="btn btn-rind">Full agenda & register</a>
+              <a href="event-detail.html" class="btn btn-secondary">Save to portal</a>
+            </div>
+          </div>
+        </article>
+
+        <!-- Event grid -->
+        <div class="grid grid-3">
+          <article class="card"><div class="card-media card-media-event-2"><span class="card-media-badge">Workshop</span><div class="card-media-date"><span class="card-media-date-month">Aug</span><span class="card-media-date-day">14</span></div></div><div class="card-body"><p class="card-meta">3 days · Point Reyes, CA</p><h3 class="card-title"><a href="event-detail.html">Sonoma Valley Sensory Intensive</a></h3><p class="card-excerpt">Small-group workshop on flavor-defect identification and grading consistency.</p></div><div class="card-foot"><span class="muted mono upper">6 seats left</span><a href="event-detail.html" class="card-link">Register <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-3"><span class="card-media-badge">Tour</span><div class="card-media-date"><span class="card-media-date-month">Sep</span><span class="card-media-date-day">07</span></div></div><div class="card-body"><p class="card-meta">1 day · Burlington, VT</p><h3 class="card-title"><a href="event-detail.html">Vermont Aging-Cave Tour</a></h3><p class="card-excerpt">Three working aging caves in the Champlain Valley with the producers themselves.</p></div><div class="card-foot"><span class="muted mono upper">28 / 40</span><a href="event-detail.html" class="card-link">Register <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-5"><span class="card-media-badge">Online course</span><div class="card-media-date"><span class="card-media-date-month">Oct</span><span class="card-media-date-day">03</span></div></div><div class="card-body"><p class="card-meta">8 weeks · Online · Certification track</p><h3 class="card-title"><a href="event-detail.html">HACCP for Small Producers — Fall Cohort</a></h3><p class="card-excerpt">A practical 8-week certification building HACCP plans for small-batch dairies.</p></div><div class="card-foot"><span class="muted mono upper">94 enrolled</span><a href="event-detail.html" class="card-link">Enroll <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-4"><span class="card-media-badge">Summit</span><div class="card-media-date"><span class="card-media-date-month">Oct</span><span class="card-media-date-day">22</span></div></div><div class="card-body"><p class="card-meta">2 days · Annecy, FR</p><h3 class="card-title"><a href="event-detail.html">European Standards Summit</a></h3><p class="card-excerpt">Biannual Standards Committee gathering — terroir labeling harmonization.</p></div><div class="card-foot"><span class="muted mono upper">By invitation</span><a href="event-detail.html" class="card-link">Request invite <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-1"><span class="card-media-badge">Conference</span><div class="card-media-date"><span class="card-media-date-month">Nov</span><span class="card-media-date-day">12</span></div></div><div class="card-body"><p class="card-meta">2 days · Lausanne, CH</p><h3 class="card-title"><a href="event-detail.html">Alpine Producers Conference</a></h3><p class="card-excerpt">Annual gathering of the Alpine chapter — small producers from CH, FR, AT, IT, DE.</p></div><div class="card-foot"><span class="muted mono upper">142 / 250</span><a href="event-detail.html" class="card-link">Register <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-6"><span class="card-media-badge">Workshop</span><div class="card-media-date"><span class="card-media-date-month">Nov</span><span class="card-media-date-day">04</span></div></div><div class="card-body"><p class="card-meta">2 days · Asheville, NC</p><h3 class="card-title"><a href="event-detail.html">Bloomy-Rind Master Class</a></h3><p class="card-excerpt">Deep practice on bloomy-rind formation — cultures, humidity control, common defects.</p></div><div class="card-foot"><span class="muted mono upper">15 / 18</span><a href="event-detail.html" class="card-link">Register <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-2"><span class="card-media-badge">Workshop</span><div class="card-media-date"><span class="card-media-date-month">Nov</span><span class="card-media-date-day">18</span></div></div><div class="card-body"><p class="card-meta">3 days · Bristol, UK</p><h3 class="card-title"><a href="event-detail.html">British Territorials Deep Dive</a></h3><p class="card-excerpt">Cheddar, Cheshire, Lancashire, Wensleydale, Caerphilly — taught by Neal's Yard veterans.</p></div><div class="card-foot"><span class="muted mono upper">12 / 24</span><a href="event-detail.html" class="card-link">Register <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-3"><span class="card-media-badge">Tour</span><div class="card-media-date"><span class="card-media-date-month">Dec</span><span class="card-media-date-day">02</span></div></div><div class="card-body"><p class="card-meta">5 days · Friuli, IT</p><h3 class="card-title"><a href="event-detail.html">Montasio Producer Tour</a></h3><p class="card-excerpt">A week with the cooperatives of Friuli-Venezia Giulia. Includes the DOP consortium briefing.</p></div><div class="card-foot"><span class="muted mono upper">8 / 12</span><a href="event-detail.html" class="card-link">Register <i class="fa-solid fa-arrow-right"></i></a></div></article>
+
+          <article class="card"><div class="card-media card-media-event-5"><span class="card-media-badge">Gala</span><div class="card-media-date"><span class="card-media-date-month">Sep</span><span class="card-media-date-day">20</span></div></div><div class="card-body"><p class="card-meta">Black tie · Madison, WI</p><h3 class="card-title"><a href="awards.html">National Cheese Awards Gala</a></h3><p class="card-excerpt">The night the year's best cheeses are crowned. 110 finalists, 29 judges, 12 categories.</p></div><div class="card-foot"><span class="muted mono upper">312 / 400</span><a href="awards.html" class="card-link">View finalists <i class="fa-solid fa-arrow-right"></i></a></div></article>
+        </div>
+
+        <div class="center mt-7">
+          <a href="#" class="btn btn-secondary btn-lg">Load more events (78 remaining)</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOST/CFP -->
+    <section class="section section-warm">
+      <div class="container-narrow center">
+        <p class="eyebrow">Host an event with us</p>
+        <h2>Have a workshop, tour, or summit idea?</h2>
+        <p class="lede">Members in good standing can propose chapter-, regional-, or international-level events. We provide branding, registration infrastructure, payment processing, and promotion through our channels.</p>
+        <a href="contact.html" class="btn btn-rind btn-lg mt-4">Submit an event proposal</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li><li><a href="resources.html">Resources</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li><li><a href="advocacy.html">Advocacy</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>
