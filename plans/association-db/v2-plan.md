@@ -1,6 +1,8 @@
-# AssociationDB v2 — Implementation Plan
+# AssociationDB v2 (a.k.a. demo-morecheese) — Implementation Plan
 
-**A Composable Open App Reference Implementation for MemberJunction**
+**The MoreCheese / International Cheese Federation Demo — A Composable Open App Reference Implementation for MemberJunction**
+
+> **Naming context.** "AssociationDB v2" is the historical internal name carried over from v1. The actual demo brand and persona is **MoreCheese** — playful shorthand for the fictional **International Cheese Federation**, the host association in our demo dataset. The new codebase lives in a dedicated repository, **`demo-morecheese`**, in the MemberJunction GitHub org — separate from the main `MJ` monorepo and separate from `bizapps-*` repos (which hold the real, sold/distributed business apps). This `demo-*` naming convention scales: future demo properties (other industries, other fictional organizations) get their own `demo-<name>` repos under the same convention. All references to "v2" in this document mean the MoreCheese demo open app(s) living in `demo-morecheese`.
 
 > **Intended audience:** This document is the complete execution brief for a future Claude Code session that will build AssociationDB v2 end-to-end. It is also usable by any engineer on the MemberJunction team who wants to understand the what, why, and how of this effort. Every task below should be executable with no additional clarification required.
 
@@ -29,7 +31,7 @@
 
 ### 1.1 The Storyline
 
-AssociationDB v1 has served us well as a basic demonstration database. It contains roughly 58 tables, 10,000+ records, and enough realistic association data (the fictional “American Cheese Association”) that prospects can navigate it, Skip can generate components against it, and our team can use it in sales conversations. But v1 has a structural limitation: **every table is custom to AssociationDB**. It doesn’t demonstrate what MemberJunction is actually uniquely good at — composing purpose-built open apps into a complete business ecosystem while layering AI capabilities on top of existing enterprise data.
+AssociationDB v1 has served us well as a basic demonstration database. It contains roughly 58 tables, 10,000+ records, and enough realistic association data (the fictional "American Cheese Association") that prospects can navigate it, Skip can generate components against it, and our team can use it in sales conversations. But v1 has a structural limitation: **every table is custom to AssociationDB**. It doesn't demonstrate what MemberJunction is actually uniquely good at — composing purpose-built open apps into a complete business ecosystem while layering AI capabilities on top of existing enterprise data. v2 also evolves the brand: the demo persona shifts to the **International Cheese Federation**, hosted at **morecheese.org** — a world-class public-facing demo site that is itself a production deployment of this open app.
 
 AssociationDB v2 rebuilds the demo from the ground up around the composition story. Rather than owning its own `Member`, `Organization`, `Committee`, `Task`, `Invoice`, `Order`, `Message`, or `Issue` tables, v2 delegates to the full BizApps open app catalog:
 
@@ -54,8 +56,14 @@ Sage, our ambient agent, becomes the onboarding experience itself. A welcome scr
 
 ### 1.2 High-Level Bullet Points
 
-- **Rearchitect AssociationDB on the full BizApps open app catalog** — biz-apps-common, tasks, committees, issues, sonar, secure-messaging, orders, payments, subscriptions, accounting (ten open apps composed together, each with all tables fully populated). **Standing rule**: every future BizApps open app gets woven into v2 in the next quarterly release after it ships.
-- **Wire in the BC multi-tenant SaaS portfolio** — Skip and Izzy as **agent proxies** (in-Explorer agents that delegate work to those SaaS products without leaving the MJ UI), Izzy and rasa.io as **integration sources** (external systems v2 pulls data from to demo MJ's integration framework end-to-end), and Betty wired in as appropriate (see §13.2 OQ for clarification)
+- **New dedicated repository**: `demo-morecheese` in the MemberJunction GitHub org. Separate from the main `MJ` monorepo. Separate from `bizapps-*` repos (which contain real, sold/distributed business apps). The `demo-*` convention scales to future demo properties.
+- **Rearchitect on the full BizApps open app catalog** — biz-apps-common, tasks, committees, issues, sonar, secure-messaging, orders, payments, subscriptions, accounting (ten open apps composed together, each with all tables fully populated). **Standing rule**: every future BizApps open app gets woven into the MoreCheese demo in the next quarterly release after it ships.
+- **Wire in the BC multi-tenant SaaS portfolio with simple, real, single-instance integrations** (no per-evaluator provisioning):
+  - **Skip** — one production Skip SaaS org ID owned by the MoreCheese demo, with a curated registry of prebuilt Skip components tied to artifacts in the demo database
+  - **Izzy** — one global demo instance of Izzy; v2 integrates with it as a real integration source (campaign / engagement data) AND surfaces in-Explorer as an agent proxy
+  - **Betty** — one global Betty instance trained on the morecheese.org website content; surfaces as an agent proxy on the public site and in-Explorer
+  - **rasa.io** — one global demo instance; v2 integrates as an integration source for newsletter engagement data
+- **morecheese.org becomes the world-class public-facing demo site** (currently dated; needs a top-tier redesign) — backed by a single production deployment of the MoreCheese open app, with the on-page voice agent, member-facing features, semantic search, and live AI capabilities. **app.morecheese.org** is the team-facing MJ Explorer login pointed at the same backend. Same open app powers both surfaces.
 - **Ship AssociationDB v2 itself as a fully portable Open App** — versioned, semver-released quarterly, installable on any MJ instance (local, MJCentral, or a customer’s own) with zero external service dependencies beyond what the host MJ already needs
 - **Split into two packages**: `@memberjunction/associationdb` (the reusable application) and `@memberjunction/associationdb-demo-data` (optional companion with fake people, dirty data, sample PDFs, preloaded conversations) — so the schema and capabilities can be studied or forked without dragging demo content into a production DB
 - **Pre-configure entity documents, vectorization, clustering, and Apollo enrichment** so AI features work out of the box; **ship pre-computed embeddings as Entity Record Documents loaded into MJ’s Search Vector Service (SVS)** at install time — no live OpenAI calls required during install, no external vector DB required for the demo
@@ -911,11 +919,14 @@ This section is the primary execution reference. Each phase contains tasks with 
   - **Embedding-model compatibility check at install time** — manifest declaration + host validation. May require small extension to the Open App manifest schema and the installer.
   - **Content Source local-files provider** — Content Source provider that serves files bundled inside a package directory. May already exist; if not, build.
 
-- [ ] **0.1** **Package as two npm packages, not a `Demos/` subdirectory.** v2 is itself an Open App and lives under `packages/`:
-  - `packages/AssociationDB/` (`@memberjunction/associationdb`) — the reusable application: schema migrations, entity-document templates, Knowledge Hub configs (jobs/clusters/duplicate detection), Sage onboarding tool, welcome screen, prebuilt models / lists / views / queries / scheduled actions / workspaces / custom form overrides (no demo personas, no fake data)
-  - `packages/AssociationDB-DemoData/` (`@memberjunction/associationdb-demo-data`) — optional companion: fake People + employment + intentional dirty data, fake Organizations, sample events / certifications / forum content, bundled PDFs as local-files Content Source, preloaded conversations + artifacts, all with `IsSharedDemo = TRUE`
-  - Both packages have `schema/`, `metadata/` (mj-sync JSON), `docs/`, `openapp.json`, `README.md`, `CLAUDE.md`
-  - MJCentral installs both. A customer studying the architecture can install just the application. Anyone forking installs the application and supplies their own data.
+- [ ] **0.1** **Set up the `demo-morecheese` repository in the MemberJunction GitHub org** with a workspace layout that contains the demo as two npm packages plus public site code:
+  - `packages/demo-morecheese/` (`@memberjunction/demo-morecheese`) — the reusable application open app: schema migrations, entity-document templates, Knowledge Hub configs (jobs/clusters/duplicate detection), Sage onboarding tool, welcome screen, prebuilt models / lists / views / queries / scheduled actions / workspaces / custom form overrides (no demo personas, no fake data)
+  - `packages/demo-morecheese-data/` (`@memberjunction/demo-morecheese-data`) — optional companion: fake People + employment + intentional dirty data, fake Organizations (cheese producers, retailers, suppliers), sample events / certifications / forum content / committee threads / orders / payment history / accounting entries / messages / issues / Sonar signals, bundled PDFs as local-files Content Source, preloaded conversations + artifacts, all with `IsSharedDemo = TRUE`
+  - `apps/morecheese-site/` — the public-facing morecheese.org website code (see Phase 14 for the redesign work stream)
+  - `apps/morecheese-explorer/` — the team-facing app.morecheese.org MJ Explorer deployment configuration (theming, auth provider, role/permission setup; uses the standard MJ Explorer codebase)
+  - Both open-app packages have `schema/`, `metadata/` (mj-sync JSON), `docs/`, `openapp.json`, `README.md`, `CLAUDE.md`
+  - **Standing convention**: `bizapps-*` repos hold real sold/distributed business apps; `demo-*` repos hold demo properties. This separation prevents demo-only content from polluting the production package registry namespace and signals intent to consumers
+  - MJCentral and the morecheese.org production deployment both install both packages. A consumer studying the architecture can install just the application. Anyone forking starts from the application package and supplies their own data.
 
 - [ ] **0.2** Author `openapp.json` manifests declaring dependencies. `associationdb` declares dependencies on the ten BizApps open apps + the MJ capabilities from 0.0.5; `associationdb-demo-data` declares dependency on `associationdb` only:
   - `@memberjunction/biz-apps-common` (pinned version)
@@ -1179,29 +1190,43 @@ Several entities get custom form overrides demonstrating MJ’s `EntityFormOverr
 
 #### 7.K — Blue Cypress SaaS Product Wiring (Skip, Izzy, Betty, rasa.io)
 
-v2 demonstrates how the broader Blue Cypress SaaS portfolio integrates *with* MJ — not as competitors to MJ's own agents but as complementary capability layers. Two integration patterns are showcased:
+v2 demonstrates how the broader Blue Cypress SaaS portfolio integrates *with* MJ — not as competitors to MJ's own agents but as complementary capability layers. **Simplification**: there is **one global production instance of each SaaS product** dedicated to the MoreCheese demo. No per-evaluator provisioning, no shared multi-tenant complexity inside v2 — just real, working integrations against real production instances.
 
-**Pattern 1 — Agent Proxies (in-Explorer agents that delegate to external SaaS products)**
+**Skip** — one MoreCheese-owned org ID in the production Skip SaaS
 
-- [ ] **7.K.1** **Skip agent proxy** — Skip components and research-style outputs are already integrated; the demo makes the Skip-as-SaaS positioning explicit so prospects understand they're seeing a multi-tenant product reached through MJ, not a built-in MJ feature. Branding, attribution, and pricing model surfaced.
-- [ ] **7.K.2** **Izzy agent proxy** — in-Explorer agent that delegates communications / marketing tasks (campaign drafting, segmentation, send orchestration) to Izzy via its API. User says "draft a renewal campaign for our high-lapse-risk members and send it next Tuesday" — Sage routes to the Izzy proxy, which calls Izzy's APIs and surfaces the result back in the conversation.
-- [ ] **7.K.3** **Betty agent proxy** — (integration model TBD — confirm Betty's role and surface area, see §13.2 OQ-10). Wire in as an additional agent proxy with appropriate domain scope.
-- [ ] **7.K.4** Each proxy is implemented via the standard MJ agent framework with the SaaS product as a tool/endpoint backend — same machinery customers can use to wire their own SaaS products in, taught by example.
-- [ ] **7.K.5** Demo conversations (§7.A) include examples that route through each proxy, with artifact lineage showing "this output was produced by Skip / Izzy / Betty," not by MJ directly.
+- [ ] **7.K.1** Provision a dedicated Skip org for MoreCheese. Configure auth so the demo open app authenticates as that org.
+- [ ] **7.K.2** Curate a registry of prebuilt Skip components for MoreCheese, each tied to artifacts persisted in the demo database (the components in §7.A become this registry).
+- [ ] **7.K.3** When a user invokes Skip from inside the demo (via Sage, via the Component Studio, via a dashboard tile), the demo's Skip integration points at the MoreCheese Skip org and pulls real Skip-generated output back as Artifacts in the database — full lineage preserved.
+- [ ] **7.K.4** Skip-as-SaaS positioning surfaced explicitly: branding, "produced by Skip," attribution on every artifact so prospects understand they're seeing a multi-tenant BC product reached through MJ, not a built-in MJ feature.
 
-**Pattern 2 — Integration Sources (external systems v2 pulls data from to demo MJ's integration framework)**
+**Izzy** — one global demo instance (agent proxy + integration source)
 
-- [ ] **7.K.6** **Izzy as integration source** — pull campaign / engagement data from Izzy into v2 (campaign sends, opens, clicks, unsubscribes, segment metadata). Demonstrates MJ's integration framework lifting data from an external system into queryable MJ entities, then layered with MJ AI on top (Sonar scoring from Izzy engagement signals, predictive features fed by Izzy data, etc.).
-- [ ] **7.K.7** **rasa.io as integration source** — pull newsletter content engagement (article opens, dwell time, click-throughs) into v2. Drives Sonar's content-engagement signal axis and feeds into the engagement scoring model.
-- [ ] **7.K.8** Both integrations are exposed in the Integration framework dashboard (the same place a customer would configure their own AMS sync) so the integration mechanism itself is part of the demo, not hidden plumbing.
-- [ ] **7.K.9** Pre-computed integration data ships in `associationdb-demo-data` for the demo flow; the live integration is optionally activatable if the installer supplies real Izzy / rasa.io credentials (parallel to the optional Box.com Content Source pattern in §7.5).
+- [ ] **7.K.5** Spin up / dedicate one production Izzy instance for the MoreCheese demo. All demo Izzy activity (campaigns, sends, segmentation) happens in this single instance.
+- [ ] **7.K.6** **Integration source role**: standard MJ Integration pulls campaign sends, opens, clicks, unsubscribes, and segment metadata from this Izzy instance into v2's queryable entities. Sonar consumes these signals; predictive models reference them.
+- [ ] **7.K.7** **Agent proxy role**: in-Explorer agent that delegates communications/marketing tasks to the same Izzy instance via its API. "Draft a renewal campaign for our high-lapse-risk members and send it next Tuesday" → Sage routes to the Izzy proxy → Izzy executes against the demo instance → result back in the conversation.
+
+**Betty** — one global Betty instance trained on morecheese.org content
+
+- [ ] **7.K.8** Provision one Betty instance trained on the morecheese.org website content (post-redesign). This becomes the conversational knowledge agent for public-site visitors and team users alike.
+- [ ] **7.K.9** **Public surface**: the morecheese.org redesign embeds Betty as the on-page voice-and-text agent (see Phase 14). Visitors can ask "what's the renewal benefit structure," "when's the next regional workshop in California," etc.
+- [ ] **7.K.10** **In-Explorer surface**: same Betty instance accessible as an agent proxy inside app.morecheese.org for the team — useful for staff to ask "what does our website say about X" when responding to member inquiries.
+
+**rasa.io** — one global demo instance (integration source)
+
+- [ ] **7.K.11** Spin up / dedicate one production rasa.io instance for the MoreCheese demo (the ICF "newsletter").
+- [ ] **7.K.12** Standard MJ Integration pulls newsletter content engagement (article opens, dwell time, click-throughs) into v2. Drives Sonar's content-engagement signal axis and feeds engagement scoring.
+
+**Integration framework visibility**
+
+- [ ] **7.K.13** All four integrations (Skip auth, Izzy data + agent, Betty agent, rasa.io data) are visible and inspectable in the standard MJ Integration framework UI — the same place a customer would configure their own AMS sync — so the integration *mechanism* is part of the demo, not hidden plumbing. Prospects can examine these as reference implementations for wiring their own SaaS subscriptions in.
 
 **Why this matters strategically**
 
-Showcasing the BC SaaS portfolio inside the v2 demo achieves three things simultaneously:
-1. **Cross-sell visibility** — prospects evaluating MJ see the broader BC product story without a separate pitch
-2. **Architecture demonstration** — proves MJ is genuinely an open AI/data platform that *integrates* (rather than competing with) other tools, including BC's own
-3. **Reference implementation for customers** — customers building their own MJ stacks see exactly how to wire their own commercial SaaS subscriptions in as either agent proxies or integration sources
+Showcasing the BC SaaS portfolio against single real production instances achieves:
+1. **Cross-sell visibility** — prospects see the broader BC product story working live, without a separate pitch
+2. **Architecture demonstration** — proves MJ genuinely *integrates* with other tools (including BC's own) rather than competing
+3. **Reference implementation** — customers building their own MJ stacks see exactly how to wire commercial SaaS subscriptions in
+4. **Operational simplicity** — one prod instance of each SaaS, no per-tenant complexity, no demo/prod confusion
 
 #### 7.L — End-to-End Validation
 
@@ -1298,6 +1323,58 @@ Showcasing the BC SaaS portfolio inside the v2 demo achieves three things simult
 - [ ] **13.8** Ongoing maintenance checklist: quarterly release pipeline runbook, demo content refresh, upstream open app version bumps, embedding-model upgrade flow
 - [ ] **13.9** **Standing rule for future open apps** — every new BizApps open app that lands in the MJ ecosystem is incorporated into v2 as part of the **next quarterly release after the open app reaches readiness**. That means: declare the new dependency in `openapp.json`, populate every table of the new open app via mj-sync metadata using the same date-anchor convention (§7.3), wire any relevant new entities into the engagement-scoring / Predictive Studio / search / list / view / scheduled-action / workspace layers, and document the addition in v2's release notes. The composition story only stays compelling if v2 *grows* with the open app catalog — a six-month-old catalog snapshot reads as stale even if the apps themselves are fresh. Build this rule into the open-app authoring CLAUDE.md so future open-app PRs explicitly include "v2 incorporation plan" as a checklist item.
 
+### Phase 14 — MoreCheese.org Public Site & Production Deployment
+
+**Goal:** Deploy the MoreCheese demo as a real production property — `morecheese.org` as a world-class public-facing association demo site with an embedded voice agent, and `app.morecheese.org` as the team-facing MJ Explorer surface. Both backed by the same single production deployment of the open app. This becomes the canonical demo prospects are directed to, alongside MJCentral.
+
+#### 14.A — morecheese.org Public Site Redesign
+
+**Goal:** Replace the existing morecheese.org with a top-tier, modern, member-facing association website that is itself the demo. The site is publicly accessible — anyone can land on it and experience the AI capabilities live.
+
+- [ ] **14.A.1** Visual / UX redesign by a strong design partner. Modern, brand-rich, contemporary association feel. Information architecture matches a real association site: About, Membership, Events, Education, Resources, Standards, Advocacy, Chapters, Contact.
+- [ ] **14.A.2** Public content (CMS-style pages, articles, event landing pages, certification program details, advocacy positions) authored and managed inside the MoreCheese open app as standard MJ content — every page-render reads from the same MJ entities the Explorer surface uses. The site is a window into the database, not a separate CMS.
+- [ ] **14.A.3** Public-facing search using SVS — unified semantic + keyword search across events, resources, articles, certifications, legislative positions. Demonstrates MJ search on a real public site.
+- [ ] **14.A.4** Public member directory (opt-in, privacy-respecting) with engagement-signal hints surfaced thoughtfully (e.g., "active in Pacific Northwest chapter, Standards Committee member")
+- [ ] **14.A.5** Public event registration flow: from event detail page → cart → orders (lives in the `orders` open app) → payments → confirmation. End-to-end demonstrates the full BizApps composition on a live site.
+- [ ] **14.A.6** Member login → member portal (also surfaced on the same domain): subscription status, renewal CTA, certification record, course progress, upcoming registrations, message inbox (from secure-messaging), notification preferences.
+- [ ] **14.A.7** "How this site is built" footer link → a transparent explainer page describing that morecheese.org is itself a MemberJunction demo, with diagrams of which open apps power which features and a CTA to learn more about MJ. Honest, not shouty.
+
+#### 14.B — Voice + Conversational Agent Surface on the Public Site
+
+- [ ] **14.B.1** Embed Betty (one global instance trained on morecheese.org content, see 7.K.8) as the on-page conversational and voice agent. Visitors click a floating "Talk to MoreCheese" affordance and start an interaction.
+- [ ] **14.B.2** Voice support via MJ's realtime / voice stack (the Voice Co-Agent infrastructure already in MJ core). Betty's responses reference live data from the database (events, resources, certifications) — not just trained knowledge.
+- [ ] **14.B.3** Member-aware conversations: signed-in members get personalized responses ("your renewal is due in 47 days," "you have 3 unread messages," "your certification expires in 6 months").
+- [ ] **14.B.4** Visitor-anonymous conversations: unauthenticated visitors get general guidance ("how do I join," "when's the next regional workshop," "what's your stance on labeling legislation") with smooth handoff to a signup or contact form if relevant.
+- [ ] **14.B.5** Public site Sage interactions are logged (with privacy controls) and surface in the team's Explorer surface — staff can see what visitors are asking and what answers Betty gave, improving the experience over time.
+
+#### 14.C — app.morecheese.org Team / Staff Explorer
+
+- [ ] **14.C.1** Standard MJ Explorer deployed at `app.morecheese.org`, configured with MoreCheese theming and BC team auth. Same open app, same database, different user audience.
+- [ ] **14.C.2** Team users (BC staff, design partners, prospects on a guided tour) log in and see the full Explorer with all prebuilt assets from Phase 7. This is where the deep MJ capability story is told.
+- [ ] **14.C.3** Role and permission configuration so different user types see appropriate surfaces (full admin for BC staff; limited "guided tour" role with read-only on most surfaces for prospects).
+- [ ] **14.C.4** "Switch to public site" link in the Explorer header → opens morecheese.org in a new tab, so internal users can flip between the two surfaces while demoing.
+
+#### 14.D — Production Deployment & Operations
+
+- [ ] **14.D.1** Provision one production MJ tenant for MoreCheese (dedicated DB, dedicated infra, separate from MJCentral). This is a real prod environment, not a demo sandbox.
+- [ ] **14.D.2** Install both `@memberjunction/demo-morecheese` + `@memberjunction/demo-morecheese-data` against this tenant via the standard `mj install` pipeline — same install path used everywhere else (§3.2).
+- [ ] **14.D.3** DNS, TLS, CDN configuration for `morecheese.org` and `app.morecheese.org`. Both point at the same backend; the API server serves both the public site bundle and the Explorer bundle from appropriate routes.
+- [ ] **14.D.4** Quarterly release flow for morecheese.org: when a new open app version drops, the prod tenant upgrades via the standard `mj install` upgrade path. Data carries forward (since this is now a real prod instance with real users); migrations handle the schema delta. **Important**: real data here means we *cannot* freely rerun the full demo-data load each quarter — date-shifting needs to apply only to demo records and preserve real public-site member data. See §13.2 OQ-14.
+- [ ] **14.D.5** Production monitoring, uptime alerts, backup policy, incident runbook (treat this as a real customer-facing property because it is one).
+- [ ] **14.D.6** Cost guardrails specific to the public site: anonymous-visitor token budget for Betty conversations (the public site is unauthenticated, so abuse vectors are different from the MJCentral shared instance). Rate limiting, captcha gating for very-active sessions.
+
+#### 14.E — Two-Surface Marketing Story
+
+- [ ] **14.E.1** Update MJ marketing materials and MJCentral landing pages: "see MJ working live at morecheese.org" as a primary CTA, alongside the existing MJCentral free-tier signup
+- [ ] **14.E.2** Sales motion: "have you spent 10 minutes at morecheese.org? Talked to Betty? Looked at how membership and events compose into orders and payments and accounting?" — public-site experience becomes a pre-meeting baseline expectation
+- [ ] **14.E.3** Team guided tours: prospects in active conversations get a 30-minute walkthrough on `app.morecheese.org` with a BC team member, showing the deeper Explorer surface and the Predictive Studio / agent / search capabilities
+
+#### 14.F — Validation
+
+- [ ] **14.F.1** End-to-end smoke test: anonymous visitor → public site → Betty conversation → signup flow → member portal → event registration → order → payment → confirmation. Every step works against the production deployment.
+- [ ] **14.F.2** Team flow: BC staff login at app.morecheese.org → see member registrations from the public site appearing in real time → run a predictive model → score the new registrants → trigger a welcome scheduled action
+- [ ] **14.F.3** Performance under public load: morecheese.org handles realistic public traffic without degrading the Explorer experience
+
 ### 11.1 Phase Dependency Graph
 
 ```mermaid
@@ -1319,14 +1396,21 @@ flowchart LR
     P10 --> P11
     P11 --> P12[Phase 12: Documentation]
     P12 --> P13[Phase 13: QA & Launch]
+    P5 --> P14A[Phase 14A: morecheese.org<br/>site redesign<br/>PARALLEL]
+    P7 --> P14B[Phase 14B/C: voice agent +<br/>app.morecheese.org Explorer]
+    P14A --> P14D[Phase 14D: Production Deployment<br/>morecheese.org + app.morecheese.org]
+    P14B --> P14D
+    P11 --> P14D
 
     style P9 fill:#b8762f,color:#fff
     style P10 fill:#b8762f,color:#fff
+    style P14A fill:#b8762f,color:#fff
     style P0 fill:#7c5295,color:#fff
     style P7 fill:#2d6a9f,color:#fff
+    style P14D fill:#7c5295,color:#fff
 ```
 
-Phases 9 and 10 are parallel work streams and should be resourced independently. Phase 0’s **MJ Capability Readiness Gate** (SVS provider, install hooks, embedding-compat check, Content Source local-files provider) is now an explicit prerequisite — if any of those host capabilities are missing, they’re built as part of this effort and benefit beyond v2. Phase 7 is the heaviest content phase and the largest scope addition (Predictive Studio models + Lists + Views + Queries + Scheduled Actions + Workspaces + Custom Forms + Prompts/Actions/Templates).
+Phases 9, 10, and 14A run in parallel with the core build. Phase 0's **MJ Capability Readiness Gate** (SVS provider, install hooks, embedding-compat check, Content Source local-files provider) is an explicit prerequisite. Phase 7 is the heaviest content phase (Predictive Studio models + Lists + Views + Queries + Scheduled Actions + Workspaces + Custom Forms + Prompts/Actions/Templates + SaaS portfolio integration). Phase 14 is the production-deployment layer that takes the open app live as morecheese.org / app.morecheese.org — sibling to MJCentral hosting in Phase 11, not downstream of it.
 
 -----
 
@@ -1409,9 +1493,17 @@ The v2 effort is successful when all of the following are demonstrably true:
 - **OQ-7:** Who authors the preloaded conversations, research reports, and the prompt library — Blue Cypress team exercise, or Claude Code-assisted with human review?
 - **OQ-8:** Quarterly release cadence target month within the quarter — e.g., always release in month 2 to keep average staleness at 1.5 months, or release at the start of the quarter for maximum freshness window?
 - **OQ-9:** Predictive Studio model portfolio scope — the proposed seven models (churn, renewal, attendance forecast, LTV, engagement, cert completion, event ROI) cover the headline use cases. Confirm or trim/expand. Confirm that **Sonar** is the canonical engagement-signal substrate feeding these models (rather than ad-hoc SQL aggregates).
-- **OQ-10:** **Betty's integration model** — Skip and Izzy are agent proxies; Izzy and rasa.io are integration sources. Where does Betty land — agent proxy only, integration source only, both, or something else (e.g., a domain-specific service like analytics or research)? Confirm before Phase 7.K.3 starts.
-- **OQ-11:** **Readiness status of the five new open apps** added in this revision — issues, sonar, secure-messaging, orders, accounting. Confirm which are production-ready, which are first-cut, which are in development, and which are not yet started. Phase 0 readiness gate is the formal place this lands, but knowing early shapes the schedule.
-- **OQ-12:** **Quarterly release ownership** — who owns the release pipeline runbook, the v2-incorporation review for new open apps, and the SaaS-portfolio (Skip / Izzy / Betty / rasa.io) integration maintenance? These are recurring operational commitments that need a named owner.
+- **OQ-10:** ~~Betty's integration model.~~ **Resolved**: one global Betty instance trained on morecheese.org content; serves as the on-page voice agent for morecheese.org public visitors and as an in-Explorer agent proxy for app.morecheese.org team users (see Phase 7.K.8–7.K.10 and Phase 14.B).
+- **OQ-11:** **Readiness status of the five new open apps** added in the prior revision — issues, sonar, secure-messaging, orders, accounting. Confirm which are production-ready, which are first-cut, which are in development, and which are not yet started. Phase 0 readiness gate is the formal place this lands, but knowing early shapes the schedule.
+- **OQ-12:** **Quarterly release ownership** — who owns the release pipeline runbook, the v2-incorporation review for new open apps, the SaaS-portfolio (Skip / Izzy / Betty / rasa.io) integration maintenance, and the morecheese.org / app.morecheese.org production operations? These are recurring operational commitments that need a named owner (probably more than one given the scope).
+- **OQ-13:** **morecheese.org redesign design partner** — who does the visual / UX work for the public site? Internal design team, agency partner, or a single contractor? Timeline expectation? Brand guideline development needed?
+- **OQ-14:** **Production-data lifecycle for morecheese.org** — once morecheese.org is a real prod property with real public traffic and real (anonymous + signed-in member) interactions, we cannot freely re-run the quarterly demo-data refresh against this DB. Strategy options:
+  - **(a)** Keep all morecheese.org data as `IsSharedDemo = TRUE` and treat real user data (member signups, event registrations, Betty conversations) as ephemeral / nightly-reset
+  - **(b)** Bifurcate: demo seed data refreshes quarterly with date shifting; real user data is preserved indefinitely as production records
+  - **(c)** Use a separate morecheese.org instance from the BC team's prod environment so demo refresh doesn't affect a real customer-facing property
+  Recommendation: (b) with careful refresh scripts that touch only demo-flagged records. Confirm.
+- **OQ-15:** **Public-site abuse and cost ceilings for Betty conversations** — morecheese.org Betty is unauthenticated public. Anonymous visitor sessions need per-IP/per-session limits, captcha gating beyond a threshold, daily aggregate budget, alerting. Define before launch.
+- **OQ-16:** **Repository governance for demo-morecheese** — who has merge rights, who reviews PRs, what's the relationship between the `demo-morecheese` repo and the main `MJ` repo (e.g., does demo-morecheese depend on unreleased `MJ` main-branch builds, or only on tagged npm releases)? Decide before Phase 0.1.
 
 -----
 
