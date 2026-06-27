@@ -1068,9 +1068,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // framework-internal read for SQL parameter building, so it deliberately bypasses
             // entity.Get(), which would assert active status (deprecation warning / disabled throw)
             // for what is NOT user use of the field. (EntityField.Value itself never asserts.)
-            const theField = entity.Fields.find(
-                (field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase(),
-            );
+            const theField = entity.GetFieldByName(f.Name);
             const rawValue = theField?.Value;
 
             // PK-on-CREATE with no explicit value: omit so the SP default fires.
@@ -3345,7 +3343,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         const pkWhere = entity.PrimaryKeys.map(pk => {
-            const fieldInfo = entityInfo.Fields.find(f => f.Name === pk.Name);
+            const fieldInfo = entityInfo.FieldByName(pk.Name);
             const quotes = fieldInfo?.NeedsQuotes ? "'" : '';
             return `${this.QuoteIdentifier(pk.Name)}=${quotes}${pk.Value}${quotes}`;
         }).join(' AND ');
@@ -3838,7 +3836,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (entity) {
                 const invalidColumns: string[] = [];
                 specifiedColumns.forEach(col => {
-                    if (!entity.Fields.find(f => f.Name.trim().toLowerCase() === col.trim().toLowerCase())) {
+                    if (!entity.FieldByName(col)) {
                         invalidColumns.push(col);
                     }
                 });
@@ -3850,7 +3848,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Ensure DateFieldToCheck is included
             const dateField = item['DateFieldToCheck'] ? String(item['DateFieldToCheck']).trim() : '';
             if (dateField.length > 0 && specifiedColumns.indexOf(dateField) === -1) {
-                if (!entity || entity.Fields.find(f => f.Name.trim().toLowerCase() === dateField.toLowerCase()))
+                if (!entity || entity.FieldByName(dateField))
                     specifiedColumns.push(dateField);
             }
         }

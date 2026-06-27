@@ -2320,7 +2320,7 @@ export class EntityInfo extends BaseInfo {
         let keyValue: string = '';
         if (relationship.EntityKeyField && relationship.EntityKeyField.length > 0) {
             keyValue = record.Get(relationship.EntityKeyField);
-            quotes = record.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === relationship.EntityKeyField.trim().toLowerCase()).NeedsQuotes ? "'" : '';
+            quotes = record.EntityInfo.FieldByName(relationship.EntityKeyField)?.NeedsQuotes ? "'" : '';
         }
         else {
             // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
