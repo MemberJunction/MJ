@@ -43,6 +43,11 @@ import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
 import { createMagicLinkHandler, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './widget/index.js';
+import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
+import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
+import { createRingCentralTelephonyHandler, RINGCENTRAL_TELEPHONY_MOUNT_PATH, SetRingCentralTelephonyService } from './telephony/index.js';
+import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService } from './telephony/index.js';
+import { InstallMediaUpgradeDispatcher } from './telephony/index.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -1023,6 +1028,63 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
     startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
   }
+
+  // ─── Telephony (Twilio) ingress: inbound voice webhook + Media-Streams WSS (PUBLIC) ──
+  // Carriers cannot present an MJ JWT — the X-Twilio-Signature HMAC is the gate. The
+  // public webhook router mounts BEFORE the auth middleware; the Media-Streams WSS attaches
+  // to the shared HTTP server. The outbound PlaceTwilioCall mutation reuses the same service.
+  if (configInfo.telephony?.enabled && configInfo.telephony.twilio) {
+    const twilioHandler = createTwilioTelephonyHandler(oauthPublicUrl, configInfo.telephony.twilio);
+    app.use(TWILIO_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), twilioHandler.publicRouter);
+    twilioHandler.attachMediaStreamServer();
+    SetTwilioTelephonyService(twilioHandler.service);
+    startupLog.LogIf('verbose', `[Telephony] Twilio routes registered at ${TWILIO_TELEPHONY_MOUNT_PATH}/voice + Media-Streams WSS`);
+  }
+
+  // ─── Telephony (Vonage) ingress: inbound answer/event webhooks + media WSS (PUBLIC) ──
+  // Carriers cannot present an MJ JWT — the Vonage signed-request HMAC / webhook JWT is the gate.
+  // The public router mounts BEFORE the auth middleware; the media WSS attaches to the shared
+  // HTTP server. The outbound PlaceVonageCall mutation reuses the same service.
+  if (configInfo.telephony?.enabled && configInfo.telephony.vonage) {
+    const vonageHandler = createVonageTelephonyHandler(oauthPublicUrl, configInfo.telephony.vonage);
+    app.use(VONAGE_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), vonageHandler.publicRouter);
+    vonageHandler.attachMediaStreamServer();
+    SetVonageTelephonyService(vonageHandler.service);
+    startupLog.LogIf('verbose', `[Telephony] Vonage routes registered at ${VONAGE_TELEPHONY_MOUNT_PATH}/answer + /event + media WSS`);
+  }
+
+  // ─── Telephony (RingCentral) ingress: Call-Control webhook + media WSS (PUBLIC) ──
+  // Carriers cannot present an MJ JWT — RingCentral's Validation-Token handshake (registration) +
+  // verification-token (delivery) are the gate. The public webhook router mounts BEFORE the auth
+  // middleware; the media WSS attaches to the shared HTTP server. The outbound PlaceRingCentralCall
+  // mutation reuses the same service.
+  if (configInfo.telephony?.enabled && configInfo.telephony.ringcentral) {
+    const ringCentralHandler = createRingCentralTelephonyHandler(configInfo.telephony.ringcentral);
+    app.use(RINGCENTRAL_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), ringCentralHandler.publicRouter);
+    ringCentralHandler.attachMediaStreamServer();
+    SetRingCentralTelephonyService(ringCentralHandler.service);
+    startupLog.LogIf('verbose', `[Telephony] RingCentral routes registered at ${RINGCENTRAL_TELEPHONY_MOUNT_PATH}/webhook + media WSS`);
+  }
+
+  // ─── Teams meetings ingress: Graph change-notification webhook (PUBLIC) ──────────────
+  // Graph cannot present an MJ JWT — the subscription validationToken handshake + the per-
+  // notification clientState shared secret are the gate. The public webhook router mounts
+  // BEFORE the auth middleware. The ACS application-hosted-media audio plane is owned by the
+  // server's native ACS media adapter, which attaches transports to the shared registry
+  // (a media WSS is not needed here). The StartTeamsMeetingSession mutation reuses the same
+  // service via the runtime holder.
+  if (configInfo.telephony?.enabled && configInfo.telephony.teams?.enabled) {
+    const teamsHandler = createTeamsMeetingsHandler(configInfo.telephony.teams);
+    app.use(TEAMS_MEETINGS_MOUNT_PATH, cors<cors.CorsRequest>(), teamsHandler.publicRouter);
+    SetTeamsMeetingsService(teamsHandler.service);
+    startupLog.LogIf('verbose', `[Meetings] Teams routes registered at ${TEAMS_MEETINGS_MOUNT_PATH}/notifications`);
+  }
+
+  // Install the single path-routing WebSocket-upgrade dispatcher AFTER all media WSS routes have
+  // registered. ws 8.x has each {server}-bound WebSocketServer 400 paths it doesn't own, so the GraphQL
+  // socket and the telephony media sockets cannot coexist as separate {server} servers — this strips the
+  // auto-listeners and routes upgrades by path. No-op when no media routes registered (telephony off).
+  InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath);
 
   // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
   // Without this, the browser blocks 401 responses from the auth middleware

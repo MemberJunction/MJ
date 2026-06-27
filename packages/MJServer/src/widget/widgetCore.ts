@@ -15,6 +15,13 @@
 import { buildSessionClaims } from '../auth/magicLink/magicLinkCore.js';
 import type { MagicLinkJWTClaims } from '../auth/magicLink/types.js';
 
+/**
+ * The magic-link resource-scope `resourceType` used for a widget guest session. Pairs with the
+ * opaque session id as `resourceId` so the synthesized principal's MagicLinkScope.ResourceID is
+ * the session id — the discriminator the Widget Guest RLS filters key on for per-session isolation.
+ */
+export const WIDGET_SESSION_RESOURCE_TYPE = 'Widget Session';
+
 /** Why a guest-session mint was rejected. Drives the HTTP status in the router. */
 export type WidgetMintErrorCode =
     | 'not_found'
@@ -22,6 +29,8 @@ export type WidgetMintErrorCode =
     | 'origin_not_allowed'
     | 'modality_not_enabled'
     | 'host_assertion_invalid'
+    | 'upgrade_not_enabled'
+    | 'invalid_email'
     | 'server_error';
 
 /** The minimal widget-instance shape the pure validators need (a subset of the entity). */
@@ -138,6 +147,12 @@ export function buildWidgetGuestClaims(args: {
     roleName: args.guestRoleName,
     anonymous: true,
     sessionId: args.sessionId,
+    // Per-session resource scope → MagicLinkScope.ResourceID on the synthesized principal.
+    // This is what the Widget Guest RLS filters key on ({{ScopeResourceID}}) to isolate one
+    // anonymous guest's conversations from another's despite the shared Anonymous UserID.
+    // It rides the SIGNED token, so a guest cannot forge another session's scope.
+    resourceType: WIDGET_SESSION_RESOURCE_TYPE,
+    resourceId: args.sessionId,
     nowSeconds: args.nowSeconds,
     ttlSeconds: args.ttlSeconds,
   });

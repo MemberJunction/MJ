@@ -74,7 +74,28 @@ export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { 
     await handleMint(service, req, res, true);
   });
 
+  // W5 magic-link upgrade ("Verify it's you"): emails a verification link scoped to the widget's app.
+  // Same rate limiter as mint — it issues an email invite, a comparable cost/abuse surface.
+  publicRouter.post('/upgrade', mintLimiter, json(), async (req: Request, res: Response) => {
+    await handleUpgrade(service, req, res);
+  });
+
   return { publicRouter };
+}
+
+/** Handles the magic-link upgrade request — parses the body, calls the service, maps the status. */
+async function handleUpgrade(service: WidgetSessionService, req: Request, res: Response): Promise<void> {
+  const body = (req.body ?? {}) as { widgetKey?: string; email?: string };
+  const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
+  const email = typeof body.email === 'string' ? body.email : '';
+  if (!widgetKey) {
+    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
+    return;
+  }
+  const result = await service.RequestUpgrade({ widgetKey, email, origin: req.get('origin') ?? undefined });
+  // 400 for a bad email (client can fix it); 403 for any policy rejection (uniform, non-enumerable); 500 for faults.
+  const status = result.success ? 200 : result.errorCode === 'invalid_email' ? 400 : result.errorCode === 'server_error' ? 500 : 403;
+  res.status(status).json(result);
 }
 
 /** Shared mint/refresh handler — parses the request, calls the service, maps the status. */

@@ -182,7 +182,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-entities (381 classes)
+// @memberjunction/core-entities (382 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -558,6 +558,7 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWidgetInstanceEntity,
     MJWorkflowEngineEntity,
     MJWorkflowEntity,
     MJWorkflowRunEntity,
@@ -1505,6 +1506,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWidgetInstanceEntity,
     MJWorkflowEngineEntity,
     MJWorkflowEntity,
     MJWorkflowRunEntity,
@@ -1909,7 +1911,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 819;
+export const CLASS_REGISTRATIONS_COUNT = 820;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

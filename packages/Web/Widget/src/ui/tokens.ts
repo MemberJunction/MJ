@@ -25,7 +25,9 @@ export const WIDGET_SHADOW_STYLES = `
     --mj-border-default: #e2e8f0;
     --mj-brand-primary: #264faf;
     --mj-brand-primary-hover: #1d3f8c;
+    --mj-status-error: #dc2626;
     --mj-status-error-text: #b91c1c;
+    --mj-status-error-bg: #fef2f2;
 
     /* chat tokens (mirror the Angular bootstrap names) */
     --mj-chat-bubble-user-bg: var(--mj-brand-primary);
@@ -94,4 +96,19 @@ export const WIDGET_SHADOW_STYLES = `
     border-radius: 8px; padding: 0 14px; cursor: pointer; font: inherit;
 }
 .mj-widget-send:disabled { opacity: 0.5; cursor: default; }
+
+/* Connection-lost banner (graceful degradation, W6) */
+.mj-widget-banner {
+    display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+    background: var(--mj-status-error-bg); color: var(--mj-status-error-text);
+    border-bottom: 1px solid color-mix(in srgb, var(--mj-status-error) 35%, transparent);
+    font-size: 0.85em;
+}
+.mj-widget-banner[hidden] { display: none; }
+.mj-widget-banner-text { flex: 1; }
+.mj-widget-banner-retry {
+    background: var(--mj-status-error); color: var(--mj-text-inverse); border: none;
+    border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 0.95em;
+}
+.mj-widget-banner-retry:hover { background: var(--mj-status-error-text); }
 `;

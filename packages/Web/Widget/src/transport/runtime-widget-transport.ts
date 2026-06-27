@@ -102,6 +102,13 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         if (this.contextUser?.ID) {
             convo.UserID = this.contextUser.ID;
         }
+        // Stamp the per-session id so the Widget Guest RLS filters ({{ScopeResourceID}}) isolate
+        // this guest's conversation from other anonymous guests sharing the Anonymous principal.
+        // Read-isolation is enforced by the SIGNED session scope, so a client mis-stamp can only
+        // hide the guest's own rows from itself — never expose another session's rows.
+        if (this.session?.sessionId) {
+            convo.ExternalID = this.session.sessionId;
+        }
         const saved = await convo.Save();
         if (!saved) {
             throw new Error(`Failed to create widget conversation: ${convo.LatestResult?.CompleteMessage ?? 'unknown error'}`);

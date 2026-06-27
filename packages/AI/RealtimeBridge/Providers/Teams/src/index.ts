@@ -3,6 +3,7 @@ export * from './teams-meeting-controls';
 export * from './teams-bridge';
 export * from './teams-native-sdk';
 export * from './real-teams-bindings';
+export * from './teams-graph-acs-client';
 export * from './teams-ingress';
 export * from './register-native';
 

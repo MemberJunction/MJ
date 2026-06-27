@@ -14,6 +14,7 @@ const SESSION: WidgetSession = {
     applicationId: 'APP1',
     pinnedAgentId: 'PINNED-AGENT',
     modality: 'Both',
+    sessionId: 'sess-1',
 };
 
 function mountElement(transport: MockWidgetTransport): SupportWidgetElement {
@@ -103,5 +104,119 @@ describe('SupportWidgetElement', () => {
         const el = mountElement(new MockWidgetTransport());
         el.ShowSystemMessage('Session expired');
         expect(el.ShadowRootRef.querySelector('.mj-widget-msg.system')?.textContent).toBe('Session expired');
+    });
+});
+
+describe('SupportWidgetElement — focus trap & focus return (W6 a11y)', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    const root = (el: SupportWidgetElement): ShadowRoot => el.ShadowRootRef;
+    const focusables = (el: SupportWidgetElement): HTMLElement[] => {
+        const panel = root(el).querySelector('.mj-widget-panel') as HTMLElement;
+        const sel = 'button:not([disabled]), textarea:not([disabled]), input:not([disabled])';
+        return Array.from(panel.querySelectorAll<HTMLElement>(sel)).filter((n) => {
+            let node: HTMLElement | null = n;
+            while (node && node !== panel) {
+                if (node.hasAttribute('hidden')) return false;
+                node = node.parentElement;
+            }
+            return true;
+        });
+    };
+
+    it('wraps Tab from the last focusable back to the first', () => {
+        const el = mountElement(new MockWidgetTransport());
+        el.Open();
+        const panel = root(el).querySelector('.mj-widget-panel') as HTMLElement;
+        const items = focusables(el);
+        const last = items[items.length - 1];
+        last.focus();
+        panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+        expect(root(el).activeElement).toBe(items[0]);
+    });
+
+    it('wraps Shift+Tab from the first focusable to the last', () => {
+        const el = mountElement(new MockWidgetTransport());
+        el.Open();
+        const panel = root(el).querySelector('.mj-widget-panel') as HTMLElement;
+        const items = focusables(el);
+        items[0].focus();
+        panel.dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+        );
+        expect(root(el).activeElement).toBe(items[items.length - 1]);
+    });
+
+    it('returns focus to the launcher on close', () => {
+        const el = mountElement(new MockWidgetTransport());
+        el.Open();
+        el.Close();
+        expect(root(el).activeElement).toBe(root(el).querySelector('.mj-widget-launcher'));
+    });
+
+    it('Escape inside the panel closes it', () => {
+        const el = mountElement(new MockWidgetTransport());
+        el.Open();
+        const panel = root(el).querySelector('.mj-widget-panel') as HTMLElement;
+        expect(panel.hasAttribute('hidden')).toBe(false);
+        panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        expect(panel.hasAttribute('hidden')).toBe(true);
+    });
+});
+
+describe('SupportWidgetElement — connection-lost banner (W6 graceful degradation)', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+    });
+
+    const banner = (el: SupportWidgetElement): HTMLElement => el.ShadowRootRef.querySelector('.mj-widget-banner') as HTMLElement;
+
+    it('shows the offline banner when a send fails', async () => {
+        const transport = new MockWidgetTransport();
+        transport.FailNextSend('Network down');
+        await transport.Initialize(SESSION);
+        const el = mountElement(transport);
+        const input = el.ShadowRootRef.querySelector('.mj-widget-input') as HTMLTextAreaElement;
+        input.value = 'hello';
+        (el.ShadowRootRef.querySelector('.mj-widget-composer') as HTMLFormElement).dispatchEvent(
+            new Event('submit', { cancelable: true }),
+        );
+        await flush();
+        expect(banner(el).hasAttribute('hidden')).toBe(false);
+        expect(banner(el).querySelector('.mj-widget-banner-text')?.textContent).toMatch(/network down/i);
+    });
+
+    it('Retry re-dispatches the failed turn and clears the banner on success', async () => {
+        const transport = new MockWidgetTransport((t) => `ok: ${t}`);
+        transport.FailNextSend('Network down');
+        await transport.Initialize(SESSION);
+        const el = mountElement(transport);
+        const input = el.ShadowRootRef.querySelector('.mj-widget-input') as HTMLTextAreaElement;
+        input.value = 'hello';
+        (el.ShadowRootRef.querySelector('.mj-widget-composer') as HTMLFormElement).dispatchEvent(
+            new Event('submit', { cancelable: true }),
+        );
+        await flush();
+        expect(banner(el).hasAttribute('hidden')).toBe(false);
+
+        (banner(el).querySelector('.mj-widget-banner-retry') as HTMLButtonElement).click();
+        await flush();
+        expect(banner(el).hasAttribute('hidden')).toBe(true);
+        const agentMsg = el.ShadowRootRef.querySelector('.mj-widget-msg.agent');
+        expect(agentMsg?.textContent).toBe('ok: hello');
+    });
+
+    it('ShowConnectionError surfaces the banner with a custom retry (token-refresh failure path)', () => {
+        const el = mountElement(new MockWidgetTransport());
+        let retried = 0;
+        el.ShowConnectionError('Connection to support was lost.', () => {
+            retried++;
+        });
+        expect(banner(el).hasAttribute('hidden')).toBe(false);
+        el.RetryConnection();
+        expect(retried).toBe(1);
+        expect(banner(el).hasAttribute('hidden')).toBe(true);
     });
 });

@@ -12,9 +12,13 @@ import type { WidgetChatMessage, WidgetSession } from '../types.js';
 import type { IWidgetTransport } from '../transport/widget-transport.js';
 import type { IVoiceController, WidgetVoiceState } from '../voice/voice-controller.js';
 import { WIDGET_SHADOW_STYLES } from './tokens.js';
+import { VoiceIsSupported } from './browser-capabilities.js';
 
 /** The registered custom-element tag name. */
 export const WIDGET_TAG_NAME = 'mj-support-widget';
+
+/** A pending retry action surfaced by the connection-lost banner. */
+type RetryAction = () => void;
 
 /** The droppable support widget element. */
 export class SupportWidgetElement extends HTMLElement {
@@ -27,6 +31,12 @@ export class SupportWidgetElement extends HTMLElement {
     private voiceActive = false;
     private headerTitle = 'Support';
     private greeting = 'Hi! How can we help you today?';
+    /** The pending retry the connection-lost banner invokes; null when no banner is shown. */
+    private pendingRetry: RetryAction | null = null;
+    /** Capability probe for the voice/mic affordance (overridable for tests). */
+    private voiceSupportedProbe: () => boolean = () => VoiceIsSupported();
+    /** Bound key handler for the open panel's focus trap (added/removed on open/close). */
+    private readonly trapHandler = (e: KeyboardEvent): void => this.onPanelKeydown(e);
 
     constructor() {
         super();
@@ -60,15 +70,27 @@ export class SupportWidgetElement extends HTMLElement {
         if (this.isConnected) this.render();
     }
 
-    /** Opens the chat panel and focuses the composer. */
+    /** Overrides the voice capability probe (used by tests to simulate unsupported browsers). */
+    public SetVoiceSupportedProbe(probe: () => boolean): void {
+        this.voiceSupportedProbe = probe;
+        if (this.isConnected) this.render();
+    }
+
+    /** Opens the chat panel, traps focus inside it, and focuses the composer. */
     public Open(): void {
-        this.panel()?.removeAttribute('hidden');
+        const panel = this.panel();
+        if (!panel) return;
+        panel.removeAttribute('hidden');
+        panel.addEventListener('keydown', this.trapHandler);
         this.input()?.focus();
     }
 
-    /** Closes the chat panel. */
+    /** Closes the chat panel, releases the focus trap, and returns focus to the launcher. */
     public Close(): void {
-        this.panel()?.setAttribute('hidden', '');
+        const panel = this.panel();
+        panel?.setAttribute('hidden', '');
+        panel?.removeEventListener('keydown', this.trapHandler);
+        this.launcher()?.focus();
     }
 
     // ── rendering ────────────────────────────────────────────────────────────
@@ -97,8 +119,31 @@ export class SupportWidgetElement extends HTMLElement {
         panel.setAttribute('hidden', '');
         panel.setAttribute('role', 'dialog');
         panel.setAttribute('aria-label', `${this.headerTitle} chat`);
-        panel.append(this.buildHeader(), this.buildTranscriptContainer(), this.buildProgress(), this.buildComposer());
+        panel.append(
+            this.buildHeader(),
+            this.buildBanner(),
+            this.buildTranscriptContainer(),
+            this.buildProgress(),
+            this.buildComposer(),
+        );
         return panel;
+    }
+
+    /** The connection-lost banner (hidden until a send / token refresh fails). */
+    private buildBanner(): HTMLElement {
+        const banner = document.createElement('div');
+        banner.className = 'mj-widget-banner';
+        banner.setAttribute('hidden', '');
+        banner.setAttribute('role', 'alert');
+        const text = document.createElement('span');
+        text.className = 'mj-widget-banner-text';
+        const retry = document.createElement('button');
+        retry.className = 'mj-widget-banner-retry';
+        retry.type = 'button';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', () => this.onRetryClicked());
+        banner.append(text, retry);
+        return banner;
     }
 
     private buildHeader(): HTMLElement {
@@ -188,6 +233,53 @@ export class SupportWidgetElement extends HTMLElement {
         }
     }
 
+    // ── focus trap (W6 accessibility) ──────────────────────────────────────────
+
+    /** Keeps Tab focus cycling within the open panel; Esc still closes. */
+    private onPanelKeydown(e: KeyboardEvent): void {
+        if (e.key === 'Escape') {
+            this.Close();
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        const focusables = this.focusableElements();
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = this.activeWithinPanel();
+        if (e.shiftKey && active === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && active === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
+
+    /** The focusable controls inside the panel, in DOM order, excluding hidden subtrees. */
+    private focusableElements(): HTMLElement[] {
+        const panel = this.panel();
+        if (!panel) return [];
+        const selector = 'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+        return Array.from(panel.querySelectorAll<HTMLElement>(selector)).filter((el) => !this.isInHiddenSubtree(el, panel));
+    }
+
+    /** True when the element (or an ancestor up to the panel) carries the `hidden` attribute. */
+    private isInHiddenSubtree(el: HTMLElement, panel: HTMLElement): boolean {
+        let node: HTMLElement | null = el;
+        while (node && node !== panel) {
+            if (node.hasAttribute('hidden')) return true;
+            node = node.parentElement;
+        }
+        return false;
+    }
+
+    /** The currently-focused element, resolved through the shadow root. */
+    private activeWithinPanel(): HTMLElement | null {
+        const active = this.root.activeElement;
+        return active instanceof HTMLElement ? active : null;
+    }
+
     /** Reads the composer, appends the user turn, dispatches it, renders the reply. */
     private async sendCurrent(): Promise<void> {
         const input = this.input();
@@ -208,12 +300,14 @@ export class SupportWidgetElement extends HTMLElement {
         try {
             const result = await this.transport!.SendMessage(text, (m) => this.showProgress(m));
             if (result.success) {
+                this.clearConnectionError();
                 this.appendMessage('agent', result.reply || '(no response)');
             } else {
-                this.appendMessage('system', result.error ?? 'Something went wrong. Please try again.');
+                this.ShowConnectionError(result.error ?? 'Message could not be sent.', () => void this.dispatchTurn(text));
             }
         } catch (err) {
-            this.appendMessage('system', err instanceof Error ? err.message : 'Unexpected error.');
+            const msg = err instanceof Error ? err.message : 'Connection lost.';
+            this.ShowConnectionError(msg, () => void this.dispatchTurn(text));
         } finally {
             this.hideProgress();
             this.setSending(false);
@@ -244,9 +338,15 @@ export class SupportWidgetElement extends HTMLElement {
 
     // ── voice (W4) ─────────────────────────────────────────────────────────────
 
-    /** Voice is offered only when a controller is wired AND the instance enables Voice/Both. */
+    /**
+     * Voice is offered only when a controller is wired, the instance enables Voice/Both,
+     * AND the browser can actually capture the mic (secure context + getUserMedia). On an
+     * insecure origin or an unsupported browser the mic affordance is hidden and the
+     * visitor falls back to text (graceful degradation, W6).
+     */
     private voiceEnabled(): boolean {
-        return this.voiceController !== null && (this.session?.modality === 'Voice' || this.session?.modality === 'Both');
+        const modalityAllows = this.session?.modality === 'Voice' || this.session?.modality === 'Both';
+        return this.voiceController !== null && modalityAllows && this.voiceSupportedProbe();
     }
 
     private buildVoiceButton(): HTMLButtonElement {
@@ -311,6 +411,40 @@ export class SupportWidgetElement extends HTMLElement {
         this.appendMessage('system', text);
     }
 
+    /**
+     * Shows the connection-lost banner with a retry affordance. Used when a send fails or
+     * a token refresh fails (graceful degradation, W6). Invoking the banner's Retry button
+     * (or {@link RetryConnection}) runs the supplied action and clears the banner on success.
+     *
+     * @param message  The user-facing reason shown in the banner.
+     * @param retry    The action to run when the visitor clicks Retry.
+     */
+    public ShowConnectionError(message: string, retry: RetryAction): void {
+        this.pendingRetry = retry;
+        const banner = this.query('.mj-widget-banner');
+        const text = this.query('.mj-widget-banner-text');
+        if (text) text.textContent = message;
+        banner?.removeAttribute('hidden');
+    }
+
+    /** Programmatically triggers the pending retry (same effect as clicking Retry). */
+    public RetryConnection(): void {
+        this.onRetryClicked();
+    }
+
+    /** Hides the connection-lost banner and drops the pending retry. */
+    private clearConnectionError(): void {
+        this.pendingRetry = null;
+        this.query('.mj-widget-banner')?.setAttribute('hidden', '');
+    }
+
+    /** Runs the pending retry (if any) and hides the banner; the retry re-shows it on a repeat failure. */
+    private onRetryClicked(): void {
+        const retry = this.pendingRetry;
+        this.clearConnectionError();
+        retry?.();
+    }
+
     /** Exposes the shadow root for tests + integration code. */
     public get ShadowRootRef(): ShadowRoot {
         return this.root;
@@ -322,6 +456,10 @@ export class SupportWidgetElement extends HTMLElement {
 
     private panel(): HTMLElement | null {
         return this.query('.mj-widget-panel');
+    }
+
+    private launcher(): HTMLButtonElement | null {
+        return this.query('.mj-widget-launcher') as HTMLButtonElement | null;
     }
 
     private input(): HTMLTextAreaElement | null {

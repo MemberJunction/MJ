@@ -373,10 +373,118 @@ const widgetSchema = z.object({
   hostPublicKeys: z.record(z.string(), z.string()).optional().default({}),
 }).passthrough();
 
+/**
+ * Telephony bridge config (plans/realtime/bridges-and-widget/telephony-vendor-bindings.md).
+ * Holds the per-vendor credentials + public stream URL the MJAPI telephony ingress wires onto
+ * the already-stubbed native SDK seams. Credentials resolve here from `mj.config.cjs` / env —
+ * never inlined in code. When `twilio` is omitted, the Twilio telephony routes are not mounted.
+ */
+const twilioTelephonySchema = z.object({
+  /** Twilio Account SID (`AC…`). */
+  accountSid: z.string(),
+  /** Account auth token — REST auth (when no API key pair) AND the HMAC key for X-Twilio-Signature verification. */
+  authToken: z.string().optional(),
+  /** API Key SID (`SK…`) — preferred over the auth token for REST auth when paired with apiKeySecret. */
+  apiKeySid: z.string().optional(),
+  /** API Key secret — paired with apiKeySid. */
+  apiKeySecret: z.string().optional(),
+  /** The publicly reachable `wss://…/telephony/twilio/media` URL Twilio's <Connect><Stream> connects to. */
+  streamPublicUrl: z.string(),
+  /** Optional shared secret gating the public webhook/WSS endpoints (defense-in-depth beyond signature verification). */
+  webhookSigningSecret: z.string().optional(),
+  /** Optional status-callback URL Twilio posts call lifecycle events to. */
+  statusCallbackUrl: z.string().optional(),
+}).passthrough();
+
+/**
+ * Vonage Voice + WebSocket-media telephony binding. Voice-API auth is application-scoped
+ * (application id + RSA private key) with an optional account API key pair for key-scoped ops;
+ * signatureSecret is the HMAC key for signed-request `sig` AND HS256 webhook-JWT verification.
+ * When `vonage` is omitted, the Vonage telephony routes are not mounted.
+ */
+const vonageTelephonySchema = z.object({
+  /** Vonage Application ID (UUID) — the JWT-auth identity for the Voice API. */
+  applicationId: z.string().optional(),
+  /** The application's RSA private key (PEM) used to sign Voice-API JWTs. */
+  privateKey: z.string().optional(),
+  /** Account API key — used for key-scoped operations when no application credential pair is supplied. */
+  apiKey: z.string().optional(),
+  /** Account API secret — paired with apiKey. */
+  apiSecret: z.string().optional(),
+  /** The publicly reachable `wss://…/telephony/vonage/media` URL the call's connect NCCO opens. */
+  mediaPublicUrl: z.string(),
+  /** Vonage account signature secret — HMAC key for signed-request `sig` AND HS256 webhook-JWT verification. */
+  signatureSecret: z.string().optional(),
+  /** Optional event-webhook URL Vonage posts call lifecycle events to (passed on outbound createCall). */
+  eventUrl: z.string().optional(),
+}).passthrough();
+
+/**
+ * RingCentral telephony binding: OAuth credentials for the Call-Control REST client, the publicly
+ * reachable media-stream URL, and the webhook verification token. Resolved here from
+ * `mj.config.cjs` / env — never inlined. When `ringcentral` is omitted, the RingCentral telephony
+ * routes are not mounted. (RingCentral does NOT HMAC-sign webhooks like Twilio: a Validation-Token
+ * handshake proves endpoint ownership at registration, and a verification-token authenticates each
+ * delivery.)
+ */
+const ringcentralTelephonySchema = z.object({
+  /** RingCentral platform server URL (sandbox vs production) — required to construct the SDK. */
+  serverUrl: z.string(),
+  /** RingCentral app client id. */
+  clientId: z.string(),
+  /** RingCentral app client secret. */
+  clientSecret: z.string(),
+  /** RingCentral JWT for server-to-server (JWT) auth — preferred over an access token when present. */
+  jwt: z.string().optional(),
+  /** Pre-obtained OAuth access token — used when no JWT is supplied. */
+  accessToken: z.string().optional(),
+  /** The publicly reachable `wss://…/telephony/ringcentral/media` URL the session bridges its audio to. */
+  streamPublicUrl: z.string(),
+  /** The verification token the webhook subscription was created with — gates public notification delivery. */
+  webhookVerificationToken: z.string().optional(),
+}).passthrough();
+
+/**
+ * Teams meetings bridge config (plans/realtime/bridges-and-widget/meeting-vendor-bindings-teams-slack.md M1).
+ * Holds the bot credentials + Graph webhook shared secret + ACS audio rate the MJAPI meetings ingress wires
+ * onto the Teams binding seams. Credentials resolve here from `mj.config.cjs` / env — never inlined in code.
+ * When `teams` is omitted (or disabled), the Teams meetings routes are not mounted.
+ */
+const teamsMeetingsSchema = z.object({
+  /** Master switch for the Teams meetings ingress. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** The bot's Azure AD application (client) id (resolved upstream; carried for diagnostics). */
+  appId: z.string().optional(),
+  /** The Azure tenant id the bot operates in. */
+  tenantId: z.string().optional(),
+  /** A pre-resolved OAuth bearer / application token for the bot's Graph calls (resolved upstream — never inline). */
+  botAccessToken: z.string().optional(),
+  /** The shared secret set as `clientState` on the Graph subscription; gates the change-notification webhook. */
+  notificationClientState: z.string().optional(),
+  /** The ACS application-hosted-media PCM sample rate (Hz) the audio plane negotiates. Defaults to 16000. */
+  acsSampleRate: z.coerce.number().optional().default(16000),
+  /** The realtime model's PCM16 sample rate (Hz) the binding resamples to/from. Defaults to 16000. */
+  modelSampleRate: z.coerce.number().optional().default(16000),
+}).passthrough();
+
+const telephonySchema = z.object({
+  /** Master switch. When false (or when no vendor block is present), telephony routes are not mounted. */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** Twilio Programmable Voice + Media Streams binding. */
+  twilio: twilioTelephonySchema.optional(),
+  /** Vonage Voice + WebSocket-media binding. */
+  vonage: vonageTelephonySchema.optional(),
+  /** RingCentral Call Control + media-stream binding. */
+  ringcentral: ringcentralTelephonySchema.optional(),
+  /** Microsoft Teams meetings (Graph cloud-communications + ACS application-hosted media) binding. */
+  teams: teamsMeetingsSchema.optional(),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
+  telephony: telephonySchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -429,6 +537,11 @@ const configInfoSchema = z.object({
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
+export type TelephonyConfig = z.infer<typeof telephonySchema>;
+export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
+export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
+export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;
+export type TeamsMeetingsConfig = z.infer<typeof teamsMeetingsSchema>;
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;
 export type ViewingSystemSettingsInfo = z.infer<typeof viewingSystemInfoSchema>;
 export type RESTApiOptions = z.infer<typeof restApiOptionsSchema>;

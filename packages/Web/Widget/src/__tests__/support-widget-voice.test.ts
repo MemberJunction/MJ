@@ -5,7 +5,7 @@ import { MockVoiceController } from '../voice/mock-voice-controller.js';
 import type { WidgetSession, WidgetModality } from '../types.js';
 
 function session(modality: WidgetModality): WidgetSession {
-    return { token: 't', expiresAtMs: Date.now() + 600_000, widgetId: 'W', applicationId: 'A', pinnedAgentId: 'AG', modality };
+    return { token: 't', expiresAtMs: Date.now() + 600_000, widgetId: 'W', applicationId: 'A', pinnedAgentId: 'AG', modality, sessionId: 'sess-1' };
 }
 
 function mount(modality: WidgetModality, voice?: MockVoiceController): SupportWidgetElement {
@@ -13,6 +13,9 @@ function mount(modality: WidgetModality, voice?: MockVoiceController): SupportWi
     const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
     el.SetSession(session(modality));
     el.SetTransport(new MockWidgetTransport());
+    // jsdom is not a secure context, so force the capability probe true here — these
+    // tests exercise the affordance/behavior, not the capability gate (covered separately).
+    el.SetVoiceSupportedProbe(() => true);
     if (voice) el.SetVoiceController(voice);
     document.body.appendChild(el);
     return el;
@@ -74,5 +77,30 @@ describe('SupportWidgetElement — voice affordance', () => {
         voice.AbortForAbuse('Voice session time limit reached.');
         const sys = el.ShadowRootRef.querySelector('.mj-widget-msg.system');
         expect(sys?.textContent).toMatch(/time limit/i);
+    });
+
+    it('hides the mic when the browser cannot capture audio (no secure context / getUserMedia)', () => {
+        // Build the element manually so the capability probe is wired BEFORE mount.
+        defineSupportWidgetElement();
+        const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
+        el.SetSession(session('Both'));
+        el.SetTransport(new MockWidgetTransport());
+        el.SetVoiceController(new MockVoiceController());
+        el.SetVoiceSupportedProbe(() => false); // unsupported browser / insecure origin
+        document.body.appendChild(el);
+        expect(voiceBtn(el)).toBeNull(); // graceful degradation → text only
+    });
+
+    it('re-shows the mic when capability is later reported supported', () => {
+        defineSupportWidgetElement();
+        const el = document.createElement(WIDGET_TAG_NAME) as SupportWidgetElement;
+        el.SetSession(session('Both'));
+        el.SetTransport(new MockWidgetTransport());
+        el.SetVoiceController(new MockVoiceController());
+        el.SetVoiceSupportedProbe(() => false);
+        document.body.appendChild(el);
+        expect(voiceBtn(el)).toBeNull();
+        el.SetVoiceSupportedProbe(() => true); // re-renders
+        expect(voiceBtn(el)).not.toBeNull();
     });
 });

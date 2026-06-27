@@ -20,7 +20,8 @@ import type { MJWidgetInstanceEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
-import type { WidgetConfig } from '../config.js';
+import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
+import { configInfo, type WidgetConfig } from '../config.js';
 import { buildWidgetGuestClaims, evaluateWidgetMint, type WidgetMintErrorCode } from './widgetCore.js';
 import { verifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
 
@@ -63,8 +64,42 @@ export interface MintGuestSessionResult {
   pinnedAgentId?: string;
   /** Which modalities this widget exposes (drives the widget UI). */
   modality?: string;
+  /**
+   * The opaque per-session id (also the signed scope resourceId). The widget stamps
+   * Conversation.ExternalID with this so the Widget Guest RLS filters isolate this guest's rows.
+   */
+  sessionId?: string;
+  /**
+   * Optional hard ceiling (minutes) on a voice session for this widget. Surfaced so the client
+   * voice-abuse guard uses the deployment-configured limit; also enforced server-side at mint.
+   */
+  voiceMaxSessionMinutes?: number;
   error?: string;
   errorCode?: WidgetMintErrorCode;
+}
+
+/** Input to request a magic-link identity upgrade for a live guest session (W5). */
+export interface UpgradeGuestSessionInput {
+  /** The widget's public embed key. */
+  widgetKey: string;
+  /** The email to send the verification link to (becomes the provisioned user's email). */
+  email: string;
+  /** The request's Origin header — enforced against the instance allowlist. */
+  origin?: string;
+}
+
+/** Result of a magic-link upgrade request. Never carries the token (delivered by email, out-of-band). */
+export interface UpgradeGuestSessionResult {
+  success: boolean;
+  /** Whether the verification email was dispatched (false when no comms provider is configured). */
+  emailSent?: boolean;
+  error?: string;
+  errorCode?: WidgetMintErrorCode;
+}
+
+/** Minimal email sanity check (presence + single `@` with a dotted domain) — not full RFC validation. */
+function isLikelyEmail(email: string): boolean {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
 }
 
 /**
@@ -135,6 +170,58 @@ export class WidgetSessionService {
   }
 
   /**
+   * W5 magic-link upgrade — "Verify it's you". For a widget whose AuthStrategy is `MagicLinkUpgrade`,
+   * a guest supplies their email and we issue a single-use **email-mode** magic-link invite scoped to
+   * the widget's Application (under the server principal — `CreateInvite` is Owner-gated). The visitor
+   * clicks the emailed link → the existing public `POST /magic-link/redeem` mints a VERIFIED session
+   * JWT → the widget swaps it in via `transport.UpdateToken`, preserving the live conversationId.
+   *
+   * This converges on the SAME `AuthProviderFactory` + `buildMagicLinkSessionUser` path as the guest
+   * mint (D1), so the verified session is just a more-privileged principal on the one pathway. Never
+   * throws for business failures — returns a structured result.
+   */
+  public async RequestUpgrade(input: UpgradeGuestSessionInput): Promise<UpgradeGuestSessionResult> {
+    try {
+      const email = (input.email ?? '').trim();
+      if (!isLikelyEmail(email)) {
+        return { success: false, errorCode: 'invalid_email', error: 'A valid email is required.' };
+      }
+      const contextUser = this.resolveLookupUser();
+      if (!contextUser) {
+        return { success: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
+      }
+      const widget = await this.loadWidgetByKey(input.widgetKey, contextUser);
+      if (!widget) {
+        return { success: false, errorCode: 'not_found', error: 'Unknown widget key.' };
+      }
+      const eligibility = evaluateWidgetMint({ Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality }, input.origin);
+      if (!eligibility.ok) {
+        return { success: false, errorCode: eligibility.errorCode, error: 'Widget upgrade rejected.' };
+      }
+      if (widget.AuthStrategy !== 'MagicLinkUpgrade') {
+        return { success: false, errorCode: 'upgrade_not_enabled', error: 'This widget does not offer magic-link upgrade.' };
+      }
+      const magicLinkConfig = configInfo.magicLink;
+      if (!magicLinkConfig) {
+        LogError('[Widget] Upgrade requested but magicLink config is absent.');
+        return { success: false, errorCode: 'server_error', error: 'Identity verification is not configured.' };
+      }
+      const service = new MagicLinkService(this.publicUrl, magicLinkConfig);
+      const result = await service.CreateInvite({ email, applicationId: widget.ApplicationID }, contextUser);
+      if (!result.success) {
+        LogError(`[Widget] Upgrade invite failed for widget ${widget.ID}: ${result.error ?? result.errorCode ?? 'unknown'}`);
+        return { success: false, errorCode: 'server_error', error: 'Could not start identity verification.' };
+      }
+      // Deliberately do NOT echo the raw token/redemption URL to the public caller — the verified link
+      // is delivered out-of-band by email so a widget-key holder cannot mint verified sessions at will.
+      return { success: true, emailSent: result.emailSent ?? false };
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
    * Verifies a host-identity assertion for a HostIdentity widget against the host's
    * registered public key (config interim store, keyed by widget PublicKey). Fails closed
    * when the key is absent or the assertion is missing/invalid.
@@ -153,11 +240,14 @@ export class WidgetSessionService {
   private mintToken(widget: MJWidgetInstanceEntity, guestRoleName: string, hostIdentity?: HostAssertedIdentity): MintGuestSessionResult {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
+    // Generated once and returned to the client: the widget stamps Conversation.ExternalID with
+    // this id so the Widget Guest RLS filters ({{ScopeResourceID}}) isolate this guest's rows.
+    const sessionId = generateSessionId();
     const claims = buildWidgetGuestClaims({
       issuer: this.publicUrl,
       audience: this.config.audience,
       widgetId: widget.ID,
-      sessionId: generateSessionId(),
+      sessionId,
       anonymousEmail: this.config.anonymousEmail,
       applicationId: widget.ApplicationID,
       guestRoleName,
@@ -174,6 +264,8 @@ export class WidgetSessionService {
       applicationId: widget.ApplicationID,
       pinnedAgentId: widget.PinnedAgentID,
       modality: widget.Modality,
+      sessionId,
+      voiceMaxSessionMinutes: widget.VoiceMaxSessionMinutes ?? undefined,
     };
   }
 

@@ -44,6 +44,30 @@ export class WidgetSessionClient {
         return this.call('/widget/session/refresh');
     }
 
+    /**
+     * W5 magic-link upgrade ("Verify it's you"): asks the server to email a verification link scoped to
+     * the widget's app. On success the visitor receives an email; clicking it redeems a VERIFIED session
+     * JWT (via the existing `/magic-link/redeem`). The host page hands that token back to the widget,
+     * which calls `transport.UpdateToken(verifiedToken)` to swap it in — the live conversationId is
+     * preserved because the transport holds it. Never throws; returns a structured result for the UI.
+     */
+    public async RequestUpgrade(email: string): Promise<{ success: boolean; emailSent?: boolean; error?: string }> {
+        try {
+            const res = await this.fetchImpl(`${this.trimmedApiUrl()}/widget/upgrade`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ widgetKey: this.widgetKey, email }),
+            });
+            const body = (await res.json()) as { success?: boolean; emailSent?: boolean; error?: string; errorCode?: string };
+            if (!res.ok || !body?.success) {
+                return { success: false, error: body?.error ?? body?.errorCode ?? 'Could not start verification.' };
+            }
+            return { success: true, emailSent: body.emailSent };
+        } catch (err) {
+            return { success: false, error: err instanceof Error ? err.message : 'Could not start verification.' };
+        }
+    }
+
     /** Milliseconds until the given session should be refreshed (never negative). */
     public static MsUntilRefresh(session: WidgetSession, nowMs: number): number {
         return Math.max(0, session.expiresAtMs - nowMs - REFRESH_LEAD_MS);
@@ -75,6 +99,8 @@ export class WidgetSessionClient {
             applicationId: body.applicationId,
             pinnedAgentId: body.pinnedAgentId,
             modality: (body.modality ?? 'Text') as WidgetModality,
+            sessionId: body.sessionId ?? '',
+            voiceMaxSessionMinutes: body.voiceMaxSessionMinutes,
         };
     }
 

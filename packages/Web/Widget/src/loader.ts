@@ -16,6 +16,7 @@ import { RuntimeWidgetTransport } from './transport/runtime-widget-transport.js'
 import type { IVoiceController } from './voice/voice-controller.js';
 import { RealtimeVoiceController } from './voice/realtime-voice-controller.js';
 import { createGuestVoiceMint } from './voice/guest-voice-mint.js';
+import { DEFAULT_VOICE_LIMITS, type VoiceAbuseLimits } from './voice/voice-abuse-guard.js';
 import { SupportWidgetElement, defineSupportWidgetElement, WIDGET_TAG_NAME } from './ui/support-widget-element.js';
 
 /** Optional injection points so the loader is unit-testable without a network/runtime. */
@@ -53,7 +54,7 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
 
     resolveMountTarget(options.mountTarget).appendChild(element);
     registerNotificationAdapter(element);
-    scheduleRefresh(client, transport, session, deps.scheduler ?? defaultScheduler);
+    scheduleRefresh(client, transport, element, session, deps.scheduler ?? defaultScheduler);
     return element;
 }
 
@@ -85,7 +86,21 @@ function defaultTransport(apiUrl: string): IWidgetTransport {
 
 /** Default voice controller: reuses the realtime client + the guest realtime mint. */
 function defaultVoiceController(session: WidgetSession): IVoiceController {
-    return new RealtimeVoiceController(createGuestVoiceMint(session));
+    return new RealtimeVoiceController(createGuestVoiceMint(session), voiceLimitsForSession(session));
+}
+
+/**
+ * Derives the client-side voice ceilings from the widget instance's configured
+ * VoiceMaxSessionMinutes (surfaced on the minted session). When the deployment sets no
+ * per-widget cap, the guard's built-in defaults apply. This is defense-in-depth — the
+ * authoritative cap is enforced server-side at the realtime mint (the ephemeral session's
+ * bounded TTL), so a tampered client cannot exceed the deployment's limit.
+ */
+function voiceLimitsForSession(session: WidgetSession): VoiceAbuseLimits | undefined {
+    if (session.voiceMaxSessionMinutes && session.voiceMaxSessionMinutes > 0) {
+        return { ...DEFAULT_VOICE_LIMITS, maxSessionMinutes: session.voiceMaxSessionMinutes };
+    }
+    return undefined;
 }
 
 function defaultScheduler(cb: () => void, delayMs: number): void {
@@ -117,6 +132,7 @@ function registerNotificationAdapter(element: SupportWidgetElement): void {
 function scheduleRefresh(
     client: WidgetSessionClient,
     transport: IWidgetTransport,
+    element: SupportWidgetElement,
     session: WidgetSession,
     scheduler: (cb: () => void, delayMs: number) => void,
 ): void {
@@ -126,10 +142,14 @@ function scheduleRefresh(
             try {
                 const refreshed = await client.Refresh();
                 transport.UpdateToken(refreshed.token);
-                scheduleRefresh(client, transport, refreshed, scheduler);
+                scheduleRefresh(client, transport, element, refreshed, scheduler);
             } catch {
-                // A failed refresh leaves the current (soon-to-expire) token; the next
-                // send will surface an auth error the visitor can retry from.
+                // A failed refresh leaves the current (soon-to-expire) token. Surface the
+                // connection-lost banner so the visitor can retry the refresh; on success
+                // the banner clears and the refresh timer re-arms (graceful degradation, W6).
+                element.ShowConnectionError('Connection to support was lost.', () =>
+                    scheduleRefresh(client, transport, element, session, scheduler),
+                );
             }
         })();
     }, delay);

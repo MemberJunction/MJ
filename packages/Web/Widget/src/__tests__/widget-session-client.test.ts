@@ -20,6 +20,8 @@ const goodBody = {
     applicationId: 'APP1',
     pinnedAgentId: 'AGENT1',
     modality: 'Both',
+    sessionId: 'sess-abc',
+    voiceMaxSessionMinutes: 5,
 };
 
 describe('WidgetSessionClient.Mint', () => {
@@ -33,6 +35,9 @@ describe('WidgetSessionClient.Mint', () => {
         expect(session.token).toBe('jwt.token.here');
         expect(session.pinnedAgentId).toBe('AGENT1');
         expect(session.modality).toBe('Both');
+        // The per-session id + voice ceiling flow through for RLS isolation + the voice-abuse guard.
+        expect(session.sessionId).toBe('sess-abc');
+        expect(session.voiceMaxSessionMinutes).toBe(5);
     });
 
     it('throws on a non-2xx response', async () => {
@@ -57,6 +62,27 @@ describe('WidgetSessionClient.Refresh', () => {
     });
 });
 
+describe('WidgetSessionClient.RequestUpgrade', () => {
+    it('POSTs widgetKey + email to /widget/upgrade and reports success', async () => {
+        const { fn, calls } = fakeFetch(200, { success: true, emailSent: true });
+        const client = new WidgetSessionClient('https://api.test/', 'pk_test_1', fn);
+
+        const result = await client.RequestUpgrade('user@example.com');
+
+        expect(calls[0].url).toBe('https://api.test/widget/upgrade');
+        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', email: 'user@example.com' });
+        expect(result).toEqual({ success: true, emailSent: true });
+    });
+
+    it('returns a failure result (never throws) on a rejected upgrade', async () => {
+        const { fn } = fakeFetch(403, { success: false, errorCode: 'upgrade_not_enabled' });
+        const client = new WidgetSessionClient('https://api.test', 'pk', fn);
+        const result = await client.RequestUpgrade('user@example.com');
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('upgrade_not_enabled');
+    });
+});
+
 describe('WidgetSessionClient.MsUntilRefresh', () => {
     it('refreshes ~60s before expiry and never returns negative', () => {
         const session: WidgetSession = {
@@ -66,6 +92,7 @@ describe('WidgetSessionClient.MsUntilRefresh', () => {
             applicationId: 'A',
             pinnedAgentId: 'AG',
             modality: 'Text',
+            sessionId: 'sess-1',
         };
         expect(WidgetSessionClient.MsUntilRefresh(session, 900_000)).toBe(40_000);
         expect(WidgetSessionClient.MsUntilRefresh(session, 1_000_000)).toBe(0);

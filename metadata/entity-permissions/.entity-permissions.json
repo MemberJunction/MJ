@@ -162,14 +162,16 @@
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
-      "CanDelete": false
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Conversations",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Conversations"
     },
     "primaryKey": {
       "ID": "46E2294F-7319-4A0D-9BD5-C3471CF919EA"
     },
     "sync": {
-      "lastModified": "2026-06-25T00:50:39.735Z",
-      "checksum": "11162037342d1bb99c508814ec4586849807cdb5c4be353b39e651d691a5054f"
+      "lastModified": "2026-06-27T16:26:38.735Z",
+      "checksum": "4eb90a6c015ef5719d5f2f78532477e9076f797f242a4353f23a7679815dee6b"
     }
   },
   {
@@ -179,14 +181,16 @@
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
-      "CanDelete": false
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Conversation Details",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Conversation Details"
     },
     "primaryKey": {
       "ID": "89D1B400-7C2F-4390-93A3-7D05353EEF16"
     },
     "sync": {
-      "lastModified": "2026-06-25T00:50:39.770Z",
-      "checksum": "84f3e0c9de34999695c6078dc5d5ae46847132e74c766541b2f7dfc1b1448568"
+      "lastModified": "2026-06-27T16:26:38.761Z",
+      "checksum": "5840d923821aa41b4817243e5f0cf084dfe90924971641ba6268c4f444da4601"
     }
   }
 ]

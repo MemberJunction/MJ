@@ -15,9 +15,16 @@ export class MockWidgetTransport implements IWidgetTransport {
     public SentMessages: string[] = [];
     private session?: WidgetSession;
     private replyFor: (text: string) => string;
+    /** When set, the NEXT SendMessage fails with this error (one-shot) — exercises the offline banner. */
+    private failNextError: string | null = null;
 
     constructor(replyFor?: (text: string) => string) {
         this.replyFor = replyFor ?? ((t) => `Thanks for your message: "${t}". A support agent will follow up.`);
+    }
+
+    /** Arms a one-shot failure on the next SendMessage (test helper for graceful-degradation paths). */
+    public FailNextSend(error: string): void {
+        this.failNextError = error;
     }
 
     public async Initialize(session: WidgetSession): Promise<void> {
@@ -31,6 +38,11 @@ export class MockWidgetTransport implements IWidgetTransport {
     public async SendMessage(text: string, onProgress?: WidgetProgressCallback): Promise<WidgetTurnResult> {
         this.LastExplicitAgentId = this.session?.pinnedAgentId ?? null;
         this.SentMessages.push(text);
+        if (this.failNextError) {
+            const error = this.failNextError;
+            this.failNextError = null; // one-shot: a retry succeeds
+            return { reply: '', success: false, error };
+        }
         onProgress?.('Thinking…', 50);
         return { reply: this.replyFor(text), success: true };
     }

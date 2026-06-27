@@ -19,6 +19,10 @@ export interface WidgetSessionResponse {
     /** The pinned support agent the widget passes as explicitAgentId for every turn (D5). */
     pinnedAgentId?: string;
     modality?: WidgetModality;
+    /** Opaque per-session id; stamped onto Conversation.ExternalID so the Widget Guest RLS filters isolate this guest. */
+    sessionId?: string;
+    /** Optional hard ceiling (minutes) on a voice session for this widget (server default applies when absent). */
+    voiceMaxSessionMinutes?: number;
     error?: string;
     errorCode?: string;
 }
@@ -31,6 +35,10 @@ export interface WidgetSession {
     applicationId: string;
     pinnedAgentId: string;
     modality: WidgetModality;
+    /** Opaque per-session id; stamped onto Conversation.ExternalID for per-guest RLS isolation. */
+    sessionId: string;
+    /** Optional hard ceiling (minutes) on a voice session — the authoritative limit for the voice-abuse guard. */
+    voiceMaxSessionMinutes?: number;
 }
 
 /** Options the host page supplies (via data-attributes or the programmatic API). */

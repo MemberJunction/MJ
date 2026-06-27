@@ -40,6 +40,7 @@ import {
 } from './base-realtime-bridge';
 import { BridgeMediaFrame, BridgeMediaTrackKind, BridgeParticipantInfo } from './media-tracks';
 import { IBridgeMeetingControlsEventSource } from './channel-plane';
+import { resamplePcm16Buffer } from './audio/index';
 
 /**
  * Whether a telephony bridge **places** the call (outbound) or **answers** an incoming one (inbound).
@@ -74,6 +75,20 @@ export const FROM_NUMBER_CONFIG_KEY = 'FromNumber';
  * webhook delivered). Required to answer an inbound call; ignored for outbound.
  */
 export const INBOUND_CALL_ID_CONFIG_KEY = 'InboundCallId';
+
+/**
+ * Telephony media is ALWAYS G.711 μ-law at 8 kHz (the PSTN rate). Realtime models speak PCM16 at a
+ * higher rate (e.g. OpenAI 24 kHz, Gemini 16 kHz in / 24 kHz out), so {@link BaseTelephonyBridge}
+ * resamples between the carrier's 8 kHz and the model's rate on BOTH legs. Skipping this plays the
+ * audio at the wrong rate — e.g. 24 kHz samples emitted as 8 kHz are ~3× slow and pitched down ("deep").
+ */
+export const TELEPHONY_SAMPLE_RATE = 8000;
+
+/** Config key carrying the realtime model's INPUT sample rate (the rate inbound caller audio must be fed at). */
+export const INBOUND_SAMPLE_RATE_CONFIG_KEY = 'InboundSampleRate';
+
+/** Config key carrying the realtime model's OUTPUT sample rate (the rate the model's outbound audio arrives at). */
+export const OUTBOUND_SAMPLE_RATE_CONFIG_KEY = 'OutboundSampleRate';
 
 /**
  * The role of the single remote party on a telephony call, surfaced through
@@ -227,6 +242,12 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     /** The direction this call was established with. */
     protected direction: BridgeConnectDirection = 'Outbound';
 
+    /** The realtime model's INPUT rate (Hz) — inbound 8 kHz caller audio is resampled UP to this. */
+    protected modelInputRate: number = 24000;
+
+    /** The realtime model's OUTPUT rate (Hz) — outbound model audio is resampled DOWN to 8 kHz from this. */
+    protected modelOutputRate: number = 24000;
+
     /** The inbound-media handler registered via {@link OnMedia}; inbound audio is forwarded to it. */
     private mediaHandler?: (frame: BridgeMediaFrame) => void;
 
@@ -298,6 +319,9 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         const config = ctx.Configuration ?? {};
         this.direction = this.readDirection(config);
         this.fromNumber = this.readStringConfig(config, FROM_NUMBER_CONFIG_KEY) ?? '';
+        // The engine forwards the realtime session's sample rates here; default 24 kHz when absent.
+        this.modelInputRate = this.readNumberConfig(config, INBOUND_SAMPLE_RATE_CONFIG_KEY) ?? 24000;
+        this.modelOutputRate = this.readNumberConfig(config, OUTBOUND_SAMPLE_RATE_CONFIG_KEY) ?? 24000;
 
         this.sdk = this.sdkFactory(ctx.Configuration);
         this.wireInboundAudio(this.sdk);
@@ -352,7 +376,10 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         if (track === 'audio-out') {
             const pcm = this.framePcm(frame);
             if (pcm) {
-                this.sdk.sendAudioFrame(pcm);
+                // Resample the model's output (e.g. 24 kHz) DOWN to the carrier's 8 kHz before the SDK
+                // μ-law-encodes it; otherwise the caller hears it ~3× slow + pitched down ("deep").
+                const out = this.modelOutputRate === TELEPHONY_SAMPLE_RATE ? pcm : resamplePcm16Buffer(pcm, this.modelOutputRate, TELEPHONY_SAMPLE_RATE);
+                this.sdk.sendAudioFrame(out);
             }
         }
         // video-out / screen-out (and any inbound track passed in error) are n/a for telephony — no-op.
@@ -505,9 +532,12 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     /** Wires the SDK's inbound-audio callback to a single-party inbound {@link BridgeMediaFrame}. */
     private wireInboundAudio(sdk: ITelephonyCallSdk): void {
         sdk.onAudioFrame((pcm: ArrayBuffer) => {
+            // The SDK hands us 8 kHz PCM16 (μ-law decoded). Resample UP to the model's input rate
+            // (e.g. 24 kHz) so the model hears the caller at the correct pitch/speed.
+            const inbound = this.modelInputRate === TELEPHONY_SAMPLE_RATE ? pcm : resamplePcm16Buffer(pcm, TELEPHONY_SAMPLE_RATE, this.modelInputRate);
             this.mediaHandler?.({
                 Track: 'audio-in',
-                Bytes: pcm,
+                Bytes: inbound,
                 SpeakerLabel: BaseTelephonyBridge.REMOTE_PARTICIPANT_ID, // single remote party — trivial diarization
                 TimestampMs: Date.now(),
             });
@@ -558,6 +588,13 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     private readStringConfig(config: Record<string, unknown>, key: string): string | undefined {
         const value = config[key];
         return typeof value === 'string' ? value : undefined;
+    }
+
+    /** Reads a positive-number config value (accepts numeric strings), returning `undefined` when absent/invalid. */
+    private readNumberConfig(config: Record<string, unknown>, key: string): number | undefined {
+        const value = config[key];
+        const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+        return Number.isFinite(n) && n > 0 ? n : undefined;
     }
 
     /** Returns the PCM bytes of an outbound audio frame, preferring the binary payload. */
