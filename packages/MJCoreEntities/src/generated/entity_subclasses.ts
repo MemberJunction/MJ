@@ -4194,17 +4194,17 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Context Compression Message Threshold
+        * * Display Name: Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Context Compression Message Retention Count
+        * * Display Name: Compression Message Retention
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
@@ -4368,7 +4368,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User
+        * * Display Name: Owner
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -4487,7 +4487,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold Bytes
+        * * Display Name: Inline Storage Threshold (Bytes)
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -4497,7 +4497,7 @@ if this limit is exceeded.`),
         * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`),
     ScopeConfig: z.string().nullable().describe(`
         * * Field Name: ScopeConfig
-        * * Display Name: Scope Config
+        * * Display Name: Scope Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
     NoteRetentionDays: z.number().nullable().describe(`
@@ -4587,10 +4587,16 @@ if this limit is exceeded.`),
         * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`),
     RecordingStorageProviderID: z.string().nullable().describe(`
         * * Field Name: RecordingStorageProviderID
-        * * Display Name: Recording Storage Provider ID
+        * * Display Name: Recording Storage Provider
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
         * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.`),
+    DefaultMediaCollectionID: z.string().nullable().describe(`
+        * * Field Name: DefaultMediaCollectionID
+        * * Display Name: Default Media Collection
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+        * * Description: OPTIONAL default media kit for this agent: a Collection of Artifacts the agent may show on the realtime Media channel during a conversation. Resolved per session as runtime-override > this agent default > none. When set, the agent is given a manifest (each item's display name, media type, when-to-show ContextDescription and Preload flag) so it can surface items via the Media_ShowMedia tool. When NULL the agent has no curated kit (ad-hoc Media_ShowMedia still works).`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -4605,7 +4611,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
-        * * Display Name: Default Artifact Type
+        * * Display Name: Default Artifact Type Name
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
@@ -4613,31 +4619,35 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Attachment Storage Provider
+        * * Display Name: Attachment Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account
+        * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     DefaultCoAgent: z.string().nullable().describe(`
         * * Field Name: DefaultCoAgent
-        * * Display Name: Default Co-Agent
+        * * Display Name: Default Co-Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RecordingStorageProvider: z.string().nullable().describe(`
         * * Field Name: RecordingStorageProvider
-        * * Display Name: Recording Storage Provider
+        * * Display Name: Recording Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
+    DefaultMediaCollection: z.string().nullable().describe(`
+        * * Field Name: DefaultMediaCollection
+        * * Display Name: Default Media Collection Name
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
     RootDefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: RootDefaultCoAgentID
-        * * Display Name: Root Default Co-Agent ID
+        * * Display Name: Root Default Co-Agent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -9649,7 +9659,7 @@ export const MJCollectionArtifactSchema = z.object({
         * * Default Value: newsequentialid()`),
     CollectionID: z.string().describe(`
         * * Field Name: CollectionID
-        * * Display Name: Collection ID
+        * * Display Name: Collection
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
     Sequence: z.number().describe(`
@@ -9670,17 +9680,28 @@ export const MJCollectionArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ArtifactVersionID: z.string().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version ID
+        * * Display Name: Artifact Version
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
         * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.`),
+    ContextDescription: z.string().nullable().describe(`
+        * * Field Name: ContextDescription
+        * * Display Name: Context Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Agent-facing description of what this media item is and WHEN to show it during a conversation. Read by a realtime agent (alongside the artifact's own name/type) to decide autonomously whether/when to surface the item. Per-membership: the same artifact can carry different guidance in different Collections (media kits).`),
+    Preload: z.boolean().describe(`
+        * * Field Name: Preload
+        * * Display Name: Preload
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Eager-load hint for a realtime media kit: when 1, the agent is told to show / the client to prefetch this item at session start rather than waiting until it is contextually relevant. Default 0 (lazy — surfaced only when the agent chooses).`),
     Collection: z.string().describe(`
         * * Field Name: Collection
-        * * Display Name: Collection
+        * * Display Name: Collection Name
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -21146,19 +21167,19 @@ export const MJMLTrainingRunSchema = z.object({
         * * Default Value: newsequentialid()`),
     PipelineID: z.string().describe(`
         * * Field Name: PipelineID
-        * * Display Name: Pipeline
+        * * Display Name: Pipeline ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
         * * Description: Foreign key to the ML Training Pipeline this run executed`),
     ResultingModelID: z.string().nullable().describe(`
         * * Field Name: ResultingModelID
-        * * Display Name: Resulting Model
+        * * Display Name: Resulting Model ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
         * * Description: Foreign key to the MLModel this run produced, when it produced one (NULL for pruned/failed runs)`),
     ExperimentSessionIterationID: z.string().nullable().describe(`
         * * Field Name: ExperimentSessionIterationID
-        * * Display Name: Experiment Iteration
+        * * Display Name: Experiment Session Iteration ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Experiment Session Iterations (vwExperimentSessionIterations.ID)
         * * Description: Optional foreign key to the generic ExperimentSessionIteration that owns this run (NULL for standalone/manual training outside a session)`),
@@ -21169,7 +21190,7 @@ export const MJMLTrainingRunSchema = z.object({
         * * Description: JSON of the exact feature set used for this run`),
     AlgorithmID: z.string().describe(`
         * * Field Name: AlgorithmID
-        * * Display Name: Algorithm
+        * * Display Name: Algorithm ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
         * * Description: Foreign key to the algorithm used for this run`),
@@ -21233,11 +21254,15 @@ export const MJMLTrainingRunSchema = z.object({
         * * Default Value: getutcdate()`),
     Pipeline: z.string().describe(`
         * * Field Name: Pipeline
-        * * Display Name: Pipeline Name
+        * * Display Name: Pipeline
+        * * SQL Data Type: nvarchar(255)`),
+    ExperimentSessionIteration: z.string().nullable().describe(`
+        * * Field Name: ExperimentSessionIteration
+        * * Display Name: Experiment Session Iteration
         * * SQL Data Type: nvarchar(255)`),
     Algorithm: z.string().describe(`
         * * Field Name: Algorithm
-        * * Display Name: Algorithm Name
+        * * Display Name: Algorithm
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -42226,7 +42251,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Context Compression Message Threshold
+    * * Display Name: Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -42239,7 +42264,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -42252,7 +42277,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Context Compression Message Retention Count
+    * * Display Name: Compression Message Retention
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -42616,7 +42641,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User
+    * * Display Name: Owner
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -42863,7 +42888,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold Bytes
+    * * Display Name: Inline Storage Threshold (Bytes)
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -42889,7 +42914,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ScopeConfig
-    * * Display Name: Scope Config
+    * * Display Name: Scope Configuration
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}
     */
@@ -43091,7 +43116,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RecordingStorageProviderID
-    * * Display Name: Recording Storage Provider ID
+    * * Display Name: Recording Storage Provider
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
     * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.
@@ -43101,6 +43126,20 @@ if this limit is exceeded.
     }
     set RecordingStorageProviderID(value: string | null) {
         this.Set('RecordingStorageProviderID', value);
+    }
+
+    /**
+    * * Field Name: DefaultMediaCollectionID
+    * * Display Name: Default Media Collection
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+    * * Description: OPTIONAL default media kit for this agent: a Collection of Artifacts the agent may show on the realtime Media channel during a conversation. Resolved per session as runtime-override > this agent default > none. When set, the agent is given a manifest (each item's display name, media type, when-to-show ContextDescription and Preload flag) so it can surface items via the Media_ShowMedia tool. When NULL the agent has no curated kit (ad-hoc Media_ShowMedia still works).
+    */
+    get DefaultMediaCollectionID(): string | null {
+        return this.Get('DefaultMediaCollectionID');
+    }
+    set DefaultMediaCollectionID(value: string | null) {
+        this.Set('DefaultMediaCollectionID', value);
     }
 
     /**
@@ -43132,7 +43171,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactType
-    * * Display Name: Default Artifact Type
+    * * Display Name: Default Artifact Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get DefaultArtifactType(): string | null {
@@ -43150,7 +43189,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Attachment Storage Provider
+    * * Display Name: Attachment Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -43159,7 +43198,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(200)
     */
     get Category(): string | null {
@@ -43168,7 +43207,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account
+    * * Display Name: Default Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -43177,7 +43216,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultCoAgent
-    * * Display Name: Default Co-Agent
+    * * Display Name: Default Co-Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultCoAgent(): string | null {
@@ -43186,7 +43225,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RecordingStorageProvider
-    * * Display Name: Recording Storage Provider
+    * * Display Name: Recording Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get RecordingStorageProvider(): string | null {
@@ -43194,8 +43233,17 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DefaultMediaCollection
+    * * Display Name: Default Media Collection Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultMediaCollection(): string | null {
+        return this.Get('DefaultMediaCollection');
+    }
+
+    /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -43204,7 +43252,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootDefaultCoAgentID
-    * * Display Name: Root Default Co-Agent ID
+    * * Display Name: Root Default Co-Agent
     * * SQL Data Type: uniqueidentifier
     */
     get RootDefaultCoAgentID(): string | null {
@@ -56683,7 +56731,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
 
     /**
     * * Field Name: CollectionID
-    * * Display Name: Collection ID
+    * * Display Name: Collection
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
     */
@@ -56730,7 +56778,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version ID
+    * * Display Name: Artifact Version
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
     * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.
@@ -56743,8 +56791,35 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     }
 
     /**
+    * * Field Name: ContextDescription
+    * * Display Name: Context Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Agent-facing description of what this media item is and WHEN to show it during a conversation. Read by a realtime agent (alongside the artifact's own name/type) to decide autonomously whether/when to surface the item. Per-membership: the same artifact can carry different guidance in different Collections (media kits).
+    */
+    get ContextDescription(): string | null {
+        return this.Get('ContextDescription');
+    }
+    set ContextDescription(value: string | null) {
+        this.Set('ContextDescription', value);
+    }
+
+    /**
+    * * Field Name: Preload
+    * * Display Name: Preload
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Eager-load hint for a realtime media kit: when 1, the agent is told to show / the client to prefetch this item at session start rather than waiting until it is contextually relevant. Default 0 (lazy — surfaced only when the agent chooses).
+    */
+    get Preload(): boolean {
+        return this.Get('Preload');
+    }
+    set Preload(value: boolean) {
+        this.Set('Preload', value);
+    }
+
+    /**
     * * Field Name: Collection
-    * * Display Name: Collection
+    * * Display Name: Collection Name
     * * SQL Data Type: nvarchar(255)
     */
     get Collection(): string {
@@ -56753,7 +56828,7 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version Name
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -86306,7 +86381,7 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
 
     /**
     * * Field Name: PipelineID
-    * * Display Name: Pipeline
+    * * Display Name: Pipeline ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
     * * Description: Foreign key to the ML Training Pipeline this run executed
@@ -86320,7 +86395,7 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
 
     /**
     * * Field Name: ResultingModelID
-    * * Display Name: Resulting Model
+    * * Display Name: Resulting Model ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Models (vwMLModels.ID)
     * * Description: Foreign key to the MLModel this run produced, when it produced one (NULL for pruned/failed runs)
@@ -86334,7 +86409,7 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
 
     /**
     * * Field Name: ExperimentSessionIterationID
-    * * Display Name: Experiment Iteration
+    * * Display Name: Experiment Session Iteration ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Experiment Session Iterations (vwExperimentSessionIterations.ID)
     * * Description: Optional foreign key to the generic ExperimentSessionIteration that owns this run (NULL for standalone/manual training outside a session)
@@ -86361,7 +86436,7 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
 
     /**
     * * Field Name: AlgorithmID
-    * * Display Name: Algorithm
+    * * Display Name: Algorithm ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: ML Algorithms (vwMLAlgorithms.ID)
     * * Description: Foreign key to the algorithm used for this run
@@ -86507,7 +86582,7 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
 
     /**
     * * Field Name: Pipeline
-    * * Display Name: Pipeline Name
+    * * Display Name: Pipeline
     * * SQL Data Type: nvarchar(255)
     */
     get Pipeline(): string {
@@ -86515,8 +86590,17 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     }
 
     /**
+    * * Field Name: ExperimentSessionIteration
+    * * Display Name: Experiment Session Iteration
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ExperimentSessionIteration(): string | null {
+        return this.Get('ExperimentSessionIteration');
+    }
+
+    /**
     * * Field Name: Algorithm
-    * * Display Name: Algorithm Name
+    * * Display Name: Algorithm
     * * SQL Data Type: nvarchar(255)
     */
     get Algorithm(): string {
