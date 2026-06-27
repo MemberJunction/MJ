@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Community · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .forum-layout { display: grid; grid-template-columns: 240px 1fr; gap: var(--mc-space-6); }
+    @media (max-width: 900px) { .forum-layout { grid-template-columns: 1fr; } }
+    .forum-side h6 { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wider); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-3); margin-top: var(--mc-space-5); }
+    .forum-cat-list { display: flex; flex-direction: column; gap: 2px; }
+    .forum-cat { padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); display: flex; justify-content: space-between; align-items: center; color: var(--mc-text-primary); transition: all var(--mc-dur-fast); }
+    .forum-cat:hover { background: var(--mc-bg-surface-warm); }
+    .forum-cat.active { background: var(--mc-rind-500); color: var(--mc-cream); }
+    .forum-cat-count { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); opacity: 0.7; }
+
+    .thread-row { display: grid; grid-template-columns: 48px 1fr auto auto; gap: var(--mc-space-4); padding: var(--mc-space-4); align-items: center; background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-md); margin-bottom: var(--mc-space-3); transition: all var(--mc-dur-fast); }
+    .thread-row:hover { border-color: var(--mc-gold-300); box-shadow: var(--mc-shadow-sm); }
+    .thread-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); flex-shrink: 0; }
+    .thread-title { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-base); line-height: var(--mc-lh-snug); }
+    .thread-meta { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); margin-top: 4px; }
+    .thread-tag { display: inline-block; padding: 1px 6px; background: var(--mc-bg-surface-warm); color: var(--mc-rind-500); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; margin-right: var(--mc-space-2); }
+    .thread-replies { display: flex; flex-direction: column; align-items: center; min-width: 60px; }
+    .thread-replies-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-lg); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); line-height: 1; }
+    .thread-replies-label { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+    .thread-time { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); color: var(--mc-text-muted); white-space: nowrap; }
+
+    .pinned-banner { background: linear-gradient(135deg, var(--mc-gold-100), var(--mc-gold-200)); border: 1px solid var(--mc-gold-300); padding: var(--mc-space-4); border-radius: var(--mc-radius-md); margin-bottom: var(--mc-space-5); display: flex; gap: var(--mc-space-3); align-items: center; }
+    .pinned-banner i { color: var(--mc-rind-500); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html" class="active">Community</a><a href="about.html">About</a></nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Community</span></nav>
+        <p class="eyebrow">Community forums</p>
+        <h1>Where the conversation lives.</h1>
+        <p class="lede">Public preview. Forum posting and full thread access requires a free Apprentice-tier membership or above. <a href="membership.html#join">Join to participate</a>.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="forum-layout">
+          <!-- SIDE: Categories -->
+          <aside class="forum-side">
+            <h6>Categories</h6>
+            <div class="forum-cat-list">
+              <a href="#" class="forum-cat active">All threads <span class="forum-cat-count">1,247</span></a>
+              <a href="#" class="forum-cat">Production technique <span class="forum-cat-count">418</span></a>
+              <a href="#" class="forum-cat">Washed-rind <span class="forum-cat-count">87</span></a>
+              <a href="#" class="forum-cat">Bloomy-rind <span class="forum-cat-count">62</span></a>
+              <a href="#" class="forum-cat">Aging caves <span class="forum-cat-count">73</span></a>
+              <a href="#" class="forum-cat">Cultures & cooks <span class="forum-cat-count">94</span></a>
+              <a href="#" class="forum-cat">Sensory & defects <span class="forum-cat-count">128</span></a>
+              <a href="#" class="forum-cat">Business & ops <span class="forum-cat-count">156</span></a>
+              <a href="#" class="forum-cat">Regulatory <span class="forum-cat-count">94</span></a>
+              <a href="#" class="forum-cat">Apprentice corner <span class="forum-cat-count">112</span></a>
+              <a href="#" class="forum-cat">Chapter chat <span class="forum-cat-count">203</span></a>
+            </div>
+
+            <h6>Hot tags</h6>
+            <div class="flex gap-2" style="flex-wrap: wrap;">
+              <a href="#" class="thread-tag">b-linens</a>
+              <a href="#" class="thread-tag">haccp</a>
+              <a href="#" class="thread-tag">scaling</a>
+              <a href="#" class="thread-tag">raw-milk</a>
+              <a href="#" class="thread-tag">labeling</a>
+              <a href="#" class="thread-tag">apprenticeship</a>
+            </div>
+
+            <h6>Stats</h6>
+            <div class="muted" style="font-size: var(--mc-fs-sm); line-height: var(--mc-lh-relaxed);">
+              <p>1,247 active threads<br/>14,802 total posts<br/>4,621 active members<br/>87 posts in last 24h</p>
+            </div>
+          </aside>
+
+          <!-- MAIN: Threads -->
+          <div>
+            <div class="pinned-banner">
+              <i class="fa-solid fa-thumbtack"></i>
+              <div style="font-size: var(--mc-fs-sm);"><strong>Pinned by Standards Committee</strong> — Voting open until Aug 30 on 7 standards revisions. <a href="advocacy.html">See the agenda →</a></div>
+            </div>
+
+            <div class="section-head">
+              <h2 style="margin: 0; font-size: var(--mc-fs-xl);">Recent threads</h2>
+              <div class="flex gap-3">
+                <select style="padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm); background: var(--mc-bg-surface);"><option>Latest activity</option><option>Most replies</option><option>Newest</option><option>Featured</option></select>
+                <a href="#" class="btn btn-rind btn-sm">New thread</a>
+              </div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">MT</div>
+              <div>
+                <div class="thread-title">B. linens cultures — recommendations from anyone using non-commercial backslops?</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">b-linens</span>
+                  <span class="thread-tag">washed-rind</span>
+                  <strong>Marcel Touraine</strong> · Affineur, Pays de la Loire · Started 4 days ago
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">34</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">2h ago</div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">TW</div>
+              <div>
+                <div class="thread-title">Anyone scaling from 50k to 200k lbs/yr — what surprised you about FDA Tier 2 compliance?</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">scaling</span>
+                  <span class="thread-tag">haccp</span>
+                  <span class="thread-tag">📌 Pinned</span>
+                  <strong>Tom Whitaker</strong> · Whitaker Mountain Dairy · Started 9 days ago
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">78</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">Yesterday</div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">ER</div>
+              <div>
+                <div class="thread-title">Cave humidity holding pattern this summer — anyone else seeing 8–10% swings on the back wall?</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">aging caves</span>
+                  <span class="thread-tag">humidity</span>
+                  <strong>Elena Rodriguez</strong> · Foggy Valley Creamery · Started 2 days ago
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">19</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">5h ago</div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">SH</div>
+              <div>
+                <div class="thread-title">Published in JDS: "Backslop B. linens vs commercial-coded strain genetic drift" — pre-print attached</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">science</span>
+                  <span class="thread-tag">b-linens</span>
+                  <strong>Sarah Henderson, PhD</strong> · Cornell · Started 6 days ago
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">42</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">8h ago</div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">JW</div>
+              <div>
+                <div class="thread-title">Master mentee match thread — Q3 2026 cohort starting to seek pairings</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">apprenticeship</span>
+                  <span class="thread-tag">mentorship</span>
+                  <strong>Jamie Wu</strong> · Education Committee · Started 12 days ago
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">28</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">1d ago</div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">JN</div>
+              <div>
+                <div class="thread-title">European Standards Summit prep — what positions should the Alpine chapter bring to Annecy?</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">standards</span>
+                  <span class="thread-tag">EU</span>
+                  <strong>Jean Naumann</strong> · Beaufort des Alpages · Started 14 days ago
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">51</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">3d ago</div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">RK</div>
+              <div>
+                <div class="thread-title">Labeling working group draft #4 — please review before the Plenary</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">labeling</span>
+                  <span class="thread-tag">standards</span>
+                  <strong>Robert Kihm</strong> · Standards Committee · Started 18 days ago
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">67</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">2d ago</div>
+            </div>
+
+            <div class="thread-row">
+              <div class="thread-avatar">SP</div>
+              <div>
+                <div class="thread-title">First successful washed-rind out of the cave today (apprentice, 6mo in) — looking for sensory feedback</div>
+                <div class="thread-meta">
+                  <span class="thread-tag">apprentice</span>
+                  <span class="thread-tag">washed-rind</span>
+                  <strong>Sam Petersen</strong> · Apprentice, Pacific Northwest · Started yesterday
+                </div>
+              </div>
+              <div class="thread-replies"><span class="thread-replies-num">23</span><span class="thread-replies-label">Replies</span></div>
+              <div class="thread-time">1h ago</div>
+            </div>
+
+            <div class="center mt-6">
+              <a href="membership.html#join" class="btn btn-rind btn-lg">Join to read full threads & participate</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CODE OF CONDUCT -->
+    <section class="section section-warm">
+      <div class="container-narrow center">
+        <p class="eyebrow">House rules</p>
+        <h2>A code of conduct that gets enforced.</h2>
+        <p class="lede">We have a Community Code of Conduct and it isn't decorative. Moderation is handled by elected member moderators, one per category. We've banned 14 accounts in our 4-year forum history — most for proselytizing about non-cheese topics, a couple for unkindness toward apprentices. Disagreement about cheese is encouraged. Bad behavior isn't.</p>
+        <a href="#" class="btn btn-secondary mt-4">Read the Code of Conduct</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

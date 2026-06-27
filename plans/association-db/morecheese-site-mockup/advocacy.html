@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Advocacy · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .pos-card { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); overflow: hidden; }
+    .pos-head { padding: var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); display: flex; justify-content: space-between; align-items: center; gap: var(--mc-space-4); }
+    .pos-status { display: inline-flex; align-items: center; gap: var(--mc-space-2); padding: 4px 10px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 11px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; font-weight: var(--mc-fw-semi); }
+    .pos-status.active { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .pos-status.support { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .pos-status.oppose { background: rgba(160,46,33,0.12); color: var(--mc-error); }
+    .pos-status.revise { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+    .pos-status.monitor { background: var(--mc-ink-100); color: var(--mc-ink-400); }
+    .pos-body { padding: var(--mc-space-5); }
+    .pos-title { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); font-weight: var(--mc-fw-semi); margin: 0 0 var(--mc-space-3); }
+    .pos-region { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-rind-500); }
+    .pos-meta { padding: var(--mc-space-4) var(--mc-space-5); background: var(--mc-bg-surface-warm); display: flex; justify-content: space-between; align-items: center; font-size: var(--mc-fs-sm); flex-wrap: wrap; gap: var(--mc-space-3); }
+    .pos-meta-item { display: flex; gap: var(--mc-space-2); align-items: center; color: var(--mc-text-secondary); }
+    .action-row { padding: var(--mc-space-4); border-left: 3px solid var(--mc-gold-500); background: var(--mc-bg-surface-warm); margin-bottom: var(--mc-space-3); border-radius: 0 var(--mc-radius-md) var(--mc-radius-md) 0; }
+    .action-date { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-2); }
+    .action-title { font-weight: var(--mc-fw-semi); margin-bottom: var(--mc-space-2); }
+    .action-desc { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); }
+
+    .impact-map { background: linear-gradient(135deg, var(--mc-sage-500), var(--mc-sage-700)); color: var(--mc-cream); border-radius: var(--mc-radius-lg); padding: var(--mc-space-7); }
+    .impact-stat { display: grid; grid-template-columns: 100px 1fr; gap: var(--mc-space-4); align-items: baseline; padding: var(--mc-space-3) 0; border-bottom: 1px solid rgba(255,255,255,0.15); }
+    .impact-stat:last-child { border-bottom: 0; }
+    .impact-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-2xl); font-weight: var(--mc-fw-semi); color: var(--mc-gold-300); line-height: 1; }
+    .impact-label { color: var(--mc-cream); font-size: var(--mc-fs-sm); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html" class="active">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Advocacy</span></nav>
+        <p class="eyebrow">Advocacy</p>
+        <h1>Where the federation stands. Why it matters.</h1>
+        <p class="lede">Twelve active positions across US, EU, UK, Canada, Australia, and Japan jurisdictions. 47 advocacy actions filed in the past 12 months. Every position is researched, member-reviewed, and formally adopted by the Advocacy Committee before publication.</p>
+      </div>
+    </section>
+
+    <!-- IMPACT -->
+    <section class="section">
+      <div class="container">
+        <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: var(--mc-space-7); align-items: start;">
+          <div>
+            <p class="eyebrow">How we work</p>
+            <h2>Research. Position. File. Mobilize.</h2>
+            <p>Every advocacy position is the output of a defined process. Member-producers and the Advocacy Committee identify legislation or regulation that materially affects cheesemakers. Policy researchers and outside counsel produce a position paper. The committee debates, revises, and votes. Once adopted, the federation files formally — and mobilizes members to file individual comments when appropriate.</p>
+            <p>We do not lobby for individual businesses or interests. We file on questions of standards, safety, labeling, designation-of-origin, raw-milk regulation, small-producer accommodation, and trade. We are non-partisan. We have filed comments under every US administration since 1996.</p>
+            <a href="#positions" class="btn btn-rind mt-3">Browse positions</a>
+          </div>
+          <div class="impact-map">
+            <p class="eyebrow on-dark mb-4" style="color: var(--mc-gold-200);">12-month impact · 2025</p>
+            <div class="impact-stat"><div class="impact-num">12</div><div class="impact-label">Active formal positions across 7 jurisdictions</div></div>
+            <div class="impact-stat"><div class="impact-num">47</div><div class="impact-label">Advocacy actions filed (comments, testimony, briefs)</div></div>
+            <div class="impact-stat"><div class="impact-num">412</div><div class="impact-label">Member producers signed at least one filing</div></div>
+            <div class="impact-stat"><div class="impact-num">5</div><div class="impact-label">Final rules incorporated our recommendations</div></div>
+            <div class="impact-stat"><div class="impact-num">2</div><div class="impact-label">Bills passed with ICF-drafted language</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ACTIVE POSITIONS -->
+    <section class="section section-warm" id="positions">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Active positions</p>
+            <h2>Open filings · Member-callable</h2>
+          </div>
+          <div class="flex gap-3">
+            <select style="padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm); background: var(--mc-bg-surface);">
+              <option>All jurisdictions</option><option>United States</option><option>European Union</option><option>United Kingdom</option><option>Canada</option><option>Australia / NZ</option><option>Japan</option>
+            </select>
+            <select style="padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-default); font-size: var(--mc-fs-sm); background: var(--mc-bg-surface);">
+              <option>All topics</option><option>Labeling</option><option>Raw milk</option><option>Inspection</option><option>Trade</option><option>Standards harmonization</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display: grid; gap: var(--mc-space-5);">
+
+          <article class="pos-card">
+            <div class="pos-head">
+              <div>
+                <p class="pos-region"><i class="fa-solid fa-flag-usa"></i> United States · FDA</p>
+                <h3 class="pos-title">FDA Dairy Labeling Proposal (Docket FDA-2026-N-0418)</h3>
+              </div>
+              <span class="pos-status revise"><i class="fa-solid fa-circle-half-stroke"></i> Support with Revisions</span>
+            </div>
+            <div class="pos-body">
+              <p>The federation supports clearer terroir-of-origin labeling for traditional cheeses but pushes back on the proposed pasteurization-disclosure language as overly broad and likely to confuse consumers about cheeses that have been safely produced from raw milk under existing FDA aging requirements. Position paper co-authored by the Standards Committee Labeling Working Group, chaired by Robert Kihm.</p>
+              <div class="flex gap-3 mt-4" style="flex-wrap: wrap;">
+                <a href="#" class="btn btn-secondary btn-sm"><i class="fa-solid fa-file-pdf"></i> Position paper (14 pp)</a>
+                <a href="#" class="btn btn-secondary btn-sm"><i class="fa-solid fa-comments"></i> File a member comment</a>
+                <a href="#" class="btn btn-secondary btn-sm">View 12 advocacy actions</a>
+              </div>
+            </div>
+            <div class="pos-meta">
+              <span class="pos-meta-item"><i class="fa-solid fa-users"></i> 187 member producers signed</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-calendar"></i> Position adopted Jun 12, 2026</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-clock"></i> Public comment closes Aug 30, 2026</span>
+            </div>
+          </article>
+
+          <article class="pos-card">
+            <div class="pos-head">
+              <div>
+                <p class="pos-region"><i class="fa-solid fa-flag"></i> European Union · DG SANTE</p>
+                <h3 class="pos-title">EU Raw-Milk Cheese Carve-Out Proposal (EFSA 2026/0231)</h3>
+              </div>
+              <span class="pos-status support"><i class="fa-solid fa-check"></i> Support</span>
+            </div>
+            <div class="pos-body">
+              <p>The federation strongly supports the Italian-French joint proposal to formally protect traditional raw-milk cheeses from the proposed Pan-EU pasteurization mandate. Centuries of safe production demonstrate that age-controlled raw-milk cheeses meet — and frequently exceed — public-health objectives. Position paper co-authored with Slow Food International and the French Conseil National des Appellations d'Origine Laitières.</p>
+              <div class="flex gap-3 mt-4" style="flex-wrap: wrap;">
+                <a href="#" class="btn btn-secondary btn-sm"><i class="fa-solid fa-file-pdf"></i> Position paper (22 pp · EN + FR)</a>
+                <a href="#" class="btn btn-secondary btn-sm">View 23 advocacy actions</a>
+              </div>
+            </div>
+            <div class="pos-meta">
+              <span class="pos-meta-item"><i class="fa-solid fa-users"></i> 241 producers + 2 co-author orgs</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-calendar"></i> Adopted Apr 18, 2026</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-clock"></i> Consultation closes Sep 30, 2026</span>
+            </div>
+          </article>
+
+          <article class="pos-card">
+            <div class="pos-head">
+              <div>
+                <p class="pos-region"><i class="fa-solid fa-flag-usa"></i> United States · Congressional</p>
+                <h3 class="pos-title">Small-Producer Inspection Modernization Act (HR 4128 / S 2387)</h3>
+              </div>
+              <span class="pos-status support"><i class="fa-solid fa-check"></i> Endorse</span>
+            </div>
+            <div class="pos-body">
+              <p>The federation endorses the bipartisan US bill (Rep. Pingree [D-ME] / Sen. Klobuchar [D-MN] / Sen. Tillis [R-NC]) modernizing FDA inspection protocols for sub-100,000-lb annual dairy operations. The bill creates a risk-based tier with periodic remote audits rather than the existing one-size-fits-all inspection cadence — appropriate for the small-producer reality.</p>
+              <div class="flex gap-3 mt-4" style="flex-wrap: wrap;">
+                <a href="#" class="btn btn-secondary btn-sm"><i class="fa-solid fa-file-pdf"></i> Endorsement letter (8 pp)</a>
+                <a href="#" class="btn btn-secondary btn-sm"><i class="fa-solid fa-pen-to-square"></i> Contact your Rep / Senator</a>
+                <a href="#" class="btn btn-secondary btn-sm">View 47 advocacy actions</a>
+              </div>
+            </div>
+            <div class="pos-meta">
+              <span class="pos-meta-item"><i class="fa-solid fa-users"></i> 412 small producers signed</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-calendar"></i> Endorsed Feb 22, 2026</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-gavel"></i> In Senate Ag Committee markup</span>
+            </div>
+          </article>
+
+          <article class="pos-card">
+            <div class="pos-head">
+              <div>
+                <p class="pos-region"><i class="fa-solid fa-flag"></i> Canada · CFIA</p>
+                <h3 class="pos-title">CFIA Aging Cave Inspection Frequency Reduction</h3>
+              </div>
+              <span class="pos-status oppose"><i class="fa-solid fa-xmark"></i> Oppose</span>
+            </div>
+            <div class="pos-body">
+              <p>The federation opposes CFIA's proposed reduction in routine aging-cave inspection frequency for sub-50,000-kg producers from quarterly to annually. While we generally support risk-based regulatory simplification (see HR 4128), aging-cave conditions are sensitive enough that quarterly oversight provides a meaningful safety floor without imposing real burden. Position adopted after a member-producer survey (n=84) showed strong support for retention.</p>
+              <div class="flex gap-3 mt-4" style="flex-wrap: wrap;">
+                <a href="#" class="btn btn-secondary btn-sm"><i class="fa-solid fa-file-pdf"></i> Position paper (10 pp)</a>
+                <a href="#" class="btn btn-secondary btn-sm">View 6 advocacy actions</a>
+              </div>
+            </div>
+            <div class="pos-meta">
+              <span class="pos-meta-item"><i class="fa-solid fa-users"></i> 67 Canadian producers signed</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-calendar"></i> Adopted May 4, 2026</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-clock"></i> CFIA review ongoing</span>
+            </div>
+          </article>
+
+          <article class="pos-card">
+            <div class="pos-head">
+              <div>
+                <p class="pos-region"><i class="fa-solid fa-globe"></i> Codex Alimentarius</p>
+                <h3 class="pos-title">Codex CX/MMP 27/1 — Terroir-of-Origin Designation Harmonization</h3>
+              </div>
+              <span class="pos-status monitor"><i class="fa-solid fa-eye"></i> Monitor & Comment</span>
+            </div>
+            <div class="pos-body">
+              <p>The federation is monitoring the proposed Codex Alimentarius work item to harmonize terroir-of-origin designations across member states. We have not yet adopted a formal position; the European Standards Summit (October 22, 2026, Annecy) will produce a preliminary position for committee review.</p>
+              <div class="flex gap-3 mt-4" style="flex-wrap: wrap;">
+                <a href="event-detail.html" class="btn btn-secondary btn-sm">European Standards Summit details</a>
+              </div>
+            </div>
+            <div class="pos-meta">
+              <span class="pos-meta-item"><i class="fa-solid fa-calendar"></i> Monitoring since Jan 2026</span>
+              <span class="pos-meta-item"><i class="fa-solid fa-clock"></i> Codex meeting Mar 2027</span>
+            </div>
+          </article>
+
+        </div>
+
+        <div class="center mt-7">
+          <a href="#" class="btn btn-secondary btn-lg">View all 12 active positions</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- RECENT ACTIONS -->
+    <section class="section">
+      <div class="container-narrow">
+        <p class="eyebrow">Recent actions</p>
+        <h2 class="mb-6">What we've filed in the last 90 days</h2>
+
+        <div class="action-row">
+          <div class="action-date">Jun 22, 2026</div>
+          <div class="action-title">Formal comment filed — FDA Docket FDA-2026-N-0418 (Dairy Labeling)</div>
+          <div class="action-desc">14-page position paper submitted via Regulations.gov. 187 member producers attached individual comments through the federation portal.</div>
+        </div>
+        <div class="action-row">
+          <div class="action-date">Jun 14, 2026</div>
+          <div class="action-title">Expert testimony — Senate Agriculture Committee (HR 4128)</div>
+          <div class="action-desc">President Maria Castillo testified in support of the Small-Producer Inspection Modernization Act before Senate Ag. <a href="#">Watch recording →</a></div>
+        </div>
+        <div class="action-row">
+          <div class="action-date">May 28, 2026</div>
+          <div class="action-title">Joint position published with Slow Food (EU raw-milk carve-out)</div>
+          <div class="action-desc">22-page position co-published in English and French. Republished by 14 European trade publications.</div>
+        </div>
+        <div class="action-row">
+          <div class="action-date">May 12, 2026</div>
+          <div class="action-title">Amicus brief filed — <em>Vermont Cheesemakers v. State of Vermont</em></div>
+          <div class="action-desc">Friend-of-the-court brief on raw-milk labeling preemption. Authored by outside counsel Wilmer Hale, reviewed by Advocacy Committee.</div>
+        </div>
+        <div class="action-row">
+          <div class="action-date">May 04, 2026</div>
+          <div class="action-title">Position adopted — CFIA aging-cave inspection frequency (oppose)</div>
+          <div class="action-desc">Following a member-producer survey of Canadian operations.</div>
+        </div>
+
+        <div class="center mt-6"><a href="#" class="btn btn-secondary">All 47 advocacy actions (last 12 months)</a></div>
+      </div>
+    </section>
+
+    <!-- MEMBER MOBILIZATION -->
+    <section class="section section-rind">
+      <div class="container-narrow center">
+        <p class="eyebrow on-dark">Member mobilization</p>
+        <h2>The voice that gets heard is yours, signed by you.</h2>
+        <p class="lede" style="color: var(--mc-gold-100);">When the federation files a position, members can attach individual comments through the portal. Producer-tier members get notified automatically when a position is open for filing in their jurisdiction.</p>
+        <div class="flex gap-3 mt-5" style="justify-content: center; flex-wrap: wrap;">
+          <a href="portal.html" class="btn btn-on-dark btn-lg">Member portal · current filings</a>
+          <a href="membership.html" class="btn btn-ghost-on-dark btn-lg">Become a member</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

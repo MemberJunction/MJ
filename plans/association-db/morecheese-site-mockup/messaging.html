@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Messages · MoreCheese Member Portal</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .msg-shell { display: grid; grid-template-columns: 240px 360px 1fr; min-height: calc(100vh - 73px); background: var(--mc-bg-surface); }
+    @media (max-width: 1100px) { .msg-shell { grid-template-columns: 1fr; } .msg-portal-side, .msg-thread-list { display: none; } }
+
+    .msg-portal-side { background: var(--mc-bg-surface); border-right: 1px solid var(--mc-border-subtle); padding: var(--mc-space-5); }
+    .msg-portal-side-head { display: flex; gap: var(--mc-space-3); align-items: center; padding: var(--mc-space-3); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); margin-bottom: var(--mc-space-5); }
+    .portal-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-rind-400)); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-bold); }
+    .portal-nav-label { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wider); text-transform: uppercase; color: var(--mc-text-muted); margin: var(--mc-space-5) 0 var(--mc-space-2); }
+    .portal-nav a { padding: var(--mc-space-3); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); display: flex; align-items: center; gap: var(--mc-space-3); color: var(--mc-text-primary); transition: all var(--mc-dur-fast); }
+    .portal-nav a:hover { background: var(--mc-bg-surface-warm); }
+    .portal-nav a.active { background: var(--mc-rind-500); color: var(--mc-cream); }
+    .portal-nav a i { width: 18px; text-align: center; }
+
+    .msg-thread-list { background: var(--mc-bg-surface-warm); border-right: 1px solid var(--mc-border-subtle); overflow-y: auto; }
+    .msg-thread-list-head { padding: var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); background: var(--mc-bg-surface); position: sticky; top: 0; }
+    .msg-thread-list-head h2 { margin: 0 0 var(--mc-space-3); font-size: var(--mc-fs-lg); }
+    .msg-filter-tabs { display: flex; gap: var(--mc-space-1); font-size: var(--mc-fs-xs); font-family: var(--mc-font-mono); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+    .msg-filter { padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-pill); color: var(--mc-text-muted); cursor: pointer; }
+    .msg-filter.active { background: var(--mc-rind-500); color: var(--mc-cream); }
+
+    .msg-thread { padding: var(--mc-space-4); border-bottom: 1px solid var(--mc-border-subtle); display: grid; grid-template-columns: 40px 1fr; gap: var(--mc-space-3); cursor: pointer; transition: background var(--mc-dur-fast); }
+    .msg-thread:hover { background: var(--mc-bg-surface); }
+    .msg-thread.unread { background: var(--mc-bg-surface); border-left: 3px solid var(--mc-rind-500); padding-left: calc(var(--mc-space-4) - 3px); }
+    .msg-thread.active { background: var(--mc-bg-surface); border-left: 3px solid var(--mc-gold-500); padding-left: calc(var(--mc-space-4) - 3px); }
+    .msg-thread-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-size: var(--mc-fs-xs); font-weight: var(--mc-fw-semi); }
+    .msg-thread-avatar.committee { background: linear-gradient(135deg, var(--mc-rind-400), var(--mc-rind-600)); }
+    .msg-thread-avatar.staff { background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-gold-600)); color: var(--mc-rind-700); }
+    .msg-thread-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--mc-space-2); }
+    .msg-thread-from { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); }
+    .msg-thread-time { font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted); white-space: nowrap; }
+    .msg-thread-subject { font-size: var(--mc-fs-sm); line-height: var(--mc-lh-snug); margin: 2px 0; }
+    .msg-thread-preview { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .msg-thread.unread .msg-thread-subject, .msg-thread.unread .msg-thread-from { font-weight: var(--mc-fw-bold); }
+
+    .msg-view { display: flex; flex-direction: column; background: var(--mc-bg-surface); }
+    .msg-view-head { padding: var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); }
+    .msg-view-subject { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); margin: 0 0 var(--mc-space-3); }
+    .msg-view-tags { display: flex; gap: var(--mc-space-2); flex-wrap: wrap; }
+    .msg-view-tag { padding: 2px 8px; background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-rind-500); }
+    .msg-view-tag.deadline { background: rgba(160,46,33,0.12); color: var(--mc-error); }
+    .msg-view-tag.secure { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+
+    .msg-view-body { flex: 1; overflow-y: auto; padding: var(--mc-space-5); background: var(--mc-bg-surface-warm); }
+    .msg-bubble { display: flex; gap: var(--mc-space-3); margin-bottom: var(--mc-space-5); align-items: flex-start; }
+    .msg-bubble-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); flex-shrink: 0; display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-xs); }
+    .msg-bubble-avatar.staff { background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-gold-600)); color: var(--mc-rind-700); }
+    .msg-bubble-avatar.you { background: linear-gradient(135deg, var(--mc-rind-400), var(--mc-rind-600)); }
+    .msg-bubble-body { flex: 1; }
+    .msg-bubble-from { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); display: flex; gap: var(--mc-space-3); align-items: baseline; }
+    .msg-bubble-from time { font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted); letter-spacing: var(--mc-ls-wide); font-weight: var(--mc-fw-regular); text-transform: uppercase; }
+    .msg-bubble-text { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); padding: var(--mc-space-4); border-radius: var(--mc-radius-md); margin-top: var(--mc-space-2); font-size: var(--mc-fs-sm); line-height: var(--mc-lh-relaxed); }
+    .msg-bubble.you .msg-bubble-text { background: var(--mc-rind-500); color: var(--mc-cream); border-color: var(--mc-rind-600); }
+    .msg-attach { display: inline-flex; align-items: center; gap: var(--mc-space-2); padding: var(--mc-space-2) var(--mc-space-3); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-xs); margin-top: var(--mc-space-3); color: var(--mc-rind-500); }
+
+    .msg-compose { padding: var(--mc-space-4); border-top: 1px solid var(--mc-border-subtle); background: var(--mc-bg-surface); }
+    .msg-compose-input { width: 100%; min-height: 80px; padding: var(--mc-space-3); border: 1px solid var(--mc-border-default); border-radius: var(--mc-radius-md); resize: vertical; font: inherit; font-size: var(--mc-fs-sm); }
+    .msg-compose-actions { display: flex; justify-content: space-between; align-items: center; margin-top: var(--mc-space-3); }
+    .msg-compose-tools { display: flex; gap: var(--mc-space-2); }
+    .msg-compose-tool { width: 36px; height: 36px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-text-secondary); display: grid; place-items: center; transition: all var(--mc-dur-fast); }
+    .msg-compose-tool:hover { background: var(--mc-gold-100); color: var(--mc-rind-500); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">Member portal · Elena Rodriguez</span></span></a>
+      <nav class="nav-primary"><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Public site</a></nav>
+      <div class="nav-cta"><a href="#" class="btn btn-secondary btn-sm">Sign out</a></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="msg-shell">
+      <!-- LEFT: portal nav -->
+      <aside class="msg-portal-side">
+        <div class="msg-portal-side-head">
+          <div class="portal-avatar">ER</div>
+          <div>
+            <div style="font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm);">Elena Rodriguez</div>
+            <div style="font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-rind-500); letter-spacing: var(--mc-ls-wider); text-transform: uppercase;">Producer · Active</div>
+          </div>
+        </div>
+        <div class="portal-nav-label">Dashboard</div>
+        <nav class="portal-nav" style="display: flex; flex-direction: column; gap: 2px;">
+          <a href="portal.html"><i class="fa-solid fa-house"></i> Overview</a>
+          <a href="#"><i class="fa-solid fa-id-card"></i> Membership</a>
+          <a href="#"><i class="fa-solid fa-graduation-cap"></i> Certifications</a>
+          <a href="#"><i class="fa-solid fa-book-open"></i> Courses</a>
+          <a href="#"><i class="fa-solid fa-calendar"></i> My events</a>
+          <a href="messaging.html" class="active"><i class="fa-solid fa-envelope"></i> Messages <span style="margin-left: auto; padding: 1px 7px; background: rgba(255,255,255,0.15); border-radius: var(--mc-radius-pill); font-size: 10px; font-family: var(--mc-font-mono);">7</span></a>
+        </nav>
+        <div class="portal-nav-label">Engagement</div>
+        <nav class="portal-nav" style="display: flex; flex-direction: column; gap: 2px;">
+          <a href="#"><i class="fa-solid fa-people-group"></i> Committees</a>
+          <a href="#"><i class="fa-solid fa-comments"></i> Forum activity</a>
+        </nav>
+      </aside>
+
+      <!-- MIDDLE: thread list -->
+      <aside class="msg-thread-list">
+        <div class="msg-thread-list-head">
+          <h2>Inbox</h2>
+          <div class="msg-filter-tabs">
+            <a href="#" class="msg-filter active">All</a>
+            <a href="#" class="msg-filter">Unread (7)</a>
+            <a href="#" class="msg-filter">Committee</a>
+            <a href="#" class="msg-filter">Direct</a>
+            <a href="#" class="msg-filter">Sent</a>
+          </div>
+        </div>
+
+        <div class="msg-thread unread active">
+          <div class="msg-thread-avatar committee">SC</div>
+          <div>
+            <div class="msg-thread-top"><span class="msg-thread-from">Standards Committee</span><span class="msg-thread-time">2h ago</span></div>
+            <div class="msg-thread-subject">Voting deadline reminder — 7 items on the Annual Plenary agenda</div>
+            <div class="msg-thread-preview">Elena, this is your final reminder before the August 30 voting deadline. As a Producer-tier voting member you have a stake in items 3 (labeling), 5 (raw-milk EU), and 7 (apprentice qualification…</div>
+          </div>
+        </div>
+
+        <div class="msg-thread unread">
+          <div class="msg-thread-avatar">MT</div>
+          <div>
+            <div class="msg-thread-top"><span class="msg-thread-from">Marcel Touraine</span><span class="msg-thread-time">Yesterday</span></div>
+            <div class="msg-thread-subject">re: B. linens backslops thread — let's take this offline?</div>
+            <div class="msg-thread-preview">Elena, your post in the forum is exactly the kind of conversation that would benefit from a longer-form exchange. I'm bringing a few backslop samples to Annecy in October — would you…</div>
+          </div>
+        </div>
+
+        <div class="msg-thread unread">
+          <div class="msg-thread-avatar staff">JW</div>
+          <div>
+            <div class="msg-thread-top"><span class="msg-thread-from">Jamie Wu · Education Cmte</span><span class="msg-thread-time">2 days ago</span></div>
+            <div class="msg-thread-subject">Master mentee match — would you mentor Sam Petersen?</div>
+            <div class="msg-thread-preview">Elena, the Education Committee is matching Master Cheesemakers with this year's Apprentice cohort. Sam Petersen (Pacific Northwest, washed-rind focus, already showed strong sensory aptitude…</div>
+          </div>
+        </div>
+
+        <div class="msg-thread unread">
+          <div class="msg-thread-avatar committee">AC</div>
+          <div>
+            <div class="msg-thread-top"><span class="msg-thread-from">Advocacy Committee</span><span class="msg-thread-time">3 days ago</span></div>
+            <div class="msg-thread-subject">FDA labeling docket open for member comment — pre-filled draft attached</div>
+            <div class="msg-thread-preview">Producers in the PNW chapter: the FDA dairy labeling docket (FDA-2026-N-0418) is open for individual member comments through August 30. We've prepared a pre-filled template you can…</div>
+          </div>
+        </div>
+
+        <div class="msg-thread">
+          <div class="msg-thread-avatar staff">MK</div>
+          <div>
+            <div class="msg-thread-top"><span class="msg-thread-from">Membership Services</span><span class="msg-thread-time">1 wk ago</span></div>
+            <div class="msg-thread-subject">Renewal coming up — anything you want changed?</div>
+            <div class="msg-thread-preview">Your Producer-tier renewal is August 13. Same card on file, same chapter, same auto-renew setting. If you want to change anything…</div>
+          </div>
+        </div>
+
+        <div class="msg-thread">
+          <div class="msg-thread-avatar">TW</div>
+          <div>
+            <div class="msg-thread-top"><span class="msg-thread-from">Tom Whitaker</span><span class="msg-thread-time">2 wk ago</span></div>
+            <div class="msg-thread-subject">re: HACCP scaling thread — quick coffee at the Annual?</div>
+            <div class="msg-thread-preview">Elena, your reply on my forum thread was the most useful response I got. Want to grab coffee on Day 2 of the Annual and walk me through the specific FDA Tier 2 documentation you used…</div>
+          </div>
+        </div>
+
+        <div class="msg-thread">
+          <div class="msg-thread-avatar committee">PC</div>
+          <div>
+            <div class="msg-thread-top"><span class="msg-thread-from">Pacific NW Chapter</span><span class="msg-thread-time">3 wk ago</span></div>
+            <div class="msg-thread-subject">July 19 quarterly — you're on the agenda</div>
+            <div class="msg-thread-preview">Confirming you'll lead the morning working session on washed-rind humidity control. Room booked, 32 RSVPs so far, board is excited…</div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- RIGHT: active thread view -->
+      <section class="msg-view">
+        <header class="msg-view-head">
+          <h2 class="msg-view-subject">Voting deadline reminder — 7 items on the Annual Plenary agenda</h2>
+          <div class="msg-view-tags">
+            <span class="msg-view-tag secure"><i class="fa-solid fa-lock"></i> End-to-end encrypted</span>
+            <span class="msg-view-tag">Standards Committee</span>
+            <span class="msg-view-tag">Producer-tier broadcast</span>
+            <span class="msg-view-tag deadline">Deadline · Aug 30</span>
+          </div>
+        </header>
+
+        <div class="msg-view-body">
+          <article class="msg-bubble">
+            <div class="msg-bubble-avatar staff">SC</div>
+            <div class="msg-bubble-body">
+              <div class="msg-bubble-from">Standards Committee <time>Jun 27 · 11:42 AM</time></div>
+              <div class="msg-bubble-text">
+                <p style="margin-top: 0;">Elena,</p>
+                <p>This is your final reminder before the August 30 voting deadline on the 7 items on the Annual Plenary agenda. As a Producer-tier voting member you have a stake in:</p>
+                <ul style="padding-left: 1.5em; line-height: var(--mc-lh-relaxed);">
+                  <li><strong>Item 3</strong> — Labeling working-group draft #4 (Robert Kihm chairs)</li>
+                  <li><strong>Item 5</strong> — EU raw-milk carve-out position (member ratification required)</li>
+                  <li><strong>Item 7</strong> — Apprentice qualification revisions (Education Committee)</li>
+                </ul>
+                <p>The full agenda and draft texts are in the attached document. The voting portal opens at 12:00 PT on August 26.</p>
+                <p>Thanks for your engagement, as always.</p>
+                <p>— Robert Kihm, Standards Committee Chair</p>
+                <a class="msg-attach"><i class="fa-solid fa-file-pdf"></i> Annual_Plenary_Agenda_2026.pdf · 1.2MB</a>
+                <a class="msg-attach" style="margin-left: var(--mc-space-2);"><i class="fa-solid fa-file-lines"></i> Item_3_Labeling_Draft_v4.pdf · 380KB</a>
+              </div>
+            </div>
+          </article>
+
+          <article class="msg-bubble you">
+            <div class="msg-bubble-avatar you">ER</div>
+            <div class="msg-bubble-body">
+              <div class="msg-bubble-from" style="color: var(--mc-text-primary);">You <time>Jun 27 · 1:15 PM</time></div>
+              <div class="msg-bubble-text">
+                <p style="margin-top: 0; margin-bottom: 0;">Got it Robert — I'll have my votes in by next Friday. Quick question on Item 5: does the EU carve-out position foreclose US-side parallel-track work, or is it intended to be the federation's only position in this domain?</p>
+              </div>
+            </div>
+          </article>
+
+          <article class="msg-bubble">
+            <div class="msg-bubble-avatar staff">RK</div>
+            <div class="msg-bubble-body">
+              <div class="msg-bubble-from">Robert Kihm <time>Jun 27 · 1:48 PM</time></div>
+              <div class="msg-bubble-text">
+                <p style="margin-top: 0; margin-bottom: 0;">Great question. No — it's specifically scoped to the EU regulatory proposal. We retain full flexibility on US-side work. The Advocacy Committee is in early conversations about a parallel framework for US raw-milk aging requirements; I'll loop you in if you're interested.</p>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <footer class="msg-compose">
+          <textarea class="msg-compose-input" placeholder="Reply to Standards Committee…"></textarea>
+          <div class="msg-compose-actions">
+            <div class="msg-compose-tools">
+              <button class="msg-compose-tool" title="Attach"><i class="fa-solid fa-paperclip"></i></button>
+              <button class="msg-compose-tool" title="Mention"><i class="fa-solid fa-at"></i></button>
+              <button class="msg-compose-tool" title="Markdown"><i class="fa-solid fa-code"></i></button>
+              <button class="msg-compose-tool" title="Schedule send"><i class="fa-solid fa-clock"></i></button>
+            </div>
+            <div class="flex gap-3">
+              <button class="btn btn-secondary btn-sm">Save draft</button>
+              <button class="btn btn-rind btn-sm">Send reply <i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+          </div>
+        </footer>
+      </section>
+    </div>
+  </main>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>

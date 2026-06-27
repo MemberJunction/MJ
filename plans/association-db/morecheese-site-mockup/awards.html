@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>National Cheese Awards · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .awards-hero { background: linear-gradient(135deg, var(--mc-rind-600) 0%, var(--mc-gold-700) 100%); color: var(--mc-cream); padding: var(--mc-space-9) 0 var(--mc-space-8); position: relative; overflow: hidden; }
+    .awards-hero::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 75% 30%, rgba(212,168,46,0.25) 0%, transparent 50%); }
+    .awards-hero h1 { color: var(--mc-cream); }
+    .awards-hero .crumbs a, .awards-hero .crumbs span { color: var(--mc-gold-200); }
+    .stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--mc-space-5); padding-top: var(--mc-space-6); margin-top: var(--mc-space-6); border-top: 1px solid rgba(255,255,255,0.15); }
+    .stat-strip-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-4xl); font-weight: var(--mc-fw-semi); color: var(--mc-gold-300); line-height: 1; }
+    .stat-strip-label { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wider); text-transform: uppercase; color: var(--mc-gold-100); margin-top: var(--mc-space-2); }
+
+    .cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--mc-space-3); }
+    .cat-tile { padding: var(--mc-space-5); background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-md); transition: all var(--mc-dur-base); }
+    .cat-tile:hover { border-color: var(--mc-gold-500); box-shadow: var(--mc-shadow-md); transform: translateY(-2px); }
+    .cat-name { font-family: var(--mc-font-display); font-size: var(--mc-fs-lg); font-weight: var(--mc-fw-semi); margin-bottom: var(--mc-space-2); }
+    .cat-meta { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+
+    .finalist-card { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); overflow: hidden; transition: all var(--mc-dur-base); }
+    .finalist-card:hover { box-shadow: var(--mc-shadow-md); transform: translateY(-2px); }
+    .finalist-head { padding: var(--mc-space-4); background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-rind-500)); color: var(--mc-cream); display: flex; justify-content: space-between; align-items: center; }
+    .finalist-head .medal { font-size: 1.75rem; }
+    .finalist-cat { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+    .finalist-body { padding: var(--mc-space-5); }
+    .finalist-name { font-family: var(--mc-font-display); font-size: var(--mc-fs-lg); font-weight: var(--mc-fw-semi); margin-bottom: var(--mc-space-1); }
+    .finalist-producer { color: var(--mc-text-secondary); font-size: var(--mc-fs-sm); margin-bottom: var(--mc-space-3); }
+    .finalist-score { font-family: var(--mc-font-display); font-size: var(--mc-fs-2xl); color: var(--mc-rind-500); font-weight: var(--mc-fw-semi); }
+    .finalist-score small { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); color: var(--mc-text-muted); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+
+    .judge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--mc-space-4); }
+    .judge-card { text-align: center; padding: var(--mc-space-4); background: var(--mc-bg-surface); border-radius: var(--mc-radius-md); border: 1px solid var(--mc-border-subtle); }
+    .judge-avatar { width: 64px; height: 64px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); margin: 0 auto var(--mc-space-3); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); }
+    .judge-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); }
+    .judge-meta { color: var(--mc-text-muted); font-size: var(--mc-fs-xs); margin-top: 2px; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html" class="active">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- AWARDS HERO -->
+    <section class="awards-hero">
+      <div class="container" style="position: relative;">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Awards</span></nav>
+        <p class="eyebrow on-dark mt-4">National Cheese Awards · 2026</p>
+        <h1>The most respected recognition in the craft.</h1>
+        <p class="lede" style="color: var(--mc-gold-100); max-width: 52rem;">Five competitions per year. 29 certified judges. 1,100+ entries from 38 countries. Blind tasting in 12 categories. Peer-reviewed. Apolitical. Held at the close of every Annual Conference.</p>
+
+        <div class="stat-strip">
+          <div><div class="stat-strip-num">110</div><div class="stat-strip-label">2026 finalists</div></div>
+          <div><div class="stat-strip-num">29</div><div class="stat-strip-label">Certified judges</div></div>
+          <div><div class="stat-strip-num">12</div><div class="stat-strip-label">Categories</div></div>
+          <div><div class="stat-strip-num">5</div><div class="stat-strip-label">Competitions / year</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS -->
+    <section class="section">
+      <div class="container">
+        <p class="eyebrow">How the awards work</p>
+        <h2>Blind tasting · Peer-reviewed · Calibrated</h2>
+        <div class="grid grid-3 mt-6">
+          <div class="pillar">
+            <div class="pillar-icon"><i class="fa-solid fa-paper-plane"></i></div>
+            <h3>Entry</h3>
+            <p>Producer-tier members get 4 free entries per year. Each entry includes a 1kg sample shipped to the judging facility plus a 1-page producer narrative (used only for context after scoring is final).</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon"><i class="fa-solid fa-eye-slash"></i></div>
+            <h3>Blind tasting</h3>
+            <p>Each entry is coded and presented to a 3-judge panel without producer information. Judges score on a 100-point rubric covering paste, rind, aroma, flavor, balance, finish, and category fidelity.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon"><i class="fa-solid fa-medal"></i></div>
+            <h3>Awards</h3>
+            <p>Gold, Silver, Bronze awarded in each category by absolute score (not ranking). Best in Show selected from category Golds by a 9-judge super-panel. Results announced at the Awards Gala.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CATEGORIES -->
+    <section class="section section-warm">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">2026 categories</p>
+            <h2>12 categories · 110 finalists</h2>
+          </div>
+          <a href="event-detail.html" class="btn btn-secondary btn-sm">Awards Gala details <i class="fa-solid fa-arrow-right"></i></a>
+        </div>
+        <div class="cat-grid">
+          <div class="cat-tile"><div class="cat-name">Bloomy-Rind</div><div class="cat-meta">14 finalists · 3 sub-categories</div></div>
+          <div class="cat-tile"><div class="cat-name">Washed-Rind</div><div class="cat-meta">12 finalists · 2 sub-categories</div></div>
+          <div class="cat-tile"><div class="cat-name">Alpine-Style</div><div class="cat-meta">9 finalists · all milk types</div></div>
+          <div class="cat-tile"><div class="cat-name">Hard-Aged</div><div class="cat-meta">11 finalists · aged ≥12mo</div></div>
+          <div class="cat-tile"><div class="cat-name">Cheddar-Style</div><div class="cat-meta">10 finalists · trad. + clothbound</div></div>
+          <div class="cat-tile"><div class="cat-name">Blue</div><div class="cat-meta">8 finalists · cow/sheep/goat</div></div>
+          <div class="cat-tile"><div class="cat-name">Fresh / Pasta Filata</div><div class="cat-meta">9 finalists · incl. burrata, mozz</div></div>
+          <div class="cat-tile"><div class="cat-name">Sheep Milk · Open</div><div class="cat-meta">7 finalists · all styles</div></div>
+          <div class="cat-tile"><div class="cat-name">Goat Milk · Open</div><div class="cat-meta">8 finalists · all styles</div></div>
+          <div class="cat-tile"><div class="cat-name">Smoked / Flavored</div><div class="cat-meta">6 finalists · added inclusions</div></div>
+          <div class="cat-tile"><div class="cat-name">Innovation</div><div class="cat-meta">8 finalists · novel approaches</div></div>
+          <div class="cat-tile"><div class="cat-name">Apprentice Showcase</div><div class="cat-meta">8 finalists · ≤2yrs experience</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINALISTS -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">2026 finalists · selected</p>
+            <h2>Top scoring from each category</h2>
+          </div>
+          <a href="#" class="btn btn-secondary btn-sm">All 110 finalists <i class="fa-solid fa-arrow-right"></i></a>
+        </div>
+
+        <div class="grid grid-3">
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Washed-Rind</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Foggy Valley Reserve</div>
+              <div class="finalist-producer">Foggy Valley Creamery · Port Townsend, WA · Elena Rodriguez (M.C.)</div>
+              <div><span class="finalist-score">96.4 <small>/ 100</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Bloomy-Rind</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Brebis Florale</div>
+              <div class="finalist-producer">Domaine Touraine · Pays de la Loire · Marcel Touraine</div>
+              <div><span class="finalist-score">95.8 <small>/ 100</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Alpine-Style</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Beaufort des Alpages — 18mo</div>
+              <div class="finalist-producer">Coopérative des Alpages · Savoie, FR · Jean Naumann</div>
+              <div><span class="finalist-score">95.1 <small>/ 100</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Hard-Aged</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Whitestone 36-Month</div>
+              <div class="finalist-producer">Whitestone Creamery · Madison, WI · Robert Kihm</div>
+              <div><span class="finalist-score">94.7 <small>/ 100</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Cheddar-Style</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Truckle Cloth-Bound 24mo</div>
+              <div class="finalist-producer">Quickes Traditional · Devon, UK · Mary Quicke</div>
+              <div><span class="finalist-score">94.3 <small>/ 100</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Blue</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Sognefjord Stilton-Style</div>
+              <div class="finalist-producer">Tine Meieri · Sogn og Fjordane, NO</div>
+              <div><span class="finalist-score">93.9 <small>/ 100</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head" style="background: linear-gradient(135deg, var(--mc-gold-500), var(--mc-gold-700));"><span class="finalist-cat">Best in Show 2026</span><span class="medal">🏆</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Foggy Valley Reserve</div>
+              <div class="finalist-producer">Foggy Valley Creamery · WA · Selected by 9-judge super-panel</div>
+              <div><span class="finalist-score">96.4 <small>/ 100 · Best in Show</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Innovation</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Misorin Koji-Aged</div>
+              <div class="finalist-producer">Tsubo Dairy · Hokkaido, JP · 12mo koji-mold collaboration</div>
+              <div><span class="finalist-score">93.4 <small>/ 100</small></span></div>
+            </div>
+          </article>
+
+          <article class="finalist-card">
+            <div class="finalist-head"><span class="finalist-cat">Apprentice</span><span class="medal">🥇</span></div>
+            <div class="finalist-body">
+              <div class="finalist-name">Crooked Creek First Wheel</div>
+              <div class="finalist-producer">Sam Petersen · Apprentice, mentored by E. Rodriguez (WA)</div>
+              <div><span class="finalist-score">91.8 <small>/ 100</small></span></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- JUDGES -->
+    <section class="section section-sunken">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">The judges</p>
+            <h2>29 certified · 12 countries</h2>
+          </div>
+          <span class="muted mono upper">All judges complete the Judge Training & Calibration course</span>
+        </div>
+        <div class="judge-grid">
+          <div class="judge-card"><div class="judge-avatar">JW</div><div class="judge-name">Jamie Wu</div><div class="judge-meta">USA · Bloomy</div></div>
+          <div class="judge-card"><div class="judge-avatar">MT</div><div class="judge-name">Marcel Touraine</div><div class="judge-meta">FR · Washed-Rind</div></div>
+          <div class="judge-card"><div class="judge-avatar">SH</div><div class="judge-name">Sarah Henderson</div><div class="judge-meta">USA · Science</div></div>
+          <div class="judge-card"><div class="judge-avatar">MQ</div><div class="judge-name">Mary Quicke</div><div class="judge-meta">UK · Cheddar</div></div>
+          <div class="judge-card"><div class="judge-avatar">JN</div><div class="judge-name">Jean Naumann</div><div class="judge-meta">FR · Alpine</div></div>
+          <div class="judge-card"><div class="judge-avatar">JH</div><div class="judge-name">John Huisman</div><div class="judge-meta">NL · All cats</div></div>
+          <div class="judge-card"><div class="judge-avatar">RK</div><div class="judge-name">Robert Kihm</div><div class="judge-meta">USA · Hard-Aged</div></div>
+          <div class="judge-card"><div class="judge-avatar">+22</div><div class="judge-name">22 more judges</div><div class="judge-meta">All certified</div></div>
+        </div>
+        <p class="muted center mt-5">Interested in becoming a judge? Complete the <a href="education.html">Judge Training & Calibration course</a> (12 weeks, hybrid, 96 CEU). Recertification required every 3 years.</p>
+      </div>
+    </section>
+
+    <!-- PAST WINNERS -->
+    <section class="section">
+      <div class="container-narrow center">
+        <p class="eyebrow">79 years of recognition</p>
+        <h2>The Best in Show roll of honor stretches back to 1947.</h2>
+        <p class="lede">Browse 79 years of winners — every Best in Show, every category Gold, every Apprentice Showcase winner.</p>
+        <a href="#" class="btn btn-rind btn-lg mt-4">Browse the historical winners archive</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>
