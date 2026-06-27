@@ -4,4 +4,5 @@
 
 export * from './lib/record-merge-types';
 export * from './lib/record-merge-panel.component';
+export * from './lib/record-comparison.service';
 export * from './lib/module';

@@ -104,6 +104,9 @@ app-duplicate-detection-resource {
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--mj-text-secondary);
+    /* Uniform label-row height across all three columns so the sliders below line up,
+       even though the LLM column's row carries an mj-switch. */
+    min-height: 24px;
 }
 
 .threshold-value {
@@ -111,6 +114,25 @@ app-duplicate-detection-resource {
     font-weight: 700;
     color: var(--mj-brand-primary);
     font-size: 0.85rem;
+}
+
+/* LLM reasoning gate — sits alongside the vector sliders, separated by a subtle rule.
+   The toggle lives in the standard .threshold-label row (with the % value pushed right via
+   margin-left:auto) so the slider and hint line up row-for-row with the vector columns. */
+.reasoning-group {
+    padding-left: 24px;
+    border-left: 1px solid var(--mj-border-subtle);
+}
+
+.reasoning-group mj-switch {
+    margin-left: 2px;
+}
+
+/* The shared mj-switch reserves a 44px touch target, which would balloon the reasoning label row
+   and drop its slider below the vector sliders. In this dense threshold bar, shrink it to the
+   24px track height (selector kept specific enough to beat the switch component's own rule). */
+.threshold-controls .reasoning-group .mj-switch {
+    min-height: 24px;
 }
 
 .threshold-slider {
@@ -844,6 +866,206 @@ app-duplicate-detection-resource {
 .col-header-diff-count {
     font-size: 0.65rem;
     color: var(--mj-status-warning-text);
+}
+
+/* ── LLM verdict (compact — full reasoning lives in a floating popover) ── */
+.llm-verdict-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+/* Confidence rendered inline inside the recommendation badge */
+.llm-conf-inline {
+    margin-left: 5px;
+    padding-left: 5px;
+    border-left: 1px solid currentColor;
+    opacity: 0.85;
+    font-weight: 700;
+}
+
+/* Compact disagreement marker (full text in tooltip + popover) */
+.llm-disagree-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    font-size: 0.6rem;
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+    cursor: pointer;
+}
+
+/* "Why?" trigger that opens the reasoning popover */
+.llm-why-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--mj-text-link);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.llm-why-btn:hover,
+.llm-why-btn.active {
+    background: color-mix(in srgb, var(--mj-text-link) 12%, transparent);
+    border-color: color-mix(in srgb, var(--mj-text-link) 35%, transparent);
+}
+
+.llm-rec-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+}
+
+.llm-rec-merge {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border-color: var(--mj-status-success-border);
+}
+
+.llm-rec-notduplicate {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border-color: var(--mj-status-error-border);
+}
+
+.llm-rec-uncertain {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+    border-color: var(--mj-status-info-border);
+}
+
+.llm-confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+    border: 1px solid var(--mj-border-default);
+}
+
+.llm-disagreement-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.62rem;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+}
+
+/* ── Floating reasoning popover (overlays the grid; keeps headers compact) ── */
+.reasoning-popover-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10001;
+    background: transparent;
+}
+
+.reasoning-popover {
+    position: fixed;
+    z-index: 10002;
+    width: 380px;
+    max-width: calc(100vw - 24px);
+    max-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    animation: reasoningPopIn 0.12s ease-out;
+}
+
+@keyframes reasoningPopIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.reasoning-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.reasoning-popover-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.reasoning-popover-title i {
+    color: var(--mj-brand-primary);
+}
+
+.reasoning-popover-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.reasoning-popover-close:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.reasoning-popover-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 10px 12px 0;
+}
+
+.reasoning-popover-body {
+    padding: 10px 12px 12px;
+    font-size: 0.74rem;
+    line-height: 1.5;
+    color: var(--mj-text-secondary);
+    white-space: pre-wrap;
+    overflow-y: auto;
 }
 
 /* Surviving record selector */
