@@ -1,5 +1,38 @@
 # @memberjunction/react-runtime
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 438ce4a: Fix `cache-manager` build failure under Node typings — the cleanup timer used `window.setInterval`/`window.clearInterval` (DOM-typed, returns `number`) while `cleanupTimer` is declared as `ReturnType<typeof setInterval>` (Node's `Timeout`), causing `TS2322: Type 'number' is not assignable to type 'Timeout'`. Switched to the bare global `setInterval`/`clearInterval`, whose return type matches the declaration and works in both browser and Node runtimes.
+- Updated dependencies [9b9b484]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

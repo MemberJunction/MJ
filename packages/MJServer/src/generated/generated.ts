@@ -8176,6 +8176,9 @@ each time the agent processes a prompt step.`})
     @Field(() => [MJProcessRunDetail_])
     MJProcessRunDetails_AIAgentRunIDArray: MJProcessRunDetail_[]; // Link to MJProcessRunDetails
     
+    @Field(() => [MJDuplicateRunDetailMatch_])
+    MJDuplicateRunDetailMatches_AIAgentRunIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
+    
 }
 
 //****************************************************************************
@@ -8642,6 +8645,16 @@ export class MJAIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwProcessRunDetails')} WHERE ${provider.QuoteIdentifier('AIAgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Process Run Details', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Process Run Details', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDuplicateRunDetailMatch_])
+    async MJDuplicateRunDetailMatches_AIAgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Duplicate Run Detail Matches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDuplicateRunDetailMatches')} WHERE ${provider.QuoteIdentifier('AIAgentRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagentrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Duplicate Run Detail Matches', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -9694,6 +9707,17 @@ export class MJAIAgentSession_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.`}) 
+    @MaxLength(20)
+    RecordingMedia?: string;
+        
+    @Field({nullable: true, description: `Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.`}) 
+    RecordingStartedAt?: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RecordingFileID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -9705,6 +9729,10 @@ export class MJAIAgentSession_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    RecordingFile?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -9765,6 +9793,15 @@ export class CreateMJAIAgentSessionInput {
     @Field({ nullable: true })
     CloseReason: string | null;
 
+    @Field({ nullable: true })
+    RecordingMedia: string | null;
+
+    @Field({ nullable: true })
+    RecordingStartedAt: Date | null;
+
+    @Field({ nullable: true })
+    RecordingFileID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9807,6 +9844,15 @@ export class UpdateMJAIAgentSessionInput {
 
     @Field({ nullable: true })
     CloseReason?: string | null;
+
+    @Field({ nullable: true })
+    RecordingMedia?: string | null;
+
+    @Field({ nullable: true })
+    RecordingStartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    RecordingFileID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11053,6 +11099,14 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`}) 
     AllowMemoryWrite: boolean;
         
+    @Field({nullable: true, description: `Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`}) 
+    @MaxLength(20)
+    RecordingDefault?: string;
+        
+    @Field({nullable: true, description: `OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.`}) 
+    @MaxLength(36)
+    RecordingStorageProviderID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11088,6 +11142,10 @@ if this limit is exceeded.`})
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultCoAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    RecordingStorageProvider?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -11195,6 +11253,9 @@ if this limit is exceeded.`})
     
     @Field(() => [MJRecordProcess_])
     MJRecordProcesses_AgentIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
+    @Field(() => [MJEntityDocument_])
+    MJEntityDocuments_ReasoningAgentIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
 }
 
@@ -11403,6 +11464,12 @@ export class CreateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMemoryWrite?: boolean;
+
+    @Field({ nullable: true })
+    RecordingDefault: string | null;
+
+    @Field({ nullable: true })
+    RecordingStorageProviderID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -11614,6 +11681,12 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMemoryWrite?: boolean;
+
+    @Field({ nullable: true })
+    RecordingDefault?: string | null;
+
+    @Field({ nullable: true })
+    RecordingStorageProviderID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12006,6 +12079,16 @@ export class MJAIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('AgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityDocument_])
+    async MJEntityDocuments_ReasoningAgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityDocuments')} WHERE ${provider.QuoteIdentifier('ReasoningAgentID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiagent_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -17681,6 +17764,9 @@ export class MJAIPromptRun_ {
     @Field(() => [MJAIPromptRun_])
     MJAIPromptRuns_ParentIDArray: MJAIPromptRun_[]; // Link to MJAIPromptRuns
     
+    @Field(() => [MJDuplicateRunDetailMatch_])
+    MJDuplicateRunDetailMatches_AIPromptRunIDArray: MJDuplicateRunDetailMatch_[]; // Link to MJDuplicateRunDetailMatches
+    
 }
 
 //****************************************************************************
@@ -18344,6 +18430,16 @@ export class MJAIPromptRunResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJDuplicateRunDetailMatch_])
+    async MJDuplicateRunDetailMatches_AIPromptRunIDArray(@Root() mjaipromptrun_: MJAIPromptRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Duplicate Run Detail Matches', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDuplicateRunDetailMatches')} WHERE ${provider.QuoteIdentifier('AIPromptRunID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Duplicate Run Detail Matches', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaipromptrun_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Duplicate Run Detail Matches', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @Mutation(() => MJAIPromptRun_)
     async CreateMJAIPromptRun(
         @Arg('input', () => CreateMJAIPromptRunInput) input: CreateMJAIPromptRunInput,
@@ -18795,6 +18891,9 @@ export class MJAIPrompt_ {
     
     @Field(() => [MJRecordProcess_])
     MJRecordProcesses_PromptIDArray: MJRecordProcess_[]; // Link to MJRecordProcesses
+    
+    @Field(() => [MJEntityDocument_])
+    MJEntityDocuments_ReasoningPromptIDArray: MJEntityDocument_[]; // Link to MJEntityDocuments
     
 }
 
@@ -19336,6 +19435,16 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwRecordProcesses')} WHERE ${provider.QuoteIdentifier('PromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Processes', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Record Processes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityDocument_])
+    async MJEntityDocuments_ReasoningPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Documents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityDocuments')} WHERE ${provider.QuoteIdentifier('ReasoningPromptID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Documents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjaiprompt_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Documents', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -36601,6 +36710,19 @@ export class MJConversationDetail_ {
     @MaxLength(36)
     AgentSessionID?: string;
         
+    @Field({nullable: true, description: `Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.`}) 
+    TurnEndedAt?: Date;
+        
+    @Field(() => Int, {nullable: true, description: `Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.`}) 
+    UtteranceStartMs?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.`}) 
+    UtteranceEndMs?: number;
+        
+    @Field({nullable: true, description: `Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`}) 
+    @MaxLength(20)
+    MediaType?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Conversation?: string;
@@ -36745,6 +36867,18 @@ export class CreateMJConversationDetailInput {
     @Field({ nullable: true })
     AgentSessionID: string | null;
 
+    @Field({ nullable: true })
+    TurnEndedAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceStartMs: number | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceEndMs: number | null;
+
+    @Field({ nullable: true })
+    MediaType: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -36832,6 +36966,18 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     AgentSessionID?: string | null;
+
+    @Field({ nullable: true })
+    TurnEndedAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceStartMs?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    UtteranceEndMs?: number | null;
+
+    @Field({ nullable: true })
+    MediaType?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -37099,6 +37245,14 @@ export class MJConversation_ {
     @Field({nullable: true, description: `Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`}) 
     AdditionalData?: string;
         
+    @Field({nullable: true, description: `For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`}) 
+    @MaxLength(36)
+    RecordingFileID?: string;
+        
+    @Field({nullable: true, description: `The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.`}) 
+    @MaxLength(255)
+    EgressID?: string;
+        
     @Field() 
     @MaxLength(100)
     User: string;
@@ -37130,6 +37284,10 @@ export class MJConversation_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     DefaultAgent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    RecordingFile?: string;
         
     @Field(() => [MJConversationDetail_])
     MJConversationDetails_ConversationIDArray: MJConversationDetail_[]; // Link to MJConversationDetails
@@ -37216,6 +37374,12 @@ export class CreateMJConversationInput {
     @Field({ nullable: true })
     AdditionalData: string | null;
 
+    @Field({ nullable: true })
+    RecordingFileID: string | null;
+
+    @Field({ nullable: true })
+    EgressID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -37282,6 +37446,12 @@ export class UpdateMJConversationInput {
 
     @Field({ nullable: true })
     AdditionalData?: string | null;
+
+    @Field({ nullable: true })
+    RecordingFileID?: string | null;
+
+    @Field({ nullable: true })
+    EgressID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41094,6 +41264,31 @@ export class MJDuplicateRunDetailMatch_ {
     @Field({nullable: true, description: `JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`}) 
     RecordMetadata?: string;
         
+    @Field({nullable: true, description: `When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).`}) 
+    @MaxLength(36)
+    AIAgentRunID?: string;
+        
+    @Field({nullable: true, description: `When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.`}) 
+    @MaxLength(36)
+    AIPromptRunID?: string;
+        
+    @Field({nullable: true, description: `The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.`}) 
+    @MaxLength(20)
+    LLMRecommendation?: string;
+        
+    @Field(() => Float, {nullable: true, description: `Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.`}) 
+    LLMConfidence?: number;
+        
+    @Field({nullable: true, description: `Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.`}) 
+    LLMReasoning?: string;
+        
+    @Field({nullable: true, description: `The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.`}) 
+    @MaxLength(500)
+    LLMProposedSurvivorRecordID?: string;
+        
+    @Field({nullable: true, description: `JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.`}) 
+    LLMProposedFieldMap?: string;
+        
     @Field() 
     @MaxLength(500)
     DuplicateRunDetail: string;
@@ -41101,6 +41296,14 @@ export class MJDuplicateRunDetailMatch_ {
     @Field({nullable: true}) 
     @MaxLength(450)
     RecordMergeLog?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIAgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AIPromptRun?: string;
         
 }
 
@@ -41144,6 +41347,27 @@ export class CreateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     RecordMetadata: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID: string | null;
+
+    @Field({ nullable: true })
+    LLMRecommendation: string | null;
+
+    @Field(() => Float, { nullable: true })
+    LLMConfidence: number | null;
+
+    @Field({ nullable: true })
+    LLMReasoning: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedSurvivorRecordID: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedFieldMap: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -41190,6 +41414,27 @@ export class UpdateMJDuplicateRunDetailMatchInput {
 
     @Field({ nullable: true })
     RecordMetadata?: string | null;
+
+    @Field({ nullable: true })
+    AIAgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    AIPromptRunID?: string | null;
+
+    @Field({ nullable: true })
+    LLMRecommendation?: string | null;
+
+    @Field(() => Float, { nullable: true })
+    LLMConfidence?: number | null;
+
+    @Field({ nullable: true })
+    LLMReasoning?: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedSurvivorRecordID?: string | null;
+
+    @Field({ nullable: true })
+    LLMProposedFieldMap?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -45276,6 +45521,10 @@ export class MJEntityActionInvocation_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`}) 
+    @MaxLength(255)
+    RuntimeUXDriverClass?: string;
+        
     @Field() 
     @MaxLength(425)
     EntityAction: string;
@@ -45303,6 +45552,9 @@ export class CreateMJEntityActionInvocationInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    RuntimeUXDriverClass: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -45324,6 +45576,9 @@ export class UpdateMJEntityActionInvocationInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    RuntimeUXDriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46996,6 +47251,28 @@ export class MJEntityDocument_ {
     @Field({nullable: true, description: `JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`}) 
     Configuration?: string;
         
+    @Field(() => Boolean, {description: `Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`}) 
+    EnableLLMReasoning: boolean;
+        
+    @Field({description: `Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`}) 
+    @MaxLength(20)
+    ReasoningMode: string;
+        
+    @Field(() => Float, {nullable: true, description: `Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.`}) 
+    ReasoningThreshold?: number;
+        
+    @Field({nullable: true, description: `The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.`}) 
+    @MaxLength(36)
+    ReasoningPromptID?: string;
+        
+    @Field({nullable: true, description: `The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.`}) 
+    @MaxLength(36)
+    ReasoningAgentID?: string;
+        
+    @Field({description: `Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).`}) 
+    @MaxLength(30)
+    AutomationLevel: string;
+        
     @Field() 
     @MaxLength(100)
     Type: string;
@@ -47019,6 +47296,14 @@ export class MJEntityDocument_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     VectorIndex?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ReasoningPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ReasoningAgent?: string;
         
     @Field(() => [MJEntityDocumentRun_])
     MJEntityDocumentRuns_EntityDocumentIDArray: MJEntityDocumentRun_[]; // Link to MJEntityDocumentRuns
@@ -47075,6 +47360,24 @@ export class CreateMJEntityDocumentInput {
     @Field({ nullable: true })
     Configuration: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    EnableLLMReasoning?: boolean;
+
+    @Field({ nullable: true })
+    ReasoningMode?: string;
+
+    @Field(() => Float, { nullable: true })
+    ReasoningThreshold: number | null;
+
+    @Field({ nullable: true })
+    ReasoningPromptID: string | null;
+
+    @Field({ nullable: true })
+    ReasoningAgentID: string | null;
+
+    @Field({ nullable: true })
+    AutomationLevel?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -47120,6 +47423,24 @@ export class UpdateMJEntityDocumentInput {
 
     @Field({ nullable: true })
     Configuration?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    EnableLLMReasoning?: boolean;
+
+    @Field({ nullable: true })
+    ReasoningMode?: string;
+
+    @Field(() => Float, { nullable: true })
+    ReasoningThreshold?: number | null;
+
+    @Field({ nullable: true })
+    ReasoningPromptID?: string | null;
+
+    @Field({ nullable: true })
+    ReasoningAgentID?: string | null;
+
+    @Field({ nullable: true })
+    AutomationLevel?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -51705,6 +52026,9 @@ export class MJFileStorageProvider_ {
     @Field(() => [MJFileStorageAccount_])
     MJFileStorageAccounts_ProviderIDArray: MJFileStorageAccount_[]; // Link to MJFileStorageAccounts
     
+    @Field(() => [MJAIAgent_])
+    MJAIAgents_RecordingStorageProviderIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
     @Field(() => [MJAIConfiguration_])
     MJAIConfigurations_DefaultStorageProviderIDArray: MJAIConfiguration_[]; // Link to MJAIConfigurations
     
@@ -51872,6 +52196,16 @@ export class MJFileStorageProviderResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgent_])
+    async MJAIAgents_RecordingStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agents', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('RecordingStorageProviderID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfilestorageprovider_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIConfiguration_])
     async MJAIConfigurations_DefaultStorageProviderIDArray(@Root() mjfilestorageprovider_: MJFileStorageProvider_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
@@ -51985,6 +52319,12 @@ export class MJFile_ {
     
     @Field(() => [MJArtifactVersion_])
     MJArtifactVersions_FileIDArray: MJArtifactVersion_[]; // Link to MJArtifactVersions
+    
+    @Field(() => [MJAIAgentSession_])
+    MJAIAgentSessions_RecordingFileIDArray: MJAIAgentSession_[]; // Link to MJAIAgentSessions
+    
+    @Field(() => [MJConversation_])
+    MJConversations_RecordingFileIDArray: MJConversation_[]; // Link to MJConversations
     
 }
 
@@ -52162,6 +52502,26 @@ export class MJFileResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactVersions')} WHERE ${provider.QuoteIdentifier('FileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentSession_])
+    async MJAIAgentSessions_RecordingFileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Sessions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentSessions')} WHERE ${provider.QuoteIdentifier('RecordingFileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Sessions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Sessions', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversation_])
+    async MJConversations_RecordingFileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversations')} WHERE ${provider.QuoteIdentifier('RecordingFileID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [mjfile_.ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -60698,6 +61058,10 @@ export class MJOpenApp_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`}) 
+    @MaxLength(500)
+    Subpath?: string;
+        
     @Field() 
     @MaxLength(100)
     InstalledByUser: string;
@@ -60772,6 +61136,9 @@ export class CreateMJOpenAppInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Subpath: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -60835,6 +61202,9 @@ export class UpdateMJOpenAppInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Subpath?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -62039,6 +62409,9 @@ export class MJProcessRun_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`}) 
+    DryRun: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -62134,6 +62507,9 @@ export class CreateMJProcessRunInput {
     @Field({ nullable: true })
     StartedByUserID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -62212,6 +62588,9 @@ export class UpdateMJProcessRunInput {
 
     @Field({ nullable: true })
     StartedByUserID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DryRun?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -68054,6 +68433,9 @@ export class MJRecordProcess_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -68176,6 +68558,9 @@ export class CreateMJRecordProcessInput {
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -68266,6 +68651,9 @@ export class UpdateMJRecordProcessInput {
 
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -68670,6 +69058,15 @@ export class MJRemoteOperation_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`}) 
+    CodeLocked: boolean;
+        
+    @Field({nullable: true, description: `The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`}) 
+    CodeComments?: string;
+        
+    @Field({nullable: true, description: `JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`}) 
+    Libraries?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -68757,6 +69154,15 @@ export class CreateMJRemoteOperationInput {
     @Field(() => Int, { nullable: true })
     MaxConcurrency: number | null;
 
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments: string | null;
+
+    @Field({ nullable: true })
+    Libraries: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -68838,6 +69244,15 @@ export class UpdateMJRemoteOperationInput {
 
     @Field(() => Int, { nullable: true })
     MaxConcurrency?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    CodeLocked?: boolean;
+
+    @Field({ nullable: true })
+    CodeComments?: string | null;
+
+    @Field({ nullable: true })
+    Libraries?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

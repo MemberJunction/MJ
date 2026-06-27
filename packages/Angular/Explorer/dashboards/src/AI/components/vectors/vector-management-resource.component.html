@@ -58,10 +58,8 @@
         </div>
 
         @if (SyncRows.length === 0) {
-          <div class="empty-state">
-            <i class="fa-solid fa-folder-open"></i>
-            <p>No entity documents configured for vectorization.</p>
-          </div>
+          <mj-empty-state Icon="fa-solid fa-folder-open"
+            Title="No entity documents configured for vectorization." />
         } @else {
           <div class="table-wrapper">
             <table class="sync-table">

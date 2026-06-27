@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJGlobal } from '@memberjunction/global';
@@ -22,6 +23,15 @@ import {
 import { BuildNarrationInstructions } from './narration-template';
 import { ParseDelegationResultJson, ParsedDelegationArtifact } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components/realtime/channels/base-realtime-channel-client';
+import { RealtimeAudioRecorder } from './realtime-audio-recorder';
+
+/**
+ * `MJ: User Settings` key for the per-user "record this voice call" consent toggle. Stored as
+ * the literal string `'true'`/`'false'` (read with `=== 'true'`), cross-device via
+ * {@link UserInfoEngine}. The pre-call picker writes it; the session service reads it as the
+ * default when the caller doesn't pass an explicit consent value.
+ */
+export const REALTIME_RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
 
 // Tree-shaking prevention: the OpenAI client is resolved dynamically through the
 // ClassFactory (by the server-reported Provider key), so this static call is what keeps
@@ -353,6 +363,20 @@ export class RealtimeSessionService {
     return this._activeChannels$.value;
   }
 
+  /**
+   * The `ChannelName`s the agent has used (acted on) at least once this session. The overlay
+   * uses this to register a channel's surface tab only after it has come into play. A fresh
+   * Set snapshot so callers can't mutate the service's tracking.
+   */
+  public get UsedChannelNames(): ReadonlySet<string> {
+    return new Set(this.usedChannelNames);
+  }
+
+  /** Whether the agent has used (acted on) the named channel at least once this session. */
+  public HasChannelBeenUsed(channelName: string): boolean {
+    return this.usedChannelNames.has(channelName);
+  }
+
   /** Synchronous access to the display name of the agent the active session fronts. */
   public get CurrentAgentName(): string {
     return this._agentName$.value;
@@ -415,6 +439,38 @@ export class RealtimeSessionService {
    * prompt — {@link buildNarrationInstructions} then falls back to the built-in wording.
    */
   private narrationTemplate: string | null = null;
+
+  // ── Browser-side call recording ────────────────────────────────────────────
+  /**
+   * The active session's audio recorder (mic + agent mix), or `null` when the user didn't
+   * consent or the browser can't record. Created after the client connects; stopped + uploaded
+   * at teardown.
+   */
+  private recorder: RealtimeAudioRecorder | null = null;
+  /** ISO timestamp of when recording started — sent to the server on session start. */
+  private recordingStartedAtIso: string | null = null;
+  /** Interval that flushes ~15s crash-recovery shards to the server during a recording. */
+  private segmentTimer: ReturnType<typeof setInterval> | null = null;
+  /** 0-based index of the next recording shard to upload. */
+  private segmentIndex = 0;
+  /** How often crash-recovery shards are flushed during a recording. */
+  private static readonly SegmentFlushMs = 15000;
+  /**
+   * Recording-relative ms offset at which the IN-FLIGHT (not-yet-finalized) turn's audio
+   * actually BEGAN — captured the moment that turn's audio/text starts flowing (its first
+   * interim transcript), NOT inherited from the previous turn's end. `null` before the first
+   * turn / between turns (until the next turn's audio starts). Sent as `utteranceStartMs` on
+   * the turn's final transcript so per-turn timing lines up with the recording even when a
+   * tool-call / silence gap sits between turns (the inherit-previous-end model mis-stamped
+   * the post-gap turn at the pre-gap offset). See {@link markTurnAudioStart}.
+   */
+  private currentTurnStartMs: number | null = null;
+  /**
+   * Per-turn guard for {@link markTurnAudioStart}: `true` once the in-flight turn's audio-start
+   * offset has been captured, so mid-turn interim deltas don't overwrite it. Reset to `false`
+   * at each finalization so the NEXT turn re-stamps from where ITS audio begins.
+   */
+  private turnAudioStartCaptured = false;
 
   // ── Delegated-run progress streaming ───────────────────────────────────────
   /** First spoken update fires no earlier than this long after delegated work starts. */
@@ -496,6 +552,15 @@ export class RealtimeSessionService {
     SessionID: string | null;
   }>();
 
+  /**
+   * `ChannelName`s the agent has ACTED ON at least once this session (the channel's first
+   * tool call routed to its local executor). The overlay reads this to decide which channel
+   * surface tabs to register: a channel earns its tab only once it's been used (the
+   * whiteboard is the sole exception — it tabs immediately, since a user may draw first).
+   * Reset at session start via {@link resetState}.
+   */
+  private usedChannelNames = new Set<string>();
+
   private _provider: IMetadataProvider | null = null;
 
   /**
@@ -543,6 +608,10 @@ export class RealtimeSessionService {
    *   authorization on any overrides — hosts only populate this from authorization-gated
    *   pickers, and never synthesize overrides beyond what the user explicitly chose.
    *   Omit/`null` for the server's defaults (today's behavior).
+   * @param recordingConsent Optional EXPLICIT "record this call" consent for THIS session. When
+   *   `true`, the browser records a mic + agent-audio mix and uploads it at session end. When
+   *   omitted/`null`, the per-user persisted preference (`mj.realtimeVoice.recordingConsent.v1`
+   *   via {@link UserInfoEngine}) is read as the default. `false` never records.
    */
   public async StartVoiceSession(
     targetAgentId: string,
@@ -552,7 +621,8 @@ export class RealtimeSessionService {
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
     coAgentId?: string | null,
-    configOverridesJson?: string | null
+    configOverridesJson?: string | null,
+    recordingConsent?: boolean | null
   ): Promise<void> {
     if (this.IsActive) {
       return; // a session is already running — ignore duplicate starts
@@ -565,11 +635,16 @@ export class RealtimeSessionService {
     this._active$.next(true);
     this._connectionState$.next('connecting');
 
+    // Resolve recording consent for this session: explicit value wins, else the per-user
+    // persisted preference. Computed before mint so it can be reported to the server.
+    const consent = recordingConsent ?? this.readPersistedRecordingConsent();
+    this.recordingStartedAtIso = consent ? new Date().toISOString() : null;
+
     try {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select
@@ -589,6 +664,15 @@ export class RealtimeSessionService {
 
       this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       await client.Connect(this.buildClientConfig(session), this.localStream);
+
+      // Start browser-side recording (mic + agent mix) when consented. Best-effort: an
+      // unsupported browser / missing remote stream degrades gracefully (mic-only or off)
+      // and never blocks the call. The remote stream may still be null here (the WebRTC
+      // ontrack can land slightly after Connect resolves) — the recorder mixes the mic now
+      // and the agent audio rides through whenever its track is already attached.
+      if (consent) {
+        this.startRecording(client);
+      }
 
       this.subscribeDelegationProgress();
       // State advances to 'listening' once the provider control channel opens
@@ -699,6 +783,182 @@ export class RealtimeSessionService {
     return this.client?.GetAudioActivity() ?? null;
   }
 
+  // ── Browser-side call recording ────────────────────────────────────────────
+
+  /**
+   * Reads the per-user recording-consent preference from `MJ: User Settings` (via
+   * {@link UserInfoEngine}'s synchronous cache). Defensive: any failure resolves to `false`
+   * (don't record) so a settings hiccup can never opt a user into recording.
+   */
+  private readPersistedRecordingConsent(): boolean {
+    try {
+      return UserInfoEngine.Instance.GetSetting(REALTIME_RECORDING_CONSENT_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Starts the browser-side recorder (mic + agent-audio mix). Best-effort — any failure is
+   * contained so it never disturbs the live call; an unsupported browser simply records
+   * nothing (the recorder disables itself).
+   */
+  private startRecording(client: BaseRealtimeClient): void {
+    try {
+      if (!this.localStream) {
+        return;
+      }
+      const remoteStream = client.GetRemoteMediaStream?.() ?? null;
+      const recorder = new RealtimeAudioRecorder();
+      recorder.Start(this.localStream, remoteStream);
+      this.recorder = recorder.IsRecording ? recorder : null;
+      // First turn's audio starts at ~0 (recording begins right as the call goes live). Seed it
+      // here so the very first turn has a sane start even if its first interim is missed; later
+      // turns re-stamp from where THEIR audio begins via markTurnAudioStart (handles tool gaps).
+      this.currentTurnStartMs = recorder.IsRecording ? 0 : null;
+      this.turnAudioStartCaptured = false;
+      if (this.recorder) {
+        // The agent's WebRTC audio track usually lands AFTER Connect() resolves, so `remoteStream`
+        // above is typically null and we'd capture mic-only. Attach the agent stream whenever it
+        // arrives (fires immediately if already present) so the recording includes the agent voice.
+        client.OnRemoteMediaStream?.((stream) => this.recorder?.AttachRemoteStream(stream));
+        this.startSegmentFlushing();
+      }
+    } catch (error) {
+      console.warn('[RealtimeSession] Failed to start call recording:', error);
+      this.recorder = null;
+    }
+  }
+
+  /** Begins flushing ~15s crash-recovery shards to the server for the duration of the recording. */
+  private startSegmentFlushing(): void {
+    this.segmentIndex = 0;
+    this.segmentTimer = setInterval(() => { void this.flushRecordingSegment(); }, RealtimeSessionService.SegmentFlushMs);
+  }
+
+  /** Stops the periodic crash-recovery shard flush. */
+  private stopSegmentFlushing(): void {
+    if (this.segmentTimer) {
+      clearInterval(this.segmentTimer);
+      this.segmentTimer = null;
+    }
+  }
+
+  /**
+   * Uploads the chunks captured since the last flush as one crash-recovery shard (durability only;
+   * the canonical file is still the full upload at teardown). Best-effort — never disturbs the call.
+   */
+  private async flushRecordingSegment(): Promise<void> {
+    const recorder = this.recorder;
+    const agentSessionId = this.agentSessionId;
+    if (!recorder || !agentSessionId) {
+      return;
+    }
+    const segment = recorder.SnapshotNewSegment();
+    if (!segment || segment.size === 0) {
+      return;
+    }
+    try {
+      const audioBase64 = await this.blobToBase64(segment);
+      if (!audioBase64) {
+        return;
+      }
+      const index = this.segmentIndex++;
+      const mutation = `
+        mutation UploadRealtimeRecordingSegment($agentSessionId: String!, $segmentIndex: Int!, $audioBase64: String!, $mimeType: String!) {
+          UploadRealtimeRecordingSegment(agentSessionId: $agentSessionId, segmentIndex: $segmentIndex, audioBase64: $audioBase64, mimeType: $mimeType)
+        }
+      `;
+      // Shards are HEADER-LESS raw little-endian PCM16 (mime audio/L16 with the capture sample rate),
+      // NOT individually-playable WAV — recovery is concatenate-in-order then WAV-wrap. The canonical
+      // seekable WAV is the consolidated end-of-call upload below.
+      const shardMime = `audio/L16;rate=${recorder.SampleRate}`;
+      await this.gql().ExecuteGQL(mutation, { agentSessionId, segmentIndex: index, audioBase64, mimeType: shardMime });
+    } catch (error) {
+      console.warn('[RealtimeSession] Failed to flush recording shard:', error);
+    }
+  }
+
+  /**
+   * Stops the active recorder and uploads the captured audio via `UploadRealtimeRecording`.
+   * Fully best-effort and wrapped in try/catch — recording upload must NEVER block teardown.
+   * No-op when nothing was recorded or there's no session id to attach the file to.
+   */
+  private async stopAndUploadRecording(agentSessionId: string | null): Promise<void> {
+    this.stopSegmentFlushing();
+    const recorder = this.recorder;
+    this.recorder = null;
+    this.currentTurnStartMs = null;
+    this.turnAudioStartCaptured = false;
+    if (!recorder) {
+      return;
+    }
+    try {
+      // Capture the recorder MIME (now 'audio/wav') BEFORE Stop() — the getter reads '' once stopped.
+      const mimeType = recorder.MimeType;
+      const blob = await recorder.Stop();
+      // Read the real waveform peaks computed during capture (survives Stop via the recorder's snapshot).
+      const peaks = recorder.GetPeaks();
+      if (!blob || blob.size === 0 || !agentSessionId) {
+        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — empty blob or no session id.');
+        return;
+      }
+      const audioBase64 = await this.blobToBase64(blob);
+      if (!audioBase64) {
+        console.warn('[RealtimeSession] ⚠️ recording NOT uploaded — base64 encoding failed.');
+        return;
+      }
+      await this.uploadRecording(agentSessionId, audioBase64, mimeType, peaks);
+    } catch (error) {
+      console.warn('[RealtimeSession] Failed to stop/upload call recording:', error);
+    }
+  }
+
+  /**
+   * Runs the `UploadRealtimeRecording` mutation; failures are logged, never thrown. Sends the
+   * capture-time waveform `peaks` (max-abs per bucket, normalized 0..1) so the server can persist a
+   * `peaks.json` sidecar for fast waveform rendering without re-decoding the audio.
+   */
+  private async uploadRecording(agentSessionId: string, audioBase64: string, mimeType: string, peaks: number[]): Promise<void> {
+    const mutation = `
+      mutation UploadRealtimeRecording($agentSessionId: String!, $audioBase64: String!, $mimeType: String!, $consent: Boolean, $peaks: [Float!]) {
+        UploadRealtimeRecording(agentSessionId: $agentSessionId, audioBase64: $audioBase64, mimeType: $mimeType, consent: $consent, peaks: $peaks) {
+          Success
+          FileID
+          ErrorMessage
+        }
+      }
+    `;
+    const result = await this.gql().ExecuteGQL(mutation, {
+      agentSessionId,
+      audioBase64,
+      mimeType,
+      consent: true,
+      peaks
+    });
+    const payload = result?.UploadRealtimeRecording as { Success?: boolean; FileID?: string; ErrorMessage?: string } | undefined;
+    if (!payload?.Success) {
+      console.warn(`[RealtimeSession] ❌ recording upload reported failure: ${payload?.ErrorMessage ?? 'unknown error'} (full result: ${JSON.stringify(result)})`);
+    }
+  }
+
+  /**
+   * Encodes a {@link Blob} as a base64 string (the data: prefix stripped) via {@link FileReader}.
+   * Resolves `''` on any read failure so the upload path can bail cleanly.
+   */
+  private blobToBase64(blob: Blob): Promise<string> {
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const commaIndex = result.indexOf(',');
+        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : '');
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    });
+  }
+
   // ── Interactive channels (registry-driven plugins) ─────────────────────────
 
   /**
@@ -790,7 +1050,10 @@ export class RealtimeSessionService {
     plugin.Initialize(this.buildChannelContext(plugin));
     this.RegisterClientToolHandler(plugin.ToolNamePrefix, (toolName, argsJson) => {
       // The agent is ACTING on this channel — surface-discovery signal for the overlay
-      // (first activity auto-reveals + focuses the channel tab) before the tool applies.
+      // (first activity registers + auto-reveals + focuses the channel tab) before the
+      // tool applies. Record the channel as USED so the overlay tabs it (channels other
+      // than the whiteboard are tab-less until they're first used).
+      this.usedChannelNames.add(plugin.ChannelName);
       this._channelActivity$.next(plugin);
       return plugin.ApplyAgentTool(toolName, argsJson);
     });
@@ -803,6 +1066,11 @@ export class RealtimeSessionService {
     const service = this;
     return {
       AgentName: this.CurrentAgentName,
+      // The live session's provider — threaded by channels into MJ-backed surfaces (e.g. the Media
+      // channel's mj-storage-media-player / CreateMediaAccessToken). `get` so it stays current.
+      get Provider(): IMetadataProvider {
+        return service.Provider;
+      },
       SendContextNote: (text: string) => this.SendContextNote(text),
       RequestSpokenResponse: (instructions: string) => this.requestChannelSpokenResponse(instructions),
       RequestSave: (stateJson: string) => this.scheduleChannelSave(plugin.ChannelName, stateJson),
@@ -978,6 +1246,7 @@ export class RealtimeSessionService {
     if (this._activeChannels$.value.length > 0) {
       this._activeChannels$.next([]);
     }
+    this.usedChannelNames.clear();
   }
 
   // ── Realtime client resolution + wiring ────────────────────────────────────
@@ -1099,14 +1368,21 @@ export class RealtimeSessionService {
   // ── Transcript policy ──────────────────────────────────────────────────────
 
   /**
-   * Applies transcript policy to client transcript events. Interim deltas are ignored
-   * (the client already drives the speaking state). Final NORMAL assistant turns become
+   * Applies transcript policy to client transcript events. Interim deltas don't become
+   * captions/turns (the client already drives the speaking state) but DO mark this turn's
+   * audio-start offset against the recording (the first interim fires as the audio/text
+   * starts flowing — see {@link markTurnAudioStart}). Final NORMAL assistant turns become
    * captions + persisted transcripts; final NARRATION turns are EPHEMERAL by product
    * decision — emitted on {@link DelegationNarration$} only, never a caption, never
    * relayed/persisted. User turns ride the caption + relay path.
    */
   private async onClientTranscript(transcript: RealtimeClientTranscript): Promise<void> {
     if (!transcript.IsFinal) {
+      // First interim of a NEW turn = that turn's audio is starting NOW. Stamp the
+      // recording-relative start here so a turn whose audio begins AFTER a tool-call /
+      // silence gap is timed where its audio really is — not inherited from the prior
+      // turn's end. Narration interims are ephemeral and excluded (Kind guard inside).
+      this.markTurnAudioStart(transcript.Kind);
       return;
     }
     if (transcript.Role === 'Assistant') {
@@ -1137,6 +1413,35 @@ export class RealtimeSessionService {
     } else {
       await this.onUserTranscript(transcript.Text);
     }
+  }
+
+  /**
+   * Stamps the recording-relative offset at which the IN-FLIGHT turn's audio actually began,
+   * the moment that turn's audio/text first starts flowing (its FIRST interim transcript).
+   *
+   * This is the fix for transcript cues drifting out of sync with the audio when a tool-call /
+   * silence gap sits between turns: the old model inherited the next turn's start from the
+   * PREVIOUS turn's end (assumes contiguous turns), so a post-gap turn's cue pointed ~gap-length
+   * too early. Capturing the start where the audio truly begins keeps the cue aligned.
+   *
+   * Guards:
+   * - only when recording ({@link recorder} present),
+   * - only ONCE per turn ({@link turnAudioStartCaptured}) so mid-turn interim deltas don't move it,
+   * - NORMAL turns only — NARRATION interims are ephemeral and never persisted, so they must not
+   *   claim the next real turn's start slot.
+   *
+   * Works for any role whose driver surfaces interim deltas (all drivers for the assistant; the
+   * relevant case here — the post-tool-gap assistant answer — and user-interim drivers like
+   * Gemini/AssemblyAI). For final-only user turns (OpenAI/xAI/ElevenLabs) no interim arrives, so
+   * {@link relayTranscript} falls back to the seeded/prior start — the gap case that drifts is the
+   * assistant answer, which always has interims.
+   */
+  private markTurnAudioStart(kind: 'normal' | 'narration'): void {
+    if (!this.recorder || this.turnAudioStartCaptured || kind === 'narration') {
+      return;
+    }
+    this.currentTurnStartMs = this.recorder.NowOffsetMs();
+    this.turnAudioStartCaptured = true;
   }
 
   /**
@@ -1385,11 +1690,13 @@ export class RealtimeSessionService {
     preferredModelId?: string | null,
     clientTools?: RealtimeToolDefinition[] | null,
     coAgentId?: string | null,
-    configOverridesJson?: string | null
+    configOverridesJson?: string | null,
+    recordingConsent?: boolean | null,
+    recordingStartedAt?: string | null
   ): Promise<StartRealtimeClientSessionResult> {
     const mutation = `
-      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String) {
-        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson) {
+      mutation StartRealtimeClientSession($targetAgentId: String!, $conversationId: String, $lastSessionId: String, $preferredModelId: String, $clientToolsJson: String, $coAgentId: String, $configOverridesJson: String, $recordingConsent: Boolean, $recordingStartedAt: String) {
+        StartRealtimeClientSession(targetAgentId: $targetAgentId, conversationId: $conversationId, lastSessionId: $lastSessionId, preferredModelId: $preferredModelId, clientToolsJson: $clientToolsJson, coAgentId: $coAgentId, configOverridesJson: $configOverridesJson, recordingConsent: $recordingConsent, recordingStartedAt: $recordingStartedAt) {
           AgentSessionId
           ConversationId
           Provider
@@ -1410,7 +1717,9 @@ export class RealtimeSessionService {
       preferredModelId: preferredModelId ?? null,
       clientToolsJson: clientTools && clientTools.length > 0 ? JSON.stringify(clientTools) : null,
       coAgentId: coAgentId ?? null,
-      configOverridesJson: configOverridesJson ?? null
+      configOverridesJson: configOverridesJson ?? null,
+      recordingConsent: recordingConsent ?? false,
+      recordingStartedAt: recordingStartedAt ?? null
     };
     const result = await this.gql().ExecuteGQL(mutation, variables);
     const payload = result?.StartRealtimeClientSession as StartRealtimeClientSessionResult | undefined;
@@ -1475,6 +1784,19 @@ export class RealtimeSessionService {
 
   /**
    * Relays a final transcript turn to MJ via `RelayRealtimeTranscript`.
+   *
+   * When the session is being recorded, per-turn timing rides along: `utteranceEndMs` is the
+   * recording-relative offset at finalization, and `utteranceStartMs` is the offset captured by
+   * {@link markTurnAudioStart} when THIS turn's audio actually began (its first interim) — NOT
+   * inherited from the previous turn's end. That distinction is the timing fix: when a tool-call
+   * / silence gap sits between turns, the post-gap turn's audio starts much later, so inheriting
+   * the prior turn's end stamped the cue ~gap-length too early. Both are omitted (left `null`)
+   * when the session isn't being recorded.
+   *
+   * A correction (`replacesPrevious`) doesn't open a new turn, so it carries no start and doesn't
+   * reset the per-turn start guard. After a normal finalization the guard is cleared so the NEXT
+   * turn re-stamps its start from where ITS audio begins.
+   *
    * @param replacesPrevious CORRECTION semantics: the server updates the session's most
    *   recent persisted turn of this role IN PLACE instead of appending (e.g. ElevenLabs'
    *   post-barge-in `agent_response_correction`).
@@ -1483,17 +1805,31 @@ export class RealtimeSessionService {
     if (!this.agentSessionId) {
       return;
     }
+    // Per-turn timing against the recording (when recording). `utteranceStartMs` is where this
+    // turn's audio actually began (captured by markTurnAudioStart on the first interim); the
+    // `?? 0` fallback covers a turn whose interim was missed / a final-only first turn.
+    const utteranceEndMs = this.recorder ? this.recorder.NowOffsetMs() : null;
+    const utteranceStartMs = this.recorder && !replacesPrevious ? (this.currentTurnStartMs ?? 0) : null;
+    if (this.recorder && !replacesPrevious) {
+      // This turn is finalized — arm the NEXT turn to re-stamp its start from its own first
+      // interim (handles a tool-call gap before the next turn). Stop inheriting this end as the
+      // next start. `null` means "not yet captured"; relay falls back to `?? 0` if no interim fires.
+      this.currentTurnStartMs = null;
+      this.turnAudioStartCaptured = false;
+    }
     try {
       const mutation = `
-        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!, $replacesPrevious: Boolean) {
-          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text, replacesPrevious: $replacesPrevious)
+        mutation RelayRealtimeTranscript($agentSessionId: String!, $role: String!, $text: String!, $replacesPrevious: Boolean, $utteranceStartMs: Int, $utteranceEndMs: Int) {
+          RelayRealtimeTranscript(agentSessionId: $agentSessionId, role: $role, text: $text, replacesPrevious: $replacesPrevious, utteranceStartMs: $utteranceStartMs, utteranceEndMs: $utteranceEndMs)
         }
       `;
       await this.gql().ExecuteGQL(mutation, {
         agentSessionId: this.agentSessionId,
         role,
         text,
-        replacesPrevious
+        replacesPrevious,
+        utteranceStartMs,
+        utteranceEndMs
       });
     } catch (error) {
       console.error('[RealtimeSession] Failed to relay transcript:', error);
@@ -1904,6 +2240,12 @@ export class RealtimeSessionService {
       this.client = null;
     }
 
+    // Stop + upload the call recording WHILE the live session id is still set (the file is
+    // attached to it). Best-effort and never blocks teardown — stopAndUploadRecording swallows
+    // its own errors. No-op when nothing was recorded.
+    await this.stopAndUploadRecording(this.agentSessionId);
+    this.recordingStartedAtIso = null;
+
     // Final usage flush WHILE the live session id is still set (the relay mutation also
     // accepts a Closed session, so ordering vs. CloseAgentSession is belt-and-braces).
     if (this.usageFlushTimer) {
@@ -1967,6 +2309,13 @@ export class RealtimeSessionService {
   private resetState(): void {
     this._captions$.next([]);
     this.SetMinimized(false);
+    this.stopSegmentFlushing();
+    this.segmentIndex = 0;
+    this.recorder = null;
+    this.recordingStartedAtIso = null;
+    this.currentTurnStartMs = null;
+    this.turnAudioStartCaptured = false;
+    this.usedChannelNames.clear();
   }
 
   /** The GraphQL provider used for relay mutations. */

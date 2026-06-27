@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/database-designer-actions",
   "type": "module",
-  "version": "5.41.0",
+  "version": "5.43.0",
   "description": "Database Designer Actions — metadata-driven action layer for entity creation and modification",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,13 +13,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/actions": "5.41.0",
-    "@memberjunction/actions-base": "5.41.0",
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/core-entities": "5.41.0",
-    "@memberjunction/database-designer-core": "5.41.0",
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/schema-engine": "5.41.0"
+    "@memberjunction/actions": "5.43.0",
+    "@memberjunction/actions-base": "5.43.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/database-designer-core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/schema-engine": "5.43.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

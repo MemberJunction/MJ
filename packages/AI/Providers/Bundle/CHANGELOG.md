@@ -1,5 +1,72 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [9f6aa87]
+  - @memberjunction/ai-gemini@5.43.0
+  - @memberjunction/ai-openai@5.43.0
+  - @memberjunction/ai-recommendations-rex@5.43.0
+  - @memberjunction/ai-vectors-pinecone@5.43.0
+  - @memberjunction/ai-anthropic@5.43.0
+  - @memberjunction/ai-assemblyai@5.43.0
+  - @memberjunction/ai-azure@5.43.0
+  - @memberjunction/ai-bedrock@5.43.0
+  - @memberjunction/ai-betty-bot@5.43.0
+  - @memberjunction/ai-blackforestlabs@5.43.0
+  - @memberjunction/ai-cerebras@5.43.0
+  - @memberjunction/ai-cohere@5.43.0
+  - @memberjunction/ai-elevenlabs@5.43.0
+  - @memberjunction/ai-fireworks@5.43.0
+  - @memberjunction/ai-groq@5.43.0
+  - @memberjunction/ai-heygen@5.43.0
+  - @memberjunction/ai-inception@5.43.0
+  - @memberjunction/ai-inworld@5.43.0
+  - @memberjunction/ai-lmstudio@5.43.0
+  - @memberjunction/ai-llamacpp@5.43.0
+  - @memberjunction/ai-local-embeddings@5.43.0
+  - @memberjunction/ai-minimax@5.43.0
+  - @memberjunction/ai-mistral@5.43.0
+  - @memberjunction/ai-ollama@5.43.0
+  - @memberjunction/ai-openrouter@5.43.0
+  - @memberjunction/ai-vertex@5.43.0
+  - @memberjunction/ai-zhipu@5.43.0
+  - @memberjunction/ai-xai@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@5.42.0
+- @memberjunction/ai-vectors-pinecone@5.42.0
+- @memberjunction/ai-anthropic@5.42.0
+- @memberjunction/ai-assemblyai@5.42.0
+- @memberjunction/ai-azure@5.42.0
+- @memberjunction/ai-bedrock@5.42.0
+- @memberjunction/ai-betty-bot@5.42.0
+- @memberjunction/ai-blackforestlabs@5.42.0
+- @memberjunction/ai-cerebras@5.42.0
+- @memberjunction/ai-cohere@5.42.0
+- @memberjunction/ai-elevenlabs@5.42.0
+- @memberjunction/ai-fireworks@5.42.0
+- @memberjunction/ai-gemini@5.42.0
+- @memberjunction/ai-groq@5.42.0
+- @memberjunction/ai-heygen@5.42.0
+- @memberjunction/ai-inception@5.42.0
+- @memberjunction/ai-inworld@5.42.0
+- @memberjunction/ai-lmstudio@5.42.0
+- @memberjunction/ai-llamacpp@5.42.0
+- @memberjunction/ai-local-embeddings@5.42.0
+- @memberjunction/ai-minimax@5.42.0
+- @memberjunction/ai-mistral@5.42.0
+- @memberjunction/ai-ollama@5.42.0
+- @memberjunction/ai-openai@5.42.0
+- @memberjunction/ai-openrouter@5.42.0
+- @memberjunction/ai-vertex@5.42.0
+- @memberjunction/ai-zhipu@5.42.0
+- @memberjunction/ai-xai@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

@@ -122,10 +122,14 @@
         </div>
         <div class="panel-body table-container">
           @if (FilteredExecutions.length === 0) {
-            <div class="empty-state-small">
-              <i class="fa-solid fa-inbox"></i>
-              <span>No executions found for this time range</span>
-            </div>
+            <mj-empty-state Size="compact"
+              [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-inbox"
+              Title="No executions found"
+              Message="No executions match the selected time range and filters."
+              [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="ResetAllFiltersAndSearch()" />
           }
           @if (FilteredExecutions.length > 0) {
             <table class="data-table">

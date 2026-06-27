@@ -50,13 +50,14 @@
     @if (IsLoading) {
       <mj-loading text="Building tag cloud..."></mj-loading>
     } @else if (!HasItems) {
-      <div class="tag-cloud-empty">
-        <i class="fa-solid fa-tags"></i>
-        <p>No tags found for the current scope</p>
-        @if (HasActiveScope) {
-          <button mjButton variant="outline" size="sm" (click)="ClearScope()">Clear filters</button>
-        }
-      </div>
+      <mj-empty-state class="tag-cloud-empty"
+        [Variant]="HasActiveScope ? 'no-results' : 'empty'"
+        Icon="fa-solid fa-tags"
+        Title="No tags found for the current scope"
+        [ActionText]="HasActiveScope ? 'Clear filters' : ''"
+        ActionIcon="fa-solid fa-rotate-left"
+        ActionVariant="outline"
+        (Action)="ClearScope()" />
     } @else {
       <mj-word-cloud
         [Items]="Items"

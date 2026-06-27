@@ -305,7 +305,9 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - JSON-string-field pattern for complex payloads, client/engine type decoupling, and reference implementations (`GraphQLClusterClient`, `SearchKnowledgeResolver`, etc.)
   - **Read this before hand-writing any new resolver or GraphQL client.** Not for plain entity CRUD — that's already generated.
 
-- **[Remote Operations Guide](guides/REMOTE_OPERATIONS_GUIDE.md)**: The typed, provider-routed **Remote Operations** primitive — `BaseRemotableOperation<TInput,TOutput>` (in `@memberjunction/core`) invoked from one call site on both client (marshalled over GraphQL) and server (in-process), the missing peer of `BaseEntity` (CRUD) and `RunView` (set reads). Covers: when to use it vs. an Action vs. a bespoke resolver, authoring + calling an operation, the `RouteOperation` power-tool seam (`IRemoteOperationProvider` on `ProviderBase`), the auth chain (API-key scope ∥ user permissions + per-op `Authorize`), and long-running modes. **Read before hand-rolling a resolver+client for a typed capability the browser and server both invoke.** Complements (does not replace) the Transport-Layer guide and the Actions boundary.
+- **[Remote Operations Guide](guides/REMOTE_OPERATIONS_GUIDE.md)**: The typed, provider-routed **Remote Operations** primitive — `BaseRemotableOperation<TInput,TOutput>` (in `@memberjunction/core`) invoked from one call site on both client (marshalled over GraphQL) and server (in-process). Framed as **MJ's 4th data primitive** alongside `BaseEntity` (CRUD), `RunView` (dynamic set reads), and `RunQuery` (stored queries). Covers: when to use it vs. an Action vs. a bespoke resolver; the **three authoring modes** driven by an `MJ: Remote Operations` row's `GenerationType` — **Manual** (CodeGen emits the typed base, you write the `InternalExecute` subclass), **AI** (RO-4: `MJRemoteOperationEntityServer` has an LLM author the body from `Description` against the ambient `input`/`provider`/`user`/`context` contract + a JSONType `Libraries` declaration, gated by `CodeApprovalStatus`), and **Default**; the `RemoteOperationGeneratorBase` CodeGen emitter (`@memberjunction/codegen-lib`) → `remote_operations.ts`; the `RouteOperation` power-tool seam (`IRemoteOperationProvider` on `ProviderBase`); the auth chain (API-key scope ∥ user permissions + the `RemoteOperationEngineBase` Active/Approved metadata gate + per-op `Authorize`); and `LongRunning` progress — attached `onProgress` works both in-process AND over the wire (a per-call `RemoteOperationProgress` subscription channel published from the resolver); only detached fire-and-forget remains partial. **Read before hand-rolling a resolver+client for a typed capability the browser and server both invoke, OR before adding a new operation (declare a metadata row, don't hand-write the base).** Complements (does not replace) the Transport-Layer guide and the Actions boundary. For a visual before/after with mermaid diagrams (the layers Remote Operations removes, from two real migrations), see the companion **[Remote Operations Showcase](packages/MJCore/docs/REMOTE_OPERATIONS_SHOWCASE.md)** (lives with the `@memberjunction/core` package that defines the primitive).
+
+- **[Record Set Processing & Record Processes Guide](guides/RECORD_SET_PROCESSING_GUIDE.md)**: MJ's single hardened substrate for *"do X to a set of an entity's records"* — and the saved, metadata-defined **Record Process** layer on top of it. Two layers: the **substrate** (`@memberjunction/record-set-processor` engine + `-base` seams) is a composition of three pluggable seams — **Source** (`ArraySource`/`ViewSource`/`ListSource`/`FilterSource`/`KeysetSource`, cursor-paginated + resumable) × **Processor** (per-record work → `RecordResult`) × **Tracker** (`GenericProcessRunTracker` → `MJ: Process Runs`/`Process Run Details`, or `NoOpTracker`/custom) — wrapped by an engine that owns batching, bounded concurrency, token-bucket rate-limiting, an error-rate circuit breaker, a budget gate, progress, a pause/cancel handshake, resume, and per-record isolation; and the **Record Process** (`MJ: Record Processes` row → the `RecordProcessExecutor` facade) with four **work types** (**FieldRules** — declarative field rules with a dry-run preview, self-writing; **Action** / **Agent** / **Infer** — wrapped by `WriteBackProcessor` when an `OutputMapping` is set), **scopes** (stored `ScopeType` View/List/Filter/SingleRecord + a runtime `RecordProcessScopeOverride` records/view/list/filter for "run against the current grid selection"), **dry-run** (the first-class `ProcessRun.DryRun` flag), and three **triggers** (OnDemand / OnChange / Schedule). The UI lives in `@memberjunction/ng-record-process-studio` (the Bulk Operations studio — editor + visual FieldRules builder + reactive history) and `@memberjunction/ng-entity-action-ux` (the in-grid `RecordProcessRunnerUX` runner); the typed API surface is the `RecordProcess.RunNow` + control Remote Operations. **Read before building any bulk/set-iterating operation, adding a work type, or touching the substrate** — don't re-implement batching/resume/audit; compose the seams or declare a Record Process. Folder overview: [`packages/RecordSetProcessor/README.md`](packages/RecordSetProcessor/README.md).
 
 - **[Real-Time Co-Agents Guide](guides/REALTIME_CO_AGENTS_GUIDE.md)**: The live, low-latency agent stack — the `Realtime` agent type and Voice Co-Agent (one co-agent voices any target agent via the stable `invoke-target-agent` tool), the triple-registry plugin architecture (server/client realtime-model drivers + interactive-channel plugins, all ClassFactory + metadata resolved), client-direct vs server-bridged topologies, `AIAgentSession` lifecycle/janitor, interactive channels (the live Whiteboard), progress narration, observability, and the security model. **Read before touching anything realtime / voice / agent-session / channel.**
 
@@ -667,6 +669,20 @@ Look for packages that depend on each other:
 ## Lint & Format
 - Check with ESLint: `npx eslint packages/path/to/file.ts`
 - Format with Prettier: `npx prettier --write packages/path/to/file.ts`
+
+## UI Consistency Checks (Local — Mirror of CI Gates)
+
+The two CI gates that run on PRs targeting `next` are also available as local npm scripts. Run them before pushing to catch violations early — these mirror the CI exactly, so a clean local run means a green CI:
+
+- `npm run check:ui` — both gates against changed CSS/SCSS vs `origin/next` (matches PR behavior)
+- `npm run check:ui-tokens` — just the hardcoded-color enforcement gate (hex, rgb/rgba, hsl/hsla — except shadow neutrals `rgba(0,0,0,X)` / `rgba(255,255,255,X)`)
+- `npm run check:ui-buttons` — just the `.mj-btn` override prevention gate
+- `npm run check:ui:all` — audit the *whole* `packages/Angular/` tree (used during cleanup work; reports pre-existing violations CI doesn't gate on)
+- `npm run check:ui:adoption` — re-run the measurement script (writes to `plans/adoption-metrics.md`)
+
+The local check requires your changes to be committed (it diffs against `origin/next`). Workflow: stage → commit → `npm run check:ui` → push.
+
+The two checker scripts live at `.github/scripts/check-css-hex-tokens.sh` and `.github/scripts/check-mj-btn-override.sh`. Both also accept `--file <path>` for single-file checks.
 
 ## Code Style Guide
 - Use TypeScript strict mode and explicit typing
@@ -1343,6 +1359,61 @@ module.exports = {
 - **Production High Load**: max: 100, min: 10
 
 Monitor SQL Server wait types (RESOURCE_SEMAPHORE, THREADPOOL) to tune pool size. The pool is created once at server startup and reused throughout the application lifecycle.
+
+## CodeGen Database Connections (SQL Server + PostgreSQL)
+
+The `databaseSettings.connectionPool` block above governs the **runtime MJAPI** pool. CodeGen (`mj codegen`) is a separate process with its own short-lived pool, configured via `codegenPool` at the top level of `mj.config.cjs`:
+
+```javascript
+module.exports = {
+  // ... other top-level codegen-lib config (dbHost, codeGenLogin, etc.)
+  codegenPool: {
+    // PG-only today (mssql doesn't honor these from this block yet)
+    max: 20,                    // Max pool connections
+    min: 2,                     // Min idle connections kept open
+    idleTimeoutMillis: 30000,   // Close idle connections after this many ms
+    connectionTimeoutMillis: 30000, // New-connection acquisition timeout
+    ssl: false,                 // PG SSL (default false — matches the pre-refactor inline pool)
+
+    // Cross-platform (both providers honor it)
+    statementTimeoutMs: 120000, // Per-statement timeout (ms)
+  },
+};
+```
+
+**Per-provider applicability** — not all fields apply to both providers today:
+
+| Field | SQL Server | PostgreSQL |
+|---|---|---|
+| `statementTimeoutMs` | ✅ mssql `requestTimeout` | ✅ libpq `-c statement_timeout` |
+| `max` / `min` / `idleTimeoutMillis` / `connectionTimeoutMillis` | ❌ ignored | ✅ `pg.Pool` config |
+| `ssl` | ❌ ignored (SQL Server uses `dbTrustServerCertificate` + mssql's own SSL) | ✅ `pg.Pool` ssl |
+
+The PG-only pool-sizing knobs reflect the asymmetry between mssql and pg.Pool configurability today; they'll converge in a follow-up.
+
+All fields are **optional** — when omitted, each driver's own defaults apply (mssql: 10 max + `requestTimeout` 120000; `pg.Pool`: 20 max, 2 min, SSL off in codegen). This matches the historical CodeGen behavior, so adding the block is opt-in tuning, not a required change.
+
+### Behavior
+- **Lazy + module-cached pool**: both `MSSQLConnection()` (SQL Server) and `PGConnection()` (PostgreSQL) build their config and open the pool on first call, then cache the pool at the module level so repeated CodeGen operations within a single process reuse the same pool. The config is built **after** `initializeConfig()` runs, so config values from `mj.config.cjs` / `.env` are picked up correctly (the previous module-load-time destructure produced empty values when callers did `await import('@memberjunction/codegen-lib')` before `initializeConfig()`).
+- **Platform dispatch via factory**: `RunCodeGenBase.setupDataSource()` resolves the concrete `CodeGenDatabaseProvider` via `MJGlobal.Instance.ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)` and calls its `SetupDataSource()` method. Adding a new platform is `@RegisterClass(CodeGenDatabaseProvider, 'newplatform')` on the new provider class — no orchestrator changes.
+- **`statementTimeoutMs`** is the cross-platform per-statement timeout. On SQL Server it maps to the mssql pool's `requestTimeout` (and takes precedence over the legacy top-level `dbRequestTimeout` / `MJ_CODEGEN_REQUEST_TIMEOUT` when both are set). On PostgreSQL it is carried via the libpq `-c statement_timeout=<ms>` startup option, so the server applies it from connection #1 — including the verify-SELECT-1 connection that `PGConnectionManager.Initialize()` opens. When unset, each driver applies its own default (mssql: 120000ms; PG: no statement timeout).
+- **`ssl` (PostgreSQL only)**: defaults to `false` to preserve the pre-multi-provider-refactor inline `pg.Pool` behavior (no SSL key passed → pg default OFF), so local/non-SSL codegen runs against PostgreSQL aren't broken by `PGConnectionManager`'s production-environment SSL auto-default. Set explicitly when the target Postgres requires SSL.
+
+### CodeGen Environment Variables
+
+The CodeGen-time database connection params come from `configInfo.dbHost` / `dbPort` / `dbDatabase` / `codeGenLogin` / `codeGenPassword`, which are resolved (in order) from `mj.config.cjs`, then env vars, then defaults. When `dbPlatform === 'postgresql'`, the PG-prefixed env vars take precedence over their SQL-Server-named siblings — so an existing PG-targeted `.env` keeps working without renaming:
+
+| Field            | PostgreSQL env (preferred)  | SQL Server / generic env | Fallback |
+|------------------|-----------------------------|--------------------------|----------|
+| `dbHost`         | `PG_HOST`                   | `DB_HOST`                | `localhost` |
+| `dbPort`         | `PG_PORT`                   | `DB_PORT`                | `5432` (PG) / `1433` (SQL Server) |
+| `dbDatabase`     | `PG_DATABASE`               | `DB_DATABASE`            | `''` |
+| `codeGenLogin`   | `PG_USERNAME`               | `CODEGEN_DB_USERNAME`    | `''` |
+| `codeGenPassword`| `PG_PASSWORD`               | `CODEGEN_DB_PASSWORD`    | `''` |
+
+Env-var precedence is resolved **once**, in `DEFAULT_CODEGEN_CONFIG` inside `Config/config.ts`. CodeGen provider code reads `configInfo.*` directly — `process.env.PG_*` is not consulted at the connection layer. This keeps env resolution in one place and avoids the two-layer trap of "resolved at config time, then re-resolved at connection time."
+
+When both env vars in a row are set AND they differ (e.g. `PG_HOST=postgres.dev` AND `DB_HOST=localhost`), `Config/config.ts` emits a one-line `console.warn` at module load identifying which value wins and which is being ignored. The PG-prefixed value continues to take precedence (existing behavior), but the silent override is now visible. Set only one — or set both to the same value — to silence the warning.
 
 ## MJAPI Public URL Configuration
 

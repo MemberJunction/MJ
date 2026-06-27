@@ -403,26 +403,6 @@
     font-size: 11px;
 }
 
-/* No Items */
-.no-items {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 80px 20px;
-    color: var(--mj-text-disabled);
-}
-
-.no-items i {
-    font-size: 48px;
-    margin-bottom: 16px;
-}
-
-.no-items p {
-    font-size: var(--mj-text-base);
-    margin: 0;
-}
-
 /* SQL Preview Modal */
 .sql-preview-overlay {
     position: fixed;

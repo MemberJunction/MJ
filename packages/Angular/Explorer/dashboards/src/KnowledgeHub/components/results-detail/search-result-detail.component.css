@@ -10,18 +10,9 @@
     border-left: 1px solid var(--mj-border-default);
 }
 
+/* keeps the empty-state filling the detail pane (host centers its own content) */
 .detail-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 300px;
-    color: var(--mj-text-muted);
-    gap: 0.75rem;
-}
-
-.detail-empty-icon {
-    font-size: 2.5rem;
+    min-height: 300px;
 }
 
 /* Breadcrumb */
@@ -298,20 +289,6 @@
     margin: 0 0 1rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-}
-
-.sidebar-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 2rem 0;
-    color: var(--mj-text-muted);
-    font-size: 0.82rem;
-}
-
-.sidebar-empty-icon {
-    font-size: 1.5rem;
 }
 
 .related-item {

@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RecordTagsComponent } from './record-tags.component';
-import { MjSlidePanelComponent } from '@memberjunction/ng-ui-components';
+import { MjSlidePanelComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
@@ -13,7 +13,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
         CommonModule,
         MjSlidePanelComponent,
         SharedGenericModule,
-        MJWordCloudComponent
+        MJWordCloudComponent,
+        MJEmptyStateComponent
     ],
     exports: [
         RecordTagsComponent

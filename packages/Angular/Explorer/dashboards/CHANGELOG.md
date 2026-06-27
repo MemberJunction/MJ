@@ -1,5 +1,162 @@
 # @memberjunction/ng-dashboards
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [54183aa]
+- Updated dependencies [3eaa05a]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/ng-base-forms@5.43.0
+  - @memberjunction/ng-ui-components@5.43.0
+  - @memberjunction/ng-conversations@5.43.0
+  - @memberjunction/ai-engine-base@5.43.0
+  - @memberjunction/tag-engine-base@5.43.0
+  - @memberjunction/api-keys-base@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/ng-base-application@5.43.0
+  - @memberjunction/ng-core-entity-forms@5.43.0
+  - @memberjunction/ng-explorer-settings@5.43.0
+  - @memberjunction/ng-shared@5.43.0
+  - @memberjunction/ng-testing@5.43.0
+  - @memberjunction/ng-action-gallery@5.43.0
+  - @memberjunction/ng-actions@5.43.0
+  - @memberjunction/ng-agent-requests@5.43.0
+  - @memberjunction/ng-agents@5.43.0
+  - @memberjunction/ng-ai-test-harness@5.43.0
+  - @memberjunction/ng-archive-manager@5.43.0
+  - @memberjunction/ng-base-types@5.43.0
+  - @memberjunction/ng-clustering@5.43.0
+  - @memberjunction/ng-code-editor@5.43.0
+  - @memberjunction/ng-container-directives@5.43.0
+  - @memberjunction/ng-credentials@5.43.0
+  - @memberjunction/ng-dashboard-viewer@5.43.0
+  - @memberjunction/ng-entity-relationship-diagram@5.43.0
+  - @memberjunction/ng-entity-viewer@5.43.0
+  - @memberjunction/ng-filter-builder@5.43.0
+  - @memberjunction/ng-list-management@5.43.0
+  - @memberjunction/ng-map-view@5.43.0
+  - @memberjunction/ng-notifications@5.43.0
+  - @memberjunction/ng-query-viewer@5.43.0
+  - @memberjunction/ng-react@5.43.0
+  - @memberjunction/ng-record-process-studio@5.43.0
+  - @memberjunction/ng-resource-permissions@5.43.0
+  - @memberjunction/ng-scheduling@5.43.0
+  - @memberjunction/ng-search@5.43.0
+  - @memberjunction/ng-shared-generic@5.43.0
+  - @memberjunction/ng-trees@5.43.0
+  - @memberjunction/ng-versions@5.43.0
+  - @memberjunction/credentials@5.43.0
+  - @memberjunction/graphql-dataprovider@5.43.0
+  - @memberjunction/integration-engine-base@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/skip-types@5.43.0
+  - @memberjunction/templates-base-types@5.43.0
+  - @memberjunction/testing-engine-base@5.43.0
+  - @memberjunction/ng-export-service@5.43.0
+  - @memberjunction/ng-markdown@5.43.0
+  - @memberjunction/ng-word-cloud@5.43.0
+  - @memberjunction/lists-base@5.43.0
+  - @memberjunction/export-engine@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 313c1c5: Make Explorer's primary navigation perceivable to assistive tech and DOM/accessibility-tree agents (computer-use) — a dual accessibility + agent-usability win.
+  - **New `mjClickable` directive** (`@memberjunction/ng-ui-components`): retrofits an existing clickable `<div>`/`<span>` into an accessible, keyboard-operable control without changing its tag or styling — adds `role` (button/link), `tabindex`, an `aria-label` accessible name, Enter/Space activation (dispatches a native click, so existing `(click)` handlers run for both mouse and keyboard), and an optional `data-testid` hook. Prefer a real `<button mjButton>`/`<a>` for new markup; use `mjClickable` to fix existing widgets cheaply.
+  - **`mjButton` gains `[ariaLabel]`** (applied without clobbering a directly-authored `aria-label`) and a dev-mode warning when an icon-only button ends up with no accessible name.
+  - **Adopted on the nav surfaces that were invisible to a DOM agent**: the Home dashboard app tiles (the reported "agent can't find the app to click" case), sidebar items (notifications/favorites/recents), and the header `app-nav` items + `app-switcher` (trigger gets `aria-expanded`/`aria-haspopup`, items/active get `aria-current`). Icon-only buttons on the Home dashboard get accessible names. Seeds a `data-testid` convention on these surfaces.
+
+  Tests added for both directives (host bindings, keyboard activation, label clobber-safety, dev warnings).
+
+- 6d970cd: Runtime SQL dialect correctness on PostgreSQL:
+  - **scheduling-engine**: PostgreSQL-correct heartbeat lease extension — affected-rowcount handling +
+    mixed-case column quoting in `spExtendScheduledJobLease`, with a PG-only migration. _(migration → minor)_
+  - **postgresql-dataprovider** + call-sites (archiving-engine, core-entities, ng-dashboards,
+    ng-entity-communications): translate T-SQL date functions (`GETDATE()`, `DATEADD`, etc.) in
+    runtime SQL clauses to PostgreSQL equivalents. _(code → patch)_
+
+- ccaf49b: Fix view-config drawer overlapping the dashboard header in Data Explorer: stack `.content-body` above `.content-header`, position the sliding panel below the 60px shell header, and update view-workspace flex sizing to fill the new flex row.
+- Updated dependencies [313c1c5]
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [6ac8ca4]
+- Updated dependencies [5fde509]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [ccaf49b]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [e4235fd]
+- Updated dependencies [3ee0f22]
+- Updated dependencies [a5d4a15]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ng-ui-components@5.42.0
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/ng-conversations@5.42.0
+  - @memberjunction/integration-engine-base@5.42.0
+  - @memberjunction/graphql-dataprovider@5.42.0
+  - @memberjunction/actions-base@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/ng-entity-viewer@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ng-core-entity-forms@5.42.0
+  - @memberjunction/ng-explorer-settings@5.42.0
+  - @memberjunction/ng-testing@5.42.0
+  - @memberjunction/ng-action-gallery@5.42.0
+  - @memberjunction/ng-ai-test-harness@5.42.0
+  - @memberjunction/ng-base-forms@5.42.0
+  - @memberjunction/ng-entity-relationship-diagram@5.42.0
+  - @memberjunction/ng-list-management@5.42.0
+  - @memberjunction/ng-resource-permissions@5.42.0
+  - @memberjunction/ng-scheduling@5.42.0
+  - @memberjunction/ai-engine-base@5.42.0
+  - @memberjunction/ng-shared@5.42.0
+  - @memberjunction/ng-agent-requests@5.42.0
+  - @memberjunction/ng-agents@5.42.0
+  - @memberjunction/skip-types@5.42.0
+  - @memberjunction/tag-engine-base@5.42.0
+  - @memberjunction/api-keys-base@5.42.0
+  - @memberjunction/ng-base-application@5.42.0
+  - @memberjunction/ng-actions@5.42.0
+  - @memberjunction/ng-archive-manager@5.42.0
+  - @memberjunction/ng-base-types@5.42.0
+  - @memberjunction/ng-clustering@5.42.0
+  - @memberjunction/ng-code-editor@5.42.0
+  - @memberjunction/ng-container-directives@5.42.0
+  - @memberjunction/ng-credentials@5.42.0
+  - @memberjunction/ng-dashboard-viewer@5.42.0
+  - @memberjunction/ng-filter-builder@5.42.0
+  - @memberjunction/ng-map-view@5.42.0
+  - @memberjunction/ng-notifications@5.42.0
+  - @memberjunction/ng-query-viewer@5.42.0
+  - @memberjunction/ng-react@5.42.0
+  - @memberjunction/ng-search@5.42.0
+  - @memberjunction/ng-shared-generic@5.42.0
+  - @memberjunction/ng-trees@5.42.0
+  - @memberjunction/ng-versions@5.42.0
+  - @memberjunction/credentials@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+  - @memberjunction/templates-base-types@5.42.0
+  - @memberjunction/testing-engine-base@5.42.0
+  - @memberjunction/ng-export-service@5.42.0
+  - @memberjunction/ng-markdown@5.42.0
+  - @memberjunction/ng-word-cloud@5.42.0
+  - @memberjunction/lists-base@5.42.0
+  - @memberjunction/export-engine@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

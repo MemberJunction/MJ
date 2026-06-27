@@ -1,5 +1,84 @@
 # Change Log - @memberjunction/core
 
+## 5.43.0
+
+### Minor Changes
+
+- 40eb4e0: Remove leftover integration metadata folders that survived the connector-metadata removal (#2942). Connectors are now managed in the `MemberJunction/Integrations` repo, so MJ carries none of this:
+  - `metadata/integration-object-deletes/` — stale one-time `deleteRecord` marker files (`.old-<vendor>-seed.deletes.json` for growthzone/imis/netforum/nimble/propfuel/salesforce/sharepoint) from an earlier connector rebuild; already applied, pure cruft.
+  - `metadata/integrations/` — the remaining orphaned files: `.betty.json`, `.mjtomj.json`, `.integrations.json` (File Feed), `.mj-sync.json`, and `additionalSchemaInfo.json`.
+
+  File-level cleanup only — no schema change. Note: the `File Feed` and `Betty AI` Integration **rows** that #2942's migration intentionally retained are not deleted here; their DB removal (and Betty/MJtoMJ repo seeding) is handled by their respective connector PRs.
+
+- 9f6aa87: Generic fire-and-forget save queue, realtime multi-agent floor control, and telemetry fixes.
+
+  **Generic fire-and-forget save queue** (`@memberjunction/global`, `@memberjunction/core`, + adopters) — de-duplicates the hand-rolled "INSERT (fire-and-forget) → chained UPDATE" persistence pattern and makes the "stuck at Running" race structurally impossible:
+  - `KeyedSerialTaskQueue` (`@memberjunction/global`) — entity-agnostic per-key serial task chain: same-key tasks serialize, different keys run concurrently, failures are tallied for `flush()` and never propagate. Self-bounding (in-flight set + failure counters), so a long-lived queue that never flushes doesn't grow.
+  - `BaseEntitySaveQueue` (`@memberjunction/core`) — entity façade: `Insert` / `Update(entity, applyMutation?)` / `Flush`, with an optional `onError` hook for structured logging. `Update`'s mutation runs _inside_ the post-INSERT task, so it can never be reverted by the INSERT's reload.
+  - Adopted in all three hand-rolled copies + the new consumer: `GenericProcessRunTracker` (`@memberjunction/record-set-processor`), `AgentRunStepSaveQueue` (`@memberjunction/ai-core-plus`), `ActionEngine`'s execution log (`@memberjunction/actions`), and `AIPromptRunner` / `AIModelRunner` (`@memberjunction/ai-prompts`). Also fixes a pre-existing `MJLruCache` mock gap in the Actions/Engine test suite.
+
+  **Realtime** (`@memberjunction/ai`, `@memberjunction/ai-bridge-server`, `@memberjunction/ai-gemini`, `@memberjunction/ai-openai`, `@memberjunction/livekit-room-server`, `@memberjunction/ng-livekit-room`) — multi-agent floor control, Gemini meeting mode, the session capability surface with first-agent re-gating, and an idle reaper.
+
+  **Telemetry / core** (`@memberjunction/core`, `@memberjunction/server`) — cacheability-aware duplicate-RunView suggestion for `AllowCaching=false` entities; fixes the telemetry pagination-fingerprint false-duplicate and batches the janitor channel reads.
+
+- ad8d8f1: Remove connector-specific Integration metadata from core MemberJunction. Each connector (Salesforce, NetSuite, MemberSuite, GrowthZone, Pheedloop, etc.) now ships its own Integration + Integration Object/Field rows and credential type from the `MemberJunction/Integrations` repo as an installable Open App, rather than being seeded natively by MJ.
+  - Deletes the connector-specific `metadata/integrations/<connector>/` folders, the single-file `.<connector>.json` definitions, and the 22 connector-specific credential-type files (and their schemas) from `metadata/credential-types/`. Only generic integration/credential metadata remains in core.
+  - Adds migration `V202606251241__v5.43.x__Remove_Connector_Integration_Metadata.sql`, which deletes the corresponding `Integration` / `Integration Object` / `Integration Object Field` / `IntegrationURLFormat` rows and the 22 `Credential Type` rows from the database, and nulls `RecordChange.IntegrationID` for the removed integrations.
+
+  The migration is a data-only (record) change — no schema change, so no CodeGen run is required. It is guarded so it never touches an integration that has a live `CompanyIntegration` connection, and never deletes a credential type still referenced by an `Integration`, `AIVendor`, `MCPServer`, or `Credential` row. "File Feed" and "Betty AI" are retained (not yet moved to the repo).
+
+### Patch Changes
+
+- a4cdfb0: Restore `metadata/credential-types/schemas/oauth2-client-credentials.schema.json`, which was inadvertently deleted in #2942 alongside the connector-specific credential-type schemas. It is a **generic** OAuth2 client-credentials schema still referenced (via `@file:`) by a retained credential type in `.credential-types.json`, so its removal broke `mj sync push --dir metadata` with a "File reference not found" validation error. No other `@file:` references are dangling.
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+  - @memberjunction/global@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+
+## 5.42.0
+
+### Minor Changes
+
+- 9b9b484: Field active-status enforcement relocation, plus the "Meet" app rename, quieter operational logging, and a telemetry suppression refinement.
+
+  **Field active-status enforcement (`@memberjunction/core`, `@memberjunction/generic-database-provider`)**
+  - Deprecated-field warnings and disabled-field exceptions are now enforced at the field-access boundary genuine code flows through — `BaseEntity.Get()`, `Set()`, and `SetMany()` (what the generated strongly-typed accessors call) — instead of on the low-level `EntityField.Value` accessor. This flips a leaky blocklist (assert on every `.Value` touch, then suppress at each internal call site) into a precise allowlist, and fixes false deprecation warnings emitted on every load/save of a record that merely _contains_ a deprecated column (e.g. `"MJ: AI Agent Runs".AgentState`) even when no code uses it.
+  - New memoized `EntityInfo.HasInactiveFields` fast-path gate: entities whose fields are all `Active` (the vast majority) pay only a single cached boolean check in the hot read/write paths.
+  - `EntityField.ActiveStatusAssertions` is retained as a `@deprecated` no-op for backward compatibility; the six now-redundant internal suppression toggles were removed. Warning caller strings are now accurate (`BaseEntity.Get`/`Set`) instead of the misleading `"EntityField.Value setter"`.
+
+  **Telemetry (`@memberjunction/core`)**
+  - Suppress "load this into a dedicated engine cache" telemetry suggestions for entities that have explicitly opted out of caching (`EntityInfo.AllowCaching = false`), reusing the existing flag as the single source of truth.
+
+  **Quieter operational logging (`@memberjunction/scheduling-engine`, `@memberjunction/ai-agents`, `@memberjunction/server`, `@memberjunction/server-bootstrap`, `@memberjunction/server-bootstrap-lite`)**
+  - Scheduled-job no-op runs (e.g. the Agent Memory Manager finding no new activity) now collapse to the engine's `Starting`/`Completed` heartbeat; the per-agent and memory-manager internal traces are verbose-only.
+  - Cleaner server startup logging: transient boot spinner, true total timing, less redundant output, and the `CustomColumnPromoter` registration log demoted to verbose-only.
+
+  **"Meet" app + local LiveKit dev (`@memberjunction/ng-explorer-core`, `@memberjunction/livekit-room-server`, `@memberjunction/auth-providers`, `@memberjunction/server`)**
+  - Renamed the Realtime app to "Meet", with the Live Room now defaulting to the Realtime co-agent instead of starting with no agent, plus a local LiveKit dev server and supporting docs.
+
+- 0fa3cbc: Record Set Processing & Record Processes, plus the Remote Operations primitive.
+
+  **Remote Operations** (`@memberjunction/core`, `@memberjunction/global`, `@memberjunction/graphql-dataprovider`, `@memberjunction/server`) — a typed, provider-routed capability the browser and server both invoke through one call site, the peer of `BaseEntity` (CRUD) and `RunView` (set reads):
+  - `BaseRemotableOperation<TInput,TOutput>` with `OperationKey` / `RequiredScope` / `RequiresSystemUser` / `ExecutionMode`; `Execute()` routes per-provider, `ExecuteServer()` runs in-process and never throws on logical failure.
+  - `IRemoteOperationProvider.RouteOperation` on `ProviderBase` (the documented power tool), in-process dispatch in `DatabaseProviderBase`, GraphQL marshalling in `GraphQLDataProvider`, and the single generic `ExecuteRemoteOperation` resolver that composes the existing API-key-scope + user-permission auth chain.
+  - Genericized value-mapping resolver in `@memberjunction/global` (`getValueAtPath` / `resolveMappingRef` / `resolveValueMapping`) — one canonical mapping engine over pluggable named sources.
+
+  **Record Set Processing substrate** (`@memberjunction/record-set-processor-base`, `@memberjunction/record-set-processor`) — a hardened iterate-a-record-set-and-do-work engine with three pluggable seams (source / processor / run-tracker): batching, bounded concurrency, rate limiting, circuit breaker, checkpoint/resume, and pause/cancel. Ships Array/View/List/Filter/Keyset sources; Action / Agent / Infer record processors; a uniform `WriteBackProcessor` that applies an `OutputMapping` (fields / child record) to any work type; the `RecordProcessExecutor` facade (Scope→source, Work→processor); and the `RecordProcess.RunNow` / `GetRunStatus` / `Pause` / `Resume` / `Cancel` control operations.
+
+  **Record Processes facade** (`@memberjunction/core-entities`, `@memberjunction/core-entities-server`, `@memberjunction/scheduling-engine`, `@memberjunction/actions`) — the `MJ: Record Processes` definition (Work × Scope × Trigger) plus generic `MJ: Process Runs` / `Process Run Details` tracking and the `MJ: Remote Operations` registry. `MJRecordProcessEntityServer` reconciles the owned recurrence Scheduled Job on save; `RecordProcessScheduledJobDriver` runs a process on its cron schedule and links each `ProcessRun` back to its `ScheduledJobRun`; the Entity Action `GetRecordList` View/List fan-out backs scoped iteration.
+
+### Patch Changes
+
+- 2f225e4: CodeGen + SS→PG converter type-correctness on PostgreSQL:
+  - **codegen-lib / core / actions-base**: core + codegen type correctness on PostgreSQL, plus a
+    PG-only migration repairing TypeScript that the SS→PG baseline conversion corrupted in
+    GeneratedCode rows. _(migration → minor)_
+  - **sql-converter**: never quote identifiers inside string literals during SS→PG conversion. _(code → patch)_
+
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/global@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

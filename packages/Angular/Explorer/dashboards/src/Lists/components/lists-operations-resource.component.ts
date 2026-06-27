@@ -255,11 +255,9 @@ interface EntityOption {
 
           @if (totalOperandCount === 0) {
             <div class="venn-empty">
-              <div class="empty-icon">
-                <i class="fa-solid fa-circle-nodes"></i>
-              </div>
-              <h3>Add Lists or Views to Compare</h3>
-              <p>Select 2-4 lists or views from the same entity to visualize their overlaps and perform set operations.</p>
+              <mj-empty-state Icon="fa-solid fa-circle-nodes"
+                Title="Add Lists or Views to Compare"
+                Message="Select 2-4 lists or views from the same entity to visualize their overlaps and perform set operations." />
             </div>
           }
     
@@ -1109,34 +1107,6 @@ interface EntityOption {
       padding: 40px;
     }
 
-    .empty-icon {
-      width: 80px;
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-      border-radius: 50%;
-      margin-bottom: 20px;
-    }
-
-    .empty-icon i {
-      font-size: 36px;
-      color: var(--mj-brand-primary);
-    }
-
-    .venn-empty h3 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      color: var(--mj-text-primary);
-    }
-
-    .venn-empty p {
-      margin: 0;
-      color: var(--mj-text-secondary);
-      font-size: 14px;
-      max-width: 300px;
-    }
 
     .loading-overlay {
       position: absolute;

@@ -94,27 +94,6 @@
   font-weight: 500;
 }
 
-/* Empty state */
-.empty-state {
-  text-align: center;
-  padding: 48px 16px;
-  color: var(--mj-text-muted);
-  border: 1px dashed var(--mj-border-default);
-  border-radius: 8px;
-  background: var(--mj-bg-surface-card);
-}
-
-.empty-state i {
-  font-size: 32px;
-  margin-bottom: 12px;
-  display: block;
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-}
-
 .total-summary {
   color: var(--mj-text-secondary);
   font-size: 13px;

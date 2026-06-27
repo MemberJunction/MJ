@@ -86,7 +86,7 @@ interface VersionRow {
           <h4><i class="fa-solid fa-check-double"></i> Pass Rate Trend</h4>
           @if (DisplayTrends$ | async; as trends) {
             @if (trends.length === 0) {
-              <div class="empty-mini"><i class="fa-solid fa-chart-area"></i><span>No trend data</span></div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-chart-area" Title="No trend data" />
             } @else {
               <div class="bar-chart">
                 @for (t of trends; track trackTrend($index, t)) {
@@ -119,7 +119,7 @@ interface VersionRow {
           <h4><i class="fa-solid fa-layer-group"></i> Run Volume</h4>
           @if (DisplayTrends$ | async; as trends) {
             @if (trends.length === 0) {
-              <div class="empty-mini"><i class="fa-solid fa-chart-bar"></i><span>No volume data</span></div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-chart-bar" Title="No volume data" />
             } @else {
               <div class="bar-chart">
                 @for (t of trends; track trackTrend($index, t)) {
@@ -148,7 +148,7 @@ interface VersionRow {
           <h4><i class="fa-solid fa-star-half-stroke"></i> Score Trend</h4>
           @if (DisplayTrends$ | async; as trends) {
             @if (trends.length === 0) {
-              <div class="empty-mini"><i class="fa-solid fa-star"></i><span>No score data</span></div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-star" Title="No score data" />
             } @else {
               <div class="bar-chart">
                 @for (t of trends; track trackTrend($index, t)) {
@@ -170,7 +170,7 @@ interface VersionRow {
           <h4><i class="fa-solid fa-dollar-sign"></i> Cost Trend</h4>
           @if (DisplayTrends$ | async; as trends) {
             @if (trends.length === 0) {
-              <div class="empty-mini"><i class="fa-solid fa-wallet"></i><span>No cost data</span></div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-wallet" Title="No cost data" />
             } @else {
               <div class="bar-chart">
                 @for (t of trends; track trackTrend($index, t)) {
@@ -200,7 +200,7 @@ interface VersionRow {
           <h4><i class="fa-solid fa-triangle-exclamation"></i> Top Failing Tests</h4>
           @if (TopFailingTests$ | async; as tests) {
             @if (tests.length === 0) {
-              <div class="empty-mini"><i class="fa-solid fa-circle-check"></i><span>No failing tests</span></div>
+              <mj-empty-state Variant="success" Size="compact" Title="No failing tests" />
             } @else {
               <div class="insight-list">
                 @for (t of tests; track t.testName) {
@@ -220,7 +220,7 @@ interface VersionRow {
           <h4><i class="fa-solid fa-clock"></i> Slowest Tests</h4>
           @if (SlowestTests$ | async; as tests) {
             @if (tests.length === 0) {
-              <div class="empty-mini"><i class="fa-solid fa-bolt"></i><span>No duration data</span></div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-bolt" Title="No duration data" />
             } @else {
               <div class="insight-list">
                 @for (t of tests; track t.testName) {
@@ -240,7 +240,7 @@ interface VersionRow {
           <h4><i class="fa-solid fa-coins"></i> Most Expensive Tests</h4>
           @if (MostExpensiveTests$ | async; as tests) {
             @if (tests.length === 0) {
-              <div class="empty-mini"><i class="fa-solid fa-dollar-sign"></i><span>No cost data</span></div>
+              <mj-empty-state Size="compact" Icon="fa-solid fa-dollar-sign" Title="No cost data" />
             } @else {
               <div class="insight-list">
                 @for (t of tests; track t.testName) {
@@ -264,7 +264,7 @@ interface VersionRow {
       <div class="card distribution-card">
         @if (ScoreDistribution$ | async; as buckets) {
           @if (buckets.length === 0) {
-            <div class="empty-mini"><i class="fa-solid fa-chart-simple"></i><span>No score data available</span></div>
+            <mj-empty-state Size="compact" Icon="fa-solid fa-chart-simple" Title="No score data available" />
           } @else {
             <div class="distribution-bars">
               @for (b of buckets; track b.label) {
@@ -292,7 +292,7 @@ interface VersionRow {
         @if (IsLoadingVersions) {
           <div class="empty-mini"><i class="fa-solid fa-spinner fa-spin"></i><span>Loading versions...</span></div>
         } @else if (VersionRows.length === 0) {
-          <div class="empty-mini"><i class="fa-solid fa-code-branch"></i><span>No version data available</span></div>
+          <mj-empty-state Size="compact" Icon="fa-solid fa-code-branch" Title="No version data available" />
         } @else {
           <div class="version-table-wrap">
             <table class="version-table">
@@ -749,7 +749,7 @@ interface VersionRow {
     .delta-neutral { background: var(--mj-bg-surface-card); color: var(--mj-text-disabled); }
 
     /* ------------------------------------------------------------------ */
-    /*  Empty / mini empty states                                          */
+    /*  Loading placeholder (data-empty states now use <mj-empty-state>)   */
     /* ------------------------------------------------------------------ */
     .empty-mini {
       display: flex;

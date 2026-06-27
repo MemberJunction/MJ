@@ -749,22 +749,6 @@
     color: var(--mj-text-secondary);
 }
 
-/* Empty State */
-.empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 32px;
-    color: var(--mj-text-secondary);
-    text-align: center;
-}
-
-.empty-state i {
-    font-size: 32px;
-    margin-bottom: 12px;
-    opacity: 0.5;
-}
 
 /* Security Notice */
 .security-notice {

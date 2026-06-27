@@ -1,5 +1,39 @@
 # @memberjunction/computer-use
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 3080b58: Computer Use goal loop now defaults to the stored metadata prompts + their model selection, and the prompt text is single-sourced across both layers.
+  - **Default flip:** `MJComputerUseEngine.Run` defaults the controller + judge to the stored `Computer Use - Controller` / `Computer Use - Judge` metadata prompts (via new `DEFAULT_CONTROLLER_PROMPT_NAME` / `DEFAULT_JUDGE_PROMPT_NAME`) when the caller pins neither a prompt nor a model — routing through `AIPromptRunner` with the prompt's configured models (default Gemini 3.1 Flash-Lite → Gemini 3.5 Flash → Claude Haiku 4.5 → GPT 5.5, each on two vendors for failover). Resolution order: explicit override → stored default prompt → `autoSelectControllerModel()` (non-throwing fallback, so standalone/no-metadata callers degrade cleanly). Model choice is now a metadata edit, not code.
+  - **Single source of truth:** the behavioral core of the controller/judge prompts lives once in `metadata/prompts/templates/computer-use/_includes/*.md`, pulled into the Layer-2 metadata templates via the push-time `{@include}` directive and generated into the Layer-1 standalone fallback (`@memberjunction/computer-use`) by a `prebuild` (`scripts/generate-prompt-parts.mjs` → `prompt-parts.generated.ts`). A drift-guard test asserts both layers stay in sync.
+  - READMEs (computer-use-engine, computer-use, remote-browser-cdp/server) and `REMOTE_BROWSER_GUIDE.md` §9e updated.
+
+- e4235fd: Add clipboard paste-in and copy-out to the remote-browser human-control (Self-Hosted Chrome canvas viewer), which previously couldn't bridge the local and remote clipboards.
+  - **Paste-in:** a new `'text'` `RemoteBrowserHumanInput` kind, mapped (CDP) to the existing text-insertion path (`TypeAction` / `Input.insertText`) — no clipboard sync needed. The viewer captures the local `paste`, reads `clipboardData`, and relays the text to the remote page's focused element.
+  - **Copy-out:** a new capability-gated `IRemoteBrowserSession.GetSelectionText()` (CDP `page.evaluate(window.getSelection())`) + a `GetRemoteBrowserSelection` GraphQL query; the viewer captures the local `copy`, fetches the remote selection, and writes it to the local clipboard via `navigator.clipboard.writeText` (best-effort, gated on `HumanTakeover`).
+
+  Lets a human controlling the remote browser paste credentials in and copy text out. Tests added for the `'text'` mapping, `GetSelectionText`, and the channel relay.
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [2f225e4]
+- Updated dependencies [0fa3cbc]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/ai@5.42.0
+
 ## 5.41.0
 
 ### Minor Changes

@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject, ViewEncapsulation, HostListener } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { CompositeKey, LogStatus, Metadata, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
+import { CompositeKey, LogStatus, RecordDependency, RecordMergeRequest, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
     ResourceData,
@@ -76,6 +76,9 @@ interface ComparisonFieldRow {
     SelectedColumnIndex: number;
 }
 
+/** LLM reasoning recommendation surfaced alongside a match (null when reasoning never ran) */
+type LLMRecommendation = 'Merge' | 'NotDuplicate' | 'Uncertain';
+
 /** Parsed match info for the comparison panel columns */
 interface ComparisonMatchInfo {
     Match: MJDuplicateRunDetailMatchEntity;
@@ -83,6 +86,14 @@ interface ComparisonMatchInfo {
     Score: number;
     Metadata: RecordMetadataInfo;
     DiffCount: number;
+    /** LLM recommendation for this match (null if reasoning did not run) */
+    LLMRecommendation: LLMRecommendation | null;
+    /** LLM confidence 0-1 (distinct from the vector Score / MatchProbability) */
+    LLMConfidence: number | null;
+    /** LLM free-text rationale (may be long; shown in an expandable region) */
+    LLMReasoning: string | null;
+    /** True when the LLM verdict contradicts the vector score — the prime human-review trigger */
+    HasDisagreement: boolean;
 }
 
 /** Lightweight entity document info for the picker dropdown */
@@ -92,6 +103,10 @@ interface EntityDocumentOption {
     EntityName: string;
     PotentialMatchThreshold: number;
     AbsoluteMatchThreshold: number;
+    /** Master switch for the LLM reasoning layer (off = vector-only). */
+    EnableLLMReasoning: boolean;
+    /** Vector-score gate (0–1): the LLM only runs on matched sets at or above this. Null = any non-empty set. */
+    ReasoningThreshold: number | null;
 }
 
 @RegisterClass(BaseResourceComponent, 'DuplicateDetectionResource')
@@ -104,10 +119,12 @@ interface EntityDocumentOption {
 })
 export class DuplicateDetectionResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
 
-    /** Close comparison panel on Escape key */
+    /** Close the reasoning popover first (if open), otherwise the comparison panel, on Escape */
     @HostListener('document:keydown.escape')
     OnEscapeKey(): void {
-        if (this.ComparisonGroup) {
+        if (this.ReasoningPopover) {
+            this.CloseReasoningPopover();
+        } else if (this.ComparisonGroup) {
             this.CloseComparison();
         }
     }
@@ -141,6 +158,23 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public ComparisonClosing = false;
     /** Loaded entity records keyed by record ID (populated on panel open via RunView) */
     private comparisonRecords = new Map<string, Record<string, unknown>>();
+    /**
+     * Floating LLM-reasoning popover state. Rendered as a fixed-position card over the
+     * comparison grid so the full reasoning prose no longer lives inline in the column
+     * header (which made headers tall, uneven, and visually cluttered). Null when closed.
+     */
+    public ReasoningPopover: {
+        columnIndex: number;
+        name: string;
+        recommendation: LLMRecommendation | null;
+        confidence: number | null;
+        hasDisagreement: boolean;
+        reasoning: string;
+        top: number;
+        left: number;
+    } | null = null;
+    /** True once the LLM proposed survivor/field-map has been applied to the selection state */
+    public LLMProposalsApplied = false;
 
     // ── Dependencies State ──
     /** Dependencies per record, keyed by composite key string */
@@ -195,6 +229,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public RunAbsoluteThreshold = 0.95;
     public DetectionCurrentItem = '';
 
+    /**
+     * LLM reasoning gate — working copies synced from the selected entity document. Unlike the
+     * run-threshold sliders (per-run overrides), these are per-entity config the engine reads from
+     * the Entity Document, so editing them persists back to that record (see persistReasoningConfig).
+     */
+    public EnableLLMReasoning = false;
+    public ReasoningThreshold = 0.85;
+
     // Entity document picker
     public EntityDocuments: EntityDocumentOption[] = [];
     private _selectedEntityDocumentID = '';
@@ -206,6 +248,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (doc) {
             this.RunPotentialThreshold = doc.PotentialMatchThreshold;
             this.RunAbsoluteThreshold = doc.AbsoluteMatchThreshold;
+            this.EnableLLMReasoning = doc.EnableLLMReasoning;
+            this.ReasoningThreshold = doc.ReasoningThreshold ?? 0.85;
         }
     }
 
@@ -395,11 +439,20 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 EntityName: 'MJ: Duplicate Run Details',
                 ExtraFilter: "MatchStatus = 'Complete'",
                 OrderBy: '__mj_CreatedAt DESC',
+                // Details and matches MUST load as a consistent set — buildGroups() joins them by
+                // DuplicateRunDetailID. With both entities' UserViewMaxRows = 1000, details truncate
+                // to the newest 1000 (by date) while matches truncate to the top 1000 (by probability);
+                // those two sets diverge once total rows exceed 1000, leaving the newest details with
+                // NO loaded matches → every group is dropped → empty board. Load the full set so the
+                // join is complete. (Scaling note: this loads all review rows; a future run-scoped /
+                // paginated board should replace the unbounded load for large production volumes.)
+                IgnoreMaxRows: true,
                 ResultType: 'entity_object'
             },
             {
                 EntityName: 'MJ: Duplicate Run Detail Matches',
                 OrderBy: 'MatchProbability DESC',
+                IgnoreMaxRows: true,
                 ResultType: 'entity_object'
             }
         ]);
@@ -746,7 +799,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             Name: d.Name ?? 'Unnamed',
             EntityName: d.Entity ?? '',
             PotentialMatchThreshold: this.normalizeDupeThreshold(d.PotentialMatchThreshold, 0.70),
-            AbsoluteMatchThreshold: this.normalizeDupeThreshold(d.AbsoluteMatchThreshold, 0.95)
+            AbsoluteMatchThreshold: this.normalizeDupeThreshold(d.AbsoluteMatchThreshold, 0.95),
+            EnableLLMReasoning: d.EnableLLMReasoning ?? false,
+            ReasoningThreshold: d.ReasoningThreshold ?? null
         }));
 
         // Auto-select the first entity document if available
@@ -777,6 +832,59 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Handle absolute threshold slider change */
     public OnAbsoluteThresholdChanged(value: number): void {
         this.RunAbsoluteThreshold = value;
+    }
+
+    /** Toggle the LLM reasoning layer for the selected entity document and persist immediately. */
+    public async OnEnableReasoningChanged(enabled: boolean): Promise<void> {
+        this.EnableLLMReasoning = enabled;
+        await this.persistReasoningConfig();
+    }
+
+    /** Live-update the reasoning-threshold display as the slider moves (persisted on release). */
+    public OnReasoningThresholdChanged(value: number): void {
+        this.ReasoningThreshold = value;
+    }
+
+    /** Persist the reasoning threshold when the slider is released. */
+    public async OnReasoningThresholdCommitted(value: number): Promise<void> {
+        this.ReasoningThreshold = value;
+        await this.persistReasoningConfig();
+    }
+
+    /**
+     * Persist the LLM reasoning gate (EnableLLMReasoning + ReasoningThreshold) onto the selected
+     * Entity Document. The detection engine reads the gate from the Entity Document, so — unlike the
+     * run-threshold sliders — these are per-entity configuration, not per-run overrides.
+     */
+    private async persistReasoningConfig(): Promise<void> {
+        const docId = this.SelectedEntityDocumentID;
+        if (!docId) return;
+
+        const md = this.ProviderToUse;
+        const ed = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents', md.CurrentUser);
+        const loaded = await ed.Load(docId);
+        if (!loaded) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Could not load the entity document to save reasoning settings', 'error', 4000);
+            return;
+        }
+
+        ed.EnableLLMReasoning = this.EnableLLMReasoning;
+        ed.ReasoningThreshold = this.ReasoningThreshold;
+        const saved = await ed.Save();
+        if (!saved) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to save reasoning settings: ${ed.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 5000);
+            return;
+        }
+
+        // Keep the local picker option in sync so re-selecting the doc reflects the saved values.
+        const opt = this.EntityDocuments.find(d => UUIDsEqual(d.ID, docId));
+        if (opt) {
+            opt.EnableLLMReasoning = this.EnableLLMReasoning;
+            opt.ReasoningThreshold = this.ReasoningThreshold;
+        }
+        this.cdr.detectChanges();
     }
 
     private subscribeToPipelineProgress(pipelineRunID: string): void {
@@ -948,7 +1056,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             const recordName = this.resolveRecordName(metadata, entityName, detail.RecordID);
 
             // Build top match summaries from match metadata
-            const topMatchSummaries = this.buildTopMatchSummaries(detailMatches, 3);
+            const topMatchSummaries = this.buildTopMatchSummaries(detailMatches, 3, entityName);
 
             this.AllGroups.push({
                 DetailId: detail.ID,
@@ -997,6 +1105,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.DepsExpandedColumns.clear();
         this.depsEntityGroupExpanded.clear();
         this.ShowMergeConfirm = false;
+        this.ReasoningPopover = null;
+        this.LLMProposalsApplied = false;
         this.cdr.detectChanges();
 
         // Load actual entity records and dependencies in parallel
@@ -1005,6 +1115,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.loadComparisonDependencies(group)
         ]);
         this.buildComparisonData();
+        // Preload the LLM-proposed survivor + per-field choices into the existing selection state
+        this.applyLLMProposals();
         this.ComparisonLoading = false;
         this.cdr.detectChanges();
     }
@@ -1022,6 +1134,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             this.ComparisonDependencies.clear();
             this.DepsExpandedColumns.clear();
         this.depsEntityGroupExpanded.clear();
+            this.ReasoningPopover = null;
+            this.LLMProposalsApplied = false;
             this.cdr.detectChanges();
         }, 250);
     }
@@ -1272,6 +1386,188 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     // ════════════════════════════════════════════
+    // LLM Reasoning Display (additive — vector-only path unaffected when no LLM data)
+    // ════════════════════════════════════════════
+
+    /**
+     * Decide whether the LLM verdict contradicts the vector score for a match.
+     * The classic disagreement is a strong vector match the LLM flags as NotDuplicate,
+     * or a weak vector pair the LLM nonetheless wants to Merge. Returns false when
+     * reasoning never ran (recommendation null) so existing groups never light up.
+     *
+     * The "strong vs. weak" boundary is the live potential-match threshold the user
+     * tuned for this run ({@link RunPotentialThreshold}) — not a hardcoded constant — so
+     * the disagreement marker tracks the same threshold driving candidate selection.
+     */
+    private computeDisagreement(recommendation: LLMRecommendation | null, vectorScore: number): boolean {
+        if (recommendation == null) return false;
+        const boundary = this.RunPotentialThreshold;
+        if (recommendation === 'NotDuplicate' && vectorScore >= boundary) return true;
+        if (recommendation === 'Merge' && vectorScore < boundary) return true;
+        return false;
+    }
+
+    /** True when ANY match in the current comparison carries LLM reasoning data */
+    public get HasAnyLLMData(): boolean {
+        return this.ComparisonMatches.some(m => m.LLMRecommendation != null);
+    }
+
+    /** CSS class for an LLM recommendation badge */
+    public GetLLMRecommendationClass(recommendation: LLMRecommendation | null): string {
+        switch (recommendation) {
+            case 'Merge': return 'llm-rec-merge';
+            case 'NotDuplicate': return 'llm-rec-notduplicate';
+            case 'Uncertain': return 'llm-rec-uncertain';
+            default: return '';
+        }
+    }
+
+    /** Font Awesome icon class for an LLM recommendation */
+    public GetLLMRecommendationIcon(recommendation: LLMRecommendation | null): string {
+        switch (recommendation) {
+            case 'Merge': return 'fa-code-merge';
+            case 'NotDuplicate': return 'fa-not-equal';
+            case 'Uncertain': return 'fa-circle-question';
+            default: return 'fa-robot';
+        }
+    }
+
+    /** Human-readable label for an LLM recommendation */
+    public GetLLMRecommendationLabel(recommendation: LLMRecommendation | null): string {
+        switch (recommendation) {
+            case 'Merge': return 'AI: Merge';
+            case 'NotDuplicate': return 'AI: Not a duplicate';
+            case 'Uncertain': return 'AI: Uncertain';
+            default: return '';
+        }
+    }
+
+    /**
+     * Open (or toggle) the floating reasoning popover for a match column, anchored under
+     * the "Why?" trigger that was clicked. Rendering the prose in a fixed-position card
+     * keeps the column headers short and uniform instead of letting reasoning text balloon
+     * the header inline.
+     */
+    public OpenReasoningPopover(match: ComparisonMatchInfo, columnIndex: number, event: MouseEvent): void {
+        event.stopPropagation();
+        // Clicking the active trigger again closes the popover
+        if (this.ReasoningPopover?.columnIndex === columnIndex) {
+            this.CloseReasoningPopover();
+            return;
+        }
+
+        const trigger = event.currentTarget as HTMLElement;
+        const rect = trigger.getBoundingClientRect();
+        const popoverWidth = 380;
+        const margin = 12;
+        const left = Math.max(margin, Math.min(rect.left, window.innerWidth - popoverWidth - margin));
+        const top = Math.min(rect.bottom + 6, window.innerHeight - 120);
+
+        this.ReasoningPopover = {
+            columnIndex,
+            name: match.Name,
+            recommendation: match.LLMRecommendation,
+            confidence: match.LLMConfidence,
+            hasDisagreement: match.HasDisagreement,
+            reasoning: match.LLMReasoning ?? '',
+            top,
+            left,
+        };
+        this.cdr.detectChanges();
+    }
+
+    /** Close the floating reasoning popover */
+    public CloseReasoningPopover(): void {
+        this.ReasoningPopover = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Whether the reasoning popover is currently open for a given match column */
+    public IsReasoningPopoverOpen(columnIndex: number): boolean {
+        return this.ReasoningPopover?.columnIndex === columnIndex;
+    }
+
+    // ════════════════════════════════════════════
+    // LLM Proposal Preload (proposed survivor + per-field choices)
+    // ════════════════════════════════════════════
+
+    /**
+     * Preload the LLM-proposed survivor record and per-field choices into the
+     * existing selection state. Fully additive: no-op when no match carries a
+     * proposal, so the user's manual selection is the default in vector-only runs.
+     */
+    private applyLLMProposals(): void {
+        if (!this.ComparisonGroup) return;
+        const proposingMatch = this.ComparisonGroup.Matches.find(m => m.LLMProposedSurvivorRecordID);
+        if (!proposingMatch) return;
+
+        // 1. Resolve the proposed survivor record ID to a column index and set it.
+        const survivorColumn = this.resolveColumnForRecordId(proposingMatch.LLMProposedSurvivorRecordID);
+        if (survivorColumn != null) {
+            this.SetSurvivor(survivorColumn);
+        }
+
+        // 2. Overlay per-field choices from the proposed field map (overrides the survivor default per field).
+        this.applyProposedFieldMap(proposingMatch.LLMProposedFieldMap);
+
+        this.LLMProposalsApplied = true;
+    }
+
+    /** Parse the proposed field map JSON and set each field's SelectedColumnIndex to the proposed source column */
+    private applyProposedFieldMap(fieldMapJson: string | null): void {
+        const choices = this.parseProposedFieldMap(fieldMapJson);
+        for (const choice of choices) {
+            const column = this.resolveColumnForRecordId(choice.SourceRecordID);
+            if (column == null) continue;
+            const row = this.ComparisonFields.find(f => f.FieldName === choice.FieldName);
+            if (row) {
+                row.SelectedColumnIndex = column;
+            }
+        }
+    }
+
+    /** Parse LLMProposedFieldMap into typed {FieldName, SourceRecordID} entries (lenient about null/garbage) */
+    private parseProposedFieldMap(json: string | null): Array<{ FieldName: string; SourceRecordID: string }> {
+        if (!json) return [];
+        try {
+            const parsed: unknown = JSON.parse(json);
+            if (!Array.isArray(parsed)) return [];
+            const result: Array<{ FieldName: string; SourceRecordID: string }> = [];
+            for (const entry of parsed) {
+                if (entry && typeof entry === 'object') {
+                    const rec = entry as Record<string, unknown>;
+                    const fieldName = rec['FieldName'];
+                    const sourceRecordId = rec['SourceRecordID'];
+                    if (typeof fieldName === 'string' && typeof sourceRecordId === 'string') {
+                        result.push({ FieldName: fieldName, SourceRecordID: sourceRecordId });
+                    }
+                }
+            }
+            return result;
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Map a record ID (URL-segment composite key, may equal the source) to a column index.
+     * Column 0 is the source; columns 1..N are matches. Uses case-insensitive comparison
+     * because UUIDs differ in case across SQL Server (upper) and PostgreSQL (lower).
+     */
+    private resolveColumnForRecordId(recordId: string | null): number | null {
+        if (!recordId) return null;
+        const target = recordId.toLowerCase();
+        const totalColumns = 1 + this.ComparisonMatches.length;
+        for (let i = 0; i < totalColumns; i++) {
+            const keyStr = this.getCompositeKeyStringForColumn(i);
+            if (keyStr && keyStr.toLowerCase() === target) {
+                return i;
+            }
+        }
+        return null;
+    }
+
+    // ════════════════════════════════════════════
     // ════════════════════════════════════════════
     // Merge Confirmation
     // ════════════════════════════════════════════
@@ -1288,8 +1584,13 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
     }
 
-    /** Get the list of cherry-picked field overrides (fields picked from non-survivor columns) */
-    public GetCherryPickedFields(): Array<{ FieldName: string; DisplayName: string; Value: string; SourceName: string }> {
+    /**
+     * Get the list of cherry-picked field overrides (fields picked from non-survivor columns).
+     * `Value` is the DISPLAY string (with an `(empty)` sentinel for null) for the confirm panel;
+     * `RawValue` is the actual value to write at merge time — never the sentinel, so the merge
+     * never corrupts a field with the literal text "(empty)".
+     */
+    public GetCherryPickedFields(): Array<{ FieldName: string; DisplayName: string; Value: string; RawValue: string | null; SourceName: string }> {
         return this.ComparisonFields
             .filter(f => f.SelectedColumnIndex !== this.SurvivorColumnIndex)
             .map(f => {
@@ -1300,6 +1601,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     FieldName: f.FieldName,
                     DisplayName: f.DisplayName,
                     Value: value ?? '(empty)',
+                    RawValue: value ?? null,
                     SourceName: this.GetColumnName(f.SelectedColumnIndex)
                 };
             });
@@ -1352,7 +1654,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             if (cherryPicked.length > 0) {
                 request.FieldMap = cherryPicked.map(f => ({
                     FieldName: f.FieldName,
-                    Value: f.Value
+                    Value: f.RawValue   // the real value, NOT the '(empty)' display sentinel
                 }));
             }
 
@@ -1563,6 +1865,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     Score: m.MatchProbability,
                     Metadata: meta,
                     DiffCount: 0,
+                    LLMRecommendation: m.LLMRecommendation,
+                    LLMConfidence: m.LLMConfidence,
+                    LLMReasoning: m.LLMReasoning,
+                    HasDisagreement: this.computeDisagreement(m.LLMRecommendation, m.MatchProbability),
                 };
             });
 
@@ -1629,7 +1935,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Build top N match summaries with parsed names and scores */
     private buildTopMatchSummaries(
         matches: MJDuplicateRunDetailMatchEntity[],
-        limit: number
+        limit: number,
+        entityName: string
     ): Array<{ Name: string; Score: number }> {
         return [...matches]
             .sort((a, b) => b.MatchProbability - a.MatchProbability)
@@ -1637,7 +1944,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             .map(m => {
                 const meta = this.parseRecordMetadata(m.RecordMetadata);
                 return {
-                    Name: this.resolveRecordName(meta, this.SelectedEntityFilter || 'Unknown', m.MatchRecordID ?? ''),
+                    // Resolve names against the group's actual entity, not the (possibly empty)
+                    // board-level SelectedEntityFilter — otherwise name resolution fails and every
+                    // summary falls back to a truncated GUID even when metadata had a real name.
+                    Name: this.resolveRecordName(meta, entityName, m.MatchRecordID ?? ''),
                     Score: m.MatchProbability,
                 };
             });

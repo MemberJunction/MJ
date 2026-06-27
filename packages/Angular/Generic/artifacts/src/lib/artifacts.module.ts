@@ -14,6 +14,9 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 // BaseFormsModule supplies `<mj-interactive-form>` for the form-aware
 // component-artifact viewer branch (componentRole === 'form').
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+// Generic media player — embedded by the audio/video artifact viewer plugins (standalone component).
+import { MJMediaPlayerComponent } from '@memberjunction/ng-media-player';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -106,7 +109,9 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     NgTreesModule,
     BaseFormsModule,
     ComponentFeedbackPanelComponent,
+    MJMediaPlayerComponent,
     AgGridModule,
+    MJEmptyStateComponent,
   ],
   exports: [
     // Export artifact type plugin viewer

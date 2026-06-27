@@ -1,0 +1,61 @@
+# Hardcoded Color Allowlist
+#
+# Files listed here are allowed to contain hardcoded color values
+# (hex, rgb, rgba, hsl, hsla). Each line is either:
+#   - A repo-relative path
+#   - A comment (starts with #)
+#   - An empty line (ignored)
+#
+# Any .css or .scss file not on this list MUST use design tokens
+# (e.g., var(--mj-brand-primary)) instead of hardcoded colors.
+#
+# Two universal exceptions (no allowlist entry needed):
+#   1. Color values inside `var(--token, <fallback>)` patterns
+#      — they only render when the token is undefined.
+#   2. rgba(0, 0, 0, X) and rgba(255, 255, 255, X) — neutral
+#      black/white opacities for shadows/overlays have no
+#      semantic token equivalent.
+#
+# Maintained per design token migration plan
+# (plans/complete/DESIGN_TOKEN_MIGRATION_PLAN.md). When adding a file
+# here, document which of the 6 categories it falls into.
+
+# Category 0: Design Token Definitions
+# The token file IS hex values by definition.
+packages/Angular/Generic/shared/src/lib/_tokens.scss
+
+# Category 2: Dark Theme Definitions
+# Self-contained retro-terminal dark theme using local --perfmon-* properties.
+packages/Angular/Explorer/dashboards/src/SystemDiagnostics/system-diagnostics.component.css
+
+# Category 0 + 3: Standalone UX mockup (not shipped component code)
+# Defines its own dark-theme token block (hex by definition) plus categorical
+# provider brand swatches (Salesforce #00a1e0, HubSpot #ff7a59) with no token equivalent.
+mockups/dupe-detection/shared.css
+
+# Category 3: SVG Paint & Flow Editor Visualization
+# SVG fill/stroke and node-graph visualization colors — distinct visual language.
+packages/Angular/Generic/flow-editor/src/lib/components/flow-editor.component.css
+packages/Angular/Generic/flow-editor/src/lib/components/flow-node.component.css
+packages/Angular/Generic/flow-editor/src/lib/agent-editor/flow-agent-editor.component.css
+packages/Angular/Generic/flow-editor/src/lib/agent-editor/agent-properties-panel.component.css
+
+# Category 4: Code Display Dark Backgrounds
+# Intentional dark-on-dark rendering for code/log output panels (VS Code dark theme).
+packages/Angular/Generic/actions/src/lib/action-test-harness/action-test-harness.component.css
+packages/Angular/Generic/query-viewer/src/lib/query-info-panel/query-info-panel.component.css
+
+# Category 5: Print Media Overrides
+# Light-on-white color overrides inside @media print blocks.
+packages/Angular/Generic/markdown/src/lib/components/markdown.component.css
+
+# Category 6: Filter Depth Categorical Colors
+# Distinct colors for visually distinguishing nesting depth levels in filter builder.
+packages/Angular/Generic/filter-builder/src/lib/filter-group/filter-group.component.css
+
+# Category 3: Categorical colors (must remain distinct; no semantic token equivalent)
+# Iconic gold rating star (#ffd700) — intentional branding color, theme-independent (documented in-file).
+packages/Angular/Generic/artifacts/src/lib/components/plugins/component-feedback-panel/component-feedback-panel.component.css
+# Suggestion type-badge identity colors — entity badge teal (#11998e) distinguishes it
+# from the brand-blue user badge; no teal semantic token exists.
+packages/Angular/Generic/conversations/src/lib/components/mention/mention-dropdown.component.css

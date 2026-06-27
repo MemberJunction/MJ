@@ -42,10 +42,12 @@ export * from './memory-manager-agent';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
+export * from './DuplicateReasoningAgentProvider';
 export * from './ClientToolRequestManager';
 export * from './realtime/realtime-session-runner';
 export * from './realtime/bridge-realtime-session-factory';
 export * from './realtime/bridge-room-transcript-sink';
+export * from './realtime/realtime-turn-moderator';
 // Broker-unique exports. The shared tool-execution contract (INVOKE_TARGET_AGENT_TOOL_NAME,
 // DelegateToTargetRequest, DelegatedResult, ToolExecutionResult, loggers) is surfaced via the
 // runner's `export *` above, so only the broker-specific symbols are named here to avoid a
@@ -58,6 +60,9 @@ export * from './realtime/realtime-channel-server-host';
 export * from './realtime/whiteboard-channel-server';
 export * from './realtime/meeting-controls-state';
 export * from './realtime/meeting-controls-channel-server';
+export * from './realtime/media-channel-server';
+export * from './realtime/realtime-recording-capture';
+export * from './realtime/realtime-recording-store';
 
 // Re-export from ai-reranker for backward compatibility
 export {

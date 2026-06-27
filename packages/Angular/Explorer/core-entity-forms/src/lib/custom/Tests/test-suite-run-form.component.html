@@ -653,24 +653,21 @@
         }
         <!-- Empty State -->
         @if (testRunsLoaded && !loadingTestRuns && testRuns.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-inbox"></i>
-            </div>
-            <h4>No Test Runs Found</h4>
-            <p>No test runs have been recorded for this suite execution.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-inbox"
+            Title="No Test Runs Found"
+            Message="No test runs have been recorded for this suite execution." />
         }
         <!-- Filtered Empty -->
         @if (testRunsLoaded && !loadingTestRuns && testRuns.length > 0 && getFilteredTestRuns().length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-filter"></i>
-            </div>
-            <h4>No Matching Runs</h4>
-            <p>No test runs match the current filter.</p>
-            <button mjButton (click)="setRunStatusFilter(null)">Clear Filter</button>
-          </div>
+          <mj-empty-state
+            Variant="no-results"
+            Icon="fa-solid fa-filter"
+            Title="No Matching Runs"
+            Message="No test runs match the current filter."
+            ActionText="Clear Filter"
+            ActionVariant="outline"
+            (Action)="setRunStatusFilter(null)" />
         }
       </div>
     }
@@ -924,13 +921,10 @@
         }
         <!-- Empty State -->
         @if (!loadingTestRuns && testRunsLoaded && testRuns.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-chart-bar"></i>
-            </div>
-            <h4>No Test Results Yet</h4>
-            <p>Test runs will appear here once the suite execution completes.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-chart-bar"
+            Title="No Test Results Yet"
+            Message="Test runs will appear here once the suite execution completes." />
         }
       </div>
     }

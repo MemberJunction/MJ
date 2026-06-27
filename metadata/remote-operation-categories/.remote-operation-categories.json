@@ -1,0 +1,58 @@
+[
+  {
+    "fields": {
+      "Name": "Record Processes",
+      "Description": "Run + control operations for MJ: Record Processes (bulk record-set processing).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "0A7E9FD9-45BD-4ECF-ABD2-0EFF73C879E6"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.672Z",
+      "checksum": "b1f647004597fd740d388f04b1de8b3d044b02e18a2cfe2d66cf77d92df2da11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Templates",
+      "Description": "Operations over MJ: Templates (render).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "74E05935-8BE0-426B-A68D-DF500B9EFAEF"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.686Z",
+      "checksum": "bb7e692042fafcbbb4622dac94f42b561a99a5247ae02060ab9edd1ba4e6eafc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Control",
+      "Description": "Run-control + status operations for a Record Process run (pause / resume / cancel / get-status).",
+      "ParentID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes"
+    },
+    "primaryKey": {
+      "ID": "88754438-D2C6-4C3F-A4F6-62C1858613F9"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.702Z",
+      "checksum": "6222e90ca9346d966983e89311fbddcfe3960777285fdc7ce0eda37eab3a51f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Record Comparison",
+      "Description": "Field-level record comparison operations (load a set of records + compute the per-field delta matrix).",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "578A2891-14D5-449C-9DF0-BBC715A29918"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:57:14.278Z",
+      "checksum": "93af6c2f0757b3365840e65647cdd8495e3ccba5c3a2fdd2a0f08e211212347b"
+    }
+  }
+]

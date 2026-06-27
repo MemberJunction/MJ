@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/esignature",
-  "version": "5.41.0",
+  "version": "5.43.0",
   "description": "MemberJunction eSignature primitive — pluggable provider contract and normalized types for sending documents for electronic signature (DocuSign, Adobe Sign, …). The optional server engine is exposed via the '@memberjunction/esignature/server' subpath.",
   "type": "module",
   "main": "dist/index.js",
@@ -38,10 +38,10 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/global": "5.41.0",
-    "@memberjunction/core": "5.41.0",
-    "@memberjunction/core-entities": "5.41.0",
-    "@memberjunction/credentials": "5.41.0",
-    "@memberjunction/storage": "5.41.0"
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/credentials": "5.43.0",
+    "@memberjunction/storage": "5.43.0"
   }
 }

@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+- Updated dependencies [4e05350]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/ai-openai@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/sqlserver-dataprovider@5.43.0
+  - @memberjunction/ai-vectors-pinecone@5.43.0
+  - @memberjunction/ai-vector-sync@5.43.0
+  - @memberjunction/actions-apollo@5.43.0
+  - @memberjunction/actions-content-autotag@5.43.0
+  - @memberjunction/scheduled-actions@5.43.0
+  - @memberjunction/ai-mistral@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [9b9b484]
+- Updated dependencies [37c73f6]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [5ada858]
+- Updated dependencies [4ec1732]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/core@5.42.0
+  - @memberjunction/actions@5.42.0
+  - @memberjunction/ai-vector-sync@5.42.0
+  - @memberjunction/sqlserver-dataprovider@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/ai-vectors-pinecone@5.42.0
+  - @memberjunction/actions-apollo@5.42.0
+  - @memberjunction/actions-content-autotag@5.42.0
+  - @memberjunction/scheduled-actions@5.42.0
+  - @memberjunction/ai@5.42.0
+  - @memberjunction/ai-mistral@5.42.0
+  - @memberjunction/ai-openai@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

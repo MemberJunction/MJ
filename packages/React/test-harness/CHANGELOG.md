@@ -1,5 +1,55 @@
 # @memberjunction/react-test-harness
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [a975e3d]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/ai-core-plus@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/react-linter@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectors-memory@5.43.0
+  - @memberjunction/interactive-component-types@5.43.0
+  - @memberjunction/core-entities-server@5.43.0
+  - @memberjunction/react-runtime@5.43.0
+  - @memberjunction/sql-parser@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- Updated dependencies [256ab06]
+- Updated dependencies [9b9b484]
+- Updated dependencies [e7c2437]
+- Updated dependencies [0c6bf61]
+- Updated dependencies [2f225e4]
+- Updated dependencies [6d970cd]
+- Updated dependencies [438ce4a]
+- Updated dependencies [0fa3cbc]
+- Updated dependencies [da5a3dd]
+  - @memberjunction/ai-core-plus@5.42.0
+  - @memberjunction/core@5.42.0
+  - @memberjunction/aiengine@5.42.0
+  - @memberjunction/ai-vectors-memory@5.42.0
+  - @memberjunction/core-entities@5.42.0
+  - @memberjunction/react-runtime@5.42.0
+  - @memberjunction/global@5.42.0
+  - @memberjunction/core-entities-server@5.42.0
+  - @memberjunction/interactive-component-types@5.42.0
+  - @memberjunction/react-linter@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+  - @memberjunction/sql-parser@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

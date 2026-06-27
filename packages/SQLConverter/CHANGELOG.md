@@ -1,5 +1,30 @@
 # @memberjunction/sql-converter
 
+## 5.43.0
+
+### Patch Changes
+
+- Updated dependencies [b98366b]
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/sqlglot-ts@5.43.0
+
+## 5.42.0
+
+### Patch Changes
+
+- 2f225e4: CodeGen + SS→PG converter type-correctness on PostgreSQL:
+  - **codegen-lib / core / actions-base**: core + codegen type correctness on PostgreSQL, plus a
+    PG-only migration repairing TypeScript that the SS→PG baseline conversion corrupted in
+    GeneratedCode rows. _(migration → minor)_
+  - **sql-converter**: never quote identifiers inside string literals during SS→PG conversion. _(code → patch)_
+
+- 8f7260b: Add inline CodeGen baking for PostgreSQL migrations (`mj migrate convert --bake-codegen` and `mj migrate rebake`) plus a one-time PG CodeGen cutover migration and a repeatable `EntityField.AllowsNull` self-heal, enabling codegen-free PostgreSQL deploys (`mj migrate` + `mj sync push`, no `mj codegen`).
+- eea5b15: Split-and-regenerate PostgreSQL migration pipeline: regenerate the machine-generated bulk of each migration and transpile only hand-authored DDL via AST-based SQLGlot dialect transforms, replacing the brittle regex-based pg-migrate path. Adds statement-level classification for unbannered baselines and end-to-end AST transforms covering the remaining DDL edge cases.
+- Updated dependencies [8f7260b]
+- Updated dependencies [eea5b15]
+  - @memberjunction/sqlglot-ts@5.42.0
+  - @memberjunction/sql-dialect@5.42.0
+
 ## 5.41.0
 
 ### Patch Changes

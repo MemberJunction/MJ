@@ -114,10 +114,8 @@
             </div>
         }
         @if (FilteredGroups.length === 0) {
-            <div class="cr-empty">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <span>No registrations match "{{ SearchQuery }}"</span>
-            </div>
+            <mj-empty-state class="cr-empty" Variant="no-results" Icon="fa-solid fa-magnifying-glass"
+                [Title]="'No registrations match “' + SearchQuery + '”'" />
         }
     </div>
 

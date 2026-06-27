@@ -466,7 +466,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       pick.Agent.Name || this.resolveVoiceAgentName(),
       pick.PreferredModelId,
       pick.CoAgentId,
-      BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice)
+      BuildRealtimeConfigOverridesJson(pick.PreferredModelId, pick.PreferredVoice),
+      pick.RecordingConsent
     );
   }
 
@@ -547,7 +548,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     agentName: string,
     preferredModelId?: string | null,
     coAgentId?: string | null,
-    configOverridesJson?: string | null
+    configOverridesJson?: string | null,
+    recordingConsent?: boolean | null
   ): Promise<void> {
     try {
       await this.voiceSession.StartVoiceSession(
@@ -558,7 +560,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         preferredModelId ?? null,
         null,
         coAgentId ?? null,
-        configOverridesJson ?? null
+        configOverridesJson ?? null,
+        recordingConsent ?? null
       );
     } catch (error) {
       console.error('Failed to start voice session:', error);

@@ -193,11 +193,14 @@
           }
 
           @if (filteredRoles.length === 0) {
-            <div class="empty-state" role="status">
-              <i class="fa-solid fa-user-tag empty-icon" aria-hidden="true"></i>
-              <p class="empty-text">No roles found</p>
-              <p class="empty-subtext">Try adjusting your filters or create a new role</p>
-            </div>
+            <mj-empty-state
+              [Variant]="IsListNarrowed ? 'no-results' : 'empty'"
+              Icon="fa-solid fa-user-tag"
+              Title="No roles found"
+              Message="Try adjusting your filters or create a new role"
+              [ActionText]="IsListNarrowed ? 'Reset filters' : ''"
+              ActionIcon="fa-solid fa-rotate-left"
+              (Action)="resetAllFiltersAndSearch()" />
           }
         </div>
     }

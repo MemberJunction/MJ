@@ -476,15 +476,6 @@
     word-break: break-word;
   }
 
-  /* Empty state compact */
-  .empty-state {
-    padding: 2rem 1rem;
-  }
-
-  .empty-state .empty-icon {
-    font-size: 2.5rem;
-  }
-
   /* Loading container compact */
   .loading-container {
     padding: 2rem 1rem;

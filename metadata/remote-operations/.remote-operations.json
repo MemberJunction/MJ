@@ -1,0 +1,190 @@
+[
+  {
+    "fields": {
+      "Name": "Run Record Process",
+      "OperationKey": "RecordProcess.RunNow",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Processes",
+      "Description": "Run a Record Process on demand over an optional runtime scope (selected records / view / list / filter), optionally as a dry-run preview that computes the per-record changes without writing. Returns the run summary (status + processed/success/error/skipped counts + the MJ: Process Runs ID). Implemented by RecordProcessRunNowServerOperation in @memberjunction/record-set-processor.",
+      "InputTypeName": "RecordProcessRunNowInput",
+      "InputTypeDefinition": "@file:types/record-process-run-now.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordProcessRunNowOutput",
+      "OutputTypeDefinition": "@file:types/record-process-run-now.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "LongRunning",
+      "RequiredScope": "recordprocess:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6A1A0EDC-6DFE-4546-AB4D-1137396B90D2"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.787Z",
+      "checksum": "4d33e22c7eb1e58138b827b53153d5bf05a0868ee098b2fbb0f75affaf956a89"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Run Template",
+      "OperationKey": "Template.Run",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Templates",
+      "Description": "Render a template by ID with optional render data. Returns the rendered output + wall-clock render time. Implemented by TemplateRunServerOperation in @memberjunction/templates.",
+      "InputTypeName": "TemplateRunInput",
+      "InputTypeDefinition": "@file:types/template-run.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "TemplateRunOutput",
+      "OutputTypeDefinition": "@file:types/template-run.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "template:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "89AB32DB-1ED8-43A3-8A01-26B91AD1C2C9"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.807Z",
+      "checksum": "e9447982add6061ba565b8ce696462182f432595629df97fadbe2a97ac06c5b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Record Process Run Status",
+      "OperationKey": "RecordProcess.GetRunStatus",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Return a snapshot of a Record Process run's progress (status + processed/total/success/error/skipped counts) by ProcessRunID. Implemented by RecordProcessGetRunStatusOperation in @memberjunction/record-set-processor.",
+      "InputTypeName": "RecordProcessGetRunStatusInput",
+      "InputTypeDefinition": "@file:types/record-process-get-run-status.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordProcessGetRunStatusOutput",
+      "OutputTypeDefinition": "@file:types/record-process-get-run-status.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "recordprocess:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "AE35B63D-EF67-42C1-859F-7FBE39630B97"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.870Z",
+      "checksum": "f866ef6f001cb7c6cb526ffdf1b3bd59ce79dcaf2d0f817d3e5e73222e028066"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pause Record Process Run",
+      "OperationKey": "RecordProcess.PauseRun",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Request a graceful pause of a running Record Process (honored at the next checkpoint). Returns the run's status. Implemented by RecordProcessPauseRunOperation in @memberjunction/record-set-processor.",
+      "InputTypeName": "ProcessRunControlInput",
+      "InputTypeDefinition": "@file:types/process-run-control.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ProcessRunControlOutput",
+      "OutputTypeDefinition": "@file:types/process-run-control.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "recordprocess:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "ACC34496-77BB-40F7-9034-53164C6F28BF"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.840Z",
+      "checksum": "2bda942f853b2fb6f95c9bbd7c35c5e23a8fd6999f0c0df4560246c2e1e496e5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Resume Record Process Run",
+      "OperationKey": "RecordProcess.ResumeRun",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Resume a paused Record Process run. Returns the run's status. Implemented by RecordProcessResumeRunOperation in @memberjunction/record-set-processor.",
+      "InputTypeName": "ProcessRunControlInput",
+      "InputTypeDefinition": "@file:types/process-run-control.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ProcessRunControlOutput",
+      "OutputTypeDefinition": "@file:types/process-run-control.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "recordprocess:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E5C6116D-62F6-4CC3-8800-C11206660643"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.823Z",
+      "checksum": "549d28e09ddf4ecd509904b9efbf6cd036ff3925129afa35057c70cc4aa7b0d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cancel Record Process Run",
+      "OperationKey": "RecordProcess.CancelRun",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Control",
+      "Description": "Request cancellation of a running Record Process (honored at the next checkpoint). Returns the run's status. Implemented by RecordProcessCancelRunOperation in @memberjunction/record-set-processor.",
+      "InputTypeName": "ProcessRunControlInput",
+      "InputTypeDefinition": "@file:types/process-run-control.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ProcessRunControlOutput",
+      "OutputTypeDefinition": "@file:types/process-run-control.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "recordprocess:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "97BCDF1F-07EB-41FE-9C9D-2AEEA8CAF27B"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:32:07.856Z",
+      "checksum": "00ea4641477d4911f2005e708dd38b367e967dd9ab1fb41b9dc01ade2cd0c1ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Compare Records",
+      "OperationKey": "RecordComparison.Compare",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Comparison",
+      "Description": "Load a set of an entity's records (by composite key, column 0 = survivor/reference) and compute the field-level delta matrix between them. Read-only. Returns the loaded records + per-field deltas. Implemented by RecordComparisonCompareServerOperation in @memberjunction/record-comparison.",
+      "InputTypeName": "RecordComparisonCompareInput",
+      "InputTypeDefinition": "@file:types/record-comparison-compare.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordComparisonCompareOutput",
+      "OutputTypeDefinition": "@file:types/record-comparison-compare.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D0CD834E-E785-4680-8F4A-F32FD6BB445E"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:57:14.330Z",
+      "checksum": "5efb711afa196d9b0dfcad8e63e45b0ec16fa98f7b47bb8dfb049dc6ee307735"
+    }
+  }
+]
