@@ -174,3 +174,36 @@ Each phase/sub-phase/cell emits a `livePhaseLog` entry the testing-agent returns
 - Don't hit live APIs from these tests — that's T10's job (separate runner, real credentials).
 - Don't assert against the killed `connector-generator` output. (ADR-001 — generator gone; tests target the hand-written connector class directly.)
 - Don't reference the retired `@memberjunction/integration-connector-validator` package; structural invariants moved into T1 of the verification ladder.
+
+## Setup hygiene + production-readiness classification (proven across 20 connectors, 2026-06-27)
+
+### Canonical setup order is migrate → CODEGEN → push (NOT push→codegen)
+The fresh-migrate baseline ships a stale `spCreateIntegration` missing the `Configuration` column; pushing
+integration metadata before codegen fails on a column mismatch. Codegen-first regenerates it. Six fresh-DB
+setup-hygiene fixes (all real failures, none connector defects): (1) codegen before push; (2) credential type
+pushed SEPARATELY in its own dir + committed FIRST, SKIP when baseline-seeded (else `UQ_CredentialType_Name`);
+(3) strip `primaryKey`+`sync` at EVERY level of pulled metadata (`@parent:ID` batch-resolver collision);
+(4) pre-delete the connector's own baseline-seeded stale IO copies (`UQ_IntegrationObject_Name`); (5) quarantine
+leaked `migrations/v5/V*__RSU_*.sql` + isolate RSU output to /tmp (stray schemas crash MJAPI boot AND churn
+tracked `src/generated/*`); (6) regenerate the class-registration manifest before MJAPI start.
+
+### Production-readiness classification — every run resolves to exactly ONE (the floor-check + test skill must emit it)
+- **GENUINE-GREEN** — deploys clean AND syncs real rows through the full matrix (forward/incremental/idempotency/
+  delta/pagination); list the rowcounts.
+- **HONEST-NA** — deploys clean but NO credential-free enumeration door: every endpoint needs a per-tenant
+  credential/config value (a `tenantId`, an environment base URL). Needs live creds to prove sync. NOT a defect,
+  NOT a green. (e.g. rhythm.)
+- **VACUOUS / NEEDS-FIXTURE** — deploys + machinery runs but 0 rows because the real fetch shape needs a
+  hand-authored fixture (an xWeb `GetQuery` envelope, a Dataverse `EntityDefinitions` describe). NOT a green.
+A 0-row pass is NEVER counted as genuine-green. Bound giant catalogs (>1000 objects) to a Goldilocks subset that
+proves advancement+termination; for the full graph use size-bounded batching in dependency order (the User-hub
+case where the graph won't fragment cleanly), cross-batch FKs deferred to soft-FK.
+
+### Harness fidelity — phaseBidirectional DELETE gate
+`phaseBidirectional` must gate the DELETE sub-cell on the object's deployed `SupportsDelete`/`DeleteAPIPath`
+(symmetric to the UPDATE gate); a create-only object correctly refuses delete and must SKIP, not RED.
+
+### Metadata defects that block a clean push (validate at extract time)
+Over-long `Description` > the deployed NVARCHAR(255) column (salesforce had 2327 such IO/IOF rows, max 900) and
+duplicate IOF Name within one IO (Dataverse polymorphic-lookup `ownerid` ×2) both roll back `mj sync push`.
+Either relax the column (framework migration) or truncate/dedupe at source; the extractor should flag both.
