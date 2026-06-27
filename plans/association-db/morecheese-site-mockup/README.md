@@ -36,12 +36,12 @@ The mockup reflects the **public-facing surface** of the redesigned morecheese.o
 | `messaging.html` | **Secure messaging** (signed-in) — TitanFile / Cisco Secure Messaging-style surface. Mapped to `@memberjunction/bizapps-secure-messaging`. 3-column layout: portal nav / 7 secure-rooms list with E2EE + files + unread + expiration pills / active room with header (encryption / confidential / retention / compliance pills), tab strip (Files · Messages · Activity · Participants · Permissions), file-centric body with 4 detailed file cards showing per-recipient read receipts, watermark / view-only / no-download / expiration policies, and a 5-event audit-log preview (IP / geo / device / action recorded) | ✅ |
 | `betty-voice.html` | Standalone full-screen voice showcase — animated orb with pulse rings, status line, sourced-answer transcript, mic + side controls, 8 try-these prompts, technical footer explaining the Caliber stack | ✅ |
 | `committees.html` | **Committees** (public) — Mapped directly to the 14-table `@memberjunction/bizapps-committees` schema. Type-filter tabs (Board / Standing / Standards WG / Ad Hoc / Workgroup) and 10 committee cards covering all types. Deep-dive on Standards Committee: meetings (upcoming + past), recent motions & votes with tallies, open action items with owners + due dates, artifacts linked from SharePoint/Drive/Box/OneDrive, full roster with chair / vice chair / secretary / voting members / non-voting liaisons, "open seats — apply" CTA | ✅ |
-| `chapters.html` | The 15 chapters worldwide | ⏳ deferred |
-| `standards.html` | Standards library — published standards, drafts under review, plenary process | ⏳ deferred |
-| `resources.html` | Resource library — research, white papers, bundled Content Source PDFs | ⏳ deferred |
-| `contact.html` | Contact info, office locations, Betty as primary entry point | ⏳ deferred |
+| `standards.html` | Standards Library — how-it-works 4-step plenary process, 6 published standards cards (cheddar / alpine / aging caves / sensory rubric / raw-milk / labeling), 4 drafts-under-review cards with status pills (Drafting / Going to Plenary), international-recognition section | ✅ |
+| `chapters.html` | All 15 chapters — gradient-banner cards by region (North America / Europe / Asia–Pacific / Latin America / At-Large) with member counts, events/yr, and chapter-chair attribution per chapter | ✅ |
+| `resources.html` | Resources & Research library — 12 representative resources (research papers, practical guides, video lectures, datasets, white papers) with access-tier pills (Open / Member / Producer), Research Council grants CTA | ✅ |
+| `contact.html` | Two offices (Madison + Annecy), 9 functional desks each with purpose + email, prominent Betty CTA as the fastest path, general contact form | ✅ |
 
-13 pages shipped, including the two BizApps surfaces (`committees.html` and `messaging.html`) built against the actual `@memberjunction/bizapps-committees` and `@memberjunction/bizapps-secure-messaging` open apps. Remaining 4 (chapters / standards / resources / contact) are routine variations of patterns already established and will be added in a later iteration if needed.
+**All 17 pages shipped.** Every link in the top nav, top utility bar, and footer resolves. The two BizApps surfaces (`committees.html` and `messaging.html`) are built against the actual `@memberjunction/bizapps-committees` and `@memberjunction/bizapps-secure-messaging` open apps.
 
 ### BizApps open-app fidelity
 

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chapters · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .ch-card { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); overflow: hidden; transition: all var(--mc-dur-base); }
+    .ch-card:hover { box-shadow: var(--mc-shadow-md); border-color: var(--mc-gold-300); transform: translateY(-2px); }
+    .ch-banner { aspect-ratio: 16/7; position: relative; }
+    .ch-banner.b1 { background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-sage-700)); }
+    .ch-banner.b2 { background: linear-gradient(135deg, var(--mc-gold-500), var(--mc-rind-500)); }
+    .ch-banner.b3 { background: linear-gradient(135deg, var(--mc-oak-400), var(--mc-oak-700)); }
+    .ch-banner.b4 { background: linear-gradient(135deg, var(--mc-rind-400), var(--mc-rind-700)); }
+    .ch-banner.b5 { background: linear-gradient(135deg, var(--mc-sage-500), var(--mc-oak-600)); }
+    .ch-banner.b6 { background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-oak-500)); }
+    .ch-banner-content { position: absolute; inset: 0; padding: var(--mc-space-5); display: flex; flex-direction: column; justify-content: space-between; color: var(--mc-cream); }
+    .ch-region { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; opacity: 0.85; }
+    .ch-name { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); font-weight: var(--mc-fw-semi); }
+    .ch-body { padding: var(--mc-space-5); }
+    .ch-stats { display: flex; justify-content: space-around; padding: var(--mc-space-3) 0; margin-bottom: var(--mc-space-4); }
+    .ch-stat { text-align: center; }
+    .ch-stat-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-lg); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); line-height: 1; }
+    .ch-stat-label { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-top: 2px; }
+    .ch-chairs { display: flex; gap: var(--mc-space-3); align-items: center; padding-top: var(--mc-space-3); border-top: 1px solid var(--mc-border-subtle); font-size: var(--mc-fs-sm); }
+    .ch-chair-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-rind-400)); color: var(--mc-cream); display: grid; place-items: center; font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-xs); flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+  <header class="site-header"><div class="site-header-inner">
+    <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+    <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html">About</a></nav>
+    <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+  </div></header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>Chapters</span></nav>
+        <p class="eyebrow">Chapters</p>
+        <h1>Fifteen chapters · six continents · one federation.</h1>
+        <p class="lede">The federation runs regionally because cheese is regional. Each chapter has its own elected chair, quarterly programming, regional advocacy focus, and a chapter operations budget funded by chapter-share of member dues.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="grid grid-3">
+          <article class="ch-card">
+            <div class="ch-banner b1"><div class="ch-banner-content"><span class="ch-region">North America</span><span class="ch-name">Pacific Northwest</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">WA · OR · ID · BC. Notable for the artisan cluster around Puget Sound and the highest small-producer density per capita in North America.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">412</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">8</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">ER</div><div><div style="font-weight: var(--mc-fw-semi);">Elena Rodriguez</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chapter Chair · 2024–2026</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b2"><div class="ch-banner-content"><span class="ch-region">North America</span><span class="ch-name">California</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">CA. Largest North American chapter by membership. Sonoma / Marin / Point Reyes / SLO clusters.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">678</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">12</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">JK</div><div><div style="font-weight: var(--mc-fw-semi);">Jamie Kemp</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2025–2027</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b3"><div class="ch-banner-content"><span class="ch-region">North America</span><span class="ch-name">Great Lakes</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">WI · MN · MI · ON. Federation headquarters chapter. Wisconsin cheddar tradition heartland.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">589</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">14</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">RK</div><div><div style="font-weight: var(--mc-fw-semi);">Robert Kihm</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2023–2025 · 2 terms</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b4"><div class="ch-banner-content"><span class="ch-region">North America</span><span class="ch-name">Northeast</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">NY · VT · NH · ME · MA · CT · RI · QC. Strong farmstead tradition, aging-cave specialists.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">487</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">10</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">TW</div><div><div style="font-weight: var(--mc-fw-semi);">Tom Whitaker</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2024–2026</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b5"><div class="ch-banner-content"><span class="ch-region">North America</span><span class="ch-name">Mountain West</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">CO · UT · NM · AZ · NV. Rapidly growing chapter, strong goat-milk producer base.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">203</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">6</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">MC</div><div><div style="font-weight: var(--mc-fw-semi);">Maria Castillo</div><div class="muted" style="font-size: var(--mc-fs-xs);">Liaison · Federation President</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b6"><div class="ch-banner-content"><span class="ch-region">North America</span><span class="ch-name">Mid-Atlantic & Southeast</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">VA · NC · TN · GA · SC · KY · WV · MD · DC. Asheville cluster, growing Tennessee tradition.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">281</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">7</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">SD</div><div><div style="font-weight: var(--mc-fw-semi);">Sara Donovan</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2025–2027</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b1"><div class="ch-banner-content"><span class="ch-region">Europe</span><span class="ch-name">European Alpine</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">CH · AT · FR (Savoie/Haute-Savoie) · IT (Alto Adige) · DE (Bayern). Beaufort, Comté, Gruyère, Emmentaler heartland.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">821</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">15</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">JN</div><div><div style="font-weight: var(--mc-fw-semi);">Jean Naumann</div><div class="muted" style="font-size: var(--mc-fs-xs);">Founding Chair · Federation VP</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b2"><div class="ch-banner-content"><span class="ch-region">Europe</span><span class="ch-name">Pays de la Loire & Atlantic France</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">France west and central. AOP heartland for soft-ripened, washed-rind, and ash-line.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">594</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">12</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">MT</div><div><div style="font-weight: var(--mc-fw-semi);">Marcel Touraine</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2024–2026 · MoF</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b3"><div class="ch-banner-content"><span class="ch-region">Europe</span><span class="ch-name">European Mediterranean</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">IT · ES · PT · GR · TR. Pecorino, Manchego, Idiazabal, Feta — the Mediterranean tradition.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">486</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">11</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">LF</div><div><div style="font-weight: var(--mc-fw-semi);">Lucia Ferri</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2025–2027</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b4"><div class="ch-banner-content"><span class="ch-region">Europe</span><span class="ch-name">UK & Ireland</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">GB · IE. The British Territorials renaissance — cheddar, Cheshire, Lancashire, Wensleydale.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">372</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">9</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">MQ</div><div><div style="font-weight: var(--mc-fw-semi);">Mary Quicke</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2024–2026</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b5"><div class="ch-banner-content"><span class="ch-region">Europe</span><span class="ch-name">Northern & Central Europe</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">NL · BE · DK · DE (North) · PL · CZ · SE · NO · FI. Gouda, Edam, Tilsiter, and growing Scandinavian craft tradition.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">412</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">10</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">JH</div><div><div style="font-weight: var(--mc-fw-semi);">John Huisman</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2024–2026</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b6"><div class="ch-banner-content"><span class="ch-region">Asia–Pacific</span><span class="ch-name">Australia & New Zealand</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">AU · NZ. Cooler-climate sheep- and cow-milk production, strong export orientation.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">187</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">7</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">CB</div><div><div style="font-weight: var(--mc-fw-semi);">Chris Brennan</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2025–2027</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b1"><div class="ch-banner-content"><span class="ch-region">Asia–Pacific</span><span class="ch-name">Japan & East Asia</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">JP · KR · TW · HK. The fastest-growing chapter, Hokkaido + Iwate dairy clusters. Innovation focus.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">142</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">5</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">YT</div><div><div style="font-weight: var(--mc-fw-semi);">Yuki Tsubo</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2025–2027</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b2"><div class="ch-banner-content"><span class="ch-region">Americas (South)</span><span class="ch-name">Latin America</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">MX · AR · BR · CL · UY · CO. Strong Argentine and Mexican farmstead traditions. Growing artisan movement.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">168</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">6</div><div class="ch-stat-label">Events/yr</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">IG</div><div><div style="font-weight: var(--mc-fw-semi);">Isabel García</div><div class="muted" style="font-size: var(--mc-fs-xs);">Chair · 2024–2026</div></div></div>
+            </div>
+          </article>
+
+          <article class="ch-card">
+            <div class="ch-banner b3"><div class="ch-banner-content"><span class="ch-region">Other</span><span class="ch-name">At-Large / Unaffiliated</span></div></div>
+            <div class="ch-body">
+              <p class="muted" style="font-size: var(--mc-fs-sm); margin-bottom: 0;">Members in regions without a formal chapter yet. Eligible for full federation programs, no chapter-specific events. Working group active to establish a Middle East / Africa chapter.</p>
+              <div class="ch-stats">
+                <div class="ch-stat"><div class="ch-stat-num">94</div><div class="ch-stat-label">Members</div></div>
+                <div class="ch-stat"><div class="ch-stat-num">—</div><div class="ch-stat-label">Federation-direct</div></div>
+              </div>
+              <div class="ch-chairs"><div class="ch-chair-avatar">MS</div><div><div style="font-weight: var(--mc-fw-semi);">Membership Services</div><div class="muted" style="font-size: var(--mc-fs-xs);">Liaison support</div></div></div>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-warm">
+      <div class="container-narrow center">
+        <p class="eyebrow">Form a new chapter</p>
+        <h2>Don't see your region?</h2>
+        <p class="lede">A new chapter requires 25 founding members in a contiguous region, a proposed chair, and a charter draft. The federation provides templating, programming guidance, and a one-year operations subsidy. Talk to us.</p>
+        <a href="contact.html" class="btn btn-rind btn-lg mt-3">Contact Chapter Development</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>
