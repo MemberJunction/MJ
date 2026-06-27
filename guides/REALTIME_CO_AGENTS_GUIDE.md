@@ -317,6 +317,24 @@ Gate implementation: `RealtimeClientSessionResolver.assertRuntimeOverridesAuthor
 
 **Write-side schema enforcement**: when an agent type publishes `ConfigSchema`, `MJAIAgentEntityServer.ValidateAsync` (in `MJCoreEntitiesServer`) validates `TypeConfiguration` against it with a dependency-free JSON-Schema-subset validator (`json-schema-lite.ts`: type / required / properties / enum / items / additionalProperties). Non-object configuration always fails; a malformed `ConfigSchema` only WARNS (a metadata bug on the type row must not brick agent saves).
 
+### App awareness — the app cascade layer, mint-time context, and multi-agent delegation
+
+The co-agent is **app-aware** and can voice **one lead while delegating to many colleagues**. Three additive capabilities, all flowing through the one shared prep (`RealtimeClientSessionService.PrepareRealtimeSessionParams`) so client-direct and server-bridged behave identically:
+
+**1. The app cascade layer.** When the session knows its `ApplicationID` (threaded via `PrepareClientSessionInput.ApplicationID` — the `StartRealtimeClientSession` `applicationId` arg client-direct, or `params.data.applicationId` server-bridged), the app's `Application.AgentSettings` contributes a NEW cascade layer **between the target agent and the runtime override**:
+
+```
+AIAgentType.DefaultConfiguration  <  co-agent TypeConfiguration  <  target TypeConfiguration  <  APP (Application.AgentSettings.Realtime)  <  runtime override
+```
+
+`AgentSettings.Realtime` (persona / disclosure / model preference) + `AgentSettings.RelevantAgents` are mapped to the canonical `{"realtime":{…}}` shape by `BuildAppRealtimeOverridesJson` and merged via the extended `ResolveEffectiveRealtimeConfig(typeDefault, agent, override, target?, appSettings?, dynamic?)`. Scalars (persona/disclosure/model) follow the per-key cascade; `allowedAgents` is the deliberate exception — see below.
+
+**2. Mint-time app context.** `PrepareClientSessionInput.AppContext` (an `AppContextSnapshot` from `@memberjunction/ai-core-plus` — where the user is, what they see, the live capability manifest) is rendered by `FormatAppContextNote` into a `CURRENT APP CONTEXT` section of the companion system prompt, so the co-agent knows the user's situation from its first word (the *session-start* half of client-context delivery; continuous streaming rides a headless `ClientContextChannel`). Client-direct passes it as the `appContextJson` arg; server-bridged as `params.data.appContext`.
+
+**3. Multi-agent delegation (lead + colleagues).** The effective `realtime.allowedAgents` is a **union-accumulated** set (NOT array-replaced) across every cascade layer (`accumulateAllowedAgents`) plus the app's `RelevantAgents` plus runtime/channel-registered additions, deduped by `agentId` (later layers win per-field). The lead's identity stays single (the voiced target / app default agent); the union is *who the lead can call*. At mint, the colleagues are rendered into the framing (`BuildRealtimeAgentFraming(leadName, surfaceClause, colleagues)` → `BuildColleaguesClause`) with per-target **disclosure** guidance. The model names a colleague in the `invoke-target-agent` arguments (`{ agent, request }`); `RealtimeClientSessionService.resolveDelegationTarget` validates the name against the session's persisted allowed union (client-direct: persisted on `AIAgentSession.Config_` and read back per relayed call; server-bridged: from the live `EffectiveConfig`), routes to that agent, or returns a structured "not available" result naming the valid colleagues so the model self-corrects. **`CanRun` on the resolved agent remains the security boundary** — the union is an affordance filter, both apply.
+
+**Delegation disclosure** (`RealtimeDisclosurePolicy = 'silent' | 'mention' | 'hand-voice'`, default `'mention'`) — how the co-agent narrates a handoff: `mention` names it ("let me get Skip on this"), `silent` absorbs the result and speaks it as its own, `hand-voice` is reserved. Resolved per-target by `GetDisclosureForTarget` (per-entry override → effective default from the scalar cascade). Configurable at the type default, co-agent, app, and per-target levels.
+
 ### Live session capabilities — `RealtimeSessionCapabilities` + `Reconfigure`
 
 A live `IRealtimeSession` exposes a small **capability surface** (the realtime-session analogue of the bridge's `IBridgeProviderFeatures` and of `BaseRealtimeModel.SupportsClientDirect`) so the container can ask "is it safe to call X?" instead of blind-invoking optional methods that no-op — or *can't* be supported — on some providers. Both members are **optional** on the interface (`@memberjunction/ai`, `baseRealtime.ts`), so a driver that hasn't declared them is treated **conservatively** (unsupported), and the 6 existing drivers compile unchanged:

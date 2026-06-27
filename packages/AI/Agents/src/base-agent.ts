@@ -78,6 +78,8 @@ import {
     AgentClientToolInvocation,
     ClientToolResultSummary,
     ClientToolMetadata,
+    ResolveClientTools,
+    AppContextSnapshot,
     InputArtifact,
     AgentPipelineRequest,
     initAgentRunStep,
@@ -1729,6 +1731,11 @@ export class BaseAgent {
             UserID: params.contextUser?.ID,
             DisableAutoResponse: meetingMode || undefined,
             SelfNames: selfNames,
+            // App awareness (Move 1/3/4): the app the session runs in (sources the app cascade layer +
+            // RelevantAgents → allowed-agent union) and the live app-context snapshot injected at mint.
+            // Both ride params.data, the same conduit async agents use for appContext.
+            ApplicationID: (params.data?.applicationId as string | undefined)?.trim() || undefined,
+            AppContext: params.data?.appContext as AppContextSnapshot | undefined,
         };
     }
 
@@ -6283,48 +6290,45 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Build the client tool prompt section for system prompt injection.
      *
-     * Tool sources (checked in order, all merged — first registration wins):
-     * 1. Metadata tools from AI Agent Client Tools junction table
-     * 2. Session-level enriched tools from ClientToolRequestManager (set by client SDK)
-     * 3. Tools provided directly in extraData.clientTools (runtime override)
+     * Resolution is delegated to the shared, tier-agnostic {@link ResolveClientTools}
+     * (`@memberjunction/ai-core-plus`) — the single source of truth used by the async
+     * path (here), the realtime co-agent broker, and the conversations runtime. Tiers,
+     * highest precedence first:
+     *
+     * 1. **override** — tools passed directly in the run's `data.clientTools`
+     * 2. **session (dynamic)** — client-SDK enriched tools from {@link ClientToolRequestManager}
+     * 3. **app** — tools the active surface published in the app-context capability manifest
+     * 4. **static** — the agent's metadata tools from the `AI Agent Client Tools` junction
+     *
+     * NOTE (behavior change): the previous inline merge resolved *static-wins* (metadata
+     * was added first and won name collisions). The unified resolver uses the more-correct
+     * *override > session > app > static* — a runtime/dynamic tool now overrides a stale
+     * static metadata tool of the same name. Collisions are rare in practice.
      */
     private buildClientToolPromptSection(agent: MJAIAgentEntityExtended, extraData?: Record<string, unknown>): string {
-        const toolMap = new Map<string, ClientToolMetadata>();
-
-        // 1. Metadata tools from junction table (authoritative source)
+        // Static tier — agent's metadata tools from the AI Agent Client Tools junction.
         const engine = AIEngine.Instance;
-        const metadataTools = engine.GetClientToolsForAgent(agent.ID);
-        for (const tool of metadataTools) {
-            toolMap.set(tool.Name, {
-                Name: tool.Name,
-                Description: tool.Description,
-                InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
-                OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
-                Category: tool.Category || undefined,
-                DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
-            });
-        }
+        const staticTools: ClientToolMetadata[] = engine.GetClientToolsForAgent(agent.ID).map(tool => ({
+            Name: tool.Name,
+            Description: tool.Description,
+            InputSchema: tool.InputSchemaJSON ? JSON.parse(tool.InputSchemaJSON) : {},
+            OutputSchema: tool.OutputSchemaJSON ? JSON.parse(tool.OutputSchemaJSON) : undefined,
+            Category: tool.Category || undefined,
+            DefaultTimeoutMs: tool.DefaultTimeoutMs || undefined
+        }));
 
-        // 2. Session-level enriched tools (client SDK decorated tools)
+        // Dynamic (session) tier — client-SDK enriched tools for this session.
         const sessionID = extraData?.sessionID as string | undefined;
-        if (sessionID) {
-            for (const tool of ClientToolRequestManager.Instance.GetSessionTools(sessionID)) {
-                if (!toolMap.has(tool.Name)) {
-                    toolMap.set(tool.Name, tool);
-                }
-            }
-        }
+        const sessionTools = sessionID ? ClientToolRequestManager.Instance.GetSessionTools(sessionID) : [];
 
-        // 3. Runtime extraData override
-        if (extraData?.clientTools) {
-            for (const tool of extraData.clientTools as ClientToolMetadata[]) {
-                if (!toolMap.has(tool.Name)) {
-                    toolMap.set(tool.Name, tool);
-                }
-            }
-        }
+        // App tier — tools the active surface published in the app-context capability manifest.
+        const appContext = extraData?.appContext as { Capabilities?: { Tools?: ClientToolMetadata[] } } | undefined;
+        const appTools = appContext?.Capabilities?.Tools ?? [];
 
-        const tools = Array.from(toolMap.values());
+        // Override tier — tools passed directly in the run's data.
+        const overrideTools = (extraData?.clientTools as ClientToolMetadata[] | undefined) ?? [];
+
+        const tools = ResolveClientTools({ agentId: agent.ID, staticTools, sessionTools, appTools, overrideTools });
 
         if (tools.length === 0) {
             return ''; // No client tools available

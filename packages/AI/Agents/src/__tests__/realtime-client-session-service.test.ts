@@ -15,7 +15,7 @@ import {
     RealtimeToolCall
 } from '@memberjunction/ai';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJAIAgentEntityExtended, MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
 import {
     RealtimeClientSessionService,
@@ -24,7 +24,8 @@ import {
     RealtimeModelResolution,
     CoAgentSystemPromptResolution
 } from '../realtime/realtime-client-session-service';
-import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact } from '../realtime/realtime-tool-broker';
+import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
+import { BuildAppRealtimeOverridesJson, RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 
 // Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
 // `runAgentMock` is hoisted so the vi.mock factory can close over it.
@@ -94,6 +95,16 @@ class TestableService extends RealtimeClientSessionService {
     };
     public ObservabilitySpy = vi.fn();
 
+    /** App cascade layer JSON this stub injects (override per-test). null = no app layer (default). */
+    public AppOverridesJson: string | null = null;
+    protected override async resolveAppRealtimeOverrides(): Promise<string | null> { return this.AppOverridesJson; }
+
+    /** Public passthroughs so unit tests can exercise the protected prompt builders directly. */
+    public ExposeAppContextSection(ctx?: AppContextSnapshot): string { return this.buildAppContextSection(ctx); }
+    public ExposeColleagues(cfg: RealtimeCoAgentConfig | undefined, exclude?: string): RealtimeColleague[] {
+        return this.buildColleaguesFromConfig(cfg, exclude);
+    }
+
     protected override async configureEngine(): Promise<void> { /* no DB */ }
     protected override async resolveRealtimeModel(): Promise<RealtimeModelResolution | null> {
         return this.ResolveModelResult;
@@ -113,9 +124,20 @@ class TestableService extends RealtimeClientSessionService {
         this.ObservabilitySpy({ coAgentID: coAgent.ID, promptID, modelID, vendorID, userID, agentSessionID });
         return this.ObservabilityResult;
     }
+    /** id → display name map for resolveTargetAgent (default keeps 'target-1' as 'Sales Agent'). */
+    public TargetAgentNames: Record<string, string> = { 'target-1': 'Sales Agent' };
     protected override resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
         if (!targetAgentID) return null;
-        return { ID: targetAgentID, Name: 'Sales Agent', Description: 'Closes deals.' } as unknown as MJAIAgentEntityExtended;
+        const name = this.TargetAgentNames[targetAgentID] ?? targetAgentID;
+        return {
+            ID: targetAgentID,
+            Name: name,
+            Description: name === 'Sales Agent' ? 'Closes deals.' : `${name} agent.`,
+        } as unknown as MJAIAgentEntityExtended;
+    }
+    /** Public passthrough to exercise the multi-target delegation routing decision directly. */
+    public ExposeResolveDelegationTarget(requested: string | undefined, input: ExecuteRelayedToolInput) {
+        return this.resolveDelegationTarget(requested, input);
     }
     protected override async delegateToTarget(
         _input: ExecuteRelayedToolInput,
@@ -1484,5 +1506,143 @@ describe('RealtimeClientSessionService.loadParentRun (real path)', () => {
 
         expect(getEntity).not.toHaveBeenCalled();
         expect(runAgentMock.mock.calls[0][0].parentRun).toBeUndefined();
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// App awareness (Move 1/3/4): app cascade layer, colleagues framing, app-context injection
+// ════════════════════════════════════════════════════════════════════
+
+describe('RealtimeClientSessionService — app awareness', () => {
+    it('injects the app cascade layer so colleagues appear in the companion prompt (excluding the lead)', async () => {
+        const svc = new TestableService();
+        // App declares two relevant agents — one IS the lead (target-1, must be excluded) and one colleague.
+        svc.AppOverridesJson = BuildAppRealtimeOverridesJson(
+            { Disclosure: 'mention' },
+            [
+                { agentId: 'target-1', label: 'Sales Agent' }, // the lead — excluded from colleagues
+                { agentId: 'colleague-1', label: 'Skip', disclosure: 'silent' },
+            ],
+        );
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+
+        const prompt = result.SessionParams!.SystemPrompt;
+        expect(prompt).toContain('Your colleagues:');
+        expect(prompt).toContain('"Skip"');
+        expect(prompt).toContain('speak their result as your own'); // silent disclosure guidance for Skip
+        // The lead (Sales Agent / target-1) is NOT listed as a colleague.
+        expect(prompt).not.toContain('"Sales Agent":');
+    });
+
+    it('produces classic single-target framing (no colleagues clause) when the app declares none', async () => {
+        const svc = new TestableService();
+        svc.AppOverridesJson = null;
+        const result = await svc.PrepareClientSession(makePrepInput(), contextUser, provider);
+        expect(result.SessionParams!.SystemPrompt).not.toContain('Your colleagues:');
+    });
+
+    it('injects the app-context snapshot into the system prompt at mint', async () => {
+        const svc = new TestableService();
+        const appContext: AppContextSnapshot = {
+            App: { Name: 'Knowledge Hub', Description: '' },
+            ActiveNavItem: { Name: 'Analytics' },
+            OtherNavItems: [],
+            User: { Name: 'Amith', Roles: [] },
+            View: { FreeText: 'reviewing the cluster chart' },
+            Capabilities: { Tools: [{ Name: 'ExportCSV', Description: 'd', InputSchema: {} }] },
+        };
+        const result = await svc.PrepareClientSession(makePrepInput({ AppContext: appContext }), contextUser, provider);
+
+        const prompt = result.SessionParams!.SystemPrompt;
+        expect(prompt).toContain('CURRENT APP CONTEXT');
+        expect(prompt).toContain('[app-context]');
+        expect(prompt).toContain('Knowledge Hub');
+        expect(prompt).toContain('available tools: ExportCSV');
+    });
+
+    it('omits the app-context section entirely when no snapshot is supplied', () => {
+        const svc = new TestableService();
+        expect(svc.ExposeAppContextSection(undefined)).toBe('');
+    });
+
+    it('maps allowedAgents to colleagues, excluding the lead and using label fallback', () => {
+        const svc = new TestableService();
+        const cfg: RealtimeCoAgentConfig = {
+            realtime: {
+                disclosure: 'mention',
+                allowedAgents: [
+                    { agentId: 'lead-1', label: 'Lead' },
+                    { agentId: 'c1', label: 'Skip', disclosure: 'silent' },
+                    { agentId: 'c2', label: 'Cleaner' },
+                ],
+            },
+        };
+        const colleagues = svc.ExposeColleagues(cfg, 'lead-1');
+        expect(colleagues.map(c => c.name).sort()).toEqual(['Cleaner', 'Skip']);
+        const skip = colleagues.find(c => c.name === 'Skip')!;
+        expect(skip.disclosure).toBe('silent');       // per-target override
+        const cleaner = colleagues.find(c => c.name === 'Cleaner')!;
+        expect(cleaner.disclosure).toBe('mention');    // falls back to default
+    });
+});
+
+// ════════════════════════════════════════════════════════════════════
+// Multi-target delegation routing (Move 4)
+// ════════════════════════════════════════════════════════════════════
+
+describe('RealtimeClientSessionService.resolveDelegationTarget', () => {
+    function inputWith(allowed?: { agentId: string; label?: string }[]): ExecuteRelayedToolInput {
+        return {
+            AgentSessionID: 'session-1',
+            TargetAgentID: 'target-1',
+            AllowedAgents: allowed,
+            Call: { CallID: 'c1', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{}' },
+        };
+    }
+
+    it('routes to the lead when no colleague is named', () => {
+        const svc = new TestableService();
+        const r = svc.ExposeResolveDelegationTarget(undefined, inputWith());
+        expect(r.Agent?.ID).toBe('target-1');
+        expect(r.Agent?.Name).toBe('Sales Agent');
+    });
+
+    it('routes to a colleague named by label in the allowed union', () => {
+        const svc = new TestableService();
+        svc.TargetAgentNames = { 'target-1': 'Sales Agent', 'skip-1': 'Skip' };
+        const r = svc.ExposeResolveDelegationTarget('Skip', inputWith([{ agentId: 'skip-1', label: 'Skip' }]));
+        expect(r.Agent?.ID).toBe('skip-1');
+    });
+
+    it('routes to a colleague named by its resolved agent name', () => {
+        const svc = new TestableService();
+        svc.TargetAgentNames = { 'target-1': 'Sales Agent', 'qb-1': 'Query Builder' };
+        const r = svc.ExposeResolveDelegationTarget('query builder', inputWith([{ agentId: 'qb-1' }]));
+        expect(r.Agent?.ID).toBe('qb-1');
+    });
+
+    it('allows naming the lead agent itself', () => {
+        const svc = new TestableService();
+        const r = svc.ExposeResolveDelegationTarget('Sales Agent', inputWith([{ agentId: 'skip-1', label: 'Skip' }]));
+        expect(r.Agent?.ID).toBe('target-1');
+    });
+
+    it('returns a structured error naming available colleagues for an unknown agent', () => {
+        const svc = new TestableService();
+        svc.TargetAgentNames = { 'target-1': 'Sales Agent', 'skip-1': 'Skip' };
+        const r = svc.ExposeResolveDelegationTarget('Nobody', inputWith([{ agentId: 'skip-1', label: 'Skip' }]));
+        expect(r.Agent).toBeUndefined();
+        expect(r.Error).toContain('"Nobody"');
+        expect(r.Error).toContain('Skip'); // available colleague listed for self-correction
+    });
+
+    it('errors clearly when no lead target is configured and none named', () => {
+        const svc = new TestableService();
+        const input: ExecuteRelayedToolInput = {
+            AgentSessionID: 's', TargetAgentID: '', Call: { CallID: 'c', ToolName: INVOKE_TARGET_AGENT_TOOL_NAME, Arguments: '{}' },
+        };
+        const r = svc.ExposeResolveDelegationTarget(undefined, input);
+        expect(r.Agent).toBeUndefined();
+        expect(r.Error).toContain('No target agent is configured');
     });
 });

@@ -49,5 +49,29 @@
       "lastModified": "2026-06-27T01:23:08.351Z",
       "checksum": "87bfd5e89770d3770cb8455f22e6da908a8e2062deab08e6f3822c049196e828"
     }
+  },
+  {
+    "fields": {
+      "Name": "ClientContextChannel",
+      "Description": "HEADLESS live wire (no visible tab) that continuously streams the user's app context to the realtime co-agent — where they are, what they see, and the available client-tool + agent manifest — and through which the model's single stable ContextTool proxy drives in-app actions. CLIENT-DIRECT: the browser publishes context deltas via the provider's SendContextNote and executes ContextTool/client-tool calls locally through the unified client-tool resolver (no server round-trip). The server channel plugin contributes no server tools and persists no state. INACTIVE until the Angular client plugin (ClientContextChannel) ships; the session-start app-context injection + multi-agent delegation already work without it.",
+      "ServerPluginClass": "ClientContextChannelServer",
+      "ClientPluginClass": "ClientContextChannel",
+      "TransportType": "PubSub",
+      "IsActive": false,
+      "IsHeadless": true,
+      "UIConfig": {
+        "DisplayName": "App Context",
+        "GroupName": "System",
+        "Icon": "fa-solid fa-satellite-dish",
+        "Color": "--mj-brand-primary"
+      }
+    },
+    "primaryKey": {
+      "ID": "F3117DE4-4A06-43FB-815F-BE4C8008768A"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:45:21.923Z",
+      "checksum": "de2397bfbabe38a6b448cf9e35b719b872cc04b1162279d00b863ef6017c7c00"
+    }
   }
 ]

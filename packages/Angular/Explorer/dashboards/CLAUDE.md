@@ -94,13 +94,15 @@ export class MyResourceComponent extends BaseResourceComponent implements AfterV
 ### What Happens Without It
 The shell component waits for `onFirstResourceLoadComplete()` before hiding the loading screen. That event is driven by `NotifyLoadComplete()`. If no resource component calls it, the user sees the loading animation indefinitely with only a "Reset" button (which clears all local data) as recovery.
 
-## Agent Context & Client Tools
+## 🚨 Agent Context & Client Tools — REQUIRED FOR EVERY DASHBOARD 🚨
 
-Every Knowledge Hub dashboard reports its state to the AI agent and registers tools the agent can invoke. This is done via `NavigationService` in `ngAfterViewInit()`.
+**This is the baseline for ALL MJ Explorer dashboards, not just Knowledge Hub.** Every `BaseResourceComponent` / `BaseDashboard` subclass MUST report its state to the agent and register the operations the agent can invoke. A surface that skips this leaves the agent — the conversational chat agent **and** the realtime co-agent — blind to what the user is doing and unable to act in it.
 
-**Required for all KH resource components:**
-1. Call `this.navigationService.SetAgentContext(this, {...})` — report dashboard state on init and on every meaningful state change
-2. Call `this.navigationService.SetAgentClientTools(this, [...])` — register tools on init
+**Required for every resource component** (in `ngAfterViewInit()` and on every meaningful state change):
+1. `this.navigationService.SetAgentContext(this, {...})` — report surface state (active selection, filters, mode, metrics). Keep it to ~15 salient fields; send deltas. This feeds the shared `AppContextSnapshot` (`@memberjunction/ai-core-plus`) — its `AdditionalContext`, plus where relevant `View` (what's on screen / selected) and `Capabilities` (the live tool/agent manifest). **One call lights the surface up for the async chat agent (system-prompt `appContext`) AND the realtime co-agent (mint-time injection + streaming).**
+2. `this.navigationService.SetAgentClientTools(this, [...])` — register the surface's agent-actionable operations (tab switches, record selection, mutations, exports). These resolve through the **one unified client-tool resolver** (`ResolveClientTools` in `@memberjunction/ai-core-plus`; precedence override > session > app > static).
+
+**Do NOT add a parallel mechanism.** `SetAgentContext`/`SetAgentClientTools` are the single surface API — they already flow to async agents and the realtime co-agent consumes the same snapshot + resolved tools. Wire them in from the start when scaffolding a new dashboard.
 
 **Currently implemented dashboards:**
 
