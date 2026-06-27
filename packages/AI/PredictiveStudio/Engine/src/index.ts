@@ -25,6 +25,10 @@ export * from './training';
 // Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
 export * from './scoring';
 
+// Experiment orchestration — deterministic, wave-based ExperimentOrchestrator that
+// executes an approved ModelingPlanSpec with a leaderboard, pruning, and a budget gate (§8.3/§8.4/§9.1).
+export * from './experiment';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.
