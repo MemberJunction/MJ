@@ -29,6 +29,10 @@ export * from './scoring';
 // executes an approved ModelingPlanSpec with a leaderboard, pruning, and a budget gate (§8.3/§8.4/§9.1).
 export * from './experiment';
 
+// Action boundaries — thin MJ Actions over the engine service classes (train /
+// score / experiment / promote), so agents / UI / workflows can invoke them (§12).
+export * from './actions';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.

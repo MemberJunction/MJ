@@ -1,0 +1,455 @@
+[
+  {
+    "_comments": [
+      "Train ML Model — thin Action boundary over TrainingEngine.trainModel.",
+      "Type='Custom' + DriverClass binds to the @RegisterClass(BaseAction,'PredictiveStudioTrainModelAction') class.",
+      "The action validates PipelineID, delegates to the engine (production seams), and maps the result."
+    ],
+    "fields": {
+      "Name": "Train ML Model",
+      "Description": "Trains a predictive model from an ML Training Pipeline definition. Carves a locked holdout, trains via the sidecar, persists an immutable Draft ML Model, and flags single-feature dominance (possible target leakage). Outputs the new model id, its honest holdout metrics, and whether it was leakage-flagged.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioTrainModelAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-dumbbell"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PipelineID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Id of the MJ: ML Training Pipelines row to train."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional cap on the number of training rows pulled from the target entity."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Id of the produced (Draft) MJ: ML Models row."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HoldoutMetrics",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the metrics scored once on the locked holdout set the search never saw (the honest performance number)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LeakageFlagged",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "True when one feature dominates the model's predictions (possible target leakage). A flagged model stays Draft and needs human sign-off before promotion."
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Model trained and persisted (Draft)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "PipelineID is missing."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TRAINING_FAILED",
+            "IsSuccess": false,
+            "Description": "The training engine failed (pipeline not found, sidecar error, or a save failure)."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "_comments": [
+      "Score Record Set — thin Action boundary over the MLModelInferenceProcessor scoring work type.",
+      "Validates ModelID + Scope, delegates scope resolution + scoring to the runner, returns counts +",
+      "ephemeral predictions OR confirms a write-back."
+    ],
+    "fields": {
+      "Name": "Score Record Set",
+      "Description": "Scores a set of records with a trained ML Model. The scope selects records (explicit ids / a saved view / a list / an entity+filter / a single record). Returns the scored count and either the ephemeral predictions or confirmation that scores were written back to the target.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioScoreRecordSetAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-gauge-high"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Id of the MJ: ML Models row to score with."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Scope",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "JSON describing the records to score. Populate exactly one of: records (id/pk array), viewId, listId, filter ({entityName, extraFilter, maxRows}), single ({entityName, primaryKey})."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WriteBack",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional. true to write scores back with the model's default mapping, or an object { OutputMapping: ... } to write to a specific column/child record. When omitted, predictions are returned ephemerally."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScoredCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Number of records successfully scored."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WroteBack",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "True when scores were written back to the target (predictions are then NOT returned ephemerally)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Predictions",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON array of ephemeral predictions ({recordId, score, class}), present only when WriteBack was not requested."
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Records scored (predictions returned or written back)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "ModelID is missing, or Scope is missing/empty/populates no selector."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SCORING_FAILED",
+            "IsSuccess": false,
+            "Description": "Scope resolution or the scoring run failed (model/artifact not found, sidecar error)."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "_comments": [
+      "Run Experiment Session — thin Action boundary over ExperimentOrchestrator.runSession.",
+      "Validates that an APPROVED PlanSpec is supplied, parses Budget + ExperimentID, delegates, maps the result."
+    ],
+    "fields": {
+      "Name": "Run Experiment Session",
+      "Description": "Executes an approved modeling plan as an experiment session — running its proposed experiments in waves to completion or until the budget bound, maintaining a leaderboard. Outputs the session id, the best (winning) model id, the final leaderboard, and why the session stopped.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioRunExperimentAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-flask"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PlanSpec",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The approved modeling plan (ModelingPlanSpec JSON) to execute. Must have Approved=true — execution is gated on user approval."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExperimentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional id of an existing MJ: Experiments definition to attach the session to. When omitted, a new durable Experiment is created from the plan."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Budget",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional budget override ({ MaxRuns, MaxComputeCost, MaxWallclockMinutes }). When omitted, the plan's ProposedBudget is used."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SessionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Id of the MJ: Experiment Sessions row that was executed."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "BestModelID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Id of the best (winning) model produced, or null when no iteration produced one."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Leaderboard",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the final leaderboard, best-first ({ IterationID, Metric, ModelID })."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StopReason",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Why the session stopped: completed, or a clean budget pause (budget-maxRuns / budget-maxComputeCost / budget-maxWallclock)."
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Experiment session ran to completion or paused cleanly on the budget."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "PlanSpec is missing or not a valid modeling plan."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PLAN_NOT_APPROVED",
+            "IsSuccess": false,
+            "Description": "The PlanSpec is not approved (Approved is not true) — execution is gated on user approval."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXPERIMENT_FAILED",
+            "IsSuccess": false,
+            "Description": "The orchestrator failed during execution."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "_comments": [
+      "Promote ML Model — thin Action boundary over the model lifecycle transition.",
+      "Enforces the leakage sign-off gate: a leakage-flagged model is refused without SignOff=true.",
+      "Lifecycle-only — never edits metrics, only Status."
+    ],
+    "fields": {
+      "Name": "Promote ML Model",
+      "Description": "Transitions an ML Model through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless SignOff=true. Lifecycle-only: never edits the model's metrics or artifact, only its Status.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioPromoteModelAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-circle-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Id of the MJ: ML Models row to transition."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetStatus",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The lifecycle status to move the model to: Validated, Published, or Archived."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SignOff",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Human/agent sign-off that overrides the leakage gate. Required (true) to promote a leakage-flagged model; ignored for clean models."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The model's new lifecycle status, on success."
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Model transitioned to the target status."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "ModelID is missing, or TargetStatus is missing/not one of Validated/Published/Archived."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LEAKAGE_SIGNOFF_REQUIRED",
+            "IsSuccess": false,
+            "Description": "The model was flagged for possible target leakage and cannot be promoted without SignOff=true."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MODEL_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No ML Model exists with the provided ModelID."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SAVE_FAILED",
+            "IsSuccess": false,
+            "Description": "The status transition failed to save."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROMOTION_FAILED",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred while promoting the model."
+          }
+        }
+      ]
+    }
+  }
+]

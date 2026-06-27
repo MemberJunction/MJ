@@ -9,7 +9,13 @@ the CPU-bound fitting and inference.
 
 This package follows the [`@memberjunction/sqlglot-ts`](../../../SQLGlotTS) pattern:
 the Python microservice is **bundled** (`src/python/`) and the `MLSidecar` class
-spawns it as a child process on demand — no Docker required for local/embedded use.
+spawns it as a child process on demand. **Managed spawn is the default and needs
+no Docker** — `new MLSidecar(); await s.start()` just works once the bundled venv
+exists (`npm run setup:python`). A remote/containerized topology is available when
+you want it, but it is opt-in, not a prerequisite.
+
+For the full architecture, read the
+**[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)**.
 
 ## Two topologies
 
@@ -133,3 +139,18 @@ manager / host) and point MJAPI at it via `PREDICTIVE_STUDIO_SIDECAR_URL` — th
 * `src/python/tests/test_preprocessing_golden.py` — the anti-skew golden tests.
 * `src/__tests__/ml-sidecar.test.ts` — TypeScript unit tests (spawn + HTTP mocked, no
   live process).
+
+## How it fits the whole
+
+```
+predictive-studio-core  → the /train + /predict contract (TrainRequest, PredictRequest, …)
+        │ implemented by
+this package (MLSidecar) → TS wrapper + bundled Python FastAPI service (app/main.py)
+        │ used by
+predictive-studio (Engine) → MJSidecarTrainer (training) · MJSidecarPredictor (scoring)
+```
+
+MJ (TypeScript) assembles the feature matrix and orchestrates; this sidecar does the
+CPU-bound **fitting** (`/train`) and **inference** (`/predict`). The fit-once
+preprocessing (§ "The anti-skew core" above) and the warm LRU model cache are what let
+the engine train in seconds-to-minutes and serve interactive single-record scores fast.
