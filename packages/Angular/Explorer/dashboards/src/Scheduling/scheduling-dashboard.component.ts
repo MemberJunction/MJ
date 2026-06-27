@@ -2,7 +2,7 @@ import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetection
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Subject, Subscription } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
+import { debounceTime, takeUntil } from 'rxjs/operators';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { TabConfig, FilterFieldConfig } from '@memberjunction/ng-ui-components';
@@ -190,7 +190,8 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
 
   private setupStateManagement(): void {
     this.stateChangeSubject.pipe(
-      debounceTime(50)
+      debounceTime(50),
+      takeUntil(this.destroy$)
     ).subscribe(state => {
       this.UserStateChanged.emit(state);
     });

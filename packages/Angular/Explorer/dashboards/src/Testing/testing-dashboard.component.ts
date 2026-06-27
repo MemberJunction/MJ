@@ -130,7 +130,8 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   private setupStateManagement(): void {
     this.stateChangeSubject.pipe(
-      debounceTime(50)
+      debounceTime(50),
+      takeUntil(this.destroy$)
     ).subscribe(state => {
       this.UserStateChanged.emit(state);
     });
