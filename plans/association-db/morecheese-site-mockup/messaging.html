@@ -3,70 +3,158 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Messages · MoreCheese Member Portal</title>
+  <title>Secure Messaging · MoreCheese Member Portal</title>
+  <meta name="description" content="End-to-end encrypted file exchange and messaging for the federation — committee documents, board materials, sponsor agreements, financial reviews. Auditable, controlled, compliant." />
   <link rel="stylesheet" href="assets/css/tokens.css" />
   <link rel="stylesheet" href="assets/css/main.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <style>
-    .msg-shell { display: grid; grid-template-columns: 240px 360px 1fr; min-height: calc(100vh - 73px); background: var(--mc-bg-surface); }
-    @media (max-width: 1100px) { .msg-shell { grid-template-columns: 1fr; } .msg-portal-side, .msg-thread-list { display: none; } }
+    /* SHELL */
+    .sm-shell { display: grid; grid-template-columns: 240px 340px 1fr; min-height: calc(100vh - 73px); background: var(--mc-bg-surface); }
+    @media (max-width: 1200px) { .sm-shell { grid-template-columns: 1fr; } .sm-portal, .sm-rooms { display: none; } }
 
-    .msg-portal-side { background: var(--mc-bg-surface); border-right: 1px solid var(--mc-border-subtle); padding: var(--mc-space-5); }
-    .msg-portal-side-head { display: flex; gap: var(--mc-space-3); align-items: center; padding: var(--mc-space-3); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); margin-bottom: var(--mc-space-5); }
+    /* PORTAL nav (slim) */
+    .sm-portal { background: var(--mc-bg-surface); border-right: 1px solid var(--mc-border-subtle); padding: var(--mc-space-5); }
+    .sm-portal-head { display: flex; gap: var(--mc-space-3); align-items: center; padding: var(--mc-space-3); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); margin-bottom: var(--mc-space-5); }
     .portal-avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-rind-400)); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-bold); }
     .portal-nav-label { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wider); text-transform: uppercase; color: var(--mc-text-muted); margin: var(--mc-space-5) 0 var(--mc-space-2); }
-    .portal-nav a { padding: var(--mc-space-3); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); display: flex; align-items: center; gap: var(--mc-space-3); color: var(--mc-text-primary); transition: all var(--mc-dur-fast); }
-    .portal-nav a:hover { background: var(--mc-bg-surface-warm); }
-    .portal-nav a.active { background: var(--mc-rind-500); color: var(--mc-cream); }
-    .portal-nav a i { width: 18px; text-align: center; }
+    .sm-portal nav { display: flex; flex-direction: column; gap: 2px; }
+    .sm-portal nav a { padding: var(--mc-space-3); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); display: flex; align-items: center; gap: var(--mc-space-3); color: var(--mc-text-primary); transition: all var(--mc-dur-fast); }
+    .sm-portal nav a:hover { background: var(--mc-bg-surface-warm); }
+    .sm-portal nav a.active { background: var(--mc-rind-500); color: var(--mc-cream); }
+    .sm-portal nav a i { width: 18px; text-align: center; }
 
-    .msg-thread-list { background: var(--mc-bg-surface-warm); border-right: 1px solid var(--mc-border-subtle); overflow-y: auto; }
-    .msg-thread-list-head { padding: var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); background: var(--mc-bg-surface); position: sticky; top: 0; }
-    .msg-thread-list-head h2 { margin: 0 0 var(--mc-space-3); font-size: var(--mc-fs-lg); }
-    .msg-filter-tabs { display: flex; gap: var(--mc-space-1); font-size: var(--mc-fs-xs); font-family: var(--mc-font-mono); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
-    .msg-filter { padding: var(--mc-space-2) var(--mc-space-3); border-radius: var(--mc-radius-pill); color: var(--mc-text-muted); cursor: pointer; }
-    .msg-filter.active { background: var(--mc-rind-500); color: var(--mc-cream); }
+    /* ROOMS list */
+    .sm-rooms { background: var(--mc-bg-surface-warm); border-right: 1px solid var(--mc-border-subtle); overflow-y: auto; display: flex; flex-direction: column; }
+    .sm-rooms-head { padding: var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); background: var(--mc-bg-surface); position: sticky; top: 0; z-index: 1; }
+    .sm-rooms-head-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--mc-space-3); }
+    .sm-rooms-head h2 { margin: 0; font-size: var(--mc-fs-lg); }
+    .sm-new-room { width: 32px; height: 32px; border-radius: var(--mc-radius-md); background: var(--mc-rind-500); color: var(--mc-cream); display: grid; place-items: center; }
+    .sm-search { width: 100%; padding: var(--mc-space-2) var(--mc-space-3); padding-left: 32px; border: 1px solid var(--mc-border-default); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23a39a85'><path d='M7 0a7 7 0 105.07 11.83l3.05 3.05a.75.75 0 101.06-1.06l-3.05-3.05A7 7 0 007 0zm0 1.5a5.5 5.5 0 110 11 5.5 5.5 0 010-11z'/></svg>") no-repeat 10px center / 14px; }
+    .sm-room-filters { display: flex; gap: var(--mc-space-1); margin-top: var(--mc-space-3); font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+    .sm-room-filter { padding: var(--mc-space-1) var(--mc-space-3); border-radius: var(--mc-radius-pill); color: var(--mc-text-muted); cursor: pointer; }
+    .sm-room-filter.active { background: var(--mc-rind-500); color: var(--mc-cream); }
 
-    .msg-thread { padding: var(--mc-space-4); border-bottom: 1px solid var(--mc-border-subtle); display: grid; grid-template-columns: 40px 1fr; gap: var(--mc-space-3); cursor: pointer; transition: background var(--mc-dur-fast); }
-    .msg-thread:hover { background: var(--mc-bg-surface); }
-    .msg-thread.unread { background: var(--mc-bg-surface); border-left: 3px solid var(--mc-rind-500); padding-left: calc(var(--mc-space-4) - 3px); }
-    .msg-thread.active { background: var(--mc-bg-surface); border-left: 3px solid var(--mc-gold-500); padding-left: calc(var(--mc-space-4) - 3px); }
-    .msg-thread-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-size: var(--mc-fs-xs); font-weight: var(--mc-fw-semi); }
-    .msg-thread-avatar.committee { background: linear-gradient(135deg, var(--mc-rind-400), var(--mc-rind-600)); }
-    .msg-thread-avatar.staff { background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-gold-600)); color: var(--mc-rind-700); }
-    .msg-thread-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--mc-space-2); }
-    .msg-thread-from { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); }
-    .msg-thread-time { font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted); white-space: nowrap; }
-    .msg-thread-subject { font-size: var(--mc-fs-sm); line-height: var(--mc-lh-snug); margin: 2px 0; }
-    .msg-thread-preview { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .msg-thread.unread .msg-thread-subject, .msg-thread.unread .msg-thread-from { font-weight: var(--mc-fw-bold); }
+    .sm-room { padding: var(--mc-space-4); border-bottom: 1px solid var(--mc-border-subtle); cursor: pointer; transition: background var(--mc-dur-fast); display: grid; grid-template-columns: 40px 1fr; gap: var(--mc-space-3); align-items: start; }
+    .sm-room:hover { background: var(--mc-bg-surface); }
+    .sm-room.active { background: var(--mc-bg-surface); border-left: 3px solid var(--mc-gold-500); padding-left: calc(var(--mc-space-4) - 3px); }
+    .sm-room-icon { width: 40px; height: 40px; border-radius: var(--mc-radius-md); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); flex-shrink: 0; }
+    .sm-room-icon.committee { background: linear-gradient(135deg, var(--mc-rind-400), var(--mc-rind-600)); }
+    .sm-room-icon.board { background: linear-gradient(135deg, var(--mc-rind-700), var(--mc-ink-500)); }
+    .sm-room-icon.sponsor { background: linear-gradient(135deg, var(--mc-gold-500), var(--mc-oak-500)); color: var(--mc-rind-700); }
+    .sm-room-icon.direct { background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-sage-600)); }
+    .sm-room-icon.finance { background: linear-gradient(135deg, var(--mc-oak-500), var(--mc-rind-700)); }
 
-    .msg-view { display: flex; flex-direction: column; background: var(--mc-bg-surface); }
-    .msg-view-head { padding: var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); }
-    .msg-view-subject { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); margin: 0 0 var(--mc-space-3); }
-    .msg-view-tags { display: flex; gap: var(--mc-space-2); flex-wrap: wrap; }
-    .msg-view-tag { padding: 2px 8px; background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-rind-500); }
-    .msg-view-tag.deadline { background: rgba(160,46,33,0.12); color: var(--mc-error); }
-    .msg-view-tag.secure { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .sm-room-top { display: flex; justify-content: space-between; align-items: baseline; gap: var(--mc-space-2); }
+    .sm-room-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); line-height: 1.2; }
+    .sm-room-time { font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted); white-space: nowrap; flex-shrink: 0; }
+    .sm-room-preview { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); margin-top: 4px; line-height: 1.4; }
+    .sm-room-tags { display: flex; gap: var(--mc-space-2); margin-top: 6px; flex-wrap: wrap; }
+    .sm-room-tag { padding: 1px 6px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 9px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; font-weight: var(--mc-fw-semi); }
+    .sm-room-tag.locked { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .sm-room-tag.unread { background: var(--mc-rind-500); color: var(--mc-cream); }
+    .sm-room-tag.files { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+    .sm-room-tag.expire { background: rgba(160,46,33,0.12); color: var(--mc-error); }
 
-    .msg-view-body { flex: 1; overflow-y: auto; padding: var(--mc-space-5); background: var(--mc-bg-surface-warm); }
-    .msg-bubble { display: flex; gap: var(--mc-space-3); margin-bottom: var(--mc-space-5); align-items: flex-start; }
-    .msg-bubble-avatar { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); flex-shrink: 0; display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-xs); }
-    .msg-bubble-avatar.staff { background: linear-gradient(135deg, var(--mc-gold-400), var(--mc-gold-600)); color: var(--mc-rind-700); }
-    .msg-bubble-avatar.you { background: linear-gradient(135deg, var(--mc-rind-400), var(--mc-rind-600)); }
-    .msg-bubble-body { flex: 1; }
-    .msg-bubble-from { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); display: flex; gap: var(--mc-space-3); align-items: baseline; }
-    .msg-bubble-from time { font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted); letter-spacing: var(--mc-ls-wide); font-weight: var(--mc-fw-regular); text-transform: uppercase; }
-    .msg-bubble-text { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); padding: var(--mc-space-4); border-radius: var(--mc-radius-md); margin-top: var(--mc-space-2); font-size: var(--mc-fs-sm); line-height: var(--mc-lh-relaxed); }
-    .msg-bubble.you .msg-bubble-text { background: var(--mc-rind-500); color: var(--mc-cream); border-color: var(--mc-rind-600); }
-    .msg-attach { display: inline-flex; align-items: center; gap: var(--mc-space-2); padding: var(--mc-space-2) var(--mc-space-3); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-xs); margin-top: var(--mc-space-3); color: var(--mc-rind-500); }
+    /* ROOM VIEW */
+    .sm-view { display: flex; flex-direction: column; background: var(--mc-bg-surface); overflow: hidden; }
 
-    .msg-compose { padding: var(--mc-space-4); border-top: 1px solid var(--mc-border-subtle); background: var(--mc-bg-surface); }
-    .msg-compose-input { width: 100%; min-height: 80px; padding: var(--mc-space-3); border: 1px solid var(--mc-border-default); border-radius: var(--mc-radius-md); resize: vertical; font: inherit; font-size: var(--mc-fs-sm); }
-    .msg-compose-actions { display: flex; justify-content: space-between; align-items: center; margin-top: var(--mc-space-3); }
-    .msg-compose-tools { display: flex; gap: var(--mc-space-2); }
-    .msg-compose-tool { width: 36px; height: 36px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-text-secondary); display: grid; place-items: center; transition: all var(--mc-dur-fast); }
-    .msg-compose-tool:hover { background: var(--mc-gold-100); color: var(--mc-rind-500); }
+    /* room header */
+    .sm-room-header { padding: var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); display: flex; gap: var(--mc-space-4); align-items: center; }
+    .sm-room-header-icon { width: 44px; height: 44px; border-radius: var(--mc-radius-md); background: linear-gradient(135deg, var(--mc-rind-400), var(--mc-rind-600)); color: var(--mc-cream); display: grid; place-items: center; font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-base); flex-shrink: 0; }
+    .sm-room-header-title { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); font-weight: var(--mc-fw-semi); margin: 0; line-height: 1.1; }
+    .sm-room-header-meta { display: flex; gap: var(--mc-space-3); margin-top: var(--mc-space-2); align-items: center; flex-wrap: wrap; }
+    .sm-room-header-pill { display: inline-flex; align-items: center; gap: var(--mc-space-2); padding: 3px 8px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; font-weight: var(--mc-fw-semi); }
+    .sm-room-header-pill.lock { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .sm-room-header-pill.confidential { background: var(--mc-rind-500); color: var(--mc-cream); }
+    .sm-room-header-pill.retention { background: var(--mc-bg-surface-warm); color: var(--mc-text-secondary); }
+    .sm-room-header-pill.compliance { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+
+    .sm-room-header-side { margin-left: auto; display: flex; gap: var(--mc-space-2); }
+    .sm-icon-btn { width: 36px; height: 36px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-text-secondary); display: grid; place-items: center; transition: all var(--mc-dur-fast); }
+    .sm-icon-btn:hover { background: var(--mc-gold-100); color: var(--mc-rind-500); }
+
+    /* room tabs */
+    .sm-tabs { display: flex; gap: var(--mc-space-1); padding: 0 var(--mc-space-5); border-bottom: 1px solid var(--mc-border-subtle); background: var(--mc-bg-surface); }
+    .sm-tab { padding: var(--mc-space-3) var(--mc-space-4); font-size: var(--mc-fs-sm); font-weight: var(--mc-fw-medium); color: var(--mc-text-secondary); border-bottom: 2px solid transparent; transition: all var(--mc-dur-fast); display: flex; align-items: center; gap: var(--mc-space-2); }
+    .sm-tab.active { color: var(--mc-rind-500); border-bottom-color: var(--mc-gold-500); }
+    .sm-tab-count { padding: 1px 7px; background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted); }
+    .sm-tab.active .sm-tab-count { background: var(--mc-rind-500); color: var(--mc-cream); }
+
+    .sm-room-body { flex: 1; overflow-y: auto; background: var(--mc-bg-surface-warm); padding: var(--mc-space-5); }
+
+    /* Files tab content (default active) */
+    .sm-files-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--mc-space-5); }
+    .sm-files-head h3 { margin: 0; font-size: var(--mc-fs-base); font-family: var(--mc-font-display); }
+    .sm-files-head-stats { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+    .sm-files-actions { display: flex; gap: var(--mc-space-2); }
+
+    .sm-file { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-md); padding: var(--mc-space-4); margin-bottom: var(--mc-space-3); transition: all var(--mc-dur-fast); }
+    .sm-file:hover { border-color: var(--mc-gold-300); box-shadow: var(--mc-shadow-sm); }
+    .sm-file-top { display: grid; grid-template-columns: 48px 1fr auto; gap: var(--mc-space-4); align-items: center; }
+    .sm-file-icon { width: 44px; height: 44px; border-radius: var(--mc-radius-md); background: var(--mc-rind-500); color: var(--mc-cream); display: grid; place-items: center; font-size: 1.1rem; }
+    .sm-file-icon.pdf { background: linear-gradient(135deg, #c4302b, #842220); }
+    .sm-file-icon.xls { background: linear-gradient(135deg, #1f7244, #145232); }
+    .sm-file-icon.doc { background: linear-gradient(135deg, #2858a8, #1a3d75); }
+    .sm-file-icon.img { background: linear-gradient(135deg, var(--mc-gold-500), var(--mc-oak-500)); color: var(--mc-rind-700); }
+    .sm-file-icon.zip { background: linear-gradient(135deg, var(--mc-oak-500), var(--mc-oak-700)); }
+    .sm-file-name { font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm); display: flex; align-items: center; gap: var(--mc-space-2); }
+    .sm-file-name i { color: var(--mc-sage-500); }
+    .sm-file-meta { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-top: 2px; }
+    .sm-file-actions { display: flex; gap: var(--mc-space-2); align-items: center; }
+    .sm-file-action { width: 32px; height: 32px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-text-secondary); display: grid; place-items: center; transition: all var(--mc-dur-fast); font-size: var(--mc-fs-xs); }
+    .sm-file-action:hover { background: var(--mc-gold-100); color: var(--mc-rind-500); }
+
+    .sm-file-policy { display: flex; flex-wrap: wrap; gap: var(--mc-space-2); margin-top: var(--mc-space-3); padding-top: var(--mc-space-3); border-top: 1px solid var(--mc-border-subtle); }
+    .sm-policy-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; font-weight: var(--mc-fw-semi); }
+    .sm-policy-pill.view-only { background: var(--mc-ink-100); color: var(--mc-ink-400); }
+    .sm-policy-pill.no-download { background: rgba(160,46,33,0.12); color: var(--mc-error); }
+    .sm-policy-pill.watermark { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+    .sm-policy-pill.expires { background: rgba(196,121,20,0.15); color: var(--mc-warning); }
+    .sm-policy-pill.locked { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .sm-policy-pill.signed { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+
+    .sm-file-receipts { margin-top: var(--mc-space-3); padding-top: var(--mc-space-3); border-top: 1px solid var(--mc-border-subtle); }
+    .sm-receipts-label { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-2); display: flex; gap: var(--mc-space-2); align-items: center; }
+    .sm-receipt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px; }
+    .sm-receipt { display: grid; grid-template-columns: 24px 1fr auto; gap: var(--mc-space-2); align-items: center; padding: 4px 0; font-size: var(--mc-fs-xs); }
+    .sm-receipt-avatar { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: 9px; }
+    .sm-receipt-name { color: var(--mc-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sm-receipt-status { font-family: var(--mc-font-mono); font-size: 9px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; padding: 1px 5px; border-radius: var(--mc-radius-pill); font-weight: var(--mc-fw-semi); flex-shrink: 0; }
+    .sm-receipt-status.read { background: var(--mc-sage-100); color: var(--mc-sage-700); }
+    .sm-receipt-status.unread { background: var(--mc-ink-100); color: var(--mc-ink-400); }
+    .sm-receipt-status.downloaded { background: var(--mc-gold-100); color: var(--mc-gold-700); }
+
+    /* Messages tab (lighter, paired with file events inline) */
+    .sm-msg-stream { display: flex; flex-direction: column; gap: var(--mc-space-4); }
+    .sm-msg { display: grid; grid-template-columns: 36px 1fr; gap: var(--mc-space-3); }
+    .sm-msg.you { grid-template-columns: 1fr 36px; }
+    .sm-msg.you .sm-msg-body { order: 1; text-align: right; }
+    .sm-msg.you .sm-msg-avatar { order: 2; }
+    .sm-msg-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-sage-400), var(--mc-oak-500)); color: var(--mc-cream); display: grid; place-items: center; font-family: var(--mc-font-display); font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-xs); }
+    .sm-msg-from { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); margin-bottom: var(--mc-space-2); }
+    .sm-msg-bubble { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); padding: var(--mc-space-3) var(--mc-space-4); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-sm); line-height: var(--mc-lh-relaxed); }
+    .sm-msg.you .sm-msg-bubble { background: var(--mc-rind-500); color: var(--mc-cream); border-color: var(--mc-rind-600); text-align: left; display: inline-block; }
+    .sm-event { padding: var(--mc-space-2) var(--mc-space-3); background: var(--mc-bg-surface); border: 1px dashed var(--mc-border-default); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-xs); color: var(--mc-text-muted); font-family: var(--mc-font-mono); letter-spacing: var(--mc-ls-wide); text-align: center; }
+    .sm-event strong { color: var(--mc-text-primary); }
+
+    /* Activity tab */
+    .sm-activity { display: grid; gap: var(--mc-space-2); }
+    .sm-act { display: grid; grid-template-columns: 100px 32px 1fr auto; gap: var(--mc-space-3); padding: var(--mc-space-3); background: var(--mc-bg-surface); border-radius: var(--mc-radius-md); align-items: center; font-size: var(--mc-fs-sm); }
+    .sm-act-time { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-muted); }
+    .sm-act-icon { width: 28px; height: 28px; border-radius: var(--mc-radius-md); background: var(--mc-bg-surface-warm); color: var(--mc-rind-500); display: grid; place-items: center; }
+    .sm-act-icon.access { color: var(--mc-sage-500); }
+    .sm-act-icon.upload { color: var(--mc-gold-700); }
+    .sm-act-icon.member { color: var(--mc-rind-500); }
+    .sm-act-icon.policy { color: var(--mc-warning); }
+    .sm-act-detail { font-size: var(--mc-fs-xs); color: var(--mc-text-muted); }
+
+    /* Compose footer */
+    .sm-compose { padding: var(--mc-space-4) var(--mc-space-5); border-top: 1px solid var(--mc-border-subtle); background: var(--mc-bg-surface); }
+    .sm-compose-input { width: 100%; min-height: 60px; padding: var(--mc-space-3); border: 1px solid var(--mc-border-default); border-radius: var(--mc-radius-md); resize: vertical; font: inherit; font-size: var(--mc-fs-sm); }
+    .sm-compose-bar { display: flex; justify-content: space-between; align-items: center; margin-top: var(--mc-space-3); }
+    .sm-compose-tools { display: flex; gap: var(--mc-space-2); }
+    .sm-compose-info { font-family: var(--mc-font-mono); font-size: 10px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-sage-700); display: flex; align-items: center; gap: var(--mc-space-2); }
   </style>
 </head>
 <body>
@@ -81,10 +169,10 @@
   </header>
 
   <main id="main">
-    <div class="msg-shell">
-      <!-- LEFT: portal nav -->
-      <aside class="msg-portal-side">
-        <div class="msg-portal-side-head">
+    <div class="sm-shell">
+      <!-- LEFT: Portal nav -->
+      <aside class="sm-portal">
+        <div class="sm-portal-head">
           <div class="portal-avatar">ER</div>
           <div>
             <div style="font-weight: var(--mc-fw-semi); font-size: var(--mc-fs-sm);">Elena Rodriguez</div>
@@ -92,165 +180,309 @@
           </div>
         </div>
         <div class="portal-nav-label">Dashboard</div>
-        <nav class="portal-nav" style="display: flex; flex-direction: column; gap: 2px;">
+        <nav>
           <a href="portal.html"><i class="fa-solid fa-house"></i> Overview</a>
           <a href="#"><i class="fa-solid fa-id-card"></i> Membership</a>
           <a href="#"><i class="fa-solid fa-graduation-cap"></i> Certifications</a>
-          <a href="#"><i class="fa-solid fa-book-open"></i> Courses</a>
           <a href="#"><i class="fa-solid fa-calendar"></i> My events</a>
-          <a href="messaging.html" class="active"><i class="fa-solid fa-envelope"></i> Messages <span style="margin-left: auto; padding: 1px 7px; background: rgba(255,255,255,0.15); border-radius: var(--mc-radius-pill); font-size: 10px; font-family: var(--mc-font-mono);">7</span></a>
+          <a href="messaging.html" class="active"><i class="fa-solid fa-shield-halved"></i> Secure messaging <span style="margin-left: auto; padding: 1px 7px; background: rgba(255,255,255,0.15); border-radius: var(--mc-radius-pill); font-size: 10px; font-family: var(--mc-font-mono);">5</span></a>
         </nav>
         <div class="portal-nav-label">Engagement</div>
-        <nav class="portal-nav" style="display: flex; flex-direction: column; gap: 2px;">
-          <a href="#"><i class="fa-solid fa-people-group"></i> Committees</a>
-          <a href="#"><i class="fa-solid fa-comments"></i> Forum activity</a>
+        <nav>
+          <a href="committees.html"><i class="fa-solid fa-people-group"></i> Committees</a>
+          <a href="community.html"><i class="fa-solid fa-comments"></i> Forum</a>
         </nav>
-      </aside>
-
-      <!-- MIDDLE: thread list -->
-      <aside class="msg-thread-list">
-        <div class="msg-thread-list-head">
-          <h2>Inbox</h2>
-          <div class="msg-filter-tabs">
-            <a href="#" class="msg-filter active">All</a>
-            <a href="#" class="msg-filter">Unread (7)</a>
-            <a href="#" class="msg-filter">Committee</a>
-            <a href="#" class="msg-filter">Direct</a>
-            <a href="#" class="msg-filter">Sent</a>
-          </div>
-        </div>
-
-        <div class="msg-thread unread active">
-          <div class="msg-thread-avatar committee">SC</div>
-          <div>
-            <div class="msg-thread-top"><span class="msg-thread-from">Standards Committee</span><span class="msg-thread-time">2h ago</span></div>
-            <div class="msg-thread-subject">Voting deadline reminder — 7 items on the Annual Plenary agenda</div>
-            <div class="msg-thread-preview">Elena, this is your final reminder before the August 30 voting deadline. As a Producer-tier voting member you have a stake in items 3 (labeling), 5 (raw-milk EU), and 7 (apprentice qualification…</div>
-          </div>
-        </div>
-
-        <div class="msg-thread unread">
-          <div class="msg-thread-avatar">MT</div>
-          <div>
-            <div class="msg-thread-top"><span class="msg-thread-from">Marcel Touraine</span><span class="msg-thread-time">Yesterday</span></div>
-            <div class="msg-thread-subject">re: B. linens backslops thread — let's take this offline?</div>
-            <div class="msg-thread-preview">Elena, your post in the forum is exactly the kind of conversation that would benefit from a longer-form exchange. I'm bringing a few backslop samples to Annecy in October — would you…</div>
-          </div>
-        </div>
-
-        <div class="msg-thread unread">
-          <div class="msg-thread-avatar staff">JW</div>
-          <div>
-            <div class="msg-thread-top"><span class="msg-thread-from">Jamie Wu · Education Cmte</span><span class="msg-thread-time">2 days ago</span></div>
-            <div class="msg-thread-subject">Master mentee match — would you mentor Sam Petersen?</div>
-            <div class="msg-thread-preview">Elena, the Education Committee is matching Master Cheesemakers with this year's Apprentice cohort. Sam Petersen (Pacific Northwest, washed-rind focus, already showed strong sensory aptitude…</div>
-          </div>
-        </div>
-
-        <div class="msg-thread unread">
-          <div class="msg-thread-avatar committee">AC</div>
-          <div>
-            <div class="msg-thread-top"><span class="msg-thread-from">Advocacy Committee</span><span class="msg-thread-time">3 days ago</span></div>
-            <div class="msg-thread-subject">FDA labeling docket open for member comment — pre-filled draft attached</div>
-            <div class="msg-thread-preview">Producers in the PNW chapter: the FDA dairy labeling docket (FDA-2026-N-0418) is open for individual member comments through August 30. We've prepared a pre-filled template you can…</div>
-          </div>
-        </div>
-
-        <div class="msg-thread">
-          <div class="msg-thread-avatar staff">MK</div>
-          <div>
-            <div class="msg-thread-top"><span class="msg-thread-from">Membership Services</span><span class="msg-thread-time">1 wk ago</span></div>
-            <div class="msg-thread-subject">Renewal coming up — anything you want changed?</div>
-            <div class="msg-thread-preview">Your Producer-tier renewal is August 13. Same card on file, same chapter, same auto-renew setting. If you want to change anything…</div>
-          </div>
-        </div>
-
-        <div class="msg-thread">
-          <div class="msg-thread-avatar">TW</div>
-          <div>
-            <div class="msg-thread-top"><span class="msg-thread-from">Tom Whitaker</span><span class="msg-thread-time">2 wk ago</span></div>
-            <div class="msg-thread-subject">re: HACCP scaling thread — quick coffee at the Annual?</div>
-            <div class="msg-thread-preview">Elena, your reply on my forum thread was the most useful response I got. Want to grab coffee on Day 2 of the Annual and walk me through the specific FDA Tier 2 documentation you used…</div>
-          </div>
-        </div>
-
-        <div class="msg-thread">
-          <div class="msg-thread-avatar committee">PC</div>
-          <div>
-            <div class="msg-thread-top"><span class="msg-thread-from">Pacific NW Chapter</span><span class="msg-thread-time">3 wk ago</span></div>
-            <div class="msg-thread-subject">July 19 quarterly — you're on the agenda</div>
-            <div class="msg-thread-preview">Confirming you'll lead the morning working session on washed-rind humidity control. Room booked, 32 RSVPs so far, board is excited…</div>
-          </div>
+        <div class="portal-nav-label">Compliance</div>
+        <div style="padding: var(--mc-space-3); background: var(--mc-sage-100); border-radius: var(--mc-radius-md); font-size: var(--mc-fs-xs); color: var(--mc-sage-700); display: flex; gap: var(--mc-space-2); align-items: center; line-height: var(--mc-lh-relaxed);">
+          <i class="fa-solid fa-shield-halved" style="font-size: 1rem;"></i>
+          <span>End-to-end encrypted via <strong>Caliber Vault</strong>. SOC 2 Type II · GDPR · HIPAA-ready.</span>
         </div>
       </aside>
 
-      <!-- RIGHT: active thread view -->
-      <section class="msg-view">
-        <header class="msg-view-head">
-          <h2 class="msg-view-subject">Voting deadline reminder — 7 items on the Annual Plenary agenda</h2>
-          <div class="msg-view-tags">
-            <span class="msg-view-tag secure"><i class="fa-solid fa-lock"></i> End-to-end encrypted</span>
-            <span class="msg-view-tag">Standards Committee</span>
-            <span class="msg-view-tag">Producer-tier broadcast</span>
-            <span class="msg-view-tag deadline">Deadline · Aug 30</span>
+      <!-- MIDDLE: Secure rooms list -->
+      <aside class="sm-rooms">
+        <div class="sm-rooms-head">
+          <div class="sm-rooms-head-top">
+            <h2><i class="fa-solid fa-shield-halved" style="color: var(--mc-sage-500); margin-right: 6px;"></i>Secure rooms</h2>
+            <button class="sm-new-room" aria-label="New room"><i class="fa-solid fa-plus"></i></button>
+          </div>
+          <input class="sm-search" type="search" placeholder="Search rooms, files, people…" />
+          <div class="sm-room-filters">
+            <button class="sm-room-filter active">All</button>
+            <button class="sm-room-filter">Unread (5)</button>
+            <button class="sm-room-filter">Pinned</button>
+            <button class="sm-room-filter">Files</button>
+            <button class="sm-room-filter">External</button>
+          </div>
+        </div>
+
+        <div class="sm-room active">
+          <div class="sm-room-icon committee">SC</div>
+          <div>
+            <div class="sm-room-top"><span class="sm-room-name">Standards Cmte — FDA Position v4</span><span class="sm-room-time">2h ago</span></div>
+            <div class="sm-room-preview">Robert: Draft v4 attached for final review before Annual Plenary. Three new redlines on §4.2 pasteurization language…</div>
+            <div class="sm-room-tags"><span class="sm-room-tag locked"><i class="fa-solid fa-lock" style="font-size: 8px;"></i> E2EE</span><span class="sm-room-tag files">4 files</span><span class="sm-room-tag unread">3 new</span></div>
+          </div>
+        </div>
+
+        <div class="sm-room">
+          <div class="sm-room-icon board">BD</div>
+          <div>
+            <div class="sm-room-top"><span class="sm-room-name">Board Q3 Materials</span><span class="sm-room-time">Yesterday</span></div>
+            <div class="sm-room-preview">CFO Robert Kihm shared: Q3_Financial_Review.pdf · 990_Draft_2025.pdf · Annual_Operating_Plan_Draft.xlsx (NDA)</div>
+            <div class="sm-room-tags"><span class="sm-room-tag locked"><i class="fa-solid fa-lock" style="font-size: 8px;"></i> E2EE</span><span class="sm-room-tag files">7 files</span><span class="sm-room-tag expire">Expires 7d</span></div>
+          </div>
+        </div>
+
+        <div class="sm-room">
+          <div class="sm-room-icon sponsor">SP</div>
+          <div>
+            <div class="sm-room-top"><span class="sm-room-name">Sponsor — Whole Foods 2027 Agreement</span><span class="sm-room-time">2 days ago</span></div>
+            <div class="sm-room-preview">External: Sarah Chen (Whole Foods Legal). Counter-signed sponsorship agreement attached. Watermark applied.</div>
+            <div class="sm-room-tags"><span class="sm-room-tag locked"><i class="fa-solid fa-lock" style="font-size: 8px;"></i> E2EE</span><span class="sm-room-tag files">3 files</span><span class="sm-room-tag unread">1 new</span></div>
+          </div>
+        </div>
+
+        <div class="sm-room">
+          <div class="sm-room-icon committee">AC</div>
+          <div>
+            <div class="sm-room-top"><span class="sm-room-name">Advocacy Cmte — Amicus Brief</span><span class="sm-room-time">4 days ago</span></div>
+            <div class="sm-room-preview">Wilmer Hale (outside counsel): Final amicus brief for VT raw-milk preemption case. Sealed until court entry.</div>
+            <div class="sm-room-tags"><span class="sm-room-tag locked"><i class="fa-solid fa-lock" style="font-size: 8px;"></i> E2EE</span><span class="sm-room-tag files">2 files</span></div>
+          </div>
+        </div>
+
+        <div class="sm-room">
+          <div class="sm-room-icon finance">FN</div>
+          <div>
+            <div class="sm-room-top"><span class="sm-room-name">Auditor — 2025 Annual Audit Workpapers</span><span class="sm-room-time">1 wk ago</span></div>
+            <div class="sm-room-preview">External: PwC audit team. Workpapers, GL trial balance, supporting docs for 990 prep.</div>
+            <div class="sm-room-tags"><span class="sm-room-tag locked"><i class="fa-solid fa-lock" style="font-size: 8px;"></i> E2EE</span><span class="sm-room-tag files">23 files</span><span class="sm-room-tag unread">1 new</span></div>
+          </div>
+        </div>
+
+        <div class="sm-room">
+          <div class="sm-room-icon direct">MT</div>
+          <div>
+            <div class="sm-room-top"><span class="sm-room-name">Marcel Touraine · 1:1</span><span class="sm-room-time">1 wk ago</span></div>
+            <div class="sm-room-preview">Direct: B. linens backslop samples — let me ship some over before Annecy.</div>
+            <div class="sm-room-tags"><span class="sm-room-tag locked"><i class="fa-solid fa-lock" style="font-size: 8px;"></i> E2EE</span></div>
+          </div>
+        </div>
+
+        <div class="sm-room">
+          <div class="sm-room-icon committee">EC</div>
+          <div>
+            <div class="sm-room-top"><span class="sm-room-name">Education Cmte — Mentee Match</span><span class="sm-room-time">2 wks ago</span></div>
+            <div class="sm-room-preview">Jamie Wu: Sam Petersen's application, transcripts, and mentor preferences. NDA file attached.</div>
+            <div class="sm-room-tags"><span class="sm-room-tag locked"><i class="fa-solid fa-lock" style="font-size: 8px;"></i> E2EE</span><span class="sm-room-tag files">3 files</span><span class="sm-room-tag unread">1 new</span></div>
+          </div>
+        </div>
+
+      </aside>
+
+      <!-- RIGHT: Active room -->
+      <section class="sm-view">
+        <header class="sm-room-header">
+          <div class="sm-room-header-icon">SC</div>
+          <div>
+            <h1 class="sm-room-header-title">Standards Cmte — FDA Position v4</h1>
+            <div class="sm-room-header-meta">
+              <span class="sm-room-header-pill lock"><i class="fa-solid fa-lock"></i> End-to-end encrypted</span>
+              <span class="sm-room-header-pill confidential">Confidential — Producer NDA</span>
+              <span class="sm-room-header-pill retention"><i class="fa-solid fa-clock-rotate-left"></i> Retention 90d post-decision</span>
+              <span class="sm-room-header-pill compliance">SOC 2 · GDPR</span>
+              <span style="color: var(--mc-text-muted); font-size: var(--mc-fs-xs);">·</span>
+              <span style="font-size: var(--mc-fs-xs); color: var(--mc-text-secondary);"><strong>9 participants</strong> · 4 files · last activity 2h ago</span>
+            </div>
+          </div>
+          <div class="sm-room-header-side">
+            <button class="sm-icon-btn" title="Add participants"><i class="fa-solid fa-user-plus"></i></button>
+            <button class="sm-icon-btn" title="Room settings"><i class="fa-solid fa-gear"></i></button>
+            <button class="sm-icon-btn" title="Export audit log"><i class="fa-solid fa-file-export"></i></button>
+            <button class="sm-icon-btn" title="More"><i class="fa-solid fa-ellipsis"></i></button>
           </div>
         </header>
 
-        <div class="msg-view-body">
-          <article class="msg-bubble">
-            <div class="msg-bubble-avatar staff">SC</div>
-            <div class="msg-bubble-body">
-              <div class="msg-bubble-from">Standards Committee <time>Jun 27 · 11:42 AM</time></div>
-              <div class="msg-bubble-text">
-                <p style="margin-top: 0;">Elena,</p>
-                <p>This is your final reminder before the August 30 voting deadline on the 7 items on the Annual Plenary agenda. As a Producer-tier voting member you have a stake in:</p>
-                <ul style="padding-left: 1.5em; line-height: var(--mc-lh-relaxed);">
-                  <li><strong>Item 3</strong> — Labeling working-group draft #4 (Robert Kihm chairs)</li>
-                  <li><strong>Item 5</strong> — EU raw-milk carve-out position (member ratification required)</li>
-                  <li><strong>Item 7</strong> — Apprentice qualification revisions (Education Committee)</li>
-                </ul>
-                <p>The full agenda and draft texts are in the attached document. The voting portal opens at 12:00 PT on August 26.</p>
-                <p>Thanks for your engagement, as always.</p>
-                <p>— Robert Kihm, Standards Committee Chair</p>
-                <a class="msg-attach"><i class="fa-solid fa-file-pdf"></i> Annual_Plenary_Agenda_2026.pdf · 1.2MB</a>
-                <a class="msg-attach" style="margin-left: var(--mc-space-2);"><i class="fa-solid fa-file-lines"></i> Item_3_Labeling_Draft_v4.pdf · 380KB</a>
+        <!-- TAB STRIP -->
+        <nav class="sm-tabs" aria-label="Room sections">
+          <a href="#" class="sm-tab active"><i class="fa-solid fa-folder"></i> Files <span class="sm-tab-count">4</span></a>
+          <a href="#" class="sm-tab"><i class="fa-solid fa-message"></i> Messages <span class="sm-tab-count">23</span></a>
+          <a href="#" class="sm-tab"><i class="fa-solid fa-list-check"></i> Activity <span class="sm-tab-count">142</span></a>
+          <a href="#" class="sm-tab"><i class="fa-solid fa-users"></i> Participants <span class="sm-tab-count">9</span></a>
+          <a href="#" class="sm-tab"><i class="fa-solid fa-shield"></i> Permissions</a>
+        </nav>
+
+        <!-- BODY: Files tab (active) -->
+        <div class="sm-room-body">
+          <div class="sm-files-head">
+            <h3>Files in this room</h3>
+            <span class="sm-files-head-stats">4 files · 2.4 MB total · 9 recipients · all share E2EE</span>
+            <div class="sm-files-actions">
+              <button class="btn btn-secondary btn-sm"><i class="fa-solid fa-arrow-down-wide-short"></i> Sort</button>
+              <button class="btn btn-rind btn-sm"><i class="fa-solid fa-cloud-arrow-up"></i> Upload</button>
+            </div>
+          </div>
+
+          <!-- FILE 1 -->
+          <article class="sm-file">
+            <div class="sm-file-top">
+              <div class="sm-file-icon pdf"><i class="fa-solid fa-file-pdf"></i></div>
+              <div>
+                <div class="sm-file-name">Labeling_Draft_v4.pdf <i class="fa-solid fa-lock" title="End-to-end encrypted"></i></div>
+                <div class="sm-file-meta">380 KB · uploaded by Robert Kihm · 2h ago · v4 of 4 revisions</div>
+              </div>
+              <div class="sm-file-actions">
+                <button class="sm-file-action" title="Preview"><i class="fa-solid fa-eye"></i></button>
+                <button class="sm-file-action" title="Download — watermarked"><i class="fa-solid fa-download"></i></button>
+                <button class="sm-file-action" title="Version history"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                <button class="sm-file-action" title="More"><i class="fa-solid fa-ellipsis"></i></button>
+              </div>
+            </div>
+            <div class="sm-file-policy">
+              <span class="sm-policy-pill locked"><i class="fa-solid fa-lock"></i> E2E encrypted</span>
+              <span class="sm-policy-pill watermark"><i class="fa-solid fa-droplet"></i> Per-recipient watermark</span>
+              <span class="sm-policy-pill expires"><i class="fa-solid fa-hourglass-half"></i> Access expires Sep 22 (Plenary +1 day)</span>
+              <span class="sm-policy-pill view-only"><i class="fa-solid fa-eye"></i> Print disabled</span>
+            </div>
+            <div class="sm-file-receipts">
+              <div class="sm-receipts-label"><i class="fa-solid fa-circle-check" style="color: var(--mc-sage-500);"></i> 6 of 9 recipients have accessed</div>
+              <div class="sm-receipt-grid">
+                <div class="sm-receipt"><div class="sm-receipt-avatar">JN</div><span class="sm-receipt-name">Jean Naumann</span><span class="sm-receipt-status downloaded">DL 1h</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">SH</div><span class="sm-receipt-name">Sarah Henderson</span><span class="sm-receipt-status read">Read 30m</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">ER</div><span class="sm-receipt-name">Elena Rodriguez</span><span class="sm-receipt-status read">Read 12m</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">MT</div><span class="sm-receipt-name">Marcel Touraine</span><span class="sm-receipt-status read">Read 1h</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">JW</div><span class="sm-receipt-name">Jamie Wu</span><span class="sm-receipt-status downloaded">DL 25m</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">JH</div><span class="sm-receipt-name">John Huisman</span><span class="sm-receipt-status read">Read 8m</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">MC</div><span class="sm-receipt-name">Maria Castillo</span><span class="sm-receipt-status unread">Not yet</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">TW</div><span class="sm-receipt-name">Tom Whitaker</span><span class="sm-receipt-status unread">Not yet</span></div>
+                <div class="sm-receipt"><div class="sm-receipt-avatar">FDA</div><span class="sm-receipt-name">FDA Liaison</span><span class="sm-receipt-status unread">Not yet</span></div>
               </div>
             </div>
           </article>
 
-          <article class="msg-bubble you">
-            <div class="msg-bubble-avatar you">ER</div>
-            <div class="msg-bubble-body">
-              <div class="msg-bubble-from" style="color: var(--mc-text-primary);">You <time>Jun 27 · 1:15 PM</time></div>
-              <div class="msg-bubble-text">
-                <p style="margin-top: 0; margin-bottom: 0;">Got it Robert — I'll have my votes in by next Friday. Quick question on Item 5: does the EU carve-out position foreclose US-side parallel-track work, or is it intended to be the federation's only position in this domain?</p>
+          <!-- FILE 2 -->
+          <article class="sm-file">
+            <div class="sm-file-top">
+              <div class="sm-file-icon xls"><i class="fa-solid fa-file-excel"></i></div>
+              <div>
+                <div class="sm-file-name">FDA_Comment_Producer_Sign_Tracker.xlsx <i class="fa-solid fa-lock"></i></div>
+                <div class="sm-file-meta">82 KB · live document · 187 producers signed · edited 4h ago</div>
               </div>
+              <div class="sm-file-actions">
+                <button class="sm-file-action" title="Open in viewer"><i class="fa-solid fa-eye"></i></button>
+                <button class="sm-file-action" title="Download disabled" disabled style="opacity: 0.4;"><i class="fa-solid fa-download"></i></button>
+                <button class="sm-file-action" title="More"><i class="fa-solid fa-ellipsis"></i></button>
+              </div>
+            </div>
+            <div class="sm-file-policy">
+              <span class="sm-policy-pill locked"><i class="fa-solid fa-lock"></i> E2E encrypted</span>
+              <span class="sm-policy-pill no-download"><i class="fa-solid fa-ban"></i> Download disabled · view-in-browser only</span>
+              <span class="sm-policy-pill view-only"><i class="fa-solid fa-eye"></i> View-only</span>
+            </div>
+            <div class="sm-file-receipts">
+              <div class="sm-receipts-label"><i class="fa-solid fa-circle-check" style="color: var(--mc-sage-500);"></i> 8 of 9 recipients accessed · all view-only</div>
+              <div style="font-size: var(--mc-fs-xs); color: var(--mc-text-muted);">Last accessed by Maria Castillo · 14m ago · Web · Madison, WI</div>
             </div>
           </article>
 
-          <article class="msg-bubble">
-            <div class="msg-bubble-avatar staff">RK</div>
-            <div class="msg-bubble-body">
-              <div class="msg-bubble-from">Robert Kihm <time>Jun 27 · 1:48 PM</time></div>
-              <div class="msg-bubble-text">
-                <p style="margin-top: 0; margin-bottom: 0;">Great question. No — it's specifically scoped to the EU regulatory proposal. We retain full flexibility on US-side work. The Advocacy Committee is in early conversations about a parallel framework for US raw-milk aging requirements; I'll loop you in if you're interested.</p>
+          <!-- FILE 3 -->
+          <article class="sm-file">
+            <div class="sm-file-top">
+              <div class="sm-file-icon doc"><i class="fa-solid fa-file-lines"></i></div>
+              <div>
+                <div class="sm-file-name">2026-06-12_Minutes_FDA_Position.md <i class="fa-solid fa-lock"></i> <i class="fa-solid fa-circle-check" style="color: var(--mc-sage-500);" title="Approved"></i></div>
+                <div class="sm-file-meta">38 KB · approved minutes · published Jun 18 · attached to committee record</div>
+              </div>
+              <div class="sm-file-actions">
+                <button class="sm-file-action" title="Preview"><i class="fa-solid fa-eye"></i></button>
+                <button class="sm-file-action" title="Download"><i class="fa-solid fa-download"></i></button>
+                <button class="sm-file-action" title="Open in Committees app"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
               </div>
             </div>
+            <div class="sm-file-policy">
+              <span class="sm-policy-pill locked"><i class="fa-solid fa-lock"></i> E2E encrypted</span>
+              <span class="sm-policy-pill signed"><i class="fa-solid fa-signature"></i> Digitally signed</span>
+              <span class="sm-policy-pill" style="background: var(--mc-ink-100); color: var(--mc-ink-400);">Linked to Committees app</span>
+            </div>
           </article>
+
+          <!-- FILE 4 -->
+          <article class="sm-file">
+            <div class="sm-file-top">
+              <div class="sm-file-icon zip"><i class="fa-solid fa-file-zipper"></i></div>
+              <div>
+                <div class="sm-file-name">Reference_Citations_FDA_Bundle.zip <i class="fa-solid fa-lock"></i></div>
+                <div class="sm-file-meta">1.9 MB · 14 PDFs · uploaded by Sarah Henderson · 1d ago</div>
+              </div>
+              <div class="sm-file-actions">
+                <button class="sm-file-action" title="Preview contents"><i class="fa-solid fa-eye"></i></button>
+                <button class="sm-file-action" title="Download bundle"><i class="fa-solid fa-download"></i></button>
+                <button class="sm-file-action" title="More"><i class="fa-solid fa-ellipsis"></i></button>
+              </div>
+            </div>
+            <div class="sm-file-policy">
+              <span class="sm-policy-pill locked"><i class="fa-solid fa-lock"></i> E2E encrypted</span>
+              <span class="sm-policy-pill expires"><i class="fa-solid fa-hourglass-half"></i> Access expires Sep 22</span>
+            </div>
+          </article>
+
+          <!-- ACTIVITY snippet (preview of what Activity tab shows) -->
+          <div style="margin-top: var(--mc-space-7); padding-top: var(--mc-space-5); border-top: 1px solid var(--mc-border-default);">
+            <div class="sm-files-head">
+              <h3>Recent activity in this room</h3>
+              <a href="#" style="font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; color: var(--mc-text-link);">Full audit log →</a>
+            </div>
+            <div class="sm-activity">
+              <div class="sm-act">
+                <span class="sm-act-time">2h ago</span>
+                <div class="sm-act-icon upload"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                <div><strong>Robert Kihm</strong> uploaded <em>Labeling_Draft_v4.pdf</em><div class="sm-act-detail">v4 · supersedes v3 (auto-archived) · per-recipient watermark applied · access expires Sep 22</div></div>
+                <span style="font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted);">52.46.122.184 · Madison WI · Desktop</span>
+              </div>
+              <div class="sm-act">
+                <span class="sm-act-time">1h 53m</span>
+                <div class="sm-act-icon access"><i class="fa-solid fa-eye"></i></div>
+                <div><strong>Marcel Touraine</strong> opened <em>Labeling_Draft_v4.pdf</em><div class="sm-act-detail">Web viewer · 12 minutes engaged · scrolled to page 11 of 14</div></div>
+                <span style="font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted);">82.214.x.x · Pays de la Loire FR · Desktop</span>
+              </div>
+              <div class="sm-act">
+                <span class="sm-act-time">1h 11m</span>
+                <div class="sm-act-icon access"><i class="fa-solid fa-download"></i></div>
+                <div><strong>Jean Naumann</strong> downloaded <em>Labeling_Draft_v4.pdf</em> (watermarked)<div class="sm-act-detail">Watermark: jnaumann@beaufort-alpages.fr · 2026-06-27 14:11 UTC · IP recorded</div></div>
+                <span style="font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted);">194.158.x.x · Savoie FR · Mobile (iOS)</span>
+              </div>
+              <div class="sm-act">
+                <span class="sm-act-time">38m</span>
+                <div class="sm-act-icon member"><i class="fa-solid fa-user-plus"></i></div>
+                <div><strong>Robert Kihm</strong> added FDA Liaison to the room<div class="sm-act-detail">Permissions granted: view-only on this room. No file-download. Cannot invite others.</div></div>
+                <span style="font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted);">52.46.x.x · Madison WI · Desktop</span>
+              </div>
+              <div class="sm-act">
+                <span class="sm-act-time">12m</span>
+                <div class="sm-act-icon policy"><i class="fa-solid fa-shield"></i></div>
+                <div><strong>Policy update</strong>: Robert Kihm extended access expiration to Sep 22 (was Aug 30)<div class="sm-act-detail">Reason: post-Annual-Plenary review window · approved by Maria Castillo (chair authorization)</div></div>
+                <span style="font-family: var(--mc-font-mono); font-size: 10px; color: var(--mc-text-muted);">52.46.x.x · Madison WI · Desktop</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <footer class="msg-compose">
-          <textarea class="msg-compose-input" placeholder="Reply to Standards Committee…"></textarea>
-          <div class="msg-compose-actions">
-            <div class="msg-compose-tools">
-              <button class="msg-compose-tool" title="Attach"><i class="fa-solid fa-paperclip"></i></button>
-              <button class="msg-compose-tool" title="Mention"><i class="fa-solid fa-at"></i></button>
-              <button class="msg-compose-tool" title="Markdown"><i class="fa-solid fa-code"></i></button>
-              <button class="msg-compose-tool" title="Schedule send"><i class="fa-solid fa-clock"></i></button>
+        <!-- COMPOSE -->
+        <footer class="sm-compose">
+          <textarea class="sm-compose-input" placeholder="Reply with a message or drag files here to share securely…"></textarea>
+          <div class="sm-compose-bar">
+            <div class="sm-compose-tools">
+              <button class="sm-icon-btn" title="Attach file"><i class="fa-solid fa-paperclip"></i></button>
+              <button class="sm-icon-btn" title="Mention"><i class="fa-solid fa-at"></i></button>
+              <button class="sm-icon-btn" title="Markdown"><i class="fa-solid fa-code"></i></button>
+              <button class="sm-icon-btn" title="Schedule send"><i class="fa-solid fa-clock"></i></button>
+              <button class="sm-icon-btn" title="Set file expiration"><i class="fa-solid fa-hourglass-half"></i></button>
+              <button class="sm-icon-btn" title="Watermark settings"><i class="fa-solid fa-droplet"></i></button>
             </div>
-            <div class="flex gap-3">
-              <button class="btn btn-secondary btn-sm">Save draft</button>
-              <button class="btn btn-rind btn-sm">Send reply <i class="fa-solid fa-paper-plane"></i></button>
+            <div class="flex gap-3" style="align-items: center;">
+              <span class="sm-compose-info"><i class="fa-solid fa-lock"></i> Encrypted to 9 recipients via Caliber Vault</span>
+              <button class="btn btn-rind btn-sm">Send securely <i class="fa-solid fa-paper-plane"></i></button>
             </div>
           </div>
         </footer>

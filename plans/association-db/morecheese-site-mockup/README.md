@@ -33,15 +33,22 @@ The mockup reflects the **public-facing surface** of the redesigned morecheese.o
 | `advocacy.html` | 12 active positions panel, 5 detailed position cards across FDA / EU / US Congressional / CFIA / Codex with status pills + comment CTAs, recent 5-action timeline | ✅ |
 | `community.html` | Forum preview — 11-category sidebar, hot tags, pinned banner, 8 representative threads with reply counts | ✅ |
 | `portal.html` | Member portal (signed-in as Elena Rodriguez, Producer-tier) — side nav, KPI tiles, renewal nudge, Sonar engagement gauge w/ 6-signal breakdown, upcoming events, certifications in progress, recent messages, Betty contextual prompts | ✅ |
-| `messaging.html` | Secure messaging — 3-column (portal nav / 7-thread inbox with filters / active thread view with secure-tag chips + 3 bubble messages + compose footer) | ✅ |
+| `messaging.html` | **Secure messaging** (signed-in) — TitanFile / Cisco Secure Messaging-style surface. Mapped to `@memberjunction/bizapps-secure-messaging`. 3-column layout: portal nav / 7 secure-rooms list with E2EE + files + unread + expiration pills / active room with header (encryption / confidential / retention / compliance pills), tab strip (Files · Messages · Activity · Participants · Permissions), file-centric body with 4 detailed file cards showing per-recipient read receipts, watermark / view-only / no-download / expiration policies, and a 5-event audit-log preview (IP / geo / device / action recorded) | ✅ |
 | `betty-voice.html` | Standalone full-screen voice showcase — animated orb with pulse rings, status line, sourced-answer transcript, mic + side controls, 8 try-these prompts, technical footer explaining the Caliber stack | ✅ |
+| `committees.html` | **Committees** (public) — Mapped directly to the 14-table `@memberjunction/bizapps-committees` schema. Type-filter tabs (Board / Standing / Standards WG / Ad Hoc / Workgroup) and 10 committee cards covering all types. Deep-dive on Standards Committee: meetings (upcoming + past), recent motions & votes with tallies, open action items with owners + due dates, artifacts linked from SharePoint/Drive/Box/OneDrive, full roster with chair / vice chair / secretary / voting members / non-voting liaisons, "open seats — apply" CTA | ✅ |
 | `chapters.html` | The 15 chapters worldwide | ⏳ deferred |
-| `committees.html` | Public-facing committee information | ⏳ deferred |
 | `standards.html` | Standards library — published standards, drafts under review, plenary process | ⏳ deferred |
 | `resources.html` | Resource library — research, white papers, bundled Content Source PDFs | ⏳ deferred |
 | `contact.html` | Contact info, office locations, Betty as primary entry point | ⏳ deferred |
 
-12 pages shipped (the priority set). Remaining 5 are routine variations of patterns already established (especially `committees.html` and `chapters.html` which mirror the directory layout in `awards.html` judges + `about.html` board). They'll be added in a later iteration if needed.
+13 pages shipped, including the two BizApps surfaces (`committees.html` and `messaging.html`) built against the actual `@memberjunction/bizapps-committees` and `@memberjunction/bizapps-secure-messaging` open apps. Remaining 4 (chapters / standards / resources / contact) are routine variations of patterns already established and will be added in a later iteration if needed.
+
+### BizApps open-app fidelity
+
+| Mockup page | Open app modeled | Notes |
+|---|---|---|
+| `committees.html` | [@memberjunction/bizapps-committees](https://github.com/MemberJunction/bizapps-committees) | 14-table schema, 5 committee types, 7 roles, 9 artifact types — all reflected. Document-linking from SharePoint/Drive/Box/OneDrive shown. |
+| `messaging.html` | [@memberjunction/bizapps-secure-messaging](https://github.com/MemberJunction/bizapps-secure-messaging) | End-to-end encrypted messaging + secure file rooms, per-recipient read receipts, watermarking, expiration, audit trail, access policies (view-only / no-download / print-disabled). Repo is private — mockup based on stated repo description ("end-to-end encrypted messaging with read receipts") + product idiom from TitanFile / Cisco Secure Messaging. |
 
 ## Design language
 
