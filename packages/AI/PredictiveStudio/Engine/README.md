@@ -1,14 +1,14 @@
 # @memberjunction/predictive-studio
 
-> The **server-side engine** of **MemberJunction Predictive Studio** — assemble features, train models, score records, run experiment searches.
+> The **server-side engine** of **MemberJunction Predictive Studio** — assemble features, train models, score records, run experiment searches, keep models honest over time, and expose all of it through Actions + Remote Operations.
 
-**What** — the four engines that turn a client's data into a trained, scored predictive model: `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, and `ExperimentOrchestrator`.
+**What** — the engine that turns a client's own data into a trained, scored predictive model. Its core is four service classes — `FeatureAssemblyExecutor`, `TrainingEngine`, `MLModelInferenceProcessor`, `ExperimentOrchestrator` — surrounded by feature-pipeline discovery, ongoing maintenance, and two thin invocation surfaces (Actions and Remote Operations) so agents, UI, and workflows can drive it.
 
-**Why** — predictive modeling needs feature assembly, anti-skew correctness, honest validation, batch scoring, and a budgeted search. Each of those already has a home in MJ's substrate; this engine **composes onto** them (Record Set Processing, entities/`RunView`, Remote Operations, Agents, vectors) plus the Python ML sidecar — rather than re-implementing batching, audit, or inference.
+**Why** — predictive modeling needs feature assembly, anti-skew correctness, honest validation, batch scoring, and a budgeted search. Each of those already has a home in MJ's substrate; this engine **composes onto** them (Record Set Processing, entities/`RunView`, Remote Operations, Agents, vectors) plus the Python ML sidecar — rather than re-implementing batching, audit, or inference. The cardinal correctness rule: **one feature-assembly code path, used identically across train / materialize / on-demand**, so there is no train/serve skew by construction.
 
-**How it fits** — it sits above the [type contracts](../Core/README.md) and the [`MLSidecar` client](../Sidecar/README.md), and is consumed by the (planned) Remote Operations / Actions / Model Development Agent and the Studio dashboard. See [How it fits the whole](#how-it-fits-the-whole).
+**How it fits** — in the four-layer architecture (data → feature → model → inference) this package owns the **feature, model, and inference** layers in TypeScript, sitting above the [type contracts](../Core/README.md) and the [`MLSidecar` client](../Sidecar/README.md), and is consumed by the Studio dashboard, the (planned) Model Development Agent, and any agent/workflow via its Actions + Remote Operations. See [How it fits the whole](#how-it-fits-the-whole).
 
-For the full architecture, read the **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§4–§7 cover these engines); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
+For the full architecture, read the **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§4–§12 cover this package); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).
 
 ## Install
 
@@ -18,7 +18,7 @@ npm install @memberjunction/predictive-studio
 
 Depends on `@memberjunction/predictive-studio-core` (type contracts), `@memberjunction/predictive-studio-sidecar` (the `MLSidecar` client), `@memberjunction/record-set-processor-base` (the scoring work-type seam), and the MJ core/global/core-entities packages.
 
-## The four components
+## The four core engines
 
 | Component | Where | What it does |
 |---|---|---|
@@ -28,6 +28,30 @@ Depends on `@memberjunction/predictive-studio-core` (type contracts), `@memberju
 | **`ExperimentOrchestrator`** | `src/experiment/experiment-orchestrator.ts` | `runSession(plan, deps, options)` — deterministic execution of an *approved* `ModelingPlanSpec` as **waves through Record Set Processing**: generate wave (`IWaveStrategist`) → train (bounded concurrency) → evaluate → leaderboard → prune → budget-gate → next wave. Wires the generic `MJ: Experiments` / `Experiment Sessions` / `Experiment Session Iterations` primitives. |
 
 > The **`MLSidecar`** client (the self-managing Python sidecar) lives in its own package, [`@memberjunction/predictive-studio-sidecar`](../Sidecar/README.md) — import it directly from there; it is intentionally not re-exported here.
+
+## The supporting modules
+
+Beyond the four core engines, the package's `src/` is organized into focused folders, each its own barrel export:
+
+| Folder | Exports | Role | Plan ref |
+|---|---|---|---|
+| `feature-assembly/` | `FeatureAssemblyExecutor` + `as-of` / `leakage-guard` / `vision-llm` / `data-access` seams | The single skew-free assembly path and its correctness primitives (point-in-time cutoff, deny-list, vision-LLM-as-feature) | §5 / §6 / §11 |
+| `training/` | `TrainingEngine` + seams (`IEntityFactory` / `IRecordLoader` / `ISidecarTrainer` / `IArtifactStore`) + `artifact-store` | Train → persist an immutable, versioned `MJ: ML Models` row with full lineage | §3 / §4.3 |
+| `scoring/` | `MLModelInferenceProcessor`, `LoadMLModelInferenceProcessor`, the `'ML Model'` work-type `register`, `artifact-loader`, `scoring-binding` | Batch + single-record inference as a Record Set Processing **work type**, registered without forking the substrate | §10 |
+| `experiment/` | `ExperimentOrchestrator` + `leaderboard` / `concurrency` / `wave-strategist` / `seams` | Deterministic, wave-based execution of an approved `ModelingPlanSpec` with leaderboard, pruning, and a budget gate | §8 / §9 |
+| `feature-pipelines/` | `FeaturePipelineEngine` (a `BaseEngine` cache) + projection types | Discover/monitor Feature Pipelines (categorized `MJ: Record Processes` rows) — "what pipelines exist, what each writes to, when each last ran" | §5.4 / SP6 |
+| `maintenance/` | `MaintenanceEngine`, `RetrainingPolicy` + defaults, the honest `RowCountProxyDriftDetector`, seams | Staleness detection, scheduled re-scoring, retraining triggers, and challenger-vs-incumbent promotion recommendation | §12 / SP10 |
+| `actions/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunExperiment,PromoteModel}Action` + `LoadPredictiveStudioActions` | **Invocation surface A** — thin MJ Actions over the engines (see below) | §12 |
+| `operations/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunFeaturePipeline,StartExperimentSession,ControlExperimentSession,PromoteModel}ServerOperation` + `LoadPredictiveStudioOperations` | **Invocation surface B** — typed Remote Operations over the engines (see below) | §12 |
+
+## Two invocation surfaces: Actions vs. Remote Operations
+
+The engine service classes are the *real* logic; both surfaces are thin and **share one delegation path** (`operations/delegation.ts`), so they train / score / experiment / promote through the same code — never duplicating it.
+
+- **Actions** (`actions/`) — discoverable, metadata-driven boundaries for **agents, low-code workflows, and the visual designer**. Four driver-class keys (`PredictiveStudioTrainModelAction`, `…ScoreRecordSetAction`, `…RunExperimentAction`, `…PromoteModelAction`) matching the `metadata/actions/predictive-studio/` rows. Call `LoadPredictiveStudioActions()` from a server bootstrap to keep the `@RegisterClass` registrations from being tree-shaken.
+- **Remote Operations** (`operations/`) — the typed peers, invoked by **stable key** from client or server with framework-applied scope/permission gates. Six keys: `PredictiveStudio.TrainModel`, `.ScoreRecordSet`, `.RunFeaturePipeline`, `.StartExperimentSession`, `.ControlExperimentSession`, `.PromoteModel`. These are the Manual-mode server bodies for the CodeGen-emitted operation bases in `@memberjunction/core-entities`. Call `LoadPredictiveStudioOperations()` from a server bootstrap to anchor them.
+
+Which to reach for: **Actions** when an agent/workflow needs to *discover and chain* capabilities; **Remote Operations** when client or server code needs a *typed, gated call by key*. (Internal engine-to-engine calls use neither — they import the service class directly. See the Transport-Layer and Remote Operations guides.)
 
 ## Usage
 
@@ -49,15 +73,18 @@ const result = await engine.trainModel({ PipelineID: retentionPipelineId /* … 
 ## How it fits the whole
 
 ```
-predictive-studio-core (types)  ─┐
-predictive-studio-sidecar (MLSidecar) ─┤
-record-set-processor-base (work-type seam) ─┤
+predictive-studio-core (types)            ─┐
+predictive-studio-sidecar (MLSidecar)     ─┤
+record-set-processor / -base (substrate)  ─┤
+@memberjunction/actions + core-entities   ─┤
                                             ▼
-                          @memberjunction/predictive-studio  (this package)
-                                            │ consumed by
-                          ┌─────────────────┴──────────────────┐
-                  (planned) Remote Operations + Actions    Studio dashboard (ng-dashboards)
-                          + Model Development Agent
+                 @memberjunction/predictive-studio  (this package)
+   feature-assembly · training · scoring · experiment · feature-pipelines ·
+                    maintenance · actions · operations
+                                            │ exposed to / consumed by
+        ┌───────────────────────┬───────────┴───────────┬────────────────────┐
+   Actions (agents/         Remote Operations      Studio dashboard      (planned) Model
+   workflows/low-code)      (typed, by key)        (ng-dashboards)       Development Agent
 ```
 
 ## Build & test

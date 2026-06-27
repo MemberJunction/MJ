@@ -33,6 +33,7 @@ FittedPreprocessing = Dict[str, Any]
 
 
 def _is_missing(value: Any) -> bool:
+    """True for null-equivalents: ``None``, NaN floats, and blank/whitespace strings."""
     if value is None:
         return True
     if isinstance(value, float) and math.isnan(value):
@@ -43,6 +44,7 @@ def _is_missing(value: Any) -> bool:
 
 
 def _to_float(value: Any) -> Optional[float]:
+    """Coerce a value to float, returning ``None`` for missing or non-numeric input."""
     if _is_missing(value):
         return None
     try:
@@ -56,6 +58,15 @@ def _to_float(value: Any) -> Optional[float]:
 # ---------------------------------------------------------------------------
 
 def _fit_impute(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Fit the imputation fill value for one column from the training frame.
+
+    Learns the mean/median (numeric), the mode (categorical), or carries the
+    declared constant. Returns the frozen ``{op, col, strategy, fill}`` params
+    applied at /predict.
+
+    Raises:
+        ValueError: For an unknown ``strategy``.
+    """
     col = op["col"]
     strategy = op.get("strategy", "mean")
     series = df[col]
@@ -76,6 +87,11 @@ def _fit_impute(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _fit_standardize(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Fit per-column mean/std for z-score standardization (population std, ddof=0).
+
+    A degenerate (zero/non-finite std) column gets std=1.0 so apply-time division
+    can't blow up — the column stays centered. Returns ``{op, cols, stats}``.
+    """
     cols = op.get("cols") or ([op["col"]] if op.get("col") else [])
     stats: Dict[str, Dict[str, float]] = {}
     for col in cols:
@@ -89,6 +105,11 @@ def _fit_standardize(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _fit_onehot(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Fit the sorted categorical vocabulary for one-hot encoding one column.
+
+    The sorted vocabulary fixes the indicator-column order so train and serve
+    produce positionally identical features. Returns ``{op, col, vocabulary}``.
+    """
     col = op["col"]
     values = df[col].apply(lambda v: None if _is_missing(v) else str(v))
     vocab = sorted({v for v in values if v is not None})
@@ -96,6 +117,12 @@ def _fit_onehot(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _fit_bin(df: pd.DataFrame, op: Dict[str, Any]) -> Dict[str, Any]:
+    """Fit quantile bin edges for discretizing one numeric column.
+
+    Edges are the (deduplicated) quantiles of the non-null values; degenerate
+    cases (empty / all-identical) fall back to a trivial two-edge range so the
+    apply path always has a valid bucket boundary. Returns ``{op, col, edges}``.
+    """
     col = op["col"]
     n_bins = int(op.get("bins") or 4)
     numeric = pd.to_numeric(df[col], errors="coerce").dropna()
@@ -124,12 +151,14 @@ _FIT_DISPATCH = {
 # ---------------------------------------------------------------------------
 
 def _apply_impute(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    """Apply a fitted impute op: fill the column with the frozen value if missing."""
     col = params["col"]
     if _is_missing(row.get(col)):
         row[col] = params.get("fill")
 
 
 def _apply_standardize(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    """Apply fitted standardization: z-score each column; missing values become 0."""
     for col, st in params["stats"].items():
         val = _to_float(row.get(col))
         if val is None:
@@ -139,6 +168,12 @@ def _apply_standardize(params: Dict[str, Any], row: Dict[str, Any]) -> None:
 
 
 def _apply_onehot(params: Dict[str, Any], row: Dict[str, Any], out: List[Tuple[str, Any]]) -> None:
+    """Apply fitted one-hot: emit a ``col=category`` indicator per vocabulary entry.
+
+    Consumes the raw categorical from ``row`` and appends the indicator columns to
+    ``out`` in fitted-vocabulary order. An out-of-vocabulary value yields all-zero
+    indicators (no column for it), keeping train/serve columns identical.
+    """
     col = params["col"]
     raw = row.pop(col, None)  # consume the raw categorical; replaced by indicators
     current = None if _is_missing(raw) else str(raw)
@@ -147,6 +182,11 @@ def _apply_onehot(params: Dict[str, Any], row: Dict[str, Any], out: List[Tuple[s
 
 
 def _apply_bin(params: Dict[str, Any], row: Dict[str, Any]) -> None:
+    """Apply fitted binning: replace the column with its 0-based bin index.
+
+    The index is the bucket ``val`` falls into per the frozen edges, clamped to
+    ``[0, n_bins-1]``. Missing values map to bin 0.
+    """
     col = params["col"]
     edges = params["edges"]
     val = _to_float(row.get(col))
@@ -164,6 +204,7 @@ def _apply_bin(params: Dict[str, Any], row: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 def _row_dict(columns: Sequence[str], values: Sequence[Any]) -> Dict[str, Any]:
+    """Zip a positional row (column names + aligned values) into a name->value dict."""
     return {c: values[i] for i, c in enumerate(columns)}
 
 

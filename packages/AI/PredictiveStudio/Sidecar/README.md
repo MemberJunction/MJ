@@ -6,7 +6,7 @@
 
 **Why** — Node is poor at ML training; Python is excellent. So MJ (TypeScript) assembles the feature matrix and orchestrates, and this sidecar does the CPU-bound **fitting** (`/train`) and **inference** (`/predict`). Keeping it self-managing means a developer needs zero infrastructure to train a model locally.
 
-**How it fits** — it follows the [`@memberjunction/sqlglot-ts`](../../../SQLGlotTS) pattern: the Python microservice is **bundled** and `MLSidecar` spawns it as a child process on demand. **Managed spawn is the default and needs no Docker** — it just works once the bundled venv exists (`npm run setup:python`). A remote/containerized topology is opt-in, not a prerequisite.
+**How it fits** — in the four-layer Predictive Studio architecture (data → feature → **model** → inference) this is the *model/inference compute* tier. It follows the [`@memberjunction/sqlglot-ts`](../../../SQLGlotTS) **bundled-microservice** pattern: the Python service ships *inside* this npm package (`src/python/`) and `MLSidecar` spawns it as a child process on demand. **Managed spawn is the default and needs no Docker** — it just works once the bundled venv exists (`npm run setup:python`). A remote/containerized topology is opt-in, not a prerequisite.
 
 For the full architecture, read the
 **[Predictive Studio Guide](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md)** (§2 covers this package); for the design record, [`plans/predictive-studio.md`](../../../../plans/predictive-studio.md).

@@ -33,6 +33,10 @@ app = FastAPI(title="Predictive Studio Sidecar", version="1.0.0")
 
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
+    """Liveness probe: report ``ok`` plus registered drivers and warm-cache depth.
+
+    Polled by the TypeScript ``MLSidecar`` client until the process is ready.
+    """
     return HealthResponse(
         status="ok",
         algorithms=algorithms.supported_algorithms(),
@@ -46,6 +50,18 @@ def health() -> HealthResponse:
 
 @app.post("/train", response_model=TrainResponse)
 def train(req: TrainRequest) -> TrainResponse:
+    """Fit a model on the assembled inline matrix and return the full train result.
+
+    Validates the request (inline ``data`` required, ``target`` must be present),
+    delegates the ML work to :func:`_run_training`, then serializes the estimator
+    into a base64 envelope, warms the model cache (so an immediately-following
+    ``/predict`` is fast), and returns the artifact, frozen fitted preprocessing,
+    metrics, feature importance, and any locked-holdout metrics.
+
+    Raises:
+        HTTPException: 400 for a missing/invalid target, an unimplemented
+            ``data_ref`` path, an unsupported algorithm, or any training ValueError.
+    """
     if req.data is None:
         raise HTTPException(
             status_code=400,
@@ -121,12 +137,34 @@ def _split_holdout_indices(
 
 
 def _looks_like_classes(y: np.ndarray) -> bool:
+    """Heuristic: do these labels look categorical (so a holdout split can stratify)?
+
+    True when the dtype is string/bool/int AND the distinct-value count is small
+    relative to the sample size — i.e. a plausible label set rather than a continuum.
+    """
     return y.dtype.kind in {"U", "S", "O", "b", "i"} and len(np.unique(y)) <= max(
         20, int(0.5 * len(y))
     )
 
 
 def _run_training(req: TrainRequest) -> Dict[str, Any]:
+    """Run the full training pipeline and return all artifacts the response needs.
+
+    The anti-skew backbone (plan §6.2) lives here:
+      1. Fit preprocessing on ALL training data → the FROZEN ``fitted`` payload.
+      2. Label-encode classification targets to contiguous ints (XGBoost requires it),
+         stashing the decode map on the estimator for /predict.
+      3. Carve the locked holdout — an orchestrator-forwarded ``req.holdout`` (scored
+         via the frozen transform, apply-only) takes precedence over a sidecar
+         re-carve from ``validation.holdout_size``.
+      4. Fit + score via :func:`_fit_and_score` (honest, train-fold-only validation),
+         then re-fit the production estimator on all dev rows.
+      5. Score the locked holdout exactly once.
+
+    Returns:
+        A dict with ``estimator``, ``fitted``, ``metrics``, ``feature_importance``,
+        ``training_row_count``, and (when a holdout exists) ``holdout_metrics``.
+    """
     feature_cols = _feature_columns(req)
     target = req.target
     columns = list(req.data.columns)
@@ -362,6 +400,11 @@ def _anti_skew_val_metrics(
 def _score(
     estimator: Any, X: np.ndarray, y: np.ndarray, is_classification: bool
 ) -> Dict[str, float]:
+    """Score a fitted estimator against ``(X, y)`` and return the metric map.
+
+    Dispatches to classification vs. regression metrics; returns an empty dict for
+    an empty matrix (e.g. no holdout rows).
+    """
     if X.shape[0] == 0:
         return {}
     if is_classification:
@@ -373,6 +416,12 @@ def _score(
 
 
 def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
+    """Best available continuous score for classification metrics/predictions.
+
+    Prefers calibrated ``predict_proba``, then ``decision_function``, then the
+    raw ``predict`` output cast to float — so AUC/positive-class probability is
+    derivable from whatever the estimator supports.
+    """
     if hasattr(estimator, "predict_proba"):
         return np.asarray(estimator.predict_proba(X))
     if hasattr(estimator, "decision_function"):
@@ -381,6 +430,13 @@ def _positive_scores(estimator: Any, X: np.ndarray) -> np.ndarray:
 
 
 def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
+    """Build a ``feature_name -> importance`` map from a fitted estimator.
+
+    Prefers ``feature_importances_`` (tree models); falls back to the absolute,
+    class-summed ``coef_`` magnitude (linear models). Returns ``{}`` when the
+    estimator exposes neither. The map drives the leakage guard's single-feature-
+    dominance check (plan §6.4).
+    """
     if hasattr(estimator, "feature_importances_"):
         values = np.asarray(estimator.feature_importances_, dtype=float)
     elif hasattr(estimator, "coef_"):
@@ -398,6 +454,18 @@ def _extract_importance(estimator: Any, columns: List[str]) -> Dict[str, float]:
 
 @app.post("/predict", response_model=PredictResponse)
 def predict(req: PredictRequest) -> PredictResponse:
+    """Score 1..N rows by APPLYING (never re-fitting) the frozen preprocessing.
+
+    Resolves the estimator from the warm cache or the supplied artifact, applies
+    the frozen ``fitted_preprocessing`` to the rows (apply-only — the anti-skew
+    guarantee), then predicts. Classification vs. regression is determined by the
+    presence of the train-time label-decode map stashed on the estimator, so the
+    response shape needs no out-of-band flag.
+
+    Raises:
+        HTTPException: 400 for a missing artifact/cache key, missing
+            ``fitted_preprocessing`` (with ``output_columns``), or a transform error.
+    """
     try:
         estimator, _ = artifacts.load_estimator(req.artifact_b64, req.model_id)
     except ValueError as exc:
@@ -433,6 +501,12 @@ def _build_predictions(
     is_classification: bool,
     label_classes: List[str] = None,
 ) -> List[Prediction]:
+    """Build one :class:`Prediction` per transformed row, in input order.
+
+    Regression rows carry only a numeric ``score``. Classification rows decode the
+    estimator's encoded integer prediction back to its original string ``class``
+    (via ``label_classes``) and attach the positive-class/predicted-class score.
+    """
     if X.shape[0] == 0:
         return []
     if is_classification:
@@ -450,6 +524,13 @@ def _build_predictions(
 def _classification_prediction(
     scores: np.ndarray, encoded_labels: np.ndarray, label_classes: List[str], i: int
 ) -> Prediction:
+    """Assemble the i-th classification :class:`Prediction` (decoded label + score).
+
+    The score convention: for binary problems it is P(positive class) (column 1);
+    for multiclass it is the probability of the predicted class; 1-D/single-column
+    score arrays fall back to the available value. ``class`` is the decoded string
+    label, or the raw integer when no decode map is available.
+    """
     encoded = int(encoded_labels[i])
     label = (
         label_classes[encoded]

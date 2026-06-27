@@ -41,6 +41,13 @@ def _resolve_port(requested_port: int) -> int:
 
 
 def main() -> None:
+    """Entrypoint: resolve the listen port, announce it on stdout, run uvicorn.
+
+    Reads an optional port from ``argv[1]`` (0/absent ⇒ OS-assigned ephemeral
+    port). The resolved port is printed as ``PREDICTIVE_STUDIO_SIDECAR_PORT=<n>``
+    on the first stdout line BEFORE uvicorn starts, so the managing TypeScript
+    ``MLSidecar`` client can parse it and poll ``/health``.
+    """
     requested_port = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     actual_port = _resolve_port(requested_port)
 

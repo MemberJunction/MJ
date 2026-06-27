@@ -44,6 +44,16 @@ class AlgorithmNotSupportedError(ValueError):
 
 
 def _require(flag: bool, name: str) -> None:
+    """Assert that an optional driver's package imported successfully.
+
+    Args:
+        flag: The ``_HAVE_*`` import-success flag for the driver.
+        name: Driver key, used in the error message.
+
+    Raises:
+        AlgorithmNotSupportedError: When ``flag`` is falsy (package missing,
+            typically because the OpenMP runtime libxgboost/lightgbm need is absent).
+    """
     if not flag:
         raise AlgorithmNotSupportedError(
             f"Driver '{name}' is unavailable — its package failed to import "
@@ -52,6 +62,11 @@ def _require(flag: bool, name: str) -> None:
 
 
 def _xgboost(problem_type: str, hp: Dict[str, Any]):
+    """Build an XGBoost classifier/regressor with histogram tree method.
+
+    Hyperparameters override the histogram + n_jobs defaults. For classification
+    a default ``eval_metric=logloss`` is set to quiet modern-xgboost warnings.
+    """
     _require(_HAVE_XGB, "xgboost")
     common = {"n_jobs": -1, "tree_method": "hist", **hp}
     if problem_type == "classification":
@@ -62,6 +77,7 @@ def _xgboost(problem_type: str, hp: Dict[str, Any]):
 
 
 def _lightgbm(problem_type: str, hp: Dict[str, Any]):
+    """Build a LightGBM classifier/regressor (quiet, small-leaf-friendly defaults)."""
     _require(_HAVE_LGBM, "lightgbm")
     common = {"n_jobs": -1, "verbose": -1, "min_child_samples": 5, **hp}
     if problem_type == "classification":
@@ -70,6 +86,11 @@ def _lightgbm(problem_type: str, hp: Dict[str, Any]):
 
 
 def _logistic_regression(problem_type: str, hp: Dict[str, Any]):
+    """Build a logistic-regression classifier (classification only).
+
+    Raises:
+        AlgorithmNotSupportedError: When ``problem_type`` is not ``classification``.
+    """
     if problem_type != "classification":
         raise AlgorithmNotSupportedError(
             "logistic_regression supports classification only."
@@ -79,6 +100,7 @@ def _logistic_regression(problem_type: str, hp: Dict[str, Any]):
 
 
 def _random_forest(problem_type: str, hp: Dict[str, Any]):
+    """Build a random-forest classifier/regressor (all cores by default)."""
     common = {"n_jobs": -1, **hp}
     if problem_type == "classification":
         return RandomForestClassifier(**common)
@@ -86,12 +108,18 @@ def _random_forest(problem_type: str, hp: Dict[str, Any]):
 
 
 def _ridge(problem_type: str, hp: Dict[str, Any]):
+    """Build a ridge (L2) regressor (regression only).
+
+    Raises:
+        AlgorithmNotSupportedError: When ``problem_type`` is not ``regression``.
+    """
     if problem_type != "regression":
         raise AlgorithmNotSupportedError("ridge supports regression only.")
     return Ridge(**hp)
 
 
 def _mlp(problem_type: str, hp: Dict[str, Any]):
+    """Build a multi-layer-perceptron classifier/regressor (500-iter default cap)."""
     params = {"max_iter": 500, **hp}
     if problem_type == "classification":
         return MLPClassifier(**params)
@@ -116,8 +144,17 @@ def supported_algorithms() -> List[str]:
 def build_estimator(algorithm: str, problem_type: str, hyperparameters: Dict[str, Any]):
     """Build an sklearn-compatible estimator for the given driver key.
 
-    Raises ``AlgorithmNotSupportedError`` for unknown keys or invalid
-    driver/problem-type pairings.
+    Args:
+        algorithm: Driver key (must match a seeded ``MJ: ML Algorithms`` DriverClass).
+        problem_type: ``classification`` or ``regression``; selects the estimator variant.
+        hyperparameters: Passed straight through to the estimator constructor.
+
+    Returns:
+        An unfitted, sklearn-compatible estimator.
+
+    Raises:
+        AlgorithmNotSupportedError: For unknown keys or invalid driver/problem-type
+            pairings (e.g. ``ridge`` with classification).
     """
     factory = _REGISTRY.get(algorithm)
     if factory is None:

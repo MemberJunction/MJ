@@ -135,6 +135,11 @@ class PredictResponse(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    """``GET /health`` response body — liveness plus introspection.
+
+    Mirrors ``SidecarHealthResponse`` in the TypeScript client.
+    """
+
     status: str
     algorithms: List[str]
     cached_models: int

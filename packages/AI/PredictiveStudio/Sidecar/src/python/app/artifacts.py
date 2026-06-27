@@ -38,12 +38,14 @@ ENVELOPE_VERSION = 1
 # ---------------------------------------------------------------------------
 
 def _model_to_bytes(estimator: Any) -> bytes:
+    """Serialize an estimator to raw bytes via joblib (in-memory, no temp file)."""
     buf = io.BytesIO()
     joblib.dump(estimator, buf)
     return buf.getvalue()
 
 
 def _bytes_to_model(raw: bytes) -> Any:
+    """Deserialize raw joblib bytes back into an estimator."""
     return joblib.load(io.BytesIO(raw))
 
 
@@ -85,6 +87,11 @@ def deserialize_envelope(artifact_b64: str) -> Tuple[Any, Dict[str, Any]]:
 
 
 def artifact_hash(artifact_b64: str) -> str:
+    """Content hash (sha256 hex) of a base64 artifact — the warm-cache key.
+
+    Identical to the ``model_id`` returned by :func:`serialize_envelope`, so a
+    freshly trained model and a re-submitted artifact resolve to the same slot.
+    """
     return hashlib.sha256(artifact_b64.encode("ascii")).hexdigest()
 
 
@@ -96,11 +103,16 @@ class ModelCache:
     """Thread-safe LRU cache of deserialized ``(estimator, envelope)`` pairs."""
 
     def __init__(self, max_size: int = 32) -> None:
+        """Create an LRU cache bounded to ``max_size`` deserialized models."""
         self._max_size = max_size
         self._store: "OrderedDict[str, Tuple[Any, Dict[str, Any]]]" = OrderedDict()
         self._lock = threading.Lock()
 
     def get(self, key: str) -> Optional[Tuple[Any, Dict[str, Any]]]:
+        """Return the cached pair for ``key``, marking it most-recently-used.
+
+        Returns ``None`` on a miss. Thread-safe.
+        """
         with self._lock:
             if key not in self._store:
                 return None
@@ -108,6 +120,8 @@ class ModelCache:
             return self._store[key]
 
     def put(self, key: str, value: Tuple[Any, Dict[str, Any]]) -> None:
+        """Insert/refresh ``key`` as most-recently-used, evicting the LRU entry
+        when the cache exceeds ``max_size``. Thread-safe."""
         with self._lock:
             self._store[key] = value
             self._store.move_to_end(key)
@@ -115,6 +129,7 @@ class ModelCache:
                 self._store.popitem(last=False)
 
     def __len__(self) -> int:
+        """Current number of cached models. Thread-safe."""
         with self._lock:
             return len(self._store)
 
