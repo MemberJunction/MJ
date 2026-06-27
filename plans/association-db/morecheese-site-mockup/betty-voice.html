@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Talk to Betty · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .voice-stage { min-height: calc(100vh - 73px); background: radial-gradient(ellipse at center, var(--mc-rind-600) 0%, var(--mc-rind-800) 70%, var(--mc-ink-700) 100%); color: var(--mc-cream); padding: var(--mc-space-8) var(--mc-space-5); position: relative; overflow: hidden; }
+    .voice-stage::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 30%, rgba(212, 168, 46, 0.15) 0%, transparent 50%); }
+    .voice-inner { max-width: 880px; margin: 0 auto; position: relative; display: grid; gap: var(--mc-space-7); }
+    .voice-orb-wrap { display: grid; place-items: center; margin: var(--mc-space-6) 0; position: relative; }
+    .voice-orb { width: 240px; height: 240px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, var(--mc-gold-300) 0%, var(--mc-gold-500) 35%, var(--mc-rind-400) 100%); position: relative; box-shadow: 0 0 80px rgba(212, 168, 46, 0.4), inset 0 -20px 40px rgba(107, 31, 28, 0.3); animation: voiceOrb 4s ease-in-out infinite; }
+    .voice-orb::before { content: ''; position: absolute; inset: -16px; border-radius: 50%; border: 2px solid var(--mc-gold-400); opacity: 0.5; animation: voiceRing 2.4s ease-out infinite; }
+    .voice-orb::after { content: ''; position: absolute; inset: -32px; border-radius: 50%; border: 2px solid var(--mc-gold-400); opacity: 0.3; animation: voiceRing 2.4s ease-out 0.6s infinite; }
+    @keyframes voiceOrb { 50% { transform: scale(1.04); } }
+    @keyframes voiceRing { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.4); opacity: 0; } }
+    .voice-orb-center { position: absolute; inset: 0; display: grid; place-items: center; color: var(--mc-rind-700); font-family: var(--mc-font-display); font-size: 4rem; font-weight: var(--mc-fw-bold); }
+
+    .voice-state { text-align: center; }
+    .voice-state-status { font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wider); text-transform: uppercase; color: var(--mc-gold-300); margin-bottom: var(--mc-space-3); }
+    .voice-state-text { font-family: var(--mc-font-display); font-size: var(--mc-fs-3xl); line-height: var(--mc-lh-tight); color: var(--mc-cream); margin-bottom: var(--mc-space-3); }
+    .voice-state-meta { font-size: var(--mc-fs-sm); color: var(--mc-gold-200); opacity: 0.9; }
+
+    .voice-transcript { background: rgba(0,0,0,0.3); backdrop-filter: blur(12px); border: 1px solid rgba(212, 168, 46, 0.2); border-radius: var(--mc-radius-lg); padding: var(--mc-space-6); max-height: 280px; overflow-y: auto; }
+    .voice-line { padding: var(--mc-space-3) 0; display: flex; gap: var(--mc-space-4); align-items: flex-start; }
+    .voice-line + .voice-line { border-top: 1px solid rgba(255,255,255,0.06); }
+    .voice-line-tag { font-family: var(--mc-font-mono); font-size: 11px; letter-spacing: var(--mc-ls-wider); text-transform: uppercase; min-width: 60px; padding-top: 3px; }
+    .voice-line.you .voice-line-tag { color: var(--mc-sage-300); }
+    .voice-line.betty .voice-line-tag { color: var(--mc-gold-300); }
+    .voice-line-text { font-size: var(--mc-fs-base); line-height: var(--mc-lh-relaxed); color: var(--mc-cream); flex: 1; }
+    .voice-line-text em { color: var(--mc-gold-200); font-style: italic; }
+    .voice-source { display: inline-block; margin-top: var(--mc-space-2); padding: 4px 10px; background: rgba(212, 168, 46, 0.15); color: var(--mc-gold-200); border-radius: var(--mc-radius-pill); font-family: var(--mc-font-mono); font-size: 11px; letter-spacing: var(--mc-ls-wide); text-transform: uppercase; }
+
+    .voice-controls { display: flex; justify-content: center; gap: var(--mc-space-4); margin-top: var(--mc-space-4); }
+    .voice-mic-btn { width: 80px; height: 80px; border-radius: 50%; background: var(--mc-gold-500); color: var(--mc-rind-700); font-size: 2rem; display: grid; place-items: center; box-shadow: 0 0 32px rgba(212, 168, 46, 0.4); transition: all var(--mc-dur-base); }
+    .voice-mic-btn:hover { background: var(--mc-gold-400); transform: scale(1.05); }
+    .voice-mic-btn.active { background: var(--mc-rind-300); color: var(--mc-cream); animation: voiceMic 1.2s ease-in-out infinite; }
+    @keyframes voiceMic { 50% { transform: scale(1.1); } }
+    .voice-side-btn { width: 56px; height: 56px; border-radius: 50%; background: rgba(255,255,255,0.08); color: var(--mc-cream); display: grid; place-items: center; transition: all var(--mc-dur-fast); border: 1px solid rgba(255,255,255,0.12); }
+    .voice-side-btn:hover { background: rgba(255,255,255,0.18); }
+
+    .voice-prompts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--mc-space-3); }
+    .voice-prompt {
+      padding: var(--mc-space-4) var(--mc-space-5);
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(212, 168, 46, 0.2);
+      border-radius: var(--mc-radius-md);
+      color: var(--mc-cream);
+      font-size: var(--mc-fs-sm);
+      text-align: left;
+      transition: all var(--mc-dur-fast);
+      cursor: pointer;
+      line-height: var(--mc-lh-relaxed);
+    }
+    .voice-prompt:hover { background: rgba(212, 168, 46, 0.15); border-color: var(--mc-gold-400); }
+    .voice-prompt strong { display: block; color: var(--mc-gold-300); font-family: var(--mc-font-mono); font-size: var(--mc-fs-xs); letter-spacing: var(--mc-ls-wide); text-transform: uppercase; margin-bottom: var(--mc-space-2); }
+
+    .voice-disclaimer { text-align: center; font-size: var(--mc-fs-xs); color: var(--mc-gold-200); opacity: 0.7; font-family: var(--mc-font-mono); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">Talk to Betty · powered by MJ Caliber</span></span></a>
+      <nav class="nav-primary"><a href="index.html"><i class="fa-solid fa-arrow-left"></i> Back to site</a></nav>
+      <div class="nav-cta"><a href="portal.html" class="btn btn-secondary btn-sm">Member portal</a></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="voice-stage">
+      <div class="voice-inner">
+        <div class="center">
+          <p class="eyebrow on-dark">Live · MJ Caliber realtime · ms-latency voice</p>
+          <h1 style="color: var(--mc-cream);">Betty knows the federation.<br/><span style="color: var(--mc-gold-300); font-style: italic;">Ask her anything.</span></h1>
+        </div>
+
+        <div class="voice-orb-wrap">
+          <div class="voice-orb"><div class="voice-orb-center">B</div></div>
+        </div>
+
+        <div class="voice-state">
+          <div class="voice-state-status"><span style="color: #4caf50;">●</span> Listening · auto-detected English</div>
+          <div class="voice-state-text">Tap the mic to talk, or pick a prompt below.</div>
+          <div class="voice-state-meta">Powered by MJ Caliber · Realtime voice + agent stack · Average response latency: 240ms</div>
+        </div>
+
+        <div class="voice-controls">
+          <button class="voice-side-btn" title="Switch language" aria-label="Switch language"><i class="fa-solid fa-language"></i></button>
+          <button class="voice-mic-btn" id="vmic" aria-label="Talk to Betty"><i class="fa-solid fa-microphone"></i></button>
+          <button class="voice-side-btn" title="Audio output" aria-label="Audio output"><i class="fa-solid fa-volume-high"></i></button>
+        </div>
+
+        <div class="voice-transcript">
+          <div class="voice-line you">
+            <span class="voice-line-tag">You</span>
+            <div class="voice-line-text">When's the next regional workshop in California?</div>
+          </div>
+          <div class="voice-line betty">
+            <span class="voice-line-tag">Betty</span>
+            <div class="voice-line-text">
+              The next California workshop is the <em>Sonoma Valley Sensory Intensive</em>, August 14th through 16th at Point Reyes. There are six seats left at the member rate, $425. Want me to open the registration page?
+              <div><span class="voice-source"><i class="fa-solid fa-link"></i> Source: Events DB · ID SVI-2026</span></div>
+            </div>
+          </div>
+          <div class="voice-line you">
+            <span class="voice-line-tag">You</span>
+            <div class="voice-line-text">Tell me about the federation's stance on the FDA dairy labeling proposal.</div>
+          </div>
+          <div class="voice-line betty">
+            <span class="voice-line-tag">Betty</span>
+            <div class="voice-line-text">
+              The Standards Committee adopted a formal position on June 12th, 2026: <em>support with revisions</em>. We support clearer terroir-of-origin labeling but are pushing back on the proposed pasteurization disclosure language for traditional cheeses. Robert Kihm chairs the working group. The position paper is 14 pages — want me to read you the summary, or open the full document?
+              <div><span class="voice-source"><i class="fa-solid fa-link"></i> Source: Advocacy DB · Position #ADV-1421</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="voice-disclaimer">
+          🔒 Conversations are logged for product improvement. Sign in for personalized answers (your membership, your events, your certifications, your messages). Privacy controls in <a href="portal.html" style="color: var(--mc-gold-300);">your portal</a>.
+        </div>
+
+        <div style="margin-top: var(--mc-space-6);">
+          <p class="eyebrow on-dark center">Try one of these</p>
+          <div class="voice-prompts">
+            <button class="voice-prompt"><strong>Events near me</strong>"Are there events near me this fall?"</button>
+            <button class="voice-prompt"><strong>Certifications</strong>"How do I become a Master Cheesemaker?"</button>
+            <button class="voice-prompt"><strong>Standards</strong>"What's our position on dairy labeling?"</button>
+            <button class="voice-prompt"><strong>Membership</strong>"Compare Professional and Producer tiers."</button>
+            <button class="voice-prompt"><strong>Community</strong>"Who in the Pacific Northwest does washed-rind work?"</button>
+            <button class="voice-prompt"><strong>My account <span style="opacity: 0.6;">(member)</span></strong>"When does my renewal come due?"</button>
+            <button class="voice-prompt"><strong>Awards</strong>"Show me the 2025 award finalists in the bloomy-rind category."</button>
+            <button class="voice-prompt"><strong>Help</strong>"What can you actually do?"</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TECHNICAL FOOTER -->
+    <section class="section-sm section-warm">
+      <div class="container-narrow">
+        <p class="eyebrow center">How this works</p>
+        <h2 class="center" style="font-size: var(--mc-fs-xl);">Betty is the public face of the MJ Caliber stack.</h2>
+        <div class="grid grid-3 mt-5">
+          <div class="pillar">
+            <div class="pillar-icon"><i class="fa-solid fa-wave-square"></i></div>
+            <h3 style="font-size: var(--mc-fs-base);">Caliber realtime</h3>
+            <p style="font-size: var(--mc-fs-sm);">Full-duplex audio over WebRTC. Sub-300ms latency. Auto language detection. Barge-in supported.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon"><i class="fa-solid fa-book-open"></i></div>
+            <h3 style="font-size: var(--mc-fs-base);">Trained on our content</h3>
+            <p style="font-size: var(--mc-fs-sm);">Every published standard, event, certification, position, resource, and forum thread is in her context. She doesn't hallucinate the federation.</p>
+          </div>
+          <div class="pillar">
+            <div class="pillar-icon"><i class="fa-solid fa-link"></i></div>
+            <h3 style="font-size: var(--mc-fs-base);">Every answer is sourced</h3>
+            <p style="font-size: var(--mc-fs-sm);">Cite-as-she-talks. Tap any source pill to jump to the original record in our database. Members can deep-link to records they have permission to see.</p>
+          </div>
+        </div>
+        <p class="muted center mt-6" style="font-size: var(--mc-fs-sm);">
+          Curious about the technology? See the <a href="https://docs.memberjunction.org" target="_blank">MemberJunction realtime co-agents guide</a>.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    document.getElementById('vmic').addEventListener('click', function () {
+      this.classList.toggle('active');
+      if (this.classList.contains('active')) {
+        setTimeout(() => this.classList.remove('active'), 3000);
+      }
+    });
+  </script>
+  <!-- intentionally NOT loading the floating betty-widget on this page; this page IS the agent surface -->
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>About · MoreCheese</title>
+  <link rel="stylesheet" href="assets/css/tokens.css" />
+  <link rel="stylesheet" href="assets/css/main.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <style>
+    .timeline { display: grid; gap: var(--mc-space-6); position: relative; padding-left: var(--mc-space-7); }
+    .timeline::before { content: ''; position: absolute; left: 16px; top: 8px; bottom: 8px; width: 2px; background: var(--mc-gold-500); }
+    .timeline-item { position: relative; }
+    .timeline-item::before { content: ''; position: absolute; left: -36px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: var(--mc-gold-500); border: 3px solid var(--mc-bg-page); box-shadow: 0 0 0 2px var(--mc-gold-500); }
+    .timeline-year { font-family: var(--mc-font-display); font-size: var(--mc-fs-xl); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); }
+    .timeline-body { color: var(--mc-text-secondary); margin-top: var(--mc-space-2); }
+    .person-card { background: var(--mc-bg-surface); border: 1px solid var(--mc-border-subtle); border-radius: var(--mc-radius-lg); padding: var(--mc-space-5); display: flex; gap: var(--mc-space-4); align-items: flex-start; }
+    .person-photo { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, var(--mc-gold-300), var(--mc-rind-400)); flex-shrink: 0; display: grid; place-items: center; color: var(--mc-cream); font-family: var(--mc-font-display); font-weight: var(--mc-fw-bold); font-size: var(--mc-fs-xl); }
+    .person-name { font-family: var(--mc-font-display); font-size: var(--mc-fs-lg); font-weight: var(--mc-fw-semi); margin-bottom: 2px; }
+    .person-role { font-size: var(--mc-fs-sm); color: var(--mc-rind-500); font-weight: var(--mc-fw-medium); margin-bottom: var(--mc-space-2); }
+    .person-bio { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); }
+    .fin-tile { padding: var(--mc-space-5); background: var(--mc-bg-surface-warm); border-radius: var(--mc-radius-lg); border-left: 4px solid var(--mc-gold-500); }
+    .fin-num { font-family: var(--mc-font-display); font-size: var(--mc-fs-3xl); font-weight: var(--mc-fw-semi); color: var(--mc-rind-500); line-height: 1; }
+    .fin-label { font-size: var(--mc-fs-sm); color: var(--mc-text-secondary); margin-top: var(--mc-space-2); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="topbar"><div class="container"><div class="topbar-inner">
+    <span class="topbar-tagline">The International Cheese Federation · Est. 1947</span>
+    <div class="topbar-links"><a href="chapters.html"><i class="fa-solid fa-location-dot"></i> Find a chapter</a><span class="topbar-divider">|</span><a href="contact.html">Contact</a><span class="topbar-divider">|</span><a href="portal.html"><i class="fa-solid fa-user"></i> Member login</a></div>
+  </div></div></div>
+
+  <header class="site-header">
+    <div class="site-header-inner">
+      <a class="brand" href="index.html"><span class="brand-mark">MC</span><span><span class="brand-name">MoreCheese</span><span class="brand-fed">International Cheese Federation</span></span></a>
+      <nav class="nav-primary"><a href="index.html">Home</a><a href="membership.html">Membership</a><a href="events.html">Events</a><a href="education.html">Education</a><a href="standards.html">Standards</a><a href="advocacy.html">Advocacy</a><a href="awards.html">Awards</a><a href="community.html">Community</a><a href="about.html" class="active">About</a></nav>
+      <div class="nav-cta"><a href="membership.html#join" class="btn btn-primary btn-sm btn-pill">Join</a><button class="nav-toggle"><i class="fa-solid fa-bars"></i></button></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="page-head">
+      <div class="container">
+        <nav class="crumbs"><a href="index.html">Home</a><span>/</span><span>About</span></nav>
+        <p class="eyebrow">About</p>
+        <h1>A federation of makers, since 1947.</h1>
+        <p class="lede">Founded by twelve cheesemakers in a barn outside Madison, Wisconsin who could not agree on much except that someone had to write down what good cheese was. We've been arguing — productively — ever since.</p>
+      </div>
+    </section>
+
+    <!-- MISSION -->
+    <section class="section">
+      <div class="container-narrow">
+        <p class="eyebrow center">Mission</p>
+        <h2 class="center" style="margin-bottom: var(--mc-space-6);">To protect, advance, and steward the craft of cheesemaking — through standards, education, advocacy, and community.</h2>
+        <p class="lede center">We are a 501(c)(6) member-driven non-profit. We are not a trade group, not a regulator, not a marketing board. We exist for the people who make cheese, the people who sell cheese, the people who study cheese, and the people who teach cheese. The dues our members pay fund the work no individual maker can do alone.</p>
+      </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section class="section section-warm">
+      <div class="container-narrow">
+        <p class="eyebrow">79 years</p>
+        <h2 class="mb-7">The arc.</h2>
+
+        <div class="timeline">
+          <div class="timeline-item"><span class="timeline-year">1947</span><div class="timeline-body">Twelve Wisconsin cheesemakers found the American Cheese Standards Society at a barn in Cross Plains. The original mission: write down what good cheese is, because the post-war commodity boom is producing cheese that isn't.</div></div>
+          <div class="timeline-item"><span class="timeline-year">1958</span><div class="timeline-body">First published standards: cheddar (8 grades), Swiss-type (4 grades), American process. Adopted within 3 years by the USDA.</div></div>
+          <div class="timeline-item"><span class="timeline-year">1971</span><div class="timeline-body">First international chapter (Pays de la Loire, France). Name changes to International Cheese Federation. French and English co-equal languages.</div></div>
+          <div class="timeline-item"><span class="timeline-year">1984</span><div class="timeline-body">Master Cheesemaker certification launched. First cohort: 14 candidates, 3 years of program, 9 finishers.</div></div>
+          <div class="timeline-item"><span class="timeline-year">1996</span><div class="timeline-body">Co-founding member of Codex Alimentarius Cheese Working Group. Standards begin formally informing UN/FAO food code.</div></div>
+          <div class="timeline-item"><span class="timeline-year">2008</span><div class="timeline-body">First formal advocacy filing — FDA proposed rule on raw-milk cheese aging requirements. The federation's position adopted in final rule.</div></div>
+          <div class="timeline-item"><span class="timeline-year">2019</span><div class="timeline-body">Apprenticeship program launched in partnership with 60 producer-mentors. First cohort: 60 apprentices, $1.8M in stipend funding.</div></div>
+          <div class="timeline-item"><span class="timeline-year">2024</span><div class="timeline-body">6,000+ members across 38 countries for the first time. The European chapters now outnumber the North American.</div></div>
+          <div class="timeline-item"><span class="timeline-year">2026</span><div class="timeline-body">79th Annual Conference in Madison — the place it all started. <a href="event-detail.html">Coming September 18–21</a>.</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LEADERSHIP -->
+    <section class="section" id="leadership">
+      <div class="container">
+        <p class="eyebrow">Leadership</p>
+        <h2>Board of Directors</h2>
+        <p class="lede" style="max-width: 48rem; margin-bottom: var(--mc-space-7);">The board is elected from and by Producer-tier and Lifetime members. Three-year terms, two-term limit. Two seats reserved for Apprentice-tier representation. Two seats reserved for academic/Institutional representation.</p>
+        <div class="grid grid-3">
+          <div class="person-card"><div class="person-photo">MC</div><div><div class="person-name">Maria Castillo</div><div class="person-role">President · Producer · Castillo Family Dairy (NM)</div><div class="person-bio">Third-generation cheesemaker. Goat-milk specialist. Standards Committee chair 2019–2023. Elected President 2024.</div></div></div>
+          <div class="person-card"><div class="person-photo">JN</div><div><div class="person-name">Jean Naumann</div><div class="person-role">Vice President · Producer · Beaufort des Alpages (FR)</div><div class="person-bio">Alpine specialist. MoF. European Chapter founding chair. Co-author of the EU Traditional Cheeses Defense Joint Position.</div></div></div>
+          <div class="person-card"><div class="person-photo">SH</div><div><div class="person-name">Dr. Sarah Henderson</div><div class="person-role">Vice President · Academic · Cornell University</div><div class="person-bio">Dairy microbiologist. Research Council Vice-Chair. Author of <em>Aging Caves: A Working Reference</em> (3rd ed., 2024).</div></div></div>
+          <div class="person-card"><div class="person-photo">RK</div><div><div class="person-name">Robert Kihm</div><div class="person-role">Treasurer · Producer · Whitestone Creamery (WI)</div><div class="person-bio">CFO turned cheesemaker. Treasurer since 2022. Standards Committee Labeling Working Group chair.</div></div></div>
+          <div class="person-card"><div class="person-photo">ER</div><div><div class="person-name">Elena Rodriguez</div><div class="person-role">Secretary · Producer · Foggy Valley Creamery (WA)</div><div class="person-bio">Master Cheesemaker. Standards Committee. Pacific Northwest Chapter chair 2023–present.</div></div></div>
+          <div class="person-card"><div class="person-photo">JH</div><div><div class="person-name">John Huisman</div><div class="person-role">At-Large · Producer · Wijngaard Kaas (NL)</div><div class="person-bio">Dutch producer. Affineur. Awards Committee chair. Two-term board member.</div></div></div>
+        </div>
+        <div class="center mt-6">
+          <a href="#" class="btn btn-secondary">Full board roster (24 members)</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMMITTEES -->
+    <section class="section section-sunken">
+      <div class="container">
+        <p class="eyebrow">Committees</p>
+        <h2>The work gets done in committees.</h2>
+        <p class="lede" style="max-width: 48rem; margin-bottom: var(--mc-space-7);">Twelve standing committees, plus working groups that form and dissolve around specific topics. Any Professional-tier member or above is eligible to serve. We always need help.</p>
+        <div class="grid grid-3">
+          <div class="card" style="padding: var(--mc-space-5);"><strong>Standards Committee</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Writes and maintains the published standards. 23 members. Chair: Robert Kihm.</p></div>
+          <div class="card" style="padding: var(--mc-space-5);"><strong>Education Committee</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Owns the certifications and CE library. 18 members. Chair: Jamie Wu.</p></div>
+          <div class="card" style="padding: var(--mc-space-5);"><strong>Awards Committee</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Runs the National Cheese Awards. 12 members. Chair: John Huisman.</p></div>
+          <div class="card" style="padding: var(--mc-space-5);"><strong>Advocacy Committee</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Files regulatory positions, organizes member-mobilization. 15 members. Chair: Tom Whitaker.</p></div>
+          <div class="card" style="padding: var(--mc-space-5);"><strong>Research Council</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Funds and reviews research at university partners. 14 members. Vice-Chair: Sarah Henderson.</p></div>
+          <div class="card" style="padding: var(--mc-space-5);"><strong>Apprenticeship Committee</strong><p class="muted mb-0 mt-2" style="font-size: var(--mc-fs-sm);">Selects apprentices and pairs them with mentor producers. 10 members.</p></div>
+        </div>
+        <div class="center mt-5">
+          <a href="committees.html" class="btn btn-secondary">All 12 committees</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINANCIALS -->
+    <section class="section" id="financials">
+      <div class="container">
+        <p class="eyebrow">Financials</p>
+        <h2>We publish our numbers.</h2>
+        <p class="lede" style="max-width: 48rem; margin-bottom: var(--mc-space-7);">501(c)(6) audited annually. Form 990 published the day it's filed. Members can request the full detailed budget any time.</p>
+        <div class="grid grid-4">
+          <div class="fin-tile"><div class="fin-num">$8.4M</div><div class="fin-label">2025 total revenue</div></div>
+          <div class="fin-tile"><div class="fin-num">68%</div><div class="fin-label">From member dues</div></div>
+          <div class="fin-tile"><div class="fin-num">$2.1M</div><div class="fin-label">Apprenticeship stipends paid (2025)</div></div>
+          <div class="fin-tile"><div class="fin-num">$1.4M</div><div class="fin-label">Research Council grants (2025)</div></div>
+        </div>
+        <div class="flex gap-3 mt-6" style="flex-wrap: wrap;">
+          <a href="#" class="btn btn-secondary"><i class="fa-solid fa-download"></i> 2025 Annual Report (PDF, 14MB)</a>
+          <a href="#" class="btn btn-secondary"><i class="fa-solid fa-download"></i> Form 990 — 2024</a>
+          <a href="#" class="btn btn-secondary"><i class="fa-solid fa-download"></i> Form 990 — 2023</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- SPONSORS -->
+    <section class="section section-warm" id="sponsors">
+      <div class="container">
+        <p class="eyebrow">Corporate sponsors</p>
+        <h2>Sponsors are visible. They are not members.</h2>
+        <p class="lede" style="max-width: 48rem; margin-bottom: var(--mc-space-5);">Sponsor dollars fund specific programs (Apprenticeship, Research Council, Awards). Sponsors get recognition and access to non-membership engagement (event tables, conference branding) — but never voting rights, never standards influence, never policy positions. This is non-negotiable.</p>
+        <a href="contact.html" class="btn btn-secondary mt-3">Sponsorship program</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand"><a class="brand" href="index.html" style="color: var(--mc-cream);"><span class="brand-mark">MC</span><span><span class="brand-name" style="color: var(--mc-cream);">MoreCheese</span><span class="brand-fed" style="color: var(--mc-gold-300);">International Cheese Federation</span></span></a><p>The federation of artisan cheesemakers, mongers, scientists, and educators. Est. 1947.</p></div>
+        <div class="footer-col"><h6>Programs</h6><ul><li><a href="membership.html">Membership</a></li><li><a href="education.html">Education</a></li><li><a href="awards.html">Awards</a></li><li><a href="standards.html">Standards</a></li></ul></div>
+        <div class="footer-col"><h6>Engage</h6><ul><li><a href="events.html">Events</a></li><li><a href="community.html">Community</a></li><li><a href="committees.html">Committees</a></li><li><a href="chapters.html">Chapters</a></li></ul></div>
+        <div class="footer-col"><h6>About</h6><ul><li><a href="about.html">Our story</a></li><li><a href="contact.html">Contact</a></li><li><a href="portal.html">Portal</a></li></ul></div>
+        <div class="footer-news"><h6>The Curd</h6><p>Monthly newsletter.</p><form onsubmit="event.preventDefault();"><input type="email" placeholder="your@email" /><button type="submit" class="btn btn-primary btn-sm">Subscribe</button></form></div>
+      </div>
+      <div class="footer-bottom"><div>© 2026 ICF</div><div class="footer-built"><i class="fa-solid fa-cheese"></i> Built on <a href="https://docs.memberjunction.org" target="_blank" rel="noopener">MemberJunction</a></div></div>
+    </div>
+  </footer>
+
+  <script src="assets/js/betty-widget.js"></script>
+</body>
+</html>
