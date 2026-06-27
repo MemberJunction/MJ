@@ -1,0 +1,141 @@
+[
+  {
+    "fields": {
+      "Name": "Write Entity Field(s)",
+      "Description": "Writes one or more fields onto a SINGLE entity record — either updating an existing record (identified by its PrimaryKey) or creating a new one (when CreateIfMissing=true and no PrimaryKey is supplied). A reusable write primitive for Flow Agents and as the terminal write-back step of a Feature Pipeline: give it the target entity, an optional primary key, and a field map, and it loads-or-creates, sets the fields, and saves. Respects entity validation, permissions, and audit trails (Record Changes). To always insert use Create Record; to read use Get Record / Run View.",
+      "DriverClass": "WriteEntityFieldsAction",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MJ entity name as registered in the metadata. Built-in MJ entities all use the 'MJ: ' prefix, e.g. 'MJ: AI Agents', 'MJ: Users', 'MJ: AI Prompt Runs'. Custom entities added by an MJ deployment may or may not use the prefix. Case-insensitive. Look up via Metadata.EntityByName if uncertain.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKey",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object identifying an EXISTING record to update, e.g. { \"ID\": \"...\" }. Most MJ entities use a single ID field; composite keys are supported via multiple key/value pairs. Accepts a JSON string as well. Omit this to create a new record (requires CreateIfMissing=true).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object mapping field names to values, e.g. { \"Status\": \"Active\", \"Description\": \"Updated\" }. Only writable fields are accepted; primary keys, computed fields, and timestamps (__mj_CreatedAt, __mj_UpdatedAt) are managed automatically and should be omitted. Fields not included are left unchanged on an update. Accepts a JSON string as well.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreateIfMissing",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "When true and no PrimaryKey is supplied, a new record is created with the supplied Fields. When false (default), a missing PrimaryKey is a validation error. Defaults to false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKey",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object containing the primary key field(s) and their value(s) for the affected (created or updated) record.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Saved",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean flag indicating whether the record was successfully saved.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Record created or updated successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required parameter was missing or invalid, or the save failed validation"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Entity not found in metadata"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RECORD_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No existing record was found for the supplied PrimaryKey"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "Permission denied accessing or saving the record"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SAVE_FAILED",
+            "IsSuccess": false,
+            "Description": "The record could not be saved (see message for the consolidated entity error)"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred while writing the record"
+          }
+        }
+      ]
+    }
+  }
+]

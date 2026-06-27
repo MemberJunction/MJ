@@ -524,14 +524,17 @@ flowchart TB
 ---
 
 ## 13. UX (world-class, manual AND agent-driven)
-**[D] Everything the agent does is also doable manually, beautifully.** Predictive Studio is an MJ Explorer dashboard (`BaseDashboard`, page-chrome trio, design tokens, mjButton, modern Angular, `NotifyLoadComplete`). Panels:
-- **Algorithm catalog** browser.
-- **Pipeline builder** — visual DAG of FeatureAssembly steps; **reuse the Foblex flow-editor** (`packages/Angular/Generic/flow-editor`) used by Flow Agents.
-- **Training run comparison** — metrics, feature importance, validation/holdout.
-- **Model registry** — promote `Draft → Validated → Published`; lineage view.
-- **Experiment session monitor** — live leaderboard, budget burn, pause/cancel.
-- **Embedded Model Development Agent chat** scoped to the agent.
-- **Feature Pipelines** authoring lives in **Knowledge Hub** (generalizing the autotagging UI).
+**[D] Everything the agent does is also doable manually, beautifully.** Predictive Studio is an MJ Explorer dashboard (`BaseDashboard`, page-chrome trio, design tokens, mjButton, modern Angular, `NotifyLoadComplete`), built to the **ng-dashboards world-class standards** used by the other Explorer dashboards (see `guides/DASHBOARD_BEST_PRACTICES.md`) and **lazy-loaded** (see `guides/LAZY_LOADING_GUIDE.md`).
+
+### 13.1 Pinned design (chosen from the option mockups, 2026-06-27 review — mockups in `plans/predictive-studio/mockups/`)
+Per-area chosen option (`<area>-<n>.html`):
+- **Home** → **Action-Forward** (`home-2`): a hero "Build a predictive model" band with entry paths (from data / from template / ask the agent) + a vertical activity/timeline feed of recent runs & promotions.
+- **Algorithm Catalog** → **Card-gallery + Guide-me** (`algorithms-2`): rich algorithm cards + a scenario picker that highlights recommendations from the `MJ: ML Algorithm Use Case Rankings` matrix.
+- **Pipeline Builder** → **Visual DAG** (`pipelines-1`) for maximum flexibility/intuitiveness. **[D] Weave Flow Agents in as step types** — the DAG provides basic feature-assembly steps natively, and a **Flow Agent can be embedded as a step** (richer per-record branching). **[D] Feature engineering is dual-homed**: the same visual DAG authoring also surfaces in **Knowledge Hub** as generalized **Feature Pipelines** (a generalized, more-flexible sibling of the Content classifier) — one builder, two entry points (Predictive Studio for model features, Knowledge Hub for standalone derived attributes).
+- **Experiments** → **Kanban** (`experiments-2`): iteration cards in Running / Completed / Pruned columns + leaderboard strip + budget bars.
+- **Model Registry** → **Master-detail** (`models-3`): model list + rich detail (lifecycle stepper, train-vs-holdout, feature importance, lineage graph, leakage sign-off gate).
+- **Compare Runs** → **all three layouts as switchable display modes** (`compare-1/2/3`): a view toggle between **Side-by-side columns**, **Overlay charts** (grouped bars + ROC), and **Champion-vs-challenger**. Build all three; user switches.
+- **Model Dev Agent** → **[D] embedded `@memberjunction/ng-conversations` chat pinned to the Model Dev Agent, available across ALL tabs** (not a standalone tab). Follow how other apps embed the conversations widget (`guides/CONVERSATIONS_UX_STACK_GUIDE.md`): pin `defaultAgentId`/`applicationId`, hide the agent picker, strip to the single agent. It's a docked/toggleable copilot panel so any panel can ask the agent to act on the current context.
 
 Bias to sensible defaults, deterministic + AI-assisted suggestions, progressive disclosure (powerful but not intimidating for an advanced business user).
 
