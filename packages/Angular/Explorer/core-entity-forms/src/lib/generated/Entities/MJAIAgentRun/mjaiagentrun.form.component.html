@@ -767,6 +767,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Experiment Session Iterations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJExperimentSessionIterations"
+        SectionName="Experiment Session Iterations"
+        Icon="fa fa-vial"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJExperimentSessionIterations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Experiment Session Iterations','AIAgentRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Experiment Session Iterations')"
+                [AllowLoad]="IsSectionExpanded('mJExperimentSessionIterations')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJExperimentSessionIterations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Experiment Sessions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJExperimentSessions"
+        SectionName="Experiment Sessions"
+        Icon="fa fa-flask"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJExperimentSessions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Experiment Sessions','AgentRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Experiment Sessions')"
+                [AllowLoad]="IsSectionExpanded('mJExperimentSessions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJExperimentSessions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         
