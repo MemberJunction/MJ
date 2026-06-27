@@ -18,7 +18,9 @@
 
 import { BaseRealtimeChannelServer } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { IRealtimeChannelServerDataAware } from './realtime-channel-server-data-context';
+import { buildAgentMediaContextNote } from './agent-media-library';
 
 /**
  * Server half of the Media interactive channel. One instance per realtime session (created by
@@ -31,10 +33,46 @@ import { LogError } from '@memberjunction/core';
  *    flag-don't-drop is the safe posture, matching `WhiteboardChannelServer`).
  */
 @RegisterClass(BaseRealtimeChannelServer, 'MediaChannelServer')
-export class MediaChannelServer extends BaseRealtimeChannelServer {
+export class MediaChannelServer extends BaseRealtimeChannelServer implements IRealtimeChannelServerDataAware {
+    /** The session's data context, handed over by the host before {@link OnSessionStarted}. */
+    private sessionContextUser: UserInfo | null = null;
+    private sessionProvider: IMetadataProvider | null = null;
+
     /** Matches the seeded `MJ: AI Agent Channels` row's `Name`. */
     public get ChannelName(): string {
         return 'Media';
+    }
+
+    /**
+     * Receives the session's MJ data context from the host (between `Initialize` and
+     * `OnSessionStarted`) — used by {@link OnSessionStarted} to resolve the agent's media kit.
+     */
+    public SetSessionDataContext(contextUser: UserInfo, provider: IMetadataProvider): void {
+        this.sessionContextUser = contextUser;
+        this.sessionProvider = provider;
+    }
+
+    /**
+     * Resolves the agent's curated media kit (a bound `MJ: Collections` of artifacts) into a manifest
+     * and feeds it to the live model as a background context note, so the agent knows what it can show
+     * (and surfaces items via the existing `Media_ShowMedia` tool). Best-effort: any failure is logged
+     * and the session proceeds with no kit (the host also wraps this in try/catch).
+     */
+    public override async OnSessionStarted(): Promise<void> {
+        const agentID = this.Context?.AgentID;
+        if (!agentID || !this.sessionContextUser || !this.sessionProvider) {
+            return; // no agent / data context — nothing to resolve (ad-hoc Media_ShowMedia still works)
+        }
+        const note = await buildAgentMediaContextNote(this.sessionProvider, this.sessionContextUser, agentID);
+        if (note) {
+            this.Context?.SendContextNote?.(note);
+        }
+    }
+
+    public override Dispose(): void {
+        this.sessionContextUser = null;
+        this.sessionProvider = null;
+        super.Dispose();
     }
 
     /**

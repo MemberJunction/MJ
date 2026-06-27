@@ -463,6 +463,17 @@ The whiteboard now lives in **two layers**, and the split is the point:
 
 **Restore-on-resume**: `RestoreState` rehydrates a prior session's board **in place** into the same `WhiteboardState` instance (`LoadFromJSON`), so the save subscription and any later surface binding keep pointing at one engine. Malformed payloads return `false` and the board starts fresh.
 
+### The Media channel's agent media library (Collections as kits)
+
+The **Media** channel (`MediaChannelServer` / `RealtimeMediaChannel`, seeded row `Name: 'Media'`) lets the agent put images/video/audio/PDF/web on a shared surface. Beyond ad-hoc `Media_ShowMedia({ url | fileId })`, an agent can be given a **curated, governed media kit** it reasons over — built by **reusing Artifacts + Collections**, not a bespoke entity:
+
+- **A `MJ: Collections` of `MJ: Artifacts` IS the kit.** The artifact (+ current version) describes the media — `FileID → MJ: Files`, `MimeType`, name, viewer, versioning, permissions. Bytes stream through the authenticated `/media` route. Nothing is duplicated.
+- **Agent-reasoning metadata lives per-membership** on `MJ: Collection Artifacts`: `Sequence` (priority/order, pre-existing) + **`ContextDescription`** (the agent-facing "what this is / when to show it") + **`Preload`** (eager hint). Per-membership means the same artifact can be framed differently in different kits.
+- **Binding:** `AIAgent.DefaultMediaCollectionID` (FK → `Collection`) is the agent's default kit; per-session resolution is `runtime override > agent default > none`.
+- **Server-side resolution, existing client tool.** `MediaChannelServer` implements `IRealtimeChannelServerDataAware` (the host hands it the session `contextUser` + `provider` between `Initialize` and `OnSessionStarted`); on start it resolves the kit via `agent-media-library.ts` (`buildAgentMediaContextNote`) and `SendContextNote`s a manifest (`fileId`, type, display name, when-to-show, PRELOAD). The agent then surfaces items with the **existing** `Media_ShowMedia({ fileId, mediaType, displayName })` — no new client tool, no client round-trips. An agent with no kit is unaffected.
+
+The resolver (`mediaTypeFromMimeType` / `resolveAgentMediaManifest` / `formatAgentMediaManifest`) is exported from `@memberjunction/ai-agents` and unit-tested. See `plans/praxis/AGENT_MEDIA_LIBRARY_PLAN.md`.
+
 ### Interactions between channels
 
 The channels are not silos — they converge on the one shared model context and the one overlay shell:
