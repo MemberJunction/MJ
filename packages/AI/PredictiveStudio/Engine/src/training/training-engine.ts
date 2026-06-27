@@ -43,11 +43,7 @@ import type {
   FittedPreprocessing,
   FeatureStepGraph,
 } from '@memberjunction/predictive-studio-core';
-import type {
-  MJMLTrainingPipelineEntity,
-  MJMLModelEntity,
-  MJMLTrainingRunEntity,
-} from '@memberjunction/core-entities';
+import type { MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 
 import { FeatureAssemblyExecutor, type FeatureAssemblyResult, detectSingleFeatureDominance, type DominanceResult } from '../feature-assembly';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from './types';
@@ -332,17 +328,23 @@ export class TrainingEngine {
     return model;
   }
 
-  /** Assemble the model lineage blob (provenance, §4.3). */
-  private buildLineage(
-    resolved: ResolvedPipeline,
-    input: TrainModelInput,
-    split: HoldoutSplit,
-    _response: TrainResponse,
-  ): Record<string, unknown> {
+  /**
+   * Assemble the model lineage blob (provenance, §4.3). This blob must be
+   * **self-contained enough to re-assemble features at score time** — the
+   * scoring path ({@link MLModelInferenceProcessor}) reconstructs its assembly
+   * config from `lineage.targetEntityName` / `sourceBindings` / `featureSteps` /
+   * `asOfStrategy` when the pipeline row isn't separately loaded. Omitting
+   * `targetEntityName` or `featureSteps` here would leave the model unable to
+   * produce any feature columns at inference (train/serve break), so both are
+   * persisted alongside the other provenance fields.
+   */
+  private buildLineage(resolved: ResolvedPipeline, input: TrainModelInput, split: HoldoutSplit, _response: TrainResponse): Record<string, unknown> {
     return {
       pipelineId: resolved.pipeline.ID,
       pipelineVersion: resolved.pipeline.Version,
+      targetEntityName: resolved.targetEntityName,
       sourceBindings: resolved.sourceBindings,
+      featureSteps: resolved.featureSteps,
       asOfStrategy: resolved.asOf,
       sidecarVersion: input.sidecarVersion ?? null,
       lockedHoldoutRowCount: split.holdoutRowCount,

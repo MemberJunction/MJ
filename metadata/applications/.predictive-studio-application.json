@@ -1,0 +1,22 @@
+{
+  "fields": {
+    "Name": "Predictive Studio",
+    "Description": "Build genuinely useful predictive models on your own data — assemble features across entities, queries, external sources and vectors; train from a curated algorithm catalog; run agent-driven experiments; promote, score, and maintain models. The Model Development Agent can drive the whole flow from plain-English goals.",
+    "Icon": "fa-solid fa-wand-magic-sparkles",
+    "DefaultForNewUser": false,
+    "DefaultSequence": 1020,
+    "Color": "#2050c8",
+    "DefaultNavItems": [
+      {
+        "Label": "Predictive Studio",
+        "Icon": "fa-solid fa-wand-magic-sparkles",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioDashboard",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  }
+}

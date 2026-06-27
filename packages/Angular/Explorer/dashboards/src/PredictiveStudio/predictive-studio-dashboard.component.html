@@ -1,0 +1,88 @@
+<mj-page-layout>
+  <mj-page-header
+    [Title]="activeLabel"
+    [Icon]="activeIcon"
+    Subtitle="Feature engineering, predictive modeling, and agent-driven model development">
+    <div meta>
+      <mj-stat-badge [Count]="engine.Models.length" Label="models"></mj-stat-badge>
+    </div>
+    <div actions>
+      <button mjButton variant="secondary" size="sm" (click)="Refresh()">
+        <i class="fa-solid fa-rotate-right"></i> <span class="action-btn-label">Refresh</span>
+      </button>
+      <button mjButton variant="primary" size="sm" (click)="openChat()">
+        <i class="fa-solid fa-robot"></i> <span class="action-btn-label">Model Dev Agent</span>
+      </button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (isLoading) {
+      <div class="ps-loading"><mj-loading text="Loading Predictive Studio..." size="medium"></mj-loading></div>
+    } @else {
+      <div class="ps-shell" [class.chat-open]="chatOpen">
+        <!-- left nav -->
+        <aside class="ps-leftnav">
+          @for (group of groups; track group) {
+            <div class="ps-nav-group">{{ group }}</div>
+            @for (item of itemsForGroup(group); track item.key) {
+              <button class="ps-nav-item" [class.active]="activePanel === item.key" (click)="selectPanel(item.key)">
+                <i [class]="item.icon"></i> <span>{{ item.label }}</span>
+              </button>
+            }
+          }
+          <div class="ps-nav-group">Assist</div>
+          <button class="ps-nav-item assist" [class.active]="chatOpen" (click)="toggleChat()">
+            <i class="fa-solid fa-robot"></i> <span>Model Dev Agent</span>
+          </button>
+        </aside>
+
+        <!-- panel host -->
+        <section class="ps-content">
+          @switch (activePanel) {
+            @case ('home') { <ps-home [engine]="engine" (navigate)="selectPanel($event)" (askAgent)="openChat()"></ps-home> }
+            @case ('catalog') { <ps-catalog [engine]="engine"></ps-catalog> }
+            @case ('pipelines') { <ps-pipelines [engine]="engine"></ps-pipelines> }
+            @case ('experiments') { <ps-experiments [engine]="engine"></ps-experiments> }
+            @case ('registry') { <ps-registry [engine]="engine"></ps-registry> }
+            @case ('compare') { <ps-compare></ps-compare> }
+          }
+        </section>
+
+        <!-- docked copilot chat -->
+        @if (chatOpen) {
+          <aside class="ps-copilot">
+            <div class="ps-copilot-head">
+              <div class="ps-copilot-title"><i class="fa-solid fa-robot"></i> Model Dev Agent</div>
+              <button class="ps-copilot-close" (click)="toggleChat()" aria-label="Close copilot"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="ps-copilot-body">
+              @if (currentUser) {
+                <mj-conversation-chat-area
+                  [Provider]="Provider"
+                  [environmentId]="chatEnvironmentId"
+                  [currentUser]="currentUser"
+                  [suppressNewConversationEmptyState]="true"
+                  [allowMentions]="false"
+                  [overlayMode]="true"
+                  [showExportButton]="false"
+                  [showShareButton]="false"
+                  [showArtifactIndicator]="false"
+                  [showAgentPicker]="false"
+                  [showAgentModePicker]="false"
+                  [defaultAgentId]="modelDevAgentId"
+                  [applicationScope]="'Application'"
+                  [applicationId]="applicationId"
+                  [appContext]="$any(chatAppContext)"
+                  emptyStateGreeting="Describe a prediction goal and I'll design the pipeline.">
+                </mj-conversation-chat-area>
+              } @else {
+                <div class="ps-copilot-empty"><mj-loading text="Connecting…" size="small"></mj-loading></div>
+              }
+            </div>
+          </aside>
+        }
+      </div>
+    }
+  </mj-page-body>
+</mj-page-layout>

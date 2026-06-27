@@ -49,6 +49,10 @@
       "types": "./dist/component-studio-dashboards.module.d.ts",
       "default": "./dist/component-studio-dashboards.module.js"
     },
+    "./predictive-studio-dashboards.module": {
+      "types": "./dist/predictive-studio-dashboards.module.d.ts",
+      "default": "./dist/predictive-studio-dashboards.module.js"
+    },
     "./integration.module": {
       "types": "./dist/Integration/integration.module.d.ts",
       "default": "./dist/Integration/integration.module.js"
