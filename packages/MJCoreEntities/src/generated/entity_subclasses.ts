@@ -20943,7 +20943,7 @@ export const MJOpenAppSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: System Name
         * * SQL Data Type: nvarchar(64)
         * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.`),
     DisplayName: z.string().describe(`
@@ -20973,7 +20973,7 @@ export const MJOpenAppSchema = z.object({
         * * Description: Optional contact email for the publisher`),
     PublisherURL: z.string().nullable().describe(`
         * * Field Name: PublisherURL
-        * * Display Name: Publisher URL
+        * * Display Name: Publisher Website
         * * SQL Data Type: nvarchar(500)
         * * Description: Optional website URL for the publisher`),
     RepositoryURL: z.string().describe(`
@@ -20983,12 +20983,12 @@ export const MJOpenAppSchema = z.object({
         * * Description: GitHub repository URL where this app is hosted`),
     SchemaName: z.string().nullable().describe(`
         * * Field Name: SchemaName
-        * * Display Name: Schema Name
+        * * Display Name: Database Schema
         * * SQL Data Type: nvarchar(128)
         * * Description: Database schema name used by this app for its tables and objects. Unique per instance.`),
     MJVersionRange: z.string().describe(`
         * * Field Name: MJVersionRange
-        * * Display Name: MJ Version Range
+        * * Display Name: Compatible MJ Version Range
         * * SQL Data Type: nvarchar(100)
         * * Description: Semver range specifying which MJ versions this app is compatible with (e.g. >=4.0.0 <5.0.0)`),
     License: z.string().nullable().describe(`
@@ -20998,12 +20998,12 @@ export const MJOpenAppSchema = z.object({
         * * Description: SPDX license identifier for this app (e.g. MIT, Apache-2.0)`),
     Icon: z.string().nullable().describe(`
         * * Field Name: Icon
-        * * Display Name: Icon
+        * * Display Name: Icon Class
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional icon identifier (e.g. Font Awesome class) for UI display`),
     Color: z.string().nullable().describe(`
         * * Field Name: Color
-        * * Display Name: Color
+        * * Display Name: Branding Color
         * * SQL Data Type: nvarchar(20)
         * * Description: Optional hex color code for branding in the UI (e.g. #FF5733)`),
     ManifestJSON: z.string().describe(`
@@ -21048,7 +21048,7 @@ export const MJOpenAppSchema = z.object({
         * * Default Value: getutcdate()`),
     Subpath: z.string().nullable().describe(`
         * * Field Name: Subpath
-        * * Display Name: Subpath
+        * * Display Name: Repository Subpath
         * * SQL Data Type: nvarchar(500)
         * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`),
     InstalledByUser: z.string().describe(`
@@ -23851,10 +23851,11 @@ export const MJRemoteOperationSchema = z.object({
         * * Display Name: Code Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`),
-    Libraries: z.string().nullable().describe(`
+    Libraries: z.any().nullable().describe(`
         * * Field Name: Libraries
         * * Display Name: Libraries
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
         * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
@@ -29919,7 +29920,7 @@ export const MJWidgetInstanceSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Widget Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Human-readable name for this widget deployment (e.g. "Acme Marketing Site Support").`),
     PublicKey: z.string().describe(`
@@ -29929,19 +29930,19 @@ export const MJWidgetInstanceSchema = z.object({
         * * Description: Public, non-secret embed key (e.g. "pk_live_…") placed in the host page's data-widget-key attribute. Used to resolve this configuration at POST /widget/session. Unique. Not a credential — security comes from the origin allowlist, rate limits, the restricted guest role, and short-lived minted tokens.`),
     ApplicationID: z.string().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application
+        * * Display Name: Application ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
         * * Description: Foreign key to Application — the single app a guest session is scoped to. Mirrors the magic-link single-application model.`),
     PinnedAgentID: z.string().describe(`
         * * Field Name: PinnedAgentID
-        * * Display Name: Pinned Agent
+        * * Display Name: Pinned Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Foreign key to AIAgent — the support agent that is PINNED for every turn (passed as explicitAgentId). D5: pinning fixes which agent runs; combined with the restricted guest role it prevents a public visitor from reaching arbitrary agents/data. The pinned agent's own tool/handoff surface should be support-scoped.`),
     GuestRoleID: z.string().describe(`
         * * Field Name: GuestRoleID
-        * * Display Name: Guest Role
+        * * Display Name: Guest Role ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
         * * Description: Foreign key to Role — the restricted guest role assigned to the synthesized guest principal. This role's entity permissions are the real authorization boundary (read/write only the visitor's own Conversation + Conversation Details). Roles ride per-session JWT claims, not DB rows on the shared Anonymous principal.`),
@@ -30011,15 +30012,15 @@ export const MJWidgetInstanceSchema = z.object({
         * * Default Value: getutcdate()`),
     Application: z.string().describe(`
         * * Field Name: Application
-        * * Display Name: Application Name
+        * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
     PinnedAgent: z.string().nullable().describe(`
         * * Field Name: PinnedAgent
-        * * Display Name: Pinned Agent Name
+        * * Display Name: Pinned Agent
         * * SQL Data Type: nvarchar(255)`),
     GuestRole: z.string().describe(`
         * * Field Name: GuestRole
-        * * Display Name: Guest Role Name
+        * * Display Name: Guest Role
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -85155,7 +85156,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: System Name
     * * SQL Data Type: nvarchar(64)
     * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.
     */
@@ -85233,7 +85234,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: PublisherURL
-    * * Display Name: Publisher URL
+    * * Display Name: Publisher Website
     * * SQL Data Type: nvarchar(500)
     * * Description: Optional website URL for the publisher
     */
@@ -85259,7 +85260,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: SchemaName
-    * * Display Name: Schema Name
+    * * Display Name: Database Schema
     * * SQL Data Type: nvarchar(128)
     * * Description: Database schema name used by this app for its tables and objects. Unique per instance.
     */
@@ -85272,7 +85273,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: MJVersionRange
-    * * Display Name: MJ Version Range
+    * * Display Name: Compatible MJ Version Range
     * * SQL Data Type: nvarchar(100)
     * * Description: Semver range specifying which MJ versions this app is compatible with (e.g. >=4.0.0 <5.0.0)
     */
@@ -85298,7 +85299,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Icon
-    * * Display Name: Icon
+    * * Display Name: Icon Class
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional icon identifier (e.g. Font Awesome class) for UI display
     */
@@ -85311,7 +85312,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Color
-    * * Display Name: Color
+    * * Display Name: Branding Color
     * * SQL Data Type: nvarchar(20)
     * * Description: Optional hex color code for branding in the UI (e.g. #FF5733)
     */
@@ -85406,7 +85407,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Subpath
-    * * Display Name: Subpath
+    * * Display Name: Repository Subpath
     * * SQL Data Type: nvarchar(500)
     * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.
     */
@@ -92023,6 +92024,20 @@ export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperatio
 
 
 /**
+ * One library that an AI-authored Remote Operation body imports. CodeGen turns the `LibrariesObject` array
+ * (the strongly-typed accessor bound to `MJ: Remote Operations.Libraries` via JSONType metadata) into one
+ * `import { ...ItemsUsed } from "Library"` per entry at the top of the generated `remote_operations.ts`.
+ * The always-available default libraries (RunView / Metadata / RunQuery from @memberjunction/core) are NOT
+ * listed here — they are emitted for every operation automatically.
+ */
+export interface MJRemoteOperationEntity_RemoteOperationLibrary {
+    /** The npm package to import from, e.g. "@memberjunction/ai-prompts". */
+    Library: string;
+    /** The exported items used from that package, e.g. ["AIPromptRunner"]. */
+    ItemsUsed: string[];
+}
+
+/**
  * MJ: Remote Operations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RemoteOperation
@@ -92443,6 +92458,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
     * * Field Name: Libraries
     * * Display Name: Libraries
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
     * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.
     */
     get Libraries(): string | null {
@@ -92450,6 +92466,27 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
     }
     set Libraries(value: string | null) {
         this.Set('Libraries', value);
+    }
+
+    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
+    private _LibrariesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
+        const raw = this.Libraries;
+        if (raw !== this._LibrariesObject_lastRaw) {
+            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
+            this._LibrariesObject_lastRaw = raw;
+        }
+        return this._LibrariesObject_cached!;
+    }
+    set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Libraries = raw;
+        this._LibrariesObject_cached = value;
+        this._LibrariesObject_lastRaw = raw;
     }
 
     /**
@@ -108823,15 +108860,15 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * Validate() method override for MJ: Widget Instances entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * RateLimitPerMinute: The rate limit per minute must be a positive number greater than zero to ensure a valid request threshold is set.
-    * * SessionTTLMinutes: The session time-to-live (TTL) must be greater than 0 and cannot exceed 1440 minutes (24 hours).
+    * * RateLimitPerMinute: The rate limit per minute must be greater than zero to ensure a valid API traffic threshold is enforced.
+    * * SessionTTLMinutes: Session TTL (Time-To-Live) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateRateLimitPerMinuteGreaterThanZero(result);
+        this.ValidateRateLimitPerMinutePositive(result);
         this.ValidateSessionTTLMinutesRange(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
@@ -108839,16 +108876,16 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
     }
 
     /**
-    * The rate limit per minute must be a positive number greater than zero to ensure a valid request threshold is set.
+    * The rate limit per minute must be greater than zero to ensure a valid API traffic threshold is enforced.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateRateLimitPerMinuteGreaterThanZero(result: ValidationResult) {
-    	if (this.RateLimitPerMinute !== undefined && this.RateLimitPerMinute !== null && this.RateLimitPerMinute <= 0) {
+    public ValidateRateLimitPerMinutePositive(result: ValidationResult) {
+    	if (this.RateLimitPerMinute <= 0) {
     		result.Errors.push(new ValidationErrorInfo(
     			"RateLimitPerMinute",
-    			"The rate limit per minute must be greater than 0.",
+    			"The rate limit per minute must be greater than zero.",
     			this.RateLimitPerMinute,
     			ValidationErrorType.Failure
     		));
@@ -108856,22 +108893,22 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
     }
 
     /**
-    * The session time-to-live (TTL) must be greater than 0 and cannot exceed 1440 minutes (24 hours).
+    * Session TTL (Time-To-Live) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateSessionTTLMinutesRange(result: ValidationResult) {
-        if (this.SessionTTLMinutes !== undefined && this.SessionTTLMinutes !== null) {
-            if (this.SessionTTLMinutes <= 0 || this.SessionTTLMinutes > 1440) {
-                result.Errors.push(new ValidationErrorInfo(
-                    "SessionTTLMinutes",
-                    "Session TTL must be greater than 0 and less than or equal to 1440 minutes (24 hours).",
-                    this.SessionTTLMinutes,
-                    ValidationErrorType.Failure
-                ));
-            }
-        }
+    	if (this.SessionTTLMinutes !== undefined && this.SessionTTLMinutes !== null) {
+    		if (this.SessionTTLMinutes <= 0 || this.SessionTTLMinutes > 1440) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"SessionTTLMinutes",
+    				"Session TTL must be greater than 0 and less than or equal to 1440 minutes (24 hours).",
+    				this.SessionTTLMinutes,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -108889,7 +108926,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: Name
-    * * Display Name: Widget Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Human-readable name for this widget deployment (e.g. "Acme Marketing Site Support").
     */
@@ -108915,7 +108952,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application
+    * * Display Name: Application ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
     * * Description: Foreign key to Application — the single app a guest session is scoped to. Mirrors the magic-link single-application model.
@@ -108929,7 +108966,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: PinnedAgentID
-    * * Display Name: Pinned Agent
+    * * Display Name: Pinned Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Foreign key to AIAgent — the support agent that is PINNED for every turn (passed as explicitAgentId). D5: pinning fixes which agent runs; combined with the restricted guest role it prevents a public visitor from reaching arbitrary agents/data. The pinned agent's own tool/handoff surface should be support-scoped.
@@ -108943,7 +108980,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: GuestRoleID
-    * * Display Name: Guest Role
+    * * Display Name: Guest Role ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
     * * Description: Foreign key to Role — the restricted guest role assigned to the synthesized guest principal. This role's entity permissions are the real authorization boundary (read/write only the visitor's own Conversation + Conversation Details). Roles ride per-session JWT claims, not DB rows on the shared Anonymous principal.
@@ -109087,7 +109124,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: Application
-    * * Display Name: Application Name
+    * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string {
@@ -109096,7 +109133,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: PinnedAgent
-    * * Display Name: Pinned Agent Name
+    * * Display Name: Pinned Agent
     * * SQL Data Type: nvarchar(255)
     */
     get PinnedAgent(): string | null {
@@ -109105,7 +109142,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: GuestRole
-    * * Display Name: Guest Role Name
+    * * Display Name: Guest Role
     * * SQL Data Type: nvarchar(50)
     */
     get GuestRole(): string {

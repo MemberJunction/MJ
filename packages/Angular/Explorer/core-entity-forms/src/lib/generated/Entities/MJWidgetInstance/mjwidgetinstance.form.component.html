@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Widget Configuration Section -->
+    <!-- Widget Details Section -->
     <mj-collapsible-panel
-        SectionKey="widgetConfiguration"
-        SectionName="Widget Configuration"
-        Icon="fa fa-sliders-h"
+        SectionKey="widgetDetails"
+        SectionName="Widget Details"
+        Icon="fa fa-window-maximize"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -52,11 +52,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Relationships Section -->
+    <!-- Security & Scope Section -->
     <mj-collapsible-panel
-        SectionKey="relationships"
-        SectionName="Relationships"
-        Icon="fa fa-link"
+        SectionKey="securityScope"
+        SectionName="Security & Scope"
+        Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -86,16 +86,6 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Security and Access Section -->
-    <mj-collapsible-panel
-        SectionKey="securityAndAccess"
-        SectionName="Security and Access"
-        Icon="fa fa-shield-alt"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -112,6 +102,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Session & Limits Section -->
+    <mj-collapsible-panel
+        SectionKey="sessionLimits"
+        SectionName="Session & Limits"
+        Icon="fa fa-clock"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"

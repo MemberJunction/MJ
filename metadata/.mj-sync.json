@@ -67,7 +67,8 @@
     "entity-form-overrides",
     "entity-settings",
     "roles",
-    "entity-permissions"
+    "entity-permissions",
+    "widget-instances"
   ],
   "sqlLogging": {
     "enabled": true,

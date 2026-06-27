@@ -15,9 +15,9 @@ export class MJWidgetInstanceFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'widgetConfiguration', sectionName: 'Widget Configuration', isExpanded: true },
-            { sectionKey: 'relationships', sectionName: 'Relationships', isExpanded: true },
-            { sectionKey: 'securityAndAccess', sectionName: 'Security and Access', isExpanded: true },
+            { sectionKey: 'widgetDetails', sectionName: 'Widget Details', isExpanded: true },
+            { sectionKey: 'securityScope', sectionName: 'Security & Scope', isExpanded: true },
+            { sectionKey: 'sessionLimits', sectionName: 'Session & Limits', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
