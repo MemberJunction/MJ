@@ -1107,7 +1107,7 @@ export const MJAIAgentChannelSchema = z.object({
         * * Description: Optional JSON Schema used to validate the per-instance channel configuration (AIAgentSessionChannel.Config).`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether this channel definition is available for use. Inactive channels cannot be attached to a session.`),
@@ -1121,6 +1121,18 @@ export const MJAIAgentChannelSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    IsHeadless: z.boolean().describe(`
+        * * Field Name: IsHeadless
+        * * Display Name: Headless
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the channel has no visible surface and is never mounted as a tab — it is a live wire (e.g. the headless ClientContextChannel that streams app context + capability manifest to the co-agent). When 0 (default), the channel renders a surface.`),
+    UIConfig: z.any().nullable().describe(`
+        * * Field Name: UIConfig
+        * * Display Name: UI Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentChannelEntity_IChannelUIConfig
+        * * Description: Channel-definition-level presentation/chrome config JSON (shape = IChannelUIConfig): tab DisplayName, GroupName, Color (prefer a design-token name), Icon, SortOrder. Distinct from ConfigSchema, which validates per-session AIAgentSessionChannel.Config state-of-record. Null = host defaults.`),
 });
 
 export type MJAIAgentChannelEntityType = z.infer<typeof MJAIAgentChannelSchema>;
@@ -8269,7 +8281,7 @@ export const MJApplicationSchema = z.object({
         * * Default Value: getutcdate()`),
     SchemaAutoAddNewEntities: z.string().nullable().describe(`
         * * Field Name: SchemaAutoAddNewEntities
-        * * Display Name: Schema Auto Add New Entities
+        * * Display Name: Auto Add Entities From Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas`),
     Color: z.string().nullable().describe(`
@@ -8343,6 +8355,12 @@ export const MJApplicationSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, Path is automatically generated from Name on save. Set to false to manually control the Path value. Defaults to true for new applications.`),
+    AgentSettings: z.any().nullable().describe(`
+        * * Field Name: AgentSettings
+        * * Display Name: Agent Settings
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJApplicationEntity_IAgentSettings
+        * * Description: App-scoped agent configuration JSON (shape = IAgentSettings). Declares the default/lead agent, relevant agents available to conversational and realtime co-agents, app-scoped client tool references, and realtime persona/disclosure overrides that layer into the agent config cascade. Null = no app-level agent config.`),
 });
 
 export type MJApplicationEntityType = z.infer<typeof MJApplicationSchema>;
@@ -34046,6 +34064,31 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
 
 /**
+ * Channel-definition-level presentation/chrome config.
+ *
+ * Stored as a JSON object in the `UIConfig` column of the `MJ: AI Agent Channels` entity.
+ * CodeGen emits a strongly-typed `UIConfigObject` accessor on `AIAgentChannelEntity`
+ * that returns `MJAIAgentChannelEntity_IChannelUIConfig | null`.
+ *
+ * Distinct from the channel's `ConfigSchema` column, which validates the *per-session*
+ * `AIAgentSessionChannel.Config` state-of-record. This bag is the channel-definition's
+ * own UI chrome, read in-memory by the host when rendering channel tabs. Extensible with
+ * no DB change — add future chrome fields here.
+ */
+export interface MJAIAgentChannelEntity_IChannelUIConfig {
+    /** Human label for the tab/chrome. Null → fall back to the channel's Name. */
+    DisplayName?: string | null;
+    /** Optional group for clustering channels in the UI. Null → ungrouped. */
+    GroupName?: string | null;
+    /** Chrome accent. Prefer a semantic design-token name (e.g. "--mj-brand-primary"); hex allowed but discouraged. */
+    Color?: string | null;
+    /** Font Awesome class, e.g. "fa-solid fa-satellite-dish". */
+    Icon?: string | null;
+    /** Display order within a group/list. */
+    SortOrder?: number | null;
+}
+
+/**
  * MJ: AI Agent Channels - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentChannel
@@ -34173,7 +34216,7 @@ export class MJAIAgentChannelEntity extends BaseEntity<MJAIAgentChannelEntityTyp
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: Whether this channel definition is available for use. Inactive channels cannot be attached to a session.
@@ -34203,6 +34246,55 @@ export class MJAIAgentChannelEntity extends BaseEntity<MJAIAgentChannelEntityTyp
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IsHeadless
+    * * Display Name: Headless
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the channel has no visible surface and is never mounted as a tab — it is a live wire (e.g. the headless ClientContextChannel that streams app context + capability manifest to the co-agent). When 0 (default), the channel renders a surface.
+    */
+    get IsHeadless(): boolean {
+        return this.Get('IsHeadless');
+    }
+    set IsHeadless(value: boolean) {
+        this.Set('IsHeadless', value);
+    }
+
+    /**
+    * * Field Name: UIConfig
+    * * Display Name: UI Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentChannelEntity_IChannelUIConfig
+    * * Description: Channel-definition-level presentation/chrome config JSON (shape = IChannelUIConfig): tab DisplayName, GroupName, Color (prefer a design-token name), Icon, SortOrder. Distinct from ConfigSchema, which validates per-session AIAgentSessionChannel.Config state-of-record. Null = host defaults.
+    */
+    get UIConfig(): string | null {
+        return this.Get('UIConfig');
+    }
+    set UIConfig(value: string | null) {
+        this.Set('UIConfig', value);
+    }
+
+    private _UIConfigObject_cached: MJAIAgentChannelEntity_IChannelUIConfig | null | undefined = undefined;
+    private _UIConfigObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for UIConfig — returns parsed JSON as MJAIAgentChannelEntity_IChannelUIConfig.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get UIConfigObject(): MJAIAgentChannelEntity_IChannelUIConfig | null {
+        const raw = this.UIConfig;
+        if (raw !== this._UIConfigObject_lastRaw) {
+            this._UIConfigObject_cached = raw ? JSON.parse(raw) : null;
+            this._UIConfigObject_lastRaw = raw;
+        }
+        return this._UIConfigObject_cached!;
+    }
+    set UIConfigObject(value: MJAIAgentChannelEntity_IChannelUIConfig | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.UIConfig = raw;
+        this._UIConfigObject_cached = value;
+        this._UIConfigObject_lastRaw = raw;
     }
 }
 
@@ -53142,6 +53234,70 @@ export interface MJApplicationEntity_IDefaultNavItem {
 }
 
 /**
+ * App-scoped agent configuration.
+ *
+ * Stored as a JSON object in the `AgentSettings` column of the `Applications` entity.
+ * CodeGen emits a strongly-typed `AgentSettingsObject` accessor on `ApplicationEntity`
+ * that returns `MJApplicationEntity_IAgentSettings | null`.
+ *
+ * Read by the conversations default-agent resolver (for the app's default/lead agent)
+ * and by the realtime co-agent cascade (relevant agents, app-scoped client tools, and
+ * realtime persona/disclosure overrides). Every field is optional — an app opts into
+ * exactly what it needs.
+ *
+ * Disclosure values ('silent' | 'mention' | 'hand-voice') mirror the AgentDisclosurePolicy
+ * union declared in @memberjunction/ai-core-plus. Keep the two in lockstep.
+ */
+export interface MJApplicationEntity_IAgentSettings {
+    /** The app's default/lead agent (conversational default AND realtime lead identity). Agent ID. */
+    DefaultAgentID?: string | null;
+
+    /**
+     * Agents relevant to this app — the static allowed-target set for the co-agent.
+     * Union-accumulated at runtime with agent-type defaults and dynamic (channel) registrations.
+     */
+    RelevantAgents?: Array<{
+        /** Agent ID (loop or flow — transparent to the co-agent). */
+        AgentID: string;
+        /** Optional friendly label for the capability manifest / disclosure ("Skip", "Query Builder"). */
+        Label?: string | null;
+        /** Per-target disclosure override; falls back to the effective default disclosure. */
+        Disclosure?: 'silent' | 'mention' | 'hand-voice' | null;
+        /** If true, surfaced in pickers / proactively offered; if false, available but not advertised. */
+        Advertised?: boolean | null;
+    }>;
+
+    /**
+     * App-scoped static client tools, by tool-definition reference.
+     * Surfaced to every agent acting in this app and resolved by the unified client-tool resolver.
+     */
+    ClientTools?: Array<{
+        /** References MJ: AI Client Tool Definitions by ID (preferred) or Name. */
+        ClientToolDefinitionID?: string | null;
+        Name?: string | null;
+        /** Optional app-level priority for first-match-wins resolution. */
+        Priority?: number | null;
+    }>;
+
+    /**
+     * Realtime co-agent overrides that layer into the config cascade above the agent's own
+     * TypeConfiguration (and below runtime overrides). Only keys set here override; unset keys
+     * fall through to the agent / type defaults.
+     */
+    Realtime?: {
+        /** Default delegation disclosure for this app's co-agent. */
+        Disclosure?: 'silent' | 'mention' | 'hand-voice' | null;
+        /** Persona override folded into the session system prompt at mint. */
+        Persona?: {
+            Tone?: string | null;
+            SpeakingStyle?: string | null;
+        } | null;
+        /** Model preference override (AI Models Name or ID). */
+        ModelPreference?: string | null;
+    } | null;
+}
+
+/**
  * MJ: Applications - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Application
@@ -53292,7 +53448,7 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
 
     /**
     * * Field Name: SchemaAutoAddNewEntities
-    * * Display Name: Schema Auto Add New Entities
+    * * Display Name: Auto Add Entities From Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Comma-delimited list of schema names where entities will be automatically added to the application when created in those schemas
     */
@@ -53473,6 +53629,41 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     }
     set AutoUpdatePath(value: boolean) {
         this.Set('AutoUpdatePath', value);
+    }
+
+    /**
+    * * Field Name: AgentSettings
+    * * Display Name: Agent Settings
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJApplicationEntity_IAgentSettings
+    * * Description: App-scoped agent configuration JSON (shape = IAgentSettings). Declares the default/lead agent, relevant agents available to conversational and realtime co-agents, app-scoped client tool references, and realtime persona/disclosure overrides that layer into the agent config cascade. Null = no app-level agent config.
+    */
+    get AgentSettings(): string | null {
+        return this.Get('AgentSettings');
+    }
+    set AgentSettings(value: string | null) {
+        this.Set('AgentSettings', value);
+    }
+
+    private _AgentSettingsObject_cached: MJApplicationEntity_IAgentSettings | null | undefined = undefined;
+    private _AgentSettingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for AgentSettings — returns parsed JSON as MJApplicationEntity_IAgentSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get AgentSettingsObject(): MJApplicationEntity_IAgentSettings | null {
+        const raw = this.AgentSettings;
+        if (raw !== this._AgentSettingsObject_lastRaw) {
+            this._AgentSettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._AgentSettingsObject_lastRaw = raw;
+        }
+        return this._AgentSettingsObject_cached!;
+    }
+    set AgentSettingsObject(value: MJApplicationEntity_IAgentSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.AgentSettings = raw;
+        this._AgentSettingsObject_cached = value;
+        this._AgentSettingsObject_lastRaw = raw;
     }
 }
 

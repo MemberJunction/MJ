@@ -65,7 +65,10 @@ interface RealtimeAllowedAgent {
 `normalizeConfig()` gains normalizers for `disclosure` (enum-validate, drop unknown) and `allowedAgents` (array of well-typed entries). The **union accumulation** of `allowedAgents` is handled *outside* `DeepMergeConfigs` (which would array-replace) — a dedicated `accumulateAllowedAgents(...layers, appSettings, dynamic)` helper that dedupes by `agentId`, last-writer-wins on per-entry fields.
 
 ### 4.5 Session config migration
-Sessions currently persist `Config.targetAgentID`. Move to `Config.leadAgentID` (identity) + a resolved-at-runtime allowed union (not persisted in full — recomputed from cascade + live channel registrations on resume). Since realtime is unpublished, no data migration — just change the shape.
+Sessions currently persist `Config.targetAgentID` (confirmed scalar in `bridge-realtime-session-factory.ts`). Move to `Config.leadAgentID` (identity) + a resolved-at-runtime allowed union (not persisted in full — recomputed from cascade + live channel registrations on resume). Since realtime is unpublished, no data migration — just change the shape.
+
+### 4.6 Prerequisite — thread `ApplicationID` through realtime mint
+The app layer (cascade position 4) and the `RelevantAgents` static source both require the session to know its app. **Realtime does not thread `applicationId` today** — this is the shared prerequisite task specified in [05 § Prerequisite](05-config-cascade-and-shared-types.md). It must land before this move's app-sourced allowed set works.
 
 ## Tests
 - `accumulateAllowedAgents` unit: union/dedupe across type+agent+app+dynamic, per-entry override precedence.

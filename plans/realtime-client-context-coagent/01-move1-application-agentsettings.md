@@ -125,7 +125,7 @@ explicit input
   → Sage code-const fallback
 ```
 
-The resolver already receives `applicationId` + `provider`; read the app's `AgentSettingsObject` from cached app metadata (no extra query). Guard with `UUIDsEqual` for the agent lookup.
+The resolver already receives `applicationId` + `provider`. **Audit caveat:** `DefaultAgentResolver` has **no cached `Application` metadata** today, so "read `AgentSettingsObject` with no extra query" is not free yet. Verify whether `ApplicationSettingEngine`/`AIEngineBase` already caches `Application` rows; if so, read from there. If not, either (a) add a small cached `Application`-by-ID lookup, or (b) have the surface (which already has the app loaded) pass the resolved `AgentSettingsObject.DefaultAgentID` in via `DefaultAgentResolveOptions`. Pick during build; don't assume zero-query. Guard with `UUIDsEqual` for the agent lookup.
 
 ### 1.6 Seed (optional, demonstrative)
 Add an `AgentSettings` block to an existing app metadata file (e.g. `metadata/applications/.ai-application.json`) showing `DefaultAgentID` (via `@lookup:MJ: AI Agents.Name=...`) + one `RelevantAgents` entry, so the shape is exercised end-to-end. Use metadata sync, not SQL.

@@ -12,7 +12,7 @@ The realtime stack already has the perfect seam: **interactive channels** (`Base
 
 ```
   App surface (Explorer shell / Form Studio / Component Studio / chat-overlay)
-        │  publishes ContextSnapshot deltas + capability manifest
+        │  publishes AppContextSnapshot deltas + capability manifest
         ▼
   ClientContextChannel (client)  ──SendContextNote(serialized)──►  Realtime model
         ▲                                                              │
@@ -20,6 +20,15 @@ The realtime stack already has the perfect seam: **interactive channels** (`Base
         ▼
   ResolveClientTools(...) → local handler  (client-direct: no server hop)
 ```
+
+### 3.0 Two delivery parts (the audit found both are missing in realtime)
+
+Realtime receives **no** app context today — neither at mint nor mid-session (`buildRealtimeSessionParams` never injects `appContext`; `SendContextNote` exists but is never called with context). So Move 3 has **two** parts, both required:
+
+- **(a) Session-start injection** — fold the initial `AppContextSnapshot` into the realtime system prompt at mint, mirroring `BaseAgent.buildAppContextSection()`. New task in `buildRealtimeSessionParams` (base-agent.ts) + the client-direct mint path: read `params.Data.appContext` (already populated for async) and render it into the system prompt via the shared formatter. This gives the co-agent a correct picture from its first word.
+- **(b) Streaming deltas** — the `ClientContextChannel` pushes subsequent changes via `SendContextNote` (sections 3.1–3.6 below). Keeps it current as the user moves.
+
+Part (a) is the baseline; part (b) is the live wire. Ship (a) first — it's a small injection and instantly useful even before the channel exists.
 
 ### 3.1 The `ContextTool` (single stable proxy)
 Declared once at session start **iff** the agent supports the channel. It's the only tool whose schema the provider ever sees for app actions, so the provider re-declaration constraint never bites.
@@ -50,61 +59,59 @@ On call: the broker reads the live resolved set (`ResolveClientTools` + allowed-
 
 Unknown/stale `action` → structured error back to the model ("that action isn't available here right now"), so it self-corrects conversationally.
 
-### 3.2 The `ContextSnapshot` (typed, in `ai-core-plus`)
-New `packages/AI/CorePlus/src/client-context.ts`:
+### 3.2 EXTEND the existing `AppContextSnapshot` (do NOT create a new type)
+
+> ⚠️ **Audit correction.** A typed snapshot **already exists and is async-wired**: `AppContextSnapshot` + `BuildAppContextSnapshot()` in [`packages/AI/CorePlus/src/app-context.ts`](packages/AI/CorePlus/src/app-context.ts), carrying `App / ActiveNavItem / OtherNavItems / User / AdditionalContext`, flowing through `NavigationService` → `MJExplorerAppComponent.handleAgentContextUpdate` → `AppContextSnapshot$` → `[appContext]` → `ProcessMessageInput.appContext` → `BaseAgent.buildAppContextSection()` (base-agent.ts:6368). **We extend this type — a new `ClientContextSnapshot` would fork it.** This is the single most important plan correction from the audit.
+
+Add two optional members to `AppContextSnapshot` in `app-context.ts` (additive; existing async consumers ignore them):
 
 ```typescript
-import { ClientToolMetadata } from './agent-types';
+// Existing: App, ActiveNavItem, OtherNavItems, User, AdditionalContext
+export interface AppContextSnapshot {
+    // ...existing members unchanged...
 
-/** A point-in-time description of the user's situation + what the agent can do. */
-export interface ClientContextSnapshot {
-    /** Where the user is. */
-    Location?: {
-        ApplicationID?: string | null;
-        Route?: string | null;            // current route/url fragment
-        ResourceType?: string | null;     // e.g. 'Record', 'Dashboard', 'Custom'
-        EntityName?: string | null;
-        RecordID?: string | null;
-        Label?: string | null;            // human label of the current view
-    };
-    /** What the user sees / has selected. */
+    /** NEW — what the user currently sees / has selected on the active surface. */
     View?: {
-        VisibleEntities?: string[];       // entity names on screen
+        VisibleEntities?: string[];                              // entity names on screen
         Selection?: { EntityName?: string; RecordIDs?: string[] } | null;
-        FreeText?: string | null;         // surface-supplied extra ("editing field X")
+        FreeText?: string | null;                               // e.g. "editing form X, field Y"
     };
-    /** The live capability manifest — names + descriptions only (the catalog, not handlers). */
+    /** NEW — the live capability manifest: names + descriptions only (catalog, not handlers). */
     Capabilities?: {
-        Tools?: ClientToolMetadata[];     // currently-valid client tools (resolved)
-        Agents?: ClientContextAgentRef[]; // currently-valid invoke_agent targets
+        Tools?: ClientToolMetadata[];                           // currently-valid client tools (resolved, Move 2)
+        Agents?: AppContextAgentRef[];                          // currently-valid invoke_agent targets (Move 4)
     };
 }
 
-export interface ClientContextAgentRef {
+export interface AppContextAgentRef {
     AgentID: string;
     Name: string;
     Description?: string | null;
-    /** loop | flow — informational; delegation is transparent either way. */
-    Kind?: 'loop' | 'flow' | null;
+    Kind?: 'loop' | 'flow' | null;                              // informational; delegation is transparent
 }
 
-/** Serialize a snapshot/delta to the compact text form sent over SendContextNote. */
-export function FormatContextNote(snapshot: ClientContextSnapshot): string { /* ... */ }
+/** Serialize a snapshot/delta to the compact text form sent over SendContextNote (realtime). */
+export function FormatAppContextNote(snapshot: AppContextSnapshot): string { /* ... */ }
 ```
 
-> The snapshot is **structured** (typed) and serialized to text **only at the channel boundary** via `FormatContextNote`, keeping the model's signal clean while staying within the text-only `SendContextNote` contract (provider-compatible).
+Notes:
+- `App`/`ActiveNavItem` already encode "where the user is" — we add `View` (what they see) and `Capabilities` (what they can do), not a parallel `Location`.
+- `BuildAppContextSnapshot()` gains optional population of the new members; async path keeps working untouched.
+- `FormatAppContextNote` lives beside `buildAppContextSection`'s logic conceptually — reuse the same field-formatting so async-prompt and realtime-note read consistently. The snapshot stays **structured**; serialization to text happens **only at the channel boundary**, within the text-only `SendContextNote` contract.
 
 ### 3.3 The channel implementation
 - **Server half:** `ClientContextChannelServer extends BaseRealtimeChannelServer` in `packages/AI/Agents/src/realtime/` (next to `whiteboard-channel-server.ts`). `ToolNamePrefix` empty (it owns `ContextTool` as a session-level tool, not a prefixed channel tool). `GetServerToolDefinitions()` contributes `ContextTool` when active. `OnChannelStateSave` is a no-op (this channel is ephemeral — it persists no state-of-record; it's a live wire).
-- **Client half:** `ClientContextChannelClient extends BaseRealtimeChannelClient` in `ng-conversations` realtime channels dir. The host knows to skip surface-mounting from **channel metadata** (`MJ: AI Agent Channels.IsHeadless` — see 3.4), not a code constant. `BindSurface()` becomes a no-op. It exposes a small API the app calls:
+- **Client half:** `ClientContextChannelClient extends BaseRealtimeChannelClient` in `ng-conversations` realtime channels dir. `BindSurface()`/`GetSurfaceComponent()` return nothing (no-op). The host knows to skip surface-mounting from **channel metadata** (`MJ: AI Agent Channels.IsHeadless` — see 3.4). *Note:* headlessness already works **implicitly** today — the mount loop instantiates+`Initialize`s every channel and the overlay just skips rendering when `GetSurfaceComponent()` is null (there's a `channel-optional-surface.test.ts`). `IsHeadless` makes it **explicit metadata** (do-it-right) so the host can also skip instantiation cost and the registry self-documents which channels are wires vs. surfaces. It exposes a small API the app calls:
 
 ```typescript
 // Surface pushes context; channel debounces + diffs + sends a note.
-PublishContext(snapshot: ClientContextSnapshot): void;        // full or partial
+PublishContext(snapshot: AppContextSnapshot): void;           // full or partial
 RegisterClientTool(tool: ClientToolDefinition): void;          // dynamic tier (handler + metadata)
 UnregisterClientTool(name: string): void;
-RegisterAllowedAgent(ref: ClientContextAgentRef): void;        // dynamic allowed-target (Move 4)
+RegisterAllowedAgent(ref: AppContextAgentRef): void;           // dynamic allowed-target (Move 4)
 ```
+
+> **Converge, don't fork (Phase 5 link).** `PublishContext` / `RegisterClientTool` here are the **evolution of the existing `NavigationService.SetAgentContext` / `SetAgentClientTools`** — the same surface call should feed both async (`AppContextSnapshot$`) and realtime (this channel). Either fold the channel publish into `NavigationService`, or have it delegate. Do **not** ship a second surface API. See [06](06-phase-app-context-rollout.md).
 
 Debounce/coalesce snapshot deltas (≈ the whiteboard's 3s coalescing) so rapid navigation doesn't spam the model. Only send a note when the *manifest or salient location* actually changes.
 
@@ -157,14 +164,15 @@ The realtime broker (Move 2.5) now, on `ContextTool` call:
 3. Validate + dispatch as in 3.1.
 
 ### 3.6 Surface adoption (thin consumers — proof of the pattern)
-- **Explorer shell** publishes a **baseline** `ClientContextSnapshot` (current app, route, open record) and registers the existing `NavigateToRecord` / `NavigateToApp` as client tools on the channel.
+- **Explorer shell** already publishes the baseline `AppContextSnapshot` (app, active nav item) — extend it with `View`/`Capabilities` and route the existing `NavigateToRecord` / `NavigateToApp` registration through the channel too.
 - **Form Studio / Component Studio** augment the snapshot (`View.FreeText = "editing form X, field Y"`) and register surface-specific tools (e.g. `AddFormField`, `PreviewComponent`).
 - **Chat overlay** rides the same channel — no third mechanism.
 
 These are *demonstration* adopters; the heavy lifting is all in the generic channel + resolver.
 
 ## Tests
-- `client-context.test.ts` (ai-core-plus): `FormatContextNote` shape, partial-snapshot merge, empty.
+- `app-context.test.ts` (ai-core-plus): `FormatAppContextNote` shape (incl. new `View`/`Capabilities`), partial-snapshot merge, empty; existing async consumers unaffected by the additive members.
+- Session-start injection (part a): `buildRealtimeSessionParams` renders `appContext` into the system prompt; absent when no appContext.
 - Channel unit: `IsHeadless` channel skips surface binding; visible channels still mount; `DisplayName ?? Name` fallback; `ContextTool` dispatch validates `action` against the live set; stale action → structured error.
 - CodeGen smoke: `IsHeadless` (boolean) and `ChannelConfigObject` (`IChannelConfig`) generate and round-trip.
 - Debounce/coalesce: N rapid `PublishContext` calls → ≤1 note within the window.
