@@ -36,10 +36,1599 @@
     {
       "Name": "NU__Order__c",
       "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "CartItem__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "CartItemLine__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "EventAnswer__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "EventBadge__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "EventSessionGroup__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "FuseEndpoint",
+      "OrderingField": null
+    },
+    {
+      "Name": "LmsProduct",
+      "OrderingField": "lastUpdated"
+    },
+    {
+      "Name": "LmsPurchase",
+      "OrderingField": "lastUpdated"
+    },
+    {
+      "Name": "NU__Affiliation__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Badge__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Campaign__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Chapter__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Committee__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__CommitteeMembership__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Credential__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Evaluation__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Invoice__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__MembershipType__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__OrderItem__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__OrderItemLine__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Payment__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Product__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Schedule__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Session__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "NU__Subscription__c",
+      "OrderingField": "LastModifiedDate"
+    },
+    {
+      "Name": "Registration2__c",
+      "OrderingField": "LastModifiedDate"
     }
   ],
   "DiscoverySupported": true,
   "Routes": [
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__CommitteeMembership__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__CommitteeMembership__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__CommitteeMembership__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__CommitteeMembership__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__CommitteeMembership__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__CommitteeMembership__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__CommitteeMembership__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__MembershipType__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__MembershipType__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__MembershipType__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__MembershipType__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__MembershipType__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__MembershipType__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__MembershipType__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM EventSessionGroup__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "EventSessionGroup__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "EventSessionGroup__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "EventSessionGroup__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "EventSessionGroup__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "EventSessionGroup__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "EventSessionGroup__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__OrderItemLine__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__OrderItemLine__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__OrderItemLine__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__OrderItemLine__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__OrderItemLine__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__OrderItemLine__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__OrderItemLine__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Subscription__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Subscription__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Subscription__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Subscription__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Subscription__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Subscription__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Subscription__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Affiliation__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Affiliation__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Affiliation__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Affiliation__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Affiliation__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Affiliation__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Affiliation__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Credential__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Credential__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Credential__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Credential__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Credential__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Credential__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Credential__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Evaluation__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Evaluation__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Evaluation__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Evaluation__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Evaluation__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Evaluation__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Evaluation__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Membership__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Membership__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Membership__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Membership__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Membership__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Membership__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Membership__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Committee__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Committee__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Committee__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Committee__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Committee__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Committee__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Committee__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__OrderItem__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__OrderItem__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__OrderItem__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__OrderItem__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__OrderItem__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__OrderItem__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__OrderItem__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM Registration2__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "Registration2__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "Registration2__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "Registration2__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "Registration2__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "Registration2__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "Registration2__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM CartItemLine__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "CartItemLine__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "CartItemLine__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "CartItemLine__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "CartItemLine__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "CartItemLine__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "CartItemLine__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Campaign__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Campaign__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Campaign__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Campaign__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Campaign__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Campaign__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Campaign__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Donation__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Donation__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Donation__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Donation__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Donation__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Donation__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Donation__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Schedule__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Schedule__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Schedule__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Schedule__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Schedule__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Schedule__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Schedule__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM EventAnswer__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "EventAnswer__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "EventAnswer__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "EventAnswer__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "EventAnswer__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "EventAnswer__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "EventAnswer__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Chapter__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Chapter__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Chapter__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Chapter__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Chapter__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Chapter__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Chapter__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Invoice__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Invoice__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Invoice__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Invoice__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Invoice__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Invoice__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Invoice__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Payment__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Payment__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Payment__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Payment__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Payment__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Payment__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Payment__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Product__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Product__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Product__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Product__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Product__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Product__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Product__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Session__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Session__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Session__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Session__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Session__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Session__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Session__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM EventBadge__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "EventBadge__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "EventBadge__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "EventBadge__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "EventBadge__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "EventBadge__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "EventBadge__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM FuseEndpoint",
+      "Body": {
+        "records": [
+          {
+            "Authentication Key": "Authentication Key 1",
+            "InboundRecords": "InboundRecords 1",
+            "InboundResults": "InboundResults 1",
+            "Message": "Sample Message 1",
+            "Name": "Alex Rivera",
+            "Parameters": "Parameters 1",
+            "RecordCount": 4,
+            "Records": "Records 1",
+            "mj_e2e_custom_attr": "custom-1",
+            "Id": "FuseEndpoint-1",
+            "SystemModstamp": "2026-06-11T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "FuseEndpoint"
+            }
+          },
+          {
+            "Authentication Key": "Authentication Key 2",
+            "InboundRecords": "InboundRecords 2",
+            "InboundResults": "InboundResults 2",
+            "Message": "Sample Message 2",
+            "Name": "Jordan Chen",
+            "Parameters": "Parameters 2",
+            "RecordCount": 7,
+            "Records": "Records 2",
+            "mj_e2e_custom_attr": "custom-2",
+            "Id": "FuseEndpoint-2",
+            "SystemModstamp": "2026-06-12T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "FuseEndpoint"
+            }
+          },
+          {
+            "Authentication Key": "Authentication Key 3",
+            "InboundRecords": "InboundRecords 3",
+            "InboundResults": "InboundResults 3",
+            "Message": "Sample Message 3",
+            "Name": "Taylor Patel",
+            "Parameters": "Parameters 3",
+            "RecordCount": 10,
+            "Records": "Records 3",
+            "mj_e2e_custom_attr": "custom-3",
+            "Id": "FuseEndpoint-3",
+            "SystemModstamp": "2026-06-13T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "FuseEndpoint"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Badge__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Badge__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Badge__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Badge__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Badge__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Badge__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Badge__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Event__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Event__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Event__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Event__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Event__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Event__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Event__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM NU__Order__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "NU__Order__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "NU__Order__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "NU__Order__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "NU__Order__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "NU__Order__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "NU__Order__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM CartItem__c",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "CartItem__c-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "CartItem__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "CartItem__c-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "CartItem__c"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "CartItem__c-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "CartItem__c"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM LmsPurchase",
+      "Body": {
+        "records": [
+          {
+            "completionStatus": "active",
+            "customerId": "customerId 1",
+            "externalId": "externalId 1",
+            "id": "LmsPurchase-1",
+            "product": "product 1",
+            "status": "active",
+            "syncStatus": "active",
+            "lastUpdated": "2026-06-11T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "Id": "LmsPurchase-1",
+            "SystemModstamp": "2026-06-11T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "LmsPurchase"
+            }
+          },
+          {
+            "completionStatus": "pending",
+            "customerId": "customerId 2",
+            "externalId": "externalId 2",
+            "id": "LmsPurchase-2",
+            "product": "product 2",
+            "status": "pending",
+            "syncStatus": "pending",
+            "lastUpdated": "2026-06-12T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "Id": "LmsPurchase-2",
+            "SystemModstamp": "2026-06-12T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "LmsPurchase"
+            }
+          },
+          {
+            "completionStatus": "completed",
+            "customerId": "customerId 3",
+            "externalId": "externalId 3",
+            "id": "LmsPurchase-3",
+            "product": "product 3",
+            "status": "completed",
+            "syncStatus": "completed",
+            "lastUpdated": "2026-06-13T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "Id": "LmsPurchase-3",
+            "SystemModstamp": "2026-06-13T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "LmsPurchase"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM LmsProduct",
+      "Body": {
+        "records": [
+          {
+            "description": "Sample description 1",
+            "id": "LmsProduct-1",
+            "name": "Alex Rivera",
+            "productType": "productType 1",
+            "lastUpdated": "2026-06-11T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "Id": "LmsProduct-1",
+            "SystemModstamp": "2026-06-11T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "LmsProduct"
+            }
+          },
+          {
+            "description": "Sample description 2",
+            "id": "LmsProduct-2",
+            "name": "Jordan Chen",
+            "productType": "productType 2",
+            "lastUpdated": "2026-06-12T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "Id": "LmsProduct-2",
+            "SystemModstamp": "2026-06-12T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "LmsProduct"
+            }
+          },
+          {
+            "description": "Sample description 3",
+            "id": "LmsProduct-3",
+            "name": "Taylor Patel",
+            "productType": "productType 3",
+            "lastUpdated": "2026-06-13T00:00:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "Id": "LmsProduct-3",
+            "SystemModstamp": "2026-06-13T00:00:00Z",
+            "IsDeleted": false,
+            "attributes": {
+              "type": "LmsProduct"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM Account",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "Account-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "Account"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "Account-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "Account"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "Account-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "Account"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
+    {
+      "Path": "/services/data/v59.0/query",
+      "Method": "GET",
+      "Status": 200,
+      "Match": "FROM Contact",
+      "Body": {
+        "records": [
+          {
+            "CreatedDate": "2026-06-10T01:30:00Z",
+            "Id": "Contact-1",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-11T00:00:00Z",
+            "SystemModstamp": "2026-06-10T01:30:00Z",
+            "mj_e2e_custom_attr": "custom-1",
+            "attributes": {
+              "type": "Contact"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-11T02:30:00Z",
+            "Id": "Contact-2",
+            "IsDeleted": false,
+            "LastModifiedDate": "2026-06-12T00:00:00Z",
+            "SystemModstamp": "2026-06-11T02:30:00Z",
+            "mj_e2e_custom_attr": "custom-2",
+            "attributes": {
+              "type": "Contact"
+            }
+          },
+          {
+            "CreatedDate": "2026-06-12T03:30:00Z",
+            "Id": "Contact-3",
+            "IsDeleted": true,
+            "LastModifiedDate": "2026-06-13T00:00:00Z",
+            "SystemModstamp": "2026-06-12T03:30:00Z",
+            "mj_e2e_custom_attr": "custom-3",
+            "attributes": {
+              "type": "Contact"
+            }
+          }
+        ],
+        "done": true,
+        "totalSize": 3
+      }
+    },
     {
       "_comment": "AUTH — Salesforce OAuth2 token endpoint. Consumed by NimbleAMSConnector.ObtainToken (line 307): POST ${LoginURL}/services/oauth2/token. instance_url drives every subsequent call via SFDataBase().",
       "Path": "/services/oauth2/token",
@@ -790,340 +2379,6 @@
       }
     },
     {
-      "_comment": "SOQL QUERY — NimbleAMSConnector.FetchSOQL (line 471): GET ${SFDataBase}/query?q=SELECT+FIELDS(ALL)+FROM+Account... Route matching: matchRoute() exact-path + longest-prefix; Match field filters by query-string substring (mock-vendor-server.mjs line 151). Each object gets a distinct route sharing /services/data/v59.0/query, differentiated by Match:'FROM Account'.",
-      "Path": "/services/data/v59.0/query",
-      "Method": "GET",
-      "Match": "FROM Account",
-      "Status": 200,
-      "Body": {
-        "totalSize": 3,
-        "done": true,
-        "records": [
-          {
-            "attributes": {
-              "type": "Account",
-              "url": "/services/data/v59.0/sobjects/Account/001NIMBLE000001"
-            },
-            "Id": "001NIMBLE000001",
-            "Name": "<scrubbed-name-1>",
-            "Type": "Organization",
-            "BillingCity": "Example",
-            "CreatedDate": "2026-01-10T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
-            "SystemModstamp": "2026-06-11T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "Account",
-              "url": "/services/data/v59.0/sobjects/Account/001NIMBLE000002"
-            },
-            "Id": "001NIMBLE000002",
-            "Name": "<scrubbed-name-2>",
-            "Type": "Individual",
-            "BillingCity": "Example",
-            "CreatedDate": "2026-02-15T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
-            "SystemModstamp": "2026-06-12T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "Account",
-              "url": "/services/data/v59.0/sobjects/Account/001NIMBLE000003"
-            },
-            "Id": "001NIMBLE000003",
-            "Name": "<scrubbed-name-3>",
-            "Type": "Organization",
-            "BillingCity": "Example",
-            "CreatedDate": "2026-03-20T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
-            "SystemModstamp": "2026-06-13T00:00:00.000Z",
-            "IsDeleted": false
-          }
-        ]
-      }
-    },
-    {
-      "Path": "/services/data/v59.0/query",
-      "Method": "GET",
-      "Match": "FROM Contact",
-      "Status": 200,
-      "Body": {
-        "totalSize": 3,
-        "done": true,
-        "records": [
-          {
-            "attributes": {
-              "type": "Contact",
-              "url": "/services/data/v59.0/sobjects/Contact/003NIMBLE000001"
-            },
-            "Id": "003NIMBLE000001",
-            "FirstName": "<scrubbed-name-1>",
-            "LastName": "<scrubbed-name-1>",
-            "Email": "example+1@example.com",
-            "AccountId": "001NIMBLE000001",
-            "CreatedDate": "2026-01-10T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
-            "SystemModstamp": "2026-06-11T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "Contact",
-              "url": "/services/data/v59.0/sobjects/Contact/003NIMBLE000002"
-            },
-            "Id": "003NIMBLE000002",
-            "FirstName": "<scrubbed-name-2>",
-            "LastName": "<scrubbed-name-2>",
-            "Email": "example+2@example.com",
-            "AccountId": "001NIMBLE000001",
-            "CreatedDate": "2026-02-15T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
-            "SystemModstamp": "2026-06-12T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "Contact",
-              "url": "/services/data/v59.0/sobjects/Contact/003NIMBLE000003"
-            },
-            "Id": "003NIMBLE000003",
-            "FirstName": "<scrubbed-name-3>",
-            "LastName": "<scrubbed-name-3>",
-            "Email": "example+3@example.com",
-            "AccountId": "001NIMBLE000002",
-            "CreatedDate": "2026-03-20T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
-            "SystemModstamp": "2026-06-13T00:00:00.000Z",
-            "IsDeleted": false
-          }
-        ]
-      }
-    },
-    {
-      "Path": "/services/data/v59.0/query",
-      "Method": "GET",
-      "Match": "FROM NU__Membership__c",
-      "Status": 200,
-      "Body": {
-        "totalSize": 3,
-        "done": true,
-        "records": [
-          {
-            "attributes": {
-              "type": "NU__Membership__c",
-              "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0001"
-            },
-            "Id": "mem0NIMBLE0001",
-            "Name": "Membership-001",
-            "NU__Account__c": "001NIMBLE000001",
-            "NU__Status__c": "Active",
-            "NU__Expiration_Date__c": "2027-01-01",
-            "CreatedDate": "2026-01-15T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
-            "SystemModstamp": "2026-06-11T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Membership__c",
-              "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0002"
-            },
-            "Id": "mem0NIMBLE0002",
-            "Name": "Membership-002",
-            "NU__Account__c": "001NIMBLE000002",
-            "NU__Status__c": "Active",
-            "NU__Expiration_Date__c": "2026-12-31",
-            "CreatedDate": "2026-02-15T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
-            "SystemModstamp": "2026-06-12T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Membership__c",
-              "url": "/services/data/v59.0/sobjects/NU__Membership__c/mem0NIMBLE0003"
-            },
-            "Id": "mem0NIMBLE0003",
-            "Name": "Membership-003",
-            "NU__Account__c": "001NIMBLE000003",
-            "NU__Status__c": "Lapsed",
-            "NU__Expiration_Date__c": "2025-12-31",
-            "CreatedDate": "2026-03-01T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
-            "SystemModstamp": "2026-06-13T00:00:00.000Z",
-            "IsDeleted": false
-          }
-        ]
-      }
-    },
-    {
-      "Path": "/services/data/v59.0/query",
-      "Method": "GET",
-      "Match": "FROM NU__Event__c",
-      "Status": 200,
-      "Body": {
-        "totalSize": 3,
-        "done": true,
-        "records": [
-          {
-            "attributes": {
-              "type": "NU__Event__c",
-              "url": "/services/data/v59.0/sobjects/NU__Event__c/evt0NIMBLE0001"
-            },
-            "Id": "evt0NIMBLE0001",
-            "Name": "Annual Conference 2026",
-            "NU__Status__c": "Active",
-            "NU__Start_Date__c": "2026-09-15T09:00:00.000Z",
-            "CreatedDate": "2026-01-10T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
-            "SystemModstamp": "2026-06-11T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Event__c",
-              "url": "/services/data/v59.0/sobjects/NU__Event__c/evt0NIMBLE0002"
-            },
-            "Id": "evt0NIMBLE0002",
-            "Name": "Spring Workshop 2026",
-            "NU__Status__c": "Active",
-            "NU__Start_Date__c": "2026-04-20T09:00:00.000Z",
-            "CreatedDate": "2026-02-01T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
-            "SystemModstamp": "2026-06-12T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Event__c",
-              "url": "/services/data/v59.0/sobjects/NU__Event__c/evt0NIMBLE0003"
-            },
-            "Id": "evt0NIMBLE0003",
-            "Name": "Webinar Series",
-            "NU__Status__c": "Cancelled",
-            "NU__Start_Date__c": "2026-05-01T14:00:00.000Z",
-            "CreatedDate": "2026-03-01T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
-            "SystemModstamp": "2026-06-13T00:00:00.000Z",
-            "IsDeleted": false
-          }
-        ]
-      }
-    },
-    {
-      "Path": "/services/data/v59.0/query",
-      "Method": "GET",
-      "Match": "FROM NU__Donation__c",
-      "Status": 200,
-      "Body": {
-        "totalSize": 3,
-        "done": true,
-        "records": [
-          {
-            "attributes": {
-              "type": "NU__Donation__c",
-              "url": "/services/data/v59.0/sobjects/NU__Donation__c/don0NIMBLE0001"
-            },
-            "Id": "don0NIMBLE0001",
-            "Name": "Donation-001",
-            "NU__Account__c": "001NIMBLE000001",
-            "NU__Amount__c": 100,
-            "CreatedDate": "2026-01-20T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
-            "SystemModstamp": "2026-06-11T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Donation__c",
-              "url": "/services/data/v59.0/sobjects/NU__Donation__c/don0NIMBLE0002"
-            },
-            "Id": "don0NIMBLE0002",
-            "Name": "Donation-002",
-            "NU__Account__c": "001NIMBLE000002",
-            "NU__Amount__c": 250,
-            "CreatedDate": "2026-02-20T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
-            "SystemModstamp": "2026-06-12T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Donation__c",
-              "url": "/services/data/v59.0/sobjects/NU__Donation__c/don0NIMBLE0003"
-            },
-            "Id": "don0NIMBLE0003",
-            "Name": "Donation-003",
-            "NU__Account__c": "001NIMBLE000003",
-            "NU__Amount__c": 50,
-            "CreatedDate": "2026-03-10T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
-            "SystemModstamp": "2026-06-13T00:00:00.000Z",
-            "IsDeleted": false
-          }
-        ]
-      }
-    },
-    {
-      "Path": "/services/data/v59.0/query",
-      "Method": "GET",
-      "Match": "FROM NU__Order__c",
-      "Status": 200,
-      "Body": {
-        "totalSize": 3,
-        "done": true,
-        "records": [
-          {
-            "attributes": {
-              "type": "NU__Order__c",
-              "url": "/services/data/v59.0/sobjects/NU__Order__c/ord0NIMBLE0001"
-            },
-            "Id": "ord0NIMBLE0001",
-            "Name": "Order-001",
-            "NU__Account__c": "001NIMBLE000001",
-            "NU__Total__c": 350,
-            "NU__Status__c": "Posted",
-            "CreatedDate": "2026-01-25T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-11T00:00:00.000Z",
-            "SystemModstamp": "2026-06-11T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Order__c",
-              "url": "/services/data/v59.0/sobjects/NU__Order__c/ord0NIMBLE0002"
-            },
-            "Id": "ord0NIMBLE0002",
-            "Name": "Order-002",
-            "NU__Account__c": "001NIMBLE000002",
-            "NU__Total__c": 500,
-            "NU__Status__c": "Open",
-            "CreatedDate": "2026-02-10T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-12T00:00:00.000Z",
-            "SystemModstamp": "2026-06-12T00:00:00.000Z",
-            "IsDeleted": false
-          },
-          {
-            "attributes": {
-              "type": "NU__Order__c",
-              "url": "/services/data/v59.0/sobjects/NU__Order__c/ord0NIMBLE0003"
-            },
-            "Id": "ord0NIMBLE0003",
-            "Name": "Order-003",
-            "NU__Account__c": "001NIMBLE000003",
-            "NU__Total__c": 200,
-            "NU__Status__c": "Posted",
-            "CreatedDate": "2026-03-05T00:00:00.000Z",
-            "LastModifiedDate": "2026-06-13T00:00:00.000Z",
-            "SystemModstamp": "2026-06-13T00:00:00.000Z",
-            "IsDeleted": false
-          }
-        ]
-      }
-    },
-    {
       "_comment": "NARROWED DISCOVERY — DiscoverNarrowedRoutes: same as the main sobjects route but omits NU__Donation__c, used to test absent-object deactivation in cell E1.",
       "Path": "/services/data/v59.0/sobjects/",
       "Method": "GET",
@@ -1314,5 +2569,19 @@
       ]
     }
   ],
-  "HandAuthored": true
+  "HandAuthored": true,
+  "Lifecycle": {
+    "supportsDiscovery": true,
+    "supportsFieldDiscovery": true,
+    "authoritativeDiscovery": true,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": false,
+    "writeRoundTrip": null,
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "NimbleAMSConnector"
+  },
+  "FetchShape": "soql"
 }

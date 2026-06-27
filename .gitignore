@@ -218,3 +218,6 @@ migrations/v*/*__RSU_*.sql
 # explicitly un-ignore this one subtree.
 !/templates/claude-pack/dist/
 !/templates/claude-pack/dist/**
+
+# huge codegen-run migration artifacts (>100MB, regenerable — never commit)
+packages/MJAPI/migrations/v5/CodeGen_Run_2026-06-26_17-21-22.sql

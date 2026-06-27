@@ -1,8 +1,8 @@
-ok i have a big task for you actually overnight, I am going to go over the integration concept with you for you to basically amnage this task over x number of part before working with me on a good ending place:
+that test.md was a prior tok i have a big task for you actually overnight, I am going to go over the integration concept with you for you to basically amnage this task over x number of part before working with me on a good ending place:
 
 first of all, I want you to ensure the following:
 
-ensure the architecture matches this general logical nature. After that look for and update any document so any consumer can follow and effectively make use of the connector platform without issues and can basically wrap around it.
+ensure the architecture matches this general logical nature. After that look for and update any document so any consumer can follow and effectively make use of the connbutector platform without issues and can basically wrap around it.
 
 
 

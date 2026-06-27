@@ -1236,7 +1236,9 @@
               },
               "nestedOnly": false,
               "schemaName": "Admin_V2_Memberships_PaymentOptionsEntity",
-              "apiVersion": "/v2/"
+              "apiVersion": "/v2/",
+              "parentObjectName": "MembershipType",
+              "parentObjectIDFieldName": "id"
             },
             "CreateAPIPath": "/admin/v2/memberships/types/{membership_type_id}/payment_options",
             "CreateMethod": "POST",
@@ -11374,7 +11376,9 @@
               "nestedOnly": false,
               "schemaName": "Experience",
               "apiVersion": "/v1/",
-              "deleteSemantics": "hard"
+              "deleteSemantics": "hard",
+              "parentObjectName": "User",
+              "parentObjectIDFieldName": "user_id"
             },
             "CreateAPIPath": "/admin/v1/users/{user_id}/experiences",
             "CreateMethod": "POST",
@@ -11697,7 +11701,9 @@
             "Status": "Disabled",
             "Configuration": {
               "disabledReason": "Declared OutOfScope (Followers, gap G5): no GET list endpoint documented. Prior APIPath /admin/v1/users/{user_id}/groups was the Groups membership endpoint, not a follower endpoint. Deactivated for consistency with OutOfScopeObjectFamilies.",
-              "wrongPriorAPIPath": "/admin/v1/users/{user_id}/groups"
+              "wrongPriorAPIPath": "/admin/v1/users/{user_id}/groups",
+              "parentObjectName": "User",
+              "parentObjectIDFieldName": "user_id"
             },
             "CreateAPIPath": "/admin/v1/topics/{topic_id}/followers",
             "CreateMethod": "POST",
@@ -13954,7 +13960,9 @@
               },
               "nestedOnly": false,
               "schemaName": "NotificationSettings",
-              "apiVersion": "/v1/"
+              "apiVersion": "/v1/",
+              "parentObjectName": "User",
+              "parentObjectIDFieldName": "user_id"
             },
             "UpdateAPIPath": "/admin/v1/users/{user_id}/notification_settings",
             "UpdateMethod": "PUT",

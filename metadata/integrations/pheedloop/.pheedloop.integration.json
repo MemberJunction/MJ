@@ -150,7 +150,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Attendees"
+              "SourceFolder": "Attendees",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -620,7 +622,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Registrations"
+              "SourceFolder": "Registrations",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -1480,7 +1484,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Ticket Transfer Logs"
+              "SourceFolder": "Ticket Transfer Logs",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -1601,7 +1607,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Surcharge"
+              "SourceFolder": "Surcharge",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -1708,7 +1716,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Registration Promotion"
+              "SourceFolder": "Registration Promotion",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -1896,7 +1906,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Sessions"
+              "SourceFolder": "Sessions",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -2194,7 +2206,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Session Formats"
+              "SourceFolder": "Session Formats",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -2277,7 +2291,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Exhibitors"
+              "SourceFolder": "Exhibitors",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -2557,7 +2573,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Exhibitors Booths"
+              "SourceFolder": "Exhibitors Booths",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -2647,7 +2665,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Sponsors"
+              "SourceFolder": "Sponsors",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -2898,7 +2918,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Speakers"
+              "SourceFolder": "Speakers",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -3058,7 +3080,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Announcements"
+              "SourceFolder": "Announcements",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -3309,7 +3333,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Tags"
+              "SourceFolder": "Tags",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -3399,7 +3425,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Speaker Tags"
+              "SourceFolder": "Speaker Tags",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -3484,7 +3512,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Sponsor Tier"
+              "SourceFolder": "Sponsor Tier",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -3558,7 +3588,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Exhibitor Promotion"
+              "SourceFolder": "Exhibitor Promotion",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -3693,7 +3725,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "Sponsor Promotion"
+              "SourceFolder": "Sponsor Promotion",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -4756,7 +4790,9 @@
                 ]
               },
               "DetailAPIPath": null,
-              "SourceFolder": "REST Hooks"
+              "SourceFolder": "REST Hooks",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {
@@ -4842,7 +4878,9 @@
               "CheckOutPath": "/events/{eventCode}/checkout/",
               "SourceFolder": "Event Attendance",
               "Notes": "Asymmetric CRUD: read=GET /attendance/, create(state)=POST /checkin/, delete(state)=DELETE /checkout/, no PATCH update. checkin/checkout bodies are {\"codes\": [<attendee-code>...]}. attendance state is keyed by attendee code (FK to Attendees).",
-              "CreateNote": "POST /checkin/ is a state mutation returning {attendees,errored_attendees} (arrays of attendee codes), NOT a new record with a retrievable id. CreateIDLocation=n/a so the generic CreateRecord does not scan for an id field. The generic BaseRESTIntegrationConnector path still routes through BuildCreatedResult, which requires a non-empty externalID — a connector-level CreateRecord/ExtractIDFromResponse override (reading attendees[0]) is required for a true Success result. Setting n/a documents the non-standard shape and stops a misleading body-scan for id|ID|externalID."
+              "CreateNote": "POST /checkin/ is a state mutation returning {attendees,errored_attendees} (arrays of attendee codes), NOT a new record with a retrievable id. CreateIDLocation=n/a so the generic CreateRecord does not scan for an id field. The generic BaseRESTIntegrationConnector path still routes through BuildCreatedResult, which requires a non-empty externalID — a connector-level CreateRecord/ExtractIDFromResponse override (reading attendees[0]) is required for a true Success result. Setting n/a documents the non-standard shape and stops a misleading body-scan for id|ID|externalID.",
+              "parentObjectName": "Events",
+              "parentObjectIDFieldName": "eventCode"
             }
           },
           "relatedEntities": {

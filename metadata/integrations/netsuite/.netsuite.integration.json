@@ -18739,7 +18739,9 @@
                 },
                 "note": "child sublist of Invoice; reached at invoice -> items[]"
               },
-              "fieldSchemaSource": "community-openapi-2024.2"
+              "fieldSchemaSource": "community-openapi-2024.2",
+              "parentObjectName": "Invoice",
+              "parentObjectIDFieldName": "id"
             },
             "IntegrationID": "@parent:ID"
           },
@@ -18848,7 +18850,9 @@
                 },
                 "note": "child sublist of Sales Order; reached at salesorder -> items[]"
               },
-              "fieldSchemaSource": "community-openapi-2024.2"
+              "fieldSchemaSource": "community-openapi-2024.2",
+              "parentObjectName": "Sales Order",
+              "parentObjectIDFieldName": "id"
             },
             "IntegrationID": "@parent:ID"
           },

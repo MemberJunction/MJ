@@ -874,22 +874,29 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (24 classes)
+// @memberjunction/integration-connectors (31 classes)
 import {
     AptifyConnector,
-    BettyConnector,
     BlackbaudConnector,
     ConstantContactConnector,
+    CventConnector,
     FileFeedConnector,
+    FontevaConnector,
     GrowthZoneConnector,
+    HivebriteConnector,
     HubSpotConnector,
     IMISConnector,
     MJToMJConnector,
     MagnetMailConnector,
     MailchimpConnector,
+    NeonCRMConnector,
     NetForumConnector,
     NetSuiteConnector,
     NimbleAMSConnector,
+    ORCIDConnector,
+    OpenWaterConnector,
+    PathLMSConnector,
+    PheedLoopConnector,
     PropFuelConnector,
     QuickBooksConnector,
     RasaConnector,
@@ -1206,11 +1213,12 @@ import {
     TeamsMessagingExtension,
 } from '@memberjunction/messaging-adapters';
 
-// @memberjunction/scheduling-engine (4 classes)
+// @memberjunction/scheduling-engine (5 classes)
 import {
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
 } from '@memberjunction/scheduling-engine';
 
@@ -1863,19 +1871,26 @@ export const CLASS_REGISTRATIONS: any[] = [
     HereGeocodingProvider,
     RunSyncAction,
     AptifyConnector,
-    BettyConnector,
     BlackbaudConnector,
     ConstantContactConnector,
+    CventConnector,
     FileFeedConnector,
+    FontevaConnector,
     GrowthZoneConnector,
+    HivebriteConnector,
     HubSpotConnector,
     IMISConnector,
     MJToMJConnector,
     MagnetMailConnector,
     MailchimpConnector,
+    NeonCRMConnector,
     NetForumConnector,
     NetSuiteConnector,
     NimbleAMSConnector,
+    ORCIDConnector,
+    OpenWaterConnector,
+    PathLMSConnector,
+    PheedLoopConnector,
     PropFuelConnector,
     QuickBooksConnector,
     RasaConnector,
@@ -2109,6 +2124,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationDiscoveryScheduledJobDriver,
     IntegrationSyncScheduledJobDriver,
     AgentEvalDriver,
     ComputerUseAction,
@@ -2123,7 +2139,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 878;
+export const CLASS_REGISTRATIONS_COUNT = 886;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

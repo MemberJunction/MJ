@@ -53203,6 +53203,26 @@ export class MJIntegrationObject_ {
     @MaxLength(20)
     MetadataSource: string;
         
+    @Field(() => Boolean, {description: `Whether this object supports record creation in the external system (per-operation granularity beyond SupportsWrite). Drives whether the generic CreateRecord path is wired and whether the object is offered for write-back create.`}) 
+    SupportsCreate: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this object supports record updates in the external system (per-operation granularity beyond SupportsWrite).`}) 
+    SupportsUpdate: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this object supports record deletion/tombstoning in the external system (per-operation granularity beyond SupportsWrite).`}) 
+    SupportsDelete: boolean;
+        
+    @Field({nullable: true, description: `Declared incremental sync strategy for this object (e.g. WatermarkIncremental, ContentHash, FullSnapshot). Informs how the engine narrows subsequent syncs.`}) 
+    @MaxLength(50)
+    SyncStrategy?: string;
+        
+    @Field(() => Boolean, {description: `Whether per-record content hashing is meaningful for this object (false for append-only/event streams where every row is new). Controls whether the engine uses content-hash to skip unchanged-row writes.`}) 
+    ContentHashApplicable: boolean;
+        
+    @Field({nullable: true, description: `Stable, monotonic ordering column (usually the PK) used for keyset/no-watermark resume of a scan. Null when the object has no stable key.`}) 
+    @MaxLength(255)
+    StableOrderingKey?: string;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -53325,6 +53345,24 @@ export class CreateMJIntegrationObjectInput {
     @Field({ nullable: true })
     MetadataSource?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    SupportsCreate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDelete?: boolean;
+
+    @Field({ nullable: true })
+    SyncStrategy: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ContentHashApplicable?: boolean;
+
+    @Field({ nullable: true })
+    StableOrderingKey: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -53439,6 +53477,24 @@ export class UpdateMJIntegrationObjectInput {
 
     @Field({ nullable: true })
     MetadataSource?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsCreate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsUpdate?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDelete?: boolean;
+
+    @Field({ nullable: true })
+    SyncStrategy?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ContentHashApplicable?: boolean;
+
+    @Field({ nullable: true })
+    StableOrderingKey?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -53986,6 +54042,9 @@ export class MJIntegration_ {
     @Field({nullable: true, description: `Icon for the integration. Supports Font Awesome CSS classes, image URLs, or base64 data URIs.`}) 
     Icon?: string;
         
+    @Field({nullable: true, description: `Integration-level connector configuration JSON (e.g. out-of-scope object families, vendor-specific tuning). Free-form JSON the connector reads at runtime.`}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     CredentialType?: string;
@@ -54039,6 +54098,9 @@ export class CreateMJIntegrationInput {
     @Field({ nullable: true })
     Icon: string | null;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -54078,6 +54140,9 @@ export class UpdateMJIntegrationInput {
 
     @Field({ nullable: true })
     Icon?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

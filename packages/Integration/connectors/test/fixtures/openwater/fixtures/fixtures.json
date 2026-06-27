@@ -14,6 +14,13 @@
     "apiKey": "mock-token",
     "APIKey": "mock-token",
     "ApiKey": "mock-token",
+    "ApiSecret": "mock-api-secret",
+    "apiSecret": "mock-api-secret",
+    "Secret": "mock-secret",
+    "AppKey": "mock-app-key",
+    "AppSecret": "mock-app-secret",
+    "PrivateToken": "mock-private-token",
+    "PublicKey": "mock-public-key",
     "TokenURL": "http://127.0.0.1:9/token",
     "TokenEndpoint": "http://127.0.0.1:9/token",
     "TokenUrl": "http://127.0.0.1:9/token",
@@ -31,12 +38,16 @@
     "applicationId": "mock-app-id",
     "applicationSecret": "mock-app-secret",
     "AuthFlow": "client_credentials",
-    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEugIBADANBgkqhkiG9w0BAQEFAASCBKQwggSgAgEAAoIBAQCyPBgCLlUxqeTm\nJTljdSIOBRBt0SBP3QB+YkdGUag+7OlR7u/hwSO460GkjP9+5N+SuTXtF6vbnAZn\n+DLRepm+G8QU4qR28wiSw/e196xdJgalGGs4XZ1nMPpXckRyhbuOzpC5+J6U4Qy2\nnl09o72E/9hm6XuSD9oEfo3iayRBGDmrpUCwGJywWM2kXUuXz4uy0Sy+XVl+lujT\neKhbwu8A35I1Nc7kh1D/YohXrXJxsHcSQtoNZV4D/Dt6uAR9/LKcolH6xUUvuMLF\nFQvI4l4Lnix/lkSL1TD9Qktef+LQlAAPZ2o9wxDnwvRY+5nTrkamBchJN4N7ZdEz\nUDgPZNDZAgMBAAECgf8VUlsM574JUumvHoTfAQQx6Skt+faDl0yX0en034/g9zZy\nNsM7nn9Hf906ciOeaoLUapOo6UwF2YRqq6ZoqOH7fBbY6MQD9s7vv8HCYv6bphDl\nbyZkd858qb9I9sJ5cMYfL1bg6H0QElwS/J7q4MurPXAF36iIsJzELN+MVoTfxHLe\n28IQLW1r7+dxZ52So0VspBE736bHrRenRcrJaPyH5cCj1jWgMm6GKiAh2TSa+RFP\nhUR0Nrb/HALbcgH02tVjW62boSKzQ06NSNA1XCSb/ChxHi+YAD4KsgK9BPF9gB5P\n1IgGUQmvr3dz0Tzf5tlfZ70cN5FN6v3y5Gg96nECgYEA5tdQYFjO081PyX0xq3lH\nWxsBfr7irU7e4FWymS5LFTqg7G3ei8M1DPIZdpMuQGz+nbNcGIniDeQCJOb9OX6+\nBlxdppOOk3Hms8OU7exJ7WhKdAGuMFz5xj8eKw7zw+g96nZlpLNvki+TeJeJs40V\nYHglR8adGJCKiDrGG26AXOkCgYEAxakDWB1QIet7UnpFQkQe6hC1oGqNZOTh2dnO\n36kqVZDhX3UXvKbOIMRh8PwYD+w3MegXNsFR1jRBE7iqKNBUR//44gWOhTCQK7ij\nuZx0EMOxne+Vgje+fCYbVBCaRois8phkQg0qOLAMxMqQs4+eV95trU/F3KHVrE4k\n6mXEnnECgYAI4E6e5ctOKZ7fyIiYZ1lvD2LHVN+yek3nomPzr+wDLPXzIWZlSWRI\n0yZXgOFOaOKBfdwUtXiTwCi08ozaIR19cR/Iv/PDh6WvU93uKB/PmSsDuuzPv0N7\ndAHc9f45kjyPP245Hw0zOdEZ2fnZhZtE0lncoK55u1UYV+o2M9GLwQKBgFpARcqh\n98jFINYUBjOvrv3pC0Vn4Y/EAmvaS99L+ox/Tqiral81OsEzahUCxmnezYT4GEFk\nG93WljBPDUL9fL4zXoy1RNIDzpBoCjnh+gz9jcgzcOy4Tz2YmLnVqtux5GYQtxaB\ntFmV6P6iD1gtp3svkJyl5A5NxqaaN7jfJtvBAoGAXZO8FX6i7NS67xv14o2BZone\n6auQKostlh5z7Jph3QPZwMIiw1Bt4TtxqyCOFNziZoNmioENMpG2FZ1A8KRhrn5j\nHdTKKhtKxi/254heVzygutjQhbiJBHajOSC+P92ys7gF4SsXBGscj8lxTHIAT7x8\nLtZh8zw3qHmqaQODOzg=\n-----END PRIVATE KEY-----\n",
+    "PrivateKey": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDmQcln2pQ/dZX+\nrdKuBa3VF/Kvo6DRZpw7Ffxc2SptzeihCCz5q6BqK5xM8RXx75m2ScwOt8SpYIB9\nRa5dm7PfCBfxtHtMeA0BhD4+EJe0A4gLaa4/tM11I2xvfWEQpLhbOdgSgb0vIYPW\n1FrPBp8Nde2pzpYT5NMw9+o+GrLDk2O+mi8ijflSQI7Q0CeQEROz7zQscfkH/45E\n1ZewxQnySnfJDLKbNV3rNuwRYi53rHew6AH6dUjtEKJb+KsG5/vQYYfM6CWzGi6n\naX3eeOf6WxS2GMbeAn1JRByagpqHpa2H4L3lEzLpmTbi0PtPmKEifgWOkMCFVt7E\n7Vv4rldFAgMBAAECggEABVJVP/vim+oxIpxh13kfdg1Xo+I5lUgJ1FPDFreY2MYp\nhOSWJYRnRgzmpTXtNpToYzjRaTBWGz61DtrNbNxsYSXkEnIEEisJdz+B221cFDer\nV+2EBB+USrYcNiIaXDLHuqlblRHqjWxONROIsGrhbNjiOp/LrX9cYjADT0F5YDZn\nRmNAt2UecHgJc2GhZXeTSXGnNB+pavaa0PPtaEygEJ8sCBs5YKIvtuJUBz563vcM\nfNS4/GPq0V//3r/ZNH2ALkejt6kbBmfctEwop48Z0r+lmYiD36iBp/nHUp0xiLd9\nWxvgpAry9rIghY3YdYf1Q//K8Y6DjO3S3Qk44SU3AQKBgQD+OcwDbSt2QoPCHGo4\n1K8Lecv4Tf8ztCMW4T8twAZJFNe2nXE/Fotbk2HYT2WpmAJSpKP6IxsS7K7FSYz3\nqEcUfxlA4EvqbRIR1M8Ku8DVZeJWxlIaFB+5bEZ1SVA72D8JZH6PgIWluqzZPAFB\nN1Sst+UXdgy1NQy0oGmNsRFDzwKBgQDn3Sq3bha1f1GohXRy8No+I6s8sgU26X2+\nOW8HbFhhx/GEcn5a+pjS1pXv4uoiJo0qs7khy0GOWLHg45hT/QthuIYi/HifaZmd\neMRuAA5fydtjJUcc/BM4ED3FrGCKwbTwUZj77Wk2Xr0slChmmDHnlBvQHwewI+Nw\na3x/AaA0qwKBgFwSJI/tHrtytXM8hT/Vzxtx3ewsm0tnZvnnU9FG5T/ce49Yj+YQ\nTSI6S0pi3ue/9L9nfzedNTXyYA11aMdcu3lx2nyDfxsEq3Gnx+AURW9DuehBZQSq\n2x51V0Ms7RDvbU0Ch0+DdWOjKux17eJnnpP6+c44Y7vQ3awhGHlHcoBDAoGAXUQv\nvJ1B8TwHotwb3WhYwYojhUSuqEn/1JbRvJCudJay5e4QOZR4CMdchKQoPhh3zGeC\n3r8d3Z573tRuH8q321UYT9Zyxtz5d8huazkGjy1pXFZQZq5XJMQTtQIDy4zjtY99\nFEmJet9dBSOLpMkvudFv5qW0t/uXr07tQ0FqKgUCgYB3hNutKGwKwEHxtxnb7dA3\nhb4xn9Bd7vQuv2Td1sQVlPTcqCrJTb/CetSb9I8QR+jOeShF2iTtzDXbQhmnfQID\n1iihXjL03cR1tzUv0nb0UBbg3yrySBXoR+KOXybVVb+KE3DlsuB6B8nRhuE6u/cN\nZukUhlInr3rnVucvqIWnLA==\n-----END PRIVATE KEY-----\n",
     "ConsumerKey": "mock-consumer",
     "ConsumerSecret": "mock-consumer-secret",
     "TokenId": "mock-token-id",
     "TokenSecret": "mock-token-secret",
-    "TokenID": "mock-token-id"
+    "TokenID": "mock-token-id",
+    "TenantId": "mock-tenant-id",
+    "TenantID": "mock-tenant-id",
+    "tenantId": "mock-tenant-id",
+    "Tenant": "mock-tenant"
   },
   "Routes": [
     {
@@ -45,37 +56,40 @@
       "Status": 200,
       "Body": [
         {
-          "categoryFriendlyPath": "val-1",
-          "categoryName": "val-1",
-          "code": "val-1",
-          "id": 1,
-          "lastModifiedUtc": "2026-06-11T00:00:00Z",
-          "name": "val-1",
-          "programId": 2,
-          "userId": 2,
-          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z"
+          "categoryFriendlyPath": "standard",
+          "categoryName": "standard",
+          "code": "code-1",
+          "id": "Application-1",
+          "lastModifiedUtc": "lastModifiedUtc 1",
+          "name": "Alex Rivera",
+          "programId": "programId 1",
+          "userId": "userId 1",
+          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
         },
         {
-          "categoryFriendlyPath": "val-2",
-          "categoryName": "val-2",
-          "code": "val-2",
-          "id": 2,
-          "lastModifiedUtc": "2026-06-12T00:00:00Z",
-          "name": "val-2",
-          "programId": 3,
-          "userId": 3,
-          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z"
+          "categoryFriendlyPath": "premium",
+          "categoryName": "premium",
+          "code": "code-2",
+          "id": "Application-2",
+          "lastModifiedUtc": "lastModifiedUtc 2",
+          "name": "Jordan Chen",
+          "programId": "programId 2",
+          "userId": "userId 2",
+          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
         },
         {
-          "categoryFriendlyPath": "val-3",
-          "categoryName": "val-3",
-          "code": "val-3",
-          "id": 3,
-          "lastModifiedUtc": "2026-06-13T00:00:00Z",
-          "name": "val-3",
-          "programId": 4,
-          "userId": 4,
-          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z"
+          "categoryFriendlyPath": "basic",
+          "categoryName": "basic",
+          "code": "code-3",
+          "id": "Application-3",
+          "lastModifiedUtc": "lastModifiedUtc 3",
+          "name": "Taylor Patel",
+          "programId": "programId 3",
+          "userId": "userId 3",
+          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
         }
       ]
     },
@@ -85,46 +99,49 @@
       "Status": 200,
       "Body": [
         {
-          "amount": 2,
-          "applicationId": 2,
-          "createdAtUtc": "2026-06-11T00:00:00Z",
-          "deletedApplicationId": 2,
-          "details": "val-1",
-          "id": 1,
-          "invoiceId": 2,
-          "isManualAdjustment": false,
-          "isVat": false,
-          "notes": "val-1",
-          "targetType": "val-1",
-          "lastModifiedUtc": "2026-06-11T00:00:00Z"
-        },
-        {
-          "amount": 3,
-          "applicationId": 3,
-          "createdAtUtc": "2026-06-12T00:00:00Z",
-          "deletedApplicationId": 3,
-          "details": "val-2",
-          "id": 2,
-          "invoiceId": 3,
+          "amount": "amount 1",
+          "applicationId": "applicationId 1",
+          "createdAtUtc": "createdAtUtc 1",
+          "deletedApplicationId": "deletedApplicationId 1",
+          "details": "details 1",
+          "id": "BillingLineItem-1",
+          "invoiceId": "invoiceId 1",
           "isManualAdjustment": true,
           "isVat": true,
-          "notes": "val-2",
-          "targetType": "val-2",
-          "lastModifiedUtc": "2026-06-12T00:00:00Z"
+          "notes": "Sample notes 1",
+          "targetType": "targetType 1",
+          "lastModifiedUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
         },
         {
-          "amount": 4,
-          "applicationId": 4,
-          "createdAtUtc": "2026-06-13T00:00:00Z",
-          "deletedApplicationId": 4,
-          "details": "val-3",
-          "id": 3,
-          "invoiceId": 4,
+          "amount": "amount 2",
+          "applicationId": "applicationId 2",
+          "createdAtUtc": "createdAtUtc 2",
+          "deletedApplicationId": "deletedApplicationId 2",
+          "details": "details 2",
+          "id": "BillingLineItem-2",
+          "invoiceId": "invoiceId 2",
           "isManualAdjustment": false,
           "isVat": false,
-          "notes": "val-3",
-          "targetType": "val-3",
-          "lastModifiedUtc": "2026-06-13T00:00:00Z"
+          "notes": "Sample notes 2",
+          "targetType": "targetType 2",
+          "lastModifiedUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "amount": "amount 3",
+          "applicationId": "applicationId 3",
+          "createdAtUtc": "createdAtUtc 3",
+          "deletedApplicationId": "deletedApplicationId 3",
+          "details": "details 3",
+          "id": "BillingLineItem-3",
+          "invoiceId": "invoiceId 3",
+          "isManualAdjustment": true,
+          "isVat": true,
+          "notes": "Sample notes 3",
+          "targetType": "targetType 3",
+          "lastModifiedUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
         }
       ]
     },
@@ -134,43 +151,46 @@
       "Status": 200,
       "Body": [
         {
-          "applicationCode": "val-1",
-          "applicationId": 2,
-          "applicationName": "val-1",
-          "deletedAtUtc": "2026-06-11T00:00:00Z",
-          "email": "val-1",
-          "firstName": "val-1",
-          "id": 1,
-          "lastName": "val-1",
-          "programId": 2,
-          "userId": 2,
-          "deletedSinceUtc": "2026-06-11T00:00:00Z"
+          "applicationCode": "applicationCode 1",
+          "applicationId": "applicationId 1",
+          "applicationName": "applicationName 1",
+          "deletedAtUtc": "deletedAtUtc 1",
+          "email": "user1@example.com",
+          "firstName": "Alex",
+          "id": "DeletedApplication-1",
+          "lastName": "Rivera",
+          "programId": "programId 1",
+          "userId": "userId 1",
+          "deletedSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
         },
         {
-          "applicationCode": "val-2",
-          "applicationId": 3,
-          "applicationName": "val-2",
-          "deletedAtUtc": "2026-06-12T00:00:00Z",
-          "email": "val-2",
-          "firstName": "val-2",
-          "id": 2,
-          "lastName": "val-2",
-          "programId": 3,
-          "userId": 3,
-          "deletedSinceUtc": "2026-06-12T00:00:00Z"
+          "applicationCode": "applicationCode 2",
+          "applicationId": "applicationId 2",
+          "applicationName": "applicationName 2",
+          "deletedAtUtc": "deletedAtUtc 2",
+          "email": "user2@example.com",
+          "firstName": "Jordan",
+          "id": "DeletedApplication-2",
+          "lastName": "Chen",
+          "programId": "programId 2",
+          "userId": "userId 2",
+          "deletedSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
         },
         {
-          "applicationCode": "val-3",
-          "applicationId": 4,
-          "applicationName": "val-3",
-          "deletedAtUtc": "2026-06-13T00:00:00Z",
-          "email": "val-3",
-          "firstName": "val-3",
-          "id": 3,
-          "lastName": "val-3",
-          "programId": 4,
-          "userId": 4,
-          "deletedSinceUtc": "2026-06-13T00:00:00Z"
+          "applicationCode": "applicationCode 3",
+          "applicationId": "applicationId 3",
+          "applicationName": "applicationName 3",
+          "deletedAtUtc": "deletedAtUtc 3",
+          "email": "user3@example.com",
+          "firstName": "Taylor",
+          "id": "DeletedApplication-3",
+          "lastName": "Patel",
+          "programId": "programId 3",
+          "userId": "userId 3",
+          "deletedSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
         }
       ]
     },
@@ -180,34 +200,37 @@
       "Status": 200,
       "Body": [
         {
-          "deletedAtUtc": "2026-06-11T00:00:00Z",
-          "deletedByUserId": 2,
-          "id": 1,
-          "programId": 2,
-          "sessionId": 2,
-          "sessionName": "val-1",
-          "typeName": "val-1",
-          "deletedSinceUtc": "2026-06-11T00:00:00Z"
+          "deletedAtUtc": "deletedAtUtc 1",
+          "deletedByUserId": "deletedByUserId 1",
+          "id": "DeletedSession-1",
+          "programId": "programId 1",
+          "sessionId": "sessionId 1",
+          "sessionName": "sessionName 1",
+          "typeName": "typeName 1",
+          "deletedSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
         },
         {
-          "deletedAtUtc": "2026-06-12T00:00:00Z",
-          "deletedByUserId": 3,
-          "id": 2,
-          "programId": 3,
-          "sessionId": 3,
-          "sessionName": "val-2",
-          "typeName": "val-2",
-          "deletedSinceUtc": "2026-06-12T00:00:00Z"
+          "deletedAtUtc": "deletedAtUtc 2",
+          "deletedByUserId": "deletedByUserId 2",
+          "id": "DeletedSession-2",
+          "programId": "programId 2",
+          "sessionId": "sessionId 2",
+          "sessionName": "sessionName 2",
+          "typeName": "typeName 2",
+          "deletedSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
         },
         {
-          "deletedAtUtc": "2026-06-13T00:00:00Z",
-          "deletedByUserId": 4,
-          "id": 3,
-          "programId": 4,
-          "sessionId": 4,
-          "sessionName": "val-3",
-          "typeName": "val-3",
-          "deletedSinceUtc": "2026-06-13T00:00:00Z"
+          "deletedAtUtc": "deletedAtUtc 3",
+          "deletedByUserId": "deletedByUserId 3",
+          "id": "DeletedSession-3",
+          "programId": "programId 3",
+          "sessionId": "sessionId 3",
+          "sessionName": "sessionName 3",
+          "typeName": "typeName 3",
+          "deletedSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
         }
       ]
     },
@@ -217,46 +240,49 @@
       "Status": 200,
       "Body": [
         {
-          "applicationCode": "val-1",
-          "applicationId": 2,
-          "evaluationDateUtc": "2026-06-11T00:00:00Z",
-          "id": 1,
-          "judgeUserId": 2,
-          "programId": 2,
-          "roundId": 2,
-          "startedAtUtc": "2026-06-11T00:00:00Z",
-          "status": "val-1",
-          "totalScore": 2,
-          "updatedAtUtc": "2026-06-11T00:00:00Z",
-          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z"
+          "applicationCode": "applicationCode 1",
+          "applicationId": "applicationId 1",
+          "evaluationDateUtc": "evaluationDateUtc 1",
+          "id": "Evaluation-1",
+          "judgeUserId": "judgeUserId 1",
+          "programId": "programId 1",
+          "roundId": "roundId 1",
+          "startedAtUtc": "startedAtUtc 1",
+          "status": "active",
+          "totalScore": "totalScore 1",
+          "updatedAtUtc": "updatedAtUtc 1",
+          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
         },
         {
-          "applicationCode": "val-2",
-          "applicationId": 3,
-          "evaluationDateUtc": "2026-06-12T00:00:00Z",
-          "id": 2,
-          "judgeUserId": 3,
-          "programId": 3,
-          "roundId": 3,
-          "startedAtUtc": "2026-06-12T00:00:00Z",
-          "status": "val-2",
-          "totalScore": 3,
-          "updatedAtUtc": "2026-06-12T00:00:00Z",
-          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z"
+          "applicationCode": "applicationCode 2",
+          "applicationId": "applicationId 2",
+          "evaluationDateUtc": "evaluationDateUtc 2",
+          "id": "Evaluation-2",
+          "judgeUserId": "judgeUserId 2",
+          "programId": "programId 2",
+          "roundId": "roundId 2",
+          "startedAtUtc": "startedAtUtc 2",
+          "status": "pending",
+          "totalScore": "totalScore 2",
+          "updatedAtUtc": "updatedAtUtc 2",
+          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
         },
         {
-          "applicationCode": "val-3",
-          "applicationId": 4,
-          "evaluationDateUtc": "2026-06-13T00:00:00Z",
-          "id": 3,
-          "judgeUserId": 4,
-          "programId": 4,
-          "roundId": 4,
-          "startedAtUtc": "2026-06-13T00:00:00Z",
-          "status": "val-3",
-          "totalScore": 4,
-          "updatedAtUtc": "2026-06-13T00:00:00Z",
-          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z"
+          "applicationCode": "applicationCode 3",
+          "applicationId": "applicationId 3",
+          "evaluationDateUtc": "evaluationDateUtc 3",
+          "id": "Evaluation-3",
+          "judgeUserId": "judgeUserId 3",
+          "programId": "programId 3",
+          "roundId": "roundId 3",
+          "startedAtUtc": "startedAtUtc 3",
+          "status": "completed",
+          "totalScore": "totalScore 3",
+          "updatedAtUtc": "updatedAtUtc 3",
+          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
         }
       ]
     },
@@ -266,25 +292,28 @@
       "Status": 200,
       "Body": [
         {
-          "currency": "val-1",
-          "id": 1,
-          "isArchived": false,
-          "name": "val-1",
-          "totalAmount": 2
-        },
-        {
-          "currency": "val-2",
-          "id": 2,
+          "currency": "USD",
+          "id": "Fund-1",
           "isArchived": true,
-          "name": "val-2",
-          "totalAmount": 3
+          "name": "Alex Rivera",
+          "totalAmount": "totalAmount 1",
+          "mj_e2e_custom_attr": "custom-1"
         },
         {
-          "currency": "val-3",
-          "id": 3,
+          "currency": "USD",
+          "id": "Fund-2",
           "isArchived": false,
-          "name": "val-3",
-          "totalAmount": 4
+          "name": "Jordan Chen",
+          "totalAmount": "totalAmount 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "currency": "USD",
+          "id": "Fund-3",
+          "isArchived": true,
+          "name": "Taylor Patel",
+          "totalAmount": "totalAmount 3",
+          "mj_e2e_custom_attr": "custom-3"
         }
       ]
     },
@@ -294,31 +323,785 @@
       "Status": 200,
       "Body": [
         {
-          "createdAtUtc": "2026-06-11T00:00:00Z",
-          "id": 1,
-          "mostRecentTransactionDateUtc": "2026-06-11T00:00:00Z",
-          "programCode": "val-1",
-          "programId": 2,
-          "thirdPartyCorporateId": "val-1",
-          "mostRecentTransactionSinceUtc": "2026-06-11T00:00:00Z"
+          "createdAtUtc": "createdAtUtc 1",
+          "id": "Invoice-1",
+          "mostRecentTransactionDateUtc": "mostRecentTransactionDateUtc 1",
+          "programCode": "programCode 1",
+          "programId": "programId 1",
+          "thirdPartyCorporateId": "thirdPartyCorporateId 1",
+          "mostRecentTransactionSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
         },
         {
-          "createdAtUtc": "2026-06-12T00:00:00Z",
-          "id": 2,
-          "mostRecentTransactionDateUtc": "2026-06-12T00:00:00Z",
-          "programCode": "val-2",
-          "programId": 3,
-          "thirdPartyCorporateId": "val-2",
-          "mostRecentTransactionSinceUtc": "2026-06-12T00:00:00Z"
+          "createdAtUtc": "createdAtUtc 2",
+          "id": "Invoice-2",
+          "mostRecentTransactionDateUtc": "mostRecentTransactionDateUtc 2",
+          "programCode": "programCode 2",
+          "programId": "programId 2",
+          "thirdPartyCorporateId": "thirdPartyCorporateId 2",
+          "mostRecentTransactionSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
         },
         {
-          "createdAtUtc": "2026-06-13T00:00:00Z",
-          "id": 3,
-          "mostRecentTransactionDateUtc": "2026-06-13T00:00:00Z",
-          "programCode": "val-3",
-          "programId": 4,
-          "thirdPartyCorporateId": "val-3",
-          "mostRecentTransactionSinceUtc": "2026-06-13T00:00:00Z"
+          "createdAtUtc": "createdAtUtc 3",
+          "id": "Invoice-3",
+          "mostRecentTransactionDateUtc": "mostRecentTransactionDateUtc 3",
+          "programCode": "programCode 3",
+          "programId": "programId 3",
+          "thirdPartyCorporateId": "thirdPartyCorporateId 3",
+          "mostRecentTransactionSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/JudgeTeams",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "JudgeTeam-1",
+          "judges": "[]",
+          "managers": "[]",
+          "name": "Alex Rivera",
+          "roundId": "roundId 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "id": "JudgeTeam-2",
+          "judges": "[]",
+          "managers": "[]",
+          "name": "Jordan Chen",
+          "roundId": "roundId 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "id": "JudgeTeam-3",
+          "judges": "[]",
+          "managers": "[]",
+          "name": "Taylor Patel",
+          "roundId": "roundId 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Invoices/Payments",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "amount": "amount 1",
+          "billingName": "billingName 1",
+          "canRefund": "canRefund 1",
+          "createdAtUtc": "createdAtUtc 1",
+          "details": "details 1",
+          "externalPaymentTransactionData": "externalPaymentTransactionData 1",
+          "id": "Payment-1",
+          "invoiceId": "invoiceId 1",
+          "isManualAdjustment": true,
+          "isPromissoryNote": true,
+          "method": "method 1",
+          "notes": "Sample notes 1",
+          "referenceNumber": "referenceNumber 1",
+          "lastModifiedUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "amount": "amount 2",
+          "billingName": "billingName 2",
+          "canRefund": "canRefund 2",
+          "createdAtUtc": "createdAtUtc 2",
+          "details": "details 2",
+          "externalPaymentTransactionData": "externalPaymentTransactionData 2",
+          "id": "Payment-2",
+          "invoiceId": "invoiceId 2",
+          "isManualAdjustment": false,
+          "isPromissoryNote": false,
+          "method": "method 2",
+          "notes": "Sample notes 2",
+          "referenceNumber": "referenceNumber 2",
+          "lastModifiedUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "amount": "amount 3",
+          "billingName": "billingName 3",
+          "canRefund": "canRefund 3",
+          "createdAtUtc": "createdAtUtc 3",
+          "details": "details 3",
+          "externalPaymentTransactionData": "externalPaymentTransactionData 3",
+          "id": "Payment-3",
+          "invoiceId": "invoiceId 3",
+          "isManualAdjustment": true,
+          "isPromissoryNote": true,
+          "method": "method 3",
+          "notes": "Sample notes 3",
+          "referenceNumber": "referenceNumber 3",
+          "lastModifiedUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "applicationCategories": "[]",
+          "code": "code-1",
+          "createdAtUtc": "createdAtUtc 1",
+          "enableScheduler": "enableScheduler 1",
+          "enableSessions": "enableSessions 1",
+          "id": "Program-1",
+          "isArchived": true,
+          "name": "Alex Rivera",
+          "rounds": [
+            {
+              "id": "Rounds-1",
+              "isJudgingOnly": true,
+              "judgingEndDateUtc": "judgingEndDateUtc 1",
+              "judgingStartDateUtc": "judgingStartDateUtc 1",
+              "name": "Alex Rivera",
+              "submissionEndDateUtc": "submissionEndDateUtc 1",
+              "submissionStartDateUtc": "submissionStartDateUtc 1",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-1",
+              "programId": "Rounds-1",
+              "roundId": "Rounds-1"
+            },
+            {
+              "id": "Rounds-2",
+              "isJudgingOnly": false,
+              "judgingEndDateUtc": "judgingEndDateUtc 2",
+              "judgingStartDateUtc": "judgingStartDateUtc 2",
+              "name": "Jordan Chen",
+              "submissionEndDateUtc": "submissionEndDateUtc 2",
+              "submissionStartDateUtc": "submissionStartDateUtc 2",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-2",
+              "programId": "Rounds-2",
+              "roundId": "Rounds-2"
+            },
+            {
+              "id": "Rounds-3",
+              "isJudgingOnly": true,
+              "judgingEndDateUtc": "judgingEndDateUtc 3",
+              "judgingStartDateUtc": "judgingStartDateUtc 3",
+              "name": "Taylor Patel",
+              "submissionEndDateUtc": "submissionEndDateUtc 3",
+              "submissionStartDateUtc": "submissionStartDateUtc 3",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-3",
+              "programId": "Rounds-3",
+              "roundId": "Rounds-3"
+            }
+          ],
+          "tag": "tag 1",
+          "createdSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "applicationCategories": "[]",
+          "code": "code-2",
+          "createdAtUtc": "createdAtUtc 2",
+          "enableScheduler": "enableScheduler 2",
+          "enableSessions": "enableSessions 2",
+          "id": "Program-2",
+          "isArchived": false,
+          "name": "Jordan Chen",
+          "rounds": [
+            {
+              "id": "Rounds-1",
+              "isJudgingOnly": true,
+              "judgingEndDateUtc": "judgingEndDateUtc 1",
+              "judgingStartDateUtc": "judgingStartDateUtc 1",
+              "name": "Alex Rivera",
+              "submissionEndDateUtc": "submissionEndDateUtc 1",
+              "submissionStartDateUtc": "submissionStartDateUtc 1",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-1",
+              "programId": "Rounds-1",
+              "roundId": "Rounds-1"
+            },
+            {
+              "id": "Rounds-2",
+              "isJudgingOnly": false,
+              "judgingEndDateUtc": "judgingEndDateUtc 2",
+              "judgingStartDateUtc": "judgingStartDateUtc 2",
+              "name": "Jordan Chen",
+              "submissionEndDateUtc": "submissionEndDateUtc 2",
+              "submissionStartDateUtc": "submissionStartDateUtc 2",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-2",
+              "programId": "Rounds-2",
+              "roundId": "Rounds-2"
+            },
+            {
+              "id": "Rounds-3",
+              "isJudgingOnly": true,
+              "judgingEndDateUtc": "judgingEndDateUtc 3",
+              "judgingStartDateUtc": "judgingStartDateUtc 3",
+              "name": "Taylor Patel",
+              "submissionEndDateUtc": "submissionEndDateUtc 3",
+              "submissionStartDateUtc": "submissionStartDateUtc 3",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-3",
+              "programId": "Rounds-3",
+              "roundId": "Rounds-3"
+            }
+          ],
+          "tag": "tag 2",
+          "createdSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "applicationCategories": "[]",
+          "code": "code-3",
+          "createdAtUtc": "createdAtUtc 3",
+          "enableScheduler": "enableScheduler 3",
+          "enableSessions": "enableSessions 3",
+          "id": "Program-3",
+          "isArchived": true,
+          "name": "Taylor Patel",
+          "rounds": [
+            {
+              "id": "Rounds-1",
+              "isJudgingOnly": true,
+              "judgingEndDateUtc": "judgingEndDateUtc 1",
+              "judgingStartDateUtc": "judgingStartDateUtc 1",
+              "name": "Alex Rivera",
+              "submissionEndDateUtc": "submissionEndDateUtc 1",
+              "submissionStartDateUtc": "submissionStartDateUtc 1",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-1",
+              "programId": "Rounds-1",
+              "roundId": "Rounds-1"
+            },
+            {
+              "id": "Rounds-2",
+              "isJudgingOnly": false,
+              "judgingEndDateUtc": "judgingEndDateUtc 2",
+              "judgingStartDateUtc": "judgingStartDateUtc 2",
+              "name": "Jordan Chen",
+              "submissionEndDateUtc": "submissionEndDateUtc 2",
+              "submissionStartDateUtc": "submissionStartDateUtc 2",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-2",
+              "programId": "Rounds-2",
+              "roundId": "Rounds-2"
+            },
+            {
+              "id": "Rounds-3",
+              "isJudgingOnly": true,
+              "judgingEndDateUtc": "judgingEndDateUtc 3",
+              "judgingStartDateUtc": "judgingStartDateUtc 3",
+              "name": "Taylor Patel",
+              "submissionEndDateUtc": "submissionEndDateUtc 3",
+              "submissionStartDateUtc": "submissionStartDateUtc 3",
+              "winnerTypes": "[]",
+              "mj_e2e_custom_attr": "custom-3",
+              "programId": "Rounds-3",
+              "roundId": "Rounds-3"
+            }
+          ],
+          "tag": "tag 3",
+          "createdSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Invoices/Refunds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "amount": "amount 1",
+          "createdAtUtc": "createdAtUtc 1",
+          "details": "details 1",
+          "id": "Refund-1",
+          "invoiceId": "invoiceId 1",
+          "notes": "Sample notes 1",
+          "lastModifiedUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "amount": "amount 2",
+          "createdAtUtc": "createdAtUtc 2",
+          "details": "details 2",
+          "id": "Refund-2",
+          "invoiceId": "invoiceId 2",
+          "notes": "Sample notes 2",
+          "lastModifiedUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "amount": "amount 3",
+          "createdAtUtc": "createdAtUtc 3",
+          "details": "details 3",
+          "id": "Refund-3",
+          "invoiceId": "invoiceId 3",
+          "notes": "Sample notes 3",
+          "lastModifiedUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Sessions",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "applicationIds": "[]",
+          "applicationItemCount": "applicationItemCount 1",
+          "id": "Session-1",
+          "name": "Alex Rivera",
+          "otherTimeItemCount": "otherTimeItemCount 1",
+          "programId": "programId 1",
+          "totalSessionItemCount": "totalSessionItemCount 1",
+          "typeName": "typeName 1",
+          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "applicationIds": "[]",
+          "applicationItemCount": "applicationItemCount 2",
+          "id": "Session-2",
+          "name": "Jordan Chen",
+          "otherTimeItemCount": "otherTimeItemCount 2",
+          "programId": "programId 2",
+          "totalSessionItemCount": "totalSessionItemCount 2",
+          "typeName": "typeName 2",
+          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "applicationIds": "[]",
+          "applicationItemCount": "applicationItemCount 3",
+          "id": "Session-3",
+          "name": "Taylor Patel",
+          "otherTimeItemCount": "otherTimeItemCount 3",
+          "programId": "programId 3",
+          "totalSessionItemCount": "totalSessionItemCount 3",
+          "typeName": "typeName 3",
+          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Users",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "createdAtUtc": "createdAtUtc 1",
+          "email": "user1@example.com",
+          "externalAuthData": "externalAuthData 1",
+          "firstName": "Alex",
+          "id": "User-1",
+          "lastLoggedInUtc": "lastLoggedInUtc 1",
+          "lastModifiedAtUtc": "lastModifiedAtUtc 1",
+          "lastName": "Rivera",
+          "thirdPartyUniqueId": "thirdPartyUniqueId 1",
+          "lastModifiedSinceUtc": "2026-06-11T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "createdAtUtc": "createdAtUtc 2",
+          "email": "user2@example.com",
+          "externalAuthData": "externalAuthData 2",
+          "firstName": "Jordan",
+          "id": "User-2",
+          "lastLoggedInUtc": "lastLoggedInUtc 2",
+          "lastModifiedAtUtc": "lastModifiedAtUtc 2",
+          "lastName": "Chen",
+          "thirdPartyUniqueId": "thirdPartyUniqueId 2",
+          "lastModifiedSinceUtc": "2026-06-12T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "createdAtUtc": "createdAtUtc 3",
+          "email": "user3@example.com",
+          "externalAuthData": "externalAuthData 3",
+          "firstName": "Taylor",
+          "id": "User-3",
+          "lastLoggedInUtc": "lastLoggedInUtc 3",
+          "lastModifiedAtUtc": "lastModifiedAtUtc 3",
+          "lastName": "Patel",
+          "thirdPartyUniqueId": "thirdPartyUniqueId 3",
+          "lastModifiedSinceUtc": "2026-06-13T00:00:00Z",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/ApplicationCategories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "code": "code-1",
+          "id": "ApplicationCategory-1",
+          "name": "Alex Rivera",
+          "path": "path 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "code": "code-2",
+          "id": "ApplicationCategory-2",
+          "name": "Jordan Chen",
+          "path": "path 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "code": "code-3",
+          "id": "ApplicationCategory-3",
+          "name": "Taylor Patel",
+          "path": "path 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Funds/{fundId}/Transactions",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "amount": "amount 1",
+          "applicationId": "applicationId 1",
+          "approvedByUserId": "approvedByUserId 1",
+          "date": "date 1",
+          "description": "Sample description 1",
+          "id": "FundTransaction-1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "amount": "amount 2",
+          "applicationId": "applicationId 2",
+          "approvedByUserId": "approvedByUserId 2",
+          "date": "date 2",
+          "description": "Sample description 2",
+          "id": "FundTransaction-2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "amount": "amount 3",
+          "applicationId": "applicationId 3",
+          "approvedByUserId": "approvedByUserId 3",
+          "date": "date 3",
+          "description": "Sample description 3",
+          "id": "FundTransaction-3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/JudgeAssignments/AssignedToRound",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "email": "user1@example.com",
+          "firstName": "Alex",
+          "judgeTeams": "[]",
+          "lastName": "Rivera",
+          "userId": "JudgeAssignment-1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "email": "user2@example.com",
+          "firstName": "Jordan",
+          "judgeTeams": "[]",
+          "lastName": "Chen",
+          "userId": "JudgeAssignment-2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "email": "user3@example.com",
+          "firstName": "Taylor",
+          "judgeTeams": "[]",
+          "lastName": "Patel",
+          "userId": "JudgeAssignment-3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Judges/Recusals",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "applicationId": "JudgeRecusal-1",
+          "email": "user1@example.com",
+          "firstName": "Alex",
+          "lastName": "Rivera",
+          "recusalReason": "recusalReason 1",
+          "userId": "userId 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "applicationId": "JudgeRecusal-2",
+          "email": "user2@example.com",
+          "firstName": "Jordan",
+          "lastName": "Chen",
+          "recusalReason": "recusalReason 2",
+          "userId": "userId 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "applicationId": "JudgeRecusal-3",
+          "email": "user3@example.com",
+          "firstName": "Taylor",
+          "lastName": "Patel",
+          "recusalReason": "recusalReason 3",
+          "userId": "userId 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/OtherSessionItemTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "description": "Sample description 1",
+          "id": "OtherSessionItemType-1",
+          "name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "description": "Sample description 2",
+          "id": "OtherSessionItemType-2",
+          "name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "description": "Sample description 3",
+          "id": "OtherSessionItemType-3",
+          "name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Rounds/{roundId}/ApplicationReports",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "Report-1",
+          "name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "id": "Report-2",
+          "name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "id": "Report-3",
+          "name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Rounds/{roundId}/JudgeReports",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "Report-1",
+          "name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "id": "Report-2",
+          "name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "id": "Report-3",
+          "name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/SessionReports",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "Report-1",
+          "name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "id": "Report-2",
+          "name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "id": "Report-3",
+          "name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/Scheduler/Days",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "code": "code-1",
+          "date": "date 1",
+          "id": "ScheduleDay-1",
+          "name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "code": "code-2",
+          "date": "date 2",
+          "id": "ScheduleDay-2",
+          "name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "code": "code-3",
+          "date": "date 3",
+          "id": "ScheduleDay-3",
+          "name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/Scheduler/ScheduleItems",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "ScheduleItem-1",
+          "scheduleDayId": "scheduleDayId 1",
+          "scheduleRoomId": "scheduleRoomId 1",
+          "scheduleTimeSlotId": "scheduleTimeSlotId 1",
+          "targetId": "targetId 1",
+          "targetType": "targetType 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "id": "ScheduleItem-2",
+          "scheduleDayId": "scheduleDayId 2",
+          "scheduleRoomId": "scheduleRoomId 2",
+          "scheduleTimeSlotId": "scheduleTimeSlotId 2",
+          "targetId": "targetId 2",
+          "targetType": "targetType 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "id": "ScheduleItem-3",
+          "scheduleDayId": "scheduleDayId 3",
+          "scheduleRoomId": "scheduleRoomId 3",
+          "scheduleTimeSlotId": "scheduleTimeSlotId 3",
+          "targetId": "targetId 3",
+          "targetType": "targetType 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/Scheduler/Rooms",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "capacity": "capacity 1",
+          "code": "code-1",
+          "id": "ScheduleRoom-1",
+          "name": "Alex Rivera",
+          "notes": "Sample notes 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "capacity": "capacity 2",
+          "code": "code-2",
+          "id": "ScheduleRoom-2",
+          "name": "Jordan Chen",
+          "notes": "Sample notes 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "capacity": "capacity 3",
+          "code": "code-3",
+          "id": "ScheduleRoom-3",
+          "name": "Taylor Patel",
+          "notes": "Sample notes 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/Scheduler/TimeSlots",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "availableOnlyInDayIds": "[]",
+          "code": "code-1",
+          "endTime": "endTime 1",
+          "id": "ScheduleTimeSlot-1",
+          "name": "Alex Rivera",
+          "startTime": "startTime 1",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "availableOnlyInDayIds": "[]",
+          "code": "code-2",
+          "endTime": "endTime 2",
+          "id": "ScheduleTimeSlot-2",
+          "name": "Jordan Chen",
+          "startTime": "startTime 2",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "availableOnlyInDayIds": "[]",
+          "code": "code-3",
+          "endTime": "endTime 3",
+          "id": "ScheduleTimeSlot-3",
+          "name": "Taylor Patel",
+          "startTime": "startTime 3",
+          "mj_e2e_custom_attr": "custom-3"
+        }
+      ]
+    },
+    {
+      "Path": "/v2/Programs/{programId}/SessionTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": [
+        {
+          "id": "SessionType-1",
+          "name": "Alex Rivera",
+          "mj_e2e_custom_attr": "custom-1"
+        },
+        {
+          "id": "SessionType-2",
+          "name": "Jordan Chen",
+          "mj_e2e_custom_attr": "custom-2"
+        },
+        {
+          "id": "SessionType-3",
+          "name": "Taylor Patel",
+          "mj_e2e_custom_attr": "custom-3"
         }
       ]
     }
@@ -351,6 +1134,78 @@
     {
       "Name": "Invoice",
       "OrderingField": "mostRecentTransactionSinceUtc"
+    },
+    {
+      "Name": "JudgeTeam",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Payment",
+      "OrderingField": "lastModifiedUtc"
+    },
+    {
+      "Name": "Program",
+      "OrderingField": "createdSinceUtc"
+    },
+    {
+      "Name": "Refund",
+      "OrderingField": "lastModifiedUtc"
+    },
+    {
+      "Name": "Session",
+      "OrderingField": "lastModifiedSinceUtc"
+    },
+    {
+      "Name": "User",
+      "OrderingField": "lastModifiedSinceUtc"
+    },
+    {
+      "Name": "ApplicationCategory",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "FundTransaction",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "JudgeAssignment",
+      "OrderingField": "userId"
+    },
+    {
+      "Name": "JudgeRecusal",
+      "OrderingField": "applicationId"
+    },
+    {
+      "Name": "OtherSessionItemType",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Report",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Rounds",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ScheduleDay",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ScheduleItem",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ScheduleRoom",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ScheduleTimeSlot",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "SessionType",
+      "OrderingField": "id"
     }
   ],
   "DeltaPasses": [
@@ -364,43 +1219,108 @@
           "Body": [
             {
               "categoryFriendlyPath": "updated-delta",
-              "categoryName": "val-1",
-              "code": "val-1",
-              "id": 1,
-              "lastModifiedUtc": "2026-06-11T00:00:00Z",
-              "name": "val-1",
-              "programId": 2,
-              "userId": 2,
-              "lastModifiedSinceUtc": "2026-06-11T00:00:00Z"
+              "categoryName": "standard",
+              "code": "code-1",
+              "id": "Application-1",
+              "lastModifiedUtc": "lastModifiedUtc 1",
+              "name": "Alex Rivera",
+              "programId": "programId 1",
+              "userId": "userId 1",
+              "lastModifiedSinceUtc": "2026-06-11T00:00:00Z",
+              "mj_e2e_custom_attr": "custom-1"
             },
             {
-              "categoryFriendlyPath": "val-2",
-              "categoryName": "val-2",
-              "code": "val-2",
-              "id": 2,
-              "lastModifiedUtc": "2026-06-12T00:00:00Z",
-              "name": "val-2",
-              "programId": 3,
-              "userId": 3,
-              "lastModifiedSinceUtc": "2026-06-12T00:00:00Z"
+              "categoryFriendlyPath": "premium",
+              "categoryName": "premium",
+              "code": "code-2",
+              "id": "Application-2",
+              "lastModifiedUtc": "lastModifiedUtc 2",
+              "name": "Jordan Chen",
+              "programId": "programId 2",
+              "userId": "userId 2",
+              "lastModifiedSinceUtc": "2026-06-12T00:00:00Z",
+              "mj_e2e_custom_attr": "custom-2"
             }
           ]
         }
       ],
       "ExpectedPresent": [
-        "1",
-        "2"
+        "Application-1",
+        "Application-2"
       ],
       "ExpectedDeletes": [
-        "3"
+        "Application-3"
       ],
       "ExpectedUpdates": [
         {
-          "ExternalID": "1",
+          "ExternalID": "Application-1",
           "Field": "categoryFriendlyPath",
           "Value": "updated-delta"
         }
       ]
     }
-  ]
+  ],
+  "Lifecycle": {
+    "supportsDiscovery": false,
+    "supportsFieldDiscovery": false,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": true,
+    "writeRoundTrip": {
+      "Object": "Application",
+      "Routes": [
+        {
+          "Path": "/v2/Applications",
+          "Method": "POST",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "categoryFriendlyPath": "mock-created"
+          },
+          "Headers": {
+            "content-type": "application/json"
+          }
+        },
+        {
+          "Path": "/v2/Applications/{id}",
+          "Method": "PATCH",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "ID": "mock-wr-id-1",
+            "Id": "mock-wr-id-1",
+            "externalID": "mock-wr-id-1",
+            "ExternalID": "mock-wr-id-1",
+            "categoryFriendlyPath": "mock-updated"
+          }
+        },
+        {
+          "Path": "/v2/Applications/{id}",
+          "Method": "DELETE",
+          "Status": 200,
+          "Body": {
+            "id": "mock-wr-id-1",
+            "deleted": true
+          }
+        }
+      ],
+      "CreateAttributes": {
+        "categoryFriendlyPath": "mock-created"
+      },
+      "CreatePathMatch": "v2",
+      "DeleteMethodMatch": "DELETE",
+      "UpdateAttributes": {
+        "categoryFriendlyPath": "mock-updated"
+      }
+    },
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "OpenWaterConnector"
+  }
 }

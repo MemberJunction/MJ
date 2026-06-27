@@ -59,5 +59,18 @@
       }
     }
   ],
-  "HandAuthored": true
+  "HandAuthored": true,
+  "Lifecycle": {
+    "supportsDiscovery": true,
+    "supportsFieldDiscovery": true,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": false,
+    "writeRoundTrip": null,
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "PathLMSConnector"
+  }
 }

@@ -1755,7 +1755,10 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"apiPath\":\"/api/contacts/{contactId}/NotesAndFields\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
+            "Configuration": {
+              "parentObjectName": "Contact",
+              "parentObjectIDFieldName": "contactId"
+            }
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2164,7 +2167,10 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"apiPath\":\"/api/contacts/{contactId}/editnotes\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
+            "Configuration": {
+              "parentObjectName": "Contact",
+              "parentObjectIDFieldName": "contactId"
+            }
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -2212,7 +2218,10 @@
             "Status": "Active",
             "MetadataSource": "Declared",
             "IntegrationID": "@parent:ID",
-            "Configuration": "{\"apiPath\":\"/api/contacts/{contactId}/engagement\",\"pathParams\":[\"contactId\"],\"pagination\":{\"style\":\"odata\",\"skipParam\":\"$skip\",\"topParam\":\"$top\",\"orderByParam\":\"$orderby\",\"topMax\":100},\"syncStrategy\":\"FullPullHashDiff\",\"contentHashApplicable\":true,\"listSupported\":true,\"supportsCreate\":false,\"supportsUpdate\":false,\"supportsDelete\":false,\"parentObjectName\":\"Contact\",\"parentObjectIDFieldName\":\"contactId\"}"
+            "Configuration": {
+              "parentObjectName": "Contact",
+              "parentObjectIDFieldName": "contactId"
+            }
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [

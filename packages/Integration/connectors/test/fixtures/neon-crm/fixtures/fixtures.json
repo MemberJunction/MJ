@@ -28,225 +28,975 @@
         "records": [
           {
             "accountId": "Account-1",
-            "companyAccount": "[]",
-            "individualAccount": {
-              "roleVoList": [
+            "companyAccount": {
+              "accountCurrentMembershipStatus": "active",
+              "accountId": "CompanyAccount-1",
+              "companyTypes": "Acme Corp",
+              "consent": "consent 1",
+              "email1OptOut": true,
+              "generosityIndicator": "generosityIndicator 1",
+              "login": "login 1",
+              "name": "Alex Rivera",
+              "noSolicitation": true,
+              "origin": "origin 1",
+              "primaryContact": "primaryContact 1",
+              "primaryContactAccountId": "primaryContactAccountId 1",
+              "sendSystemEmail": true,
+              "sendTextOptIn": true,
+              "smsNumber": "smsNumber 1",
+              "source": "source 1",
+              "timestamps": "timestamps 1",
+              "url": "https://example.com/url/1",
+              "shippingAddresses": [
                 {
-                  "color": "[]",
-                  "description": "val-1",
-                  "id": "AccountRoleApi-1",
-                  "name": "val-1"
+                  "addressId": "ShippingAddress-1",
+                  "addressLine1": "101 Test St",
+                  "addressLine2": "101 Test St",
+                  "addressLine3": "101 Test St",
+                  "addressLine4": "101 Test St",
+                  "city": "Boston",
+                  "country": "US",
+                  "county": "county 1",
+                  "fax": "555-0101",
+                  "faxType": "555-0101",
+                  "phone1": "555-0101",
+                  "phone1Type": "555-0101",
+                  "phone2": "555-0101",
+                  "phone2Type": "555-0101",
+                  "phone3": "555-0101",
+                  "phone3Type": "555-0101",
+                  "shippingCompanyName": "Acme Corp",
+                  "shippingDeliverTo": "shippingDeliverTo 1",
+                  "stateProvince": "MA",
+                  "territory": "territory 1",
+                  "type": "standard",
+                  "zipCode": "02101",
+                  "zipCodeSuffix": "02101"
                 }
               ]
+            },
+            "individualAccount": {
+              "accountCurrentMembershipStatus": "active",
+              "accountId": "IndividualAccount-1",
+              "company": "Acme Corp",
+              "consent": "consent 1",
+              "email1OptOut": true,
+              "facebookPage": "facebookPage 1",
+              "generosityIndicator": "generosityIndicator 1",
+              "individualTypes": "individualTypes 1",
+              "login": "login 1",
+              "noSolicitation": true,
+              "origin": "origin 1",
+              "primaryContact": "primaryContact 1",
+              "sendSystemEmail": true,
+              "sendTextOptIn": true,
+              "smsNumber": "smsNumber 1",
+              "source": "source 1",
+              "timestamps": "timestamps 1",
+              "twitterPage": "twitterPage 1",
+              "url": "https://example.com/url/1"
             },
             "contacts": {
               "accountId": "AccountContacts-1",
-              "pagination": "[]"
+              "pagination": "pagination 1"
             },
             "orders": [
               {
-                "accountId": "val-1",
+                "accountId": "accountId 1",
                 "id": "AccountOrder-1",
-                "orderDate": "val-1",
-                "shippingHandlingFee": "val-1",
-                "status": "val-1",
-                "subTotal": "val-1",
-                "tax": "val-1",
-                "timestamps": "[]",
-                "totalCharge": "val-1",
-                "totalDiscount": "val-1",
+                "orderDate": "2026-06-10T01:30:00Z",
+                "shippingHandlingFee": 19.99,
+                "status": "active",
+                "subTotal": 19.99,
+                "tax": 2,
+                "timestamps": "timestamps 1",
+                "totalCharge": 19.99,
+                "totalDiscount": 19.99,
                 "items": [
                   {
                     "id": "AccountOrderItem-1",
-                    "name": "val-1",
-                    "price": "val-1",
-                    "quantity": "val-1",
-                    "type": "val-1",
-                    "unitPrice": "val-1"
+                    "name": "Alex Rivera",
+                    "price": 19.99,
+                    "quantity": 4,
+                    "type": "standard",
+                    "unitPrice": 19.99
                   }
                 ]
               }
             ],
             "windfall": {
-              "boat_owner": "val-1",
-              "foundation_association": "val-1",
-              "foundation_officer": "val-1",
-              "high_confidence_net_worth": "val-1",
+              "boat_owner": true,
+              "foundation_association": true,
+              "foundation_officer": true,
+              "high_confidence_net_worth": 2,
               "id": "AccountWindfall-1",
-              "imported_car_owner": "val-1",
-              "liquidity_trigger": "val-1",
-              "low_confidence_net_worth": "val-1",
-              "luxury_car_owner": "val-1",
-              "match_confidence": "val-1",
-              "multi-property_owner": "val-1",
-              "net_worth": "val-1",
-              "net_worth_last_calculated": "val-1",
-              "nonprofit_board_member": "val-1",
-              "philanthropic_cause": "[]",
-              "philanthropic_focus": "[]",
-              "philanthropic_giver": "val-1",
-              "plane_owner": "val-1",
-              "political_affiliation": "val-1",
-              "political_donor": "val-1",
-              "primary_address_incorrect": "val-1",
-              "recent_death_in_family": "val-1",
-              "recent_mortgage": "val-1",
-              "recent_mover": "val-1",
-              "recently_divorced": "val-1",
-              "sec_money_in_motion": "val-1",
-              "small_business_owner": "val-1",
-              "top_political_donor": "val-1",
-              "trust_association": "val-1",
-              "windfall_id": "val-1"
-            }
+              "imported_car_owner": true,
+              "liquidity_trigger": true,
+              "low_confidence_net_worth": 2,
+              "luxury_car_owner": true,
+              "match_confidence": 2,
+              "multi-property_owner": true,
+              "net_worth": 2,
+              "net_worth_last_calculated": "net_worth_last_calculated 1",
+              "nonprofit_board_member": true,
+              "philanthropic_cause": "philanthropic_cause 1",
+              "philanthropic_focus": "philanthropic_focus 1",
+              "philanthropic_giver": true,
+              "plane_owner": true,
+              "political_affiliation": "political_affiliation 1",
+              "political_donor": true,
+              "primary_address_incorrect": true,
+              "recent_death_in_family": true,
+              "recent_mortgage": true,
+              "recent_mover": true,
+              "recently_divorced": true,
+              "sec_money_in_motion": true,
+              "small_business_owner": true,
+              "top_political_donor": true,
+              "trust_association": true,
+              "windfall_id": "windfall_id-1"
+            },
+            "addresses": [
+              {
+                "addressId": "Address-1",
+                "addressLine1": "101 Test St",
+                "addressLine2": "101 Test St",
+                "addressLine3": "101 Test St",
+                "addressLine4": "101 Test St",
+                "city": "Boston",
+                "country": "US",
+                "county": "county 1",
+                "endDate": "endDate 1",
+                "fax": "555-0101",
+                "faxType": "555-0101",
+                "isPrimaryAddress": true,
+                "phone1": "555-0101",
+                "phone1Type": "555-0101",
+                "phone2": "555-0101",
+                "phone2Type": "555-0101",
+                "phone3": "555-0101",
+                "phone3Type": "555-0101",
+                "startDate": "startDate 1",
+                "stateProvince": "MA",
+                "territory": "territory 1",
+                "type": "standard",
+                "validAddress": true,
+                "zipCode": "02101",
+                "zipCodeSuffix": "02101"
+              }
+            ],
+            "eventRegistrations": [
+              {
+                "couponCode": "couponCode 1",
+                "craInfo": "craInfo 1",
+                "donorCoveredFee": 19.99,
+                "donorCoveredFeeFlag": true,
+                "eventId": "eventId 1",
+                "fundraiserAccountId": "fundraiserAccountId 1",
+                "id": "EventRegistration-1",
+                "ignoreCapacity": true,
+                "origin": "origin 1",
+                "payLater": true,
+                "registrantAccountId": "registrantAccountId 1",
+                "registrationAmount": 19.99,
+                "registrationDateTime": "registrationDateTime 1",
+                "sendSystemEmail": true,
+                "source": "source 1",
+                "taxDeductibleInfo": "taxDeductibleInfo 1",
+                "totalCharge": 19.99,
+                "totalDiscount": 19.99,
+                "tickets": [
+                  {
+                    "ticketId": 1,
+                    "ticketSequence": 2
+                  }
+                ]
+              }
+            ],
+            "pledges": [
+              {
+                "installments": [
+                  {
+                    "amount": 19.99,
+                    "expectedDate": "expectedDate 1",
+                    "id": "Installment-1",
+                    "pledgeId": "pledgeId 1",
+                    "pledgePaymentIds": "pledgePaymentIds 1"
+                  }
+                ],
+                "dafpay": {
+                  "advisor": "advisor 1",
+                  "distributionId": "PledgeDafPayDistribution-1",
+                  "grantId": "grantId 1",
+                  "note": "Sample note 1",
+                  "status": "active",
+                  "totalFees": 19.99
+                },
+                "pledgePayments": [
+                  {
+                    "craInfo": "craInfo 1",
+                    "date": "2026-06-10",
+                    "donorCoveredFee": 19.99,
+                    "donorCoveredFeeFlag": true,
+                    "id": "PledgePayment-1",
+                    "installmentId": "installmentId 1",
+                    "origin": "origin 1",
+                    "payment": "payment 1",
+                    "pledgeId": "pledgeId 1",
+                    "sendAcknowledgeEmail": true,
+                    "sendAcknowledgeLetter": true,
+                    "sendMatchedDonorEmail": true,
+                    "sendMatchedDonorLetter": true,
+                    "taxDeductibleInfo": "taxDeductibleInfo 1",
+                    "timestamps": "timestamps 1",
+                    "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+                  }
+                ]
+              },
+              {
+                "accountId": "accountId 1",
+                "acknowledgee": "acknowledgee 1",
+                "amount": 19.99,
+                "anonymousType": "anonymousType 1",
+                "campaign": "campaign 1",
+                "dafpay": "dafpay 1",
+                "date": "2026-06-10",
+                "expectedDate": "2026-06-10T01:30:00Z",
+                "fund": "fund 1",
+                "fundraiserAccountId": "fundraiserAccountId 1",
+                "id": "Pledge-1",
+                "matchedDonationId": "matchedDonationId 1",
+                "pledgeStatus": "active",
+                "publicRecognitionName": "publicRecognitionName 1",
+                "purpose": "purpose 1",
+                "solicitationMethod": "solicitationMethod 1",
+                "solicitor": "solicitor 1",
+                "source": "source 1",
+                "timestamps": "timestamps 1",
+                "tribute": "tribute 1",
+                "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+              }
+            ],
+            "memberships": [
+              {
+                "accountId": "accountId 1",
+                "autoRenewal": {
+                  "ach": "ach 1",
+                  "autoRenewal": true,
+                  "creditCardOnline": "creditCardOnline 1",
+                  "donorCoveredFeeFlag": true,
+                  "membershipId": "MembershipAutoRenewal-1",
+                  "sendAutoRenewalEnabledEmail": true
+                },
+                "changeType": "changeType 1",
+                "complimentary": 2,
+                "craInfo": "craInfo 1",
+                "donorCoveredFee": 19.99,
+                "donorCoveredFeeFlag": true,
+                "enrollType": "enrollType 1",
+                "fee": 19.99,
+                "id": "Membership-1",
+                "isActive": true,
+                "membershipLevel": "standard",
+                "membershipTerm": "membershipTerm 1",
+                "origin": "origin 1",
+                "parentId": "parentId 1",
+                "payLater": true,
+                "primaryActiveMembership": true,
+                "sendAcknowledgeEmail": true,
+                "sendAutoRenewalEnabledEmail": true,
+                "source": "source 1",
+                "status": "active",
+                "taxDeductibleInfo": "taxDeductibleInfo 1",
+                "termDuration": 0.1,
+                "termEndDate": "2026-06-10T01:30:00Z",
+                "termStartDate": "2026-06-10T01:30:00Z",
+                "termUnit": "termUnit 1",
+                "timestamps": "timestamps 1",
+                "totalCharge": 19.99,
+                "totalDiscount": 19.99,
+                "transactionDate": "2026-06-10T01:30:00Z",
+                "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z",
+                "subMembers": [
+                  {
+                    "accountId": "accountId 1",
+                    "autoRenewal": true,
+                    "changeType": "changeType 1",
+                    "complimentary": 2,
+                    "couponCode": "couponCode 1",
+                    "craInfo": "craInfo 1",
+                    "enrollType": "enrollType 1",
+                    "fee": 19.99,
+                    "id": "SubMembership-1",
+                    "isCurrentEmployee": true,
+                    "membershipLevel": "standard",
+                    "membershipTerm": "membershipTerm 1",
+                    "origin": "origin 1",
+                    "parentId": "parentId 1",
+                    "sendAcknowledgeEmail": true,
+                    "sendAutoRenewalEnabledEmail": true,
+                    "source": "source 1",
+                    "status": "active",
+                    "taxDeductibleInfo": "taxDeductibleInfo 1",
+                    "termDuration": 0.1,
+                    "termEndDate": "2026-06-10T01:30:00Z",
+                    "termStartDate": "2026-06-10T01:30:00Z",
+                    "termUnit": "termUnit 1",
+                    "timestamps": "timestamps 1",
+                    "transactionDate": "2026-06-10T01:30:00Z",
+                    "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+                  }
+                ]
+              }
+            ]
           },
           {
             "accountId": "Account-2",
-            "companyAccount": "[]",
-            "individualAccount": {
-              "roleVoList": [
+            "companyAccount": {
+              "accountCurrentMembershipStatus": "pending",
+              "accountId": "CompanyAccount-2",
+              "companyTypes": "Globex LLC",
+              "consent": "consent 2",
+              "email1OptOut": false,
+              "generosityIndicator": "generosityIndicator 2",
+              "login": "login 2",
+              "name": "Jordan Chen",
+              "noSolicitation": false,
+              "origin": "origin 2",
+              "primaryContact": "primaryContact 2",
+              "primaryContactAccountId": "primaryContactAccountId 2",
+              "sendSystemEmail": false,
+              "sendTextOptIn": false,
+              "smsNumber": "smsNumber 2",
+              "source": "source 2",
+              "timestamps": "timestamps 2",
+              "url": "https://example.com/url/2",
+              "shippingAddresses": [
                 {
-                  "color": "[]",
-                  "description": "val-2",
-                  "id": "AccountRoleApi-2",
-                  "name": "val-2"
+                  "addressId": "ShippingAddress-2",
+                  "addressLine1": "102 Test St",
+                  "addressLine2": "102 Test St",
+                  "addressLine3": "102 Test St",
+                  "addressLine4": "102 Test St",
+                  "city": "New York",
+                  "country": "US",
+                  "county": "county 2",
+                  "fax": "555-0102",
+                  "faxType": "555-0102",
+                  "phone1": "555-0102",
+                  "phone1Type": "555-0102",
+                  "phone2": "555-0102",
+                  "phone2Type": "555-0102",
+                  "phone3": "555-0102",
+                  "phone3Type": "555-0102",
+                  "shippingCompanyName": "Globex LLC",
+                  "shippingDeliverTo": "shippingDeliverTo 2",
+                  "stateProvince": "NY",
+                  "territory": "territory 2",
+                  "type": "premium",
+                  "zipCode": "02102",
+                  "zipCodeSuffix": "02102"
                 }
               ]
+            },
+            "individualAccount": {
+              "accountCurrentMembershipStatus": "pending",
+              "accountId": "IndividualAccount-2",
+              "company": "Globex LLC",
+              "consent": "consent 2",
+              "email1OptOut": false,
+              "facebookPage": "facebookPage 2",
+              "generosityIndicator": "generosityIndicator 2",
+              "individualTypes": "individualTypes 2",
+              "login": "login 2",
+              "noSolicitation": false,
+              "origin": "origin 2",
+              "primaryContact": "primaryContact 2",
+              "sendSystemEmail": false,
+              "sendTextOptIn": false,
+              "smsNumber": "smsNumber 2",
+              "source": "source 2",
+              "timestamps": "timestamps 2",
+              "twitterPage": "twitterPage 2",
+              "url": "https://example.com/url/2"
             },
             "contacts": {
               "accountId": "AccountContacts-2",
-              "pagination": "[]"
+              "pagination": "pagination 2"
             },
             "orders": [
               {
-                "accountId": "val-2",
+                "accountId": "accountId 2",
                 "id": "AccountOrder-2",
-                "orderDate": "val-2",
-                "shippingHandlingFee": "val-2",
-                "status": "val-2",
-                "subTotal": "val-2",
-                "tax": "val-2",
-                "timestamps": "[]",
-                "totalCharge": "val-2",
-                "totalDiscount": "val-2",
+                "orderDate": "2026-06-11T02:30:00Z",
+                "shippingHandlingFee": 29.99,
+                "status": "pending",
+                "subTotal": 29.99,
+                "tax": 3,
+                "timestamps": "timestamps 2",
+                "totalCharge": 29.99,
+                "totalDiscount": 29.99,
                 "items": [
                   {
                     "id": "AccountOrderItem-2",
-                    "name": "val-2",
-                    "price": "val-2",
-                    "quantity": "val-2",
-                    "type": "val-2",
-                    "unitPrice": "val-2"
+                    "name": "Jordan Chen",
+                    "price": 29.99,
+                    "quantity": 7,
+                    "type": "premium",
+                    "unitPrice": 29.99
                   }
                 ]
               }
             ],
             "windfall": {
-              "boat_owner": "val-2",
-              "foundation_association": "val-2",
-              "foundation_officer": "val-2",
-              "high_confidence_net_worth": "val-2",
+              "boat_owner": false,
+              "foundation_association": false,
+              "foundation_officer": false,
+              "high_confidence_net_worth": 3,
               "id": "AccountWindfall-2",
-              "imported_car_owner": "val-2",
-              "liquidity_trigger": "val-2",
-              "low_confidence_net_worth": "val-2",
-              "luxury_car_owner": "val-2",
-              "match_confidence": "val-2",
-              "multi-property_owner": "val-2",
-              "net_worth": "val-2",
-              "net_worth_last_calculated": "val-2",
-              "nonprofit_board_member": "val-2",
-              "philanthropic_cause": "[]",
-              "philanthropic_focus": "[]",
-              "philanthropic_giver": "val-2",
-              "plane_owner": "val-2",
-              "political_affiliation": "val-2",
-              "political_donor": "val-2",
-              "primary_address_incorrect": "val-2",
-              "recent_death_in_family": "val-2",
-              "recent_mortgage": "val-2",
-              "recent_mover": "val-2",
-              "recently_divorced": "val-2",
-              "sec_money_in_motion": "val-2",
-              "small_business_owner": "val-2",
-              "top_political_donor": "val-2",
-              "trust_association": "val-2",
-              "windfall_id": "val-2"
-            }
+              "imported_car_owner": false,
+              "liquidity_trigger": false,
+              "low_confidence_net_worth": 3,
+              "luxury_car_owner": false,
+              "match_confidence": 3,
+              "multi-property_owner": false,
+              "net_worth": 3,
+              "net_worth_last_calculated": "net_worth_last_calculated 2",
+              "nonprofit_board_member": false,
+              "philanthropic_cause": "philanthropic_cause 2",
+              "philanthropic_focus": "philanthropic_focus 2",
+              "philanthropic_giver": false,
+              "plane_owner": false,
+              "political_affiliation": "political_affiliation 2",
+              "political_donor": false,
+              "primary_address_incorrect": false,
+              "recent_death_in_family": false,
+              "recent_mortgage": false,
+              "recent_mover": false,
+              "recently_divorced": false,
+              "sec_money_in_motion": false,
+              "small_business_owner": false,
+              "top_political_donor": false,
+              "trust_association": false,
+              "windfall_id": "windfall_id-2"
+            },
+            "addresses": [
+              {
+                "addressId": "Address-2",
+                "addressLine1": "102 Test St",
+                "addressLine2": "102 Test St",
+                "addressLine3": "102 Test St",
+                "addressLine4": "102 Test St",
+                "city": "New York",
+                "country": "US",
+                "county": "county 2",
+                "endDate": "endDate 2",
+                "fax": "555-0102",
+                "faxType": "555-0102",
+                "isPrimaryAddress": false,
+                "phone1": "555-0102",
+                "phone1Type": "555-0102",
+                "phone2": "555-0102",
+                "phone2Type": "555-0102",
+                "phone3": "555-0102",
+                "phone3Type": "555-0102",
+                "startDate": "startDate 2",
+                "stateProvince": "NY",
+                "territory": "territory 2",
+                "type": "premium",
+                "validAddress": false,
+                "zipCode": "02102",
+                "zipCodeSuffix": "02102"
+              }
+            ],
+            "eventRegistrations": [
+              {
+                "couponCode": "couponCode 2",
+                "craInfo": "craInfo 2",
+                "donorCoveredFee": 29.99,
+                "donorCoveredFeeFlag": false,
+                "eventId": "eventId 2",
+                "fundraiserAccountId": "fundraiserAccountId 2",
+                "id": "EventRegistration-2",
+                "ignoreCapacity": false,
+                "origin": "origin 2",
+                "payLater": false,
+                "registrantAccountId": "registrantAccountId 2",
+                "registrationAmount": 29.99,
+                "registrationDateTime": "registrationDateTime 2",
+                "sendSystemEmail": false,
+                "source": "source 2",
+                "taxDeductibleInfo": "taxDeductibleInfo 2",
+                "totalCharge": 29.99,
+                "totalDiscount": 29.99,
+                "tickets": [
+                  {
+                    "ticketId": 2,
+                    "ticketSequence": 3
+                  }
+                ]
+              }
+            ],
+            "pledges": [
+              {
+                "installments": [
+                  {
+                    "amount": 29.99,
+                    "expectedDate": "expectedDate 2",
+                    "id": "Installment-2",
+                    "pledgeId": "pledgeId 2",
+                    "pledgePaymentIds": "pledgePaymentIds 2"
+                  }
+                ],
+                "dafpay": {
+                  "advisor": "advisor 2",
+                  "distributionId": "PledgeDafPayDistribution-2",
+                  "grantId": "grantId 2",
+                  "note": "Sample note 2",
+                  "status": "pending",
+                  "totalFees": 29.99
+                },
+                "pledgePayments": [
+                  {
+                    "craInfo": "craInfo 2",
+                    "date": "2026-06-11",
+                    "donorCoveredFee": 29.99,
+                    "donorCoveredFeeFlag": false,
+                    "id": "PledgePayment-2",
+                    "installmentId": "installmentId 2",
+                    "origin": "origin 2",
+                    "payment": "payment 2",
+                    "pledgeId": "pledgeId 2",
+                    "sendAcknowledgeEmail": false,
+                    "sendAcknowledgeLetter": false,
+                    "sendMatchedDonorEmail": false,
+                    "sendMatchedDonorLetter": false,
+                    "taxDeductibleInfo": "taxDeductibleInfo 2",
+                    "timestamps": "timestamps 2",
+                    "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+                  }
+                ]
+              },
+              {
+                "accountId": "accountId 2",
+                "acknowledgee": "acknowledgee 2",
+                "amount": 29.99,
+                "anonymousType": "anonymousType 2",
+                "campaign": "campaign 2",
+                "dafpay": "dafpay 2",
+                "date": "2026-06-11",
+                "expectedDate": "2026-06-11T02:30:00Z",
+                "fund": "fund 2",
+                "fundraiserAccountId": "fundraiserAccountId 2",
+                "id": "Pledge-2",
+                "matchedDonationId": "matchedDonationId 2",
+                "pledgeStatus": "pending",
+                "publicRecognitionName": "publicRecognitionName 2",
+                "purpose": "purpose 2",
+                "solicitationMethod": "solicitationMethod 2",
+                "solicitor": "solicitor 2",
+                "source": "source 2",
+                "timestamps": "timestamps 2",
+                "tribute": "tribute 2",
+                "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+              }
+            ],
+            "memberships": [
+              {
+                "accountId": "accountId 2",
+                "autoRenewal": {
+                  "ach": "ach 2",
+                  "autoRenewal": false,
+                  "creditCardOnline": "creditCardOnline 2",
+                  "donorCoveredFeeFlag": false,
+                  "membershipId": "MembershipAutoRenewal-2",
+                  "sendAutoRenewalEnabledEmail": false
+                },
+                "changeType": "changeType 2",
+                "complimentary": 3,
+                "craInfo": "craInfo 2",
+                "donorCoveredFee": 29.99,
+                "donorCoveredFeeFlag": false,
+                "enrollType": "enrollType 2",
+                "fee": 29.99,
+                "id": "Membership-2",
+                "isActive": false,
+                "membershipLevel": "premium",
+                "membershipTerm": "membershipTerm 2",
+                "origin": "origin 2",
+                "parentId": "parentId 2",
+                "payLater": false,
+                "primaryActiveMembership": false,
+                "sendAcknowledgeEmail": false,
+                "sendAutoRenewalEnabledEmail": false,
+                "source": "source 2",
+                "status": "pending",
+                "taxDeductibleInfo": "taxDeductibleInfo 2",
+                "termDuration": 0.2,
+                "termEndDate": "2026-06-11T02:30:00Z",
+                "termStartDate": "2026-06-11T02:30:00Z",
+                "termUnit": "termUnit 2",
+                "timestamps": "timestamps 2",
+                "totalCharge": 29.99,
+                "totalDiscount": 29.99,
+                "transactionDate": "2026-06-11T02:30:00Z",
+                "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z",
+                "subMembers": [
+                  {
+                    "accountId": "accountId 2",
+                    "autoRenewal": false,
+                    "changeType": "changeType 2",
+                    "complimentary": 3,
+                    "couponCode": "couponCode 2",
+                    "craInfo": "craInfo 2",
+                    "enrollType": "enrollType 2",
+                    "fee": 29.99,
+                    "id": "SubMembership-2",
+                    "isCurrentEmployee": false,
+                    "membershipLevel": "premium",
+                    "membershipTerm": "membershipTerm 2",
+                    "origin": "origin 2",
+                    "parentId": "parentId 2",
+                    "sendAcknowledgeEmail": false,
+                    "sendAutoRenewalEnabledEmail": false,
+                    "source": "source 2",
+                    "status": "pending",
+                    "taxDeductibleInfo": "taxDeductibleInfo 2",
+                    "termDuration": 0.2,
+                    "termEndDate": "2026-06-11T02:30:00Z",
+                    "termStartDate": "2026-06-11T02:30:00Z",
+                    "termUnit": "termUnit 2",
+                    "timestamps": "timestamps 2",
+                    "transactionDate": "2026-06-11T02:30:00Z",
+                    "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+                  }
+                ]
+              }
+            ]
           },
           {
             "accountId": "Account-3",
-            "companyAccount": "[]",
-            "individualAccount": {
-              "roleVoList": [
+            "companyAccount": {
+              "accountCurrentMembershipStatus": "completed",
+              "accountId": "CompanyAccount-3",
+              "companyTypes": "Initech",
+              "consent": "consent 3",
+              "email1OptOut": true,
+              "generosityIndicator": "generosityIndicator 3",
+              "login": "login 3",
+              "name": "Taylor Patel",
+              "noSolicitation": true,
+              "origin": "origin 3",
+              "primaryContact": "primaryContact 3",
+              "primaryContactAccountId": "primaryContactAccountId 3",
+              "sendSystemEmail": true,
+              "sendTextOptIn": true,
+              "smsNumber": "smsNumber 3",
+              "source": "source 3",
+              "timestamps": "timestamps 3",
+              "url": "https://example.com/url/3",
+              "shippingAddresses": [
                 {
-                  "color": "[]",
-                  "description": "val-3",
-                  "id": "AccountRoleApi-3",
-                  "name": "val-3"
+                  "addressId": "ShippingAddress-3",
+                  "addressLine1": "103 Test St",
+                  "addressLine2": "103 Test St",
+                  "addressLine3": "103 Test St",
+                  "addressLine4": "103 Test St",
+                  "city": "San Francisco",
+                  "country": "US",
+                  "county": "county 3",
+                  "fax": "555-0103",
+                  "faxType": "555-0103",
+                  "phone1": "555-0103",
+                  "phone1Type": "555-0103",
+                  "phone2": "555-0103",
+                  "phone2Type": "555-0103",
+                  "phone3": "555-0103",
+                  "phone3Type": "555-0103",
+                  "shippingCompanyName": "Initech",
+                  "shippingDeliverTo": "shippingDeliverTo 3",
+                  "stateProvince": "CA",
+                  "territory": "territory 3",
+                  "type": "basic",
+                  "zipCode": "02103",
+                  "zipCodeSuffix": "02103"
                 }
               ]
             },
+            "individualAccount": {
+              "accountCurrentMembershipStatus": "completed",
+              "accountId": "IndividualAccount-3",
+              "company": "Initech",
+              "consent": "consent 3",
+              "email1OptOut": true,
+              "facebookPage": "facebookPage 3",
+              "generosityIndicator": "generosityIndicator 3",
+              "individualTypes": "individualTypes 3",
+              "login": "login 3",
+              "noSolicitation": true,
+              "origin": "origin 3",
+              "primaryContact": "primaryContact 3",
+              "sendSystemEmail": true,
+              "sendTextOptIn": true,
+              "smsNumber": "smsNumber 3",
+              "source": "source 3",
+              "timestamps": "timestamps 3",
+              "twitterPage": "twitterPage 3",
+              "url": "https://example.com/url/3"
+            },
             "contacts": {
               "accountId": "AccountContacts-3",
-              "pagination": "[]"
+              "pagination": "pagination 3"
             },
             "orders": [
               {
-                "accountId": "val-3",
+                "accountId": "accountId 3",
                 "id": "AccountOrder-3",
-                "orderDate": "val-3",
-                "shippingHandlingFee": "val-3",
-                "status": "val-3",
-                "subTotal": "val-3",
-                "tax": "val-3",
-                "timestamps": "[]",
-                "totalCharge": "val-3",
-                "totalDiscount": "val-3",
+                "orderDate": "2026-06-12T03:30:00Z",
+                "shippingHandlingFee": 39.99,
+                "status": "completed",
+                "subTotal": 39.99,
+                "tax": 4,
+                "timestamps": "timestamps 3",
+                "totalCharge": 39.99,
+                "totalDiscount": 39.99,
                 "items": [
                   {
                     "id": "AccountOrderItem-3",
-                    "name": "val-3",
-                    "price": "val-3",
-                    "quantity": "val-3",
-                    "type": "val-3",
-                    "unitPrice": "val-3"
+                    "name": "Taylor Patel",
+                    "price": 39.99,
+                    "quantity": 10,
+                    "type": "basic",
+                    "unitPrice": 39.99
                   }
                 ]
               }
             ],
             "windfall": {
-              "boat_owner": "val-3",
-              "foundation_association": "val-3",
-              "foundation_officer": "val-3",
-              "high_confidence_net_worth": "val-3",
+              "boat_owner": true,
+              "foundation_association": true,
+              "foundation_officer": true,
+              "high_confidence_net_worth": 4,
               "id": "AccountWindfall-3",
-              "imported_car_owner": "val-3",
-              "liquidity_trigger": "val-3",
-              "low_confidence_net_worth": "val-3",
-              "luxury_car_owner": "val-3",
-              "match_confidence": "val-3",
-              "multi-property_owner": "val-3",
-              "net_worth": "val-3",
-              "net_worth_last_calculated": "val-3",
-              "nonprofit_board_member": "val-3",
-              "philanthropic_cause": "[]",
-              "philanthropic_focus": "[]",
-              "philanthropic_giver": "val-3",
-              "plane_owner": "val-3",
-              "political_affiliation": "val-3",
-              "political_donor": "val-3",
-              "primary_address_incorrect": "val-3",
-              "recent_death_in_family": "val-3",
-              "recent_mortgage": "val-3",
-              "recent_mover": "val-3",
-              "recently_divorced": "val-3",
-              "sec_money_in_motion": "val-3",
-              "small_business_owner": "val-3",
-              "top_political_donor": "val-3",
-              "trust_association": "val-3",
-              "windfall_id": "val-3"
-            }
+              "imported_car_owner": true,
+              "liquidity_trigger": true,
+              "low_confidence_net_worth": 4,
+              "luxury_car_owner": true,
+              "match_confidence": 4,
+              "multi-property_owner": true,
+              "net_worth": 4,
+              "net_worth_last_calculated": "net_worth_last_calculated 3",
+              "nonprofit_board_member": true,
+              "philanthropic_cause": "philanthropic_cause 3",
+              "philanthropic_focus": "philanthropic_focus 3",
+              "philanthropic_giver": true,
+              "plane_owner": true,
+              "political_affiliation": "political_affiliation 3",
+              "political_donor": true,
+              "primary_address_incorrect": true,
+              "recent_death_in_family": true,
+              "recent_mortgage": true,
+              "recent_mover": true,
+              "recently_divorced": true,
+              "sec_money_in_motion": true,
+              "small_business_owner": true,
+              "top_political_donor": true,
+              "trust_association": true,
+              "windfall_id": "windfall_id-3"
+            },
+            "addresses": [
+              {
+                "addressId": "Address-3",
+                "addressLine1": "103 Test St",
+                "addressLine2": "103 Test St",
+                "addressLine3": "103 Test St",
+                "addressLine4": "103 Test St",
+                "city": "San Francisco",
+                "country": "US",
+                "county": "county 3",
+                "endDate": "endDate 3",
+                "fax": "555-0103",
+                "faxType": "555-0103",
+                "isPrimaryAddress": true,
+                "phone1": "555-0103",
+                "phone1Type": "555-0103",
+                "phone2": "555-0103",
+                "phone2Type": "555-0103",
+                "phone3": "555-0103",
+                "phone3Type": "555-0103",
+                "startDate": "startDate 3",
+                "stateProvince": "CA",
+                "territory": "territory 3",
+                "type": "basic",
+                "validAddress": true,
+                "zipCode": "02103",
+                "zipCodeSuffix": "02103"
+              }
+            ],
+            "eventRegistrations": [
+              {
+                "couponCode": "couponCode 3",
+                "craInfo": "craInfo 3",
+                "donorCoveredFee": 39.99,
+                "donorCoveredFeeFlag": true,
+                "eventId": "eventId 3",
+                "fundraiserAccountId": "fundraiserAccountId 3",
+                "id": "EventRegistration-3",
+                "ignoreCapacity": true,
+                "origin": "origin 3",
+                "payLater": true,
+                "registrantAccountId": "registrantAccountId 3",
+                "registrationAmount": 39.99,
+                "registrationDateTime": "registrationDateTime 3",
+                "sendSystemEmail": true,
+                "source": "source 3",
+                "taxDeductibleInfo": "taxDeductibleInfo 3",
+                "totalCharge": 39.99,
+                "totalDiscount": 39.99,
+                "tickets": [
+                  {
+                    "ticketId": 3,
+                    "ticketSequence": 4
+                  }
+                ]
+              }
+            ],
+            "pledges": [
+              {
+                "installments": [
+                  {
+                    "amount": 39.99,
+                    "expectedDate": "expectedDate 3",
+                    "id": "Installment-3",
+                    "pledgeId": "pledgeId 3",
+                    "pledgePaymentIds": "pledgePaymentIds 3"
+                  }
+                ],
+                "dafpay": {
+                  "advisor": "advisor 3",
+                  "distributionId": "PledgeDafPayDistribution-3",
+                  "grantId": "grantId 3",
+                  "note": "Sample note 3",
+                  "status": "completed",
+                  "totalFees": 39.99
+                },
+                "pledgePayments": [
+                  {
+                    "craInfo": "craInfo 3",
+                    "date": "2026-06-12",
+                    "donorCoveredFee": 39.99,
+                    "donorCoveredFeeFlag": true,
+                    "id": "PledgePayment-3",
+                    "installmentId": "installmentId 3",
+                    "origin": "origin 3",
+                    "payment": "payment 3",
+                    "pledgeId": "pledgeId 3",
+                    "sendAcknowledgeEmail": true,
+                    "sendAcknowledgeLetter": true,
+                    "sendMatchedDonorEmail": true,
+                    "sendMatchedDonorLetter": true,
+                    "taxDeductibleInfo": "taxDeductibleInfo 3",
+                    "timestamps": "timestamps 3",
+                    "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+                  }
+                ]
+              },
+              {
+                "accountId": "accountId 3",
+                "acknowledgee": "acknowledgee 3",
+                "amount": 39.99,
+                "anonymousType": "anonymousType 3",
+                "campaign": "campaign 3",
+                "dafpay": "dafpay 3",
+                "date": "2026-06-12",
+                "expectedDate": "2026-06-12T03:30:00Z",
+                "fund": "fund 3",
+                "fundraiserAccountId": "fundraiserAccountId 3",
+                "id": "Pledge-3",
+                "matchedDonationId": "matchedDonationId 3",
+                "pledgeStatus": "completed",
+                "publicRecognitionName": "publicRecognitionName 3",
+                "purpose": "purpose 3",
+                "solicitationMethod": "solicitationMethod 3",
+                "solicitor": "solicitor 3",
+                "source": "source 3",
+                "timestamps": "timestamps 3",
+                "tribute": "tribute 3",
+                "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+              }
+            ],
+            "memberships": [
+              {
+                "accountId": "accountId 3",
+                "autoRenewal": {
+                  "ach": "ach 3",
+                  "autoRenewal": true,
+                  "creditCardOnline": "creditCardOnline 3",
+                  "donorCoveredFeeFlag": true,
+                  "membershipId": "MembershipAutoRenewal-3",
+                  "sendAutoRenewalEnabledEmail": true
+                },
+                "changeType": "changeType 3",
+                "complimentary": 4,
+                "craInfo": "craInfo 3",
+                "donorCoveredFee": 39.99,
+                "donorCoveredFeeFlag": true,
+                "enrollType": "enrollType 3",
+                "fee": 39.99,
+                "id": "Membership-3",
+                "isActive": true,
+                "membershipLevel": "basic",
+                "membershipTerm": "membershipTerm 3",
+                "origin": "origin 3",
+                "parentId": "parentId 3",
+                "payLater": true,
+                "primaryActiveMembership": true,
+                "sendAcknowledgeEmail": true,
+                "sendAutoRenewalEnabledEmail": true,
+                "source": "source 3",
+                "status": "completed",
+                "taxDeductibleInfo": "taxDeductibleInfo 3",
+                "termDuration": 0.3,
+                "termEndDate": "2026-06-12T03:30:00Z",
+                "termStartDate": "2026-06-12T03:30:00Z",
+                "termUnit": "termUnit 3",
+                "timestamps": "timestamps 3",
+                "totalCharge": 39.99,
+                "totalDiscount": 39.99,
+                "transactionDate": "2026-06-12T03:30:00Z",
+                "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z",
+                "subMembers": [
+                  {
+                    "accountId": "accountId 3",
+                    "autoRenewal": true,
+                    "changeType": "changeType 3",
+                    "complimentary": 4,
+                    "couponCode": "couponCode 3",
+                    "craInfo": "craInfo 3",
+                    "enrollType": "enrollType 3",
+                    "fee": 39.99,
+                    "id": "SubMembership-3",
+                    "isCurrentEmployee": true,
+                    "membershipLevel": "basic",
+                    "membershipTerm": "membershipTerm 3",
+                    "origin": "origin 3",
+                    "parentId": "parentId 3",
+                    "sendAcknowledgeEmail": true,
+                    "sendAutoRenewalEnabledEmail": true,
+                    "source": "source 3",
+                    "status": "completed",
+                    "taxDeductibleInfo": "taxDeductibleInfo 3",
+                    "termDuration": 0.3,
+                    "termEndDate": "2026-06-12T03:30:00Z",
+                    "termStartDate": "2026-06-12T03:30:00Z",
+                    "termUnit": "termUnit 3",
+                    "timestamps": "timestamps 3",
+                    "transactionDate": "2026-06-12T03:30:00Z",
+                    "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+                  }
+                ]
+              }
+            ]
           }
         ],
         "pagination": {
@@ -263,28 +1013,2557 @@
       "Body": {
         "records": [
           {
+            "accountId": "accountId 1",
             "acknowledgee": {
               "accountId": "Acknowledgee-1",
-              "address": "[]",
-              "email": "val-1",
-              "name": "val-1"
-            }
+              "address": "101 Test St",
+              "email": "user1@example.com",
+              "name": "Alex Rivera"
+            },
+            "amount": 19.99,
+            "anonymousType": "anonymousType 1",
+            "batchNumber": "batchNumber 1",
+            "campaign": "campaign 1",
+            "craInfo": "craInfo 1",
+            "date": "2026-06-10",
+            "donorCoveredFee": 19.99,
+            "donorCoveredFeeFlag": true,
+            "fund": "fund 1",
+            "fundraiserAccountId": "fundraiserAccountId 1",
+            "id": "Donation-1",
+            "origin": "origin 1",
+            "payLater": true,
+            "publicRecognitionName": "publicRecognitionName 1",
+            "purpose": "purpose 1",
+            "sendAcknowledgeEmail": true,
+            "sendAcknowledgeLetter": true,
+            "solicitationMethod": "solicitationMethod 1",
+            "solicitor": {
+              "accountId": "Solicitor-1",
+              "solicitorName": "solicitorName 1"
+            },
+            "source": "source 1",
+            "status": "active",
+            "taxDeductibleInfo": "taxDeductibleInfo 1",
+            "timestamps": "timestamps 1",
+            "tribute": {
+              "name": "Alex Rivera",
+              "type": "standard"
+            },
+            "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z",
+            "payments": [
+              {
+                "check": {
+                  "accountNumber": "accountNumber 1",
+                  "accountOwner": "Boston",
+                  "accountType": "accountType 1",
+                  "checkNumber": "checkNumber 1",
+                  "institution": "institution 1",
+                  "routingNumber": "routingNumber 1"
+                },
+                "creditCardOffline": {
+                  "billingAddress": "101 Test St",
+                  "cardHolderEmail": "user1@example.com",
+                  "cardHolderName": "cardHolderName 1",
+                  "cardNumberLastFour": "cardNumberLastFour 1",
+                  "cardTypeCode": "cardTypeCode 1",
+                  "expirationMonth": 0.1,
+                  "expirationYear": 0.1
+                },
+                "dafpay": {
+                  "daf": "daf 1",
+                  "distributionId": "DafPayPayment-1"
+                },
+                "inKind": {
+                  "fairMarketValue": 2,
+                  "nccDescription": "Sample nccDescription 1"
+                },
+                "wire": {
+                  "accountNumber": "accountNumber 1",
+                  "accountOwner": "Boston",
+                  "institution": "institution 1",
+                  "routingNumber": "routingNumber 1",
+                  "wireNumber": "wireNumber 1"
+                }
+              },
+              {
+                "ach": "ach 1",
+                "amount": 19.99,
+                "check": "check 1",
+                "creditCardOffline": "creditCardOffline 1",
+                "creditCardOnline": "creditCardOnline 1",
+                "dafpay": "dafpay 1",
+                "id": "Payment-1",
+                "inKind": "standard",
+                "note": "Sample note 1",
+                "paymentStatus": "active",
+                "receivedDate": "2026-06-10T01:30:00Z",
+                "tenderType": 2,
+                "wire": "wire 1"
+              }
+            ]
           },
           {
+            "accountId": "accountId 2",
             "acknowledgee": {
               "accountId": "Acknowledgee-2",
-              "address": "[]",
-              "email": "val-2",
-              "name": "val-2"
+              "address": "102 Test St",
+              "email": "user2@example.com",
+              "name": "Jordan Chen"
+            },
+            "amount": 29.99,
+            "anonymousType": "anonymousType 2",
+            "batchNumber": "batchNumber 2",
+            "campaign": "campaign 2",
+            "craInfo": "craInfo 2",
+            "date": "2026-06-11",
+            "donorCoveredFee": 29.99,
+            "donorCoveredFeeFlag": false,
+            "fund": "fund 2",
+            "fundraiserAccountId": "fundraiserAccountId 2",
+            "id": "Donation-2",
+            "origin": "origin 2",
+            "payLater": false,
+            "publicRecognitionName": "publicRecognitionName 2",
+            "purpose": "purpose 2",
+            "sendAcknowledgeEmail": false,
+            "sendAcknowledgeLetter": false,
+            "solicitationMethod": "solicitationMethod 2",
+            "solicitor": {
+              "accountId": "Solicitor-2",
+              "solicitorName": "solicitorName 2"
+            },
+            "source": "source 2",
+            "status": "pending",
+            "taxDeductibleInfo": "taxDeductibleInfo 2",
+            "timestamps": "timestamps 2",
+            "tribute": {
+              "name": "Jordan Chen",
+              "type": "premium"
+            },
+            "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z",
+            "payments": [
+              {
+                "check": {
+                  "accountNumber": "accountNumber 2",
+                  "accountOwner": "New York",
+                  "accountType": "accountType 2",
+                  "checkNumber": "checkNumber 2",
+                  "institution": "institution 2",
+                  "routingNumber": "routingNumber 2"
+                },
+                "creditCardOffline": {
+                  "billingAddress": "102 Test St",
+                  "cardHolderEmail": "user2@example.com",
+                  "cardHolderName": "cardHolderName 2",
+                  "cardNumberLastFour": "cardNumberLastFour 2",
+                  "cardTypeCode": "cardTypeCode 2",
+                  "expirationMonth": 0.2,
+                  "expirationYear": 0.2
+                },
+                "dafpay": {
+                  "daf": "daf 2",
+                  "distributionId": "DafPayPayment-2"
+                },
+                "inKind": {
+                  "fairMarketValue": 3,
+                  "nccDescription": "Sample nccDescription 2"
+                },
+                "wire": {
+                  "accountNumber": "accountNumber 2",
+                  "accountOwner": "New York",
+                  "institution": "institution 2",
+                  "routingNumber": "routingNumber 2",
+                  "wireNumber": "wireNumber 2"
+                }
+              },
+              {
+                "ach": "ach 2",
+                "amount": 29.99,
+                "check": "check 2",
+                "creditCardOffline": "creditCardOffline 2",
+                "creditCardOnline": "creditCardOnline 2",
+                "dafpay": "dafpay 2",
+                "id": "Payment-2",
+                "inKind": "premium",
+                "note": "Sample note 2",
+                "paymentStatus": "pending",
+                "receivedDate": "2026-06-11T02:30:00Z",
+                "tenderType": 3,
+                "wire": "wire 2"
+              }
+            ]
+          },
+          {
+            "accountId": "accountId 3",
+            "acknowledgee": {
+              "accountId": "Acknowledgee-3",
+              "address": "103 Test St",
+              "email": "user3@example.com",
+              "name": "Taylor Patel"
+            },
+            "amount": 39.99,
+            "anonymousType": "anonymousType 3",
+            "batchNumber": "batchNumber 3",
+            "campaign": "campaign 3",
+            "craInfo": "craInfo 3",
+            "date": "2026-06-12",
+            "donorCoveredFee": 39.99,
+            "donorCoveredFeeFlag": true,
+            "fund": "fund 3",
+            "fundraiserAccountId": "fundraiserAccountId 3",
+            "id": "Donation-3",
+            "origin": "origin 3",
+            "payLater": true,
+            "publicRecognitionName": "publicRecognitionName 3",
+            "purpose": "purpose 3",
+            "sendAcknowledgeEmail": true,
+            "sendAcknowledgeLetter": true,
+            "solicitationMethod": "solicitationMethod 3",
+            "solicitor": {
+              "accountId": "Solicitor-3",
+              "solicitorName": "solicitorName 3"
+            },
+            "source": "source 3",
+            "status": "completed",
+            "taxDeductibleInfo": "taxDeductibleInfo 3",
+            "timestamps": "timestamps 3",
+            "tribute": {
+              "name": "Taylor Patel",
+              "type": "basic"
+            },
+            "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z",
+            "payments": [
+              {
+                "check": {
+                  "accountNumber": "accountNumber 3",
+                  "accountOwner": "San Francisco",
+                  "accountType": "accountType 3",
+                  "checkNumber": "checkNumber 3",
+                  "institution": "institution 3",
+                  "routingNumber": "routingNumber 3"
+                },
+                "creditCardOffline": {
+                  "billingAddress": "103 Test St",
+                  "cardHolderEmail": "user3@example.com",
+                  "cardHolderName": "cardHolderName 3",
+                  "cardNumberLastFour": "cardNumberLastFour 3",
+                  "cardTypeCode": "cardTypeCode 3",
+                  "expirationMonth": 0.3,
+                  "expirationYear": 0.3
+                },
+                "dafpay": {
+                  "daf": "daf 3",
+                  "distributionId": "DafPayPayment-3"
+                },
+                "inKind": {
+                  "fairMarketValue": 4,
+                  "nccDescription": "Sample nccDescription 3"
+                },
+                "wire": {
+                  "accountNumber": "accountNumber 3",
+                  "accountOwner": "San Francisco",
+                  "institution": "institution 3",
+                  "routingNumber": "routingNumber 3",
+                  "wireNumber": "wireNumber 3"
+                }
+              },
+              {
+                "ach": "ach 3",
+                "amount": 39.99,
+                "check": "check 3",
+                "creditCardOffline": "creditCardOffline 3",
+                "creditCardOnline": "creditCardOnline 3",
+                "dafpay": "dafpay 3",
+                "id": "Payment-3",
+                "inKind": "basic",
+                "note": "Sample note 3",
+                "paymentStatus": "completed",
+                "receivedDate": "2026-06-12T03:30:00Z",
+                "tenderType": 4,
+                "wire": "wire 3"
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/activities/search",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "activityDates": {
+              "endDate": "2026-06-10T01:30:00Z",
+              "endTime": "endTime 1",
+              "startDate": "2026-06-10T01:30:00Z",
+              "startTime": "startTime 1",
+              "timeZone": "America/New_York"
+            },
+            "customStatus": "active",
+            "grantId": "grantId 1",
+            "id": "Activity-1",
+            "note": "Sample note 1",
+            "priority": "priority 1",
+            "status": "active",
+            "subject": "Sample Title 1",
+            "systemUserId": "systemUserId 1",
+            "timestamps": "timestamps 1",
+            "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z",
+            "clientAccount": [
+              {
+                "accountId": "ClientAccount-1",
+                "companyContactId": "Acme Corp"
+              }
+            ]
+          },
+          {
+            "activityDates": {
+              "endDate": "2026-06-11T02:30:00Z",
+              "endTime": "endTime 2",
+              "startDate": "2026-06-11T02:30:00Z",
+              "startTime": "startTime 2",
+              "timeZone": "America/New_York"
+            },
+            "customStatus": "pending",
+            "grantId": "grantId 2",
+            "id": "Activity-2",
+            "note": "Sample note 2",
+            "priority": "priority 2",
+            "status": "pending",
+            "subject": "Sample Title 2",
+            "systemUserId": "systemUserId 2",
+            "timestamps": "timestamps 2",
+            "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z",
+            "clientAccount": [
+              {
+                "accountId": "ClientAccount-2",
+                "companyContactId": "Globex LLC"
+              }
+            ]
+          },
+          {
+            "activityDates": {
+              "endDate": "2026-06-12T03:30:00Z",
+              "endTime": "endTime 3",
+              "startDate": "2026-06-12T03:30:00Z",
+              "startTime": "startTime 3",
+              "timeZone": "America/New_York"
+            },
+            "customStatus": "completed",
+            "grantId": "grantId 3",
+            "id": "Activity-3",
+            "note": "Sample note 3",
+            "priority": "priority 3",
+            "status": "completed",
+            "subject": "Sample Title 3",
+            "systemUserId": "systemUserId 3",
+            "timestamps": "timestamps 3",
+            "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z",
+            "clientAccount": [
+              {
+                "accountId": "ClientAccount-3",
+                "companyContactId": "Initech"
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/events",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "archived": true,
+            "campaign": "campaign 1",
+            "category": "standard",
+            "code": "code-1",
+            "createAccountsforAttendees": true,
+            "enableEventRegistrationForm": true,
+            "enableWaitListing": true,
+            "eventDates": {
+              "endDate": "2026-06-10T01:30:00Z",
+              "endTime": "endTime 1",
+              "registrationCloseDate": "2026-06-10T01:30:00Z",
+              "registrationOpenDate": "2026-06-10T01:30:00Z",
+              "startDate": "2026-06-10T01:30:00Z",
+              "startTime": "startTime 1",
+              "timeZone": "America/New_York"
+            },
+            "eventDescription": "Sample eventDescription 1",
+            "financialSettings": {
+              "admissionFee": {
+                "craInfo": "craInfo 1",
+                "fee": 19.99,
+                "taxDeductibleInfo": "taxDeductibleInfo 1",
+                "taxDeductiblePercent": 0.1
+              },
+              "taxDeductiblePortion": {
+                "fund": "fund 1",
+                "purpose": "purpose 1"
+              },
+              "ticketsPerRegistration": {
+                "number": 4,
+                "operator": "operator 1"
+              }
+            },
+            "id": "Event-1",
+            "location": {
+              "address": "101 Test St",
+              "buildingNumber": "buildingNumber 1",
+              "city": "Boston",
+              "country": "US",
+              "name": "Alex Rivera",
+              "roomNumber": "roomNumber 1",
+              "stateProvince": "MA",
+              "zipCode": "02101",
+              "zipCodeSuffix": "02101"
+            },
+            "maximumAttendees": 4,
+            "name": "Alex Rivera",
+            "publishEvent": true,
+            "summary": "Sample summary 1",
+            "thumbnailUrl": "https://example.com/thumbnailUrl/1",
+            "topic": "topic 1",
+            "attendees": [
+              {
+                "accountId": "EventAttendee-1",
+                "addressLine1": "101 Test St",
+                "attendeeId": 2,
+                "city": "Boston",
+                "companyName": "Acme Corp",
+                "dob": "dob 1",
+                "email": "user1@example.com",
+                "eventName": "eventName 1",
+                "firstName": "Alex",
+                "lastName": "Rivera",
+                "markedAttended": true,
+                "phone1": "555-0101",
+                "phone1Type": "555-0101",
+                "prefix": "prefix 1",
+                "registrantAccountId": "registrantAccountId 1",
+                "registrationDate": "2026-06-10T01:30:00Z",
+                "registrationId": "registrationId 1",
+                "registrationStatus": "active",
+                "stateProvince": "MA",
+                "ticketName": "ticketName 1",
+                "zipCode": "02101"
+              }
+            ]
+          },
+          {
+            "archived": false,
+            "campaign": "campaign 2",
+            "category": "premium",
+            "code": "code-2",
+            "createAccountsforAttendees": false,
+            "enableEventRegistrationForm": false,
+            "enableWaitListing": false,
+            "eventDates": {
+              "endDate": "2026-06-11T02:30:00Z",
+              "endTime": "endTime 2",
+              "registrationCloseDate": "2026-06-11T02:30:00Z",
+              "registrationOpenDate": "2026-06-11T02:30:00Z",
+              "startDate": "2026-06-11T02:30:00Z",
+              "startTime": "startTime 2",
+              "timeZone": "America/New_York"
+            },
+            "eventDescription": "Sample eventDescription 2",
+            "financialSettings": {
+              "admissionFee": {
+                "craInfo": "craInfo 2",
+                "fee": 29.99,
+                "taxDeductibleInfo": "taxDeductibleInfo 2",
+                "taxDeductiblePercent": 0.2
+              },
+              "taxDeductiblePortion": {
+                "fund": "fund 2",
+                "purpose": "purpose 2"
+              },
+              "ticketsPerRegistration": {
+                "number": 7,
+                "operator": "operator 2"
+              }
+            },
+            "id": "Event-2",
+            "location": {
+              "address": "102 Test St",
+              "buildingNumber": "buildingNumber 2",
+              "city": "New York",
+              "country": "US",
+              "name": "Jordan Chen",
+              "roomNumber": "roomNumber 2",
+              "stateProvince": "NY",
+              "zipCode": "02102",
+              "zipCodeSuffix": "02102"
+            },
+            "maximumAttendees": 7,
+            "name": "Jordan Chen",
+            "publishEvent": false,
+            "summary": "Sample summary 2",
+            "thumbnailUrl": "https://example.com/thumbnailUrl/2",
+            "topic": "topic 2",
+            "attendees": [
+              {
+                "accountId": "EventAttendee-2",
+                "addressLine1": "102 Test St",
+                "attendeeId": 3,
+                "city": "New York",
+                "companyName": "Globex LLC",
+                "dob": "dob 2",
+                "email": "user2@example.com",
+                "eventName": "eventName 2",
+                "firstName": "Jordan",
+                "lastName": "Chen",
+                "markedAttended": false,
+                "phone1": "555-0102",
+                "phone1Type": "555-0102",
+                "prefix": "prefix 2",
+                "registrantAccountId": "registrantAccountId 2",
+                "registrationDate": "2026-06-11T02:30:00Z",
+                "registrationId": "registrationId 2",
+                "registrationStatus": "pending",
+                "stateProvince": "NY",
+                "ticketName": "ticketName 2",
+                "zipCode": "02102"
+              }
+            ]
+          },
+          {
+            "archived": true,
+            "campaign": "campaign 3",
+            "category": "basic",
+            "code": "code-3",
+            "createAccountsforAttendees": true,
+            "enableEventRegistrationForm": true,
+            "enableWaitListing": true,
+            "eventDates": {
+              "endDate": "2026-06-12T03:30:00Z",
+              "endTime": "endTime 3",
+              "registrationCloseDate": "2026-06-12T03:30:00Z",
+              "registrationOpenDate": "2026-06-12T03:30:00Z",
+              "startDate": "2026-06-12T03:30:00Z",
+              "startTime": "startTime 3",
+              "timeZone": "America/New_York"
+            },
+            "eventDescription": "Sample eventDescription 3",
+            "financialSettings": {
+              "admissionFee": {
+                "craInfo": "craInfo 3",
+                "fee": 39.99,
+                "taxDeductibleInfo": "taxDeductibleInfo 3",
+                "taxDeductiblePercent": 0.3
+              },
+              "taxDeductiblePortion": {
+                "fund": "fund 3",
+                "purpose": "purpose 3"
+              },
+              "ticketsPerRegistration": {
+                "number": 10,
+                "operator": "operator 3"
+              }
+            },
+            "id": "Event-3",
+            "location": {
+              "address": "103 Test St",
+              "buildingNumber": "buildingNumber 3",
+              "city": "San Francisco",
+              "country": "US",
+              "name": "Taylor Patel",
+              "roomNumber": "roomNumber 3",
+              "stateProvince": "CA",
+              "zipCode": "02103",
+              "zipCodeSuffix": "02103"
+            },
+            "maximumAttendees": 10,
+            "name": "Taylor Patel",
+            "publishEvent": true,
+            "summary": "Sample summary 3",
+            "thumbnailUrl": "https://example.com/thumbnailUrl/3",
+            "topic": "topic 3",
+            "attendees": [
+              {
+                "accountId": "EventAttendee-3",
+                "addressLine1": "103 Test St",
+                "attendeeId": 4,
+                "city": "San Francisco",
+                "companyName": "Initech",
+                "dob": "dob 3",
+                "email": "user3@example.com",
+                "eventName": "eventName 3",
+                "firstName": "Taylor",
+                "lastName": "Patel",
+                "markedAttended": true,
+                "phone1": "555-0103",
+                "phone1Type": "555-0103",
+                "prefix": "prefix 3",
+                "registrantAccountId": "registrantAccountId 3",
+                "registrationDate": "2026-06-12T03:30:00Z",
+                "registrationId": "registrationId 3",
+                "registrationStatus": "completed",
+                "stateProvince": "CA",
+                "ticketName": "ticketName 3",
+                "zipCode": "02103"
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/recurring",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "accountId": "accountId 1",
+            "amount": 19.99,
+            "frequency": "frequency 1",
+            "id": 1,
+            "nextDate": "nextDate 1",
+            "publicRecognitionName": "publicRecognitionName 1",
+            "creditCardOnline": {
+              "billingAddress": "101 Test St",
+              "cardHolderEmail": "user1@example.com",
+              "cardHolderName": "cardHolderName 1",
+              "cardNumberLastFour": "cardNumberLastFour 1",
+              "cardTypeCode": "cardTypeCode 1",
+              "expirationMonth": 0.1,
+              "expirationYear": 0.1,
+              "token": "token-1",
+              "transactionNumber": "transactionNumber 1"
+            },
+            "ach": {
+              "accountHolderEmail": "user1@example.com",
+              "accountNumber": "accountNumber 1",
+              "accountOwner": "Boston",
+              "accountType": "accountType 1",
+              "checkNumber": "checkNumber 1",
+              "institution": "institution 1",
+              "plaidAccountId": "ECheckPayment-1",
+              "routingNumber": "routingNumber 1",
+              "token": "token-1",
+              "transactionNumber": "transactionNumber 1"
             }
           },
           {
-            "acknowledgee": {
-              "accountId": "Acknowledgee-3",
-              "address": "[]",
-              "email": "val-3",
-              "name": "val-3"
+            "accountId": "accountId 2",
+            "amount": 29.99,
+            "frequency": "frequency 2",
+            "id": 2,
+            "nextDate": "nextDate 2",
+            "publicRecognitionName": "publicRecognitionName 2",
+            "creditCardOnline": {
+              "billingAddress": "102 Test St",
+              "cardHolderEmail": "user2@example.com",
+              "cardHolderName": "cardHolderName 2",
+              "cardNumberLastFour": "cardNumberLastFour 2",
+              "cardTypeCode": "cardTypeCode 2",
+              "expirationMonth": 0.2,
+              "expirationYear": 0.2,
+              "token": "token-2",
+              "transactionNumber": "transactionNumber 2"
+            },
+            "ach": {
+              "accountHolderEmail": "user2@example.com",
+              "accountNumber": "accountNumber 2",
+              "accountOwner": "New York",
+              "accountType": "accountType 2",
+              "checkNumber": "checkNumber 2",
+              "institution": "institution 2",
+              "plaidAccountId": "ECheckPayment-2",
+              "routingNumber": "routingNumber 2",
+              "token": "token-2",
+              "transactionNumber": "transactionNumber 2"
             }
+          },
+          {
+            "accountId": "accountId 3",
+            "amount": 39.99,
+            "frequency": "frequency 3",
+            "id": 3,
+            "nextDate": "nextDate 3",
+            "publicRecognitionName": "publicRecognitionName 3",
+            "creditCardOnline": {
+              "billingAddress": "103 Test St",
+              "cardHolderEmail": "user3@example.com",
+              "cardHolderName": "cardHolderName 3",
+              "cardNumberLastFour": "cardNumberLastFour 3",
+              "cardTypeCode": "cardTypeCode 3",
+              "expirationMonth": 0.3,
+              "expirationYear": 0.3,
+              "token": "token-3",
+              "transactionNumber": "transactionNumber 3"
+            },
+            "ach": {
+              "accountHolderEmail": "user3@example.com",
+              "accountNumber": "accountNumber 3",
+              "accountOwner": "San Francisco",
+              "accountType": "accountType 3",
+              "checkNumber": "checkNumber 3",
+              "institution": "institution 3",
+              "plaidAccountId": "ECheckPayment-3",
+              "routingNumber": "routingNumber 3",
+              "token": "token-3",
+              "transactionNumber": "transactionNumber 3"
+            }
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/campaigns",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "campaignPageUrl": "https://example.com/campaignPageUrl/1",
+            "code": "code-1",
+            "craInfo": "craInfo 1",
+            "donationFormUrl": "https://example.com/donationFormUrl/1",
+            "endDate": "2026-06-10T01:30:00Z",
+            "fund": "fund 1",
+            "goal": 2,
+            "id": "Campaign-1",
+            "name": "Alex Rivera",
+            "pageContent": "Sample pageContent 1",
+            "parentCampaign": "parentCampaign 1",
+            "purpose": "purpose 1",
+            "socialFundraising": {
+              "createFundraiserUrl": "https://example.com/createFundraiserUrl/1",
+              "enabled": true,
+              "fundraiserListUrl": "https://example.com/fundraiserListUrl/1",
+              "fundraisersCount": 4,
+              "fundraisingPageContent": "Sample fundraisingPageContent 1",
+              "statistics": "statistics 1"
+            },
+            "startDate": "2026-06-10T01:30:00Z",
+            "statistics": {
+              "donationAmount": 19.99,
+              "donationCount": 4,
+              "eventRegistrationAmount": 19.99,
+              "eventRegistrationCount": 0.1,
+              "grandTotal": 19.99,
+              "pledgeAmount": 19.99,
+              "pledgeCount": 4
+            },
+            "status": "active",
+            "taxDeductibleInfo": {
+              "nonDeductibleAmount": 19.99,
+              "nonDeductibleDescription": "Sample nonDeductibleDescription 1",
+              "taxDeducibleAmount": 19.99
+            }
+          },
+          {
+            "campaignPageUrl": "https://example.com/campaignPageUrl/2",
+            "code": "code-2",
+            "craInfo": "craInfo 2",
+            "donationFormUrl": "https://example.com/donationFormUrl/2",
+            "endDate": "2026-06-11T02:30:00Z",
+            "fund": "fund 2",
+            "goal": 3,
+            "id": "Campaign-2",
+            "name": "Jordan Chen",
+            "pageContent": "Sample pageContent 2",
+            "parentCampaign": "parentCampaign 2",
+            "purpose": "purpose 2",
+            "socialFundraising": {
+              "createFundraiserUrl": "https://example.com/createFundraiserUrl/2",
+              "enabled": false,
+              "fundraiserListUrl": "https://example.com/fundraiserListUrl/2",
+              "fundraisersCount": 7,
+              "fundraisingPageContent": "Sample fundraisingPageContent 2",
+              "statistics": "statistics 2"
+            },
+            "startDate": "2026-06-11T02:30:00Z",
+            "statistics": {
+              "donationAmount": 29.99,
+              "donationCount": 7,
+              "eventRegistrationAmount": 29.99,
+              "eventRegistrationCount": 0.2,
+              "grandTotal": 29.99,
+              "pledgeAmount": 29.99,
+              "pledgeCount": 7
+            },
+            "status": "pending",
+            "taxDeductibleInfo": {
+              "nonDeductibleAmount": 29.99,
+              "nonDeductibleDescription": "Sample nonDeductibleDescription 2",
+              "taxDeducibleAmount": 29.99
+            }
+          },
+          {
+            "campaignPageUrl": "https://example.com/campaignPageUrl/3",
+            "code": "code-3",
+            "craInfo": "craInfo 3",
+            "donationFormUrl": "https://example.com/donationFormUrl/3",
+            "endDate": "2026-06-12T03:30:00Z",
+            "fund": "fund 3",
+            "goal": 4,
+            "id": "Campaign-3",
+            "name": "Taylor Patel",
+            "pageContent": "Sample pageContent 3",
+            "parentCampaign": "parentCampaign 3",
+            "purpose": "purpose 3",
+            "socialFundraising": {
+              "createFundraiserUrl": "https://example.com/createFundraiserUrl/3",
+              "enabled": true,
+              "fundraiserListUrl": "https://example.com/fundraiserListUrl/3",
+              "fundraisersCount": 10,
+              "fundraisingPageContent": "Sample fundraisingPageContent 3",
+              "statistics": "statistics 3"
+            },
+            "startDate": "2026-06-12T03:30:00Z",
+            "statistics": {
+              "donationAmount": 39.99,
+              "donationCount": 10,
+              "eventRegistrationAmount": 39.99,
+              "eventRegistrationCount": 0.3,
+              "grandTotal": 39.99,
+              "pledgeAmount": 39.99,
+              "pledgeCount": 10
+            },
+            "status": "completed",
+            "taxDeductibleInfo": {
+              "nonDeductibleAmount": 39.99,
+              "nonDeductibleDescription": "Sample nonDeductibleDescription 3",
+              "taxDeducibleAmount": 39.99
+            }
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/store/catalogs",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "displaySequence": 2,
+            "id": "Catalog-1",
+            "name": "Alex Rivera",
+            "status": "active"
+          },
+          {
+            "displaySequence": 3,
+            "id": "Catalog-2",
+            "name": "Jordan Chen",
+            "status": "pending"
+          },
+          {
+            "displaySequence": 4,
+            "id": "Catalog-3",
+            "name": "Taylor Patel",
+            "status": "completed"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/store/categories",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "code": "code-1",
+            "description": "Sample description 1",
+            "displaySequence": 2,
+            "id": "Category-1",
+            "name": "Alex Rivera",
+            "status": "active"
+          },
+          {
+            "code": "code-2",
+            "description": "Sample description 2",
+            "displaySequence": 3,
+            "id": "Category-2",
+            "name": "Jordan Chen",
+            "status": "pending"
+          },
+          {
+            "code": "code-3",
+            "description": "Sample description 3",
+            "displaySequence": 4,
+            "id": "Category-3",
+            "name": "Taylor Patel",
+            "status": "completed"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/orders/search",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "accountId": "accountId 1",
+            "donorCoveredFee": 19.99,
+            "donorCoveredFeeFlag": true,
+            "id": "Order-1",
+            "needShipping": true,
+            "orderDate": "2026-06-10T01:30:00Z",
+            "payLater": true,
+            "shipping": {
+              "addressLine1": "101 Test St",
+              "addressLine2": "101 Test St",
+              "city": "Boston",
+              "country": "US",
+              "county": "county 1",
+              "phone": "555-0101",
+              "shippingCompanyName": "Acme Corp",
+              "shippingDate": "2026-06-10T01:30:00Z",
+              "shippingDeliverTo": "shippingDeliverTo 1",
+              "shippingMethodName": "shippingMethodName 1",
+              "stateProvince": "MA",
+              "zipCode": "02101",
+              "zipCodeSuffix": "02101"
+            },
+            "shippingHandlingFee": 19.99,
+            "status": "active",
+            "subTotal": 19.99,
+            "tax": 2,
+            "timestamps": "timestamps 1",
+            "totalCharge": 19.99,
+            "totalDiscount": 19.99,
+            "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z",
+            "discounts": [
+              {
+                "discount": 4,
+                "discountId": "DiscountItem-1",
+                "discountName": "discountName 1",
+                "orderItemId": "orderItemId 1",
+                "orderItemName": "orderItemName 1",
+                "orderItemType": "orderItemType 1"
+              }
+            ],
+            "donations": [
+              {
+                "accountId": "accountId 1",
+                "acknowledgee": "acknowledgee 1",
+                "amount": 19.99,
+                "anonymousType": "anonymousType 1",
+                "batchNumber": "batchNumber 1",
+                "campaign": "campaign 1",
+                "craInfo": "craInfo 1",
+                "date": "2026-06-10",
+                "fund": "fund 1",
+                "fundraiserAccountId": "fundraiserAccountId 1",
+                "id": "DonationItem-1",
+                "origin": "origin 1",
+                "publicRecognitionName": "publicRecognitionName 1",
+                "purpose": "purpose 1",
+                "sendAcknowledgeEmail": true,
+                "solicitationMethod": "solicitationMethod 1",
+                "solicitor": "solicitor 1",
+                "source": "source 1",
+                "status": "active",
+                "taxDeductibleInfo": "taxDeductibleInfo 1",
+                "timestamps": "timestamps 1",
+                "tribute": "tribute 1"
+              }
+            ],
+            "eventRegistrations": [
+              {
+                "couponCode": "couponCode 1",
+                "craInfo": "craInfo 1",
+                "eventId": "eventId 1",
+                "fundraiserAccountId": "fundraiserAccountId 1",
+                "id": "EventRegistrationItem-1",
+                "ignoreCapacity": true,
+                "registrantAccountId": "registrantAccountId 1",
+                "registrationAmount": 19.99,
+                "registrationDateTime": "registrationDateTime 1",
+                "sendSystemEmail": true,
+                "source": "source 1",
+                "taxDeductibleInfo": "taxDeductibleInfo 1"
+              }
+            ],
+            "memberships": [
+              {
+                "accountId": "accountId 1",
+                "autoRenewal": true,
+                "changeType": "changeType 1",
+                "complimentary": 2,
+                "couponCode": "couponCode 1",
+                "craInfo": "craInfo 1",
+                "enrollType": "enrollType 1",
+                "fee": 19.99,
+                "id": "MembershipItem-1",
+                "membershipLevel": "standard",
+                "membershipTerm": "membershipTerm 1",
+                "origin": "origin 1",
+                "parentId": "parentId 1",
+                "sendAcknowledgeEmail": true,
+                "sendAutoRenewalEnabledEmail": true,
+                "source": "source 1",
+                "status": "active",
+                "taxDeductibleInfo": "taxDeductibleInfo 1",
+                "termDuration": 0.1,
+                "termEndDate": "2026-06-10T01:30:00Z",
+                "termStartDate": "2026-06-10T01:30:00Z",
+                "termUnit": "termUnit 1",
+                "timestamps": "timestamps 1",
+                "transactionDate": "2026-06-10T01:30:00Z"
+              }
+            ],
+            "products": [
+              {
+                "craInfo": "craInfo 1",
+                "productId": "ProductItem-1",
+                "quantity": 4,
+                "sendAcknowledgeEmail": true,
+                "taxDeductibleInfo": "taxDeductibleInfo 1",
+                "unitPrice": 19.99,
+                "optionSelections": [
+                  {
+                    "itemId": "ProductOptionSelection-1",
+                    "optionId": "optionId 1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "accountId": "accountId 2",
+            "donorCoveredFee": 29.99,
+            "donorCoveredFeeFlag": false,
+            "id": "Order-2",
+            "needShipping": false,
+            "orderDate": "2026-06-11T02:30:00Z",
+            "payLater": false,
+            "shipping": {
+              "addressLine1": "102 Test St",
+              "addressLine2": "102 Test St",
+              "city": "New York",
+              "country": "US",
+              "county": "county 2",
+              "phone": "555-0102",
+              "shippingCompanyName": "Globex LLC",
+              "shippingDate": "2026-06-11T02:30:00Z",
+              "shippingDeliverTo": "shippingDeliverTo 2",
+              "shippingMethodName": "shippingMethodName 2",
+              "stateProvince": "NY",
+              "zipCode": "02102",
+              "zipCodeSuffix": "02102"
+            },
+            "shippingHandlingFee": 29.99,
+            "status": "pending",
+            "subTotal": 29.99,
+            "tax": 3,
+            "timestamps": "timestamps 2",
+            "totalCharge": 29.99,
+            "totalDiscount": 29.99,
+            "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z",
+            "discounts": [
+              {
+                "discount": 7,
+                "discountId": "DiscountItem-2",
+                "discountName": "discountName 2",
+                "orderItemId": "orderItemId 2",
+                "orderItemName": "orderItemName 2",
+                "orderItemType": "orderItemType 2"
+              }
+            ],
+            "donations": [
+              {
+                "accountId": "accountId 2",
+                "acknowledgee": "acknowledgee 2",
+                "amount": 29.99,
+                "anonymousType": "anonymousType 2",
+                "batchNumber": "batchNumber 2",
+                "campaign": "campaign 2",
+                "craInfo": "craInfo 2",
+                "date": "2026-06-11",
+                "fund": "fund 2",
+                "fundraiserAccountId": "fundraiserAccountId 2",
+                "id": "DonationItem-2",
+                "origin": "origin 2",
+                "publicRecognitionName": "publicRecognitionName 2",
+                "purpose": "purpose 2",
+                "sendAcknowledgeEmail": false,
+                "solicitationMethod": "solicitationMethod 2",
+                "solicitor": "solicitor 2",
+                "source": "source 2",
+                "status": "pending",
+                "taxDeductibleInfo": "taxDeductibleInfo 2",
+                "timestamps": "timestamps 2",
+                "tribute": "tribute 2"
+              }
+            ],
+            "eventRegistrations": [
+              {
+                "couponCode": "couponCode 2",
+                "craInfo": "craInfo 2",
+                "eventId": "eventId 2",
+                "fundraiserAccountId": "fundraiserAccountId 2",
+                "id": "EventRegistrationItem-2",
+                "ignoreCapacity": false,
+                "registrantAccountId": "registrantAccountId 2",
+                "registrationAmount": 29.99,
+                "registrationDateTime": "registrationDateTime 2",
+                "sendSystemEmail": false,
+                "source": "source 2",
+                "taxDeductibleInfo": "taxDeductibleInfo 2"
+              }
+            ],
+            "memberships": [
+              {
+                "accountId": "accountId 2",
+                "autoRenewal": false,
+                "changeType": "changeType 2",
+                "complimentary": 3,
+                "couponCode": "couponCode 2",
+                "craInfo": "craInfo 2",
+                "enrollType": "enrollType 2",
+                "fee": 29.99,
+                "id": "MembershipItem-2",
+                "membershipLevel": "premium",
+                "membershipTerm": "membershipTerm 2",
+                "origin": "origin 2",
+                "parentId": "parentId 2",
+                "sendAcknowledgeEmail": false,
+                "sendAutoRenewalEnabledEmail": false,
+                "source": "source 2",
+                "status": "pending",
+                "taxDeductibleInfo": "taxDeductibleInfo 2",
+                "termDuration": 0.2,
+                "termEndDate": "2026-06-11T02:30:00Z",
+                "termStartDate": "2026-06-11T02:30:00Z",
+                "termUnit": "termUnit 2",
+                "timestamps": "timestamps 2",
+                "transactionDate": "2026-06-11T02:30:00Z"
+              }
+            ],
+            "products": [
+              {
+                "craInfo": "craInfo 2",
+                "productId": "ProductItem-2",
+                "quantity": 7,
+                "sendAcknowledgeEmail": false,
+                "taxDeductibleInfo": "taxDeductibleInfo 2",
+                "unitPrice": 29.99,
+                "optionSelections": [
+                  {
+                    "itemId": "ProductOptionSelection-2",
+                    "optionId": "optionId 2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "accountId": "accountId 3",
+            "donorCoveredFee": 39.99,
+            "donorCoveredFeeFlag": true,
+            "id": "Order-3",
+            "needShipping": true,
+            "orderDate": "2026-06-12T03:30:00Z",
+            "payLater": true,
+            "shipping": {
+              "addressLine1": "103 Test St",
+              "addressLine2": "103 Test St",
+              "city": "San Francisco",
+              "country": "US",
+              "county": "county 3",
+              "phone": "555-0103",
+              "shippingCompanyName": "Initech",
+              "shippingDate": "2026-06-12T03:30:00Z",
+              "shippingDeliverTo": "shippingDeliverTo 3",
+              "shippingMethodName": "shippingMethodName 3",
+              "stateProvince": "CA",
+              "zipCode": "02103",
+              "zipCodeSuffix": "02103"
+            },
+            "shippingHandlingFee": 39.99,
+            "status": "completed",
+            "subTotal": 39.99,
+            "tax": 4,
+            "timestamps": "timestamps 3",
+            "totalCharge": 39.99,
+            "totalDiscount": 39.99,
+            "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z",
+            "discounts": [
+              {
+                "discount": 10,
+                "discountId": "DiscountItem-3",
+                "discountName": "discountName 3",
+                "orderItemId": "orderItemId 3",
+                "orderItemName": "orderItemName 3",
+                "orderItemType": "orderItemType 3"
+              }
+            ],
+            "donations": [
+              {
+                "accountId": "accountId 3",
+                "acknowledgee": "acknowledgee 3",
+                "amount": 39.99,
+                "anonymousType": "anonymousType 3",
+                "batchNumber": "batchNumber 3",
+                "campaign": "campaign 3",
+                "craInfo": "craInfo 3",
+                "date": "2026-06-12",
+                "fund": "fund 3",
+                "fundraiserAccountId": "fundraiserAccountId 3",
+                "id": "DonationItem-3",
+                "origin": "origin 3",
+                "publicRecognitionName": "publicRecognitionName 3",
+                "purpose": "purpose 3",
+                "sendAcknowledgeEmail": true,
+                "solicitationMethod": "solicitationMethod 3",
+                "solicitor": "solicitor 3",
+                "source": "source 3",
+                "status": "completed",
+                "taxDeductibleInfo": "taxDeductibleInfo 3",
+                "timestamps": "timestamps 3",
+                "tribute": "tribute 3"
+              }
+            ],
+            "eventRegistrations": [
+              {
+                "couponCode": "couponCode 3",
+                "craInfo": "craInfo 3",
+                "eventId": "eventId 3",
+                "fundraiserAccountId": "fundraiserAccountId 3",
+                "id": "EventRegistrationItem-3",
+                "ignoreCapacity": true,
+                "registrantAccountId": "registrantAccountId 3",
+                "registrationAmount": 39.99,
+                "registrationDateTime": "registrationDateTime 3",
+                "sendSystemEmail": true,
+                "source": "source 3",
+                "taxDeductibleInfo": "taxDeductibleInfo 3"
+              }
+            ],
+            "memberships": [
+              {
+                "accountId": "accountId 3",
+                "autoRenewal": true,
+                "changeType": "changeType 3",
+                "complimentary": 4,
+                "couponCode": "couponCode 3",
+                "craInfo": "craInfo 3",
+                "enrollType": "enrollType 3",
+                "fee": 39.99,
+                "id": "MembershipItem-3",
+                "membershipLevel": "basic",
+                "membershipTerm": "membershipTerm 3",
+                "origin": "origin 3",
+                "parentId": "parentId 3",
+                "sendAcknowledgeEmail": true,
+                "sendAutoRenewalEnabledEmail": true,
+                "source": "source 3",
+                "status": "completed",
+                "taxDeductibleInfo": "taxDeductibleInfo 3",
+                "termDuration": 0.3,
+                "termEndDate": "2026-06-12T03:30:00Z",
+                "termStartDate": "2026-06-12T03:30:00Z",
+                "termUnit": "termUnit 3",
+                "timestamps": "timestamps 3",
+                "transactionDate": "2026-06-12T03:30:00Z"
+              }
+            ],
+            "products": [
+              {
+                "craInfo": "craInfo 3",
+                "productId": "ProductItem-3",
+                "quantity": 10,
+                "sendAcknowledgeEmail": true,
+                "taxDeductibleInfo": "taxDeductibleInfo 3",
+                "unitPrice": 39.99,
+                "optionSelections": [
+                  {
+                    "itemId": "ProductOptionSelection-3",
+                    "optionId": "optionId 3"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/payments/donorCoveredFees",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "achFee": 19.99,
+            "additionalFees": "additionalFees 1",
+            "creditCardAmExFee": 19.99,
+            "creditCardFee": 19.99,
+            "creditCardMasterCardFee": 19.99
+          },
+          {
+            "achFee": 29.99,
+            "additionalFees": "additionalFees 2",
+            "creditCardAmExFee": 29.99,
+            "creditCardFee": 29.99,
+            "creditCardMasterCardFee": 29.99
+          },
+          {
+            "achFee": 39.99,
+            "additionalFees": "additionalFees 3",
+            "creditCardAmExFee": 39.99,
+            "creditCardFee": 39.99,
+            "creditCardMasterCardFee": 39.99
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/grants/search",
+      "Method": "POST",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "accountId": "accountId 1",
+            "askAmount": 19.99,
+            "campaign": "campaign 1",
+            "closeDate": "2026-06-10T01:30:00Z",
+            "committedAmount": 19.99,
+            "committedDate": "2026-06-10T01:30:00Z",
+            "createdBy": "createdBy 1",
+            "createdDate": "2026-06-10T01:30:00Z",
+            "dueDate": "2026-06-10T01:30:00Z",
+            "fund": "fund 1",
+            "fundedAmount": 19.99,
+            "fundedDate": "2026-06-10T01:30:00Z",
+            "grantName": "grantName 1",
+            "id": "Grant-1",
+            "lastModifiedBy": "lastModifiedBy 1",
+            "lastModifiedDate": "2026-06-10T01:30:00Z",
+            "linkedTransactionId": "https://example.com/linkedTransactionId/1",
+            "note": "Sample note 1",
+            "parentGrantId": "parentGrantId 1",
+            "purpose": "purpose 1",
+            "status": "active",
+            "systemUserId": "systemUserId 1"
+          },
+          {
+            "accountId": "accountId 2",
+            "askAmount": 29.99,
+            "campaign": "campaign 2",
+            "closeDate": "2026-06-11T02:30:00Z",
+            "committedAmount": 29.99,
+            "committedDate": "2026-06-11T02:30:00Z",
+            "createdBy": "createdBy 2",
+            "createdDate": "2026-06-11T02:30:00Z",
+            "dueDate": "2026-06-11T02:30:00Z",
+            "fund": "fund 2",
+            "fundedAmount": 29.99,
+            "fundedDate": "2026-06-11T02:30:00Z",
+            "grantName": "grantName 2",
+            "id": "Grant-2",
+            "lastModifiedBy": "lastModifiedBy 2",
+            "lastModifiedDate": "2026-06-11T02:30:00Z",
+            "linkedTransactionId": "https://example.com/linkedTransactionId/2",
+            "note": "Sample note 2",
+            "parentGrantId": "parentGrantId 2",
+            "purpose": "purpose 2",
+            "status": "pending",
+            "systemUserId": "systemUserId 2"
+          },
+          {
+            "accountId": "accountId 3",
+            "askAmount": 39.99,
+            "campaign": "campaign 3",
+            "closeDate": "2026-06-12T03:30:00Z",
+            "committedAmount": 39.99,
+            "committedDate": "2026-06-12T03:30:00Z",
+            "createdBy": "createdBy 3",
+            "createdDate": "2026-06-12T03:30:00Z",
+            "dueDate": "2026-06-12T03:30:00Z",
+            "fund": "fund 3",
+            "fundedAmount": 39.99,
+            "fundedDate": "2026-06-12T03:30:00Z",
+            "grantName": "grantName 3",
+            "id": "Grant-3",
+            "lastModifiedBy": "lastModifiedBy 3",
+            "lastModifiedDate": "2026-06-12T03:30:00Z",
+            "linkedTransactionId": "https://example.com/linkedTransactionId/3",
+            "note": "Sample note 3",
+            "parentGrantId": "parentGrantId 3",
+            "purpose": "purpose 3",
+            "status": "completed",
+            "systemUserId": "systemUserId 3"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/customObjects",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "recordData": "recordData 1",
+            "recordId": 1,
+            "formFields": {
+              "layoutField": [
+                {
+                  "fieldApiName": "fieldApiName 1",
+                  "objectApiName": "objectApiName 1"
+                }
+              ]
+            },
+            "results": [
+              {
+                "isDefault": true,
+                "lastModifiedBy": "lastModifiedBy 1",
+                "lastModifiedDateTime": "2026-06-10T01:30:00Z",
+                "layoutId": 1,
+                "layoutName": "layoutName 1"
+              }
+            ],
+            "customObjectRelation": [
+              {
+                "objectApiName": "objectApiName 1",
+                "objectLabel": "Sample Title 1",
+                "relateListLabel": "Sample Title 1",
+                "relationId": 1
+              }
+            ]
+          },
+          {
+            "recordData": "recordData 2",
+            "recordId": 2,
+            "formFields": {
+              "layoutField": [
+                {
+                  "fieldApiName": "fieldApiName 2",
+                  "objectApiName": "objectApiName 2"
+                }
+              ]
+            },
+            "results": [
+              {
+                "isDefault": false,
+                "lastModifiedBy": "lastModifiedBy 2",
+                "lastModifiedDateTime": "2026-06-11T02:30:00Z",
+                "layoutId": 2,
+                "layoutName": "layoutName 2"
+              }
+            ],
+            "customObjectRelation": [
+              {
+                "objectApiName": "objectApiName 2",
+                "objectLabel": "Sample Title 2",
+                "relateListLabel": "Sample Title 2",
+                "relationId": 2
+              }
+            ]
+          },
+          {
+            "recordData": "recordData 3",
+            "recordId": 3,
+            "formFields": {
+              "layoutField": [
+                {
+                  "fieldApiName": "fieldApiName 3",
+                  "objectApiName": "objectApiName 3"
+                }
+              ]
+            },
+            "results": [
+              {
+                "isDefault": true,
+                "lastModifiedBy": "lastModifiedBy 3",
+                "lastModifiedDateTime": "2026-06-12T03:30:00Z",
+                "layoutId": 3,
+                "layoutName": "layoutName 3"
+              }
+            ],
+            "customObjectRelation": [
+              {
+                "objectApiName": "objectApiName 3",
+                "objectLabel": "Sample Title 3",
+                "relateListLabel": "Sample Title 3",
+                "relationId": 3
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/households/listHouseholds",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "id": "ListHouseHoldDto-1",
+            "name": "Alex Rivera",
+            "salutation": "salutation 1",
+            "contacts": [
+              {
+                "accountId": "ListHouseHoldContactDto-1",
+                "isPrimaryHouseHoldContact": true,
+                "relationType": "relationType 1"
+              }
+            ]
+          },
+          {
+            "id": "ListHouseHoldDto-2",
+            "name": "Jordan Chen",
+            "salutation": "salutation 2",
+            "contacts": [
+              {
+                "accountId": "ListHouseHoldContactDto-2",
+                "isPrimaryHouseHoldContact": false,
+                "relationType": "relationType 2"
+              }
+            ]
+          },
+          {
+            "id": "ListHouseHoldDto-3",
+            "name": "Taylor Patel",
+            "salutation": "salutation 3",
+            "contacts": [
+              {
+                "accountId": "ListHouseHoldContactDto-3",
+                "isPrimaryHouseHoldContact": true,
+                "relationType": "relationType 3"
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/memberships/levels",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "childMemberAllowed": 2,
+            "code": "code-1",
+            "description": "Sample description 1",
+            "forceAutoRenewal": true,
+            "id": 1,
+            "rank": 2,
+            "scopeType": "scopeType 1",
+            "status": "active",
+            "type": "standard"
+          },
+          {
+            "childMemberAllowed": 3,
+            "code": "code-2",
+            "description": "Sample description 2",
+            "forceAutoRenewal": false,
+            "id": 2,
+            "rank": 3,
+            "scopeType": "scopeType 2",
+            "status": "pending",
+            "type": "premium"
+          },
+          {
+            "childMemberAllowed": 4,
+            "code": "code-3",
+            "description": "Sample description 3",
+            "forceAutoRenewal": true,
+            "id": 3,
+            "rank": 4,
+            "scopeType": "scopeType 3",
+            "status": "completed",
+            "type": "basic"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/customFields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "accountSettings": {
+              "accountType": "accountType 1"
+            },
+            "component": "component 1",
+            "constituentReadOnly": true,
+            "dataType": "dataType 1",
+            "displayName": "Alex Rivera",
+            "displayType": "displayType 1",
+            "eventSettings": {
+              "attendeeQuestion": true,
+              "constituentRequired": true,
+              "constituentVisible": true,
+              "eventId": "EventCustomFieldData-1",
+              "isEventSpecificField": true,
+              "publicRequired": true,
+              "publicVisible": true
+            },
+            "groupId": "groupId 1",
+            "id": "CustomFieldData-1",
+            "membershipSettings": {
+              "membershipLevels": [
+                {
+                  "id": "MembershipLevelId-1"
+                }
+              ]
+            },
+            "name": "Alex Rivera",
+            "productSettings": {
+              "showOnProductDetail": true,
+              "showOnStorefront": true
+            },
+            "status": "active",
+            "optionValues": [
+              {
+                "id": "CustomFieldOption-1",
+                "name": "Alex Rivera",
+                "visibleOnConstituentForms": true,
+                "visibleOnPublicForms": true
+              }
+            ]
+          },
+          {
+            "accountSettings": {
+              "accountType": "accountType 2"
+            },
+            "component": "component 2",
+            "constituentReadOnly": false,
+            "dataType": "dataType 2",
+            "displayName": "Jordan Chen",
+            "displayType": "displayType 2",
+            "eventSettings": {
+              "attendeeQuestion": false,
+              "constituentRequired": false,
+              "constituentVisible": false,
+              "eventId": "EventCustomFieldData-2",
+              "isEventSpecificField": false,
+              "publicRequired": false,
+              "publicVisible": false
+            },
+            "groupId": "groupId 2",
+            "id": "CustomFieldData-2",
+            "membershipSettings": {
+              "membershipLevels": [
+                {
+                  "id": "MembershipLevelId-2"
+                }
+              ]
+            },
+            "name": "Jordan Chen",
+            "productSettings": {
+              "showOnProductDetail": false,
+              "showOnStorefront": false
+            },
+            "status": "pending",
+            "optionValues": [
+              {
+                "id": "CustomFieldOption-2",
+                "name": "Jordan Chen",
+                "visibleOnConstituentForms": false,
+                "visibleOnPublicForms": false
+              }
+            ]
+          },
+          {
+            "accountSettings": {
+              "accountType": "accountType 3"
+            },
+            "component": "component 3",
+            "constituentReadOnly": true,
+            "dataType": "dataType 3",
+            "displayName": "Taylor Patel",
+            "displayType": "displayType 3",
+            "eventSettings": {
+              "attendeeQuestion": true,
+              "constituentRequired": true,
+              "constituentVisible": true,
+              "eventId": "EventCustomFieldData-3",
+              "isEventSpecificField": true,
+              "publicRequired": true,
+              "publicVisible": true
+            },
+            "groupId": "groupId 3",
+            "id": "CustomFieldData-3",
+            "membershipSettings": {
+              "membershipLevels": [
+                {
+                  "id": "MembershipLevelId-3"
+                }
+              ]
+            },
+            "name": "Taylor Patel",
+            "productSettings": {
+              "showOnProductDetail": true,
+              "showOnStorefront": true
+            },
+            "status": "completed",
+            "optionValues": [
+              {
+                "id": "CustomFieldOption-3",
+                "name": "Taylor Patel",
+                "visibleOnConstituentForms": true,
+                "visibleOnPublicForms": true
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/memberships/terms",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "childTerms": "childTerms 1",
+            "craInfo": "craInfo 1",
+            "display": "display 1",
+            "duration": 0.1,
+            "fee": 19.99,
+            "id": 1,
+            "membershipLevel": "standard",
+            "taxDeductibleInfo": "taxDeductibleInfo 1",
+            "type": "standard",
+            "unit": "unit 1"
+          },
+          {
+            "childTerms": "childTerms 2",
+            "craInfo": "craInfo 2",
+            "display": "display 2",
+            "duration": 0.2,
+            "fee": 29.99,
+            "id": 2,
+            "membershipLevel": "premium",
+            "taxDeductibleInfo": "taxDeductibleInfo 2",
+            "type": "premium",
+            "unit": "unit 2"
+          },
+          {
+            "childTerms": "childTerms 3",
+            "craInfo": "craInfo 3",
+            "display": "display 3",
+            "duration": 0.3,
+            "fee": 39.99,
+            "id": 3,
+            "membershipLevel": "basic",
+            "taxDeductibleInfo": "taxDeductibleInfo 3",
+            "type": "basic",
+            "unit": "unit 3"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/opportunities",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "address": "101 Test St",
+            "availableOnline": true,
+            "categories": "categories 1",
+            "contactId": "contactId 1",
+            "description": "Sample description 1",
+            "endDate": "2026-06-10T01:30:00Z",
+            "eventId": "eventId 1",
+            "expensesEnabled": true,
+            "id": "Opportunity-1",
+            "locationName": "locationName 1",
+            "maxVolunteers": 2,
+            "mileageEnabled": true,
+            "name": "Alex Rivera",
+            "ngEventId": "ngEventId 1",
+            "shiftEnabled": true,
+            "startDate": "2026-06-10T01:30:00Z",
+            "status": "active",
+            "sysUserAccountId": "sysUserAccountId 1",
+            "timestamps": "timestamps 1",
+            "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+          },
+          {
+            "address": "102 Test St",
+            "availableOnline": false,
+            "categories": "categories 2",
+            "contactId": "contactId 2",
+            "description": "Sample description 2",
+            "endDate": "2026-06-11T02:30:00Z",
+            "eventId": "eventId 2",
+            "expensesEnabled": false,
+            "id": "Opportunity-2",
+            "locationName": "locationName 2",
+            "maxVolunteers": 3,
+            "mileageEnabled": false,
+            "name": "Jordan Chen",
+            "ngEventId": "ngEventId 2",
+            "shiftEnabled": false,
+            "startDate": "2026-06-11T02:30:00Z",
+            "status": "pending",
+            "sysUserAccountId": "sysUserAccountId 2",
+            "timestamps": "timestamps 2",
+            "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+          },
+          {
+            "address": "103 Test St",
+            "availableOnline": true,
+            "categories": "categories 3",
+            "contactId": "contactId 3",
+            "description": "Sample description 3",
+            "endDate": "2026-06-12T03:30:00Z",
+            "eventId": "eventId 3",
+            "expensesEnabled": true,
+            "id": "Opportunity-3",
+            "locationName": "locationName 3",
+            "maxVolunteers": 4,
+            "mileageEnabled": true,
+            "name": "Taylor Patel",
+            "ngEventId": "ngEventId 3",
+            "shiftEnabled": true,
+            "startDate": "2026-06-12T03:30:00Z",
+            "status": "completed",
+            "sysUserAccountId": "sysUserAccountId 3",
+            "timestamps": "timestamps 3",
+            "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/properties/organizationProfile",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "appUrl": "https://example.com/appUrl/1",
+            "name": "Alex Rivera",
+            "orgId": "OrganizationProfile-1"
+          },
+          {
+            "appUrl": "https://example.com/appUrl/2",
+            "name": "Jordan Chen",
+            "orgId": "OrganizationProfile-2"
+          },
+          {
+            "appUrl": "https://example.com/appUrl/3",
+            "name": "Taylor Patel",
+            "orgId": "OrganizationProfile-3"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/store/products",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "category": "standard",
+            "code": "code-1",
+            "craInfo": "craInfo 1",
+            "description": "Sample description 1",
+            "downloadURL": "https://example.com/downloadURL/1",
+            "hasOptions": true,
+            "id": "Product-1",
+            "isApplyOnSiteTax": true,
+            "isDiscountInPercentage": true,
+            "isFrontEndDisplay": true,
+            "keyword": "keyword 1",
+            "name": "Alex Rivera",
+            "priceOffDiscount": 19.99,
+            "priceOffDiscountEndDate": "2026-06-10T01:30:00Z",
+            "priceOffDiscountStartDate": "2026-06-10T01:30:00Z",
+            "shipping": {
+              "daysToShip": 2,
+              "defaultShippingCost": 19.99,
+              "ounces": 2,
+              "pounds": 2,
+              "shippingRequired": true
+            },
+            "status": "active",
+            "taxDeductibleInfo": "taxDeductibleInfo 1",
+            "unitPrice": 19.99,
+            "images": [
+              {
+                "label": "Sample Title 1",
+                "sequenceId": 1,
+                "url": "https://example.com/url/1"
+              }
+            ],
+            "options": [
+              {
+                "id": "ProductOption-1",
+                "name": "Alex Rivera",
+                "status": "active",
+                "items": [
+                  {
+                    "advantageAmountAdjustment": 19.99,
+                    "id": "ProductOptionItem-1",
+                    "name": "Alex Rivera",
+                    "nonDeductibleAmountAdjustment": 19.99,
+                    "priceAdjustment": 19.99,
+                    "status": "active"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "category": "premium",
+            "code": "code-2",
+            "craInfo": "craInfo 2",
+            "description": "Sample description 2",
+            "downloadURL": "https://example.com/downloadURL/2",
+            "hasOptions": false,
+            "id": "Product-2",
+            "isApplyOnSiteTax": false,
+            "isDiscountInPercentage": false,
+            "isFrontEndDisplay": false,
+            "keyword": "keyword 2",
+            "name": "Jordan Chen",
+            "priceOffDiscount": 29.99,
+            "priceOffDiscountEndDate": "2026-06-11T02:30:00Z",
+            "priceOffDiscountStartDate": "2026-06-11T02:30:00Z",
+            "shipping": {
+              "daysToShip": 3,
+              "defaultShippingCost": 29.99,
+              "ounces": 3,
+              "pounds": 3,
+              "shippingRequired": false
+            },
+            "status": "pending",
+            "taxDeductibleInfo": "taxDeductibleInfo 2",
+            "unitPrice": 29.99,
+            "images": [
+              {
+                "label": "Sample Title 2",
+                "sequenceId": 2,
+                "url": "https://example.com/url/2"
+              }
+            ],
+            "options": [
+              {
+                "id": "ProductOption-2",
+                "name": "Jordan Chen",
+                "status": "pending",
+                "items": [
+                  {
+                    "advantageAmountAdjustment": 29.99,
+                    "id": "ProductOptionItem-2",
+                    "name": "Jordan Chen",
+                    "nonDeductibleAmountAdjustment": 29.99,
+                    "priceAdjustment": 29.99,
+                    "status": "pending"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "category": "basic",
+            "code": "code-3",
+            "craInfo": "craInfo 3",
+            "description": "Sample description 3",
+            "downloadURL": "https://example.com/downloadURL/3",
+            "hasOptions": true,
+            "id": "Product-3",
+            "isApplyOnSiteTax": true,
+            "isDiscountInPercentage": true,
+            "isFrontEndDisplay": true,
+            "keyword": "keyword 3",
+            "name": "Taylor Patel",
+            "priceOffDiscount": 39.99,
+            "priceOffDiscountEndDate": "2026-06-12T03:30:00Z",
+            "priceOffDiscountStartDate": "2026-06-12T03:30:00Z",
+            "shipping": {
+              "daysToShip": 4,
+              "defaultShippingCost": 39.99,
+              "ounces": 4,
+              "pounds": 4,
+              "shippingRequired": true
+            },
+            "status": "completed",
+            "taxDeductibleInfo": "taxDeductibleInfo 3",
+            "unitPrice": 39.99,
+            "images": [
+              {
+                "label": "Sample Title 3",
+                "sequenceId": 3,
+                "url": "https://example.com/url/3"
+              }
+            ],
+            "options": [
+              {
+                "id": "ProductOption-3",
+                "name": "Taylor Patel",
+                "status": "completed",
+                "items": [
+                  {
+                    "advantageAmountAdjustment": 39.99,
+                    "id": "ProductOptionItem-3",
+                    "name": "Taylor Patel",
+                    "nonDeductibleAmountAdjustment": 39.99,
+                    "priceAdjustment": 39.99,
+                    "status": "completed"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/softCredits",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "amount": 19.99,
+            "donationId": "donationId 1",
+            "eventRegistrationId": "eventRegistrationId 1",
+            "id": "SoftCredit-1",
+            "membershipId": "membershipId 1",
+            "recipientAccountId": "recipientAccountId 1"
+          },
+          {
+            "amount": 29.99,
+            "donationId": "donationId 2",
+            "eventRegistrationId": "eventRegistrationId 2",
+            "id": "SoftCredit-2",
+            "membershipId": "membershipId 2",
+            "recipientAccountId": "recipientAccountId 2"
+          },
+          {
+            "amount": 39.99,
+            "donationId": "donationId 3",
+            "eventRegistrationId": "eventRegistrationId 3",
+            "id": "SoftCredit-3",
+            "membershipId": "membershipId 3",
+            "recipientAccountId": "recipientAccountId 3"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/properties/currentSystemUser",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "firstName": "Alex",
+            "id": "SystemUser-1",
+            "lastName": "Rivera",
+            "middleName": "middleName 1"
+          },
+          {
+            "firstName": "Jordan",
+            "id": "SystemUser-2",
+            "lastName": "Chen",
+            "middleName": "middleName 2"
+          },
+          {
+            "firstName": "Taylor",
+            "id": "SystemUser-3",
+            "lastName": "Patel",
+            "middleName": "middleName 3"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/timeSheets",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "accountId": "accountId 1",
+            "approvalBy": "approvalBy 1",
+            "approvalDatetime": "2026-06-10T01:30:00Z",
+            "id": "TimeSheetApi-1",
+            "projectId": "projectId 1",
+            "status": "active",
+            "timestamps": "timestamps 1",
+            "totalExpenses": 19.99,
+            "totalHours": 19.99,
+            "totalMileages": 19.99,
+            "weekOf": "2026-06-10T01:30:00Z",
+            "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z",
+            "timeSheetItems": [
+              {
+                "date": "2026-06-10",
+                "expenses": 2,
+                "hours": 2,
+                "id": "TimeSheetItemApi-1",
+                "mileages": 2,
+                "roleId": "roleId 1",
+                "shiftId": "shiftId 1",
+                "timeSheetId": "timeSheetId 1",
+                "timestamps": "timestamps 1"
+              }
+            ]
+          },
+          {
+            "accountId": "accountId 2",
+            "approvalBy": "approvalBy 2",
+            "approvalDatetime": "2026-06-11T02:30:00Z",
+            "id": "TimeSheetApi-2",
+            "projectId": "projectId 2",
+            "status": "pending",
+            "timestamps": "timestamps 2",
+            "totalExpenses": 29.99,
+            "totalHours": 29.99,
+            "totalMileages": 29.99,
+            "weekOf": "2026-06-11T02:30:00Z",
+            "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z",
+            "timeSheetItems": [
+              {
+                "date": "2026-06-11",
+                "expenses": 3,
+                "hours": 3,
+                "id": "TimeSheetItemApi-2",
+                "mileages": 3,
+                "roleId": "roleId 2",
+                "shiftId": "shiftId 2",
+                "timeSheetId": "timeSheetId 2",
+                "timestamps": "timestamps 2"
+              }
+            ]
+          },
+          {
+            "accountId": "accountId 3",
+            "approvalBy": "approvalBy 3",
+            "approvalDatetime": "2026-06-12T03:30:00Z",
+            "id": "TimeSheetApi-3",
+            "projectId": "projectId 3",
+            "status": "completed",
+            "timestamps": "timestamps 3",
+            "totalExpenses": 39.99,
+            "totalHours": 39.99,
+            "totalMileages": 39.99,
+            "weekOf": "2026-06-12T03:30:00Z",
+            "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z",
+            "timeSheetItems": [
+              {
+                "date": "2026-06-12",
+                "expenses": 4,
+                "hours": 4,
+                "id": "TimeSheetItemApi-3",
+                "mileages": 4,
+                "roleId": "roleId 3",
+                "shiftId": "shiftId 3",
+                "timeSheetId": "timeSheetId 3",
+                "timestamps": "timestamps 3"
+              }
+            ]
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/groups/list",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "description": "Sample description 1",
+            "expenses": 2,
+            "hours": 2,
+            "id": "UserGroupApi-1",
+            "mileages": 2,
+            "name": "Alex Rivera",
+            "totalVolunteers": 19.99
+          },
+          {
+            "description": "Sample description 2",
+            "expenses": 3,
+            "hours": 3,
+            "id": "UserGroupApi-2",
+            "mileages": 3,
+            "name": "Jordan Chen",
+            "totalVolunteers": 29.99
+          },
+          {
+            "description": "Sample description 3",
+            "expenses": 4,
+            "hours": 4,
+            "id": "UserGroupApi-3",
+            "mileages": 4,
+            "name": "Taylor Patel",
+            "totalVolunteers": 39.99
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/volunteers",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "accountId": "VolunteerApi-1",
+            "email": "user1@example.com",
+            "firstName": "Alex",
+            "groupIds": "groupIds 1",
+            "lastName": "Rivera",
+            "opportunityIds": "opportunityIds 1",
+            "phone": "555-0101",
+            "roles": "roles 1",
+            "shiftIds": "shiftIds 1",
+            "smsNumber": "smsNumber 1",
+            "totalExpenses": 19.99,
+            "totalHours": 19.99,
+            "totalMileages": 19.99
+          },
+          {
+            "accountId": "VolunteerApi-2",
+            "email": "user2@example.com",
+            "firstName": "Jordan",
+            "groupIds": "groupIds 2",
+            "lastName": "Chen",
+            "opportunityIds": "opportunityIds 2",
+            "phone": "555-0102",
+            "roles": "roles 2",
+            "shiftIds": "shiftIds 2",
+            "smsNumber": "smsNumber 2",
+            "totalExpenses": 29.99,
+            "totalHours": 29.99,
+            "totalMileages": 29.99
+          },
+          {
+            "accountId": "VolunteerApi-3",
+            "email": "user3@example.com",
+            "firstName": "Taylor",
+            "groupIds": "groupIds 3",
+            "lastName": "Patel",
+            "opportunityIds": "opportunityIds 3",
+            "phone": "555-0103",
+            "roles": "roles 3",
+            "shiftIds": "shiftIds 3",
+            "smsNumber": "smsNumber 3",
+            "totalExpenses": 39.99,
+            "totalHours": 39.99,
+            "totalMileages": 39.99
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/roles/list",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "description": "Sample description 1",
+            "id": "VolunteerRoleApi-1",
+            "name": "Alex Rivera",
+            "status": "active",
+            "statusColor": "active",
+            "timestamps": "timestamps 1",
+            "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+          },
+          {
+            "description": "Sample description 2",
+            "id": "VolunteerRoleApi-2",
+            "name": "Jordan Chen",
+            "status": "pending",
+            "statusColor": "pending",
+            "timestamps": "timestamps 2",
+            "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+          },
+          {
+            "description": "Sample description 3",
+            "id": "VolunteerRoleApi-3",
+            "name": "Taylor Patel",
+            "status": "completed",
+            "statusColor": "completed",
+            "timestamps": "timestamps 3",
+            "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/accounts/search/outputFields",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "id": "CustomField-1",
+            "name": "Alex Rivera",
+            "optionValues": "optionValues 1",
+            "value": "value 1"
+          },
+          {
+            "id": "CustomField-2",
+            "name": "Jordan Chen",
+            "optionValues": "optionValues 2",
+            "value": "value 2"
+          },
+          {
+            "id": "CustomField-3",
+            "name": "Taylor Patel",
+            "optionValues": "optionValues 3",
+            "value": "value 3"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/customFields/groups",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "component": "component 1",
+            "description": "Sample description 1",
+            "displayName": "Alex Rivera",
+            "id": "CustomFieldGroup-1"
+          },
+          {
+            "component": "component 2",
+            "description": "Sample description 2",
+            "displayName": "Jordan Chen",
+            "id": "CustomFieldGroup-2"
+          },
+          {
+            "component": "component 3",
+            "description": "Sample description 3",
+            "displayName": "Taylor Patel",
+            "id": "CustomFieldGroup-3"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/households/listRelationTypes",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "category": "standard",
+            "id": "RelationTypeDto-1",
+            "isDefault": true,
+            "isSymmetric": true,
+            "name": "Alex Rivera",
+            "pairRelationType": "pairRelationType 1",
+            "status": "active"
+          },
+          {
+            "category": "premium",
+            "id": "RelationTypeDto-2",
+            "isDefault": false,
+            "isSymmetric": false,
+            "name": "Jordan Chen",
+            "pairRelationType": "pairRelationType 2",
+            "status": "pending"
+          },
+          {
+            "category": "basic",
+            "id": "RelationTypeDto-3",
+            "isDefault": true,
+            "isSymmetric": true,
+            "name": "Taylor Patel",
+            "pairRelationType": "pairRelationType 3",
+            "status": "completed"
+          }
+        ],
+        "pagination": {
+          "currentPage": 0,
+          "totalPages": 1,
+          "totalResults": 3
+        }
+      }
+    },
+    {
+      "Path": "/webhooks",
+      "Method": "GET",
+      "Status": 200,
+      "Body": {
+        "records": [
+          {
+            "contentType": "Sample contentType 1",
+            "customParameters": "customParameters 1",
+            "httpBasic": "httpBasic 1",
+            "id": "Webhook-1",
+            "name": "Alex Rivera",
+            "trigger": "trigger 1",
+            "triggerSelfImport": true,
+            "url": "https://example.com/url/1"
+          },
+          {
+            "contentType": "Sample contentType 2",
+            "customParameters": "customParameters 2",
+            "httpBasic": "httpBasic 2",
+            "id": "Webhook-2",
+            "name": "Jordan Chen",
+            "trigger": "trigger 2",
+            "triggerSelfImport": false,
+            "url": "https://example.com/url/2"
+          },
+          {
+            "contentType": "Sample contentType 3",
+            "customParameters": "customParameters 3",
+            "httpBasic": "httpBasic 3",
+            "id": "Webhook-3",
+            "name": "Taylor Patel",
+            "trigger": "trigger 3",
+            "triggerSelfImport": true,
+            "url": "https://example.com/url/3"
           }
         ],
         "pagination": {
@@ -323,6 +3602,390 @@
     {
       "Name": "Acknowledgee",
       "OrderingField": "accountId"
+    },
+    {
+      "Name": "Activity",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "ActivityDates",
+      "OrderingField": null
+    },
+    {
+      "Name": "Address",
+      "OrderingField": "addressId"
+    },
+    {
+      "Name": "AdmissionFee",
+      "OrderingField": null
+    },
+    {
+      "Name": "BillingAddress",
+      "OrderingField": "countryId"
+    },
+    {
+      "Name": "Campaign",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CampaignStats",
+      "OrderingField": null
+    },
+    {
+      "Name": "Catalog",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Category",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CheckPayment",
+      "OrderingField": null
+    },
+    {
+      "Name": "ClientAccount",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "CompanyAccount",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "Consent",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "Contact",
+      "OrderingField": "contactId"
+    },
+    {
+      "Name": "CreditCardOfflinePayment",
+      "OrderingField": null
+    },
+    {
+      "Name": "CreditCardOnlinePayment",
+      "OrderingField": null
+    },
+    {
+      "Name": "DafPayPayment",
+      "OrderingField": "distributionId"
+    },
+    {
+      "Name": "DiscountItem",
+      "OrderingField": "discountId"
+    },
+    {
+      "Name": "Donation",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "DonationItem",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "DonorCoveredFees",
+      "OrderingField": null
+    },
+    {
+      "Name": "DynaRecurringDonation",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ECheckPayment",
+      "OrderingField": "plaidAccountId"
+    },
+    {
+      "Name": "Event",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "EventAttendee",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "EventDates",
+      "OrderingField": null
+    },
+    {
+      "Name": "EventRegistration",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "EventRegistrationItem",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "EventTicket",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "GenerosityIndicator",
+      "OrderingField": null
+    },
+    {
+      "Name": "Grant",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "IndividualAccount",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "InKindPayment",
+      "OrderingField": null
+    },
+    {
+      "Name": "Installment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "LayoutField",
+      "OrderingField": null
+    },
+    {
+      "Name": "ListHouseHoldContactDto",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "ListHouseHoldDto",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Location",
+      "OrderingField": null
+    },
+    {
+      "Name": "Membership",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "MembershipAutoRenewal",
+      "OrderingField": "membershipId"
+    },
+    {
+      "Name": "MembershipItem",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "MembershipLevel",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "MembershipLevelId",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "MembershipTerm",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Opportunity",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "OpportunityShift",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "Order",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "OrderShipping",
+      "OrderingField": null
+    },
+    {
+      "Name": "OrganizationProfile",
+      "OrderingField": "orgId"
+    },
+    {
+      "Name": "Payment",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Pledge",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "PledgeDafPayDistribution",
+      "OrderingField": "distributionId"
+    },
+    {
+      "Name": "PledgePayment",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "Product",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ProductImage",
+      "OrderingField": "sequenceId"
+    },
+    {
+      "Name": "ProductItem",
+      "OrderingField": "productId"
+    },
+    {
+      "Name": "ProductOption",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ProductOptionItem",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "ProductOptionSelection",
+      "OrderingField": "itemId"
+    },
+    {
+      "Name": "ProductShipping",
+      "OrderingField": null
+    },
+    {
+      "Name": "ProductTypeId",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "RecordResponse",
+      "OrderingField": "recordId"
+    },
+    {
+      "Name": "RecurringDonation",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "ShippingAddress",
+      "OrderingField": "addressId"
+    },
+    {
+      "Name": "SocialFundraising",
+      "OrderingField": null
+    },
+    {
+      "Name": "SoftCredit",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Solicitor",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "SubMembership",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "SystemUser",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "TaxDeducibleInfo",
+      "OrderingField": null
+    },
+    {
+      "Name": "TaxDeductiblePortion",
+      "OrderingField": null
+    },
+    {
+      "Name": "Ticket",
+      "OrderingField": "ticketId"
+    },
+    {
+      "Name": "TicketsPerRegistration",
+      "OrderingField": null
+    },
+    {
+      "Name": "TimeSheetApi",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "TimeSheetItemApi",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Tribute",
+      "OrderingField": null
+    },
+    {
+      "Name": "UserGroupApi",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "VolunteerApi",
+      "OrderingField": "accountId"
+    },
+    {
+      "Name": "VolunteerRoleApi",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "WirePayment",
+      "OrderingField": null
+    },
+    {
+      "Name": "AccountCustomFieldData",
+      "OrderingField": null
+    },
+    {
+      "Name": "CustomField",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CustomFieldData",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CustomFieldGroup",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CustomFieldOption",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CustomObjectFieldResponse",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "CustomObjectFormLayoutResponse",
+      "OrderingField": null
+    },
+    {
+      "Name": "CustomObjectLayoutPageItem",
+      "OrderingField": "layoutId"
+    },
+    {
+      "Name": "CustomObjectListLayoutResponse",
+      "OrderingField": null
+    },
+    {
+      "Name": "CustomObjectRelation",
+      "OrderingField": "relationId"
+    },
+    {
+      "Name": "CustomObjectResponse",
+      "OrderingField": "timestamps.lastModifiedDateTime"
+    },
+    {
+      "Name": "CustomObjectValidatorRuleResponse",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "EventCustomFieldData",
+      "OrderingField": "eventId"
+    },
+    {
+      "Name": "ProductCustomFieldData",
+      "OrderingField": null
+    },
+    {
+      "Name": "RelationTypeDto",
+      "OrderingField": "id"
+    },
+    {
+      "Name": "Webhook",
+      "OrderingField": "id"
     }
   ],
   "DeltaPasses": [
@@ -337,215 +4000,965 @@
             "records": [
               {
                 "accountId": "Account-1",
-                "companyAccount": "[]",
-                "individualAccount": {
-                  "roleVoList": [
+                "companyAccount": {
+                  "accountCurrentMembershipStatus": "active",
+                  "accountId": "CompanyAccount-1",
+                  "companyTypes": "Acme Corp",
+                  "consent": "consent 1",
+                  "email1OptOut": true,
+                  "generosityIndicator": "generosityIndicator 1",
+                  "login": "login 1",
+                  "name": "Alex Rivera",
+                  "noSolicitation": true,
+                  "origin": "origin 1",
+                  "primaryContact": "primaryContact 1",
+                  "primaryContactAccountId": "primaryContactAccountId 1",
+                  "sendSystemEmail": true,
+                  "sendTextOptIn": true,
+                  "smsNumber": "smsNumber 1",
+                  "source": "source 1",
+                  "timestamps": "timestamps 1",
+                  "url": "https://example.com/url/1",
+                  "shippingAddresses": [
                     {
-                      "color": "[]",
-                      "description": "val-1",
-                      "id": "AccountRoleApi-1",
-                      "name": "val-1"
+                      "addressId": "ShippingAddress-1",
+                      "addressLine1": "101 Test St",
+                      "addressLine2": "101 Test St",
+                      "addressLine3": "101 Test St",
+                      "addressLine4": "101 Test St",
+                      "city": "Boston",
+                      "country": "US",
+                      "county": "county 1",
+                      "fax": "555-0101",
+                      "faxType": "555-0101",
+                      "phone1": "555-0101",
+                      "phone1Type": "555-0101",
+                      "phone2": "555-0101",
+                      "phone2Type": "555-0101",
+                      "phone3": "555-0101",
+                      "phone3Type": "555-0101",
+                      "shippingCompanyName": "Acme Corp",
+                      "shippingDeliverTo": "shippingDeliverTo 1",
+                      "stateProvince": "MA",
+                      "territory": "territory 1",
+                      "type": "standard",
+                      "zipCode": "02101",
+                      "zipCodeSuffix": "02101"
                     }
                   ]
                 },
+                "individualAccount": {
+                  "accountCurrentMembershipStatus": "active",
+                  "accountId": "IndividualAccount-1",
+                  "company": "Acme Corp",
+                  "consent": "consent 1",
+                  "email1OptOut": true,
+                  "facebookPage": "facebookPage 1",
+                  "generosityIndicator": "generosityIndicator 1",
+                  "individualTypes": "individualTypes 1",
+                  "login": "login 1",
+                  "noSolicitation": true,
+                  "origin": "origin 1",
+                  "primaryContact": "primaryContact 1",
+                  "sendSystemEmail": true,
+                  "sendTextOptIn": true,
+                  "smsNumber": "smsNumber 1",
+                  "source": "source 1",
+                  "timestamps": "timestamps 1",
+                  "twitterPage": "twitterPage 1",
+                  "url": "https://example.com/url/1"
+                },
                 "contacts": {
                   "accountId": "AccountContacts-1",
-                  "pagination": "[]"
+                  "pagination": "pagination 1"
                 },
                 "orders": [
                   {
-                    "accountId": "val-1",
+                    "accountId": "accountId 1",
                     "id": "AccountOrder-1",
-                    "orderDate": "val-1",
-                    "shippingHandlingFee": "val-1",
-                    "status": "val-1",
-                    "subTotal": "val-1",
-                    "tax": "val-1",
-                    "timestamps": "[]",
-                    "totalCharge": "val-1",
-                    "totalDiscount": "val-1",
+                    "orderDate": "2026-06-10T01:30:00Z",
+                    "shippingHandlingFee": 19.99,
+                    "status": "active",
+                    "subTotal": 19.99,
+                    "tax": 2,
+                    "timestamps": "timestamps 1",
+                    "totalCharge": 19.99,
+                    "totalDiscount": 19.99,
                     "items": [
                       {
                         "id": "AccountOrderItem-1",
                         "name": "updated-delta",
-                        "price": "val-1",
-                        "quantity": "val-1",
-                        "type": "val-1",
-                        "unitPrice": "val-1"
+                        "price": 19.99,
+                        "quantity": 4,
+                        "type": "standard",
+                        "unitPrice": 19.99
                       }
                     ]
                   }
                 ],
                 "windfall": {
-                  "boat_owner": "val-1",
-                  "foundation_association": "val-1",
-                  "foundation_officer": "val-1",
-                  "high_confidence_net_worth": "val-1",
+                  "boat_owner": true,
+                  "foundation_association": true,
+                  "foundation_officer": true,
+                  "high_confidence_net_worth": 2,
                   "id": "AccountWindfall-1",
-                  "imported_car_owner": "val-1",
-                  "liquidity_trigger": "val-1",
-                  "low_confidence_net_worth": "val-1",
-                  "luxury_car_owner": "val-1",
-                  "match_confidence": "val-1",
-                  "multi-property_owner": "val-1",
-                  "net_worth": "val-1",
-                  "net_worth_last_calculated": "val-1",
-                  "nonprofit_board_member": "val-1",
-                  "philanthropic_cause": "[]",
-                  "philanthropic_focus": "[]",
-                  "philanthropic_giver": "val-1",
-                  "plane_owner": "val-1",
-                  "political_affiliation": "val-1",
-                  "political_donor": "val-1",
-                  "primary_address_incorrect": "val-1",
-                  "recent_death_in_family": "val-1",
-                  "recent_mortgage": "val-1",
-                  "recent_mover": "val-1",
-                  "recently_divorced": "val-1",
-                  "sec_money_in_motion": "val-1",
-                  "small_business_owner": "val-1",
-                  "top_political_donor": "val-1",
-                  "trust_association": "val-1",
-                  "windfall_id": "val-1"
-                }
+                  "imported_car_owner": true,
+                  "liquidity_trigger": true,
+                  "low_confidence_net_worth": 2,
+                  "luxury_car_owner": true,
+                  "match_confidence": 2,
+                  "multi-property_owner": true,
+                  "net_worth": 2,
+                  "net_worth_last_calculated": "net_worth_last_calculated 1",
+                  "nonprofit_board_member": true,
+                  "philanthropic_cause": "philanthropic_cause 1",
+                  "philanthropic_focus": "philanthropic_focus 1",
+                  "philanthropic_giver": true,
+                  "plane_owner": true,
+                  "political_affiliation": "political_affiliation 1",
+                  "political_donor": true,
+                  "primary_address_incorrect": true,
+                  "recent_death_in_family": true,
+                  "recent_mortgage": true,
+                  "recent_mover": true,
+                  "recently_divorced": true,
+                  "sec_money_in_motion": true,
+                  "small_business_owner": true,
+                  "top_political_donor": true,
+                  "trust_association": true,
+                  "windfall_id": "windfall_id-1"
+                },
+                "addresses": [
+                  {
+                    "addressId": "Address-1",
+                    "addressLine1": "101 Test St",
+                    "addressLine2": "101 Test St",
+                    "addressLine3": "101 Test St",
+                    "addressLine4": "101 Test St",
+                    "city": "Boston",
+                    "country": "US",
+                    "county": "county 1",
+                    "endDate": "endDate 1",
+                    "fax": "555-0101",
+                    "faxType": "555-0101",
+                    "isPrimaryAddress": true,
+                    "phone1": "555-0101",
+                    "phone1Type": "555-0101",
+                    "phone2": "555-0101",
+                    "phone2Type": "555-0101",
+                    "phone3": "555-0101",
+                    "phone3Type": "555-0101",
+                    "startDate": "startDate 1",
+                    "stateProvince": "MA",
+                    "territory": "territory 1",
+                    "type": "standard",
+                    "validAddress": true,
+                    "zipCode": "02101",
+                    "zipCodeSuffix": "02101"
+                  }
+                ],
+                "eventRegistrations": [
+                  {
+                    "couponCode": "couponCode 1",
+                    "craInfo": "craInfo 1",
+                    "donorCoveredFee": 19.99,
+                    "donorCoveredFeeFlag": true,
+                    "eventId": "eventId 1",
+                    "fundraiserAccountId": "fundraiserAccountId 1",
+                    "id": "EventRegistration-1",
+                    "ignoreCapacity": true,
+                    "origin": "origin 1",
+                    "payLater": true,
+                    "registrantAccountId": "registrantAccountId 1",
+                    "registrationAmount": 19.99,
+                    "registrationDateTime": "registrationDateTime 1",
+                    "sendSystemEmail": true,
+                    "source": "source 1",
+                    "taxDeductibleInfo": "taxDeductibleInfo 1",
+                    "totalCharge": 19.99,
+                    "totalDiscount": 19.99,
+                    "tickets": [
+                      {
+                        "ticketId": 1,
+                        "ticketSequence": 2
+                      }
+                    ]
+                  }
+                ],
+                "pledges": [
+                  {
+                    "installments": [
+                      {
+                        "amount": 19.99,
+                        "expectedDate": "expectedDate 1",
+                        "id": "Installment-1",
+                        "pledgeId": "pledgeId 1",
+                        "pledgePaymentIds": "pledgePaymentIds 1"
+                      }
+                    ],
+                    "dafpay": {
+                      "advisor": "advisor 1",
+                      "distributionId": "PledgeDafPayDistribution-1",
+                      "grantId": "grantId 1",
+                      "note": "Sample note 1",
+                      "status": "active",
+                      "totalFees": 19.99
+                    },
+                    "pledgePayments": [
+                      {
+                        "craInfo": "craInfo 1",
+                        "date": "2026-06-10",
+                        "donorCoveredFee": 19.99,
+                        "donorCoveredFeeFlag": true,
+                        "id": "PledgePayment-1",
+                        "installmentId": "installmentId 1",
+                        "origin": "origin 1",
+                        "payment": "payment 1",
+                        "pledgeId": "pledgeId 1",
+                        "sendAcknowledgeEmail": true,
+                        "sendAcknowledgeLetter": true,
+                        "sendMatchedDonorEmail": true,
+                        "sendMatchedDonorLetter": true,
+                        "taxDeductibleInfo": "taxDeductibleInfo 1",
+                        "timestamps": "timestamps 1",
+                        "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+                      }
+                    ]
+                  },
+                  {
+                    "accountId": "accountId 1",
+                    "acknowledgee": "acknowledgee 1",
+                    "amount": 19.99,
+                    "anonymousType": "anonymousType 1",
+                    "campaign": "campaign 1",
+                    "dafpay": "dafpay 1",
+                    "date": "2026-06-10",
+                    "expectedDate": "2026-06-10T01:30:00Z",
+                    "fund": "fund 1",
+                    "fundraiserAccountId": "fundraiserAccountId 1",
+                    "id": "Pledge-1",
+                    "matchedDonationId": "matchedDonationId 1",
+                    "pledgeStatus": "active",
+                    "publicRecognitionName": "publicRecognitionName 1",
+                    "purpose": "purpose 1",
+                    "solicitationMethod": "solicitationMethod 1",
+                    "solicitor": "solicitor 1",
+                    "source": "source 1",
+                    "timestamps": "timestamps 1",
+                    "tribute": "tribute 1",
+                    "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+                  }
+                ],
+                "memberships": [
+                  {
+                    "accountId": "accountId 1",
+                    "autoRenewal": {
+                      "ach": "ach 1",
+                      "autoRenewal": true,
+                      "creditCardOnline": "creditCardOnline 1",
+                      "donorCoveredFeeFlag": true,
+                      "membershipId": "MembershipAutoRenewal-1",
+                      "sendAutoRenewalEnabledEmail": true
+                    },
+                    "changeType": "changeType 1",
+                    "complimentary": 2,
+                    "craInfo": "craInfo 1",
+                    "donorCoveredFee": 19.99,
+                    "donorCoveredFeeFlag": true,
+                    "enrollType": "enrollType 1",
+                    "fee": 19.99,
+                    "id": "Membership-1",
+                    "isActive": true,
+                    "membershipLevel": "standard",
+                    "membershipTerm": "membershipTerm 1",
+                    "origin": "origin 1",
+                    "parentId": "parentId 1",
+                    "payLater": true,
+                    "primaryActiveMembership": true,
+                    "sendAcknowledgeEmail": true,
+                    "sendAutoRenewalEnabledEmail": true,
+                    "source": "source 1",
+                    "status": "active",
+                    "taxDeductibleInfo": "taxDeductibleInfo 1",
+                    "termDuration": 0.1,
+                    "termEndDate": "2026-06-10T01:30:00Z",
+                    "termStartDate": "2026-06-10T01:30:00Z",
+                    "termUnit": "termUnit 1",
+                    "timestamps": "timestamps 1",
+                    "totalCharge": 19.99,
+                    "totalDiscount": 19.99,
+                    "transactionDate": "2026-06-10T01:30:00Z",
+                    "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z",
+                    "subMembers": [
+                      {
+                        "accountId": "accountId 1",
+                        "autoRenewal": true,
+                        "changeType": "changeType 1",
+                        "complimentary": 2,
+                        "couponCode": "couponCode 1",
+                        "craInfo": "craInfo 1",
+                        "enrollType": "enrollType 1",
+                        "fee": 19.99,
+                        "id": "SubMembership-1",
+                        "isCurrentEmployee": true,
+                        "membershipLevel": "standard",
+                        "membershipTerm": "membershipTerm 1",
+                        "origin": "origin 1",
+                        "parentId": "parentId 1",
+                        "sendAcknowledgeEmail": true,
+                        "sendAutoRenewalEnabledEmail": true,
+                        "source": "source 1",
+                        "status": "active",
+                        "taxDeductibleInfo": "taxDeductibleInfo 1",
+                        "termDuration": 0.1,
+                        "termEndDate": "2026-06-10T01:30:00Z",
+                        "termStartDate": "2026-06-10T01:30:00Z",
+                        "termUnit": "termUnit 1",
+                        "timestamps": "timestamps 1",
+                        "transactionDate": "2026-06-10T01:30:00Z",
+                        "timestamps.lastModifiedDateTime": "2026-06-11T00:00:00Z"
+                      }
+                    ]
+                  }
+                ]
               },
               {
                 "accountId": "Account-2",
-                "companyAccount": "[]",
-                "individualAccount": {
-                  "roleVoList": [
+                "companyAccount": {
+                  "accountCurrentMembershipStatus": "pending",
+                  "accountId": "CompanyAccount-2",
+                  "companyTypes": "Globex LLC",
+                  "consent": "consent 2",
+                  "email1OptOut": false,
+                  "generosityIndicator": "generosityIndicator 2",
+                  "login": "login 2",
+                  "name": "Jordan Chen",
+                  "noSolicitation": false,
+                  "origin": "origin 2",
+                  "primaryContact": "primaryContact 2",
+                  "primaryContactAccountId": "primaryContactAccountId 2",
+                  "sendSystemEmail": false,
+                  "sendTextOptIn": false,
+                  "smsNumber": "smsNumber 2",
+                  "source": "source 2",
+                  "timestamps": "timestamps 2",
+                  "url": "https://example.com/url/2",
+                  "shippingAddresses": [
                     {
-                      "color": "[]",
-                      "description": "val-2",
-                      "id": "AccountRoleApi-2",
-                      "name": "val-2"
+                      "addressId": "ShippingAddress-2",
+                      "addressLine1": "102 Test St",
+                      "addressLine2": "102 Test St",
+                      "addressLine3": "102 Test St",
+                      "addressLine4": "102 Test St",
+                      "city": "New York",
+                      "country": "US",
+                      "county": "county 2",
+                      "fax": "555-0102",
+                      "faxType": "555-0102",
+                      "phone1": "555-0102",
+                      "phone1Type": "555-0102",
+                      "phone2": "555-0102",
+                      "phone2Type": "555-0102",
+                      "phone3": "555-0102",
+                      "phone3Type": "555-0102",
+                      "shippingCompanyName": "Globex LLC",
+                      "shippingDeliverTo": "shippingDeliverTo 2",
+                      "stateProvince": "NY",
+                      "territory": "territory 2",
+                      "type": "premium",
+                      "zipCode": "02102",
+                      "zipCodeSuffix": "02102"
                     }
                   ]
                 },
+                "individualAccount": {
+                  "accountCurrentMembershipStatus": "pending",
+                  "accountId": "IndividualAccount-2",
+                  "company": "Globex LLC",
+                  "consent": "consent 2",
+                  "email1OptOut": false,
+                  "facebookPage": "facebookPage 2",
+                  "generosityIndicator": "generosityIndicator 2",
+                  "individualTypes": "individualTypes 2",
+                  "login": "login 2",
+                  "noSolicitation": false,
+                  "origin": "origin 2",
+                  "primaryContact": "primaryContact 2",
+                  "sendSystemEmail": false,
+                  "sendTextOptIn": false,
+                  "smsNumber": "smsNumber 2",
+                  "source": "source 2",
+                  "timestamps": "timestamps 2",
+                  "twitterPage": "twitterPage 2",
+                  "url": "https://example.com/url/2"
+                },
                 "contacts": {
                   "accountId": "AccountContacts-2",
-                  "pagination": "[]"
+                  "pagination": "pagination 2"
                 },
                 "orders": [
                   {
-                    "accountId": "val-2",
+                    "accountId": "accountId 2",
                     "id": "AccountOrder-2",
-                    "orderDate": "val-2",
-                    "shippingHandlingFee": "val-2",
-                    "status": "val-2",
-                    "subTotal": "val-2",
-                    "tax": "val-2",
-                    "timestamps": "[]",
-                    "totalCharge": "val-2",
-                    "totalDiscount": "val-2",
+                    "orderDate": "2026-06-11T02:30:00Z",
+                    "shippingHandlingFee": 29.99,
+                    "status": "pending",
+                    "subTotal": 29.99,
+                    "tax": 3,
+                    "timestamps": "timestamps 2",
+                    "totalCharge": 29.99,
+                    "totalDiscount": 29.99,
                     "items": [
                       {
                         "id": "AccountOrderItem-2",
-                        "name": "val-2",
-                        "price": "val-2",
-                        "quantity": "val-2",
-                        "type": "val-2",
-                        "unitPrice": "val-2"
+                        "name": "Jordan Chen",
+                        "price": 29.99,
+                        "quantity": 7,
+                        "type": "premium",
+                        "unitPrice": 29.99
                       }
                     ]
                   }
                 ],
                 "windfall": {
-                  "boat_owner": "val-2",
-                  "foundation_association": "val-2",
-                  "foundation_officer": "val-2",
-                  "high_confidence_net_worth": "val-2",
+                  "boat_owner": false,
+                  "foundation_association": false,
+                  "foundation_officer": false,
+                  "high_confidence_net_worth": 3,
                   "id": "AccountWindfall-2",
-                  "imported_car_owner": "val-2",
-                  "liquidity_trigger": "val-2",
-                  "low_confidence_net_worth": "val-2",
-                  "luxury_car_owner": "val-2",
-                  "match_confidence": "val-2",
-                  "multi-property_owner": "val-2",
-                  "net_worth": "val-2",
-                  "net_worth_last_calculated": "val-2",
-                  "nonprofit_board_member": "val-2",
-                  "philanthropic_cause": "[]",
-                  "philanthropic_focus": "[]",
-                  "philanthropic_giver": "val-2",
-                  "plane_owner": "val-2",
-                  "political_affiliation": "val-2",
-                  "political_donor": "val-2",
-                  "primary_address_incorrect": "val-2",
-                  "recent_death_in_family": "val-2",
-                  "recent_mortgage": "val-2",
-                  "recent_mover": "val-2",
-                  "recently_divorced": "val-2",
-                  "sec_money_in_motion": "val-2",
-                  "small_business_owner": "val-2",
-                  "top_political_donor": "val-2",
-                  "trust_association": "val-2",
-                  "windfall_id": "val-2"
-                }
+                  "imported_car_owner": false,
+                  "liquidity_trigger": false,
+                  "low_confidence_net_worth": 3,
+                  "luxury_car_owner": false,
+                  "match_confidence": 3,
+                  "multi-property_owner": false,
+                  "net_worth": 3,
+                  "net_worth_last_calculated": "net_worth_last_calculated 2",
+                  "nonprofit_board_member": false,
+                  "philanthropic_cause": "philanthropic_cause 2",
+                  "philanthropic_focus": "philanthropic_focus 2",
+                  "philanthropic_giver": false,
+                  "plane_owner": false,
+                  "political_affiliation": "political_affiliation 2",
+                  "political_donor": false,
+                  "primary_address_incorrect": false,
+                  "recent_death_in_family": false,
+                  "recent_mortgage": false,
+                  "recent_mover": false,
+                  "recently_divorced": false,
+                  "sec_money_in_motion": false,
+                  "small_business_owner": false,
+                  "top_political_donor": false,
+                  "trust_association": false,
+                  "windfall_id": "windfall_id-2"
+                },
+                "addresses": [
+                  {
+                    "addressId": "Address-2",
+                    "addressLine1": "102 Test St",
+                    "addressLine2": "102 Test St",
+                    "addressLine3": "102 Test St",
+                    "addressLine4": "102 Test St",
+                    "city": "New York",
+                    "country": "US",
+                    "county": "county 2",
+                    "endDate": "endDate 2",
+                    "fax": "555-0102",
+                    "faxType": "555-0102",
+                    "isPrimaryAddress": false,
+                    "phone1": "555-0102",
+                    "phone1Type": "555-0102",
+                    "phone2": "555-0102",
+                    "phone2Type": "555-0102",
+                    "phone3": "555-0102",
+                    "phone3Type": "555-0102",
+                    "startDate": "startDate 2",
+                    "stateProvince": "NY",
+                    "territory": "territory 2",
+                    "type": "premium",
+                    "validAddress": false,
+                    "zipCode": "02102",
+                    "zipCodeSuffix": "02102"
+                  }
+                ],
+                "eventRegistrations": [
+                  {
+                    "couponCode": "couponCode 2",
+                    "craInfo": "craInfo 2",
+                    "donorCoveredFee": 29.99,
+                    "donorCoveredFeeFlag": false,
+                    "eventId": "eventId 2",
+                    "fundraiserAccountId": "fundraiserAccountId 2",
+                    "id": "EventRegistration-2",
+                    "ignoreCapacity": false,
+                    "origin": "origin 2",
+                    "payLater": false,
+                    "registrantAccountId": "registrantAccountId 2",
+                    "registrationAmount": 29.99,
+                    "registrationDateTime": "registrationDateTime 2",
+                    "sendSystemEmail": false,
+                    "source": "source 2",
+                    "taxDeductibleInfo": "taxDeductibleInfo 2",
+                    "totalCharge": 29.99,
+                    "totalDiscount": 29.99,
+                    "tickets": [
+                      {
+                        "ticketId": 2,
+                        "ticketSequence": 3
+                      }
+                    ]
+                  }
+                ],
+                "pledges": [
+                  {
+                    "installments": [
+                      {
+                        "amount": 29.99,
+                        "expectedDate": "expectedDate 2",
+                        "id": "Installment-2",
+                        "pledgeId": "pledgeId 2",
+                        "pledgePaymentIds": "pledgePaymentIds 2"
+                      }
+                    ],
+                    "dafpay": {
+                      "advisor": "advisor 2",
+                      "distributionId": "PledgeDafPayDistribution-2",
+                      "grantId": "grantId 2",
+                      "note": "Sample note 2",
+                      "status": "pending",
+                      "totalFees": 29.99
+                    },
+                    "pledgePayments": [
+                      {
+                        "craInfo": "craInfo 2",
+                        "date": "2026-06-11",
+                        "donorCoveredFee": 29.99,
+                        "donorCoveredFeeFlag": false,
+                        "id": "PledgePayment-2",
+                        "installmentId": "installmentId 2",
+                        "origin": "origin 2",
+                        "payment": "payment 2",
+                        "pledgeId": "pledgeId 2",
+                        "sendAcknowledgeEmail": false,
+                        "sendAcknowledgeLetter": false,
+                        "sendMatchedDonorEmail": false,
+                        "sendMatchedDonorLetter": false,
+                        "taxDeductibleInfo": "taxDeductibleInfo 2",
+                        "timestamps": "timestamps 2",
+                        "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+                      }
+                    ]
+                  },
+                  {
+                    "accountId": "accountId 2",
+                    "acknowledgee": "acknowledgee 2",
+                    "amount": 29.99,
+                    "anonymousType": "anonymousType 2",
+                    "campaign": "campaign 2",
+                    "dafpay": "dafpay 2",
+                    "date": "2026-06-11",
+                    "expectedDate": "2026-06-11T02:30:00Z",
+                    "fund": "fund 2",
+                    "fundraiserAccountId": "fundraiserAccountId 2",
+                    "id": "Pledge-2",
+                    "matchedDonationId": "matchedDonationId 2",
+                    "pledgeStatus": "pending",
+                    "publicRecognitionName": "publicRecognitionName 2",
+                    "purpose": "purpose 2",
+                    "solicitationMethod": "solicitationMethod 2",
+                    "solicitor": "solicitor 2",
+                    "source": "source 2",
+                    "timestamps": "timestamps 2",
+                    "tribute": "tribute 2",
+                    "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+                  }
+                ],
+                "memberships": [
+                  {
+                    "accountId": "accountId 2",
+                    "autoRenewal": {
+                      "ach": "ach 2",
+                      "autoRenewal": false,
+                      "creditCardOnline": "creditCardOnline 2",
+                      "donorCoveredFeeFlag": false,
+                      "membershipId": "MembershipAutoRenewal-2",
+                      "sendAutoRenewalEnabledEmail": false
+                    },
+                    "changeType": "changeType 2",
+                    "complimentary": 3,
+                    "craInfo": "craInfo 2",
+                    "donorCoveredFee": 29.99,
+                    "donorCoveredFeeFlag": false,
+                    "enrollType": "enrollType 2",
+                    "fee": 29.99,
+                    "id": "Membership-2",
+                    "isActive": false,
+                    "membershipLevel": "premium",
+                    "membershipTerm": "membershipTerm 2",
+                    "origin": "origin 2",
+                    "parentId": "parentId 2",
+                    "payLater": false,
+                    "primaryActiveMembership": false,
+                    "sendAcknowledgeEmail": false,
+                    "sendAutoRenewalEnabledEmail": false,
+                    "source": "source 2",
+                    "status": "pending",
+                    "taxDeductibleInfo": "taxDeductibleInfo 2",
+                    "termDuration": 0.2,
+                    "termEndDate": "2026-06-11T02:30:00Z",
+                    "termStartDate": "2026-06-11T02:30:00Z",
+                    "termUnit": "termUnit 2",
+                    "timestamps": "timestamps 2",
+                    "totalCharge": 29.99,
+                    "totalDiscount": 29.99,
+                    "transactionDate": "2026-06-11T02:30:00Z",
+                    "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z",
+                    "subMembers": [
+                      {
+                        "accountId": "accountId 2",
+                        "autoRenewal": false,
+                        "changeType": "changeType 2",
+                        "complimentary": 3,
+                        "couponCode": "couponCode 2",
+                        "craInfo": "craInfo 2",
+                        "enrollType": "enrollType 2",
+                        "fee": 29.99,
+                        "id": "SubMembership-2",
+                        "isCurrentEmployee": false,
+                        "membershipLevel": "premium",
+                        "membershipTerm": "membershipTerm 2",
+                        "origin": "origin 2",
+                        "parentId": "parentId 2",
+                        "sendAcknowledgeEmail": false,
+                        "sendAutoRenewalEnabledEmail": false,
+                        "source": "source 2",
+                        "status": "pending",
+                        "taxDeductibleInfo": "taxDeductibleInfo 2",
+                        "termDuration": 0.2,
+                        "termEndDate": "2026-06-11T02:30:00Z",
+                        "termStartDate": "2026-06-11T02:30:00Z",
+                        "termUnit": "termUnit 2",
+                        "timestamps": "timestamps 2",
+                        "transactionDate": "2026-06-11T02:30:00Z",
+                        "timestamps.lastModifiedDateTime": "2026-06-12T00:00:00Z"
+                      }
+                    ]
+                  }
+                ]
               },
               {
                 "accountId": "Account-3",
-                "companyAccount": "[]",
-                "individualAccount": {
-                  "roleVoList": [
+                "companyAccount": {
+                  "accountCurrentMembershipStatus": "completed",
+                  "accountId": "CompanyAccount-3",
+                  "companyTypes": "Initech",
+                  "consent": "consent 3",
+                  "email1OptOut": true,
+                  "generosityIndicator": "generosityIndicator 3",
+                  "login": "login 3",
+                  "name": "Taylor Patel",
+                  "noSolicitation": true,
+                  "origin": "origin 3",
+                  "primaryContact": "primaryContact 3",
+                  "primaryContactAccountId": "primaryContactAccountId 3",
+                  "sendSystemEmail": true,
+                  "sendTextOptIn": true,
+                  "smsNumber": "smsNumber 3",
+                  "source": "source 3",
+                  "timestamps": "timestamps 3",
+                  "url": "https://example.com/url/3",
+                  "shippingAddresses": [
                     {
-                      "color": "[]",
-                      "description": "val-3",
-                      "id": "AccountRoleApi-3",
-                      "name": "val-3"
+                      "addressId": "ShippingAddress-3",
+                      "addressLine1": "103 Test St",
+                      "addressLine2": "103 Test St",
+                      "addressLine3": "103 Test St",
+                      "addressLine4": "103 Test St",
+                      "city": "San Francisco",
+                      "country": "US",
+                      "county": "county 3",
+                      "fax": "555-0103",
+                      "faxType": "555-0103",
+                      "phone1": "555-0103",
+                      "phone1Type": "555-0103",
+                      "phone2": "555-0103",
+                      "phone2Type": "555-0103",
+                      "phone3": "555-0103",
+                      "phone3Type": "555-0103",
+                      "shippingCompanyName": "Initech",
+                      "shippingDeliverTo": "shippingDeliverTo 3",
+                      "stateProvince": "CA",
+                      "territory": "territory 3",
+                      "type": "basic",
+                      "zipCode": "02103",
+                      "zipCodeSuffix": "02103"
                     }
                   ]
                 },
+                "individualAccount": {
+                  "accountCurrentMembershipStatus": "completed",
+                  "accountId": "IndividualAccount-3",
+                  "company": "Initech",
+                  "consent": "consent 3",
+                  "email1OptOut": true,
+                  "facebookPage": "facebookPage 3",
+                  "generosityIndicator": "generosityIndicator 3",
+                  "individualTypes": "individualTypes 3",
+                  "login": "login 3",
+                  "noSolicitation": true,
+                  "origin": "origin 3",
+                  "primaryContact": "primaryContact 3",
+                  "sendSystemEmail": true,
+                  "sendTextOptIn": true,
+                  "smsNumber": "smsNumber 3",
+                  "source": "source 3",
+                  "timestamps": "timestamps 3",
+                  "twitterPage": "twitterPage 3",
+                  "url": "https://example.com/url/3"
+                },
                 "contacts": {
                   "accountId": "AccountContacts-3",
-                  "pagination": "[]"
+                  "pagination": "pagination 3"
                 },
                 "orders": [
                   {
-                    "accountId": "val-3",
+                    "accountId": "accountId 3",
                     "id": "AccountOrder-3",
-                    "orderDate": "val-3",
-                    "shippingHandlingFee": "val-3",
-                    "status": "val-3",
-                    "subTotal": "val-3",
-                    "tax": "val-3",
-                    "timestamps": "[]",
-                    "totalCharge": "val-3",
-                    "totalDiscount": "val-3"
+                    "orderDate": "2026-06-12T03:30:00Z",
+                    "shippingHandlingFee": 39.99,
+                    "status": "completed",
+                    "subTotal": 39.99,
+                    "tax": 4,
+                    "timestamps": "timestamps 3",
+                    "totalCharge": 39.99,
+                    "totalDiscount": 39.99
                   }
                 ],
                 "windfall": {
-                  "boat_owner": "val-3",
-                  "foundation_association": "val-3",
-                  "foundation_officer": "val-3",
-                  "high_confidence_net_worth": "val-3",
+                  "boat_owner": true,
+                  "foundation_association": true,
+                  "foundation_officer": true,
+                  "high_confidence_net_worth": 4,
                   "id": "AccountWindfall-3",
-                  "imported_car_owner": "val-3",
-                  "liquidity_trigger": "val-3",
-                  "low_confidence_net_worth": "val-3",
-                  "luxury_car_owner": "val-3",
-                  "match_confidence": "val-3",
-                  "multi-property_owner": "val-3",
-                  "net_worth": "val-3",
-                  "net_worth_last_calculated": "val-3",
-                  "nonprofit_board_member": "val-3",
-                  "philanthropic_cause": "[]",
-                  "philanthropic_focus": "[]",
-                  "philanthropic_giver": "val-3",
-                  "plane_owner": "val-3",
-                  "political_affiliation": "val-3",
-                  "political_donor": "val-3",
-                  "primary_address_incorrect": "val-3",
-                  "recent_death_in_family": "val-3",
-                  "recent_mortgage": "val-3",
-                  "recent_mover": "val-3",
-                  "recently_divorced": "val-3",
-                  "sec_money_in_motion": "val-3",
-                  "small_business_owner": "val-3",
-                  "top_political_donor": "val-3",
-                  "trust_association": "val-3",
-                  "windfall_id": "val-3"
-                }
+                  "imported_car_owner": true,
+                  "liquidity_trigger": true,
+                  "low_confidence_net_worth": 4,
+                  "luxury_car_owner": true,
+                  "match_confidence": 4,
+                  "multi-property_owner": true,
+                  "net_worth": 4,
+                  "net_worth_last_calculated": "net_worth_last_calculated 3",
+                  "nonprofit_board_member": true,
+                  "philanthropic_cause": "philanthropic_cause 3",
+                  "philanthropic_focus": "philanthropic_focus 3",
+                  "philanthropic_giver": true,
+                  "plane_owner": true,
+                  "political_affiliation": "political_affiliation 3",
+                  "political_donor": true,
+                  "primary_address_incorrect": true,
+                  "recent_death_in_family": true,
+                  "recent_mortgage": true,
+                  "recent_mover": true,
+                  "recently_divorced": true,
+                  "sec_money_in_motion": true,
+                  "small_business_owner": true,
+                  "top_political_donor": true,
+                  "trust_association": true,
+                  "windfall_id": "windfall_id-3"
+                },
+                "addresses": [
+                  {
+                    "addressId": "Address-3",
+                    "addressLine1": "103 Test St",
+                    "addressLine2": "103 Test St",
+                    "addressLine3": "103 Test St",
+                    "addressLine4": "103 Test St",
+                    "city": "San Francisco",
+                    "country": "US",
+                    "county": "county 3",
+                    "endDate": "endDate 3",
+                    "fax": "555-0103",
+                    "faxType": "555-0103",
+                    "isPrimaryAddress": true,
+                    "phone1": "555-0103",
+                    "phone1Type": "555-0103",
+                    "phone2": "555-0103",
+                    "phone2Type": "555-0103",
+                    "phone3": "555-0103",
+                    "phone3Type": "555-0103",
+                    "startDate": "startDate 3",
+                    "stateProvince": "CA",
+                    "territory": "territory 3",
+                    "type": "basic",
+                    "validAddress": true,
+                    "zipCode": "02103",
+                    "zipCodeSuffix": "02103"
+                  }
+                ],
+                "eventRegistrations": [
+                  {
+                    "couponCode": "couponCode 3",
+                    "craInfo": "craInfo 3",
+                    "donorCoveredFee": 39.99,
+                    "donorCoveredFeeFlag": true,
+                    "eventId": "eventId 3",
+                    "fundraiserAccountId": "fundraiserAccountId 3",
+                    "id": "EventRegistration-3",
+                    "ignoreCapacity": true,
+                    "origin": "origin 3",
+                    "payLater": true,
+                    "registrantAccountId": "registrantAccountId 3",
+                    "registrationAmount": 39.99,
+                    "registrationDateTime": "registrationDateTime 3",
+                    "sendSystemEmail": true,
+                    "source": "source 3",
+                    "taxDeductibleInfo": "taxDeductibleInfo 3",
+                    "totalCharge": 39.99,
+                    "totalDiscount": 39.99,
+                    "tickets": [
+                      {
+                        "ticketId": 3,
+                        "ticketSequence": 4
+                      }
+                    ]
+                  }
+                ],
+                "pledges": [
+                  {
+                    "installments": [
+                      {
+                        "amount": 39.99,
+                        "expectedDate": "expectedDate 3",
+                        "id": "Installment-3",
+                        "pledgeId": "pledgeId 3",
+                        "pledgePaymentIds": "pledgePaymentIds 3"
+                      }
+                    ],
+                    "dafpay": {
+                      "advisor": "advisor 3",
+                      "distributionId": "PledgeDafPayDistribution-3",
+                      "grantId": "grantId 3",
+                      "note": "Sample note 3",
+                      "status": "completed",
+                      "totalFees": 39.99
+                    },
+                    "pledgePayments": [
+                      {
+                        "craInfo": "craInfo 3",
+                        "date": "2026-06-12",
+                        "donorCoveredFee": 39.99,
+                        "donorCoveredFeeFlag": true,
+                        "id": "PledgePayment-3",
+                        "installmentId": "installmentId 3",
+                        "origin": "origin 3",
+                        "payment": "payment 3",
+                        "pledgeId": "pledgeId 3",
+                        "sendAcknowledgeEmail": true,
+                        "sendAcknowledgeLetter": true,
+                        "sendMatchedDonorEmail": true,
+                        "sendMatchedDonorLetter": true,
+                        "taxDeductibleInfo": "taxDeductibleInfo 3",
+                        "timestamps": "timestamps 3",
+                        "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+                      }
+                    ]
+                  },
+                  {
+                    "accountId": "accountId 3",
+                    "acknowledgee": "acknowledgee 3",
+                    "amount": 39.99,
+                    "anonymousType": "anonymousType 3",
+                    "campaign": "campaign 3",
+                    "dafpay": "dafpay 3",
+                    "date": "2026-06-12",
+                    "expectedDate": "2026-06-12T03:30:00Z",
+                    "fund": "fund 3",
+                    "fundraiserAccountId": "fundraiserAccountId 3",
+                    "id": "Pledge-3",
+                    "matchedDonationId": "matchedDonationId 3",
+                    "pledgeStatus": "completed",
+                    "publicRecognitionName": "publicRecognitionName 3",
+                    "purpose": "purpose 3",
+                    "solicitationMethod": "solicitationMethod 3",
+                    "solicitor": "solicitor 3",
+                    "source": "source 3",
+                    "timestamps": "timestamps 3",
+                    "tribute": "tribute 3",
+                    "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+                  }
+                ],
+                "memberships": [
+                  {
+                    "accountId": "accountId 3",
+                    "autoRenewal": {
+                      "ach": "ach 3",
+                      "autoRenewal": true,
+                      "creditCardOnline": "creditCardOnline 3",
+                      "donorCoveredFeeFlag": true,
+                      "membershipId": "MembershipAutoRenewal-3",
+                      "sendAutoRenewalEnabledEmail": true
+                    },
+                    "changeType": "changeType 3",
+                    "complimentary": 4,
+                    "craInfo": "craInfo 3",
+                    "donorCoveredFee": 39.99,
+                    "donorCoveredFeeFlag": true,
+                    "enrollType": "enrollType 3",
+                    "fee": 39.99,
+                    "id": "Membership-3",
+                    "isActive": true,
+                    "membershipLevel": "basic",
+                    "membershipTerm": "membershipTerm 3",
+                    "origin": "origin 3",
+                    "parentId": "parentId 3",
+                    "payLater": true,
+                    "primaryActiveMembership": true,
+                    "sendAcknowledgeEmail": true,
+                    "sendAutoRenewalEnabledEmail": true,
+                    "source": "source 3",
+                    "status": "completed",
+                    "taxDeductibleInfo": "taxDeductibleInfo 3",
+                    "termDuration": 0.3,
+                    "termEndDate": "2026-06-12T03:30:00Z",
+                    "termStartDate": "2026-06-12T03:30:00Z",
+                    "termUnit": "termUnit 3",
+                    "timestamps": "timestamps 3",
+                    "totalCharge": 39.99,
+                    "totalDiscount": 39.99,
+                    "transactionDate": "2026-06-12T03:30:00Z",
+                    "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z",
+                    "subMembers": [
+                      {
+                        "accountId": "accountId 3",
+                        "autoRenewal": true,
+                        "changeType": "changeType 3",
+                        "complimentary": 4,
+                        "couponCode": "couponCode 3",
+                        "craInfo": "craInfo 3",
+                        "enrollType": "enrollType 3",
+                        "fee": 39.99,
+                        "id": "SubMembership-3",
+                        "isCurrentEmployee": true,
+                        "membershipLevel": "basic",
+                        "membershipTerm": "membershipTerm 3",
+                        "origin": "origin 3",
+                        "parentId": "parentId 3",
+                        "sendAcknowledgeEmail": true,
+                        "sendAutoRenewalEnabledEmail": true,
+                        "source": "source 3",
+                        "status": "completed",
+                        "taxDeductibleInfo": "taxDeductibleInfo 3",
+                        "termDuration": 0.3,
+                        "termEndDate": "2026-06-12T03:30:00Z",
+                        "termStartDate": "2026-06-12T03:30:00Z",
+                        "termUnit": "termUnit 3",
+                        "timestamps": "timestamps 3",
+                        "transactionDate": "2026-06-12T03:30:00Z",
+                        "timestamps.lastModifiedDateTime": "2026-06-13T00:00:00Z"
+                      }
+                    ]
+                  }
+                ]
               }
             ],
             "pagination": {
@@ -571,5 +4984,19 @@
         }
       ]
     }
-  ]
+  ],
+  "Lifecycle": {
+    "supportsDiscovery": true,
+    "supportsFieldDiscovery": true,
+    "authoritativeDiscovery": false,
+    "supportsCustomColumns": true,
+    "incrementalStrategy": "watermark",
+    "supportsWrite": false,
+    "writeRoundTrip": null,
+    "supportsScheduling": true,
+    "connectionTestable": true,
+    "derivedFromMetadata": true,
+    "sourceClass": "NeonCRMConnector"
+  },
+  "FetchShape": "accesspath"
 }

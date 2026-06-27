@@ -2213,7 +2213,9 @@
                   "applicationCategories"
                 ],
                 "entryPath": "/v2/Programs/{programId}/ApplicationCategories"
-              }
+              },
+              "parentObjectName": "Program",
+              "parentObjectIDFieldName": "programId"
             },
             "Status": "Active",
             "SupportsPagination": true,
@@ -2303,7 +2305,9 @@
                   "transactions"
                 ],
                 "entryPath": "/v2/Funds/{fundId}/Transactions"
-              }
+              },
+              "parentObjectName": "Fund",
+              "parentObjectIDFieldName": "fundId"
             },
             "Status": "Active",
             "SupportsPagination": true,
@@ -2681,7 +2685,9 @@
                 "doorPath": "/v2/Programs",
                 "parentParamName": "programId",
                 "entryPath": "/v2/Programs/{programId}/OtherSessionItemTypes"
-              }
+              },
+              "parentObjectName": "Program",
+              "parentObjectIDFieldName": "programId"
             },
             "Status": "Active",
             "SupportsPagination": true,
@@ -2831,7 +2837,9 @@
                 "doorPath": "/v2/Programs",
                 "parentParamName": "programId",
                 "entryPath": "/v2/Programs/{programId}/Scheduler/Days"
-              }
+              },
+              "parentObjectName": "Program",
+              "parentObjectIDFieldName": "programId"
             },
             "Status": "Active",
             "SupportsPagination": true,
@@ -2932,7 +2940,9 @@
                 "doorPath": "/v2/Programs",
                 "parentParamName": "programId",
                 "entryPath": "/v2/Programs/{programId}/Scheduler/Rooms"
-              }
+              },
+              "parentObjectName": "Program",
+              "parentObjectIDFieldName": "programId"
             },
             "Status": "Active",
             "SupportsPagination": true,
@@ -3050,7 +3060,9 @@
                 "entryPath": "/v2/Programs/{programId}/Scheduler/TimeSlots"
               },
               "LiteralCreateReason": "Create CreateRequest requires scheduleDayIds; synced IOFs lack that exact field (availableOnlyInDayIds is the read-side name) — generic flat body would omit it. Connector overrides CreateRecord to supply scheduleDayIds.",
-              "LiteralUpdateReason": "Update UpdateRequest requires scheduleDayIds (array of int); read-side IOF is availableOnlyInDayIds. Generic flat body omits/misnames it -> 422. Connector overrides UpdateRecord to supply scheduleDayIds from availableOnlyInDayIds. Mirrors LiteralCreateReason."
+              "LiteralUpdateReason": "Update UpdateRequest requires scheduleDayIds (array of int); read-side IOF is availableOnlyInDayIds. Generic flat body omits/misnames it -> 422. Connector overrides UpdateRecord to supply scheduleDayIds from availableOnlyInDayIds. Mirrors LiteralCreateReason.",
+              "parentObjectName": "Program",
+              "parentObjectIDFieldName": "programId"
             },
             "Status": "Active",
             "SupportsPagination": true,
@@ -3177,7 +3189,9 @@
                 "doorPath": "/v2/Programs",
                 "parentParamName": "programId",
                 "entryPath": "/v2/Programs/{programId}/Scheduler/ScheduleItems"
-              }
+              },
+              "parentObjectName": "Program",
+              "parentObjectIDFieldName": "programId"
             },
             "Status": "Active",
             "SupportsPagination": true,
@@ -3309,7 +3323,9 @@
                 "doorPath": "/v2/Programs",
                 "parentParamName": "programId",
                 "entryPath": "/v2/Programs/{programId}/SessionTypes"
-              }
+              },
+              "parentObjectName": "Program",
+              "parentObjectIDFieldName": "programId"
             },
             "Status": "Active",
             "SupportsPagination": true,

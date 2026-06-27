@@ -71,6 +71,7 @@ module.exports = {
   // Default for CodeGen with larger batches, if this 
   // isn't in place, hard default of 5 is fallback, much slower
   advancedGeneration: {
+    enableAdvancedGeneration: false,
     batchSize: 15,
   },
 

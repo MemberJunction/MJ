@@ -1,5 +1,30 @@
 # Overnight Connector Verification — Living Plan (UNTRACKED, never commit)
 
+## 🔴🔴 CURRENT DIRECTIVE (2026-06-21) — supersedes "Goldilocks subset" everywhere below
+The prior "green" was a LIE-by-omission: ApplyAll touched every object so it *looked* complete, but the
+behavioral matrix (forward / delta / idempotency / watermark / merkle / bidirectional / pagination /
+rate-limit / concurrency) ran ONLY on a tiny per-connector **Goldilocks subset** (cfg.objects →
+`gql-live-harness.mjs` `syncMaps = maps.filter(wanted)`). So ~20 connectors shipped where most objects
+were NEVER sync-verified. PheedLoop = proven failure (21 nested template-var objects, never tested);
+OpenWater happened to pass (25 flat objects). User: "horrifyingly fucking bad … 2-record tests."
+
+**TWO-PART TASK (this session):**
+1. **In connector-builder-v2 (THIS worktree, branch `agentic/connector-builder-v2`):** rethink + totally
+   rebuild the cred-free e2e so it is FULLY production-real over **ALL objects** — every applied object
+   driven through the real engine code path (mj migrate → mj sync push --dir metadata → mj codegen →
+   ApplyAll all tables → records from the faithful mock built from each connector's context.md +
+   docs/Postman/OpenAPI/Swagger), exercising the FULL DAG with content-hash + Merkle + bidirectional +
+   all CRUD + rate-limit + concurrency. Goldilocks = bound ROWS-PER-OBJECT, never WHICH objects. Setup
+   must be deterministic + unbreakable (login/setup identical every run). Hybrid-e2e = with creds, fill
+   the gaps cred-free can't reach (real write round-trip, true rate behavior). THEN commit + push here
+   (production harness files only — NEVER context/*, test.md, plan.md).
+2. **From latest `next`, with the new harness:** retest ALL ~20 connectors. Building is fine; the TESTS
+   were lazy. Creds available via broker for: **pheedloop, growthzone, sharepoint, propfuel** (+others).
+
+Goal unchanged: such little doubt that if real creds were present it would work. Per-connector,
+per-object, per-capability matrix. No fabrication, no dishonest green.
+
+
 > Source task: `test.md`. This file is my persistent memory + checklist. Keep it updated as I go.
 > NEVER commit: this file, context/*, test/*.mjs/*.md scratch. ONLY production files (connector
 > classes, engine, metadata) — and ONLY if explicitly proven + the user later approves.
