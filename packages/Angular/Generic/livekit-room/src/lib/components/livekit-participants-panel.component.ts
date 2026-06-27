@@ -10,7 +10,7 @@ import type { LiveKitParticipantView } from '@memberjunction/livekit-room-core';
     <div class="lk-roster">
       <header class="lk-roster__head">
         <span><i class="fa-solid fa-users"></i> Participants ({{ Participants.length }})</span>
-        <button type="button" class="lk-roster__close" (click)="Close.emit()"><i class="fa-solid fa-xmark"></i></button>
+        <button type="button" class="lk-roster__close" aria-label="Close participants panel" title="Close participants panel" (click)="Close.emit()"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
       </header>
       <ul class="lk-roster__list">
         @for (p of Participants; track p.Identity) {
