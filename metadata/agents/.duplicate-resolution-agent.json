@@ -1,0 +1,41 @@
+[
+  {
+    "fields": {
+      "Name": "Duplicate Resolution Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Data Management?create&Description=Agents for data quality, deduplication, and record management",
+      "Description": "Agentic reasoning path for intelligent duplicate detection (the 'Agent' ReasoningMode on an Entity Document, for heavier entities that warrant deeper reasoning). Wraps the shared 'Duplicate Resolution' prompt so it can use memory notes and (Phase 2) context-exploration tools, while producing the same structured verdict (Merge/NotDuplicate/Uncertain + confidence + reasoning + survivor + field choices) as the cheap single-shot prompt path.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "IconClass": "fa-solid fa-clone",
+      "MaxIterationsPerRun": 5
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Duplicate Resolution",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C1DA885F-E702-49FA-AEEE-66B14A2EE4F6"
+          },
+          "sync": {
+            "lastModified": "2026-06-23T17:05:13.021Z",
+            "checksum": "55152c29aa53ec3a830310e3c5f2613380f4ce0edfab2efae42509d471eed671"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "17204EB4-1D6E-4DB6-8348-0B21D7E8FC09"
+    },
+    "sync": {
+      "lastModified": "2026-06-23T17:05:12.988Z",
+      "checksum": "a415d8d94404ef381071b9df62dfb07faeba7111370b46c1ca6bbbbe92290a16"
+    }
+  }
+]

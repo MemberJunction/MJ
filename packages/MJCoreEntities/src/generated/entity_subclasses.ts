@@ -14344,7 +14344,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunDetailID: z.string().describe(`
         * * Field Name: DuplicateRunDetailID
-        * * Display Name: Duplicate Run Detail ID
+        * * Display Name: Duplicate Run Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)`),
     MatchSource: z.union([z.literal('SP'), z.literal('Vector')]).describe(`
@@ -14359,7 +14359,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Either Vector or SP`),
     MatchRecordID: z.string().describe(`
         * * Field Name: MatchRecordID
-        * * Display Name: Match Record ID
+        * * Display Name: Matched Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record identified as a potential duplicate match.`),
     MatchProbability: z.number().describe(`
@@ -14393,7 +14393,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Current approval status of the proposed action (Pending, Approved, Rejected).`),
     RecordMergeLogID: z.string().nullable().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log ID
+        * * Display Name: Merge Log
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)`),
     MergeStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -14428,14 +14428,64 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Display Name: Record Metadata
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
+    AIAgentRunID: z.string().nullable().describe(`
+        * * Field Name: AIAgentRunID
+        * * Display Name: AI Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.`),
+    LLMRecommendation: z.union([z.literal('Merge'), z.literal('NotDuplicate'), z.literal('Uncertain')]).nullable().describe(`
+        * * Field Name: LLMRecommendation
+        * * Display Name: LLM Recommendation
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Merge
+    *   * NotDuplicate
+    *   * Uncertain
+        * * Description: The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.`),
+    LLMConfidence: z.number().nullable().describe(`
+        * * Field Name: LLMConfidence
+        * * Display Name: LLM Confidence
+        * * SQL Data Type: numeric(12, 11)
+        * * Description: Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.`),
+    LLMReasoning: z.string().nullable().describe(`
+        * * Field Name: LLMReasoning
+        * * Display Name: LLM Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.`),
+    LLMProposedSurvivorRecordID: z.string().nullable().describe(`
+        * * Field Name: LLMProposedSurvivorRecordID
+        * * Display Name: Proposed Survivor Record
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.`),
+    LLMProposedFieldMap: z.string().nullable().describe(`
+        * * Field Name: LLMProposedFieldMap
+        * * Display Name: Proposed Field Map
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.`),
     DuplicateRunDetail: z.string().describe(`
         * * Field Name: DuplicateRunDetail
-        * * Display Name: Duplicate Run Detail
+        * * Display Name: Duplicate Run Detail Object
         * * SQL Data Type: nvarchar(500)`),
     RecordMergeLog: z.string().nullable().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Record Merge Log
+        * * Display Name: Merge Log Object
         * * SQL Data Type: nvarchar(450)`),
+    AIAgentRun: z.string().nullable().describe(`
+        * * Field Name: AIAgentRun
+        * * Display Name: AI Agent Run Object
+        * * SQL Data Type: nvarchar(255)`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run Object
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJDuplicateRunDetailMatchEntityType = z.infer<typeof MJDuplicateRunDetailMatchSchema>;
@@ -16198,9 +16248,53 @@ export const MJEntityDocumentSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`),
+    EnableLLMReasoning: z.boolean().describe(`
+        * * Field Name: EnableLLMReasoning
+        * * Display Name: Enable LLM Reasoning
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`),
+    ReasoningMode: z.union([z.literal('Agent'), z.literal('Prompt')]).describe(`
+        * * Field Name: ReasoningMode
+        * * Display Name: Reasoning Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Prompt
+        * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`),
+    ReasoningThreshold: z.number().nullable().describe(`
+        * * Field Name: ReasoningThreshold
+        * * Display Name: Reasoning Threshold
+        * * SQL Data Type: numeric(12, 11)
+        * * Description: Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.`),
+    ReasoningPromptID: z.string().nullable().describe(`
+        * * Field Name: ReasoningPromptID
+        * * Display Name: Reasoning Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.`),
+    ReasoningAgentID: z.string().nullable().describe(`
+        * * Field Name: ReasoningAgentID
+        * * Display Name: Reasoning Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.`),
+    AutomationLevel: z.union([z.literal('AutoMergeAboveAbsolute'), z.literal('LLMGated'), z.literal('ReviewAll')]).describe(`
+        * * Field Name: AutomationLevel
+        * * Display Name: Automation Level
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ReviewAll
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AutoMergeAboveAbsolute
+    *   * LLMGated
+    *   * ReviewAll
+        * * Description: Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -16221,6 +16315,14 @@ export const MJEntityDocumentSchema = z.object({
     VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
         * * Display Name: Vector Index Name
+        * * SQL Data Type: nvarchar(255)`),
+    ReasoningPrompt: z.string().nullable().describe(`
+        * * Field Name: ReasoningPrompt
+        * * Display Name: Reasoning Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+    ReasoningAgent: z.string().nullable().describe(`
+        * * Field Name: ReasoningAgent
+        * * Display Name: Reasoning Agent Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -69344,7 +69446,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: DuplicateRunDetailID
-    * * Display Name: Duplicate Run Detail ID
+    * * Display Name: Duplicate Run Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)
     */
@@ -69375,7 +69477,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: MatchRecordID
-    * * Display Name: Match Record ID
+    * * Display Name: Matched Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record identified as a potential duplicate match.
     */
@@ -69449,7 +69551,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log ID
+    * * Display Name: Merge Log
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -69527,8 +69629,106 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
     }
 
     /**
+    * * Field Name: AIAgentRunID
+    * * Display Name: AI Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).
+    */
+    get AIAgentRunID(): string | null {
+        return this.Get('AIAgentRunID');
+    }
+    set AIAgentRunID(value: string | null) {
+        this.Set('AIAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: LLMRecommendation
+    * * Display Name: LLM Recommendation
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Merge
+    *   * NotDuplicate
+    *   * Uncertain
+    * * Description: The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.
+    */
+    get LLMRecommendation(): 'Merge' | 'NotDuplicate' | 'Uncertain' | null {
+        return this.Get('LLMRecommendation');
+    }
+    set LLMRecommendation(value: 'Merge' | 'NotDuplicate' | 'Uncertain' | null) {
+        this.Set('LLMRecommendation', value);
+    }
+
+    /**
+    * * Field Name: LLMConfidence
+    * * Display Name: LLM Confidence
+    * * SQL Data Type: numeric(12, 11)
+    * * Description: Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.
+    */
+    get LLMConfidence(): number | null {
+        return this.Get('LLMConfidence');
+    }
+    set LLMConfidence(value: number | null) {
+        this.Set('LLMConfidence', value);
+    }
+
+    /**
+    * * Field Name: LLMReasoning
+    * * Display Name: LLM Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.
+    */
+    get LLMReasoning(): string | null {
+        return this.Get('LLMReasoning');
+    }
+    set LLMReasoning(value: string | null) {
+        this.Set('LLMReasoning', value);
+    }
+
+    /**
+    * * Field Name: LLMProposedSurvivorRecordID
+    * * Display Name: Proposed Survivor Record
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.
+    */
+    get LLMProposedSurvivorRecordID(): string | null {
+        return this.Get('LLMProposedSurvivorRecordID');
+    }
+    set LLMProposedSurvivorRecordID(value: string | null) {
+        this.Set('LLMProposedSurvivorRecordID', value);
+    }
+
+    /**
+    * * Field Name: LLMProposedFieldMap
+    * * Display Name: Proposed Field Map
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.
+    */
+    get LLMProposedFieldMap(): string | null {
+        return this.Get('LLMProposedFieldMap');
+    }
+    set LLMProposedFieldMap(value: string | null) {
+        this.Set('LLMProposedFieldMap', value);
+    }
+
+    /**
     * * Field Name: DuplicateRunDetail
-    * * Display Name: Duplicate Run Detail
+    * * Display Name: Duplicate Run Detail Object
     * * SQL Data Type: nvarchar(500)
     */
     get DuplicateRunDetail(): string {
@@ -69537,11 +69737,29 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Record Merge Log
+    * * Display Name: Merge Log Object
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string | null {
         return this.Get('RecordMergeLog');
+    }
+
+    /**
+    * * Field Name: AIAgentRun
+    * * Display Name: AI Agent Run Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgentRun(): string | null {
+        return this.Get('AIAgentRun');
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
     }
 }
 
@@ -74019,8 +74237,100 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     }
 
     /**
+    * * Field Name: EnableLLMReasoning
+    * * Display Name: Enable LLM Reasoning
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.
+    */
+    get EnableLLMReasoning(): boolean {
+        return this.Get('EnableLLMReasoning');
+    }
+    set EnableLLMReasoning(value: boolean) {
+        this.Set('EnableLLMReasoning', value);
+    }
+
+    /**
+    * * Field Name: ReasoningMode
+    * * Display Name: Reasoning Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Prompt
+    * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.
+    */
+    get ReasoningMode(): 'Agent' | 'Prompt' {
+        return this.Get('ReasoningMode');
+    }
+    set ReasoningMode(value: 'Agent' | 'Prompt') {
+        this.Set('ReasoningMode', value);
+    }
+
+    /**
+    * * Field Name: ReasoningThreshold
+    * * Display Name: Reasoning Threshold
+    * * SQL Data Type: numeric(12, 11)
+    * * Description: Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.
+    */
+    get ReasoningThreshold(): number | null {
+        return this.Get('ReasoningThreshold');
+    }
+    set ReasoningThreshold(value: number | null) {
+        this.Set('ReasoningThreshold', value);
+    }
+
+    /**
+    * * Field Name: ReasoningPromptID
+    * * Display Name: Reasoning Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.
+    */
+    get ReasoningPromptID(): string | null {
+        return this.Get('ReasoningPromptID');
+    }
+    set ReasoningPromptID(value: string | null) {
+        this.Set('ReasoningPromptID', value);
+    }
+
+    /**
+    * * Field Name: ReasoningAgentID
+    * * Display Name: Reasoning Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.
+    */
+    get ReasoningAgentID(): string | null {
+        return this.Get('ReasoningAgentID');
+    }
+    set ReasoningAgentID(value: string | null) {
+        this.Set('ReasoningAgentID', value);
+    }
+
+    /**
+    * * Field Name: AutomationLevel
+    * * Display Name: Automation Level
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ReviewAll
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AutoMergeAboveAbsolute
+    *   * LLMGated
+    *   * ReviewAll
+    * * Description: Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).
+    */
+    get AutomationLevel(): 'AutoMergeAboveAbsolute' | 'LLMGated' | 'ReviewAll' {
+        return this.Get('AutomationLevel');
+    }
+    set AutomationLevel(value: 'AutoMergeAboveAbsolute' | 'LLMGated' | 'ReviewAll') {
+        this.Set('AutomationLevel', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {
@@ -74070,6 +74380,24 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     */
     get VectorIndex(): string | null {
         return this.Get('VectorIndex');
+    }
+
+    /**
+    * * Field Name: ReasoningPrompt
+    * * Display Name: Reasoning Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ReasoningPrompt(): string | null {
+        return this.Get('ReasoningPrompt');
+    }
+
+    /**
+    * * Field Name: ReasoningAgent
+    * * Display Name: Reasoning Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ReasoningAgent(): string | null {
+        return this.Get('ReasoningAgent');
     }
 }
 

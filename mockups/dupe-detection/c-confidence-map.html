@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe Detection · C — Confidence Map</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+    .layout { display:grid; grid-template-columns: 1fr 360px; gap:18px; padding:18px 20px; height:calc(100vh - 53px); }
+    .left-col { display:flex; flex-direction:column; gap:16px; overflow:auto; }
+
+    /* KPI strip */
+    .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; }
+    .kpi { padding:13px 15px; }
+    .kpi .n { font-size:24px; font-weight:800; letter-spacing:-.5px; }
+    .kpi .l { font-size:11.5px; color:var(--mj-text-muted); font-weight:600; margin-top:2px; }
+    .kpi.green .n{color:var(--rec-merge)} .kpi.amber .n{color:var(--rec-uncertain)} .kpi.red .n{color:var(--rec-notdupe)} .kpi.brand .n{color:var(--mj-brand-primary)}
+
+    /* plot */
+    .plot-card { padding:16px 18px 12px; flex:1; display:flex; flex-direction:column; min-height:520px; }
+    .plot-head { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
+    .plot-head h2 { font-size:15px; margin:0; }
+    .plot-head .spacer{flex:1}
+    .legend { display:flex; gap:14px; font-size:12px; color:var(--mj-text-secondary); }
+    .legend span { display:inline-flex; align-items:center; gap:6px; }
+    .legend .sw { width:11px; height:11px; border-radius:50%; }
+
+    .plot-wrap { flex:1; display:grid; grid-template-columns: 34px 1fr; grid-template-rows: 1fr 26px; gap:4px; }
+    .yaxis { writing-mode:vertical-rl; transform:rotate(180deg); text-align:center; font-size:11px; color:var(--mj-text-muted); font-weight:600; }
+    .xaxis { grid-column:2; text-align:center; font-size:11px; color:var(--mj-text-muted); font-weight:600; }
+    .plot {
+        position:relative; border-left:1.5px solid var(--mj-border-strong); border-bottom:1.5px solid var(--mj-border-strong);
+        background:
+          repeating-linear-gradient(to right, transparent, transparent calc(20% - 1px), var(--mj-border-subtle) 20%),
+          repeating-linear-gradient(to top, transparent, transparent calc(25% - 1px), var(--mj-border-subtle) 25%);
+        overflow:hidden;
+    }
+    /* zones */
+    .zone { position:absolute; font-size:10.5px; font-weight:700; letter-spacing:.3px; padding:6px 8px; text-transform:uppercase; }
+    .zone.auto    { right:0; top:0; width:16.7%; height:10%; background:color-mix(in srgb,var(--rec-merge) 14%,transparent); color:var(--rec-merge); border-left:1px dashed var(--rec-merge); border-bottom:1px dashed var(--rec-merge); }
+    .zone.disagree{ left:66.7%; bottom:0; width:33.3%; height:42%; background:color-mix(in srgb,var(--rec-notdupe) 9%,transparent); color:var(--rec-notdupe); border-left:1px dashed var(--rec-notdupe); border-top:1px dashed var(--rec-notdupe); display:flex; align-items:flex-end; }
+    .zone .znum { display:block; font-size:18px; }
+
+    /* threshold guide lines */
+    .vline { position:absolute; top:0; bottom:0; border-left:2px dashed; }
+    .vline .tag { position:absolute; top:4px; left:5px; font-size:10px; font-weight:700; white-space:nowrap; background:var(--mj-bg-surface); padding:1px 5px; border-radius:4px; }
+    .vline.reason { left:66.7%; border-color:var(--vector-accent); color:var(--vector-accent); }
+    .vline.absolute { left:83.3%; border-color:var(--rec-merge); color:var(--rec-merge); }
+    .agree-line { position:absolute; left:0; bottom:0; width:141%; height:0; border-top:1.5px dotted var(--mj-border-strong); transform-origin:bottom left; transform:rotate(-35deg); opacity:.6; }
+
+    .pt { position:absolute; border-radius:50%; transform:translate(-50%,50%); cursor:pointer; border:2px solid var(--mj-bg-surface); box-shadow:var(--mj-shadow-sm); }
+    .pt:hover { outline:3px solid color-mix(in srgb,var(--mj-brand-primary) 40%,transparent); z-index:5; }
+    .pt.merge   { background:var(--rec-merge); }
+    .pt.notdupe { background:var(--rec-notdupe); }
+    .pt.uncertain{ background:var(--rec-uncertain); }
+    .pt.flag::after { content:"⚠"; position:absolute; top:-9px; left:50%; transform:translateX(-50%); font-size:11px; }
+
+    .ptlabel { position:absolute; transform:translate(-50%,-140%); font-size:10.5px; font-weight:700; background:var(--mj-bg-surface); padding:1px 6px; border-radius:5px; border:1px solid var(--mj-border-default); white-space:nowrap; box-shadow:var(--mj-shadow-sm); }
+
+    /* threshold controls */
+    .controls { display:flex; gap:22px; align-items:center; padding:11px 16px; flex-wrap:wrap; }
+    .ctl { display:flex; flex-direction:column; gap:5px; min-width:220px; }
+    .ctl label { font-size:11.5px; color:var(--mj-text-muted); font-weight:600; display:flex; justify-content:space-between; }
+    .ctl label b { color:var(--mj-text-primary); }
+    input[type=range]{ accent-color:var(--mj-brand-primary); }
+
+    /* right column lists */
+    .right-col { display:flex; flex-direction:column; gap:16px; overflow:auto; }
+    .listcard { padding:0; overflow:hidden; }
+    .listcard .lh { display:flex; align-items:center; gap:8px; padding:13px 15px; border-bottom:1px solid var(--mj-border-default); font-weight:700; font-size:13px; }
+    .listcard .lh .spacer{flex:1}
+    .lrow { display:flex; align-items:center; gap:10px; padding:10px 15px; border-bottom:1px solid var(--mj-border-subtle); cursor:pointer; }
+    .lrow:hover { background:var(--mj-bg-surface-hover); }
+    .lrow .nm { font-weight:600; font-size:13px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lrow .sp { display:flex; align-items:center; gap:4px; font-size:11px; }
+    .lrow .sp .v{color:var(--vector-accent);font-weight:700}.lrow .sp .l{color:var(--mj-brand-primary);font-weight:700}.lrow .sp .a{color:var(--mj-text-disabled)}
+    .bulkbar { padding:12px 15px; display:flex; gap:10px; align-items:center; background:var(--mj-bg-surface-card); }
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Duplicate Detection <small>· mockups</small></div>
+    <div class="links">
+        <a href="index.html">Overview</a>
+        <a href="a-triage-queue.html">A · Triage Queue</a>
+        <a href="b-diff-reasoning.html">B · Diff + Reasoning</a>
+        <a href="c-confidence-map.html" class="active">C · Confidence Map</a>
+    </div>
+    <div class="spacer"></div>
+    <span class="pattern-tag">Pattern C — run-level oversight, threshold tuning &amp; disagreement triage at scale</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="layout">
+    <!-- ================= LEFT ================= -->
+    <div class="left-col">
+        <div class="kpis">
+            <div class="kpi card"><div class="n">184</div><div class="l">Match-sets reasoned</div></div>
+            <div class="kpi card green"><div class="n">89</div><div class="l">Auto-merge eligible</div></div>
+            <div class="kpi card brand"><div class="n">68</div><div class="l">Need review</div></div>
+            <div class="kpi card amber"><div class="n">27</div><div class="l">Uncertain</div></div>
+            <div class="kpi card red"><div class="n">12</div><div class="l">⚠ Disagreements</div></div>
+        </div>
+
+        <div class="controls card">
+            <div class="ctl">
+                <label>Reasoning threshold <b>0.90</b></label>
+                <input type="range" min="0.70" max="1.0" step="0.01" value="0.90">
+                <span class="tiny muted">below this, vectors only — no LLM call</span>
+            </div>
+            <div class="ctl">
+                <label>Absolute (auto-merge) threshold <b>0.95</b></label>
+                <input type="range" min="0.80" max="1.0" step="0.01" value="0.95">
+                <span class="tiny muted">at/above + LLM “Merge” → auto-execute</span>
+            </div>
+            <div class="ctl" style="min-width:170px;">
+                <label>Automation level</label>
+                <select class="btn" style="font-weight:600;">
+                    <option>LLM-Gated</option>
+                    <option>Review all</option>
+                    <option>Auto-merge ≥ absolute</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="plot-card card">
+            <div class="plot-head">
+                <h2>Vector similarity × LLM confidence</h2>
+                <div class="spacer"></div>
+                <div class="legend">
+                    <span><i class="sw" style="background:var(--rec-merge)"></i>Merge</span>
+                    <span><i class="sw" style="background:var(--rec-uncertain)"></i>Uncertain</span>
+                    <span><i class="sw" style="background:var(--rec-notdupe)"></i>Not dup</span>
+                    <span class="muted">○ size = dependents</span>
+                </div>
+            </div>
+            <div class="plot-wrap">
+                <div class="yaxis">LLM confidence  0 → 1.0</div>
+                <div class="plot">
+                    <!-- zones -->
+                    <div class="zone auto">Auto-merge<span class="znum">89</span></div>
+                    <div class="zone disagree">⚠ Vectors high · LLM low<br>disagreement band</div>
+                    <!-- guide lines -->
+                    <div class="vline reason"><span class="tag">reasoning ≥ .90</span></div>
+                    <div class="vline absolute"><span class="tag">absolute ≥ .95</span></div>
+                    <div class="agree-line"></div>
+
+                    <!-- merge cluster top-right -->
+                    <div class="pt merge" style="left:86.7%; bottom:98%; width:22px; height:22px;"></div>
+                    <div class="ptlabel" style="left:86.7%; bottom:98%;">Acme · 0.96→0.98</div>
+                    <div class="pt merge" style="left:96.7%; bottom:99%; width:16px; height:16px;"></div>
+                    <div class="ptlabel" style="left:96.7%; bottom:99%;">Stark</div>
+                    <div class="pt merge" style="left:80%; bottom:96%; width:18px; height:18px;"></div>
+                    <div class="pt merge" style="left:76.7%; bottom:95%; width:14px; height:14px;"></div>
+                    <div class="pt merge" style="left:90%; bottom:97%; width:12px; height:12px;"></div>
+                    <div class="pt merge" style="left:84%; bottom:94%; width:11px; height:11px;"></div>
+                    <div class="pt merge" style="left:93%; bottom:96.5%; width:13px; height:13px;"></div>
+                    <div class="pt merge" style="left:88%; bottom:92%; width:10px; height:10px;"></div>
+                    <div class="pt merge" style="left:78%; bottom:91%; width:10px; height:10px;"></div>
+                    <div class="pt merge" style="left:82%; bottom:88%; width:9px; height:9px;"></div>
+
+                    <!-- uncertain mid band -->
+                    <div class="pt uncertain" style="left:70%; bottom:58%; width:14px; height:14px;"></div>
+                    <div class="ptlabel" style="left:70%; bottom:58%;">Initech · .58</div>
+                    <div class="pt uncertain" style="left:66.7%; bottom:61%; width:18px; height:18px;"></div>
+                    <div class="ptlabel" style="left:66.7%; bottom:61%;">Umbrella</div>
+                    <div class="pt uncertain" style="left:73%; bottom:52%; width:11px; height:11px;"></div>
+                    <div class="pt uncertain" style="left:68%; bottom:46%; width:10px; height:10px;"></div>
+
+                    <!-- DISAGREEMENTS top-left: high vector, low LLM -->
+                    <div class="pt notdupe flag" style="left:90%; bottom:19%; width:18px; height:18px;"></div>
+                    <div class="ptlabel" style="left:90%; bottom:19%;">Northwind · 0.97→0.19</div>
+                    <div class="pt notdupe flag" style="left:73.3%; bottom:8%; width:14px; height:14px;"></div>
+                    <div class="ptlabel" style="left:73.3%; bottom:8%;">Soylent</div>
+                    <div class="pt notdupe flag" style="left:80%; bottom:14%; width:12px; height:12px;"></div>
+                    <div class="pt notdupe flag" style="left:85%; bottom:24%; width:11px; height:11px;"></div>
+                </div>
+                <div></div>
+                <div class="xaxis">Vector similarity  0.70 → 1.00</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= RIGHT ================= -->
+    <div class="right-col">
+        <div class="listcard card">
+            <div class="lh">⚠️ Disagreements <span class="chip disagree tiny">12</span><div class="spacer"></div><span class="tiny muted">vectors say dup, LLM doesn't</span></div>
+            <div class="lrow"><span class="chip notdupe tiny" style="width:24px;justify-content:center">▲</span><span class="nm">Northwind Traders</span><span class="sp"><span class="v">.97</span><span class="a">→</span><span class="l">.19</span></span></div>
+            <div class="lrow"><span class="chip notdupe tiny" style="width:24px;justify-content:center">▲</span><span class="nm">Soylent Corp</span><span class="sp"><span class="v">.92</span><span class="a">→</span><span class="l">.08</span></span></div>
+            <div class="lrow"><span class="chip notdupe tiny" style="width:24px;justify-content:center">▲</span><span class="nm">Hooli (West)</span><span class="sp"><span class="v">.94</span><span class="a">→</span><span class="l">.22</span></span></div>
+            <div class="lrow"><span class="chip notdupe tiny" style="width:24px;justify-content:center">▲</span><span class="nm">Pied Piper Test</span><span class="sp"><span class="v">.91</span><span class="a">→</span><span class="l">.31</span></span></div>
+            <div class="bulkbar"><button class="btn sm primary">Review all 12 →</button><span class="tiny muted">highest-value human attention</span></div>
+        </div>
+
+        <div class="listcard card">
+            <div class="lh">⚡ Auto-merge candidates <span class="chip merge tiny">89</span></div>
+            <div class="lrow"><span class="chip merge tiny" style="width:24px;justify-content:center">✓</span><span class="nm">Stark Industries</span><span class="sp"><span class="v">.99</span><span class="a">→</span><span class="l">.99</span></span></div>
+            <div class="lrow"><span class="chip merge tiny" style="width:24px;justify-content:center">✓</span><span class="nm">Acme Corporation</span><span class="sp"><span class="v">.96</span><span class="a">→</span><span class="l">.98</span></span></div>
+            <div class="lrow"><span class="chip merge tiny" style="width:24px;justify-content:center">✓</span><span class="nm">Wayne Enterprises</span><span class="sp"><span class="v">.95</span><span class="a">→</span><span class="l">.96</span></span></div>
+            <div class="bulkbar" style="flex-direction:column;align-items:stretch;gap:8px;">
+                <button class="btn sm success">⚡ Execute 89 auto-merges</button>
+                <span class="tiny muted">honors per-merge <span class="mono">AllowRecordMerge</span> guard · transactional · skips locked dependents with a logged reason</span>
+            </div>
+        </div>
+
+        <div class="listcard card">
+            <div class="lh">🧠 Learning loop <span class="chip brand tiny">Phase 2</span></div>
+            <div style="padding:13px 15px;" class="tiny muted">
+                After this run's decisions, a distillation pass proposes <b style="color:var(--mj-text-secondary)">2 candidate notes</b> for the Accounts memory scope:
+                <div class="memchip" style="margin-top:9px;"><span class="tag" style="color:var(--vector-accent)">＋</span><span>“Test/sandbox accounts (‘…Test’, ‘…West’) are usually NOT duplicates of production accounts.”</span></div>
+                <div class="memchip"><span class="tag" style="color:var(--vector-accent)">＋</span><span>“Prefer most-recently-verified phone/address over highest-dependency record.”</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+document.querySelectorAll('input[type=range]').forEach(r=>r.addEventListener('input',e=>{ e.target.previousElementSibling.querySelector('b').textContent=parseFloat(e.target.value).toFixed(2); }));
+</script>
+</body>
+</html>

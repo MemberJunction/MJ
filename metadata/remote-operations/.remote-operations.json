@@ -163,6 +163,32 @@
   },
   {
     "fields": {
+      "Name": "Compare Records",
+      "OperationKey": "RecordComparison.Compare",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Record Comparison",
+      "Description": "Load a set of an entity's records (by composite key, column 0 = survivor/reference) and compute the field-level delta matrix between them. Read-only. Returns the loaded records + per-field deltas. Implemented by RecordComparisonCompareServerOperation in @memberjunction/record-comparison.",
+      "InputTypeName": "RecordComparisonCompareInput",
+      "InputTypeDefinition": "@file:types/record-comparison-compare.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "RecordComparisonCompareOutput",
+      "OutputTypeDefinition": "@file:types/record-comparison-compare.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D0CD834E-E785-4680-8F4A-F32FD6BB445E"
+    },
+    "sync": {
+      "lastModified": "2026-06-26T21:57:14.330Z",
+      "checksum": "5efb711afa196d9b0dfcad8e63e45b0ec16fa98f7b47bb8dfb049dc6ee307735"
+    }
+  },
+  {
+    "fields": {
       "Name": "Train ML Model",
       "OperationKey": "PredictiveStudio.TrainModel",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
