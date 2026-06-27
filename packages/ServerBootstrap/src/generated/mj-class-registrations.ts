@@ -1108,7 +1108,7 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/core-actions (141 classes)
+// @memberjunction/core-actions (142 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1250,6 +1250,7 @@ import {
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
+    WriteEntityFieldsAction,
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
@@ -2198,6 +2199,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     VoidSignatureRequestAction,
     WebPageContentAction,
     WebSearchAction,
+    WriteEntityFieldsAction,
     XMLParserAction,
     AutotagAndVectorizeContentAction,
     ActionScheduledJobDriver,
@@ -2219,7 +2221,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 920;
+export const CLASS_REGISTRATIONS_COUNT = 921;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

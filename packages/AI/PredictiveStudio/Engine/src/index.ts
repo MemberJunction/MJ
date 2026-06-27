@@ -19,6 +19,9 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 // FeatureAssembly executor + as-of / leakage-guard correctness primitives (§5/§6).
 export * from './feature-assembly';
 
+// Training orchestration — TrainingEngine + its injected seams (§3/§4.3/§4.4/§8.2/§11).
+export * from './training';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.
@@ -32,6 +35,7 @@ export const PredictiveStudioEngineVersion = '5.43.0';
 //                              [Implemented — see ./feature-assembly]
 // TrainingEngine             — orchestrates /train against the Python sidecar,
 //                              persists immutable, versioned MJ: ML Models (§3/§4.3).
+//                              [Implemented — see ./training]
 // MLModelInferenceProcessor  — Record Set Processing work type for batch + single
 //                              -record scoring with optional write-back (§10).
 // ExperimentOrchestrator     — deterministic plan executor running iterations in

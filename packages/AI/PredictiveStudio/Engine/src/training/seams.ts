@@ -1,0 +1,123 @@
+/**
+ * @module training/seams
+ *
+ * Production implementations of the {@link TrainingDeps} seams — thin adapters
+ * over `Metadata.GetEntityObject`, `RunView`, and the Python sidecar
+ * ({@link MLSidecar} from `@memberjunction/predictive-studio-sidecar`). These are
+ * the only place the engine touches MJ's live data/inference plumbing; the
+ * orchestrator itself depends solely on the narrow interfaces, so unit tests
+ * substitute in-memory fakes and never need a DB or sidecar.
+ */
+
+import {
+  Metadata,
+  RunView,
+  type BaseEntity,
+  type UserInfo,
+  type IMetadataProvider,
+} from '@memberjunction/core';
+import type { MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
+import type { TrainRequest, TrainResponse, MatrixData } from '@memberjunction/predictive-studio-core';
+import { MLSidecar } from '@memberjunction/predictive-studio-sidecar';
+import type { IEntityFactory, IRecordLoader, ISidecarTrainer } from './types';
+
+/**
+ * `Metadata.GetEntityObject`-backed {@link IEntityFactory}. Optionally bound to a
+ * specific provider for multi-provider correctness.
+ */
+export class MetadataEntityFactory implements IEntityFactory {
+  private readonly md: Metadata;
+
+  /**
+   * @param provider optional provider; when omitted the global default is used
+   */
+  constructor(private readonly provider?: IMetadataProvider) {
+    this.md = new Metadata();
+  }
+
+  /** @inheritdoc */
+  public async getEntityObject<T extends BaseEntity>(entityName: string, contextUser?: UserInfo): Promise<T> {
+    return this.md.GetEntityObject<T>(entityName, contextUser);
+  }
+}
+
+/**
+ * `RunView`-backed {@link IRecordLoader}. Loads the pipeline as a full
+ * `entity_object` (it is read, not mutated) and computes the next version from a
+ * narrow `simple` projection over `MJ: ML Models`.
+ */
+export class RunViewRecordLoader implements IRecordLoader {
+  /** @inheritdoc */
+  public async loadPipeline(
+    pipelineId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<MJMLTrainingPipelineEntity | null> {
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const result = await rv.RunView<MJMLTrainingPipelineEntity>(
+      {
+        EntityName: 'MJ: ML Training Pipelines',
+        ExtraFilter: `ID='${pipelineId}'`,
+        ResultType: 'entity_object',
+        MaxRows: 1,
+      },
+      contextUser,
+    );
+    if (!result.Success || result.Results.length === 0) {
+      return null;
+    }
+    return result.Results[0];
+  }
+
+  /** @inheritdoc */
+  public async nextModelVersion(
+    pipelineId: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<number> {
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
+    const result = await rv.RunView<{ Version: number }>(
+      {
+        EntityName: 'MJ: ML Models',
+        ExtraFilter: `PipelineID='${pipelineId}'`,
+        Fields: ['Version'],
+        OrderBy: 'Version DESC',
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!result.Success || result.Results.length === 0) {
+      return 1;
+    }
+    return (result.Results[0].Version ?? 0) + 1;
+  }
+}
+
+/**
+ * {@link ISidecarTrainer} backed by the self-managing {@link MLSidecar} client.
+ * Lazily starts the sidecar on first use (managed or remote mode is decided by
+ * `MLSidecar` from options/env).
+ */
+export class MJSidecarTrainer implements ISidecarTrainer {
+  private started = false;
+
+  /**
+   * @param sidecar an `MLSidecar` instance (managed or remote)
+   */
+  constructor(private readonly sidecar: MLSidecar = new MLSidecar()) {}
+
+  /** @inheritdoc */
+  public async train(req: TrainRequest, _lockedHoldout?: MatrixData): Promise<TrainResponse> {
+    if (!this.started) {
+      await this.sidecar.start();
+      this.started = true;
+    }
+    // The current public sidecar `/train` contract takes a single `TrainRequest`;
+    // the locked holdout is carried in the request's data convention when the
+    // sidecar gains a holdout channel. Until then the engine still carves the
+    // holdout deterministically (so HoldoutMetrics provenance is honest) — see
+    // PS-SIDE-2 for wiring the holdout scoring into the Python `/train` path.
+    return this.sidecar.train(req);
+  }
+}
