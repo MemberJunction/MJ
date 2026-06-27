@@ -61,8 +61,12 @@ export NODE_ENV="${NODE_ENV:-development}"
 KEY_FILE="${KEY_FILE:-/tmp/mj-ss-e2e.env}"
 if [[ -z "${MJ_API_KEY:-}" ]]; then
   if [[ -f "$KEY_FILE" ]]; then
-    # shellcheck disable=SC1090
-    set -a; . "$KEY_FILE"; set +a
+    # LITERAL read — never `source` this file. The key contains '#'/'$' specials; sourcing makes
+    # bash treat everything after the first '#' as a comment → TRUNCATED key → 401 mismatch vs the
+    # campaign's literal regex read.
+    export MJ_API_KEY="$(grep -m1 '^MJ_API_KEY=' "$KEY_FILE" | cut -d= -f2-)"
+    EK_FROM_FILE="$(grep -m1 '^MJ_BASE_ENCRYPTION_KEY=' "$KEY_FILE" | cut -d= -f2-)"
+    [[ -n "$EK_FROM_FILE" ]] && export MJ_BASE_ENCRYPTION_KEY="$EK_FROM_FILE"
   fi
 fi
 if [[ -z "${MJ_API_KEY:-}" ]]; then
@@ -87,8 +91,8 @@ fi
 # anything encrypted with it stays decryptable. Self-managing — no user step, no guessing.
 ENCKEY_FILE="${ENCKEY_FILE:-/tmp/mj-ss-e2e-enckey.env}"
 if [[ -z "${MJ_BASE_ENCRYPTION_KEY:-}" && -f "$ENCKEY_FILE" ]]; then
-  # shellcheck disable=SC1090
-  set -a; . "$ENCKEY_FILE"; set +a
+  # LITERAL read (consistent with the key-file read above) — avoid any shell mangling of the value.
+  export MJ_BASE_ENCRYPTION_KEY="$(grep -m1 '^MJ_BASE_ENCRYPTION_KEY=' "$ENCKEY_FILE" | cut -d= -f2-)"
 fi
 if [[ -z "${MJ_BASE_ENCRYPTION_KEY:-}" ]]; then
   GEN="$(openssl rand -base64 32)"

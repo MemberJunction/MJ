@@ -148,7 +148,17 @@ function mockDiscoveryRoutes() {
     const paths = [
         '/services/rest/record/v1/metadata-catalog',   // NetSuite metadata catalog
     ];
-    return paths.map((Path) => ({ Path, Method: 'GET', Status: 200, Body: emptyCatalog, Headers: { 'content-type': 'application/json' } }));
+    const catalogRoutes = paths.map((Path) => ({ Path, Method: 'GET', Status: 200, Body: emptyCatalog, Headers: { 'content-type': 'application/json' } }));
+    // Microsoft Graph connection-probe: SharePoint/Dynamics TestConnection GETs `/organization?$select=...`
+    // and reads body.value[0].displayName. Serve a non-empty value array so the probe succeeds against the
+    // mock (specific path — cannot prefix-shadow a real data route). Without it, ConnectionTest fails →
+    // discovery/ApplyAll/sync cascade to 0 rows (the sharepoint 0/25 false-red).
+    const graphProbe = [{
+        Path: '/organization', Method: 'GET', Status: 200,
+        Body: JSON.stringify({ value: [{ id: 'mock-tenant-id', displayName: 'Mock Org' }] }),
+        Headers: { 'content-type': 'application/json' },
+    }];
+    return [...catalogRoutes, ...graphProbe];
 }
 
 /** Terminal catch-all SOQL routes: a Salesforce-family connector (Fonteva/Salesforce/Nimble) pages a
