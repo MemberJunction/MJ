@@ -12,6 +12,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 
 import { PredictiveStudioDashboardComponent } from './PredictiveStudio/predictive-studio-dashboard.component';
+import { PredictiveStudioResourceComponent } from './PredictiveStudio/predictive-studio-resource.component';
 import { PSHomeComponent } from './PredictiveStudio/components/ps-home.component';
 import { PSCatalogComponent } from './PredictiveStudio/components/ps-catalog.component';
 import { PSPipelinesComponent } from './PredictiveStudio/components/ps-pipelines.component';
@@ -29,7 +30,7 @@ import { PSCompareComponent } from './PredictiveStudio/components/ps-compare.com
  * components imported here.
  */
 @NgModule({
-  declarations: [PredictiveStudioDashboardComponent],
+  declarations: [PredictiveStudioDashboardComponent, PredictiveStudioResourceComponent],
   imports: [
     CommonModule,
     FormsModule,
@@ -47,7 +48,7 @@ import { PSCompareComponent } from './PredictiveStudio/components/ps-compare.com
     PSRegistryComponent,
     PSCompareComponent,
   ],
-  exports: [PredictiveStudioDashboardComponent],
+  exports: [PredictiveStudioDashboardComponent, PredictiveStudioResourceComponent],
 })
 export class PredictiveStudioDashboardsModule {}
 
@@ -55,3 +56,6 @@ export class PredictiveStudioDashboardsModule {}
 // generator can reach it via the subpath .d.ts and map BaseDashboard::PredictiveStudioDashboard
 // to this chunk. (Same pattern as ComponentStudioDashboardsModule.)
 export { PredictiveStudioDashboardComponent, LoadPredictiveStudioDashboard } from './PredictiveStudio/predictive-studio-dashboard.component';
+// Re-export the BaseResourceComponent wrapper (registered BaseResourceComponent::PredictiveStudioDashboard,
+// the nav-item DriverClass the shell resolver looks up) + its tree-shake-prevention loader.
+export { PredictiveStudioResourceComponent, LoadPredictiveStudioResource } from './PredictiveStudio/predictive-studio-resource.component';

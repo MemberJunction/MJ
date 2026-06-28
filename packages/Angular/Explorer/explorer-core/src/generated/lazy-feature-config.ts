@@ -49,7 +49,7 @@ const loadMcpModule = featureLoader(() => import('@memberjunction/ng-dashboards/
 // --- @memberjunction/ng-dashboards → ./module (3 entries) ---
 const loadModule = featureLoader(() => import('@memberjunction/ng-dashboards/module'));
 
-// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (1 entries) ---
+// --- @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module (2 entries) ---
 const loadPredictiveStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/predictive-studio-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./scheduling-dashboards.module (4 entries) ---
@@ -184,6 +184,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
   // @memberjunction/ng-dashboards → ./predictive-studio-dashboards.module
   'BaseDashboard::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
+  'BaseResourceComponent::PredictiveStudioDashboard': loadPredictiveStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./scheduling-dashboards.module
   'BaseDashboard::SchedulingDashboard': loadSchedulingDashboardsModule,
@@ -215,4 +216,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 107;
+export const LAZY_FEATURE_CONFIG_COUNT = 108;

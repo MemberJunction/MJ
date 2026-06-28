@@ -567,7 +567,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (94 classes)
+// @memberjunction/ng-dashboards (95 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -637,6 +637,7 @@ import {
     PermissionsUserAccessResourceComponent,
     PipelinesComponent,
     PredictiveStudioDashboardComponent,
+    PredictiveStudioResourceComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     RealtimeRecordingsDashboardComponent,
@@ -1232,6 +1233,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     PermissionsUserAccessResourceComponent,
     PipelinesComponent,
     PredictiveStudioDashboardComponent,
+    PredictiveStudioResourceComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     RealtimeRecordingsDashboardComponent,
@@ -1273,7 +1275,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 583;
+export const CLASS_REGISTRATIONS_COUNT = 584;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
