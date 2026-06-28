@@ -108,6 +108,20 @@
             "lastModified": "2026-06-27T15:16:02.599Z",
             "checksum": "5f0a699166de31bd10ae41641115c67192457c539a3f8473d58803fbbc6a5161"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Schedule Model Scoring",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "045B1E32-686E-409D-BC9A-3317A8FF54EF"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:22.293Z",
+            "checksum": "9c73345bcf5686928dd3bd765f997e0d38b7feb983d0824b22d253bc425dd1e1"
+          }
         }
       ],
       "MJ: AI Agents": [

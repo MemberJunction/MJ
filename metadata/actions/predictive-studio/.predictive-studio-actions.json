@@ -773,6 +773,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Id of the MJ: ML Models row to score with."
+          },
+          "primaryKey": {
+            "ID": "28864094-602A-4E03-8B76-6D88EA53C22F"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.085Z",
+            "checksum": "144e621bbb13ac7c3b79f5711b9c42457f9528abca0598c2ded39641c6c317e0"
           }
         },
         {
@@ -784,6 +791,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Name of the entity whose rows are scored and written (e.g. 'Memberships')."
+          },
+          "primaryKey": {
+            "ID": "7DD011D9-44D7-4447-AF4A-2B2A138DF2ED"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.115Z",
+            "checksum": "5822f138f7c01600275639532b8841f2fe4072cc0773f2bb164bdb7412dfae2a"
           }
         },
         {
@@ -795,6 +809,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The column on the target entity the prediction is written into (e.g. 'RenewalScore')."
+          },
+          "primaryKey": {
+            "ID": "B9DDA710-EFF0-49C4-971F-BCAD32D17549"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.150Z",
+            "checksum": "58c9ff75b1bd57dd5cd7fdbae2ac10eb384ffe65c6705a8bea9a008ddaa9fd4b"
           }
         },
         {
@@ -806,6 +827,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "SQL predicate over the target entity selecting which rows each scheduled run scores (e.g. \"Status='Active'\")."
+          },
+          "primaryKey": {
+            "ID": "CCB94B86-0A25-4F90-9509-14D377B0A960"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.183Z",
+            "checksum": "38f4d966516ddcb7700bee67711de0e4a1d96c3a0559863d9a88f4b08eba8abc"
           }
         },
         {
@@ -817,6 +845,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Recurrence: 'Monthly' (default — 1st of each month), 'Weekly', 'Daily', or a raw cron expression. When omitted, Monthly is used."
+          },
+          "primaryKey": {
+            "ID": "BAA36C09-E5BA-40BF-AA7F-973C6A91A1A8"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.208Z",
+            "checksum": "68a742485bff162019c4993d0fe733570e27664ebf362ffe607155c69b0dc4e0"
           }
         },
         {
@@ -828,6 +863,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Primary-key field on the target entity (defaults to 'ID')."
+          },
+          "primaryKey": {
+            "ID": "397A0324-AEA1-48B7-BEFD-A6FF34154E6F"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.233Z",
+            "checksum": "c1d36f9f9d9d35f47a7bfae0a4d89346daaeea6c9fadfb4ad0f263e2d04a8cb6"
           }
         },
         {
@@ -839,6 +881,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Which prediction value to write: 'score' (numeric probability/value — the default) or 'class' (predicted class label)."
+          },
+          "primaryKey": {
+            "ID": "7F74B025-A4A4-4019-8366-4E462687D392"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.257Z",
+            "checksum": "c9992518882aa5531536b3bb0f5481e7b70dd35253a3f728b0967713160a0c73"
           }
         },
         {
@@ -850,6 +899,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Id of the scheduled MJ: Record Processes row that was created (its owned MJ: Scheduled Jobs row is auto-created on save)."
+          },
+          "primaryKey": {
+            "ID": "ACF2D385-6A00-4FFF-BC37-95672763B966"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.278Z",
+            "checksum": "4f6f6b82a78ddda3f96df251f1c5c56ddca92380e65d36f09a96e8c63f5c7c25"
           }
         },
         {
@@ -861,6 +917,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The cron expression the scoring run recurs on."
+          },
+          "primaryKey": {
+            "ID": "8E7C4A49-B70F-4FBB-BAC2-67D815F17651"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.300Z",
+            "checksum": "42e6b360e4aa40db6857352e84637a8f56fe59522a1f355d6406d5a963268226"
           }
         }
       ],
@@ -871,6 +934,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "The scheduled scoring Record Process was created and saved (now live on its cadence)."
+          },
+          "primaryKey": {
+            "ID": "F385AEC0-31EE-4D8D-A5B3-23412918FC4F"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.328Z",
+            "checksum": "1c6c70740679568d83a3d575b31ef44b2d12883e4e7da91c3976d3e64ead0e67"
           }
         },
         {
@@ -879,6 +949,13 @@
             "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
             "Description": "A required param (ModelID / TargetEntityName / OutputField / ScopeFilter / ContextUser) is missing."
+          },
+          "primaryKey": {
+            "ID": "CD316F65-502C-4DF8-8813-9C5FF959DDA5"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.346Z",
+            "checksum": "053e9724b6f02ac60c973431d85f10c19ed47b4de013ecd0d74c371ac0e06328"
           }
         },
         {
@@ -887,9 +964,23 @@
             "ResultCode": "SCHEDULE_FAILED",
             "IsSuccess": false,
             "Description": "The target entity was unknown, or the Record Process failed to save."
+          },
+          "primaryKey": {
+            "ID": "AD6D3713-C7A2-4171-B2A3-E02C429B71DF"
+          },
+          "sync": {
+            "lastModified": "2026-06-28T22:12:20.363Z",
+            "checksum": "a94092f8a4c21bc594637274eae370825cc5bc2e9ff9764f76cb26523b2c1e35"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "BDB3CB57-F72B-4A01-8B41-571CD6B189E1"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T22:12:20.048Z",
+      "checksum": "235c098a3be2ec1579ed84a9cfc8fad0ae93a9604e71375a4b3c6074249aace7"
     }
   }
 ]
