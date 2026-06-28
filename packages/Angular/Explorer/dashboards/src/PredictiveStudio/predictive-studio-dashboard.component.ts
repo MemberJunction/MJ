@@ -24,6 +24,11 @@ interface NavItem {
 }
 
 /**
+ * @deprecated Superseded by the six top-nav section resources in `./resources/` (PredictiveStudio
+ * Home/Pipelines/Catalog/Experiments/Registry/Compare). Predictive Studio is now a multi-Nav-Item app
+ * (the canonical MJ shape — mirrors AI Administration) rather than this single monolithic left-nav
+ * dashboard. Kept declared for backward compatibility but no longer referenced by any Nav Item.
+ *
  * Predictive Studio — the world-class, lazy-loaded MJ Explorer dashboard for feature engineering,
  * predictive modeling, agent-driven model development, and scoring.
  *

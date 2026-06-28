@@ -5,6 +5,7 @@ import {
   MJButtonDirective,
   MJPageLayoutComponent,
   MJPageHeaderComponent,
+  MJPageHeaderInteriorComponent,
   MJPageBodyComponent,
   MJStatBadgeComponent,
 } from '@memberjunction/ng-ui-components';
@@ -20,23 +21,49 @@ import { PSExperimentsComponent } from './PredictiveStudio/components/ps-experim
 import { PSRegistryComponent } from './PredictiveStudio/components/ps-registry.component';
 import { PSCompareComponent } from './PredictiveStudio/components/ps-compare.component';
 
+import { PSHomeResourceComponent } from './PredictiveStudio/resources/ps-home-resource.component';
+import { PSPipelinesResourceComponent } from './PredictiveStudio/resources/ps-pipelines-resource.component';
+import { PSCatalogResourceComponent } from './PredictiveStudio/resources/ps-catalog-resource.component';
+import { PSExperimentsResourceComponent } from './PredictiveStudio/resources/ps-experiments-resource.component';
+import { PSRegistryResourceComponent } from './PredictiveStudio/resources/ps-registry-resource.component';
+import { PSCompareResourceComponent } from './PredictiveStudio/resources/ps-compare-resource.component';
+
 /**
- * PredictiveStudioDashboardsModule — the lazy-loadable feature chunk for the Predictive Studio
- * Explorer dashboard. Exported via a subpath in package.json
- * (`./predictive-studio-dashboards.module`) so the lazy-config generator maps
- * `BaseDashboard::PredictiveStudioDashboard` to this chunk.
+ * PredictiveStudioDashboardsModule — the lazy-loadable feature chunk for the Predictive Studio app.
+ * Exported via a subpath in package.json (`./predictive-studio-dashboards.module`) so the lazy-config
+ * generator + manifest map each Predictive Studio `BaseResourceComponent` DriverClass to this chunk.
  *
- * The dashboard shell is NgModule-declared (`standalone: false`); the six panels are standalone
- * components imported here.
+ * Predictive Studio is now a six-section top-nav app (the canonical MJ shape — mirrors AI
+ * Administration). Each section is a `BaseResourceComponent` (`PS*ResourceComponent`) registered under
+ * its own DriverClass and hosting one of the six standalone panels (`ps-home`, `ps-pipelines`, …):
+ *   - PredictiveStudioHomeResource         → ps-home
+ *   - PredictiveStudioPipelinesResource    → ps-pipelines
+ *   - PredictiveStudioCatalogResource      → ps-catalog
+ *   - PredictiveStudioExperimentsResource  → ps-experiments
+ *   - PredictiveStudioRegistryResource     → ps-registry
+ *   - PredictiveStudioCompareResource      → ps-compare
+ *
+ * The legacy monolithic `PredictiveStudioDashboardComponent` + its `PredictiveStudioResourceComponent`
+ * wrapper are kept declared (no longer referenced by any Nav Item) for backward compatibility.
  */
 @NgModule({
-  declarations: [PredictiveStudioDashboardComponent, PredictiveStudioResourceComponent],
+  declarations: [
+    PredictiveStudioDashboardComponent,
+    PredictiveStudioResourceComponent,
+    PSHomeResourceComponent,
+    PSPipelinesResourceComponent,
+    PSCatalogResourceComponent,
+    PSExperimentsResourceComponent,
+    PSRegistryResourceComponent,
+    PSCompareResourceComponent,
+  ],
   imports: [
     CommonModule,
     FormsModule,
     MJButtonDirective,
     MJPageLayoutComponent,
     MJPageHeaderComponent,
+    MJPageHeaderInteriorComponent,
     MJPageBodyComponent,
     MJStatBadgeComponent,
     SharedGenericModule,
@@ -48,14 +75,30 @@ import { PSCompareComponent } from './PredictiveStudio/components/ps-compare.com
     PSRegistryComponent,
     PSCompareComponent,
   ],
-  exports: [PredictiveStudioDashboardComponent, PredictiveStudioResourceComponent],
+  exports: [
+    PredictiveStudioDashboardComponent,
+    PredictiveStudioResourceComponent,
+    PSHomeResourceComponent,
+    PSPipelinesResourceComponent,
+    PSCatalogResourceComponent,
+    PSExperimentsResourceComponent,
+    PSRegistryResourceComponent,
+    PSCompareResourceComponent,
+  ],
 })
 export class PredictiveStudioDashboardsModule {}
 
-// Re-export the @RegisterClass-decorated dashboard from this subpath module so the lazy-config
-// generator can reach it via the subpath .d.ts and map BaseDashboard::PredictiveStudioDashboard
-// to this chunk. (Same pattern as ComponentStudioDashboardsModule.)
+// Re-export the @RegisterClass-decorated classes from this subpath module so the lazy-config generator
+// + manifest can reach them via the subpath .d.ts and map each DriverClass to this chunk.
+
+// Legacy monolith (kept for backward compatibility; no longer referenced by any Nav Item).
 export { PredictiveStudioDashboardComponent, LoadPredictiveStudioDashboard } from './PredictiveStudio/predictive-studio-dashboard.component';
-// Re-export the BaseResourceComponent wrapper (registered BaseResourceComponent::PredictiveStudioDashboard,
-// the nav-item DriverClass the shell resolver looks up) + its tree-shake-prevention loader.
 export { PredictiveStudioResourceComponent, LoadPredictiveStudioResource } from './PredictiveStudio/predictive-studio-resource.component';
+
+// The six top-nav section resources + their tree-shake-prevention loaders.
+export { PSHomeResourceComponent, LoadPSHomeResource } from './PredictiveStudio/resources/ps-home-resource.component';
+export { PSPipelinesResourceComponent, LoadPSPipelinesResource } from './PredictiveStudio/resources/ps-pipelines-resource.component';
+export { PSCatalogResourceComponent, LoadPSCatalogResource } from './PredictiveStudio/resources/ps-catalog-resource.component';
+export { PSExperimentsResourceComponent, LoadPSExperimentsResource } from './PredictiveStudio/resources/ps-experiments-resource.component';
+export { PSRegistryResourceComponent, LoadPSRegistryResource } from './PredictiveStudio/resources/ps-registry-resource.component';
+export { PSCompareResourceComponent, LoadPSCompareResource } from './PredictiveStudio/resources/ps-compare-resource.component';

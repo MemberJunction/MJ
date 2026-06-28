@@ -8,11 +8,41 @@
     "Color": "#2050c8",
     "DefaultNavItems": [
       {
-        "Label": "Predictive Studio",
-        "Icon": "fa-solid fa-wand-magic-sparkles",
+        "Label": "Home",
+        "Icon": "fa-solid fa-gauge-high",
         "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioDashboard",
+        "DriverClass": "PredictiveStudioHomeResource",
         "isDefault": true
+      },
+      {
+        "Label": "Training Pipelines",
+        "Icon": "fa-solid fa-diagram-project",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioPipelinesResource"
+      },
+      {
+        "Label": "Algorithm Catalog",
+        "Icon": "fa-solid fa-shapes",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioCatalogResource"
+      },
+      {
+        "Label": "Experiments",
+        "Icon": "fa-solid fa-flask",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioExperimentsResource"
+      },
+      {
+        "Label": "Model Registry",
+        "Icon": "fa-solid fa-cubes",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioRegistryResource"
+      },
+      {
+        "Label": "Compare Runs",
+        "Icon": "fa-solid fa-chart-column",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioCompareResource"
       }
     ]
   },
@@ -23,7 +53,7 @@
     "ID": "299C9272-8D38-40CA-85D4-0980F2C9FAD1"
   },
   "sync": {
-    "lastModified": "2026-06-27T15:16:03.055Z",
-    "checksum": "fa6617b725b90c46e0d7625fcc53e9bc5e33801694388f3d7f1cc1ac563943cc"
+    "lastModified": "2026-06-28T01:58:51.979Z",
+    "checksum": "7cef4aa92e7857e91659851db7dab7251fee368122f20cf14382380ed83cd090"
   }
 }

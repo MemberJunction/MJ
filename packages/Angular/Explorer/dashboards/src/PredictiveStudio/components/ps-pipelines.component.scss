@@ -2,13 +2,29 @@
 .ps-pipelines .builder { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
 @media (max-width: 1080px) { .ps-pipelines .builder { grid-template-columns: 1fr; } }
 
-.ps-pipelines .canvas-wrap { display: flex; flex-direction: column; }
+.ps-pipelines .canvas-wrap { display: flex; flex-direction: column; min-width: 0; }
 .ps-pipelines .palette {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
   border-bottom: none; border-radius: 10px 10px 0 0; padding: 12px 14px;
 }
-.ps-pipelines .ps-flow.big { border-radius: 0; min-height: 620px; }
+/* The DAG canvas is sized in px by the layered layout (inline width/height) and
+   may exceed the 1fr column width, so allow it to scroll rather than clip the
+   right-most layers. min-height keeps an empty/short graph from collapsing. */
+.ps-pipelines .ps-flow.big {
+  border-radius: 0;
+  min-height: 620px;
+  max-width: 100%;
+  overflow: auto;
+}
+/* Pin every node to a fixed height so its port (top:50%) lines up exactly with
+   the SVG edge anchor (node.y + NODE_H/2). NODE_H in the component = 86. */
+.ps-pipelines .ps-flow.big .ps-node {
+  height: 86px;
+  display: flex;
+  flex-direction: column;
+}
+.ps-pipelines .ps-flow.big .ps-node .nb { flex: 1; min-height: 0; }
 .ps-pipelines .flow-toolbar {
   display: flex; align-items: center; gap: 8px;
   background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default);
