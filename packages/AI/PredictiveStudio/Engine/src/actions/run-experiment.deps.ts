@@ -20,7 +20,7 @@ import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { MJFilesArtifactStore } from '../training/artifact-store';
+import { resolveActiveFileStorageProviderId, buildArtifactStore } from '../training/artifact-store';
 import type { TrainingDeps } from '../training/types';
 import {
   SystemClock,
@@ -53,19 +53,26 @@ export class UnresolvedPipelineResolver implements IPipelineResolver {
  * is composed here and handed to the {@link TrainingEngineExperimentTrainer} so
  * each iteration trains through the real {@link TrainingEngine}.
  *
+ * The artifact store is built the same way the standalone training path builds it:
+ * resolve the active `MJ: File Storage Providers` id (see
+ * {@link resolveActiveFileStorageProviderId}) and stamp it on the store, which
+ * creates a real `MJ: Files` row and writes the bytes to local disk keyed by that
+ * id (dev / on-prem). Async so the provider lookup is part of the wiring.
+ *
  * @param contextUser request user — threaded for isolation/audit
  * @param provider optional provider for multi-provider correctness
  */
-export function buildProductionExperimentDeps(
+export async function buildProductionExperimentDeps(
   contextUser?: UserInfo,
   provider?: IMetadataProvider,
-): ExperimentDeps {
+): Promise<ExperimentDeps> {
   const entityFactory = new MetadataEntityFactory(provider);
+  const providerId = await resolveActiveFileStorageProviderId(contextUser, provider);
   const trainingDeps: TrainingDeps = {
     entityFactory,
     recordLoader: new RunViewRecordLoader(),
     sidecar: new MJSidecarTrainer(),
-    artifactStore: new MJFilesArtifactStore(entityFactory),
+    artifactStore: buildArtifactStore(providerId, entityFactory),
     contextUser,
     provider,
   };

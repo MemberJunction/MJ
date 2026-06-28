@@ -56,7 +56,7 @@ class TestableExperimentAction extends PredictiveStudioRunExperimentAction {
   protected override createOrchestrator(): ExperimentOrchestrator {
     return this.orchestrator;
   }
-  protected override buildDeps(): ExperimentDeps {
+  protected override async buildDeps(): Promise<ExperimentDeps> {
     return inertDeps();
   }
   public run(params: RunActionParams): Promise<ActionResultSimple> {

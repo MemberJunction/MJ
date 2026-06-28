@@ -22,7 +22,7 @@ import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { MJFilesArtifactStore } from '../training/artifact-store';
+import { resolveActiveFileStorageProviderId, buildArtifactStore } from '../training/artifact-store';
 import type { TrainModelInput, TrainModelResult, TrainingDeps } from '../training/types';
 
 import { ExperimentOrchestrator } from '../experiment/experiment-orchestrator';
@@ -30,6 +30,9 @@ import type { ExperimentRunOptions, ExperimentSessionResult } from '../experimen
 import { buildProductionExperimentDeps } from '../actions/run-experiment.deps';
 
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
+import { RunViewMLModelLoader, MJSidecarPredictor } from '../scoring/seams';
+import { LocalArtifactLoader } from '../scoring/artifact-loader';
+import type { MLInferenceDeps } from '../scoring/types';
 import type {
   IScoreRecordSetRunner,
   ScoreRecordSetRequest,
@@ -52,19 +55,24 @@ import type {
 
 /**
  * Build the {@link TrainingEngine}'s production dependency bundle from a per-call
- * `provider` + `user`. Identical to the wiring the Train action's `buildDeps`
- * performs — extracted so the Remote Op and the Action train through one path.
+ * `provider` + `user`. Resolves the active File Storage Provider once and chooses
+ * the artifact-store family accordingly (MJ-Files when a provider is active, local
+ * disk when none is — see {@link resolveActiveFileStorageProviderId}). Async so the
+ * provider lookup is part of the wiring; the scoring side keys off the SAME
+ * decision (the composite loader routes by whether the artifact exists on local
+ * disk) so a model never gets trained to one family and scored from another.
  *
  * @param provider the owning provider for data access / multi-provider correctness
  * @param user the acting user threaded through every entity op for isolation/audit
  */
-export function buildTrainingDeps(provider: IMetadataProvider, user: UserInfo): TrainingDeps {
+export async function buildTrainingDeps(provider: IMetadataProvider, user: UserInfo): Promise<TrainingDeps> {
   const entityFactory = new MetadataEntityFactory(provider);
+  const providerId = await resolveActiveFileStorageProviderId(user, provider);
   return {
     entityFactory,
     recordLoader: new RunViewRecordLoader(),
     sidecar: new MJSidecarTrainer(),
-    artifactStore: new MJFilesArtifactStore(entityFactory),
+    artifactStore: buildArtifactStore(providerId, entityFactory),
     contextUser: user,
     provider,
   };
@@ -80,13 +88,13 @@ export function buildTrainingDeps(provider: IMetadataProvider, user: UserInfo): 
  * @param user the acting user
  * @param engine optional engine override (defaults to a fresh {@link TrainingEngine})
  */
-export function trainModelViaEngine(
+export async function trainModelViaEngine(
   input: TrainModelInput,
   provider: IMetadataProvider,
   user: UserInfo,
   engine: TrainingEngine = new TrainingEngine(),
 ): Promise<TrainModelResult> {
-  return engine.trainModel(input, buildTrainingDeps(provider, user));
+  return engine.trainModel(input, await buildTrainingDeps(provider, user));
 }
 
 /**
@@ -101,16 +109,36 @@ export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
 // ----- Scoring ----------------------------------------------------------------
 
 /**
+ * Build the production scoring runner wired with the single {@link LocalArtifactLoader}
+ * — the read-side inverse of `MJFilesArtifactStore`. The model's `ArtifactFileID` is
+ * the real `MJ: Files` row id the bytes were stored under, and the loader reads them
+ * from local disk by that id (dev / on-prem). No provider lookup is needed at score
+ * time — the File id IS the artifact key.
+ *
+ * **Production follow-up**: swap `LocalArtifactLoader` for a provider `GetObject`
+ * loader; the id contract (read by File id) is unchanged.
+ */
+export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
+  const deps: MLInferenceDeps = {
+    modelLoader: new RunViewMLModelLoader(),
+    sidecar: new MJSidecarPredictor(),
+    artifactLoader: new LocalArtifactLoader(),
+  };
+  return new ProductionScoreRecordSetRunner({ deps });
+}
+
+/**
  * Score a record set, delegating to the SAME production runner the Score action
  * uses ({@link ProductionScoreRecordSetRunner} → `MLModelInferenceProcessor`). The
- * `runner` is injectable for tests.
+ * default runner is wired with the {@link LocalArtifactLoader} so the artifact is
+ * read back by its `MJ: Files` row id. The `runner` is injectable for tests.
  *
  * @param request the model id + resolved scope + write-back directive + user/provider
- * @param runner optional runner override (defaults to {@link ProductionScoreRecordSetRunner})
+ * @param runner optional runner override (defaults to {@link buildScoreRecordSetRunner})
  */
 export function scoreRecordSetViaRunner(
   request: ScoreRecordSetRequest,
-  runner: IScoreRecordSetRunner = new ProductionScoreRecordSetRunner(),
+  runner: IScoreRecordSetRunner = buildScoreRecordSetRunner(),
 ): Promise<ScoreRecordSetResult> {
   return runner.run(request);
 }
@@ -129,14 +157,14 @@ export function scoreRecordSetViaRunner(
  * @param user the acting user
  * @param orchestrator optional orchestrator override (defaults to {@link ExperimentOrchestrator})
  */
-export function runExperimentSessionViaOrchestrator(
+export async function runExperimentSessionViaOrchestrator(
   plan: ModelingPlanSpec,
   options: ExperimentRunOptions,
   provider: IMetadataProvider,
   user: UserInfo,
   orchestrator: ExperimentOrchestrator = new ExperimentOrchestrator(),
 ): Promise<ExperimentSessionResult> {
-  return orchestrator.runSession(plan, buildProductionExperimentDeps(user, provider), options);
+  return orchestrator.runSession(plan, await buildProductionExperimentDeps(user, provider), options);
 }
 
 // ----- Promotion --------------------------------------------------------------

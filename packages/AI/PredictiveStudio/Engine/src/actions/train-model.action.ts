@@ -21,7 +21,7 @@ import { BaseAction } from '@memberjunction/actions';
 
 import { TrainingEngine } from '../training/training-engine';
 import { MetadataEntityFactory, RunViewRecordLoader, MJSidecarTrainer } from '../training/seams';
-import { MJFilesArtifactStore } from '../training/artifact-store';
+import { resolveActiveFileStorageProviderId, buildArtifactStore } from '../training/artifact-store';
 import type { TrainingDeps, TrainModelResult } from '../training/types';
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 
@@ -48,7 +48,7 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
       const maxRows = this.getNumericParam(params, 'MaxRows');
 
       const engine = this.createEngine();
-      const deps = this.buildDeps(params);
+      const deps = await this.buildDeps(params);
 
       const result = await engine.trainModel({ pipelineId, maxRows }, deps);
       return this.mapResult(params, result);
@@ -94,15 +94,20 @@ export class PredictiveStudioTrainModelAction extends BasePredictiveStudioAction
   /**
    * Build the engine's production dependency bundle from the action's run params
    * (threading `ContextUser` + `Provider` for isolation/multi-provider
-   * correctness). Overridable so tests inject in-memory seams.
+   * correctness). Resolves the active File Storage Provider once and picks the
+   * artifact-store family accordingly (MJ-Files when a provider is active, local
+   * disk when none is — the dev/on-prem fallback; see
+   * {@link resolveActiveFileStorageProviderId}). Async so the provider lookup is
+   * part of the wiring; overridable so tests inject in-memory seams.
    */
-  protected buildDeps(params: RunActionParams): TrainingDeps {
+  protected async buildDeps(params: RunActionParams): Promise<TrainingDeps> {
     const entityFactory = new MetadataEntityFactory(params.Provider);
+    const providerId = await resolveActiveFileStorageProviderId(params.ContextUser, params.Provider);
     return {
       entityFactory,
       recordLoader: new RunViewRecordLoader(),
       sidecar: new MJSidecarTrainer(),
-      artifactStore: new MJFilesArtifactStore(entityFactory),
+      artifactStore: buildArtifactStore(providerId, entityFactory),
       contextUser: params.ContextUser,
       provider: params.Provider,
     };

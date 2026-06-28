@@ -31,7 +31,7 @@ import type {
   WriteBackDirective,
 } from '../actions/score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../actions/score-record-set.runner';
-import { scoreRecordSetViaRunner } from './delegation';
+import { scoreRecordSetViaRunner, buildScoreRecordSetRunner } from './delegation';
 
 /**
  * Server implementation of `PredictiveStudio.ScoreRecordSet`. Extends the
@@ -114,7 +114,10 @@ export class PredictiveStudioScoreRecordSetServerOperation extends PredictiveStu
    * the `MLModelInferenceProcessor` — the SAME path the Score action uses.
    */
   protected runner(): IScoreRecordSetRunner {
-    return new ProductionScoreRecordSetRunner();
+    // Use the loader-wired factory so the runner can read the persisted model
+    // artifact at score time (a bare `new ProductionScoreRecordSetRunner()` has
+    // no artifact loader → "no artifact loader is configured").
+    return buildScoreRecordSetRunner();
   }
 }
 

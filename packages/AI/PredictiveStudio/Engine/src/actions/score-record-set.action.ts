@@ -59,6 +59,14 @@ export interface ScoreRecordSetRequest {
   modelId: string;
   scope: ScoringScope;
   writeBack?: WriteBackDirective;
+  /**
+   * When `true`, predictions are computed but NOT persisted — even if `writeBack`
+   * supplies an `OutputMapping`. The run summary still reports the scored/failed
+   * counts and surfaces the (ephemeral) predictions, but `wroteBack` stays `false`.
+   * Mirrors the first-class `ProcessRun.DryRun` flag in the Record Set Processing
+   * substrate so "preview without mutating" works the same way through this action.
+   */
+  dryRun?: boolean;
   contextUser?: UserInfo;
   provider?: IMetadataProvider;
 }

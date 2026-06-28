@@ -50,7 +50,7 @@ class TestableTrainAction extends PredictiveStudioTrainModelAction {
   protected override createEngine(): TrainingEngine {
     return this.engine;
   }
-  protected override buildDeps(): TrainingDeps {
+  protected override async buildDeps(): Promise<TrainingDeps> {
     return inertDeps();
   }
   public run(params: RunActionParams): Promise<ActionResultSimple> {

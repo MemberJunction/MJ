@@ -17,11 +17,15 @@
 
 import {
   RunView,
+  CompositeKey,
+  LogError,
   type UserInfo,
   type IMetadataProvider,
+  type EntityInfo,
   Metadata,
 } from '@memberjunction/core';
-import type { BaseEntity } from '@memberjunction/core';
+import { BaseEntity } from '@memberjunction/core';
+import { resolveMappingRef } from '@memberjunction/global';
 import type { RecordRef, RecordProcessorContext, RecordResult } from '@memberjunction/record-set-processor-base';
 
 import { MLModelInferenceProcessor } from '../scoring/ml-model-inference-processor';
@@ -34,8 +38,29 @@ import type {
   ScoreRecordSetResult,
   ScoringScope,
   EphemeralPrediction,
+  WriteBackDirective,
 } from './score-record-set.action';
 import type { JsonObject } from './base-predictive-studio.action';
+
+/**
+ * The declarative write-back shape this runner applies — IDENTICAL in meaning to
+ * the Record Set Processing substrate's `OutputMappingConfig`
+ * (`@memberjunction/record-set-processor`). Keys are **entity field names** on the
+ * scored record; values are **result references** resolved against the prediction
+ * payload via the shared {@link resolveMappingRef} resolver, where `$` is the
+ * payload root. So `{ "PredictedClass": "$.class", "ChurnProbability": "$.score" }`
+ * writes the prediction's `class` into `PredictedClass` and its `score` into
+ * `ChurnProbability`. Matching the substrate exactly keeps one mental model for
+ * write-back across the Action / Agent / Infer / ML-Model work types.
+ *
+ * Only the field-update form is honored here (the `MLInferenceResultPayload` is a
+ * flat score/class — there is no child-record fan-out to map). The substrate's
+ * optional `childRecord` shape is intentionally not part of the scoring path.
+ */
+interface ScoringOutputMapping {
+  /** Map of `EntityFieldName -> resultRef` (e.g. `{ "Score": "$.score" }`). */
+  fields?: Record<string, string>;
+}
 
 /** Options for {@link ProductionScoreRecordSetRunner}. */
 export interface ProductionScoreRecordSetRunnerOptions {
@@ -72,7 +97,12 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     const context = this.buildContext(request);
     const results = await processor.ProcessBatch(records, context);
 
-    return this.summarize(records, results, request);
+    // When an explicit OutputMapping was supplied (and this is not a dry run),
+    // persist each succeeded record's prediction into the mapped entity field(s).
+    // Records whose Save fails are reclassified Succeeded -> Failed in the summary.
+    const writeBack = await this.applyWriteBack(records, results, request, context);
+
+    return this.summarize(records, results, request, writeBack);
   }
 
   // ----- scope resolution ------------------------------------------------------
@@ -316,6 +346,162 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
     return '';
   }
 
+  // ----- write-back ------------------------------------------------------------
+
+  /**
+   * Persist predictions back onto the scored records per the request's write-back
+   * `OutputMapping`, returning a {@link WriteBackOutcome} the summary folds in.
+   *
+   * No-ops (and reports `wroteBack: false`) when:
+   * - write-back is not requested, or is the boolean form (no explicit mapping — a
+   *   default-mapping write-back is owned by the higher Record Process layer, not
+   *   this runner), or
+   * - `request.dryRun` is `true` (compute-only — predictions are surfaced but never
+   *   persisted, matching `ProcessRun.DryRun` in the substrate).
+   *
+   * Otherwise, for each **Succeeded** record (paired 1:1 with `records` in order),
+   * it resolves the target {@link BaseEntity}, validates + applies the mapped
+   * fields, and `Save()`s. A record whose Save fails is recorded in
+   * `failedIndexes` so {@link summarize} can move it from scored -> failed.
+   */
+  protected async applyWriteBack(
+    records: RecordRef[],
+    results: RecordResult[],
+    request: ScoreRecordSetRequest,
+    context: RecordProcessorContext,
+  ): Promise<WriteBackOutcome> {
+    const mapping = this.resolveOutputMapping(request.writeBack);
+    if (!mapping || request.dryRun) {
+      return { wroteBack: false, failedIndexes: new Set<number>() };
+    }
+
+    const failedIndexes = new Set<number>();
+    let anyWritten = false;
+    const pairCount = Math.min(records.length, results.length);
+    for (let i = 0; i < pairCount; i++) {
+      const result = results[i];
+      if (result.Status !== 'Succeeded') {
+        continue; // only persist predictions for records that actually scored
+      }
+      const payload = result.ResultPayload as MLInferenceResultPayload | undefined;
+      const ok = await this.writeBackRecord(records[i], payload, mapping, context);
+      if (ok) {
+        anyWritten = true;
+      } else {
+        failedIndexes.add(i);
+      }
+    }
+
+    return { wroteBack: anyWritten, failedIndexes };
+  }
+
+  /**
+   * Resolve the explicit field-mapping out of the write-back directive. Returns
+   * `undefined` for the boolean form or a malformed/empty mapping (treated as
+   * "no write-back to apply here").
+   */
+  protected resolveOutputMapping(directive: WriteBackDirective | undefined): ScoringOutputMapping | undefined {
+    if (!directive || directive === true) {
+      return undefined;
+    }
+    const raw = directive.OutputMapping as { fields?: unknown };
+    const fields = raw?.fields;
+    if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+      return undefined;
+    }
+    const normalized: Record<string, string> = {};
+    for (const [field, ref] of Object.entries(fields as Record<string, unknown>)) {
+      if (typeof ref === 'string') {
+        normalized[field] = ref;
+      }
+    }
+    return Object.keys(normalized).length > 0 ? { fields: normalized } : undefined;
+  }
+
+  /**
+   * Apply the mapping to ONE record's prediction and Save it. Resolves the target
+   * `BaseEntity` (reusing the preloaded `.Record` when present, else loading by id
+   * via the provider), validates every mapped field name against the entity's real
+   * fields (rejecting unknown names — mirroring the PK-name validation in
+   * {@link primaryKeyFilter}), sets the resolved values via the config-driven
+   * `Set` accessor, and Saves. Returns `true` on a successful Save, `false` on any
+   * failure (logged) so the caller can reclassify the record as failed.
+   */
+  protected async writeBackRecord(
+    record: RecordRef,
+    payload: MLInferenceResultPayload | undefined,
+    mapping: ScoringOutputMapping,
+    context: RecordProcessorContext,
+  ): Promise<boolean> {
+    try {
+      const entity = await this.resolveTargetEntity(record, context);
+      this.assertMappedFieldsExist(entity.EntityInfo, mapping);
+      // `$` is the prediction payload root; `record` exposes the source row — the
+      // SAME source contract the substrate's `applyOutputMapping` uses.
+      const sources: Record<string, unknown> = { $: payload ?? {}, record: record.Record ?? {} };
+      for (const [field, ref] of Object.entries(mapping.fields ?? {})) {
+        // Config-driven field name (no compile-time property) — the legitimate
+        // use of Set(), exactly as the substrate's write-back does.
+        entity.Set(field, resolveMappingRef(ref, sources));
+      }
+      const saved = await entity.Save();
+      if (!saved) {
+        LogError(
+          `Score Record Set: write-back Save failed for record '${record.RecordID}': ` +
+            `${entity.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+        );
+      }
+      return saved;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      LogError(`Score Record Set: write-back failed for record '${record.RecordID}': ${message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Resolve the strongly-typed target {@link BaseEntity} for a record. Most scopes
+   * carry the already-loaded entity on `.Record`; reuse it (no extra DB round-trip)
+   * when it is a real `BaseEntity`. Otherwise (id-only `records`/`single` refs)
+   * load it from the provider via the record's `EntityID` + single-column PK using
+   * the request user, so write-back works regardless of how the scope was resolved.
+   */
+  protected async resolveTargetEntity(record: RecordRef, context: RecordProcessorContext): Promise<BaseEntity> {
+    if (record.Record instanceof BaseEntity) {
+      return record.Record;
+    }
+    const entityInfo = context.provider.EntityByID(record.EntityID);
+    if (!entityInfo) {
+      throw new Error(`entity '${record.EntityID}' not found in metadata; cannot write back prediction.`);
+    }
+    if (entityInfo.PrimaryKeys.length !== 1) {
+      throw new Error(`write-back supports single-primary-key entities only ('${entityInfo.Name}').`);
+    }
+    const obj = await context.provider.GetEntityObject<BaseEntity>(entityInfo.Name, context.contextUser);
+    const loaded = await obj.InnerLoad(CompositeKey.FromKeyValuePair(entityInfo.FirstPrimaryKey.Name, record.RecordID));
+    if (!loaded) {
+      throw new Error(`record '${record.RecordID}' of '${entityInfo.Name}' not found.`);
+    }
+    return obj;
+  }
+
+  /**
+   * Validate every mapped target field name against the entity's real fields,
+   * throwing on the first unknown name. The mapping is caller-supplied, so an
+   * unknown field would otherwise silently no-op (or be swallowed by `Set`); we
+   * reject loudly — the same defensive posture as {@link primaryKeyFilter}.
+   */
+  protected assertMappedFieldsExist(entityInfo: EntityInfo, mapping: ScoringOutputMapping): void {
+    for (const field of Object.keys(mapping.fields ?? {})) {
+      const match = entityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === field.trim().toLowerCase());
+      if (!match) {
+        throw new Error(
+          `'${field}' is not a field on entity '${entityInfo.Name}'; refusing to write back to an unknown field.`,
+        );
+      }
+    }
+  }
+
   // ----- result summarization --------------------------------------------------
 
   /**
@@ -326,11 +512,18 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
    * the PAIRED record's `RecordID` (record-correlated, not a bare positional
    * lookup that would silently misalign if the lengths ever diverged). All three
    * outcome buckets — Succeeded / Failed / Skipped — are tallied.
+   *
+   * `wroteBack` reflects what was ACTUALLY persisted: it is `true` only when at
+   * least one record's prediction was Saved. A record that scored but whose
+   * write-back Save failed (its index is in `writeBack.failedIndexes`) is moved
+   * from the scored bucket into the failed bucket — its prediction did not land.
+   * Predictions are surfaced ephemerally only when nothing was written back.
    */
   protected summarize(
     records: RecordRef[],
     results: RecordResult[],
     request: ScoreRecordSetRequest,
+    writeBack: WriteBackOutcome,
   ): ScoreRecordSetResult {
     let scoredCount = 0;
     let failedCount = 0;
@@ -342,6 +535,11 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       const record = records[i];
       const result = results[i];
       if (result.Status === 'Succeeded') {
+        if (writeBack.failedIndexes.has(i)) {
+          // Scored, but the write-back Save failed — the prediction never landed.
+          failedCount++;
+          continue;
+        }
         scoredCount++;
         const payload = result.ResultPayload as MLInferenceResultPayload | undefined;
         if (payload) {
@@ -354,14 +552,26 @@ export class ProductionScoreRecordSetRunner implements IScoreRecordSetRunner {
       }
     }
 
-    const wroteBack = Boolean(request.writeBack);
     return {
       scoredCount,
       failedCount,
       skippedCount,
-      wroteBack,
-      // Predictions are ephemeral — only surfaced when NOT writing back.
-      predictions: wroteBack ? undefined : predictions,
+      wroteBack: writeBack.wroteBack,
+      // Predictions are ephemeral — only surfaced when NOTHING was written back.
+      predictions: writeBack.wroteBack ? undefined : predictions,
     };
   }
+}
+
+/**
+ * The outcome of the write-back pass, folded into the run summary. `wroteBack` is
+ * `true` only when at least one prediction was successfully Saved; `failedIndexes`
+ * holds the positions of records that scored but whose write-back Save failed (so
+ * they are reclassified scored -> failed).
+ */
+interface WriteBackOutcome {
+  /** True when at least one record's prediction was Saved. */
+  wroteBack: boolean;
+  /** Indexes (into the paired records/results) whose write-back Save failed. */
+  failedIndexes: Set<number>;
 }

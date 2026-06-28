@@ -199,8 +199,15 @@ class TestableRunner extends ProductionScoreRecordSetRunner {
     records: RecordRef[],
     results: RecordResult[],
     request: ScoreRecordSetRequest,
+    writeBack?: { wroteBack: boolean; failedIndexes: Set<number> },
   ): ScoreRecordSetResult {
-    return this.summarize(records, results, request);
+    // The legacy 3-arg callers in this suite exercise the pure ephemeral/no-write
+    // path; default the write-back outcome to "nothing written" unless supplied.
+    const wb = writeBack ?? { wroteBack: false, failedIndexes: new Set<number>() };
+    // Reach the protected 4-arg `summarize` without widening its public surface.
+    return (this as unknown as {
+      summarize(r: RecordRef[], x: RecordResult[], req: ScoreRecordSetRequest, w: typeof wb): ScoreRecordSetResult;
+    }).summarize(records, results, request, wb);
   }
 }
 
@@ -282,7 +289,27 @@ describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correla
   it('omits ephemeral predictions when writing back', () => {
     const records = [ref('a')];
     const results: RecordResult[] = [{ Status: 'Succeeded', ResultPayload: payload(0.5) }];
-    const summary = runner.summarizeResults(records, results, { ...baseRequest(), writeBack: true });
+    const summary = runner.summarizeResults(records, results, baseRequest(), {
+      wroteBack: true,
+      failedIndexes: new Set<number>(),
+    });
+    expect(summary.wroteBack).toBe(true);
+    expect(summary.predictions).toBeUndefined();
+  });
+
+  it('reclassifies a scored record whose write-back Save failed (scored -> failed)', () => {
+    const records = [ref('a'), ref('b')];
+    const results: RecordResult[] = [
+      { Status: 'Succeeded', ResultPayload: payload(0.9, 'churn') },
+      { Status: 'Succeeded', ResultPayload: payload(0.1, 'retain') },
+    ];
+    // Record index 1's write-back Save failed — it should move to the failed bucket.
+    const summary = runner.summarizeResults(records, results, baseRequest(), {
+      wroteBack: true,
+      failedIndexes: new Set<number>([1]),
+    });
+    expect(summary.scoredCount).toBe(1);
+    expect(summary.failedCount).toBe(1);
     expect(summary.wroteBack).toBe(true);
     expect(summary.predictions).toBeUndefined();
   });

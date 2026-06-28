@@ -7,13 +7,29 @@
  * both the mapped output AND the emitted progress.
  */
 
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo, RunViewParams, RunViewResult } from '@memberjunction/core';
 import type { RemoteOpServerContext } from '@memberjunction/core';
 import type { RemoteOpProgress } from '@memberjunction/core';
 
-/** A minimal stub provider — the engine seams are mocked, so it is never dereferenced. */
+/**
+ * A minimal stub provider. The engine seams are mocked, but the training
+ * delegation now resolves the active File Storage Provider via `RunView` before
+ * delegating — so the stub answers that ONE read with an empty result (→ no active
+ * provider → the local-disk artifact fallback), keeping the train-op unit tests DB-free.
+ */
 export function stubProvider(): IMetadataProvider {
-  return {} as unknown as IMetadataProvider;
+  return {
+    async RunView<T>(_params: RunViewParams): Promise<RunViewResult<T>> {
+      return {
+        Success: true,
+        Results: [] as T[],
+        RowCount: 0,
+        TotalRowCount: 0,
+        ExecutionTime: 0,
+        ErrorMessage: '',
+      } as RunViewResult<T>;
+    },
+  } as unknown as IMetadataProvider;
 }
 
 /** A minimal stub user threaded through delegation for isolation/audit. */

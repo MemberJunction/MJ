@@ -71,7 +71,7 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
 
       const options = this.buildOptions(params);
       const orchestrator = this.createOrchestrator();
-      const deps = this.buildDeps(params);
+      const deps = await this.buildDeps(params);
 
       const result = await orchestrator.runSession(plan, deps, options);
       return this.mapResult(params, result);
@@ -139,10 +139,11 @@ export class PredictiveStudioRunExperimentAction extends BasePredictiveStudioAct
 
   /**
    * Build the orchestrator's production dependency bundle from the action's run
-   * params. Overridable so tests inject in-memory seams (entity factory, fake
-   * clock, fake trainer).
+   * params. Async because the wiring resolves the active File Storage Provider to
+   * pick the artifact-store family. Overridable so tests inject in-memory seams
+   * (entity factory, fake clock, fake trainer).
    */
-  protected buildDeps(params: RunActionParams): ExperimentDeps {
+  protected buildDeps(params: RunActionParams): Promise<ExperimentDeps> {
     return buildProductionExperimentDeps(params.ContextUser, params.Provider);
   }
 }
