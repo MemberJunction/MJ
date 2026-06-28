@@ -41,7 +41,7 @@ import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
-import { createMagicLinkHandler, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
+import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './widget/index.js';
 import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
 import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
@@ -1026,6 +1026,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (configInfo.widget?.enabled) {
     const { publicRouter: widgetRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
     app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
+    // The widget reuses the magic-link RS256 key + auth provider to validate guest
+    // tokens, which validates by fetching the JWKS at MAGIC_LINK_MOUNT_PATH/jwks.json.
+    // When magic-link itself is disabled its public router (which serves JWKS) never
+    // mounts, so publish the key here — otherwise every guest token fails validation
+    // (the auth middleware can't fetch the public key) and the widget 401s.
+    if (!configInfo.magicLink?.enabled) {
+      app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), createMagicLinkJwksRouter());
+      startupLog.LogIf('verbose', `[Widget] Published reused signing key at ${MAGIC_LINK_MOUNT_PATH}/jwks.json (magic-link flow disabled)`);
+    }
     startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
   }
 

@@ -192,5 +192,112 @@
       "lastModified": "2026-06-27T16:26:38.761Z",
       "checksum": "5840d923821aa41b4817243e5f0cf084dfe90924971641ba6268c4f444da4601"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Agent Sessions",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Agent Sessions"
+    },
+    "primaryKey": {
+      "ID": "228DB8C7-DAAF-4E4A-8DBD-2173FEF2602D"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T16:40:26.846Z",
+      "checksum": "99f8f4d210d5b5869b7028ad37fafd1a8f42f5cae1062b4e018996b9f443c336"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Session Channels",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Agent Session Channels",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Own Agent Session Channels"
+    },
+    "primaryKey": {
+      "ID": "92289B8C-2175-496D-804A-F7AB3A86E5C6"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T16:40:26.859Z",
+      "checksum": "48ded14d9292845b83a7e1b7f1eb9faad3a30758b7603b59cf6fa8d4ec6971ec"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agents",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Widget Guest: Widget-Pinned Agents"
+    },
+    "primaryKey": {
+      "ID": "91FEF155-2A6C-4413-A7B7-E2102E889F78"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T17:08:34.142Z",
+      "checksum": "793141d5980887a81f5bb71de41980b257e165333943fb10de48447d4f0e59c9"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "F6EE8067-2AA2-4C8F-94A6-0570728B5DF8"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T17:08:34.102Z",
+      "checksum": "be8f614b84f094f792d17da401c05e58e58bc12d7b122758b7bb1d666c70801b"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Steps",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "343A55BB-F236-4800-867D-F0DB37B322E7"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T17:08:34.117Z",
+      "checksum": "594dd9ff836f6d5c5552c7d8b8576e44a16c68eec1471f74545ee908fb5f889e"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Runs",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "38382D9B-174A-469A-A90F-282FDFCD3FD9"
+    },
+    "sync": {
+      "lastModified": "2026-06-28T17:08:34.130Z",
+      "checksum": "4d2930db8fcbc0f445bd08d41e53829792fc44a746dfe454f08caf75e8d7f521"
+    }
   }
 ]
