@@ -49,7 +49,7 @@
  *   npx tsx packages/MJServer/integration-test-scripts/ps-live-writeback-demo.ts
  */
 import { LoadEnv, LoadClientConfig } from './lib/harness';
-import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, BaseEntity, IMetadataProvider, CompositeKey } from '@memberjunction/core';
 import { GraphQLProviderConfigData, setupGraphQLClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import '@memberjunction/core-entities';
 import {
@@ -94,10 +94,12 @@ async function preflight(url: string, apiKey: string): Promise<void> {
       signal: AbortSignal.timeout(5000),
     });
   } catch (error) {
-    throw new Error(`MJAPI not reachable at ${url} (${error instanceof Error ? error.message : String(error)}).`);
+    console.log(`SKIP: MJAPI not reachable at ${url} — start MJAPI (and set PS_INTEGRATION=1 + the sidecar) to run this wire test.`);
+    process.exit(0);
   }
   if (!response.ok) {
-    throw new Error(`MJAPI at ${url} answered HTTP ${response.status} — check MJ_API_KEY.`);
+    console.log(`SKIP: MJAPI at ${url} answered HTTP ${response.status} — set MJ_API_KEY + start MJAPI to run this wire test.`);
+    process.exit(0);
   }
 }
 
@@ -256,7 +258,7 @@ async function clearWrittenColumns(md: Metadata, user: UserInfo, rows: Membershi
       // BaseEntity, matching ps-live-renewal/multimodel-lifecycle). Clearing two columns to
       // null on a generic handle is the established cleanup idiom in this script suite.
       const m = await md.GetEntityObject<BaseEntity>('Memberships', user);
-      if (!(await m.Load(r.ID))) {
+      if (!(await m.InnerLoad(CompositeKey.FromID(r.ID)))) {
         continue;
       }
       m.Set(CLASS_COLUMN, null);
@@ -282,7 +284,7 @@ async function cleanup(md: Metadata, user: UserInfo, ids: {
   const del = async (entity: string, id: string): Promise<void> => {
     try {
       const obj = await md.GetEntityObject<BaseEntity>(entity, user);
-      if (await obj.Load(id)) {
+      if (await obj.InnerLoad(CompositeKey.FromID(id))) {
         const ok = await obj.Delete();
         console.log(`  ${ok ? 'deleted' : 'FAILED to delete'} ${entity} ${id}${ok ? '' : ` — ${obj.LatestResult?.CompleteMessage}`}`);
       }
