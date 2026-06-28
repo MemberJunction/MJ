@@ -17,7 +17,7 @@ It is **core MJ, not an OpenApp**. It composes on substrates MJ already has — 
 | **What it is *not*** | SageMaker / Databricks. No GPU. No training embeddings from scratch (it *uses* pre-trained embeddings as features). Deliberately rigid about algorithms (a fixed 6-catalog), flexible about data. |
 | **Compute** | **CPU-bound, no GPU.** Gradient boosting / logistic / random forest / small MLP on tabular data train in seconds-to-minutes — matches MJ's API-runtime infra. |
 | **Invocation** | **6 typed Remote Operations** (`predictive:execute` scope) + **4 Actions**, both delegating to one shared engine layer. The browser, Skip, and the agent all call the same code. |
-| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#16-roadmap--future-phases)). |
+| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#17-roadmap--future-phases)). |
 
 **Proof it works — real numbers from the live integration test** (`live-train-score.integration.test.ts`, real managed sidecar, 420-row synthetic dataset with a genuinely learnable signal, no DB):
 
@@ -57,10 +57,11 @@ This guide ties together the packages that each document one layer:
 13. [The security model](#13-the-security-model)
 14. [The maintenance loop — staleness + challenger-vs-incumbent](#14-the-maintenance-loop--staleness--challenger-vs-incumbent)
 15. [Phase 2 — Model as a First-Class Primitive (Reach)](#15-phase-2--model-as-a-first-class-primitive-reach)
-16. [Roadmap / future phases](#16-roadmap--future-phases)
-17. [The Studio UI](#17-the-studio-ui)
-18. [Getting started — train and score a model](#18-getting-started--train-and-score-a-model)
-19. [Quick reference — what's built](#19-quick-reference--whats-built)
+16. [The Business-User Experience](#16-the-business-user-experience)
+17. [Roadmap / future phases](#17-roadmap--future-phases)
+18. [The Studio UI](#18-the-studio-ui)
+19. [Getting started — train and score a model](#19-getting-started--train-and-score-a-model)
+20. [Quick reference — what's built](#20-quick-reference--whats-built)
 
 > **The six invariants** this system is built to protect. Each is enforced by code, not convention — they recur throughout the guide:
 > 1. **Anti train/serve skew** — one assembly code path for train and score; preprocessing is *fit once, applied everywhere*, and the **validation fit happens inside the train/val split** (§4.2, §5.1).
@@ -118,7 +119,7 @@ The differentiation is **data assembly + agentic search over MJ's entire data su
 | **1 · Data** (existing) | Entities, `MJ: Queries`, external entities (#2449), vectors, DBAutoDoc — all become feed-ins via `RunView`/`RunQuery` | — |
 | **2 · Feature** | `FeatureAssemblyExecutor` (the single correctness backbone) + Feature Pipelines (persisted derived features) | §4, §11 |
 | **3 · Model** | `MLSidecar` + `TrainingEngine` → immutable versioned `MJ: ML Models` | §2, §5 |
-| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide indexed columns are deferred to #2770 | §6, §16 |
+| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide indexed columns are deferred to #2770 | §6, §17 |
 
 ---
 
@@ -342,13 +343,13 @@ sequenceDiagram
     TE-->>C: { model, run }
 ```
 
-The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §18.4).
+The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §19.4).
 
 ### 5.1 Validation discipline + locked holdout
 
 Be opinionated; don't ship broken models. Default to a train/test split with overfitting detection; optional k-fold and holdout. The decisive primitive is the **locked final holdout** — a slice the search never sees (`carveLockedHoldout()` leads the split), scored *exactly once* on the promoted model → `MLModel.HoldoutMetrics` is the **honest number**. This prevents leaderboard optimism and the multiple-comparisons overfitting an automated search inevitably produces. The holdout is scored through the frozen apply-only path (the same `transform()` inference uses), so it measures exactly what production will see. Deterministic scoring (AUC/F1/accuracy/RMSE) drives the loop.
 
-> The integration test (§18.4) asserts this end-to-end: the holdout is carved *before* training, scored *once* on the final model, and the resulting `HoldoutMetrics.auc` clears **0.70** for both XGBoost and Logistic Regression on a deliberately noisy synthetic signal.
+> The integration test (§19.4) asserts this end-to-end: the holdout is carved *before* training, scored *once* on the final model, and the resulting `HoldoutMetrics.auc` clears **0.70** for both XGBoost and Logistic Regression on a deliberately noisy synthetic signal.
 
 ### 5.2 `MJ: ML Models` is distinct from `MJ: AI Models`
 
@@ -404,7 +405,7 @@ The processor **warm-loads the model once** and shares it across the batch (an i
 
 ### 6.4 Single, batch, on-demand, scheduled
 
-The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§16); scoring + write-back ship with **zero dependency** on it.
+The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§17); scoring + write-back ship with **zero dependency** on it.
 
 ---
 
@@ -927,7 +928,106 @@ Each Phase 2 capability ships with an MJServer integration script that exercises
 
 ---
 
-## 16. Roadmap / future phases
+## 16. The Business-User Experience
+
+Phases 1–2 built the platform and gave the *model* reach. **This** is the layer that makes the whole thing usable, visible, and trustworthy for a **non-technical business user** — the conversational north-star made real, end to end, with **every surface generic** (binding-driven, entity-agnostic; "members/renewal" is throwaway test data, never a build target). Full plan + commit lineage: [`plans/predictive-studio-business-experience.md`](../plans/predictive-studio-business-experience.md).
+
+The one-sentence goal: *a membership director, in chat, asks "which members are likely to lapse?" — and minutes later every member record shows a renewal-risk score that refreshes monthly, driven and explained conversationally, with the deployed model visible in a control-tower view.*
+
+### 16.1 The end-to-end flow
+
+```mermaid
+flowchart LR
+    User["Business user<br/>(Home → 'Ask the agent')"]
+    Agent["Model Development Agent<br/>(collaborate → approve → train → promote)"]
+    Offer{{"Offer to operationalize<br/>'score everyone + refresh monthly?'"}}
+    Sched["createScheduledModelScoring()<br/>= Record Process (WorkType='ML Model', monthly cron)<br/>+ MJ: ML Model Scoring Binding"]
+    Job["Owned MJ: Scheduled Jobs<br/>→ SchedulingEngine (1st of month)"]
+    WB["RecordProcessExecutor<br/>score + write prediction back"]
+    Rec[("Entity record<br/>(prediction column)")]
+    Card["WS1 · Risk card<br/>(generic '*' form panel,<br/>binding-driven)"]
+    Prod["WS2 · Models in Production<br/>(bindings + process runs + distribution)"]
+
+    User --> Agent
+    Agent --> Offer
+    Offer -->|user says yes| Sched
+    Sched --> Job
+    Job -->|each cadence| WB
+    WB --> Rec
+    Sched -.binding.-> Card
+    Sched -.binding.-> Prod
+    Rec --> Card
+    Rec --> Prod
+    style Sched fill:#ede9fe,stroke:#6d28d9
+    style Card fill:#ecfeff,stroke:#0891b2
+    style Prod fill:#ecfeff,stroke:#0891b2
+```
+
+The whole loop never leaves the conversation: the agent trains, promotes, **proactively offers** to operationalize, and on a yes wires up scheduled scoring; the binding it records is what lights up the risk card and the production view.
+
+### 16.2 The Model Development Agent's conversational flow
+
+The agent (§12) now closes the loop. Its prompt (`metadata/prompts/templates/model-development-agent/model-development-agent.template.md`, §5 *"Operationalize — proactively offer"*) teaches it that *a trained, promoted model is only useful once its predictions are on the records, kept current.* So after a clean promote (or a signed-off leakage flag), it **proactively offers** — not waiting to be asked — in plain business language tied to the user's goal:
+
+> *"This model's ready to go. Want me to score every active member right now, write each one's renewal-risk onto their record, and then refresh it every month so it always stays current?"*
+
+It offers clear `suggestedResponses` (*Yes, score & schedule monthly* / *Just score once now* / *Not yet*). On a **yes**, it calls the **Schedule Model Scoring** action — now in its `MJ: AI Agent Actions` toolkit (`metadata/agents/.model-development-agent.json`) and fully metadata-synced (`metadata/actions/predictive-studio/.predictive-studio-actions.json`: `ModelID`, `TargetEntityName`, `OutputField`, `ScopeFilter`, optional `Cadence` (default `Monthly`) / `PrimaryKeyField` / `ValueKind`; result codes `SUCCESS` / `VALIDATION_ERROR` / `SCHEDULE_FAILED`). It proposes a column name if the user hasn't named one, confirms the population (`ScopeFilter`), then reports back in plain English what it scheduled. Keeps it **generic** — "this works for any entity and any prediction target, not just members or renewal."
+
+The Action wraps `createScheduledModelScoring` (§15.6); the helper now **also records the scoring binding** (§16.6), which is the seam that makes the next two surfaces light up.
+
+### 16.3 The generic model-prediction form panel (the risk card)
+
+The payoff renders on **any** entity a model writes to, with **no per-entity code**:
+
+- **Component** — `ModelPredictionPanel` (`packages/Angular/Explorer/core-entity-forms/src/lib/panels/model-predictions/`), a `BaseFormPanel` registered under the **`'*'` wildcard entity**:
+  ```typescript
+  @RegisterClassEx(BaseFormPanel, {
+      key: 'model-predictions:model-prediction',
+      skipNullKeyWarning: true,
+      metadata: { entity: '*', slot: 'after-fields', sortKey: 40 },
+  })
+  ```
+- **The `'*'` slot wildcard** — added to the slot host (`packages/Angular/Generic/base-forms/src/lib/panel-slot/`). `entityMatches()` now treats `'*'` as "mount on **every** entity's form"; such panels are expected to self-hide when they don't apply. This is the entity-agnostic-panel contract: one registration, cross-cutting, unobtrusive.
+- **Binding-driven** — on any record the panel `RunView`s `MJ: ML Model Scoring Bindings` filtered to `TargetEntityID=<this entity> AND TargetColumn IS NOT NULL`. No binding → no cards → the panel **self-hides** (`@if (HasPredictions)`, i.e. `Cards.length > 0`). It's invisible on every form a model doesn't touch.
+- **Entity-neutral band + format** — the bound value renders as a meaningful indicator: a low/mid/high band shaded with `--mj-brand-primary` opacity (no moral "risk" direction baked in — generic by construction); 0–1 values → "%", regression → grouped number, classification → class label, missing → "—". Plus the **top 5 drivers** (parsed from the model's `FeatureImportance`), the **model + version** ("Pipeline v{n}"), and **last scored**.
+
+### 16.4 "Models in Production" — the control tower
+
+A new Studio section (`PSProductionComponent` + `PSProductionResourceComponent`, `@RegisterClass(BaseResourceComponent, 'PredictiveStudioProductionResource')`; `packages/Angular/Explorer/dashboards/src/PredictiveStudio/`). For each deployed model it shows: model label + algorithm + problem type + status, **what it writes** (target entity / column), the **mode + schedule phrase** (`humanizeCron`), the **last run** (the latest `MJ: Process Runs` row for the binding's `RecordProcessID` — status, time, success/error counts) or the binding's own `LastScoredAt` / `LastRowCount`, and a **prediction-distribution mini-viz**. The distribution (`production-distribution.ts`, pure + unit-testable) samples up to 5,000 non-null values of the bound column and buckets them **entity-neutrally** — numeric → three terciles, categorical → top-8-by-frequency + "Other". Everything reads from `MJ: ML Model Scoring Bindings` + `MJ: Process Runs` + the target entity via metadata; **zero Member-specific code**, multi-provider-correct (`RunView.FromMetadataProvider(this.ProviderToUse)`).
+
+### 16.5 The live Studio (de-mocked) + conversational entry
+
+The Studio (§18) no longer ships sample arrays on screen — the `SAMPLE_*` arrays are gone (the only `SAMPLE_` token left is the `PRODUCTION_SAMPLE_CAP = 5000` constant). Pure, testable view-models (`predictive-studio.view-models.ts`) feed each panel from **live engine data**: Registry from `engine.Models` (metrics / holdout / feature-importance parsed live), Experiments from `engine.Sessions` / `engine.Iterations`, Home KPIs + activity feed from `engine.Models` / `engine.Sessions` + recent `MJ: Process Runs`, Compare from the session leaderboard. The previously-dead buttons are wired to **Remote Operations** behind a `ps-confirm-modal`:
+
+- **Promote / Mark Validated / Archive** → `PredictiveStudioPromoteModelOperation` (`{ modelId, targetStatus, signOff?, reason? }` — a leakage sign-off reason is **required** when the model is flagged).
+- **Pause / Resume / Cancel** → `PredictiveStudioControlExperimentSessionOperation` (`{ sessionId, action }`).
+
+Each mutation force-refreshes the engine (`Config(true, …)`) and reports success/failure. And Home's **"Ask the agent"** CTA opens the docked `<mj-conversation-chat-area>` pinned to the Model Dev Agent with a seeded starter prompt (`[pendingMessage]` auto-sends) — one click from Home into a seeded conversation.
+
+### 16.6 The scoring-binding lineage (the seam that lights it all up)
+
+Both §16.3 and §16.4 read `MJ: ML Model Scoring Bindings` — so operationalizing must **record a binding**, not just create a scheduled Record Process. `createScheduledModelScoring` (`packages/AI/PredictiveStudio/Engine/src/scheduling/scheduled-model-scoring.ts`) now, after saving the Record Process, calls `upsertScoringBinding(...)` to create/update the binding row with `MLModelID`, `RecordProcessID`, `TargetEntityID`, `TargetColumn`, and `Mode='Scheduled'`. That binding is the lineage record — *"this model is in production, scoring these records into this column on this schedule"* — and the seam that connects the headless scoring loop to the human-facing surfaces. Without it the scheduled job would run silently and both surfaces would stay dark.
+
+### 16.7 The enablers
+
+- **`'ML Model'` WorkType value-list** — migration `V202606281819__v5.44.x__RecordProcess_WorkType_ValueList.sql` sets the `RecordProcess.WorkType` EntityField's `ValueListType = 'ListOrUserEntry'` (extensible enum) and idempotently seeds 5 `EntityFieldValue` rows (`Action`, `Agent`, `FieldRules`, `Infer`, **`ML Model`**). It does **not** re-add a CHECK — the Phase-2 `_Pluggable` migration already dropped it so the `RecordProcessorRegistry` governs validity. After the next CodeGen the union becomes `'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model' | string` (known values are dropdown suggestions, pluggable values still save), so `'ML Model'` is a real dropdown option in the Bulk-Operations / Record-Process studio. **Requires CodeGen** to regenerate the union.
+- **Enrichment over GraphQL RunQuery** (PS2-3 follow-up) — the RunQuery resolver (`packages/MJServer/src/resolvers/QueryResolver.ts`) accepts `@Arg('Enrichment', () => GraphQLJSONObject, { nullable: true })` and threads it into `RunQuery({ …, Enrichment })`; the `GraphQLDataProvider` client carries the same `Enrichment?: RunQueryEnrichment` (`{ EnricherKey, Config }`). So browser / Query-Builder callers — not just server-side Skip — can request a scored query via the `'ML Model Score'` enricher.
+
+### 16.8 Capability → file(s) → proof
+
+| Capability | Key file(s) | Proof |
+|---|---|---|
+| Agent offers to operationalize, schedules monthly | `metadata/agents/.model-development-agent.json` · `metadata/actions/predictive-studio/.predictive-studio-actions.json` · `…/model-development-agent.template.md` (§5) | conversational (live agent run); the scheduling path → `ps-inproc-scheduled-scoring.ts` |
+| Generic risk card (`'*'` form panel) | `core-entity-forms/.../panels/model-predictions/` · `Generic/base-forms/.../panel-slot/` (`'*'` wildcard) | binding-driven render (lights up via the binding from `ps-inproc-scheduled-scoring.ts`) |
+| Models in Production section | `dashboards/.../PredictiveStudio/components/ps-production.component.*` · `resources/ps-production-resource.component.ts` · `production-distribution.ts` | reads bindings + `MJ: Process Runs` (live) |
+| De-mocked Studio + ops wired | `dashboards/.../PredictiveStudio/predictive-studio.view-models.ts` (+ Registry / Experiments components) | `PredictiveStudioPromoteModelOperation` / `…ControlExperimentSessionOperation` |
+| Scoring-binding on operationalize | `PredictiveStudio/Engine/src/scheduling/scheduled-model-scoring.ts` (`upsertScoringBinding`) | `ps-inproc-scheduled-scoring.ts` (binding asserted) |
+| `'ML Model'` WorkType value-list | `migrations/v5/V202606281819__…RecordProcess_WorkType_ValueList.sql` | (needs CodeGen) |
+| Enrichment over GraphQL | `MJServer/src/resolvers/QueryResolver.ts` · `GraphQLDataProvider` | `ps-inproc-scored-query.ts` |
+
+---
+
+## 17. Roadmap / future phases
 
 Predictive Studio ships end-to-end. The one explicitly-deferred capability is honest here:
 
@@ -939,7 +1039,7 @@ Other open questions carried forward (none block the shipped feature): model ser
 
 ---
 
-## 17. The Studio UI
+## 18. The Studio UI
 
 Predictive Studio is an MJ Explorer dashboard built to the ng-dashboards world-class standards (see [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md)) and **lazy-loaded** (see [Lazy Loading Guide](LAZY_LOADING_GUIDE.md)). It lives at `packages/Angular/Explorer/dashboards/src/PredictiveStudio/`.
 
@@ -964,9 +1064,9 @@ The HTML option mockups that informed the pinned designs are at [`plans/predicti
 
 ---
 
-## 18. Getting started — train and score a model
+## 19. Getting started — train and score a model
 
-### 18.1 One-time setup
+### 19.1 One-time setup
 
 ```bash
 # 1. Set up the bundled Python sidecar environment (once)
@@ -980,7 +1080,7 @@ cd ../Sidecar                            && npm run build
 cd ../Engine                             && npm run build
 ```
 
-### 18.2 Train
+### 19.2 Train
 
 In production you invoke the `PredictiveStudio.TrainModel` Remote Op (browser/Skip) or the `Train ML Model` Action (agent). Both delegate to `TrainingEngine.trainModel`. Directly, the shape is:
 
@@ -1000,11 +1100,11 @@ const result = await engine.trainModel(
 
 A pipeline (`MJ: ML Training Pipelines`) declares the target entity, target variable, problem type, algorithm, `SourceBindings`, `FeatureSteps` DAG, `AsOfStrategy`, `LeakageGuard`, and `ValidationStrategy` (including the locked-holdout fraction).
 
-### 18.3 Score (Record Set Processing)
+### 19.3 Score (Record Set Processing)
 
 Scoring runs as the `'ML Model'` work type. On-demand against a view/list/selection via `RecordProcess.RunNow` with a scope override (or the `PredictiveStudio.ScoreRecordSet` op / `Score Record Set` Action); scheduled via the `Schedule` trigger (which also upserts an `MJ: ML Model Scoring Binding` for maintenance, §14). Attach an `OutputMapping` to write the prediction back as a sortable/filterable column; omit it for ephemeral scores. See the [Record Set Processing Guide](RECORD_SET_PROCESSING_GUIDE.md) for the substrate mechanics.
 
-### 18.4 Run the live integration test (`PS_INTEGRATION=1`)
+### 19.4 Run the live integration test (`PS_INTEGRATION=1`)
 
 The engine ships an opt-in end-to-end test that spawns the **real** managed sidecar and trains + scores against it (`Engine/src/__tests__/integration/live-train-score.integration.test.ts`):
 
@@ -1020,7 +1120,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 
 ---
 
-## 19. Quick reference — what's built
+## 20. Quick reference — what's built
 
 | Area | Status |
 |---|---|
@@ -1038,8 +1138,9 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | **Maintenance** (staleness + direction-aware challenger-vs-incumbent, never auto-promotes) | ✅ built |
 | **Multimodal** vision-LLM-as-feature (`'vision-llm'` FeatureStep kind, additive) | ✅ built |
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
+| **Business-user experience** (§16) — agent offers + schedules monthly · generic `'*'` risk-card panel · Models-in-Production section · de-mocked Studio + ops wired · scoring-binding lineage · WorkType value-list + Enrichment-over-GraphQL | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
-| Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§16) |
+| Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§17) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).
 

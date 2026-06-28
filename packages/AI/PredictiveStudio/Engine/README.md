@@ -60,6 +60,10 @@ Phase 2 extends the model's *reach* without new ML: the **same** scorer (`MLMode
 
 Each item ships with an MJServer integration script (`ps-live-recordprocess-scoring`, `ps-live-modelaction-generation`, `ps-inproc-scored-query`, `ps-inproc-scheduled-scoring`).
 
+### Business-experience layer
+
+The **business-user experience** phase (the conversational north-star made real) builds on this engine without new ML: `createScheduledModelScoring` now, after saving the scheduled Record Process, also **records an `MJ: ML Model Scoring Binding`** (via `upsertScoringBinding` — `MLModelID` / `RecordProcessID` / `TargetEntityID` / `TargetColumn` / `Mode='Scheduled'`). That binding is the lineage seam the Angular surfaces key off — the generic, binding-driven risk-card form panel and the "Models in Production" Studio section both light up from it. On the agent side, the Model Development Agent now **proactively offers to operationalize** after a clean promote ("score everyone + refresh monthly?") and, on a yes, calls the `Schedule Model Scoring` action. Full plan + commit lineage: [`plans/predictive-studio-business-experience.md`](../../../../plans/predictive-studio-business-experience.md); architecture write-up: [Predictive Studio Guide §16](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md#16-the-business-user-experience).
+
 ## Two invocation surfaces: Actions vs. Remote Operations
 
 The engine service classes are the *real* logic; both surfaces are thin and **share one delegation path** (`operations/delegation.ts`), so they train / score / experiment / promote through the same code — never duplicating it.
