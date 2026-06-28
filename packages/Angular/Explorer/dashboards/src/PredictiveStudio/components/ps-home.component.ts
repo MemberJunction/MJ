@@ -4,6 +4,9 @@ import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSPanelKey } from '../predictive-studio.types';
+import { PS_AGENT_STARTER_PROMPT } from './ps-agent-starter-prompt';
+
+export { PS_AGENT_STARTER_PROMPT } from './ps-agent-starter-prompt';
 import {
   PSActivityFeedItem,
   PSHomeKpis,
@@ -25,6 +28,12 @@ import {
  *
  * Recent scoring runs are loaded once on init (cheap, capped) — `MJ: Process Runs` isn't bulk-cached
  * because it grows unbounded. 100% entity-agnostic.
+ *
+ * **"Ask the agent" entry path.** The hero CTA and the agent entry-path card emit {@link askAgent} with a
+ * starter prompt string. The host resource ({@link PSHomeResourceComponent}) reveals the docked Model
+ * Development Agent chat seeded with that prompt. The prompt is a deliberately entity-agnostic template
+ * ({@link PS_AGENT_STARTER_PROMPT}) — it never names a specific entity/target, so Predictive Studio stays
+ * 100% domain-neutral and the agent leads the user through choosing what to predict.
  */
 @Component({
   standalone: true,
@@ -51,7 +60,7 @@ import {
           <button mjButton variant="secondary" size="sm" (click)="navigate.emit('pipelines')">
             <i class="fa-solid fa-diagram-project"></i> New Training Pipeline
           </button>
-          <button class="hero-ghost" (click)="askAgent.emit()">
+          <button class="hero-ghost" (click)="onAskAgent()">
             <i class="fa-solid fa-robot"></i> Ask the Model Dev Agent
           </button>
         </div>
@@ -71,7 +80,7 @@ import {
           <p>Browse the algorithm catalog with a use-case guide that ranks each algorithm for your scenario.</p>
           <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-clone"></i> Browse catalog</button>
         </div>
-        <div class="path" data-testid="ps-home-path-agent" (click)="askAgent.emit()">
+        <div class="path" data-testid="ps-home-path-agent" (click)="onAskAgent()">
           <div class="ic purple"><i class="fa-solid fa-robot"></i></div>
           <h4>Ask the agent</h4>
           <p>Describe the goal in plain English. The agent proposes algorithms, features, and a budget.</p>
@@ -135,9 +144,18 @@ export class PSHomeComponent implements OnInit {
   /** Acting user for the on-demand scoring-runs load. */
   @Input() currentUser: UserInfo | null = null;
   @Output() navigate = new EventEmitter<PSPanelKey>();
-  @Output() askAgent = new EventEmitter<void>();
+  /**
+   * Emitted when the user clicks an "Ask the agent" entry path. The payload is the starter prompt to seed
+   * the Model Development Agent chat with — the entity-agnostic {@link PS_AGENT_STARTER_PROMPT} by default.
+   */
+  @Output() askAgent = new EventEmitter<string>();
 
   private cdr = inject(ChangeDetectorRef);
+
+  /** Entry-path handler — emits {@link askAgent} with the default entity-agnostic starter prompt. */
+  public onAskAgent(): void {
+    this.askAgent.emit(PS_AGENT_STARTER_PROMPT);
+  }
 
   /** Derived KPI strip. Starts from the synchronously-available counts, refined once runs load. */
   public kpis: PSHomeKpis = { publishedCount: 0, activeExperiments: 0, bestHoldout: '—', scoredThisWeek: '0', experimentRuns: 0 };
