@@ -1271,14 +1271,16 @@ import {
     AutotagAndVectorizeContentAction,
 } from '@memberjunction/actions-content-autotag';
 
-// @memberjunction/predictive-studio (11 classes)
+// @memberjunction/predictive-studio (13 classes)
 import {
     MLModelInferenceProcessor,
+    MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
@@ -2234,11 +2236,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     XMLParserAction,
     AutotagAndVectorizeContentAction,
     MLModelInferenceProcessor,
+    MLModelScoreEnricher,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
     PredictiveStudioScoreRecordSetServerOperation,
     PredictiveStudioStartExperimentSessionServerOperation,
@@ -2263,7 +2267,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 936;
+export const CLASS_REGISTRATIONS_COUNT = 938;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -745,5 +745,151 @@
       "lastModified": "2026-06-27T15:15:59.844Z",
       "checksum": "ddd2a0ae24a426c548e308b6b9ceb773289f88f88a50620cc95b5b2e8ae2d2f0"
     }
+  },
+  {
+    "_comments": [
+      "Schedule Model Scoring — thin Action boundary over the PS2-6 createScheduledModelScoring helper.",
+      "Binds a trained ML Model to write its prediction into a target entity column on a recurring",
+      "schedule (default monthly). Validates ModelID + TargetEntityName + OutputField + ScopeFilter,",
+      "delegates to the helper (which creates + saves a scheduled MJ: Record Processes row whose owned",
+      "MJ: Scheduled Jobs row is auto-created on save), and returns the new Record Process id + cron."
+    ],
+    "fields": {
+      "Name": "Schedule Model Scoring",
+      "Description": "Binds a trained ML Model to write its prediction into a target entity column on a recurring schedule (e.g. monthly). Creates a scheduled Record Process that scores the rows selected by a filter and writes the prediction back into the chosen column on its cadence. Outputs the new Record Process id and the cron expression.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioScheduleModelScoringAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModelID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Id of the MJ: ML Models row to score with."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetEntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "Name of the entity whose rows are scored and written (e.g. 'Memberships')."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OutputField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The column on the target entity the prediction is written into (e.g. 'RenewalScore')."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScopeFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "SQL predicate over the target entity selecting which rows each scheduled run scores (e.g. \"Status='Active'\")."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Cadence",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Recurrence: 'Monthly' (default — 1st of each month), 'Weekly', 'Daily', or a raw cron expression. When omitted, Monthly is used."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PrimaryKeyField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Primary-key field on the target entity (defaults to 'ID')."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ValueKind",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Which prediction value to write: 'score' (numeric probability/value — the default) or 'class' (predicted class label)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RecordProcessID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Id of the scheduled MJ: Record Processes row that was created (its owned MJ: Scheduled Jobs row is auto-created on save)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CronExpression",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The cron expression the scoring run recurs on."
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The scheduled scoring Record Process was created and saved (now live on its cadence)."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "A required param (ModelID / TargetEntityName / OutputField / ScopeFilter / ContextUser) is missing."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SCHEDULE_FAILED",
+            "IsSuccess": false,
+            "Description": "The target entity was unknown, or the Record Process failed to save."
+          }
+        }
+      ]
+    }
   }
 ]

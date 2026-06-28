@@ -28,14 +28,16 @@ export * from './run-experiment.deps';
 export * from './promote-model.action';
 export * from './promote-model.gate';
 export * from './model-scoring-action-generator';
+export * from './schedule-model-scoring.action';
 
 import { PredictiveStudioTrainModelAction } from './train-model.action';
 import { PredictiveStudioScoreRecordSetAction } from './score-record-set.action';
 import { PredictiveStudioRunExperimentAction } from './run-experiment.action';
 import { PredictiveStudioPromoteModelAction } from './promote-model.action';
+import { PredictiveStudioScheduleModelScoringAction } from './schedule-model-scoring.action';
 
 /**
- * Tree-shaking anchor — call from a server bootstrap to guarantee the four
+ * Tree-shaking anchor — call from a server bootstrap to guarantee the
  * `@RegisterClass(BaseAction, ...)` registrations are not eliminated by the
  * bundler. Referencing the classes through this function creates a static code
  * path the bundler keeps (mirrors `LoadMLModelInferenceProcessor`).
@@ -45,4 +47,5 @@ export function LoadPredictiveStudioActions(): void {
   void PredictiveStudioScoreRecordSetAction;
   void PredictiveStudioRunExperimentAction;
   void PredictiveStudioPromoteModelAction;
+  void PredictiveStudioScheduleModelScoringAction;
 }
