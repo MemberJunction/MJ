@@ -119,6 +119,37 @@ integration*, not on out-feature-ing the long tail.
 
 ## 3. Architecture Overview
 
+```mermaid
+flowchart TB
+  subgraph Public["Public / Anonymous"]
+    R["Respondent on phone"] -->|loads| W["&lt;mj-form&gt; Angular Element<br/>(CDN widget)"]
+  end
+  W -->|"submit (anon magic-link scope)"| SUB["Public Submit Endpoint<br/>Turnstile · rate-limit · quota"]
+  subgraph ServerBox["bizapps-forms Server — MJAPI :4121"]
+    SUB --> SAVE[("Save FormResponse + Answers")]
+    SAVE --> HOOK["On-submit Actions / Agents"]
+  end
+  subgraph AdminBox["MJExplorer :4321 (internal staff)"]
+    B["Visual Form Builder"] --> DEF[("Form / Pages / Questions")]
+    RPT["Reporting Dashboard"]
+  end
+  subgraph CoreBox["MemberJunction Core (reused)"]
+    AUTH["Anonymous Magic-Link<br/>mj_scopes enforcement"]
+    ACT["Actions · Agents · AI Prompts"]
+    RV["RunView / RunQuery / Dashboards"]
+    RSU["SchemaEngine / RSU"]
+    FILES[("MJ: Files")]
+    COMMON[("bizapps-common<br/>Person / Organization")]
+  end
+  SUB -. scope check .-> AUTH
+  HOOK --> ACT
+  HOOK --> COMMON
+  W --> FILES
+  RPT --> RV
+  DEF --> RV
+  SAVE -. opt-in publish .-> RSU
+```
+
 ### 3.1 Repo skeleton (mirror of `bizapps-common`, verified against that repo)
 
 ```
@@ -209,6 +240,29 @@ form = effectively a **public form URL**.
 (Turnstile + rate-limit + quota check) → Save `FormResponse` + `FormResponseAnswer` rows
 → fire on-submit Actions/Agents.
 
+```mermaid
+sequenceDiagram
+  actor V as Anonymous Visitor
+  participant W as &lt;mj-form&gt; Widget
+  participant S as Submit Endpoint
+  participant A as MJ Auth (mj_scopes)
+  participant DB as Forms Tables
+  participant X as Actions / Agents
+  V->>W: open public link / embed
+  W->>S: GET published FormVersion
+  S->>A: validate anon scope (read)
+  A-->>S: ok (Anonymous principal, scope = form:read)
+  S-->>W: form definition
+  V->>W: fill + submit (+ Turnstile token)
+  W->>S: POST answers
+  S->>S: Turnstile · rate-limit · quota · dedupe
+  S->>A: validate scope (CREATE FormResponse only)
+  A-->>S: ok (no role accretion)
+  S->>DB: Save FormResponse + Answers
+  S->>X: fire on-submit (email / Task / upsert Person)
+  S-->>W: confirmation / redirect
+```
+
 **Open follow-up:** confirm the **minimum MJ version** that includes (a) anonymous
 magic-link `mj_scopes` enforcement and (b) RSU — pin `mjVersionRange` accordingly (default
 assumption: `>=5.44.0`).
@@ -221,6 +275,23 @@ Schema **`__mj_BizAppsForms`**, entity prefix **`Forms:`** (decision DG-2 — no
 `Forms: Forms` stutter on the root table; alternative is to name the root table
 `FormDefinition` → `Forms: Definitions`). No `__mj_*` timestamp cols, no FK indexes
 (CodeGen adds them). `sp_addextendedproperty` on every business column.
+
+```mermaid
+erDiagram
+  FormCategory ||--o{ FormCategory : "parent of"
+  FormCategory ||--o{ Form : organizes
+  FormStyle ||--o{ Form : styles
+  FormGroup ||--o{ Form : "groups (P2)"
+  Form ||--o{ FormVersion : "snapshots"
+  Form ||--o{ FormPage : has
+  FormPage ||--o{ FormQuestion : contains
+  FormQuestion ||--o{ FormQuestionOption : offers
+  Form ||--o{ FormDistribution : "published via"
+  Form ||--o{ FormResponse : collects
+  FormVersion ||--o{ FormResponse : "pinned by"
+  FormResponse ||--o{ FormResponseAnswer : contains
+  FormQuestion ||--o{ FormResponseAnswer : "answered as"
+```
 
 ### 5.1 Phase 1 entities (MVP)
 
@@ -275,6 +346,15 @@ FileUpload, Statement (display-only/section header).
 Payment, Calculated, Conversational (→ Caliber hand-off, §9).
 
 ### 5.4 Dual persistence (the design you locked)
+
+```mermaid
+flowchart LR
+  SUB["Form submission"] --> SoT[("Normalized tables<br/>FormResponse + Answers<br/>+ FormVersion snapshot<br/><b>source of truth</b>")]
+  SoT -->|"default · live · no restart"| VIEW["Generated SQL View<br/>registered as MJ Entity"]
+  SoT -->|"opt-in · admin-triggered · batched"| RSU["RSU Materialized Table<br/>SchemaEvolution adds columns over time"]
+  VIEW --> TOOL["Viewing system · Query Builder<br/>Dashboards · Skip"]
+  RSU --> TOOL
+```
 
 - **Generic normalized tables are ALWAYS the source of truth** (`FormResponse` +
   `FormResponseAnswer` + the `FormVersion` snapshot). Every submission lands here, fast, no
