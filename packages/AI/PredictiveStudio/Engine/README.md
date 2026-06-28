@@ -41,8 +41,24 @@ Beyond the four core engines, the package's `src/` is organized into focused fol
 | `experiment/` | `ExperimentOrchestrator` + `leaderboard` / `concurrency` / `wave-strategist` / `seams` | Deterministic, wave-based execution of an approved `ModelingPlanSpec` with leaderboard, pruning, and a budget gate | §8 / §9 |
 | `feature-pipelines/` | `FeaturePipelineEngine` (a `BaseEngine` cache) + projection types | Discover/monitor Feature Pipelines (categorized `MJ: Record Processes` rows) — "what pipelines exist, what each writes to, when each last ran" | §5.4 / SP6 |
 | `maintenance/` | `MaintenanceEngine`, `RetrainingPolicy` + defaults, the honest `RowCountProxyDriftDetector`, seams | Staleness detection, scheduled re-scoring, retraining triggers, and challenger-vs-incumbent promotion recommendation | §12 / SP10 |
+| `scheduling/` | `createScheduledModelScoring` (the Phase 2 north-star helper) | One call binds a model to write its prediction into a target column on a recurring cron (auto-creates the owned Scheduled Job) | §15 / PS2-6 |
 | `actions/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunExperiment,PromoteModel}Action` + `LoadPredictiveStudioActions` | **Invocation surface A** — thin MJ Actions over the engines (see below) | §12 |
 | `operations/` | `PredictiveStudio{TrainModel,ScoreRecordSet,RunFeaturePipeline,StartExperimentSession,ControlExperimentSession,PromoteModel}ServerOperation` + `LoadPredictiveStudioOperations` | **Invocation surface B** — typed Remote Operations over the engines (see below) | §12 |
+
+## Phase 2 reach — one scorer, many surfaces
+
+Phase 2 extends the model's *reach* without new ML: the **same** scorer (`MLModelInferenceProcessor`) and the **same** entry point (`ScoreRecordSet`) plumbed into every MJ surface where a prediction is useful, each through a registry / ClassFactory seam so no base/types package depends on Predictive Studio. Full write-up: **[Predictive Studio Guide §15](../../../../guides/PREDICTIVE_STUDIO_GUIDE.md#15-phase-2--model-as-a-first-class-primitive-reach)**.
+
+| Item | Module | What it adds |
+|---|---|---|
+| **PS2-1** scoring as a saved/scheduled Record Process | `scoring/startup-register.ts` (`PredictiveStudioScoringStartup`), `scoring/register.ts` (`registerMLScoringProcessor`) | Registers the `'ML Model'` work type into `RecordProcessorRegistry` at MJAPI boot so a saved `MJ: Record Processes` row routes to the scorer. (Migration `V202606280215…` drops the closed `WorkType` CHECK so the registry governs work types.) |
+| **PS2-2** per-model Action on Publish | `actions/model-scoring-action-generator.ts` (`ModelScoringActionGenerator`), hooked from `actions/promote-model.gate.ts` | Generates an idempotent child Action `Score with <pipeline> v<n>` (Type=Custom, parent's `DriverClass`, `ParentID` set, `ModelID` `DefaultValue` baked) — so every published model is a discoverable Action. |
+| **PS2-3** scored-query enrichment | `scoring/ml-model-score-enricher.ts` (`MLModelScoreEnricher`, `@RegisterClass(QueryResultEnricherBase, 'ML Model Score')`) | Appends a model prediction column to a `RunQuery` result via the decoupled `RunQueryParams.Enrichment` seam in `@memberjunction/core`. |
+| **PS2-6** scheduled model scoring (north-star) | `scheduling/scheduled-model-scoring.ts` (`createScheduledModelScoring`), `actions/schedule-model-scoring.action.ts` | One call creates an Active `'ML Model'` Record Process with `ScheduleEnabled` + monthly cron + `OutputMapping`; saving it auto-creates the owned Scheduled Job. |
+
+> PS2-4 (the Interactive Components `utilities.ml` capability) lives **outside** this package — `SimpleMLTools` in `@memberjunction/interactive-component-types`, built by `RuntimeUtilities.CreateSimpleMLTools()` in `@memberjunction/ng-react`, marshaling `ScoreRecordSet` over GraphQL to this engine.
+
+Each item ships with an MJServer integration script (`ps-live-recordprocess-scoring`, `ps-live-modelaction-generation`, `ps-inproc-scored-query`, `ps-inproc-scheduled-scoring`).
 
 ## Two invocation surfaces: Actions vs. Remote Operations
 

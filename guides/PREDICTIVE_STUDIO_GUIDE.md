@@ -17,7 +17,7 @@ It is **core MJ, not an OpenApp**. It composes on substrates MJ already has — 
 | **What it is *not*** | SageMaker / Databricks. No GPU. No training embeddings from scratch (it *uses* pre-trained embeddings as features). Deliberately rigid about algorithms (a fixed 6-catalog), flexible about data. |
 | **Compute** | **CPU-bound, no GPU.** Gradient boosting / logistic / random forest / small MLP on tabular data train in seconds-to-minutes — matches MJ's API-runtime infra. |
 | **Invocation** | **6 typed Remote Operations** (`predictive:execute` scope) + **4 Actions**, both delegating to one shared engine layer. The browser, Skip, and the agent all call the same code. |
-| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#15-roadmap--future-phases)). |
+| **Status** | **End-to-end shipped** — sidecar, FeatureAssembly, training, scoring, the experiment orchestrator, the 6 Remote Ops + 4 Actions, Feature Pipelines, the Model Development Agent + artifact + viewer, maintenance/retrain, multimodal vision-as-feature, the Studio UI, and a live integration test. The one explicitly-deferred item is **SP5 materialized prediction columns**, gated on PR #2770 (see [Roadmap](#16-roadmap--future-phases)). |
 
 **Proof it works — real numbers from the live integration test** (`live-train-score.integration.test.ts`, real managed sidecar, 420-row synthetic dataset with a genuinely learnable signal, no DB):
 
@@ -56,10 +56,11 @@ This guide ties together the packages that each document one layer:
 12. [The Model Development Agent + artifact + viewer](#12-the-model-development-agent--artifact--viewer)
 13. [The security model](#13-the-security-model)
 14. [The maintenance loop — staleness + challenger-vs-incumbent](#14-the-maintenance-loop--staleness--challenger-vs-incumbent)
-15. [Roadmap / future phases](#15-roadmap--future-phases)
-16. [The Studio UI](#16-the-studio-ui)
-17. [Getting started — train and score a model](#17-getting-started--train-and-score-a-model)
-18. [Quick reference — what's built](#18-quick-reference--whats-built)
+15. [Phase 2 — Model as a First-Class Primitive (Reach)](#15-phase-2--model-as-a-first-class-primitive-reach)
+16. [Roadmap / future phases](#16-roadmap--future-phases)
+17. [The Studio UI](#17-the-studio-ui)
+18. [Getting started — train and score a model](#18-getting-started--train-and-score-a-model)
+19. [Quick reference — what's built](#19-quick-reference--whats-built)
 
 > **The six invariants** this system is built to protect. Each is enforced by code, not convention — they recur throughout the guide:
 > 1. **Anti train/serve skew** — one assembly code path for train and score; preprocessing is *fit once, applied everywhere*, and the **validation fit happens inside the train/val split** (§4.2, §5.1).
@@ -117,7 +118,7 @@ The differentiation is **data assembly + agentic search over MJ's entire data su
 | **1 · Data** (existing) | Entities, `MJ: Queries`, external entities (#2449), vectors, DBAutoDoc — all become feed-ins via `RunView`/`RunQuery` | — |
 | **2 · Feature** | `FeatureAssemblyExecutor` (the single correctness backbone) + Feature Pipelines (persisted derived features) | §4, §11 |
 | **3 · Model** | `MLSidecar` + `TrainingEngine` → immutable versioned `MJ: ML Models` | §2, §5 |
-| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide indexed columns are deferred to #2770 | §6, §15 |
+| **4 · Inference** | `MLModelInferenceProcessor` (RSP work type); population-wide indexed columns are deferred to #2770 | §6, §16 |
 
 ---
 
@@ -341,13 +342,13 @@ sequenceDiagram
     TE-->>C: { model, run }
 ```
 
-The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §17.4).
+The engine is built on **dependency-injection seams** (`src/training/types.ts` + `src/training/seams.ts`): `IEntityFactory`, `IRecordLoader`, `ISidecarTrainer`, `IArtifactStore`. Production wires `MetadataEntityFactory`, `RunViewRecordLoader`, `MJSidecarTrainer`, and `MJFilesArtifactStore`; tests substitute in-memory fakes (which is what makes the engine unit-testable with no DB and no live sidecar — see the live integration test in §18.4).
 
 ### 5.1 Validation discipline + locked holdout
 
 Be opinionated; don't ship broken models. Default to a train/test split with overfitting detection; optional k-fold and holdout. The decisive primitive is the **locked final holdout** — a slice the search never sees (`carveLockedHoldout()` leads the split), scored *exactly once* on the promoted model → `MLModel.HoldoutMetrics` is the **honest number**. This prevents leaderboard optimism and the multiple-comparisons overfitting an automated search inevitably produces. The holdout is scored through the frozen apply-only path (the same `transform()` inference uses), so it measures exactly what production will see. Deterministic scoring (AUC/F1/accuracy/RMSE) drives the loop.
 
-> The integration test (§17.4) asserts this end-to-end: the holdout is carved *before* training, scored *once* on the final model, and the resulting `HoldoutMetrics.auc` clears **0.70** for both XGBoost and Logistic Regression on a deliberately noisy synthetic signal.
+> The integration test (§18.4) asserts this end-to-end: the holdout is carved *before* training, scored *once* on the final model, and the resulting `HoldoutMetrics.auc` clears **0.70** for both XGBoost and Logistic Regression on a deliberately noisy synthetic signal.
 
 ### 5.2 `MJ: ML Models` is distinct from `MJ: AI Models`
 
@@ -403,7 +404,7 @@ The processor **warm-loads the model once** and shares it across the batch (an i
 
 ### 6.4 Single, batch, on-demand, scheduled
 
-The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§15); scoring + write-back ship with **zero dependency** on it.
+The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§16); scoring + write-back ship with **zero dependency** on it.
 
 ---
 
@@ -751,7 +752,182 @@ Positive `improvement` always means "better," whichever direction the metric run
 
 ---
 
-## 15. Roadmap / future phases
+## 15. Phase 2 — Model as a First-Class Primitive (Reach)
+
+Phase 1 (§1–§14) shipped the model *entity* and its core invocation surfaces — Actions, Remote Operations, and write-back into entity fields — proven live end-to-end. **Phase 2 extends the model's *reach*: the *same* trained scorer, plumbed into every MJ surface where a prediction is useful.** None of this is new ML. There is exactly **one** scorer (`MLModelInferenceProcessor`, §6) and exactly **one** scoring entry point (`PredictiveStudioScoreRecordSetAction` / the `PredictiveStudio.ScoreRecordSet` Remote Op, which share one delegation path); Phase 2 is purely the plumbing that exposes that one scorer as a saved/scheduled Record Process, a discoverable per-model Action, a query column, and an interactive-component capability — and turns its output into ordinary entity data via write-back.
+
+### 15.1 The unifying picture — one scorer, many surfaces
+
+```mermaid
+flowchart TB
+    M["MJ: ML Models<br/>(one immutable, published model)"]
+    M --> SC["The ONE scorer<br/>MLModelInferenceProcessor<br/>(PredictiveStudio.ScoreRecordSet)"]
+
+    SC --> RP["PS2-1 · Saved 'ML Model'<br/>Record Process<br/>(on-demand + scheduled)"]
+    SC --> ACT["PS2-2 · Per-model Action<br/>'Score with &lt;pipeline&gt; v&lt;n&gt;'<br/>(generated on Publish)"]
+    SC --> QRY["PS2-3 · Scored Query column<br/>(RunQuery Enrichment)"]
+    SC --> IC["PS2-4 · Interactive Component<br/>utilities.ml.score / .listModels"]
+
+    RP --> WB["WriteBackProcessor<br/>OutputMapping → real entity column"]
+    ACT --> WB
+    QRY --> EPH1["ephemeral prediction column<br/>appended to the result rows"]
+    IC --> EPH2["ephemeral predictions<br/>folded into charts / tables"]
+    WB --> COL["RenewalScore / PredictedRenewalClass<br/>= ordinary, sortable / filterable /<br/>reportable entity data"]
+```
+
+**Decoupling is the discipline that makes this safe.** No base/types package gains a dependency on Predictive Studio. Every surface plugs in through a *registry* or the *MJGlobal ClassFactory*, resolved by string key at runtime, no-op when the providing package isn't loaded:
+
+| Surface | Seam | Lives in (PS-free) | Provided by (PS) |
+|---|---|---|---|
+| Record Process | `RecordProcessorRegistry` | `@memberjunction/record-set-processor-base` | `registerMLScoringProcessor()` at startup |
+| Scored Query | `QueryResultEnricherBase` + ClassFactory | `@memberjunction/core` (`queryResultEnricher.ts`) | `@RegisterClass(QueryResultEnricherBase, 'ML Model Score')` |
+| Interactive Component | `ComponentUtilities.ml?` (optional) | `@memberjunction/interactive-component-types` | `RuntimeUtilities.CreateSimpleMLTools()` (ng-react) |
+| Per-model Action | `MJ: Actions` metadata + `ParentID` | — (pure metadata) | `ModelScoringActionGenerator` on Publish |
+
+### 15.2 PS2-1 — Scoring as a saved (and scheduled) Record Process
+
+**What it is.** Phase 1's `MLModelInferenceProcessor` is a Record Set Processing **work type** (`'ML Model'`, §6), but a `@RegisterClass` decoration only makes it *resolvable* through the ClassFactory — it does not make the substrate *route* a saved `MJ: Record Processes` row with `WorkType='ML Model'` to it. PS2-1 closes that gap so a **saved, replayable, schedulable** Record Process scores a scope and writes a prediction column.
+
+**Key entry points.**
+
+- `registerMLScoringProcessor(deps: MLInferenceDeps): void` (`Engine/src/scoring/register.ts`) — installs a factory into `RecordProcessorRegistry.Instance` for both `'ML Model'` and the `'MLModelInference'` alias. The factory reads the per-run `MLScoringConfiguration` (`{ modelId, primaryKeyField?, datedSources? }`) off the Record Process's `Configuration` JSON and closes over the injected `MLInferenceDeps` (model loader / artifact loader / sidecar).
+- `PredictiveStudioScoringStartup` (`Engine/src/scoring/startup-register.ts`) — a `@RegisterForStartup`-decorated `IStartupSink` (a `BaseSingleton`) whose `HandleStartup()` calls `registerMLScoringProcessor(buildProductionMLInferenceDeps())` **once at MJAPI boot**. It warms no `BaseEngine` cache and touches no DB — the injected seams take their `provider` + `user` per call — so the registration is a cheap synchronous map write (not `deferred`). Mirrors `RemoteBrowserEngine`'s startup pattern.
+- The **migration** `migrations/v5/V202606280215__v5.44.x__RecordProcess_WorkType_Pluggable.sql` drops the closed `CK_RecordProcess_WorkType` CHECK constraint. That CHECK hard-coded `WorkType` to the four built-ins (`'Action' | 'Agent' | 'Infer' | 'FieldRules'`), so a row with `WorkType='ML Model'` failed on INSERT *before* the registry ever got to resolve a processor — directly contradicting the pluggable design. Work-type **validity** is now enforced where it belongs: at execution time, by `RecordProcessExecutor.buildProcessor() → RecordProcessorRegistry.Resolve()`, which throws for an unregistered work type. The built-in values stay first-class **suggestions** via the field's value list (which drives the generated TypeScript union + the UI dropdown) — just not a hard DB constraint a registered extension can never satisfy. Idempotent (`DROP ... IF EXISTS`); no CodeGen needed (a CHECK is not CodeGen output).
+
+**Dry-run write-back fix.** PS2-1 also hardened the substrate's write-back so a **dry-run** of any wrapped work type (Action / Agent / Infer / **ML Model**) computes its effect without mutating data. `applyOutputMapping(... dryRun: true)` (`packages/RecordSetProcessor/engine/src/writeBack.ts`) now still resolves the mapped values and validates the target entity/field metadata, but saves nothing — returning the would-be values in `previewFields` / `previewChild` (`WriteBackResult.dryRun`). This mirrors the first-class `ProcessRun.DryRun` flag threaded through `WriteBackProcessor.ts` and `RecordProcessExecutor.ts`, and through the action's `ScoreRecordSetRequest.dryRun`.
+
+**Usage** — score a view and write a probability column on demand:
+
+```typescript
+// A saved MJ: Record Processes row (created once, then runnable / schedulable):
+//   WorkType      = 'ML Model'                         // set via rp.Set('WorkType', …) — see 15.6
+//   ScopeType     = 'Filter'  ScopeFilter = "IsActive = 1"
+//   Configuration = { "modelId": "<MJ: ML Models id>", "primaryKeyField": "ID" }
+//   OutputMapping = { "fields": { "RenewalScore": "$.score" } }   // write-back
+// Run it (same path the scheduled job driver uses):
+await RecordProcessExecutor.RunByID(recordProcessId, { contextUser, provider });
+// → each row scored by the model → RenewalScore column written back.
+```
+
+**Proven live by** `ps-live-recordprocess-scoring.ts` — a SAVED Record Process scoring over GraphQL against a running MJAPI, relying on the **startup-registered** scorer (it does *not* register the work type itself).
+
+### 15.3 PS2-2 — A per-model Action generated on Promote
+
+**What it is.** When a model is promoted to **Published**, the promote gate auto-generates an idempotent child Action **`Score with <pipeline> v<n>`**, so every published model becomes a first-class, discoverable Action — ActionSmith / CodeSmith pick it up for free, with zero per-model code or AI codegen.
+
+**Key entry points.**
+
+- `ModelScoringActionGenerator` (`Engine/src/actions/model-scoring-action-generator.ts`):
+  - `generateForModel(model, contextUser, provider): Promise<void>` — find-or-create the Action by its deterministic name; reconcile its params (delete + recreate to stay in sync with the parent contract).
+  - `disableForModel(model, contextUser, provider): Promise<void>` — flip `Status` to `'Disabled'` when the model is Archived.
+- The hook is in `ProductionModelPromotionGate.syncScoringAction()` (`Engine/src/actions/promote-model.gate.ts`), called from `transition()` after the lifecycle save: generate on `Published`, disable on `Archived`. It is a **pure enhancement** — any failure is logged and swallowed so it can never fail an otherwise-successful promotion.
+
+**Composition, not inheritance** (CLAUDE.md Actions rule). The generated row is a *child* of the canonical **Score Record Set** parent — it carries the parent's `ParentID` (metadata link only) and reuses the **same** `DriverClass` (`SCORE_RECORD_SET_DRIVER_CLASS = 'PredictiveStudioScoreRecordSetAction'`). That driver already reads `ModelID` / `Scope` / `WriteBack`, so the child needs no new implementation. The only thing model-specific is the `ModelID` input param's `DefaultValue`, **baked to `model.ID`** — ActionEngine seeds each param from its `DefaultValue` before invoke, so omitting `ModelID` scores with *this* model. The Action is named from the model's denormalized `Pipeline` view field (the model has no `Name` column) and `Version`, and grouped under a find-or-create `Predictive Studio Models` Action Category.
+
+**Proven live by** `ps-live-modelaction-generation.ts` — promotes a model to Published over GraphQL, then reads `MJ: Actions` / `MJ: Action Params` back and asserts the generated Action name + the baked `ModelID` default.
+
+### 15.4 PS2-3 — Scored-query enrichment
+
+**What it is.** A `RunQuery` post-query enrichment seam: a query run with an `Enrichment` directive has its result rows scored by the existing scorer and the prediction **appended as a new column** — post-query, **not** SQL-inline, so the model stays in the engine (portable, no DB-side model dependency).
+
+**Key types/entry points (all decoupled from PS).**
+
+- `QueryResultEnricherBase` (abstract) + `RunQueryEnrichment` (`{ EnricherKey: string; Config: Record<string, unknown> }`) + `resolveQueryResultEnricher(key)` live in **`@memberjunction/core`** (`src/generic/queryResultEnricher.ts`). `RunQueryParams.Enrichment?: RunQueryEnrichment` is a **runtime-only** directive — there is intentionally **no** persisted per-query column (a saved annotation is a deliberate follow-up), so the feature is purely additive: no schema change, no CodeGen.
+- The hook is in `GenericDatabaseProvider.InternalRunQuery` → `enrichQueryResults(...)`: after paging, if `params.Enrichment?.EnricherKey` is set, it resolves the enricher via the ClassFactory and awaits `EnrichResults(...)`. **Resolution checks `GetRegistration` before constructing** (so it never instantiates the abstract base) and the whole call is wrapped in try/catch — when no enricher is registered (providing package not loaded) or anything fails, it **returns the original rows**. A scoring problem can never break the query.
+- `MLModelScoreEnricher` (`Engine/src/scoring/ml-model-score-enricher.ts`, `@RegisterClass(QueryResultEnricherBase, 'ML Model Score')`) is the PS half. Its `MLModelScoreEnricherConfig` is `{ modelId, outputField, primaryKeyField?, valueKind?: 'score' | 'class' }`. Because the **model** determines the target entity, the enricher only needs each row's primary key: it collects the PKs, scores them **without write-back** (ephemeral), and joins predictions back onto rows by id (`O(1)` map). `LoadMLModelScoreEnricher()` anchors the registration against tree-shaking.
+
+**Usage:**
+
+```typescript
+const result = await new RunQuery().RunQuery({
+  QueryName: 'Active Members',
+  Enrichment: {
+    EnricherKey: 'ML Model Score',
+    Config: { modelId: '<MJ: ML Models id>', outputField: 'RenewalScore', primaryKeyField: 'ID' },
+  },
+});
+// → each result row now carries a `RenewalScore` column (the model's numeric score).
+```
+
+**Proven live by** `ps-inproc-scored-query.ts` — runs in-process (the `Enrichment` param is not marshaled over GraphQL yet, by design), exercising the full path: `RunQuery → resolveQueryResultEnricher('ML Model Score') → MLModelScoreEnricher → MLModelInferenceProcessor → DB + sidecar → new column`.
+
+### 15.5 PS2-4 — An `ml` capability on Interactive Components
+
+**What it is.** An optional `ml` capability on the Interactive Components `utilities` surface, so Skip's components can **list trained models** and **score records** and weave predictions (renewal likelihood, lead scores, churn risk) into charts / tables / dashboards. Push-to-generic: every interactive component gains it.
+
+**Key types/entry points.**
+
+- `SimpleMLTools` (`packages/InteractiveComponents/src/shared.ts`) — the capability interface:
+  - `listModels(filter?: SimpleMLListModelsFilter, contextUser?): Promise<SimpleMLModelInfo[]>` — newest version first; resilient (returns `[]` on failure).
+  - `score(modelId, records: Array<Record<string,unknown> | string>, options?): Promise<SimpleMLScoreResult>` — ephemeral predictions (nothing written back).
+  - Supporting shapes: `SimpleMLModelInfo`, `SimpleMLPrediction`, `SimpleMLScoreResult`, `SimpleMLListModelsFilter`.
+- `ComponentUtilities.ml?: SimpleMLTools` (`runtime-types.ts`) is **optional** — it can be `undefined` when the capability isn't available in the current environment/security context, so component code **must guard** for that.
+- `RuntimeUtilities.CreateSimpleMLTools()` (`packages/Angular/Generic/react/src/lib/utilities/runtime-utilities.ts`) builds it: `listModels` reads the `MJ: ML Models` catalog via `RunView` (defaulting `Status='Published'`); `score` marshals the `PredictiveStudioScoreRecordSetOperation` (the `PredictiveStudio.ScoreRecordSet` Remote Op) **over GraphQL** to the server engine — because the Python sidecar lives server-side and cannot run in the browser. Returns `undefined` when there is no `GraphQLDataProvider`, so the `ml` capability degrades cleanly.
+
+**Usage (inside an interactive component):**
+
+```typescript
+if (utilities.ml) {
+  const models = await utilities.ml.listModels({ targetVariable: 'Renewed' });
+  const { predictions } = await utilities.ml.score(models[0].id, memberRows /* objects or pk strings */);
+  // fold predictions (by recordId) into the chart/table…
+}
+```
+
+### 15.6 PS2-6 — The north-star: scheduled model scoring
+
+**What it is.** The end-to-end composition Phase 2 builds toward: *"build a model, write the renewal probability back into the member record, and re-score it on the 1st of every month"* — as a **single call**, with **no new scheduling, dispatch, or write-back code**. Everything underneath already exists (PS2-1 + the scheduled-job machinery); the helper just assembles one `MJ: Record Processes` row.
+
+**Key entry point.** `createScheduledModelScoring(opts: ScheduleModelScoringOptions): Promise<MJRecordProcessEntity>` (`Engine/src/scheduling/scheduled-model-scoring.ts`). Required quartet: `modelId`, `targetEntityName`, `outputField`, and exactly one `scope` selector (`filter` | `viewId` | `listId`); sensible defaults otherwise (`'Monthly'` cadence = `0 0 1 * *`, `ID` primary key, numeric `'score'`, UTC). It validates, maps the `ScoringCadence` to a cron (`cadenceToCron`), and populates the row:
+
+- `WorkType='ML Model'` — set via `rp.Set('WorkType', 'ML Model')`, the **documented legitimate exception** to the no-`.Set()` rule: the CodeGen'd `WorkType` union (`'Action' | 'Agent' | 'FieldRules' | 'Infer'`) cannot represent a runtime-registered extension work type. (Same exception PS2-1's path uses.)
+- `Configuration = { modelId, primaryKeyField }`, `OutputMapping = { fields: { <outputField>: '$.score' | '$.class' } }`.
+- `Status='Active'`, `ScheduleEnabled=true`, `CronExpression`, `Timezone`, `OnDemandEnabled=true`.
+
+Saving that row auto-creates an **owned `MJ: Scheduled Jobs`** row via `MJRecordProcessEntityServer.Save → reconcileScheduledJob`; `SchedulingEngine` then dispatches it on its cron through `RecordProcessScheduledJobDriver → RecordProcessExecutor.RunByID(...)` — which resolves the scope, scores each row, and writes the prediction back per the `OutputMapping`. The `schedule-model-scoring.action.ts` Action wraps the helper for agent/workflow invocation.
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Agent as Model Dev Agent
+    participant Train as TrainingEngine
+    participant Helper as createScheduledModelScoring
+    participant RP as MJ: Record Processes
+    participant Job as Owned MJ: Scheduled Jobs
+    participant Sched as SchedulingEngine
+    participant Exec as RecordProcessExecutor
+    participant Member as Membership row
+
+    User->>Agent: "predict renewal & re-score monthly"
+    Agent->>Train: trainModel(pipeline)
+    Train-->>Agent: published MJ: ML Models row
+    Agent->>Helper: createScheduledModelScoring({ modelId, targetEntity, outputField, scope, cadence:'Monthly' })
+    Helper->>RP: save row (WorkType='ML Model', ScheduleEnabled, cron='0 0 1 * *', OutputMapping)
+    RP->>Job: Save → reconcileScheduledJob (auto-creates owned job)
+    loop 1st of every month
+        Sched->>Exec: RunByID(recordProcessId)
+        Exec->>Member: score + write RenewalScore back
+    end
+```
+
+**Proven live by** `ps-inproc-scheduled-scoring.ts` — one `createScheduledModelScoring(...)` call, then it verifies the owned Scheduled Job the scheduler *would* dispatch and runs the Record Process now via `RecordProcessExecutor.RunByID` (the same path the job driver uses), asserting the write-back landed.
+
+### 15.7 Integration-test proofs
+
+Each Phase 2 capability ships with an MJServer integration script that exercises the real path (no mocked ML). The `ps-live-*` scripts drive an already-running MJAPI over GraphQL (system API key); the `ps-inproc-*` scripts bootstrap a real `SQLServerDataProvider` in-process (used where the path isn't marshaled over GraphQL yet). All gate the sidecar legs behind `PS_INTEGRATION=1` and skip gracefully without it.
+
+| Capability | Script | Harness | Proves |
+|---|---|---|---|
+| PS2-1 — saved Record Process scoring | `ps-live-recordprocess-scoring.ts` | live / GraphQL | a saved `WorkType='ML Model'` Record Process scores a view + writes columns, via the **startup-registered** scorer |
+| PS2-2 — per-model Action on Promote | `ps-live-modelaction-generation.ts` | live / GraphQL | promoting to Published generates `Score with <pipeline> v<n>` with `ModelID` `DefaultValue` baked in |
+| PS2-3 — scored-query enrichment | `ps-inproc-scored-query.ts` | in-process | `RunQuery` + `Enrichment` appends the model's prediction column |
+| PS2-6 — scheduled model scoring | `ps-inproc-scheduled-scoring.ts` | in-process | one `createScheduledModelScoring(...)` call → owned Scheduled Job + a real scored write-back |
+
+> PS2-5 (catalog awareness for agents) is delivered *through* PS2-2: every published model is a discoverable Action, which ActionSmith / CodeSmith see for free — no separate code.
+
+---
+
+## 16. Roadmap / future phases
 
 Predictive Studio ships end-to-end. The one explicitly-deferred capability is honest here:
 
@@ -763,7 +939,7 @@ Other open questions carried forward (none block the shipped feature): model ser
 
 ---
 
-## 16. The Studio UI
+## 17. The Studio UI
 
 Predictive Studio is an MJ Explorer dashboard built to the ng-dashboards world-class standards (see [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md)) and **lazy-loaded** (see [Lazy Loading Guide](LAZY_LOADING_GUIDE.md)). It lives at `packages/Angular/Explorer/dashboards/src/PredictiveStudio/`.
 
@@ -788,9 +964,9 @@ The HTML option mockups that informed the pinned designs are at [`plans/predicti
 
 ---
 
-## 17. Getting started — train and score a model
+## 18. Getting started — train and score a model
 
-### 17.1 One-time setup
+### 18.1 One-time setup
 
 ```bash
 # 1. Set up the bundled Python sidecar environment (once)
@@ -804,7 +980,7 @@ cd ../Sidecar                            && npm run build
 cd ../Engine                             && npm run build
 ```
 
-### 17.2 Train
+### 18.2 Train
 
 In production you invoke the `PredictiveStudio.TrainModel` Remote Op (browser/Skip) or the `Train ML Model` Action (agent). Both delegate to `TrainingEngine.trainModel`. Directly, the shape is:
 
@@ -824,11 +1000,11 @@ const result = await engine.trainModel(
 
 A pipeline (`MJ: ML Training Pipelines`) declares the target entity, target variable, problem type, algorithm, `SourceBindings`, `FeatureSteps` DAG, `AsOfStrategy`, `LeakageGuard`, and `ValidationStrategy` (including the locked-holdout fraction).
 
-### 17.3 Score (Record Set Processing)
+### 18.3 Score (Record Set Processing)
 
 Scoring runs as the `'ML Model'` work type. On-demand against a view/list/selection via `RecordProcess.RunNow` with a scope override (or the `PredictiveStudio.ScoreRecordSet` op / `Score Record Set` Action); scheduled via the `Schedule` trigger (which also upserts an `MJ: ML Model Scoring Binding` for maintenance, §14). Attach an `OutputMapping` to write the prediction back as a sortable/filterable column; omit it for ephemeral scores. See the [Record Set Processing Guide](RECORD_SET_PROCESSING_GUIDE.md) for the substrate mechanics.
 
-### 17.4 Run the live integration test (`PS_INTEGRATION=1`)
+### 18.4 Run the live integration test (`PS_INTEGRATION=1`)
 
 The engine ships an opt-in end-to-end test that spawns the **real** managed sidecar and trains + scores against it (`Engine/src/__tests__/integration/live-train-score.integration.test.ts`):
 
@@ -844,7 +1020,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 
 ---
 
-## 18. Quick reference — what's built
+## 19. Quick reference — what's built
 
 | Area | Status |
 |---|---|
@@ -863,7 +1039,7 @@ It exercises the real `FeatureAssemblyExecutor`, `TrainingEngine`, `MLSidecar` (
 | **Multimodal** vision-LLM-as-feature (`'vision-llm'` FeatureStep kind, additive) | ✅ built |
 | Studio dashboard UI (6 panels, engine, embedded copilot, lazy-load) | ✅ built |
 | Live integration test (`PS_INTEGRATION=1`) | ✅ built |
-| Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§15) |
+| Materialized prediction columns (#2770) | ⏳ **deferred — gated on PR #2770** (§16) |
 
 **Related guides**: [Record Set Processing](RECORD_SET_PROCESSING_GUIDE.md) (the scoring + wave + feature-pipeline substrate) · [Remote Operations](REMOTE_OPERATIONS_GUIDE.md) & [Transport-Layer Architecture](TRANSPORT_LAYER_ARCHITECTURE_GUIDE.md) (the invocation surface) · [Dashboard Best Practices](DASHBOARD_BEST_PRACTICES.md) & [Lazy Loading](LAZY_LOADING_GUIDE.md) (the Studio UI) · [Conversations UX Stack](CONVERSATIONS_UX_STACK_GUIDE.md) (the embedded copilot) · [Agent Memory](AGENT_MEMORY_GUIDE.md) (the Model Dev Agent's notes).
 
