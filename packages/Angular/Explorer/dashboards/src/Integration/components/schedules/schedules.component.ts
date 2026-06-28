@@ -1,9 +1,11 @@
-import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJCompanyIntegrationEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { IntegrationDataService, ResolveIntegrationIcon } from '../../services/integration-data.service';
+import { buildIntegrationAgentContext, resolveIntegrationSurface, navLabelForSurface } from '../../integration-agent-context';
+import { AgentToolResult } from '../../../shared/agent-tool-validation';
 
 // ---------------------------------------------------------------------------
 // Data interfaces
@@ -60,7 +62,7 @@ interface CronPreset {
   templateUrl: './schedules.component.html',
   styleUrls: ['./schedules.component.css']
 })
-export class SchedulesComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class SchedulesComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // ---------------------------------------------------------------------------
   // Public state
@@ -131,6 +133,71 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   // ---------------------------------------------------------------------------
+  // AI Agent Context & Client Tools
+  //
+  // 🔒 SAFETY BOUNDARY: The Schedules surface exposes ONLY navigational and
+  // read-only refresh tools to the agent. It deliberately does NOT expose any
+  // sync trigger (RunSync — a LIVE external sync), nor update-schedule
+  // (enable/disable, change interval/cron), nor edit-mapping /
+  // change-credentials. Changing a schedule remains user-driven from the UI.
+  // ---------------------------------------------------------------------------
+
+  ngAfterViewInit(): void {
+    this.emitAgentContext();
+    this.registerAgentTools();
+  }
+
+  private emitAgentContext(): void {
+    const context = buildIntegrationAgentContext({
+      Surface: 'Schedules',
+      IsLoading: this.IsLoading,
+      KPIs: {
+        TotalIntegrations: this.Schedules.length,
+        ActiveSyncs: 0,
+        RecordsSyncedToday: 0,
+        SyncErrorRate: 0,
+        PipelineCount: 0,
+        ScheduledSyncCount: this.ScheduledCount,
+      },
+      SchedulesEnabledCount: this.ScheduledCount,
+      SchedulesLockedCount: this.LockedCount,
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchIntegrationSurface',
+        Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
+        ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'RefreshIntegrationData',
+        Description: 'Reload the integration sync schedules.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.LoadData();
+          return { Success: true };
+        },
+      },
+    ]);
+  }
+
+  private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const surface = resolveIntegrationSurface(params['surface']);
+    if (!surface) {
+      return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
+    }
+    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    if (!tabId) {
+      return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
+    }
+    return { Success: true };
+  }
+
+  // ---------------------------------------------------------------------------
   // Resource overrides
   // ---------------------------------------------------------------------------
 
@@ -171,6 +238,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
     } finally {
       this.IsLoading = false;
       this.cdr.detectChanges();
+      this.emitAgentContext();
     }
   }
 

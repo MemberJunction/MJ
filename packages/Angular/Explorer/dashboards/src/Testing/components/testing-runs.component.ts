@@ -1155,6 +1155,35 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     this.applyInitialState();
     this.updateServiceDateRange();
     this.setupObservables();
+    this.subscribeToAgentFilterIntents();
+  }
+
+  /**
+   * Apply agent-driven filter intents published on the shared instrumentation
+   * service (from the Testing dashboard's `FilterTestsByStatus` / `SearchTests`
+   * client tools). Decouples those tools from this component's lifetime — the
+   * intent is replayed via BehaviorSubject when this surface mounts.
+   */
+  private subscribeToAgentFilterIntents(): void {
+    this.instrumentationService.runsFilterIntent$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(intent => {
+      if (!intent) return;
+      let changed = false;
+      if (intent.status && intent.status !== this.filterState.status) {
+        this.filterState.status = intent.status;
+        changed = true;
+      }
+      if (intent.searchText != null && intent.searchText !== this.filterState.searchText) {
+        this.filterState.searchText = intent.searchText;
+        changed = true;
+      }
+      if (changed) {
+        this.filterTrigger$.next();
+        this.emitStateChange();
+        this.cdr.markForCheck();
+      }
+    });
   }
 
   ngOnDestroy(): void {

@@ -8,6 +8,9 @@ import { debounceTime } from 'rxjs/operators';
 import { ERDCompositeComponent, ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
 import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 
+import { buildEntityAdminAgentContext } from './entity-admin-agent-context';
+import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+
 /** Settings key for ERD state persistence */
 const ERD_SETTINGS_KEY = 'MJ.Admin.Entity.ERD';
 
@@ -49,6 +52,12 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     ).subscribe(state => {
       this.saveStateToUserSettings(state);
     });
+
+    // Publish the initial agent context and register the (read-only) client tools
+    // the AI agent can invoke against this surface. Ongoing re-emit happens in
+    // onStateChange (every ERD state change).
+    this.publishAgentContext();
+    this.registerAgentClientTools();
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {
@@ -91,6 +100,10 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       this.hasLoadedUserState = true;
       this.loadStateFromUserSettings();
     }
+
+    // Keep the AI agent's view of this surface in sync with every ERD state change
+    // (entity selection, filter panel visibility, filtered count, etc.).
+    this.publishAgentContext();
   }
 
   public onUserStateChange(state: ERDCompositeState): void {
@@ -178,5 +191,114 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     } catch (error) {
       console.warn('Failed to save ERD state to User Settings:', error);
     }
+  }
+
+  // ========================================
+  // AI AGENT CONTEXT & CLIENT TOOLS
+  //
+  // 🔒 SAFETY BOUNDARY: The Entity Admin surface is a metadata BROWSER (the ERD
+  // entity explorer). The context published and the tools registered below are
+  // STRICTLY READ-ONLY / NAVIGATIONAL — select/clear an entity, toggle the filter
+  // panel, refresh the diagram. NO tool here (and none added in future) may edit,
+  // create, or delete entity metadata, alter schema, or perform any other mutation.
+  // The agent browses; the user makes changes from the dedicated entity forms.
+  // ========================================
+
+  /**
+   * Publish the current Entity Admin ERD-browser state to the AI agent via
+   * NavigationService. Reports the entity counts (total + filtered), the current
+   * selection, and filter-panel visibility. The shaping lives in the pure
+   * {@link buildEntityAdminAgentContext} helper so it stays unit-testable.
+   * Called on init (ngAfterViewInit) and on every ERD state change (onStateChange).
+   */
+  private publishAgentContext(): void {
+    const context = buildEntityAdminAgentContext({
+      TotalEntityCount: this.TotalEntityCount,
+      FilteredEntityCount: this.filteredEntities.length,
+      SelectedEntityId: this.selectedEntity?.ID ?? null,
+      SelectedEntityName: this.selectedEntity?.Name ?? null,
+      FilterPanelVisible: this.filterPanelVisible,
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  /**
+   * Register the (read-only / navigational) client tools the AI agent can invoke
+   * against the Entity Admin ERD. Each handler delegates to the same component or
+   * ERD method a user interaction would call, and returns `{ Success: true }` on
+   * success or `{ Success: false, ErrorMessage }` on failure. Handlers never throw.
+   *
+   * Tools (browse only — see SAFETY BOUNDARY above):
+   * - SelectEntity: select an entity in the ERD by its ID and focus it.
+   * - ToggleFilterPanel: show/hide the ERD filter panel.
+   * - ClearEntitySelection: deselect the currently selected entity.
+   * - RefreshERD: re-render the ERD diagram.
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SelectEntity',
+        Description: 'Select and focus an entity in the ERD by its entity ID (read-only — opens nothing for edit).',
+        ParameterSchema: { type: 'object', properties: { entityId: { type: 'string' } }, required: ['entityId'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSelectEntity(params),
+      },
+      {
+        Name: 'ToggleFilterPanel',
+        Description: 'Show or hide the ERD entity filter panel.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.toggleFilterPanel();
+          this.publishAgentContext();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearEntitySelection',
+        Description: 'Clear the currently selected entity in the ERD.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.toolClearEntitySelection(),
+      },
+      {
+        Name: 'RefreshERD',
+        Description: 'Re-render the ERD diagram (no data is modified).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.toolRefreshERD(),
+      },
+    ]);
+  }
+
+  /** Resolve an entity by ID from the ERD's loaded entities and select/focus it. */
+  private toolSelectEntity(params: Record<string, unknown>): AgentToolResult {
+    const validated = validateStringParam(params['entityId'], 'entityId');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    if (!this.erdComposite) {
+      return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
+    }
+    const entity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, validated.value));
+    if (!entity) {
+      return { Success: false, ErrorMessage: `Entity with ID "${validated.value}" is not available in the ERD.` };
+    }
+    this.erdComposite.onEntitySelected(entity);
+    return { Success: true };
+  }
+
+  /** Deselect the currently selected entity in the ERD. */
+  private toolClearEntitySelection(): AgentToolResult {
+    if (!this.erdComposite) {
+      return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
+    }
+    this.erdComposite.onEntityDeselected();
+    return { Success: true };
+  }
+
+  /** Re-render the ERD diagram. */
+  private toolRefreshERD(): AgentToolResult {
+    if (!this.erdComposite) {
+      return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
+    }
+    this.erdComposite.refreshERD();
+    return { Success: true };
   }
 }

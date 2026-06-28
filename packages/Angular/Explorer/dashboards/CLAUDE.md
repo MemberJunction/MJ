@@ -136,4 +136,56 @@ The shell component waits for `onFirstResourceLoadComplete()` before hiding the 
 
 > **Admin safety rule:** Admin surfaces expose ONLY navigational / filter / search / export / read-only-diagnostic tools to the agent. **Never** wire create/edit/delete (users/roles/keys), schema mutations, GraphQL execution, query-run-with-arbitrary-params, or secret/token values into agent context or tools. Each Admin component carries a documented SAFETY BOUNDARY comment.
 
+**Actions** (🔒 find/filter/navigate only — **action execution NOT exposed** to the agent)
+| Surface | Context Fields | Tools (read-only) |
+|---------|---------------|-------|
+| Overview | action counts, success rate, current search/status/type filters | SearchActions, FilterActionsByStatus/ByType, ClearAllFilters, OpenActionDetail, OpenExecutionDetail, RefreshOverviewData |
+| Explorer | view mode, sort, selected category, total/filtered counts, filters | SwitchViewMode, SortActionsByField, SearchActions, ClearExplorerSearch, SelectCategory, ToggleStatus/TypeFilter, ClearExplorerFilters, OpenActionRecord, RefreshExplorerData |
+| Monitor | execution metrics (total/failed/running), success rate, filters | SearchExecutions, FilterExecutionsByResult/ByTimeRange/ByAction, ClearMonitorFilters, OpenExecutionLog, RefreshMonitorData |
+
+> **Actions safety:** `RunAction` / any execute path is intentionally NOT exposed (side effects + agent-supplied params). The agent finds/filters/navigates; the user runs from the UI dialog.
+
+**Lists**
+| Surface | Context Fields | Tools |
+|---------|---------------|-------|
+| Browse | search, view mode, list counts, sort, active filters | OpenList, SearchLists, FilterLists, ClearFilters, SetViewMode, SortBy, **CreateList** (bounded) |
+| Categories | selected category, counts | SelectCategory, ExpandCategory, **CreateCategory** (bounded) |
+| Operations (Venn) | operand counts, locked entity, compose op, region selection | AddListOperand, RemoveListOperand, FilterOperandsByEntity, PerformUnion/Intersection/SymmetricDifference, SelectVennRegion, **CreateListFromRegion**/**AddRegionToList** (append-only) |
+
+> **Lists safety:** create/append (dialog-validated) exposed; **Edit/Delete/Share/Duplicate/ToggleFavorite/ComposeAndSave NOT exposed** (destructive or user-confirm-driven).
+
+**Bulk Operations** (🔒 **dry-run preview only — real apply NOT exposed**)
+| Surface | Context Fields | Tools |
+|---------|---------------|-------|
+| Operations | mode, process counts, search, editing process, isRunning | RefreshProcessList, SearchProcesses, CreateNewProcess, EditProcess, BackToList, **PreviewProcessChanges (dry-run)** |
+| Run History | viewing-detail, run count, open-run status + DryRun flag | RefreshRunHistory, ViewRunDetails, BackToRunList |
+
+> **Bulk Ops safety:** the only "run" capability is `PreviewProcessChanges` (opens the runner, which always dry-runs first and requires a manual user Apply). **No tool performs a real (non-dry-run) apply**, and `SaveProcess` is not exposed.
+
+### Phase-5 full rollout — remaining apps (all wired with context + tools)
+
+Every app below publishes context (re-emitted on state change) + registers tools via the inherited `this.navigationService` (never re-inject it — that shadows the base and breaks the build). Per-surface specifics live in each component's `SAFETY BOUNDARY` comment; this is the index.
+
+| App | Context (highlights) | Safe tools | 🔒 Excluded / gated |
+|-----|----------------------|------------|---------------------|
+| **Communication** | active tab + child counts (logs/providers/templates/runs/sent/failed) | SwitchCommunicationTab, RefreshCommunicationData, FilterLogsBy | **SendMessage / compose**, template/provider edit, test-send |
+| **Integration** | KPIs (integrations, syncs, error rate, pipelines, schedules) per surface | SwitchIntegrationSurface, RefreshIntegrationData, FilterActivityByStatus, SearchActivity | **RunSync** (live external sync), edit mappings/schedules/creds |
+| **Scheduling** | active tab, job counts by status, alerts, success rate | SwitchSchedulingTab, RefreshSchedulingData, FilterJobsByStatus, SearchJobs, GetJobDetails | pause/resume (updateJobStatus), delete, create-job |
+| **Testing** | active tab, run/pass/fail counts, cost, pending-review | SwitchTestingTab, RefreshTestingData, FilterTestsByStatus/ByTimeRange, SearchTests, GetTestRunDetails, **SubmitTestFeedback** | **StartNewTest / RerunTest** (execute) |
+| **EntityAdmin** | entity counts, selected entity, filter-panel state | SelectEntity, ToggleFilterPanel, ClearEntitySelection, RefreshERD | any entity-metadata edit/create/delete |
+| **DashboardBrowser** | mode, selected dashboard, counts, category, view mode | SearchDashboards, FilterByCategory, OpenDashboard, SwitchViewMode, RefreshDashboardList, BackToList | create/delete/save/share/move |
+| **MCP** | active tab, server/connection/tool/exec counts, search (no secrets) | SwitchMCPTab, SearchMCPTools, FilterMCPToolsByServer, ToggleMCPToolFavorite, RefreshMCPData, SetToolsViewMode, ClearMCPFilters | create/delete servers+connections, **tool execution**, credentials/OAuth |
+| **Form Builder / Component Studio** | active form, canvas, selected element/section, dirty flag, pane mode, field names | **canvas-edit suite**: AddField, RemoveField, SetFieldLabel, ToggleFieldRequired, SetFieldSpan, ReorderFields, AddSection, RemoveSection, SetSectionTitle, PreviewForm, ViewFormCode/Layout (+ wholesale UpdateForm) | Save/Publish/persist, delete-whole-form, override-activation |
+| **Home** | app/pin/group/notification/recent counts, edit + add-panel state | OpenApp, OpenPin, SearchAddPinPanel, OpenAddPinPanel/Close, ToggleSidebar, TogglePinEditMode | pin create/delete/rename, group mutation, reorder |
+| **RealtimeRecordings** | session count, selected session (agent/convo/media/duration), turn count | SelectSession, DeselectSession, RefreshSessionList, SearchSessions | mutate/delete/export (read-only playback) |
+| **VersionHistory** | Restore: restore counts + filter · Graph: selected entity, entity/relationship counts, search, schema filter | FilterRestoresByStatus, RefreshRestoreHistory, GetRestoreStats · SelectEntityForDependencyView, FilterEntitiesBySchema, SearchEntities | **Restore/rollback**, label mutation, schema edits |
+| **ApplicationRoles** | app-group + assignment counts, unsaved flag, expanded groups | ToggleApplicationGroup, GetRoleCountForApplication, RefreshApplicationRoleData | toggle-access/admin, add/remove role, save/discard |
+| **Archiving** | Config: policy/entity counts · Runs: run counts by status, filter, selected run | RefreshArchiveConfig · FilterArchiveRunsByStatus, RefreshArchiveRunHistory, ViewArchiveRunDetail | **run archive / purge**, modify policy, cancel/retry run |
+| **DatabaseDesigner** (🔒 read-only schema browse) | entity count, search, selected entity, modify-panel state | SearchEntities, SelectEntity (view), RefreshEntityList | **all schema mutation** — create/modify/add-field/delete/apply/pipeline |
+| **Credentials** (🔒 metadata-only) | active tab, credential/type counts (never secrets) | SwitchCredentialsTab, RefreshCredentialCounts | secret values, create/edit/delete/reveal, type/category mutation |
+| **Permissions** (🔒 read-only) | resource/user lookup state, audit filters, counts | LookupResourcePermissions, ChangeDomain, SelectUserForPermissionReview, TogglePermissionDomainGroup, RunAuditTimelineQuery, ResetAuditFilters | **grant/revoke**, domain mutation, impersonation, audit-record edit |
+| **DevTools** | per-inspector (see below) | EventMonitor (pause/resume/clear/filter/sort), ClassRegistry (search/filter/clear), LazyModules (search/refresh), Layout (inspect/refresh) | — |
+
+> **DevTools safety tiers:** EventMonitor / ClassRegistry / LazyModules / Layout = safe (context + tools). **AppState / SettingsExplorer = metadata-only** (counts/keys, **never values** — may hold tokens/secrets; no value-returning tools). **GraphQL Console = intentionally UNWIRED** (no context, no tools — arbitrary query execution is an injection vector).
+
 See **[packages/AI/Agents/AGENT_CONTEXT_GUIDE.md](../../../AI/Agents/AGENT_CONTEXT_GUIDE.md)** for the full architecture guide.

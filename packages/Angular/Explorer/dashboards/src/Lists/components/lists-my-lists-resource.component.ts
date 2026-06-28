@@ -7,6 +7,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
 interface ListViewModel {
   list: MJListEntity;
   itemCount: number;
@@ -100,14 +101,14 @@ interface CategoryNode {
             <button
               class="view-toggle"
               [class.active]="viewMode === 'grid'"
-              (click)="viewMode = 'grid'"
+              (click)="setViewMode('grid')"
               title="Grid view">
               <i class="fa-solid fa-grip"></i>
             </button>
             <button
               class="view-toggle"
               [class.active]="viewMode === 'list'"
-              (click)="viewMode = 'list'"
+              (click)="setViewMode('list')"
               title="List view">
               <i class="fa-solid fa-list"></i>
             </button>
@@ -1133,6 +1134,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   async ngOnInit() {
     super.ngOnInit();
     await this.loadData();
+    this.registerAgentTools();
+    this.publishAgentContext();
     this.NotifyLoadComplete();
   }
 
@@ -1140,6 +1143,79 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // SAFETY BOUNDARY: SAFE (open / search / view) operations plus ONE
+  // bounded-mutation tool (CreateList) that opens the dialog-validated
+  // create flow. INTENTIONALLY EXCLUDED — must NOT be wired in:
+  //   - EditList   (editList)             — mutates an existing record
+  //   - DeleteList (confirmDeleteList)    — destructive
+  // ================================================================
+
+  /** Report the My-Lists surface's salient state to the AI agent. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      SearchTerm: this.searchTerm,
+      ViewMode: this.viewMode,
+      AllListCount: this.allLists.length,
+      FilteredListCount: this.filteredLists.length,
+    });
+  }
+
+  /** Register the My-Lists surface's agent-actionable tools. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'OpenList',
+        Description: 'Open one of my lists by its ID in a new tab.',
+        ParameterSchema: { type: 'object', properties: { listId: { type: 'string', description: 'The ID of the list to open' } }, required: ['listId'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['listId'], 'listId');
+          if (!check.ok) return check.result;
+          const item = this.allLists.find(l => UUIDsEqual(l.list.ID, check.value));
+          if (!item) return { Success: false, ErrorMessage: `No list found with ID "${check.value}".` };
+          this.openList(item.list);
+          return { Success: true, Data: { listName: item.list.Name } };
+        },
+      },
+      {
+        Name: 'SearchLists',
+        Description: 'Set the search term that filters my lists.',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['searchTerm'], 'searchTerm');
+          if (!check.ok) return check.result;
+          this.searchTerm = check.value;
+          this.onSearchChange(check.value);
+          this.publishAgentContext();
+          return { Success: true, Data: { resultCount: this.filteredLists.length } };
+        },
+      },
+      {
+        Name: 'SetViewMode',
+        Description: 'Set the view mode: "grid" or "list".',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['grid', 'list'] } }, required: ['mode'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateEnumParam(params['mode'], ['grid', 'list'] as const, 'mode');
+          if (!check.ok) return check.result;
+          this.setViewMode(check.value);
+          return { Success: true };
+        },
+      },
+      {
+        // BOUNDED MUTATION: opens the dialog-validated create flow only.
+        Name: 'CreateList',
+        Description: 'Open the "Create New List" dialog. Nothing is saved until the user confirms the name and entity.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.createNewList();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   async loadData() {
@@ -1302,6 +1378,13 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   onSearchChange(_term: string) {
     this.applyFilter();
     this.buildCategoryTree();
+    this.publishAgentContext();
+  }
+
+  /** Set the grid/list view mode and refresh agent context. */
+  setViewMode(mode: 'grid' | 'list') {
+    this.viewMode = mode;
+    this.publishAgentContext();
   }
 
   clearSearch() {

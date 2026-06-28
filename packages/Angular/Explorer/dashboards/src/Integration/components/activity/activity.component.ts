@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, AfterViewInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
@@ -11,6 +11,8 @@ import {
   RunDetailRow,
   EntityMapRow,
 } from '../../services/integration-data.service';
+import { buildIntegrationAgentContext, resolveIntegrationSurface, navLabelForSurface } from '../../integration-agent-context';
+import { AgentToolResult, validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
 
 type StatusFilterType = 'All' | 'Success' | 'Failed' | 'In Progress' | 'Pending';
 type DateFilterType = 'today' | '7d' | '30d' | 'all';
@@ -36,11 +38,12 @@ interface IntegrationOption {
   templateUrl: './activity.component.html',
   styleUrls: ['./activity.component.css']
 })
-export class ActivityComponent extends BaseResourceComponent implements OnInit {
+export class ActivityComponent extends BaseResourceComponent implements OnInit, AfterViewInit {
 
   // Data
   AllRuns: IntegrationRunRow[] = [];
   FilteredRuns: IntegrationRunRow[] = [];
+  Summaries: IntegrationSummary[] = [];
   Integrations: IntegrationOption[] = [];
   SelectedRunID: string | null = null;
   SelectedRunDetails: RunDetailRow[] = [];
@@ -92,6 +95,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
         this.dataService.LoadIntegrationSummaries(provider),
         this.loadAllRuns(provider)
       ]);
+      this.Summaries = summaries;
       this.Integrations = this.buildIntegrationOptions(summaries);
       this.AllRuns = runs;
       this.ApplyFilters();
@@ -183,6 +187,105 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
     filtered = this.filterByDate(filtered);
     filtered = this.filterBySearch(filtered);
     this.FilteredRuns = filtered;
+    this.emitAgentContext();
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI Agent Context & Client Tools
+  //
+  // 🔒 SAFETY BOUNDARY: The Activity surface exposes ONLY read-only filter /
+  // search / navigation / refresh tools to the agent. It deliberately does NOT
+  // expose any sync trigger (RunSync — a LIVE external sync), nor any mutation
+  // of mappings, schedules, or credentials. The agent can narrow what's shown;
+  // the user performs every mutating action from the UI.
+  // ---------------------------------------------------------------------------
+
+  ngAfterViewInit(): void {
+    this.emitAgentContext();
+    this.registerAgentTools();
+  }
+
+  private emitAgentContext(): void {
+    const kpis = this.dataService.ComputeKPIs(this.Summaries);
+    const context = buildIntegrationAgentContext({
+      Surface: 'Activity',
+      IsLoading: this.IsLoading,
+      KPIs: {
+        TotalIntegrations: kpis.TotalIntegrations,
+        ActiveSyncs: kpis.ActiveSyncs,
+        RecordsSyncedToday: kpis.RecordsSyncedToday,
+        SyncErrorRate: kpis.ErrorRate,
+        PipelineCount: 0,
+        ScheduledSyncCount: 0,
+      },
+      ActivityStatusFilter: this.StatusFilter,
+      ActivitySearchQuery: this.SearchQuery,
+      ActivityFilteredRunCount: this.FilteredRuns.length,
+      ActivityTotalRunCount: this.AllRuns.length,
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchIntegrationSurface',
+        Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
+        ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'FilterActivityByStatus',
+        Description: 'Filter the run-activity list by status. Valid: All, Success, Failed, In Progress, Pending.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+        Handler: async (params: Record<string, unknown>) => this.toolFilterByStatus(params),
+      },
+      {
+        Name: 'SearchActivity',
+        Description: 'Search the run-activity list by integration or company name.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearch(params),
+      },
+      {
+        Name: 'RefreshIntegrationData',
+        Description: 'Reload the integration run-activity history.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.LoadData();
+          return { Success: true };
+        },
+      },
+    ]);
+  }
+
+  private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const surface = resolveIntegrationSurface(params['surface']);
+    if (!surface) {
+      return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
+    }
+    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    if (!tabId) {
+      return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
+    }
+    return { Success: true };
+  }
+
+  private toolFilterByStatus(params: Record<string, unknown>): AgentToolResult {
+    const check = validateEnumParam<StatusFilterType>(params['status'], this.StatusOptions, 'status');
+    if (!check.ok) {
+      return check.result;
+    }
+    this.SetStatusFilter(check.value);
+    return { Success: true };
+  }
+
+  private toolSearch(params: Record<string, unknown>): AgentToolResult {
+    const check = validateStringParam(params['query'], 'query');
+    if (!check.ok) {
+      return check.result;
+    }
+    this.OnSearchValueChange(check.value);
+    return { Success: true };
   }
 
   private filterByStatus(runs: IntegrationRunRow[]): IntegrationRunRow[] {

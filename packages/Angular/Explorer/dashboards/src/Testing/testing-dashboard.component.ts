@@ -1,12 +1,23 @@
 import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Subject } from 'rxjs';
+import { Subject, firstValueFrom } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ResourceData } from '@memberjunction/core-entities';
 import { TestingDialogService, TestingExecutionService, ActiveRun } from '@memberjunction/ng-testing';
 import { TabConfig } from '@memberjunction/ng-ui-components';
-import { TestingInstrumentationService } from './services/testing-instrumentation.service';
+import { TestingInstrumentationService, TestingDashboardKPIs } from './services/testing-instrumentation.service';
+import {
+  buildTestingAgentContext,
+  isValidTestingTab,
+  isValidTestingStatusFilter,
+  isValidTestingTimeRange,
+  TESTING_TABS,
+  TESTING_STATUS_FILTERS,
+  TESTING_TIME_RANGES,
+  TestingTab,
+} from './testing-agent-context';
+import { validateStringParam, AgentToolResult } from '../shared/agent-tool-validation';
 
 interface TestingDashboardState {
   activeTab: string;
@@ -32,6 +43,10 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
 
   // Active test runs from execution service
   public ActiveRuns: ActiveRun[] = [];
+
+  // Latest run-instrumentation KPIs, used to build agent context. Null until the
+  // first kpis$ emission arrives.
+  private latestKPIs: TestingDashboardKPIs | null = null;
 
   // Component states
   public dashboardState: Record<string, unknown> | null = null;
@@ -94,8 +109,21 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
       takeUntil(this.destroy$)
     ).subscribe(runs => {
       this.ActiveRuns = runs;
+      this.emitAgentContext();
       this.cdr.markForCheck();
     });
+
+    // Keep agent context in sync with the run-instrumentation KPIs (pass rate,
+    // failures, cost, pending review, etc.).
+    this.instrumentationService.kpis$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(kpis => {
+      this.latestKPIs = kpis;
+      this.emitAgentContext();
+    });
+
+    this.emitAgentContext();
+    this.registerAgentTools();
 
     this.testingDialogService.PanelStateChanged$.pipe(
       takeUntil(this.destroy$)
@@ -121,6 +149,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.updateNavigationSelection();
     this.visitedTabs.add(tabId);
     this.emitStateChange();
+    this.emitAgentContext();
     this.cdr.markForCheck();
   }
 
@@ -234,5 +263,192 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.navigationConfig.forEach((item, index) => {
       item.selected = this.navigationItems[index] === this.activeTab;
     });
+  }
+
+  // ================================================================
+  // AI Agent context + client tools
+  // ================================================================
+
+  /**
+   * Report the current Testing surface state to the AI agent (async chat agent
+   * + realtime co-agent). Re-emitted on tab switch, active-run changes, and on
+   * every kpis$ refresh. Uses the pure {@link buildTestingAgentContext} helper.
+   */
+  private emitAgentContext(): void {
+    const k = this.latestKPIs;
+    this.navigationService.SetAgentContext(this, buildTestingAgentContext({
+      ActiveTab: (isValidTestingTab(this.activeTab) ? this.activeTab : 'dashboard'),
+      ActiveRunCount: this.ActiveRuns.length,
+      TotalTestsRun: k?.totalTestRuns ?? 0,
+      PassRate: k?.passRateThisMonth ?? 0,
+      FailureCount: k?.failedTests ?? 0,
+      AverageRunDuration: k?.averageDuration ?? 0,
+      TotalTestCost: k?.totalCostThisMonth ?? 0,
+      PendingReviewCount: k?.testsPendingReview ?? 0,
+    }));
+  }
+
+  /**
+   * Register the Testing surface's agent-actionable client tools.
+   *
+   * 🔒 SAFETY BOUNDARY: This surface exposes ONLY navigation, filter, refresh,
+   * read-only, and the bounded human-feedback tool to the agent. Test-EXECUTING
+   * operations (StartNewTest / RerunTest) are intentionally NOT exposed — running
+   * a test has real side effects (cost, execution, state changes) and must remain
+   * a deliberate user action initiated from the UI. Do not add execute/run tools
+   * here without an explicit user-confirmation design.
+   */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchTestingTab',
+        Description: `Switch the Testing dashboard to a specific tab. One of: ${TESTING_TABS.join(', ')}.`,
+        ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: [...TESTING_TABS] } }, required: ['tab'] },
+        Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+          const tab = params['tab'];
+          if (!isValidTestingTab(tab)) {
+            return { Success: false, ErrorMessage: `Invalid tab. Expected one of: ${TESTING_TABS.join(', ')}.` };
+          }
+          this.onTabChange(tab as TestingTab);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'RefreshTestingData',
+        Description: 'Refresh all Testing dashboard data (KPIs, runs, analytics) from the server.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async (): Promise<AgentToolResult> => {
+          this.instrumentationService.refresh();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterTestsByStatus',
+        Description: `Filter the test runs list by execution status. One of: ${TESTING_STATUS_FILTERS.join(', ')}.`,
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...TESTING_STATUS_FILTERS] } }, required: ['status'] },
+        Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+          const status = params['status'];
+          if (!isValidTestingStatusFilter(status)) {
+            return { Success: false, ErrorMessage: `Invalid status. Expected one of: ${TESTING_STATUS_FILTERS.join(', ')}.` };
+          }
+          this.onTabChange('runs');
+          this.instrumentationService.setRunsFilterIntent({ status });
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterTestsByTimeRange',
+        Description: `Filter test runs by time range. One of: ${TESTING_TIME_RANGES.join(', ')}.`,
+        ParameterSchema: { type: 'object', properties: { range: { type: 'string', enum: [...TESTING_TIME_RANGES] } }, required: ['range'] },
+        Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+          const range = params['range'];
+          if (!isValidTestingTimeRange(range)) {
+            return { Success: false, ErrorMessage: `Invalid range. Expected one of: ${TESTING_TIME_RANGES.join(', ')}.` };
+          }
+          this.instrumentationService.setDateRangeByName(range);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SearchTests',
+        Description: 'Search/filter the test runs list by test name (substring match). Pass an empty string to clear.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+          const validated = validateStringParam(params['query'], 'query');
+          if (!validated.ok) {
+            return validated.result;
+          }
+          this.onTabChange('runs');
+          this.instrumentationService.setRunsFilterIntent({ searchText: validated.value });
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'GetTestRunDetails',
+        Description: 'Get read-only details for a single test run by its ID (name, status, score, cost, duration, human feedback).',
+        ParameterSchema: { type: 'object', properties: { runId: { type: 'string' } }, required: ['runId'] },
+        Handler: async (params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> => {
+          const validated = validateStringParam(params['runId'], 'runId');
+          if (!validated.ok) {
+            return validated.result;
+          }
+          return this.getTestRunDetails(validated.value);
+        },
+      },
+      {
+        Name: 'SubmitTestFeedback',
+        // 🔒 SAFE: bounded write that is part of the normal evaluation flow —
+        // records a human rating/correctness on an existing test run. Not a
+        // test-execution side effect.
+        Description: 'Submit human evaluation feedback for an existing test run: a 1-10 rating, whether the result is correct, and optional comments.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            runId: { type: 'string' },
+            rating: { type: 'number', minimum: 1, maximum: 10 },
+            isCorrect: { type: 'boolean' },
+            comments: { type: 'string' },
+          },
+          required: ['runId', 'rating', 'isCorrect'],
+        },
+        Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+          return this.submitTestFeedback(params);
+        },
+      },
+    ]);
+  }
+
+  /** Read-only lookup of a single test run from the current run-instrumentation cache. */
+  private async getTestRunDetails(runId: string): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
+    const runs = await firstValueFrom(this.instrumentationService.testRunsWithFeedback$);
+    const run = runs.find(r => r.id === runId);
+    if (!run) {
+      return { Success: false, ErrorMessage: `No test run found with ID "${runId}" in the current date range.` };
+    }
+    return {
+      Success: true,
+      Data: {
+        ID: run.id,
+        TestName: run.testName,
+        Status: run.status,
+        Score: run.score,
+        Cost: run.cost,
+        Duration: run.duration,
+        RunDateTime: run.runDateTime,
+        HasHumanFeedback: run.hasHumanFeedback,
+        HumanRating: run.humanRating,
+        HumanIsCorrect: run.humanIsCorrect,
+        HumanComments: run.humanComments,
+      },
+    };
+  }
+
+  /** Validate and submit human feedback for an existing test run. */
+  private async submitTestFeedback(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const runIdValidated = validateStringParam(params['runId'], 'runId');
+    if (!runIdValidated.ok) {
+      return runIdValidated.result;
+    }
+    const rawRating = params['rating'];
+    const rating = typeof rawRating === 'number' ? rawRating : Number(rawRating);
+    if (!Number.isFinite(rating) || rating < 1 || rating > 10) {
+      return { Success: false, ErrorMessage: 'rating must be a number between 1 and 10.' };
+    }
+    const isCorrect = params['isCorrect'];
+    if (typeof isCorrect !== 'boolean') {
+      return { Success: false, ErrorMessage: 'isCorrect must be a boolean.' };
+    }
+    const rawComments = params['comments'];
+    const comments = typeof rawComments === 'string' ? rawComments : '';
+
+    const ok = await this.instrumentationService.submitFeedback(
+      runIdValidated.value,
+      rating,
+      isCorrect,
+      comments,
+    );
+    return ok
+      ? { Success: true }
+      : { Success: false, ErrorMessage: 'Failed to submit feedback for the specified test run.' };
   }
 }

@@ -1,9 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { AgentToolResult, validateStringParam } from '../../shared/agent-tool-validation';
+import { buildVersionHistoryGraphAgentContext } from '../version-history-graph-agent-context';
 
 interface VersionGraphPreferences {
     SchemaFilter: string;
@@ -32,7 +34,7 @@ interface RelationshipEdge {
     styleUrls: ['./graph-resource.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class VersionHistoryGraphResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class VersionHistoryGraphResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
     public IsLoading = true;
 
     // Entity browser
@@ -74,6 +76,125 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
         this.destroy$.complete();
     }
 
+    /**
+     * After the view initializes, publish the initial agent context and register
+     * the client tools the AI agent can invoke against this surface. The ongoing
+     * context re-emit happens in {@link applyFilter} and {@link SelectEntity}.
+     */
+    ngAfterViewInit(): void {
+        this.publishAgentContext();
+        this.registerAgentClientTools();
+    }
+
+    // ========================================
+    // AI AGENT CONTEXT & CLIENT TOOLS
+    //
+    // 🔒 SAFETY BOUNDARY: This surface is a read-only browse/filter/inspect view
+    // over entity-relationship metadata. It exposes ONLY select / filter / search
+    // tools to the agent — NO mutation of any kind (no schema edits, no entity
+    // changes, no restore/rollback, no deletion). Every tool below only changes
+    // what the user is LOOKING at; none changes data.
+    // ========================================
+
+    /**
+     * Publish the current Dependency-Graph state to the AI agent via
+     * NavigationService. Shaping lives in the pure
+     * {@link buildVersionHistoryGraphAgentContext} helper so it stays
+     * unit-testable. Called on load, on filter changes, and on entity selection.
+     */
+    private publishAgentContext(): void {
+        const context = buildVersionHistoryGraphAgentContext({
+            SelectedEntityName: this.SelectedEntity?.Name ?? null,
+            TotalEntities: this.TotalEntities,
+            EntitiesWithDependents: this.EntitiesWithDependents,
+            TotalRelationships: this.TotalRelationships,
+            SearchText: this.SearchText,
+            SchemaFilter: this.SchemaFilter,
+            VisibleEntityCount: this.FilteredEntities.length,
+            VisibleEntityNames: this.FilteredEntities.map(e => e.Name),
+            AvailableSchemas: this.AvailableSchemas,
+        });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /**
+     * Register the read-only client tools the AI agent can invoke against the
+     * Dependency Graph. Each handler is tolerant — it never throws and returns a
+     * typed `{ Success, Data?, ErrorMessage? }` result.
+     *
+     * Tools:
+     * - SelectEntityForDependencyView: select an entity by name to inspect its
+     *   dependencies (delegates to {@link NavigateToEntity}, which clears any
+     *   schema filter so the entity is reachable).
+     * - FilterEntitiesBySchema: filter the entity list to a single schema.
+     * - SearchEntities: filter the entity list by an entity-name substring.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SelectEntityForDependencyView',
+                Description: 'Select an entity by name to inspect what references it and what it depends on. Clears any active schema filter so the entity is reachable.',
+                ParameterSchema: { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSelectEntity(params),
+            },
+            {
+                Name: 'FilterEntitiesBySchema',
+                Description: 'Filter the entity list to a single schema. Pass an empty string to clear the schema filter.',
+                ParameterSchema: { type: 'object', properties: { schema: { type: 'string' } }, required: ['schema'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterBySchema(params),
+            },
+            {
+                Name: 'SearchEntities',
+                Description: 'Filter the entity list by an entity-name substring. Pass an empty string to clear the search.',
+                ParameterSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSearchEntities(params),
+            },
+        ]);
+    }
+
+    /** Resolve an entity by name and select it for the dependency view. */
+    private toolSelectEntity(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+        const parsed = validateStringParam(params['entityName'], 'entityName');
+        if (!parsed.ok) {
+            return parsed.result;
+        }
+        const lowered = parsed.value.trim().toLowerCase();
+        const node = this.AllEntities.find(e => e.Name.toLowerCase() === lowered);
+        if (!node) {
+            return { Success: false, ErrorMessage: `Entity "${parsed.value}" was not found in the dependency graph.` };
+        }
+        this.NavigateToEntity(node.Name);
+        return { Success: true, Data: { SelectedEntityName: node.Name } };
+    }
+
+    /** Apply a schema filter deterministically (no toggle), validating it exists. */
+    private toolFilterBySchema(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+        const parsed = validateStringParam(params['schema'], 'schema');
+        if (!parsed.ok) {
+            return parsed.result;
+        }
+        const value = parsed.value.trim();
+        if (value && !this.AvailableSchemas.includes(value)) {
+            return { Success: false, ErrorMessage: `Schema "${value}" is not available. Available schemas: ${this.AvailableSchemas.join(', ')}.` };
+        }
+        // Set deterministically rather than via OnSchemaFilterChange's toggle semantics,
+        // so the agent always lands on the requested filter regardless of current state.
+        this.SchemaFilter = value;
+        this.applyFilter();
+        this.persistPreferences();
+        return { Success: true, Data: { SchemaFilter: this.SchemaFilter, VisibleEntityCount: this.FilteredEntities.length } };
+    }
+
+    /** Apply an entity-name search filter. */
+    private toolSearchEntities(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+        const parsed = validateStringParam(params['text'], 'text');
+        if (!parsed.ok) {
+            return parsed.result;
+        }
+        this.OnSearchChange(parsed.value);
+        return { Success: true, Data: { SearchText: this.SearchText, VisibleEntityCount: this.FilteredEntities.length } };
+    }
+
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         return 'Dependency Graph';
     }
@@ -112,6 +233,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
         } finally {
             this.IsLoading = false;
             this.NotifyLoadComplete();
+            this.publishAgentContext();
             this.cdr.markForCheck();
         }
     }
@@ -183,6 +305,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
         }
 
         this.FilteredEntities = result;
+        this.publishAgentContext();
         this.cdr.markForCheck();
     }
 
@@ -205,6 +328,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
             this.DependsOnEntities = [];
         }
 
+        this.publishAgentContext();
         this.cdr.markForCheck();
     }
 

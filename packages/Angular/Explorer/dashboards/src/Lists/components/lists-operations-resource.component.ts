@@ -10,6 +10,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { ListDelta, ListSource } from '@memberjunction/lists-base';
+import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { resolveVennRegion } from './lists-operations-region-resolver';
 interface ListSelection {
   list: MJListEntity;
   entityName: string;
@@ -1904,7 +1906,201 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.setOperationsService.Provider = this.ProviderToUse;
     await this.loadAvailableLists();
     await this.loadSavedState();
+    this.registerAgentTools();
+    this.publishAgentContext();
     this.NotifyLoadComplete();
+  }
+
+  // ================================================================
+  // AI Agent Context & Client Tools
+  //
+  // This is the highest-value agent surface in the Lists dashboard: the
+  // agent can assemble operands, run set operations, inspect regions, and
+  // (via bounded-mutation tools) materialize results into a NEW list or
+  // APPEND a region to an existing one.
+  //
+  // SAFETY BOUNDARY — INTENTIONALLY EXCLUDED, must NOT be wired in:
+  //   - ComposeAndSave (composeAndSave / the compose-into-existing-target
+  //     flow) — keep the delta-confirm dialog user-driven so the user
+  //     reviews any dropped records before a destructive merge.
+  //   - Any edit / delete / share of lists (those live on the Browse
+  //     surface and are excluded there too).
+  // The two mutation tools we DO expose are append-only / create-only and
+  // route through the same dialog-validated flows a user would use.
+  // ================================================================
+
+  /**
+   * Report the Operations surface's salient state to the AI agent.
+   * Re-called on every operand / entity-filter / region / operation
+   * change so the agent always knows what is on the canvas.
+   */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      ListOperandCount: this.selectedLists.length,
+      ViewOperandCount: this.selectedViews.length,
+      TotalOperandCount: this.totalOperandCount,
+      MaxOperands: this.maxLists,
+      LockedEntityName: this.lockedEntityName,
+      ComposeOp: this.composeOp,
+      SelectedRegionLabel: this.selectedRegion?.label ?? null,
+      SelectedRegionSize: this.selectedRegion?.size ?? null,
+      LastOperation: this.lastOperationResult
+        ? { operation: this.lastOperationResult.operation, resultCount: this.lastOperationResult.resultCount }
+        : null,
+    });
+  }
+
+  /**
+   * Register the Operations surface's agent-actionable tools. SAFE tools
+   * cover operand assembly, set-operation computation, and region
+   * selection; the two bounded-mutation tools are create-only / append-only.
+   */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'AddListOperand',
+        Description: 'Add a list (by ID) as an operand to the comparison. Operands are locked to a single entity type; the first operand sets the type.',
+        ParameterSchema: { type: 'object', properties: { listId: { type: 'string', description: 'The ID of the list to add' } }, required: ['listId'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['listId'], 'listId');
+          if (!check.ok) return check.result;
+          if (this.totalOperandCount >= this.maxLists) {
+            return { Success: false, ErrorMessage: `Maximum of ${this.maxLists} operands already selected.` };
+          }
+          const list = this.availableLists.find(l => UUIDsEqual(l.ID, check.value));
+          if (!list) return { Success: false, ErrorMessage: `No available list found with ID "${check.value}".` };
+          if (this.selectedLists.some(s => UUIDsEqual(s.list.ID, check.value))) {
+            return { Success: false, ErrorMessage: `List "${list.Name}" is already an operand.` };
+          }
+          if (this.lockedEntityID && !UUIDsEqual(list.EntityID, this.lockedEntityID)) {
+            return { Success: false, ErrorMessage: `List "${list.Name}" is a different entity type than the current operands (locked to "${this.lockedEntityName}").` };
+          }
+          this.addList(list);
+          this.publishAgentContext();
+          return { Success: true, Data: { listName: list.Name, totalOperandCount: this.totalOperandCount } };
+        },
+      },
+      {
+        Name: 'RemoveListOperand',
+        Description: 'Remove a list operand by its zero-based index in the selected-lists array.',
+        ParameterSchema: { type: 'object', properties: { index: { type: 'number', description: 'Zero-based index of the list operand to remove' } }, required: ['index'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const raw = params['index'];
+          const index = typeof raw === 'number' ? raw : Number(raw);
+          if (!Number.isInteger(index) || index < 0 || index >= this.selectedLists.length) {
+            return { Success: false, ErrorMessage: `index must be an integer between 0 and ${this.selectedLists.length - 1}.` };
+          }
+          const removed = this.selectedLists[index].list.Name;
+          this.removeList(index);
+          this.publishAgentContext();
+          return { Success: true, Data: { removedListName: removed, totalOperandCount: this.totalOperandCount } };
+        },
+      },
+      {
+        Name: 'FilterOperandsByEntity',
+        Description: 'Set the entity filter (by entity ID) that narrows which lists/views can be added as operands. Pass an empty string to clear the filter. Changing to a different entity than the current operands clears the canvas.',
+        ParameterSchema: { type: 'object', properties: { entityId: { type: 'string', description: 'The entity ID to filter by, or "" to clear' } }, required: ['entityId'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['entityId'], 'entityId');
+          if (!check.ok) return check.result;
+          if (check.value !== '' && !this.entityOptions.some(o => UUIDsEqual(o.id, check.value))) {
+            return { Success: false, ErrorMessage: `No entity option found with ID "${check.value}".` };
+          }
+          this.selectedEntityId = check.value;
+          this.onEntityFilterChange();
+          this.publishAgentContext();
+          return { Success: true, Data: { totalOperandCount: this.totalOperandCount } };
+        },
+      },
+      {
+        Name: 'PerformUnion',
+        Description: 'Compute the union (records in ANY operand) of the selected operands. Requires at least 2 operands.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.runAgentOperation('union'),
+      },
+      {
+        Name: 'PerformIntersection',
+        Description: 'Compute the intersection (records in ALL operands) of the selected operands. Requires at least 2 operands.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.runAgentOperation('intersection'),
+      },
+      {
+        Name: 'PerformSymmetricDifference',
+        Description: 'Compute the symmetric difference (records in exactly one operand) of the selected operands. Requires at least 2 operands.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.runAgentOperation('symmetric_difference'),
+      },
+      {
+        Name: 'SelectVennRegion',
+        Description: 'Select a region of the Venn diagram by its label (e.g. "A ∩ B") or by the operand names it covers (e.g. "List A, List B"). Selecting a region loads its records for preview and enables the create/append tools.',
+        ParameterSchema: { type: 'object', properties: { region: { type: 'string', description: 'Region label or comma-separated operand labels' } }, required: ['region'] },
+        Handler: async (params: Record<string, unknown>) => {
+          const check = validateStringParam(params['region'], 'region');
+          if (!check.ok) return check.result;
+          if (!this.vennData || this.vennData.intersections.length === 0) {
+            return { Success: false, ErrorMessage: 'No Venn regions are available. Add operands first.' };
+          }
+          const region = resolveVennRegion(this.vennData.intersections, check.value);
+          if (!region) {
+            const available = this.vennData.intersections.map(r => r.label).join(', ');
+            return { Success: false, ErrorMessage: `Could not resolve region "${check.value}". Available regions: ${available}.` };
+          }
+          this.onRegionClick({ intersection: region, recordIds: region.recordIds });
+          this.publishAgentContext();
+          return { Success: true, Data: { regionLabel: region.label, recordCount: region.size } };
+        },
+      },
+      {
+        // BOUNDED MUTATION (create-only): opens the create-list dialog
+        // pre-filled from the selected region. The user confirms the name
+        // before any record is written.
+        Name: 'CreateListFromRegion',
+        Description: 'Open the "Create List" dialog pre-filled with the records of the currently-selected Venn region. Requires a region to be selected first (see SelectVennRegion). Nothing is saved until the user confirms.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          if (!this.selectedRegion || this.selectedRegion.size === 0) {
+            return { Success: false, ErrorMessage: 'No region with records is selected. Use SelectVennRegion first.' };
+          }
+          const count = this.selectedRegion.size;
+          this.createListFromSelection();
+          return { Success: true, Data: { recordCount: count } };
+        },
+      },
+      {
+        // BOUNDED MUTATION (append-only): opens the add-to-existing-list
+        // dialog for the selected region. Append-only — never drops records
+        // from the target.
+        Name: 'AddRegionToList',
+        Description: 'Open the "Add to Existing List" dialog for the records of the currently-selected Venn region (append-only). Requires a region to be selected first. Nothing is written until the user picks a target and confirms.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          if (!this.selectedRegion || this.selectedRegion.size === 0) {
+            return { Success: false, ErrorMessage: 'No region with records is selected. Use SelectVennRegion first.' };
+          }
+          const count = this.selectedRegion.size;
+          this.addToExistingList();
+          return { Success: true, Data: { recordCount: count } };
+        },
+      },
+    ]);
+  }
+
+  /**
+   * Run a set operation on behalf of the agent: guard the operand count,
+   * await the computation, re-publish context, and return a structured
+   * result. Shared by the PerformUnion / PerformIntersection /
+   * PerformSymmetricDifference tools.
+   */
+  private async runAgentOperation(operation: SetOperation): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
+    if (this.totalOperandCount < 2) {
+      return { Success: false, ErrorMessage: `At least 2 operands are required (currently ${this.totalOperandCount}).` };
+    }
+    await this.performOperation(operation);
+    this.publishAgentContext();
+    if (!this.lastOperationResult) {
+      return { Success: false, ErrorMessage: 'Operation did not produce a result.' };
+    }
+    return { Success: true, Data: { operation, resultCount: this.lastOperationResult.resultCount } };
   }
 
   ngOnDestroy() {
@@ -1994,6 +2190,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filterAvailableLists();
     this.filterAvailableViews();
     this.saveState();
+    this.publishAgentContext();
   }
 
   filterAvailableLists() {
@@ -2087,6 +2284,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filterAvailableViews();
     this.recalculateVenn();
     this.saveState();
+    this.publishAgentContext();
   }
 
   removeList(index: number) {
@@ -2099,6 +2297,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filterAvailableViews();
     this.recalculateVenn();
     this.saveState();
+    this.publishAgentContext();
   }
 
   addView(view: MJUserViewEntity) {
@@ -2115,6 +2314,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filterAvailableViews();
     this.recalculateVenn();
     this.saveState();
+    this.publishAgentContext();
   }
 
   removeView(index: number) {
@@ -2124,6 +2324,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filterAvailableViews();
     this.recalculateVenn();
     this.saveState();
+    this.publishAgentContext();
   }
 
   private reassignOperandColors(): void {
@@ -2199,6 +2400,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.previewRecords = event.recordIds.slice(0, 10);
     this.loadPreviewRecords(event.recordIds.slice(0, 10));
     this.cdr.detectChanges();
+    this.publishAgentContext();
   }
 
   /**
@@ -2379,6 +2581,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     } finally {
       this.isCalculating = false;
       this.cdr.detectChanges();
+      this.publishAgentContext();
     }
   }
 

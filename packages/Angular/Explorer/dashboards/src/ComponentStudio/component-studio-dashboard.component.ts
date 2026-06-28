@@ -27,6 +27,10 @@ import {
   type FormCanvasSection,
 } from './services/form-canvas-model';
 import { generateCodeFromCanvas } from './services/canvas-to-code';
+import {
+  buildCanvasEditClientTools,
+  type CanvasEditHost,
+} from './services/canvas-edit-transforms';
 
 /**
  * User preferences persisted via UserInfoEngine.
@@ -554,6 +558,22 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   /**
+   * {@link CanvasEditHost} adapter for the shared granular canvas-edit tool
+   * suite. `ApplyCanvas` routes through `applyCanvasUpdate` so agent edits go
+   * through the same dirty-track + code-regen + change-detection path as the
+   * right-panel/tab events. Pane-navigation actions are intentionally omitted
+   * (Component Studio uses its tab system), so the factory drops those tools.
+   */
+  private buildCanvasEditHost(): CanvasEditHost {
+    return {
+      GetCanvas: () => this.state.FormCanvas,
+      ApplyCanvas: (next: FormCanvasModel) => this.applyCanvasUpdate(next),
+      NewElementId: () => generateCanvasId('field'),
+      NewSectionId: () => generateCanvasId('section'),
+    };
+  }
+
+  /**
    * Serialise the canvas → JSX into state.EditableCode. Quietly no-ops if
    * we don't have both a canvas and a schema (the FormSelected* events
    * shouldn't fire in that case anyway).
@@ -588,23 +608,32 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
           sections: canvas.sections,
         },
       });
-      this.navigationService?.SetAgentClientTools(this, [{
-        Name: 'UpdateForm',
-        Description: 'Replace the canvas model of the active form. Accepts a FormCanvasModel JSON object.',
-        ParameterSchema: {
-          type: 'object',
-          properties: { canvas: { type: 'object', description: 'A FormCanvasModel matching the Form Builder shape.' } },
-          required: ['canvas'],
+      // 🔒 SAFETY BOUNDARY: the granular suite below exposes ONLY reversible
+      // canvas-DEFINITION edits (no Save / Publish / override-activation /
+      // delete-the-whole-form). Component Studio omits the center-pane
+      // navigation tools (PreviewForm/ViewFormCode/ViewFormLayout) because it
+      // navigates via its tab system, not a SetCenterPaneMode — the shared
+      // factory drops them automatically when the host doesn't provide them.
+      this.navigationService?.SetAgentClientTools(this, [
+        {
+          Name: 'UpdateForm',
+          Description: 'Replace the canvas model of the active form. Accepts a FormCanvasModel JSON object. Prefer the granular AddField/RemoveField/etc. tools for small edits.',
+          ParameterSchema: {
+            type: 'object',
+            properties: { canvas: { type: 'object', description: 'A FormCanvasModel matching the Form Builder shape.' } },
+            required: ['canvas'],
+          },
+          Handler: async (params: Record<string, unknown>) => {
+            const next = (params['canvas'] as FormCanvasModel | undefined) ?? null;
+            if (next && Array.isArray(next.sections)) {
+              this.applyCanvasUpdate(next);
+              return { Success: true };
+            }
+            return { Success: false, Error: 'Missing or malformed canvas payload.' };
+          },
         },
-        Handler: async (params: Record<string, unknown>) => {
-          const next = (params['canvas'] as FormCanvasModel | undefined) ?? null;
-          if (next && Array.isArray(next.sections)) {
-            this.applyCanvasUpdate(next);
-            return { Success: true };
-          }
-          return { Success: false, Error: 'Missing or malformed canvas payload.' };
-        },
-      }]);
+        ...buildCanvasEditClientTools(this.buildCanvasEditHost()),
+      ]);
       this.notificationService.CreateSimpleNotification(
         'Form context sent to chat. Open the chat panel to continue.',
         'info', 4000,

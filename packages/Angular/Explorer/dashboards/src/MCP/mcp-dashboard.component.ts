@@ -32,6 +32,9 @@ import { CredentialEngine } from '@memberjunction/credentials';
 import { RegisterClass , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
+import { buildMCPAgentContext, isValidMCPTab, isValidToolsViewMode, MCP_TABS, MCP_TOOLS_VIEW_MODES } from './mcp-agent-context';
+import { validateEnumParam, validateStringParam } from '../shared/agent-tool-validation';
+import type { AgentToolResult } from '../shared/agent-tool-validation';
 
 /**
  * User preferences for the MCP Dashboard
@@ -566,7 +569,186 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     }
 
     ngAfterViewInit(): void {
+        this.publishAgentContext();
+        this.registerAgentClientTools();
         this.cdr.markForCheck();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+    // MCP is a credential-bearing surface. Servers carry OAuth client secrets,
+    // connections carry bearer tokens, and OAuth token / client-registration /
+    // credential entities are in scope here. The agent context and client tools
+    // registered below are strictly NAVIGATIONAL + READ-ONLY: tab switches,
+    // search, server filtering, view-mode, favorite toggling, and data refresh.
+    //
+    // DELIBERATELY NOT exposed to the agent (must stay human-initiated):
+    //   - create / edit / delete of servers and connections
+    //   - MCP tool EXECUTION / test-with-params (untrusted LLM-supplied args
+    //     against real, side-effecting external tools)
+    //   - ANY secret/credential value: server URL/command, bearer token, OAuth
+    //     client secret, encrypted credential, or tool input/output payload
+    //
+    // Context exposes ONLY aggregate counts + navigation state — never secrets.
+    // ================================================================
+
+    /**
+     * Publish the current MCP dashboard state to the AI agent. Re-invoked on every
+     * meaningful state change (data load, filter/search change, tab switch,
+     * view-mode change). The shaping lives in the pure {@link buildMCPAgentContext}
+     * helper so it stays unit-testable and the secret-free guarantee is auditable
+     * in one place.
+     */
+    private publishAgentContext(): void {
+        const context = buildMCPAgentContext({
+            ActiveTab: this.ActiveTab,
+            ServerCount: this.stats.totalServers,
+            ActiveServerCount: this.stats.activeServers,
+            ConnectionCount: this.stats.totalConnections,
+            ToolCount: this.stats.totalTools,
+            RecentExecutionCount: this.stats.recentExecutions,
+            FailedExecutionCount: this.stats.failedExecutions,
+            CurrentSearchTerm: this.filters$.value.searchTerm,
+            ToolsViewMode: this.ToolsViewMode,
+        });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /**
+     * Register the read-only / navigational client tools the agent may invoke.
+     * Every Handler is tolerant: it validates input and returns
+     * `{ Success: false, ErrorMessage }` rather than throwing. No Handler performs
+     * a server/connection mutation, executes an MCP tool, or touches a credential.
+     *
+     * Tools:
+     * - SwitchMCPTab: change the active tab (servers/connections/tools/logs).
+     * - SearchMCPTools: set the dashboard free-text search term.
+     * - FilterMCPToolsByServer: restrict the Tools tab to a single server.
+     * - ToggleMCPToolFavorite: toggle a tool's favorite flag for the current user.
+     * - RefreshMCPData: reload all dashboard data (read-only).
+     * - SetToolsViewMode: switch the Tools tab between card/list.
+     * - ClearMCPFilters: reset all filters to their defaults.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchMCPTab',
+                Description: 'Switch the active MCP dashboard tab. Valid tabs: servers, connections, tools, logs.',
+                ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: ['servers', 'connections', 'tools', 'logs'] } }, required: ['tab'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSwitchTab(params),
+            },
+            {
+                Name: 'SearchMCPTools',
+                Description: 'Set the free-text search term applied to the current MCP tab (servers, connections, tools, or logs by name/description).',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSearch(params),
+            },
+            {
+                Name: 'FilterMCPToolsByServer',
+                Description: 'On the Tools tab, restrict the tool list to a single MCP server by its ID, or pass "all" to clear the server filter.',
+                ParameterSchema: { type: 'object', properties: { serverId: { type: 'string' } }, required: ['serverId'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByServer(params),
+            },
+            {
+                Name: 'ToggleMCPToolFavorite',
+                Description: 'Toggle the favorite flag for an MCP tool (by tool ID) for the current user. Read/navigational preference only — does not execute or modify the tool.',
+                ParameterSchema: { type: 'object', properties: { toolId: { type: 'string' } }, required: ['toolId'] },
+                Handler: async (params: Record<string, unknown>) => this.toolToggleFavorite(params),
+            },
+            {
+                Name: 'RefreshMCPData',
+                Description: 'Reload all MCP dashboard data. Read-only — does not create, modify, or execute anything.',
+                ParameterSchema: { type: 'object', properties: { forceRefresh: { type: 'boolean' } } },
+                Handler: async (params: Record<string, unknown>) => this.toolRefresh(params),
+            },
+            {
+                Name: 'SetToolsViewMode',
+                Description: 'Set the Tools tab view mode. Valid modes: card, list.',
+                ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['card', 'list'] } }, required: ['mode'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSetToolsViewMode(params),
+            },
+            {
+                Name: 'ClearMCPFilters',
+                Description: 'Reset all MCP dashboard filters (search, status, server, category, favorites, recent) to their defaults.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.resetAllFilters();
+                    this.publishAgentContext();
+                    return { Success: true };
+                },
+            },
+        ]);
+    }
+
+    /** Switch the active tab after validating it. */
+    private toolSwitchTab(params: Record<string, unknown>): AgentToolResult {
+        const v = validateEnumParam(params?.['tab'], MCP_TABS, 'tab');
+        if (!v.ok) return v.result;
+        this.setActiveTab(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Set the dashboard search term. */
+    private toolSearch(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['query'], 'query');
+        if (!v.ok) return v.result;
+        this.onSearchChange(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Restrict the Tools tab to a single server (or 'all' to clear). */
+    private toolFilterByServer(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['serverId'], 'serverId');
+        if (!v.ok) return v.result;
+        const serverId = v.value;
+        if (serverId !== 'all' && !this.toolsAvailableServers.some(s => UUIDsEqual(s.ID, serverId))) {
+            return { Success: false, ErrorMessage: `Server "${serverId}" is not available in this dashboard.` };
+        }
+        // Ensure the Tools tab is active so the filter is meaningful.
+        this.setActiveTab('tools');
+        this.onFilterFieldChange('toolsServer', serverId);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    /** Toggle a tool's favorite flag for the current user. */
+    private async toolToggleFavorite(params: Record<string, unknown>): Promise<AgentToolResult> {
+        const v = validateStringParam(params?.['toolId'], 'toolId');
+        if (!v.ok) return v.result;
+        if (!this.tools.some(t => UUIDsEqual(t.ID, v.value))) {
+            return { Success: false, ErrorMessage: `Tool "${v.value}" is not available in this dashboard.` };
+        }
+        try {
+            await this.toggleFavorite(v.value);
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Toggle favorite failed.' };
+        }
+    }
+
+    /** Reload all dashboard data (read-only). */
+    private async toolRefresh(params: Record<string, unknown>): Promise<AgentToolResult> {
+        const forceRefresh = params?.['forceRefresh'] === true;
+        try {
+            await this.loadAllData(forceRefresh);
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+        }
+    }
+
+    /** Switch the Tools tab view mode after validating it. */
+    private toolSetToolsViewMode(params: Record<string, unknown>): AgentToolResult {
+        const v = validateEnumParam(params?.['mode'], MCP_TOOLS_VIEW_MODES, 'mode');
+        if (!v.ok) return v.result;
+        this.setToolsViewMode(v.value);
+        this.publishAgentContext();
+        return { Success: true };
     }
 
     override ngOnDestroy(): void {
@@ -683,6 +865,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Apply filters
             this.applyFilters();
 
+            // Refresh the agent context now that counts/stats are recomputed.
+            this.publishAgentContext();
+
             // Load user's favorites (Part 3.6) — fire and forget
             this.loadFavorites();
 
@@ -796,6 +981,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             )
             .subscribe(() => {
                 this.applyFilters();
+                // Re-emit agent context so search / filter / tab-clear changes are
+                // reflected in the AI agent's view of this surface.
+                this.publishAgentContext();
                 this.cdr.detectChanges();
             });
     }

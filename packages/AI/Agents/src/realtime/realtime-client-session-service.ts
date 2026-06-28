@@ -1797,8 +1797,10 @@ export class RealtimeClientSessionService {
             return '';
         }
         return (
-            `CURRENT APP CONTEXT — the user's live situation in the application. Use it to act in context ` +
-            `(navigate, show records, delegate) without asking where they are:\n${note}`
+            `CURRENT APP CONTEXT — the user's live situation in the application. THIS IS YOUR SOURCE OF TRUTH for ` +
+            `where the user is and what they see — use it directly to answer "where am I" and to act in context; do ` +
+            `NOT ask the user to capture a snapshot just to learn their location. When it lists available actions, ` +
+            `those are the actions you can run here via 'ContextTool':\n${note}`
         );
     }
 
@@ -1847,13 +1849,34 @@ export class RealtimeClientSessionService {
         if (!extraTools || extraTools.length === 0) {
             return '';
         }
-        return ` ONE EXCEPTION: besides '${INVOKE_TARGET_AGENT_TOOL_NAME}' you have been given ` +
-            `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user can ` +
-            `watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by YOU, ` +
-            `directly — when the user asks to use one (e.g. "open/show a browser", "go to a site", "add ` +
-            `to the whiteboard"), call the matching tool yourself immediately and narrate what you're ` +
-            `doing. NEVER route an interactive-surface request through '${INVOKE_TARGET_AGENT_TOOL_NAME}', ` +
-            `and never claim you lack a session — calling the tool is all that's needed.`;
+        const hasContextTool = extraTools.some(t => t.Name === 'ContextTool');
+        const otherSurfaces = extraTools.filter(t => t.Name !== 'ContextTool');
+        let clause = '';
+
+        if (otherSurfaces.length > 0) {
+            clause += ` ONE EXCEPTION: besides '${INVOKE_TARGET_AGENT_TOOL_NAME}' you have been given ` +
+                `interactive-surface tools (for example 'browser_*' to drive a LIVE web browser the user can ` +
+                `watch, or 'Whiteboard_*' to draw on a shared board). Those surfaces are operated by YOU, ` +
+                `directly — when the user asks to use one (e.g. "open/show a browser", "go to a site", "add ` +
+                `to the whiteboard"), call the matching tool yourself immediately and narrate what you're ` +
+                `doing. NEVER route an interactive-surface request through '${INVOKE_TARGET_AGENT_TOOL_NAME}', ` +
+                `and never claim you lack a session — calling the tool is all that's needed.`;
+        }
+
+        if (hasContextTool) {
+            clause += ` You ALSO have a 'ContextTool' that lets you ACT IN THE APPLICATION the user is currently ` +
+                `in — navigate to apps and records, switch tabs/views, and run the actions available on the ` +
+                `current screen. The set of actions available RIGHT NOW (their names + what they do) is given to you ` +
+                `in your CURRENT APP CONTEXT and updated as the user moves around. To use one, call 'ContextTool' ` +
+                `with { "action": "<action name>", "params": { ... } } — it runs in the user's browser IMMEDIATELY. ` +
+                `Use 'ContextTool' YOURSELF for anything that navigates or acts in the app (e.g. "take me to ` +
+                `Knowledge Hub" → ContextTool with action 'NavigateToApp'; "open this record"; "switch to the X tab"). ` +
+                `Do NOT route in-app navigation/actions through '${INVOKE_TARGET_AGENT_TOOL_NAME}', and NEVER say you ` +
+                `need an active session id or a screen snapshot to do them — calling 'ContextTool' is all that's ` +
+                `needed. Reserve '${INVOKE_TARGET_AGENT_TOOL_NAME}' for actual analysis / data work, not navigation.`;
+        }
+
+        return clause;
     }
 
     /**

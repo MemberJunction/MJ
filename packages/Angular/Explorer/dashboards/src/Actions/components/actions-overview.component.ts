@@ -6,6 +6,8 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { validateEnumParam } from '../../shared/agent-tool-validation';
+import { findByIdOrError } from '../agent-tool-helpers';
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -61,9 +63,18 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   public recentExecutions: ExecutionWithExpanded[] = [];
   public topCategories: MJActionCategoryEntity[] = [];
 
+  /** Full (un-sliced) collections retained so agent tools can resolve any id, not just the visible top-10. */
+  private allActions: MJActionEntity[] = [];
+  private allExecutions: MJActionExecutionLogEntity[] = [];
+
   public searchTerm$ = new BehaviorSubject<string>('');
   public selectedStatus$ = new BehaviorSubject<string>('all');
   public selectedType$ = new BehaviorSubject<string>('all');
+
+  /** Allowed status filter values (mirrors the Filter popover dropdown). */
+  private readonly statusFilterValues = ['all', 'Active', 'Pending', 'Disabled'] as const;
+  /** Allowed type filter values (mirrors the Filter popover dropdown). */
+  private readonly typeFilterValues = ['all', 'Generated', 'Custom'] as const;
 
   protected override destroy$ = new Subject<void>();
 
@@ -74,6 +85,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   ngOnInit(): void {
     super.ngOnInit();
     this.setupFilters();
+    this.registerAgentTools();
     this.loadData();
   }
 
@@ -92,7 +104,112 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.loadFilteredData();
+      this.publishAgentContext();
     });
+  }
+
+  // ================================================================
+  // AI Agent context + client tools
+  //
+  // 🚨 SAFETY BOUNDARY: The Actions app executes actions with real side
+  // effects (data mutation, emails, integrations). Action EXECUTION is
+  // intentionally NOT exposed to the agent here — no RunAction, no execute
+  // path. The agent may only FIND / FILTER / NAVIGATE actions and view run
+  // history. Every Handler is tolerant (never throws; returns a structured
+  // failure on bad input).
+  // ================================================================
+
+  /** Publish the current overview state to the agent. Called on load and on every filter change. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      TotalActionCount: this.metrics.totalActions,
+      ActiveActionCount: this.metrics.activeActions,
+      PendingActionCount: this.metrics.pendingActions,
+      DisabledActionCount: this.metrics.disabledActions,
+      TotalExecutionCount: this.metrics.totalExecutions,
+      SuccessRate: this.metrics.successRate,
+      CurrentSearchTerm: this.searchTerm$.value,
+      CurrentStatusFilter: this.selectedStatus$.value,
+      CurrentTypeFilter: this.selectedType$.value,
+    });
+  }
+
+  /** Register the read-only / navigational client tools the agent can invoke on this surface. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SearchActions',
+        Description: 'Search the actions list by a free-text term (matches name and description).',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params) => {
+          const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
+          this.onSearchChange(term);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterActionsByStatus',
+        Description: 'Filter actions by status. Allowed: all, Active, Pending, Disabled.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...this.statusFilterValues] } }, required: ['status'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['status'], this.statusFilterValues, 'status');
+          if (!v.ok) return v.result;
+          this.onStatusFilterChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterActionsByType',
+        Description: 'Filter actions by type. Allowed: all, Generated (AI-generated), Custom.',
+        ParameterSchema: { type: 'object', properties: { type: { type: 'string', enum: [...this.typeFilterValues] } }, required: ['type'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['type'], this.typeFilterValues, 'type');
+          if (!v.ok) return v.result;
+          this.onTypeFilterChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearAllFilters',
+        Description: 'Reset the status and type filters back to "all".',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.resetFilters();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'OpenActionDetail',
+        Description: 'Open the detail record for an action by its id (navigation only — does NOT run the action).',
+        ParameterSchema: { type: 'object', properties: { actionId: { type: 'string' } }, required: ['actionId'] },
+        Handler: async (params) => {
+          const found = findByIdOrError(params['actionId'], this.allActions, 'action');
+          if (!found.ok) return found.result;
+          this.openAction(found.value);
+          return { Success: true, Data: { Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'OpenExecutionDetail',
+        Description: 'Open the detail record for an action execution log by its id (view-only run history).',
+        ParameterSchema: { type: 'object', properties: { executionId: { type: 'string' } }, required: ['executionId'] },
+        Handler: async (params) => {
+          const found = findByIdOrError(params['executionId'], this.allExecutions, 'execution');
+          if (!found.ok) return found.result;
+          this.openExecution(found.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'RefreshOverviewData',
+        Description: 'Reload the actions overview data (metrics, categories, recent items).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.loadData();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   private async loadData(): Promise<void> {
@@ -130,11 +247,14 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       const categories = (categoriesResult.Results || []) as MJActionCategoryEntity[];
       const executions = (executionsResult.Results || []) as MJActionExecutionLogEntity[];
 
+      this.allActions = actions;
+      this.allExecutions = executions;
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
       this.recentActions = actions.slice(0, 10);
       this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
       this.topCategories = categories.slice(0, 5);
+      this.publishAgentContext();
     } catch (error) {
       console.error('Error loading actions overview data:', error);
       LogError('Failed to load actions overview data', undefined, error);

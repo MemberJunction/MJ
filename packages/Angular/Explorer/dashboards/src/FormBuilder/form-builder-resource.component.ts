@@ -35,6 +35,11 @@ import {
     type FormCanvasModel,
     type FormCanvasSection,
 } from '../ComponentStudio/services/form-canvas-model';
+import {
+    buildCanvasEditClientTools,
+    collectFieldNames,
+    type CanvasEditHost,
+} from '../ComponentStudio/services/canvas-edit-transforms';
 import { EntityFormOverrideService } from '../ComponentStudio/services/entity-form-override.service';
 import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { joinVersionsWithOverrides, pickActiveVersionID } from './form-builder-version-rail.helpers';
@@ -1409,6 +1414,23 @@ export class FormBuilderResourceComponent
             }
         } catch (err) {
             LogError(`FormBuilderResource.OnPreviewRecordPicked: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Agent-facing preview entry point: switch the center pane to the live
+     * preview and, when a record id is supplied, bind that specific record.
+     * Maps the `PreviewForm(recordId?)` client tool onto the existing
+     * `SetCenterPaneMode('preview')` + record-load lifecycle. When no record
+     * id is given, the standard Top-1 lazy load in `SetCenterPaneMode` runs.
+     */
+    public previewForm(recordId?: string): void {
+        this.SetCenterPaneMode('preview');
+        const id = recordId?.trim();
+        if (id) {
+            // Reuse the by-id picker path; label is cosmetic and resolved
+            // from the loaded record's NameField, so we pass the raw id.
+            void this.OnPreviewRecordPicked({ ID: id, Label: id });
         }
     }
 
@@ -3087,6 +3109,25 @@ export class FormBuilderResourceComponent
         return lines.join('\n');
     }
 
+    /**
+     * Build the {@link CanvasEditHost} adapter the shared granular tool
+     * factory needs. `ApplyCanvas` routes through `OnCanvasChanged` so every
+     * agent edit goes through the SAME path a human drag-drop edit does:
+     * marks dirty, regenerates code, triggers change detection, re-emits
+     * agent context. The pane actions map to the cockpit's center-pane modes.
+     */
+    private buildCanvasEditHost(): CanvasEditHost {
+        return {
+            GetCanvas: () => this.Canvas,
+            ApplyCanvas: (next: FormCanvasModel) => this.OnCanvasChanged(next),
+            NewElementId: () => generateCanvasId('field'),
+            NewSectionId: () => generateCanvasId('section'),
+            PreviewForm: (recordId?: string) => this.previewForm(recordId),
+            ViewFormCode: () => this.SetCenterPaneMode('code'),
+            ViewFormLayout: () => this.SetCenterPaneMode('layout'),
+        };
+    }
+
     private registerAgentContext(): void {
         try {
             const ctx: Record<string, unknown> = {
@@ -3103,6 +3144,20 @@ export class FormBuilderResourceComponent
                         Description: this.SavedSpec?.description ?? null,
                         SectionCount: this.Canvas?.sections.length ?? 0,
                         IsDirty: this.DirtyFlag,
+                        // Granular canvas-edit context for the realtime
+                        // co-agent voice-editing the form. These let the
+                        // agent target the right element/section ("make THIS
+                        // field required") and know what's already placed
+                        // (AllFieldNames) without a tool round-trip.
+                        DirtyFlag: this.DirtyFlag,
+                        SelectedElementId: this.SelectedElementId,
+                        SelectedSectionId: this.SelectedSectionId,
+                        CenterPaneMode: this.CenterPaneMode,
+                        AllFieldNames: this.Canvas ? collectFieldNames(this.Canvas) : [],
+                        // Full canvas model (sections + element ids) so the
+                        // agent can reference element/section ids in the
+                        // granular AddField/RemoveField/Reorder/etc. tools.
+                        Canvas: this.Canvas,
                         // Identity of the currently-loaded Component +
                         // EntityFormOverride row, so the Form Builder
                         // agent can call `Modify Interactive Form` with
@@ -3160,10 +3215,15 @@ export class FormBuilderResourceComponent
             // the embedded chat-area sees the latest form state. Same flow
             // the floating overlay uses; both surfaces stay in sync.
             this.navigationService.SetAgentContext(this, ctx);
+            // 🔒 SAFETY BOUNDARY: the tool suite below exposes ONLY reversible
+            // canvas-DEFINITION edits + view-only pane switches. Save / Publish /
+            // override-activation / delete-the-whole-form are deliberately NOT
+            // exposed — those are irreversible and stay human-confirmed in the
+            // UI. Keep the wholesale UpdateForm tool; ADD the granular suite.
             this.navigationService.SetAgentClientTools(this, [
                 {
                     Name: 'UpdateForm',
-                    Description: 'Replace the active form canvas with a new canvas model. Pass the new FormCanvasModel JSON.',
+                    Description: 'Replace the active form canvas with a new canvas model. Pass the new FormCanvasModel JSON. Prefer the granular AddField/RemoveField/etc. tools for small edits.',
                     ParameterSchema: {
                         type: 'object',
                         properties: {
@@ -3183,6 +3243,7 @@ export class FormBuilderResourceComponent
                         return { Success: true };
                     },
                 },
+                ...buildCanvasEditClientTools(this.buildCanvasEditHost()),
             ]);
         } catch (err) {
             LogError(`FormBuilderResource.registerAgentContext: ${err instanceof Error ? err.message : String(err)}`);

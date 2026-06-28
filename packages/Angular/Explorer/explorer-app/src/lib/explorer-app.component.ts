@@ -400,10 +400,18 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       OtherNavItems: navItems
         .filter(n => n.Label !== activeNavItem?.Label && n.Status !== 'Disabled' && n.Status !== 'Pending')
         .map(n => ({ Name: n.Label, Description: n.Description })),
+      // Other apps the user can open — the valid AppName values for a NavigateToApp call. Without
+      // this the co-agent guesses the app name and navigation fails with "application undefined".
+      NavigableApps: this.appManager.GetAllApps()
+        .filter(a => a.Name !== activeApp.Name)
+        .map(a => ({ Name: a.Name, Description: a.Description || undefined })),
       User: {
         Name: currentUser?.Name || '',
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
-      }
+      },
+      // Baseline capability manifest = the always-available global tools (with their schemas).
+      // handleAgentContextUpdate merges the active surface's tools on top of this.
+      Capabilities: { Tools: [...this.globalToolManifest] }
     };
     // Publish to any embedded chat-area subscribers (Form Builder
     // cockpit, future domain dashboards). The floating overlay sees
@@ -473,10 +481,12 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
 
       // Mirror the surface tools into the realtime session so the co-agent's ContextTool proxy can
-      // execute them client-side (the realtime analogue of the async agentClient registration above).
-      this.realtimeSession.RegisterAppClientTools(
-        update.AgentClientTools.map(t => ({ Name: t.Name, Handler: t.Handler })),
-      );
+      // execute them client-side — MERGED with the always-available global tools (NavigateToApp,
+      // NavigateToRecord, …) so the co-agent can navigate AND drive the current surface.
+      this.realtimeSession.RegisterAppClientTools([
+        ...this.globalAgentTools,
+        ...update.AgentClientTools.map(t => ({ Name: t.Name, Handler: t.Handler })),
+      ]);
 
       // Populate the LIVE capability manifest on the snapshot — names + schemas only (no handlers),
       // so the streamed context note tells the co-agent exactly which tools are callable on the
@@ -484,11 +494,16 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       // user navigates and the surface re-registers its tools, the manifest (and the streamed note)
       // updates with it.
       if (this.AppContextSnapshot) {
-        const toolManifest: ClientToolMetadata[] = update.AgentClientTools.map(t => ({
-          Name: t.Name,
-          Description: t.Description,
-          InputSchema: t.ParameterSchema,
-        }));
+        // Merge the global tools (NavigateToApp/NavigateToRecord/etc.) with the active surface's
+        // tools so the streamed note lists EVERY callable action + its params, not just the surface's.
+        const toolManifest: ClientToolMetadata[] = [
+          ...this.globalToolManifest,
+          ...update.AgentClientTools.map(t => ({
+            Name: t.Name,
+            Description: t.Description,
+            InputSchema: t.ParameterSchema,
+          })),
+        ];
         this.AppContextSnapshot = {
           ...this.AppContextSnapshot,
           Capabilities: { ...this.AppContextSnapshot.Capabilities, Tools: toolManifest },
@@ -504,8 +519,37 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   private activeDashboardToolNames: string[] = [];
 
   /** Register Explorer-specific client tool handlers with the AgentClientService */
+  /**
+   * Global client tools (Name + Handler), captured so the REALTIME co-agent's `ContextTool` can
+   * execute them too — not just the async chat agent. Merged with the active surface's tools in
+   * {@link handleAgentContextUpdate}. Without this, the realtime ContextTool can't perform
+   * NavigateToApp / NavigateToRecord / etc. and the co-agent falls back to (failing) delegation.
+   */
+  private globalAgentTools: Array<{ Name: string; Handler: (params: Record<string, unknown>) => Promise<unknown> | unknown }> = [];
+
+  /**
+   * Catalog (name + description + schema, no handlers) of the global tools, merged into
+   * {@link AppContextSnapshot}.Capabilities.Tools so the realtime context note tells the co-agent
+   * HOW to call NavigateToApp/NavigateToRecord/etc. (their params) — not just that they exist.
+   */
+  private globalToolManifest: ClientToolMetadata[] = [];
+
   private registerClientTools(): void {
-    this.agentClient.RegisterTool({
+    // Register each global tool on BOTH the async agent-client AND capture it for the realtime
+    // session (one set of handlers, both agents) + the streamed capability manifest (schemas).
+    this.globalAgentTools = [];
+    this.globalToolManifest = [];
+    const register = (tool: {
+      Name: string;
+      Description: string;
+      ParameterSchema: Record<string, unknown>;
+      Handler: (params: Record<string, unknown>) => Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }>;
+    }): void => {
+      this.agentClient.RegisterTool(tool);
+      this.globalAgentTools.push({ Name: tool.Name, Handler: tool.Handler });
+      this.globalToolManifest.push({ Name: tool.Name, Description: tool.Description, InputSchema: tool.ParameterSchema });
+    };
+    register({
       Name: 'NavigateToRecord',
       Description: 'Navigate the user to a specific entity record',
       ParameterSchema: {
@@ -532,7 +576,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'NavigateToApp',
       Description: 'Navigate to a specific application and optionally a nav item within it',
       ParameterSchema: {
@@ -571,7 +615,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'Sleep',
       Description: 'Wait for a specified number of seconds',
       ParameterSchema: {
@@ -588,7 +632,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'CopyToClipboard',
       Description: 'Copy text to the user\'s clipboard. Use when the user asks to copy something or when generating content the user will want to paste elsewhere (SQL, code, formatted data).',
       ParameterSchema: {
@@ -609,7 +653,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'ShowNotification',
       Description: 'Show a toast notification to the user. Use for confirmations, status updates, or alerts that don\'t need a chat message response.',
       ParameterSchema: {
@@ -630,7 +674,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'OpenBrowserTab',
       Description: 'Open a URL in a new browser tab. Use when the user asks to visit an external website, view documentation, or open any URL outside the current application.',
       ParameterSchema: {
@@ -651,7 +695,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       }
     });
 
-    this.agentClient.RegisterTool({
+    register({
       Name: 'SetTheme',
       Description: 'Switch the application between dark mode and light mode. Use when the user asks for dark mode, light mode, or to toggle the theme.',
       ParameterSchema: {
@@ -673,6 +717,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         return { Success: true, Data: { CurrentMode: this.IsDarkMode ? 'dark' : 'light' } };
       }
     });
+
+    // Make the global tools available to the realtime co-agent's ContextTool from the start
+    // (handleAgentContextUpdate later merges in the active surface's tools).
+    this.realtimeSession.RegisterAppClientTools(this.globalAgentTools);
   }
 
   /**

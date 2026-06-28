@@ -170,6 +170,18 @@ interface TestRunFeedbackSimple {
   CreatedAt: Date;
 }
 
+/**
+ * A filter intent published by the AI agent (via the Testing dashboard's client
+ * tools) for the Runs surface to apply. Both fields are optional — only the
+ * provided ones are applied. This decouples the agent-actionable Runs filters
+ * from any specific component instance: the agent sets an intent on this shared
+ * root service, and the (possibly not-yet-mounted) Runs component consumes it.
+ */
+export interface RunsFilterIntent {
+  status?: 'all' | 'running' | 'passed' | 'failed' | 'error';
+  searchText?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -178,6 +190,21 @@ export class TestingInstrumentationService {
     start: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // Last 30 days
     end: new Date()
   });
+
+  /**
+   * Agent-driven filter intents for the Runs surface. Published by the Testing
+   * dashboard's client tools; consumed by the Runs component. Starts as null
+   * (no pending intent).
+   */
+  private readonly _runsFilterIntent$ = new BehaviorSubject<RunsFilterIntent | null>(null);
+
+  /** Observable of agent-driven Runs filter intents. */
+  readonly runsFilterIntent$ = this._runsFilterIntent$.asObservable();
+
+  /** Publish an agent-driven filter intent for the Runs surface to apply. */
+  setRunsFilterIntent(intent: RunsFilterIntent): void {
+    this._runsFilterIntent$.next(intent);
+  }
 
   private readonly _suiteFilter$ = new BehaviorSubject<string | null>(null);
   private readonly _testTypeFilter$ = new BehaviorSubject<string | null>(null);
@@ -290,6 +317,33 @@ export class TestingInstrumentationService {
 
   setDateRange(start: Date, end: Date): void {
     this._dateRange$.next({ start, end });
+  }
+
+  /**
+   * Set the active date range from a named time range. Centralizes the
+   * range-to-dates computation so both the Runs surface UI and the agent's
+   * `FilterTestsByTimeRange` tool resolve identical windows.
+   */
+  setDateRangeByName(range: 'today' | 'week' | 'month' | '90days'): void {
+    const now = new Date();
+    let start: Date;
+    switch (range) {
+      case 'today':
+        start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        break;
+      case 'week':
+        start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '90days':
+        start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+      default:
+        start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+    }
+    this.setDateRange(start, now);
   }
 
   setSuiteFilter(suiteId: string | null): void {

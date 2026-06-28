@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView, IRunViewProvider } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -12,6 +12,8 @@ import {
   DailyRecordCount,
   EntityMapRow
 } from '../../services/integration-data.service';
+import { buildIntegrationAgentContext, resolveIntegrationSurface, navLabelForSurface } from '../../integration-agent-context';
+import { AgentToolResult } from '../../../shared/agent-tool-validation';
 
 type StatusColorType = 'green' | 'amber' | 'red' | 'gray';
 
@@ -27,7 +29,7 @@ interface NotificationBanner {
   templateUrl: './overview.component.html',
   styleUrls: ['./overview.component.css']
 })
-export class OverviewComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class OverviewComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
   Summaries: IntegrationSummary[] = [];
   KPIs: IntegrationKPIs = {
@@ -85,11 +87,86 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
     } finally {
       this.IsLoading = false;
       this.cdr.detectChanges();
+      this.emitAgentContext();
     }
   }
 
   async Refresh(): Promise<void> {
     await this.LoadData();
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI Agent Context & Client Tools
+  //
+  // 🔒 SAFETY BOUNDARY: The Overview surface exposes ONLY navigational and
+  // read-only refresh tools to the agent. It deliberately does NOT expose
+  // RunSync() — that triggers a LIVE external sync against a third-party system
+  // and must remain user-driven. Edit-mapping, update-schedule, and
+  // change-credentials are likewise never exposed. The agent observes KPIs and
+  // can navigate / refresh; the user performs every mutating action from the UI.
+  // ---------------------------------------------------------------------------
+
+  ngAfterViewInit(): void {
+    this.emitAgentContext();
+    this.registerAgentTools();
+  }
+
+  private emitAgentContext(): void {
+    const context = buildIntegrationAgentContext({
+      Surface: 'Overview',
+      IsLoading: this.IsLoading,
+      KPIs: {
+        TotalIntegrations: this.KPIs.TotalIntegrations,
+        ActiveSyncs: this.KPIs.ActiveSyncs,
+        RecordsSyncedToday: this.KPIs.RecordsSyncedToday,
+        SyncErrorRate: this.KPIs.ErrorRate,
+        PipelineCount: this.computePipelineCount(),
+        ScheduledSyncCount: 0,
+      },
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchIntegrationSurface',
+        Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
+        ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'RefreshIntegrationData',
+        Description: 'Reload the Integration overview KPIs, pipeline cards, and recent activity.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.LoadData();
+          return { Success: true };
+        },
+      },
+    ]);
+  }
+
+  /** Resolve a requested surface and route to it via NavigationService. */
+  private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const surface = resolveIntegrationSurface(params['surface']);
+    if (!surface) {
+      return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
+    }
+    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    if (!tabId) {
+      return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
+    }
+    return { Success: true };
+  }
+
+  /** Count of entity-map "pipelines" (enabled maps) across all integrations. */
+  private computePipelineCount(): number {
+    let total = 0;
+    for (const value of this.EntityMapCounts.values()) {
+      total += value;
+    }
+    return total;
   }
 
   // ---------------------------------------------------------------------------

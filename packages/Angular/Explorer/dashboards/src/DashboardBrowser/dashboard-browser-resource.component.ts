@@ -8,6 +8,14 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData, MJDashboardEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardEngine, DashboardUserPermissions, MJDashboardCategoryLinkEntity } from '@memberjunction/core-entities';
 import { ShareDialogResult } from './dashboard-share-dialog.component';
 import {
+    buildDashboardBrowserAgentContext,
+    isValidBrowserViewMode,
+} from './dashboard-browser-agent-context';
+import {
+    AgentToolResult,
+    validateStringParam,
+} from '../shared/agent-tool-validation';
+import {
     DashboardViewerComponent,
     DashboardNavRequestEvent,
     PanelInteractionEvent,
@@ -121,6 +129,8 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.loadDashboards();
         this.subscribeToQueryParams();
         this.loadViewPreference();
+        this.registerAgentTools();
+        this.emitAgentContext();
     }
 
     ngOnDestroy(): void {
@@ -139,6 +149,167 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
     async GetResourceIconClass(data: ResourceData): Promise<string> {
         return 'fa-solid fa-gauge-high';
+    }
+
+    // ========================================
+    // Agent Context & Client Tools
+    //
+    // 🔒 SAFETY BOUNDARY: the Dashboard Browser exposes ONLY browse / navigate
+    // tools to the AI agent — search, filter-by-category, open-for-viewing,
+    // switch view mode, refresh, and back-to-list. Mutating operations
+    // (create / delete / save / share / move) are intentionally NOT exposed.
+    // The agent helps the user find and open dashboards; the user performs any
+    // create/edit/delete/share/move from the UI. Do not add a mutating tool
+    // here without revisiting this boundary.
+    // ========================================
+
+    /**
+     * Report the current browser state to the AI agent (async chat agent and
+     * realtime co-agent). Re-emit whenever mode, selection, category filter,
+     * view mode, or loading state changes.
+     */
+    private emitAgentContext(): void {
+        this.navigationService.SetAgentContext(this, buildDashboardBrowserAgentContext({
+            Mode: this.mode,
+            SelectedDashboardId: this.selectedDashboard?.ID ?? null,
+            SelectedDashboardName: this.selectedDashboard?.Name ?? null,
+            TotalDashboardCount: this.dashboards.length,
+            SelectedCategoryId: this.selectedCategoryId,
+            ViewMode: this.viewMode,
+            IsLoading: this.isLoading,
+        }));
+    }
+
+    /** Register the browse-only client tools the agent may invoke. */
+    private registerAgentTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SearchDashboards',
+                Description: 'Search/filter the dashboard list by a text query matching dashboard name or description.',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['query'], 'query');
+                    if (!v.ok) return v.result;
+                    return this.AgentSearchDashboards(v.value);
+                },
+            },
+            {
+                Name: 'FilterByCategory',
+                Description: 'Filter the dashboard list to a category by its ID. Pass an empty string to clear the category filter (show root).',
+                ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string' } }, required: ['categoryId'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['categoryId'], 'categoryId');
+                    if (!v.ok) return v.result;
+                    return this.AgentFilterByCategory(v.value);
+                },
+            },
+            {
+                Name: 'OpenDashboard',
+                Description: 'Open a dashboard for viewing (inline) by its ID.',
+                ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string' } }, required: ['dashboardId'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['dashboardId'], 'dashboardId');
+                    if (!v.ok) return v.result;
+                    return this.AgentOpenDashboard(v.value);
+                },
+            },
+            {
+                Name: 'SwitchViewMode',
+                Description: 'Switch the dashboard list view mode between "cards" and "list".',
+                ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: ['cards', 'list'] } }, required: ['mode'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    return this.AgentSwitchViewMode(params['mode']);
+                },
+            },
+            {
+                Name: 'RefreshDashboardList',
+                Description: 'Reload the list of dashboards and categories from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async (): Promise<AgentToolResult> => {
+                    await this.loadDashboards();
+                    this.emitAgentContext();
+                    return { Success: true };
+                },
+            },
+            {
+                Name: 'BackToList',
+                Description: 'Return from a dashboard view/edit back to the dashboard list.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async (): Promise<AgentToolResult> => {
+                    this.backToList();
+                    this.emitAgentContext();
+                    return { Success: true };
+                },
+            },
+        ]);
+    }
+
+    /**
+     * Filter the dashboard list by a text query against name + description.
+     * The generic browser owns the category/view chrome; this surfaces a
+     * name/description filter via the same selected-category mechanism is not
+     * applicable, so we narrow the in-memory list the browser renders.
+     */
+    private AgentSearchDashboards(query: string): AgentToolResult {
+        const q = query.trim().toLowerCase();
+        const engine = DashboardEngine.Instance;
+        const md = this.ProviderToUse;
+        const all = [...engine.GetAccessibleDashboards(md.CurrentUser.ID)];
+
+        const matched = q
+            ? all.filter(d =>
+                (d.Name || '').toLowerCase().includes(q) ||
+                (d.Description || '').toLowerCase().includes(q))
+            : all;
+
+        this.dashboards = matched.sort((a, b) =>
+            new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
+        this.mode = 'list';
+        this.selectedDashboard = null;
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
+    }
+
+    /** Apply a category filter (empty string clears it) and return to the list. */
+    private AgentFilterByCategory(categoryId: string): AgentToolResult {
+        const trimmed = categoryId.trim();
+        if (trimmed && !this.categories.some(c => UUIDsEqual(c.ID, trimmed))) {
+            return { Success: false, ErrorMessage: `No accessible category found with ID "${trimmed}".` };
+        }
+        this.selectedCategoryId = trimmed || null;
+        this.mode = 'list';
+        this.selectedDashboard = null;
+        this.updateUrlQueryParams();
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
+    }
+
+    /** Open a dashboard for inline viewing by ID. */
+    private AgentOpenDashboard(dashboardId: string): AgentToolResult {
+        const id = dashboardId.trim();
+        if (!id) return { Success: false, ErrorMessage: 'dashboardId must not be empty.' };
+
+        const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, id));
+        if (!dashboard) {
+            return { Success: false, ErrorMessage: `No accessible dashboard found with ID "${id}".` };
+        }
+        this.openDashboard(dashboard);
+        this.emitAgentContext();
+        return { Success: true };
+    }
+
+    /** Switch and persist the list view mode (cards | list). */
+    private AgentSwitchViewMode(rawMode: unknown): AgentToolResult {
+        if (!isValidBrowserViewMode(rawMode)) {
+            return { Success: false, ErrorMessage: 'mode must be one of: cards, list.' };
+        }
+        this.viewMode = rawMode;
+        this.saveViewPreference(rawMode);
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
     }
 
     // ========================================
@@ -296,6 +467,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public onCategoryChange(event: CategoryChangeEvent): void {
         this.selectedCategoryId = event.CategoryId;
         this.updateUrlQueryParams();
+        this.emitAgentContext();
     }
 
     /**
@@ -304,6 +476,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public onViewPreferenceChange(event: ViewPreferenceChangeEvent): void {
         this.viewMode = event.ViewMode;
         this.saveViewPreference(event.ViewMode);
+        this.emitAgentContext();
     }
 
     /**
@@ -464,6 +637,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
         this.updateUrlQueryParams();
         this.NotifyDisplayNameChanged(dashboard.Name || 'Dashboard');
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -496,6 +670,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.originalDescription = dashboard.Description || '';
         this.originalConfig = dashboard.UIConfigDetails || '';
 
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -507,6 +682,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.mode = 'list';
         this.updateUrlQueryParams();
         this.NotifyDisplayNameChanged('Dashboards');
+        this.emitAgentContext();
         this.cdr.detectChanges();
     }
 
@@ -977,6 +1153,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             // Also watch for late-arriving query params from pin navigation
             this.watchForLateQueryParams();
 
+            this.emitAgentContext();
             this.NotifyLoadComplete();
         } catch (err) {
             console.error('Failed to load dashboards:', err);
@@ -1073,6 +1250,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                     }
                 }
 
+                this.emitAgentContext();
                 this.cdr.detectChanges();
             });
     }

@@ -536,10 +536,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * stays unit-testable. Called on init and on every state change.
    */
   private publishAgentContext(): void {
+    const accessibleViews = this.getAccessibleViewsForSelectedEntity();
     const context = buildDataExplorerAgentContext({
       SelectedEntityName: this.selectedEntity?.Name ?? null,
       ViewMode: this.state.viewMode,
       ActiveViewId: this.state.selectedViewId,
+      ActiveViewName: this.resolveActiveViewName(accessibleViews),
+      AvailableViewNames: accessibleViews.map(v => v.Name),
+      VisibleColumnNames: this.getVisibleColumnNames(),
       FilterText: this.debouncedFilterText,
       TotalRecordCount: this.totalRecordCount,
       FilteredRecordCount: this.filteredRecordCount,
@@ -548,8 +552,57 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       HomeViewMode: this.state.homeViewMode,
       EntitySearchText: this.entityFilterText,
       VisibleEntityCount: this.filteredEntityCount,
+      AvailableEntityNames: this.entities.map(e => e.Name),
     });
     this.navigationService.SetAgentContext(this, context);
+  }
+
+  /**
+   * Saved views accessible to the current user for the selected entity, read from the
+   * already-loaded {@link UserViewEngine} cache (no new RunView). Returns [] at the home
+   * level. The engine's cache is populated lazily elsewhere (e.g. {@link restoreViewFromUrl}
+   * and the view workspace); if it hasn't loaded yet this returns [] and the next state
+   * change re-publishes once it has.
+   */
+  private getAccessibleViewsForSelectedEntity(): MJUserViewEntityExtended[] {
+    if (!this.selectedEntity) {
+      return [];
+    }
+    return UserViewEngine.Instance.GetAccessibleViewsForEntity(this.selectedEntity.ID);
+  }
+
+  /**
+   * Resolve the display name for the active view id. Prefers the live
+   * {@link selectedViewEntity}, then the accessible-views list, then the engine cache.
+   */
+  private resolveActiveViewName(accessibleViews: MJUserViewEntityExtended[]): string | null {
+    const activeId = this.state.selectedViewId;
+    if (!activeId) {
+      return null;
+    }
+    if (this.selectedViewEntity && UUIDsEqual(this.selectedViewEntity.ID, activeId)) {
+      return this.selectedViewEntity.Name;
+    }
+    const fromList = accessibleViews.find(v => UUIDsEqual(v.ID, activeId));
+    if (fromList) {
+      return fromList.Name;
+    }
+    return UserViewEngine.Instance.GetViewById(activeId)?.Name ?? null;
+  }
+
+  /**
+   * Column/field names visible in the grid for the selected entity — the entity's
+   * default-in-view fields, read straight from in-memory {@link EntityInfo} metadata
+   * (no lookup). Falls back to all fields when none are flagged for view display.
+   * Returns [] at the home level.
+   */
+  private getVisibleColumnNames(): string[] {
+    if (!this.selectedEntity) {
+      return [];
+    }
+    const inViewFields = this.selectedEntity.Fields.filter(f => f.DefaultInView);
+    const fields = inViewFields.length > 0 ? inViewFields : this.selectedEntity.Fields;
+    return fields.map(f => f.DisplayNameOrName);
   }
 
   /**
@@ -599,8 +652,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       },
       {
         Name: 'SelectView',
-        Description: 'Select a saved view for the current entity by its view ID.',
-        ParameterSchema: { type: 'object', properties: { viewId: { type: 'string' } }, required: ['viewId'] },
+        Description: 'Select a saved view for the current entity. Accepts either the view name (e.g. "Active Accounts", as listed in AvailableViews) or its view ID.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            view: { type: 'string', description: 'The view name or view ID to select.' },
+            viewId: { type: 'string', description: 'Deprecated alias for "view" — the view ID.' },
+          },
+        },
         Handler: async (params: Record<string, unknown>) => this.toolSelectView(params),
       },
       {
@@ -658,14 +717,36 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return { Success: true, Data: { ViewMode: mode } };
   }
 
-  /** Select a saved view by ID. */
-  private toolSelectView(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-    const viewId = String(params['viewId'] ?? '');
-    if (!viewId) {
-      return { Success: false, ErrorMessage: 'A viewId is required.' };
+  /**
+   * Select a saved view by name OR id. The agent now sees view names via the
+   * AvailableViews context field, so this resolves a supplied name (case-insensitive)
+   * to its id against the in-memory {@link UserViewEngine} cache for the current entity.
+   * A value that already matches a known view id is used directly.
+   */
+  private toolSelectView(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there are no saved views to choose from.' };
     }
-    this.stateService.selectView(viewId);
-    return { Success: true };
+    // Accept either "view" (name or id) or the legacy "viewId" alias.
+    const raw = String(params['view'] ?? params['viewId'] ?? '').trim();
+    if (!raw) {
+      return { Success: false, ErrorMessage: 'A view name or view ID is required.' };
+    }
+
+    const accessibleViews = this.getAccessibleViewsForSelectedEntity();
+    // Prefer an exact id match, then fall back to a case-insensitive name match.
+    const lowered = raw.toLowerCase();
+    const match =
+      accessibleViews.find(v => UUIDsEqual(v.ID, raw)) ??
+      accessibleViews.find(v => v.Name.toLowerCase() === lowered);
+
+    if (!match) {
+      const available = accessibleViews.map(v => v.Name).join(', ') || '(none)';
+      return { Success: false, ErrorMessage: `No saved view named or identified by "${raw}" for "${this.selectedEntity.Name}". Available views: ${available}.` };
+    }
+
+    this.stateService.selectView(match.ID);
+    return { Success: true, Data: { ViewId: match.ID, ViewName: match.Name } };
   }
 
   /** Open the currently-selected record in its full form. */

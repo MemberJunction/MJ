@@ -14,6 +14,25 @@ import { DataExplorerViewMode } from './models/explorer-state.interface';
 const VALID_VIEW_MODES: readonly DataExplorerViewMode[] = ['grid', 'cards', 'timeline', 'map'] as const;
 
 /**
+ * Upper bound on how many names we publish in a name-list context field
+ * (AvailableViews, VisibleColumns, AvailableEntities). Keeping the streamed note
+ * bounded avoids flooding the co-agent with hundreds of names; when the underlying
+ * list is larger we surface a companion total-count field instead.
+ */
+export const AGENT_CONTEXT_NAME_LIST_CAP = 25;
+
+/**
+ * Cap an array of names to {@link AGENT_CONTEXT_NAME_LIST_CAP} entries.
+ * Pure + deterministic so the context shape stays unit-testable.
+ *
+ * @param names - the full list of names (already de-duplicated by the caller)
+ * @returns the first N names, where N is the cap
+ */
+function capNames(names: readonly string[]): string[] {
+    return names.slice(0, AGENT_CONTEXT_NAME_LIST_CAP);
+}
+
+/**
  * Type-guard / validator for a record-view mode string. Used to keep the
  * `SetViewMode` client tool tolerant of arbitrary agent input — only the four
  * known modes are accepted.
@@ -38,6 +57,23 @@ export interface DataExplorerAgentContextInput {
     ViewMode: DataExplorerViewMode;
     /** ID of the currently selected saved view, or null. */
     ActiveViewId: string | null;
+    /**
+     * Resolved display name for {@link ActiveViewId}, or null when no view is active
+     * (or the id couldn't be resolved). Lets the co-agent refer to the view by name
+     * rather than an opaque GUID.
+     */
+    ActiveViewName: string | null;
+    /**
+     * Names of the saved views available for the currently selected entity (the ones
+     * the agent can open via the SelectView tool). The component supplies the full
+     * list; this helper bounds it — see {@link AGENT_CONTEXT_NAME_LIST_CAP}.
+     */
+    AvailableViewNames: string[];
+    /**
+     * Field/column names visible in the current entity's grid. The component supplies
+     * the full list; this helper bounds it.
+     */
+    VisibleColumnNames: string[];
     /** The debounced record filter text currently applied to the grid. */
     FilterText: string;
     /** Total record count for the selected entity/view (unfiltered). */
@@ -54,6 +90,12 @@ export interface DataExplorerAgentContextInput {
     EntitySearchText: string;
     /** Count of entities currently visible after the home-screen filter. */
     VisibleEntityCount: number;
+    /**
+     * Names of the entities loaded and available at the home level (so the co-agent
+     * can navigate to one via OpenEntityData). The component supplies the full list;
+     * this helper bounds it — see {@link AGENT_CONTEXT_NAME_LIST_CAP}.
+     */
+    AvailableEntityNames: string[];
 }
 
 /**
@@ -73,25 +115,44 @@ export interface DataExplorerAgentContextInput {
  */
 export function buildDataExplorerAgentContext(input: DataExplorerAgentContextInput): Record<string, unknown> {
     if (input.SelectedEntityName) {
-        return {
+        const context: Record<string, unknown> = {
             AtHomeLevel: false,
             SelectedEntityName: input.SelectedEntityName,
             ViewMode: input.ViewMode,
             ActiveViewId: input.ActiveViewId,
+            ActiveViewName: input.ActiveViewName,
             FilterText: input.FilterText,
             TotalRecordCount: input.TotalRecordCount,
             FilteredRecordCount: input.FilteredRecordCount,
             SelectedRecordName: input.SelectedRecordName,
             DetailPanelOpen: input.DetailPanelOpen,
+            AvailableViews: capNames(input.AvailableViewNames),
         };
+        // When the entity has more saved views than we publish names for, tell the
+        // co-agent the true total so it knows the list is truncated.
+        if (input.AvailableViewNames.length > AGENT_CONTEXT_NAME_LIST_CAP) {
+            context['AvailableViewCount'] = input.AvailableViewNames.length;
+        }
+        if (input.VisibleColumnNames.length > 0) {
+            context['VisibleColumns'] = capNames(input.VisibleColumnNames);
+            if (input.VisibleColumnNames.length > AGENT_CONTEXT_NAME_LIST_CAP) {
+                context['VisibleColumnCount'] = input.VisibleColumnNames.length;
+            }
+        }
+        return context;
     }
 
     // Home level — describe the entity-browsing surface instead.
-    return {
+    const homeContext: Record<string, unknown> = {
         AtHomeLevel: true,
         SelectedEntityName: null,
         HomeViewMode: input.HomeViewMode,
         EntitySearchText: input.EntitySearchText,
         VisibleEntityCount: input.VisibleEntityCount,
+        AvailableEntities: capNames(input.AvailableEntityNames),
     };
+    if (input.AvailableEntityNames.length > AGENT_CONTEXT_NAME_LIST_CAP) {
+        homeContext['AvailableEntityCount'] = input.AvailableEntityNames.length;
+    }
+    return homeContext;
 }

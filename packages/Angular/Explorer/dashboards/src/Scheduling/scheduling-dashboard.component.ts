@@ -6,10 +6,16 @@ import { debounceTime, takeUntil } from 'rxjs/operators';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { TabConfig, FilterFieldConfig } from '@memberjunction/ng-ui-components';
-import { SchedulingInstrumentationService } from './services/scheduling-instrumentation.service';
+import { JobStatistics, SchedulingInstrumentationService } from './services/scheduling-instrumentation.service';
 import { SchedulingOverviewComponent } from './components/scheduling-overview.component';
 import { SchedulingJobsComponent } from './components/scheduling-jobs.component';
 import { SchedulingActivityComponent } from './components/scheduling-activity.component';
+import {
+  buildSchedulingAgentContext,
+  isValidSchedulingTab,
+  SchedulingJobSnapshot,
+} from './scheduling-agent-context';
+import { AgentToolResult } from '../shared/agent-tool-validation';
 
 interface SchedulingDashboardState {
   activeTab: string;
@@ -40,6 +46,9 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   public ActiveJobCount = 0;
   public AlertCount = 0;
 
+  /** Live snapshot of every scheduled job — used both for the agent context and the read-only GetJobDetails tool. */
+  private currentJobs: JobStatistics[] = [];
+
   /** ViewChild references to the active inner tab component — drive the toolbar UI rendered in <mj-page-header>. */
   @ViewChild('overviewCmp') overviewCmp?: SchedulingOverviewComponent;
   @ViewChild('jobsCmp') jobsCmp?: SchedulingJobsComponent;
@@ -47,6 +56,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
 
   private kpiSub: Subscription | undefined;
   private alertSub: Subscription | undefined;
+  private jobsSub: Subscription | undefined;
 
   public get Tabs(): TabConfig[] {
     return [
@@ -76,6 +86,11 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   ngAfterViewInit(): void {
     this.visitedTabs.add(this.ActiveTab);
     this.loadSidebarCounts();
+    // Publish the initial agent context and register the client tools the AI agent
+    // can invoke against this surface. Context is re-emitted whenever the job list,
+    // alert count, or active tab changes (see loadSidebarCounts / OnTabChange).
+    this.publishAgentContext();
+    this.registerAgentClientTools();
     this.cdr.detectChanges();
   }
 
@@ -84,6 +99,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     this.stateChangeSubject.complete();
     if (this.kpiSub) this.kpiSub.unsubscribe();
     if (this.alertSub) this.alertSub.unsubscribe();
+    if (this.jobsSub) this.jobsSub.unsubscribe();
   }
 
   private loadSidebarCounts(): void {
@@ -94,6 +110,13 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
 
     this.alertSub = this.schedulingService.alerts$.subscribe(alerts => {
       this.AlertCount = alerts.length;
+      this.publishAgentContext();
+      this.cdr.markForCheck();
+    });
+
+    this.jobsSub = this.schedulingService.jobStatistics$.subscribe(jobs => {
+      this.currentJobs = jobs;
+      this.publishAgentContext();
       this.cdr.markForCheck();
     });
   }
@@ -107,11 +130,161 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
     }, 100);
 
     this.emitStateChange();
+    this.publishAgentContext();
     this.cdr.markForCheck();
   }
 
   public HasVisited(tabId: string): boolean {
     return this.visitedTabs.has(tabId);
+  }
+
+  // ========================================================================
+  // AI AGENT CONTEXT & CLIENT TOOLS
+  //
+  // 🔒 SAFETY BOUNDARY: the Scheduling surface exposes ONLY navigational /
+  // filter / search / read-only tools to the agent. The following are
+  // INTENTIONALLY NOT exposed because they mutate or destroy state:
+  //   - updateJobStatus / ToggleJobStatus (pause / resume a job) — state mutation
+  //   - ConfirmDelete / deleteJob — destructive
+  //   - OpenCreateSlideout / saveJob (create a job) — state mutation
+  //   - releaseLock — operational mutation
+  // The agent finds / filters / inspects; the user performs mutations from the UI.
+  // ========================================================================
+
+  /**
+   * Publish the current Scheduling state to the AI agent via NavigationService.
+   * Reports the active tab, job counts (total/active/paused/disabled), the alert
+   * count, the overall success rate, and the jobs-tab status filter. The shaping
+   * lives in the pure {@link buildSchedulingAgentContext} helper so it stays
+   * unit-testable. Called on init and on every meaningful state change.
+   */
+  private publishAgentContext(): void {
+    const context = buildSchedulingAgentContext({
+      ActiveTab: this.ActiveTab,
+      Jobs: this.currentJobs.map(j => this.toJobSnapshot(j)),
+      AlertCount: this.AlertCount,
+      StatusFilter: this.jobsCmp?.StatusFilter ?? '',
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  /** Project a full job statistics row into the read-only snapshot shape. */
+  private toJobSnapshot(job: JobStatistics): SchedulingJobSnapshot {
+    return {
+      JobId: job.jobId,
+      JobName: job.jobName,
+      JobType: job.jobType,
+      Status: job.status,
+      SuccessRate: job.successRate,
+      TotalRuns: job.totalRuns,
+      CronExpression: job.cronExpression,
+      Timezone: job.timezone,
+    };
+  }
+
+  /**
+   * Register the SAFE, read-only client tools the AI agent can invoke against the
+   * Scheduling dashboard. Each handler delegates to the same component path a user
+   * interaction would call and returns a tolerant `{ Success, Data?, ErrorMessage? }`
+   * result — handlers never throw.
+   *
+   * Tools (all non-mutating):
+   * - SwitchSchedulingTab: switch the active tab (dashboard / jobs / activity).
+   * - RefreshSchedulingData: re-pull the scheduling data from the server.
+   * - FilterJobsByStatus: apply a status filter on the jobs tab.
+   * - SearchJobs: apply a search query on the jobs tab.
+   * - GetJobDetails: read a single job's details from the loaded list.
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchSchedulingTab',
+        Description: 'Switch the active Scheduling tab. Valid tabs: dashboard, jobs, activity.',
+        ParameterSchema: { type: 'object', properties: { tab: { type: 'string' } }, required: ['tab'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchTab(params),
+      },
+      {
+        Name: 'RefreshSchedulingData',
+        Description: 'Refresh the scheduling data (jobs, executions, KPIs, alerts) from the server.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.schedulingService.refresh();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterJobsByStatus',
+        Description: 'Filter the jobs list by status. Valid statuses: Active, Paused, Disabled, Pending, Expired, or empty string to clear.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+        Handler: async (params: Record<string, unknown>) => this.toolFilterJobsByStatus(params),
+      },
+      {
+        Name: 'SearchJobs',
+        Description: 'Search the jobs list by a free-text query (matches job name, type, and description).',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchJobs(params),
+      },
+      {
+        Name: 'GetJobDetails',
+        Description: 'Get the read-only details of a single scheduled job by its ID.',
+        ParameterSchema: { type: 'object', properties: { jobId: { type: 'string' } }, required: ['jobId'] },
+        Handler: async (params: Record<string, unknown>) => this.toolGetJobDetails(params),
+      },
+    ]);
+  }
+
+  /** Switch the active tab after validating the requested tab id. */
+  private toolSwitchTab(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const tab = params['tab'];
+    if (!isValidSchedulingTab(tab)) {
+      return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Valid tabs: dashboard, jobs, activity.` };
+    }
+    this.OnTabChange(tab);
+    return { Success: true, Data: { ActiveTab: tab } };
+  }
+
+  /** Apply a status filter on the jobs tab (switching to it first if needed). */
+  private toolFilterJobsByStatus(params: Record<string, unknown>): AgentToolResult {
+    const status = typeof params['status'] === 'string' ? params['status'] as string : '';
+    const allowed = ['', 'Active', 'Paused', 'Disabled', 'Pending', 'Expired'];
+    if (!allowed.includes(status)) {
+      return { Success: false, ErrorMessage: `Invalid status "${status}". Expected one of: ${allowed.filter(s => s).join(', ')} (or empty to clear).` };
+    }
+    if (this.ActiveTab !== 'jobs') {
+      this.OnTabChange('jobs');
+    }
+    if (!this.jobsCmp) {
+      return { Success: false, ErrorMessage: 'The jobs view is not ready yet. Try again after switching to the jobs tab.' };
+    }
+    this.jobsCmp.OnStatusFilterChange(status);
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  /** Apply a search query on the jobs tab (switching to it first if needed). */
+  private toolSearchJobs(params: Record<string, unknown>): AgentToolResult {
+    const query = typeof params['query'] === 'string' ? params['query'] as string : '';
+    if (this.ActiveTab !== 'jobs') {
+      this.OnTabChange('jobs');
+    }
+    if (!this.jobsCmp) {
+      return { Success: false, ErrorMessage: 'The jobs view is not ready yet. Try again after switching to the jobs tab.' };
+    }
+    this.jobsCmp.OnSearchChange(query);
+    return { Success: true };
+  }
+
+  /** Return the read-only details of a single job from the loaded list. */
+  private toolGetJobDetails(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const jobId = typeof params['jobId'] === 'string' ? params['jobId'] as string : '';
+    if (!jobId) {
+      return { Success: false, ErrorMessage: 'A jobId is required.' };
+    }
+    const job = this.currentJobs.find(j => j.jobId === jobId);
+    if (!job) {
+      return { Success: false, ErrorMessage: `No job found with ID "${jobId}".` };
+    }
+    return { Success: true, Data: this.toJobSnapshot(job) as unknown as Record<string, unknown> };
   }
 
   // ───── Filter-popover plumbing for the [actions]/[toolbar] slots ─────

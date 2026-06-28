@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject, ViewChild } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
@@ -13,6 +13,8 @@ import {
   IntegrationSummary,
   EntityMapRow
 } from '../../services/integration-data.service';
+import { buildIntegrationAgentContext, resolveIntegrationSurface, navLabelForSurface } from '../../integration-agent-context';
+import { AgentToolResult } from '../../../shared/agent-tool-validation';
 
 /** Brand color mapping for known integration names */
 const BRAND_COLOR_MAP: Array<{ Pattern: RegExp; Color: string }> = [
@@ -65,7 +67,7 @@ const WIZARD_STEPS: WizardStep[] = [
   templateUrl: './connections.component.html',
   styleUrls: ['./connections.component.css']
 })
-export class ConnectionsComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class ConnectionsComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // --- Main view state ---
   Connections: IntegrationSummary[] = [];
@@ -259,7 +261,76 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     } finally {
       this.IsLoading = false;
       this.cdr.detectChanges();
+      this.emitAgentContext();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI Agent Context & Client Tools
+  //
+  // 🔒 SAFETY BOUNDARY: The Connections surface exposes ONLY navigational and
+  // read-only refresh tools to the agent. It deliberately does NOT expose any
+  // sync trigger (RunSync — a LIVE external sync), nor edit-mapping,
+  // update-schedule, or change-credentials. Creating / editing / deleting
+  // connections and testing credentials remain user-driven from the UI.
+  // ---------------------------------------------------------------------------
+
+  ngAfterViewInit(): void {
+    this.emitAgentContext();
+    this.registerAgentTools();
+  }
+
+  private emitAgentContext(): void {
+    const kpis = this.dataService.ComputeKPIs(this.Connections);
+    let pipelineCount = 0;
+    for (const value of this.EntityMapCounts.values()) {
+      pipelineCount += value;
+    }
+    const context = buildIntegrationAgentContext({
+      Surface: 'Connections',
+      IsLoading: this.IsLoading,
+      KPIs: {
+        TotalIntegrations: kpis.TotalIntegrations,
+        ActiveSyncs: kpis.ActiveSyncs,
+        RecordsSyncedToday: kpis.RecordsSyncedToday,
+        SyncErrorRate: kpis.ErrorRate,
+        PipelineCount: pipelineCount,
+        ScheduledSyncCount: 0,
+      },
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchIntegrationSurface',
+        Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
+        ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'RefreshIntegrationData',
+        Description: 'Reload the list of integration connections and their entity-map counts.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.LoadData();
+          return { Success: true };
+        },
+      },
+    ]);
+  }
+
+  private async toolSwitchSurface(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const surface = resolveIntegrationSurface(params['surface']);
+    if (!surface) {
+      return { Success: false, ErrorMessage: 'Invalid surface. Expected one of: Overview, Connections, Activity, Schedules.' };
+    }
+    const tabId = await this.navigationService.OpenNavItemByName(navLabelForSurface(surface));
+    if (!tabId) {
+      return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
+    }
+    return { Success: true };
   }
 
   // ---------------------------------------------------------------------------

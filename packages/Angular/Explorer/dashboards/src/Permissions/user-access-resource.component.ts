@@ -1,9 +1,10 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 import { Metadata, NormalizedPermission, PermissionAction } from '@memberjunction/core';
 import { PermissionEngine, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
+import { validateStringParam } from '../shared/agent-tool-validation';
 import {
     PermissionsDomainGroup,
     PermissionsUserOption,
@@ -24,7 +25,7 @@ import {
     templateUrl: './user-access-resource.component.html',
     styleUrls: ['./permissions-resource.component.css'],
 })
-export class PermissionsUserAccessResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class PermissionsUserAccessResourceComponent extends BaseResourceComponent implements OnInit, AfterViewInit, OnDestroy {
     Users: PermissionsUserOption[] = [];
     SelectedUserId: string | null = null;
     SelectedUserRoles: string[] = [];
@@ -51,8 +52,109 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
         this.NotifyLoadComplete();
     }
 
+    ngAfterViewInit(): void {
+        this.registerAgentClientTools();
+        this.publishAgentContext();
+    }
+
     override ngOnDestroy(): void {
         super.ngOnDestroy();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY / REVIEW ONLY 🚨
+    // User Access Report is a security-sensitive surface that reveals every
+    // resource a chosen user can access across all permission domains. The agent
+    // context and client tools registered here are strictly READ-ONLY: select a
+    // user to review and expand/collapse a domain group. The agent CANNOT grant or
+    // revoke permissions, mutate any domain, impersonate the selected user, alter
+    // audit records, or bulk-export effective permissions — those operations are
+    // DELIBERATELY NOT exposed and must remain human-initiated. Context exposes
+    // only the selected user, group/permission counts, and the loading flag.
+    // ================================================================
+
+    /**
+     * Publish the current user-access state to the AI agent. Re-invoked on every
+     * meaningful state change (user selection, permission load, group toggle).
+     */
+    private publishAgentContext(): void {
+        this.navigationService.SetAgentContext(this, {
+            SelectedUserId: this.SelectedUserId,
+            DomainGroupCount: this.DomainGroups.length,
+            TotalPermissionCount: this.TotalCount,
+            IsLoadingPermissions: this.IsLoadingPermissions,
+        });
+    }
+
+    /**
+     * Register the read-only / review client tools the agent may invoke. Every
+     * Handler is tolerant: validates input and returns
+     * `{ Success: false, ErrorMessage }` rather than throwing.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SelectUserForPermissionReview',
+                Description:
+                    'Select a user and load their effective permissions across all domains for review. Read-only — does not grant, revoke, or impersonate. Requires the user ID.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { userId: { type: 'string', description: 'The ID of the user to review' } },
+                    required: ['userId'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleSelectUserTool(params),
+            },
+            {
+                Name: 'TogglePermissionDomainGroup',
+                Description:
+                    'Expand or collapse a permission domain group in the current report. Read-only UI control — does not mutate data. Requires the domain name.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { domainName: { type: 'string', description: 'The domain group name to toggle' } },
+                    required: ['domainName'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleToggleGroupTool(params),
+            },
+        ]);
+    }
+
+    private async handleSelectUserTool(
+        params: Record<string, unknown>
+    ): Promise<{ Success: boolean; Data?: unknown; ErrorMessage?: string }> {
+        const user = validateStringParam(params?.['userId'], 'userId');
+        if (!user.ok) return user.result;
+        if (!user.value.trim()) {
+            return { Success: false, ErrorMessage: 'userId is required.' };
+        }
+
+        const known = this.Users.some((u) => u.ID === user.value.trim());
+        if (!known) {
+            return { Success: false, ErrorMessage: `Unknown user ID "${user.value.trim()}".` };
+        }
+
+        await this.OnUserChanged(user.value.trim());
+        this.publishAgentContext();
+
+        if (this.ErrorMessage) {
+            return { Success: false, ErrorMessage: this.ErrorMessage };
+        }
+        return { Success: true, Data: { TotalPermissionCount: this.TotalCount, DomainGroupCount: this.DomainGroups.length } };
+    }
+
+    private handleToggleGroupTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const domain = validateStringParam(params?.['domainName'], 'domainName');
+        if (!domain.ok) return domain.result;
+
+        const group = this.DomainGroups.find((g) => g.DomainName === domain.value.trim());
+        if (!group) {
+            return { Success: false, ErrorMessage: `No domain group named "${domain.value.trim()}" in the current report.` };
+        }
+
+        this.ToggleGroup(group);
+        this.publishAgentContext();
+        return { Success: true };
     }
 
     async loadUsers(): Promise<void> {
@@ -106,6 +208,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
 
         this.IsLoadingPermissions = false;
         this.cdr.detectChanges();
+        this.publishAgentContext();
     }
 
     ToggleGroup(group: PermissionsDomainGroup): void {

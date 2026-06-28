@@ -1,9 +1,14 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { MJConversationDetailEntity, ResourceData } from '@memberjunction/core-entities';
 import { MediaTranscriptCue } from '@memberjunction/ng-media-player';
+import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
+import {
+  buildRealtimeRecordingsAgentContext,
+  sessionMatchesQuery,
+} from './realtime-recordings-agent-context';
 
 /**
  * A recorded realtime session, projected from `MJ: AI Agent Sessions` for the list pane.
@@ -49,7 +54,7 @@ interface RecordedSession {
   templateUrl: './realtime-recordings-dashboard.component.html',
   styleUrls: ['./realtime-recordings-dashboard.component.css']
 })
-export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
   /** All recorded sessions (master list), newest first. */
   public Sessions: RecordedSession[] = [];
   /** The session currently selected for playback, or null. */
@@ -84,6 +89,16 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     this.NotifyLoadComplete();
   }
 
+  /**
+   * After the view initializes, publish the initial agent context and register the read-only
+   * playback-navigation tools the AI agent can invoke against this surface. The ongoing context
+   * re-emit happens after every meaningful state change (load, select, deselect).
+   */
+  ngAfterViewInit(): void {
+    this.publishAgentContext();
+    this.registerAgentClientTools();
+  }
+
   override ngOnDestroy(): void {
     super.ngOnDestroy();
   }
@@ -115,6 +130,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
       this.Sessions = [];
     } finally {
       this.IsLoading = false;
+      this.publishAgentContext();
       this.cdr.detectChanges();
     }
   }
@@ -129,6 +145,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     this.SelectedCues = [];
     this.DetailErrorMessage = null;
     this.IsDetailLoading = true;
+    this.publishAgentContext();
     this.cdr.detectChanges();
 
     try {
@@ -148,6 +165,7 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
       if (UUIDsEqual(this.SelectedSession?.ID, session.ID)) {
         this.IsDetailLoading = false;
       }
+      this.publishAgentContext();
       this.cdr.detectChanges();
     }
   }
@@ -173,6 +191,140 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     return session.CreatedAt.toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
     });
+  }
+
+  /** Clears the current playback selection, returning the surface to the empty playback state. */
+  public DeselectSession(): void {
+    if (this.SelectedSession === null) {
+      return;
+    }
+    this.SelectedSession = null;
+    this.SelectedTurns = [];
+    this.SelectedCues = [];
+    this.DetailErrorMessage = null;
+    this.IsDetailLoading = false;
+    this.publishAgentContext();
+    this.cdr.detectChanges();
+  }
+
+  // ========================================
+  // AI AGENT CONTEXT & CLIENT TOOLS
+  //
+  // 🚨 SAFETY BOUNDARY: This is a read-only session-playback surface. Only playback-navigation
+  // tools are exposed to the agent (select / deselect a recording, refresh the list, narrow the
+  // list by a client-side text filter). NO tool mutates, deletes, or exports a recording, a
+  // session, or its transcript.
+  // ========================================
+
+  /**
+   * Publish the current Realtime Recordings state to the AI agent via NavigationService.
+   * The shaping lives in the pure {@link buildRealtimeRecordingsAgentContext} helper so it stays
+   * unit-testable. Called on init and after every meaningful state change (load, select, deselect).
+   */
+  private publishAgentContext(): void {
+    const selected = this.SelectedSession;
+    const context = buildRealtimeRecordingsAgentContext({
+      SessionCount: this.Sessions.length,
+      SelectedSession: selected
+        ? {
+            ID: selected.ID,
+            AgentName: selected.AgentName,
+            ConversationName: selected.ConversationName,
+            RecordingMedia: selected.RecordingMedia,
+            DurationLabel: selected.DurationLabel,
+          }
+        : null,
+      TurnCount: this.SelectedTurns.length,
+      IsDetailLoading: this.IsDetailLoading,
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  /**
+   * Register the read-only playback-navigation tools the AI agent can invoke against this surface.
+   * Each handler delegates to the same component method a user interaction would call, and returns
+   * `{ Success: true, Data? }` on success or `{ Success: false, ErrorMessage }` on failure.
+   * Handlers are tolerant — they never throw.
+   *
+   * Tools (read-only — see the SAFETY BOUNDARY comment above):
+   * - SelectSession: select a recording by its session id and load its transcript for playback.
+   * - DeselectSession: clear the current playback selection.
+   * - RefreshSessionList: reload the master list of recorded sessions.
+   * - SearchSessions: client-side filter of the loaded recordings by agent / conversation / media.
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SelectSession',
+        Description: 'Select a recorded realtime session by its session ID and load its transcript for playback.',
+        ParameterSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, required: ['sessionId'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSelectSession(params),
+      },
+      {
+        Name: 'DeselectSession',
+        Description: 'Clear the currently selected recording, returning playback to the empty state.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.DeselectSession();
+          return { Success: true } satisfies AgentToolResult;
+        },
+      },
+      {
+        Name: 'RefreshSessionList',
+        Description: 'Reload the master list of recorded realtime sessions.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.LoadData();
+          return { Success: true, Data: { SessionCount: this.Sessions.length } };
+        },
+      },
+      {
+        Name: 'SearchSessions',
+        Description: 'Filter the loaded recordings by a free-text query, matched against the agent name, conversation name, and captured-media type. Returns the matching sessions (read-only; does not change the selection).',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchSessions(params),
+      },
+    ]);
+  }
+
+  /** Resolve a session id (case-insensitively) to a loaded recording and select it for playback. */
+  private async toolSelectSession(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
+    const validation = validateStringParam(params['sessionId'], 'sessionId');
+    if (!validation.ok) {
+      return validation.result;
+    }
+    const sessionId = validation.value.trim();
+    if (sessionId.length === 0) {
+      return { Success: false, ErrorMessage: 'A sessionId is required.' };
+    }
+    const session = this.Sessions.find(s => UUIDsEqual(s.ID, sessionId));
+    if (!session) {
+      return { Success: false, ErrorMessage: `No recorded session with id "${sessionId}" is loaded.` };
+    }
+    await this.SelectSession(session);
+    return { Success: true, Data: { SelectedSessionId: session.ID, AgentName: session.AgentName } };
+  }
+
+  /** Client-side filter of the loaded recordings; reports the matches without changing selection. */
+  private toolSearchSessions(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const validation = validateStringParam(params['query'], 'query');
+    if (!validation.ok) {
+      return validation.result;
+    }
+    const matches = this.Sessions.filter(s => sessionMatchesQuery(s, validation.value));
+    return {
+      Success: true,
+      Data: {
+        MatchCount: matches.length,
+        Matches: matches.map(s => ({
+          ID: s.ID,
+          AgentName: s.AgentName,
+          ConversationName: s.ConversationName,
+          RecordingMedia: s.RecordingMedia,
+          DurationLabel: s.DurationLabel,
+        })),
+      },
+    };
   }
 
   // ----- helpers ----------------------------------------------------------------------------

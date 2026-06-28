@@ -6,6 +6,8 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { validateEnumParam } from '../../shared/agent-tool-validation';
+import { findByIdOrError } from '../agent-tool-helpers';
 interface ExecutionMetrics {
   totalExecutions: number;
   successfulExecutions: number;
@@ -75,6 +77,11 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
     { text: 'All Actions', value: 'all' }
   ];
 
+  /** Allowed result-filter values (mirrors `resultOptions`). */
+  private readonly resultFilterValues = ['all', 'Success', 'Failed', 'Error', 'Running'] as const;
+  /** Allowed time-range values (mirrors `timeRangeOptions`). */
+  private readonly timeRangeValues = ['24hours', '7days', '30days', '90days'] as const;
+
   protected override destroy$ = new Subject<void>();
 
   constructor(private cdr: ChangeDetectorRef) {
@@ -84,6 +91,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   ngOnInit(): void {
     super.ngOnInit();
     this.setupFilters();
+    this.registerAgentTools();
     this.loadData();
   }
 
@@ -103,7 +111,120 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.applyFilters();
+      this.publishAgentContext();
     });
+  }
+
+  // ================================================================
+  // AI Agent context + client tools
+  //
+  // 🚨 SAFETY BOUNDARY: This is the Actions app. Executing an action has real
+  // side effects. This monitor is VIEW-ONLY run history — it exposes only
+  // search / filter / navigate / refresh tools to the agent. No action
+  // execution (RunAction / re-run) is wired. Every Handler is tolerant
+  // (never throws; returns a structured failure on bad input).
+  // ================================================================
+
+  /** Publish the current monitor state to the agent. Called on load and on every filter change. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      TotalExecutionCount: this.metrics.totalExecutions,
+      SuccessfulExecutionCount: this.metrics.successfulExecutions,
+      FailedExecutionCount: this.metrics.failedExecutions,
+      CurrentlyRunningCount: this.metrics.currentlyRunning,
+      OverallSuccessRate: this.getSuccessRate(),
+      CurrentSearchTerm: this.searchTerm$.value,
+      CurrentResultFilter: this.selectedResult$.value,
+      CurrentTimeRangeFilter: this.selectedTimeRange$.value,
+      CurrentActionFilter: this.selectedAction$.value,
+    });
+  }
+
+  /** Register the view-only / navigational client tools the agent can invoke on this surface. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SearchExecutions',
+        Description: 'Search the execution log by a free-text term (matches action name, result code, user).',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params) => {
+          const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
+          this.onSearchChange(term);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterExecutionsByResult',
+        Description: 'Filter executions by result. Allowed: all, Success, Failed, Error, Running.',
+        ParameterSchema: { type: 'object', properties: { result: { type: 'string', enum: [...this.resultFilterValues] } }, required: ['result'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['result'], this.resultFilterValues, 'result');
+          if (!v.ok) return v.result;
+          this.onResultFilterChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterExecutionsByTimeRange',
+        Description: 'Filter executions by time range. Allowed: 24hours, 7days, 30days, 90days.',
+        ParameterSchema: { type: 'object', properties: { timeRange: { type: 'string', enum: [...this.timeRangeValues] } }, required: ['timeRange'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['timeRange'], this.timeRangeValues, 'timeRange');
+          if (!v.ok) return v.result;
+          this.onTimeRangeChange(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'FilterExecutionsByAction',
+        Description: 'Filter executions to a single action by its id, or "all" to clear the action filter.',
+        ParameterSchema: { type: 'object', properties: { actionId: { type: 'string' } }, required: ['actionId'] },
+        Handler: async (params) => {
+          const raw = params['actionId'];
+          if (typeof raw !== 'string' || raw.trim() === '') {
+            return { Success: false, ErrorMessage: 'A non-empty actionId is required (use "all" to clear).' };
+          }
+          if (raw === 'all') {
+            this.onActionFilterChange('all');
+            return { Success: true };
+          }
+          if (!this.actions.has(raw)) {
+            return { Success: false, ErrorMessage: `No action found with id "${raw}".` };
+          }
+          this.onActionFilterChange(raw);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearMonitorFilters',
+        Description: 'Reset all execution-monitor filters (result, time range, action) to their defaults.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.resetFilters();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'OpenExecutionLog',
+        Description: 'Open the detail record for an execution log by its id (view-only run history).',
+        ParameterSchema: { type: 'object', properties: { executionId: { type: 'string' } }, required: ['executionId'] },
+        Handler: async (params) => {
+          const found = findByIdOrError(params['executionId'], this.executions, 'execution');
+          if (!found.ok) return found.result;
+          this.openExecution(found.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'RefreshMonitorData',
+        Description: 'Reload the execution monitoring data (logs, metrics, trends).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.refreshData();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   private async loadData(): Promise<void> {
@@ -135,6 +256,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
       this.calculateMetrics();
       this.generateExecutionTrends();
       this.applyFilters();
+      this.publishAgentContext();
 
     } catch (error) {
       LogError('Failed to load execution monitoring data', undefined, error);

@@ -11,6 +11,8 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ActionPinConfigResult } from './action-pin-config-dialog.component';
 import { ActionPinRunResult } from './action-pin-runner-dialog.component';
+import { buildHomeAgentContext } from './home-agent-context';
+import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 
 /**
  * Cached app data with pre-computed values for optimal rendering performance
@@ -198,6 +200,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.isLoading = false;
         this.NotifyLoadComplete();
 
+        // Apps changed → keep the agent's view of the launcher in sync.
+        this.publishAgentContext();
+
         this.cdr.markForCheck();
       });
 
@@ -207,6 +212,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .subscribe(notifications => {
         this.unreadNotifications = notifications.filter(n => n.Unread).slice(0, 5);
         this.notificationsLoading = false;
+        this.publishAgentContext();
         this.cdr.markForCheck();
       });
 
@@ -216,6 +222,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .subscribe(items => {
         this.recentItems = this.deduplicateRecents(items).slice(0, 5);
         this.recentsLoading = false;
+        this.publishAgentContext();
         this.cdr.markForCheck();
       });
 
@@ -238,6 +245,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.PinnedItems = pins;
         this.UngroupedPins = this.pinService.GetUngroupedPins();
         this.PinGroups = this.pinService.GetGroups();
+        this.publishAgentContext();
         this.cdr.markForCheck();
       });
 
@@ -255,6 +263,195 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       .catch(err => console.warn('[Home] UserViewEngine pre-warm failed', err));
     ActionEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
       .catch(err => console.warn('[Home] ActionEngineBase pre-warm failed', err));
+
+    // Publish the initial agent context and register the client tools the AI agent
+    // can invoke against the Home surface. Ongoing re-emits happen in the subscriptions
+    // above (apps, notifications, recents, pins).
+    this.publishAgentContext();
+    this.registerAgentClientTools();
+  }
+
+  // ========================================
+  // AI AGENT CONTEXT & CLIENT TOOLS
+  // ========================================
+  //
+  // 🚨 SAFETY BOUNDARY: the Home dashboard exposes ONLY navigation / discovery /
+  // panel-toggle operations to the agent. No pin create, no pin delete, no pin
+  // rename, no group mutation, no reordering — those are user-confirm-driven or
+  // destructive and stay in the UI. Every tool below maps to the exact same
+  // component method a user click would call (OpenApp→onAppClick, OpenPin→OnPinClick,
+  // search→AddPanel search field, panel/sidebar/edit-mode toggles). Handlers are
+  // tolerant: they never throw, returning { Success, Data?, ErrorMessage? }.
+
+  /**
+   * Publish the current Home dashboard state to the AI agent via NavigationService.
+   * The shaping lives in the pure {@link buildHomeAgentContext} helper so it stays
+   * unit-testable. Called on init and on every meaningful state change.
+   */
+  private publishAgentContext(): void {
+    const context = buildHomeAgentContext({
+      AppCount: this.apps.length,
+      VisibleAppCount: this.appsDisplayData.length,
+      AppNames: this.apps.map(a => a.Name),
+      PinnedItemCount: this.PinnedItems.length,
+      PinGroupCount: this.PinGroups.length,
+      PinNames: this.PinnedItems.map(p => p.DisplayName),
+      UnreadNotifications: this.unreadNotifications.length,
+      RecentItemsCount: this.recentItems.length,
+      EditMode: this.EditMode,
+      AddPanelOpen: this.AddPanelOpen,
+      SidebarOpen: this.sidebarOpen,
+      AddPanelSearchQuery: this.AddPanelSearchQuery,
+    });
+    this.navigationService.SetAgentContext(this, context);
+  }
+
+  /**
+   * Register the client tools the AI agent can invoke against the Home dashboard.
+   * All are navigation / discovery / panel-toggle operations (see SAFETY BOUNDARY
+   * above). Each handler delegates to the same component method a user interaction
+   * would call and returns a tolerant result.
+   *
+   * Tools:
+   * - OpenApp: switch to an application by name.
+   * - OpenPin: open a pinned item by its display name.
+   * - SearchAddPinPanel: open the Add Pin panel (if needed) and apply a search query.
+   * - ClearAddPinPanelSearch: clear the Add Pin panel search query.
+   * - OpenAddPinPanel / CloseAddPinPanel: toggle the Add Pin panel.
+   * - ToggleSidebar: toggle the notifications/favorites/recents sidebar.
+   * - TogglePinEditMode: toggle pin edit mode (reorder/rename UI affordances).
+   */
+  private registerAgentClientTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'OpenApp',
+        Description: 'Switch to an application by its name (e.g. "Data Explorer", "Knowledge Hub").',
+        ParameterSchema: { type: 'object', properties: { appName: { type: 'string' } }, required: ['appName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenApp(params),
+      },
+      {
+        Name: 'OpenPin',
+        Description: 'Open a pinned item on the Home screen by its display name.',
+        ParameterSchema: { type: 'object', properties: { pinName: { type: 'string' } }, required: ['pinName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenPin(params),
+      },
+      {
+        Name: 'SearchAddPinPanel',
+        Description: 'Open the Add Pin panel (if not already open) and filter its available resources by a search query.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchAddPinPanel(params),
+      },
+      {
+        Name: 'ClearAddPinPanelSearch',
+        Description: 'Clear the search query in the Add Pin panel.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.toolClearAddPinPanelSearch(),
+      },
+      {
+        Name: 'OpenAddPinPanel',
+        Description: 'Open the Add Pin panel so the user can browse pinnable resources.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.OpenAddPinPanel();
+          this.publishAgentContext();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'CloseAddPinPanel',
+        Description: 'Close the Add Pin panel.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.CloseAddPinPanel();
+          this.publishAgentContext();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ToggleSidebar',
+        Description: 'Toggle the Home sidebar (unread notifications, favorites, and recent items).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.toggleSidebar();
+          this.publishAgentContext();
+          return { Success: true, Data: { SidebarOpen: this.sidebarOpen } };
+        },
+      },
+      {
+        Name: 'TogglePinEditMode',
+        Description: 'Toggle pin edit mode on the Home screen (lets the user rename/reorder pins). This only changes the UI mode — it does not modify any pins.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.ToggleEditMode();
+          this.publishAgentContext();
+          return { Success: true, Data: { EditMode: this.EditMode } };
+        },
+      },
+    ]);
+  }
+
+  /** Resolve an app by name (case-insensitive) and switch to it. */
+  private async toolOpenApp(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
+    const parsed = validateStringParam(params['appName'], 'appName');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const appName = parsed.value.trim();
+    if (!appName) {
+      return { Success: false, ErrorMessage: 'appName is required.' };
+    }
+    const app = this.apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    if (!app) {
+      return { Success: false, ErrorMessage: `App "${appName}" is not available. Available apps: ${this.apps.map(a => a.Name).join(', ') || '(none)'}.` };
+    }
+    await this.onAppClick(app);
+    return { Success: true, Data: { AppName: app.Name } };
+  }
+
+  /** Resolve a pinned item by display name (case-insensitive) and open it. */
+  private toolOpenPin(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const parsed = validateStringParam(params['pinName'], 'pinName');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const pinName = parsed.value.trim();
+    if (!pinName) {
+      return { Success: false, ErrorMessage: 'pinName is required.' };
+    }
+    const lowered = pinName.toLowerCase();
+    const pin = this.PinnedItems.find(p => p.DisplayName.toLowerCase() === lowered);
+    if (!pin) {
+      return { Success: false, ErrorMessage: `No pinned item named "${pinName}". Pinned items: ${this.PinnedItems.map(p => p.DisplayName).join(', ') || '(none)'}.` };
+    }
+    // OnPinClick is a no-op while in edit mode; clear edit mode so the open succeeds.
+    if (this.EditMode) {
+      this.EditMode = false;
+    }
+    this.OnPinClick(pin);
+    return { Success: true, Data: { PinName: pin.DisplayName } };
+  }
+
+  /** Open the Add Pin panel (if needed) and apply a search query. */
+  private async toolSearchAddPinPanel(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
+    const parsed = validateStringParam(params['query'], 'query');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    if (!this.AddPanelOpen) {
+      await this.OpenAddPinPanel();
+    }
+    this.AddPanelSearchQuery = parsed.value;
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+    return { Success: true, Data: { Query: parsed.value } };
+  }
+
+  /** Clear the Add Pin panel search query. */
+  private toolClearAddPinPanelSearch(): AgentToolResult {
+    this.AddPanelSearchQuery = '';
+    this.publishAgentContext();
+    this.cdr.markForCheck();
+    return { Success: true };
   }
 
   ngOnDestroy(): void {

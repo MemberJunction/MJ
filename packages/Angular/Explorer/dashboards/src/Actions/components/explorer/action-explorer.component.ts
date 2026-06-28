@@ -23,6 +23,8 @@ import {
   ActionFilters
 } from '../../services/action-explorer-state.service';
 import { ActionTreePanelComponent } from './action-tree-panel.component';
+import { validateEnumParam } from '../../../shared/agent-tool-validation';
+import { findByIdOrError } from '../../agent-tool-helpers';
 
 interface SortOption {
   field: SortField;
@@ -93,6 +95,17 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     { value: 'Custom',    label: 'Custom',       icon: 'fa-solid fa-code' }
   ];
 
+  /** Allowed view modes (mirrors `ViewToggleOptions` / `ActionViewMode`). */
+  private readonly viewModeValues = ['card', 'list', 'compact'] as const;
+  /** Allowed sort fields (mirrors `SortOptions` / `SortField`). */
+  private readonly sortFieldValues = ['name', 'updated', 'status', 'type', 'category'] as const;
+  /** Allowed sort directions. */
+  private readonly sortDirectionValues = ['asc', 'desc'] as const;
+  /** Allowed action statuses (mirrors `StatusOptions`). */
+  private readonly statusValues = ['Active', 'Pending', 'Disabled'] as const;
+  /** Allowed action types (mirrors `TypeOptions`). */
+  private readonly typeValues = ['Generated', 'Custom'] as const;
+
   protected override destroy$ = new Subject<void>();
   private searchInput$ = new Subject<string>();
 
@@ -109,6 +122,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
     this.setupSearchDebounce();
     this.applyQueryParams(this.GetQueryParams());
     this.StateService.loadSavedState();
+    this.registerAgentTools();
     this.loadData();
   }
 
@@ -134,6 +148,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       takeUntil(this.destroy$)
     ).subscribe(mode => {
       this.ViewMode = mode;
+      this.publishAgentContext();
       this.cdr.markForCheck();
     });
 
@@ -144,6 +159,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       this.SelectedCategoryId = id;
       this.applyFilters();
       this.UpdateQueryParams(this.StateService.buildQueryParams());
+      this.publishAgentContext();
       this.cdr.markForCheck();
     });
 
@@ -158,8 +174,164 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
       this.SortDirection = sort.direction;
       this.applyFilters();
       this.UpdateQueryParams(this.StateService.buildQueryParams());
+      this.publishAgentContext();
       this.cdr.markForCheck();
     });
+  }
+
+  // ================================================================
+  // AI Agent context + client tools
+  //
+  // 🚨 SAFETY BOUNDARY: This is the Actions app. Executing an action has real
+  // side effects (data mutation, emails, integrations). Action EXECUTION is
+  // intentionally NOT exposed to the agent — `onActionRun()` (which opens the
+  // run dialog) is deliberately NOT wired as a tool; running stays user-driven
+  // via that dialog. The agent may only FIND / FILTER / SORT / NAVIGATE
+  // actions. Every Handler is tolerant (never throws; returns a structured
+  // failure on bad input).
+  // ================================================================
+
+  /** Publish the current explorer state to the agent. Called on load and on every view/filter/sort/category change. */
+  private publishAgentContext(): void {
+    this.navigationService.SetAgentContext(this, {
+      ActiveViewMode: this.ViewMode,
+      CurrentSortField: this.SortField,
+      CurrentSortDirection: this.SortDirection,
+      SelectedCategoryId: this.SelectedCategoryId,
+      TotalActionCount: this.Actions.length,
+      FilteredActionCount: this.FilteredActions.length,
+      CurrentSearchTerm: this.Filters.searchTerm,
+      SelectedStatuses: [...this.Filters.statuses],
+      SelectedTypes: [...this.Filters.types],
+    });
+  }
+
+  /** Register the read-only / navigational client tools the agent can invoke on this surface. */
+  private registerAgentTools(): void {
+    this.navigationService.SetAgentClientTools(this, [
+      {
+        Name: 'SwitchViewMode',
+        Description: 'Switch the explorer view mode. Allowed: card, list, compact.',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string', enum: [...this.viewModeValues] } }, required: ['mode'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['mode'], this.viewModeValues, 'mode');
+          if (!v.ok) return v.result;
+          this.setViewMode(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SortActionsByField',
+        Description: 'Sort actions by a field and direction. field: name, updated, status, type, category. direction: asc, desc.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            field: { type: 'string', enum: [...this.sortFieldValues] },
+            direction: { type: 'string', enum: [...this.sortDirectionValues] },
+          },
+          required: ['field'],
+        },
+        Handler: async (params) => {
+          const f = validateEnumParam(params['field'], this.sortFieldValues, 'field');
+          if (!f.ok) return f.result;
+          // direction is optional; default to ascending when omitted.
+          let direction: SortDirection = 'asc';
+          if (params['direction'] !== undefined) {
+            const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+            if (!d.ok) return d.result;
+            direction = d.value;
+          }
+          this.StateService.setSortConfig({ field: f.value, direction });
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SearchActions',
+        Description: 'Search the actions list by a free-text term (matches name and description).',
+        ParameterSchema: { type: 'object', properties: { searchTerm: { type: 'string' } }, required: ['searchTerm'] },
+        Handler: async (params) => {
+          const term = typeof params['searchTerm'] === 'string' ? params['searchTerm'] : '';
+          this.onSearchInput(term);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearExplorerSearch',
+        Description: 'Clear the explorer search term.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.clearSearch();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'SelectCategory',
+        Description: 'Select a category to filter the actions list. Use "all" for all categories or "uncategorized" for actions without a category; otherwise pass a category id.',
+        ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string' } }, required: ['categoryId'] },
+        Handler: async (params) => {
+          const raw = params['categoryId'];
+          if (typeof raw !== 'string' || raw.trim() === '') {
+            return { Success: false, ErrorMessage: 'A non-empty categoryId is required (use "all" or "uncategorized" for the special selections).' };
+          }
+          if (raw !== 'all' && raw !== 'uncategorized' && !this.CategoriesMap.has(raw)) {
+            return { Success: false, ErrorMessage: `No category found with id "${raw}".` };
+          }
+          this.onCategorySelect(raw);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ToggleStatusFilter',
+        Description: 'Toggle a status in the status filter. Allowed: Active, Pending, Disabled.',
+        ParameterSchema: { type: 'object', properties: { status: { type: 'string', enum: [...this.statusValues] } }, required: ['status'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['status'], this.statusValues, 'status');
+          if (!v.ok) return v.result;
+          this.toggleStatus(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ToggleTypeFilter',
+        Description: 'Toggle a type in the type filter. Allowed: Generated (AI-generated), Custom.',
+        ParameterSchema: { type: 'object', properties: { type: { type: 'string', enum: [...this.typeValues] } }, required: ['type'] },
+        Handler: async (params) => {
+          const v = validateEnumParam(params['type'], this.typeValues, 'type');
+          if (!v.ok) return v.result;
+          this.toggleType(v.value);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'ClearExplorerFilters',
+        Description: 'Clear all status / type / search filters in the explorer.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.clearFilters();
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'OpenActionRecord',
+        Description: 'Open the detail record for an action by its id (navigation only — does NOT run the action).',
+        ParameterSchema: { type: 'object', properties: { actionId: { type: 'string' } }, required: ['actionId'] },
+        Handler: async (params) => {
+          const found = findByIdOrError(params['actionId'], this.Actions, 'action');
+          if (!found.ok) return found.result;
+          this.onActionClick(found.value);
+          return { Success: true, Data: { Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'RefreshExplorerData',
+        Description: 'Reload the action explorer data (actions + categories).',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.onRefresh();
+          return { Success: true };
+        },
+      },
+    ]);
   }
 
   /**
@@ -207,6 +379,8 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
         this.Categories.forEach(c => categoryParentMap.set(c.ID, c.ParentID || null));
         this.StateService.expandPathToCategory(this.SelectedCategoryId, categoryParentMap);
       }
+
+      this.publishAgentContext();
 
     } catch (error) {
       LogError('Failed to load action explorer data', undefined, error);
