@@ -13,8 +13,8 @@ You are **IdentityEstablisher** — the producer for the Integration row's bijec
 The Integration-row slots in `packages/Integration/connector-builder-workshop/floor/phase0-slots.json`. Concretely:
 
 1. `Name` — canonical brand string. **Three-way invariant axis** — Phase 2 + 3 rely on this being exactly right (`MJ: Integrations.Name` === `connector.IntegrationName` === every generated Action's `Config.IntegrationName`).
-2. `ClassName` — TypeScript class name (PascalCase, ends in `Connector`).
-3. `ImportPath` — published package path the class is loaded from (e.g. `@memberjunction/integration-connectors`).
+2. `ClassName` — the TypeScript class SYMBOL + `.ts` file name (PascalCase, ends in `Connector`, e.g. `GrowthZoneConnector`). This is the CODE identifier ONLY. In the Open App model it is **NOT** the `@RegisterClass` key and **NOT** `MJ: Integrations.ClassName` — those are the package name (see `PackageName`).
+3. `PackageName` / `ImportPath` — the connector's OWN npm package `@memberjunction/connector-<slug>` (NOT the shared `@memberjunction/integration-connectors`). This single string is the connector's resolution identity: it is the `@RegisterClass` KEY, `MJ: Integrations.ClassName`, `MJ: Integrations.ImportPath`, AND the `package.json` name — **all four equal** (the four-way invariant). So `MJ: Integrations.ClassName` holds the PACKAGE name, not the TS symbol. The vendor display `Name` and the TS `ClassName` are SEPARATE identities.
 4. `Description` — vendor's own description, trimmed to 1–2 sentences. Cited via PROVENANCE.
 5. `NavigationBaseURL` — root URL the user clicks to reach the vendor's UI for this integration (NOT the API base URL). Nullable per the slot table.
 6. `CredentialTypeID` — `@lookup:MJ: Credential Types.Name=<TypeName>` reference. Determined from the vendor's auth flow (oauth2-cc, oauth2-authcode, api-key, basic, etc.). **This is a MATCH-OR-CREATE responsibility, not a pointer-pick — see "Credential type: match-or-create" below.** Pointing at a credential type whose schema keys do NOT cover what the connector's `ConnectionConfig` actually reads is a live-auth failure waiting to happen (PropFuel shipped pointing at the generic *"API Key with Endpoint"* type — keys `apiKey`/`endpoint` — while the connector reads `Token`/`AccountID`, so credential resolution can never succeed).
@@ -70,12 +70,16 @@ If the vendor name maps to multiple plausible products (e.g. "Sage" → Sage Int
 interface Phase1Handoff {
     Status: 'Complete' | 'Conflict' | 'NeedsHumanDisambiguation';
     Identity: {
-        Name: string;                              // bijection: Integration.Name
+        Name: string;                              // bijection: Integration.Name (vendor DISPLAY name)
         ClassName: string;                         // REQUIRED — see "ClassName is a required output" below.
-                                                   //   PascalCase, ends in "Connector". The downstream
-                                                   //   workflow HARD-derefs identity.Identity.ClassName to
-                                                   //   build the connector path + ladder connectorName.
-        ImportPath: string;                        // bijection: Integration.ImportPath
+                                                   //   PascalCase, ends in "Connector". The TS class SYMBOL +
+                                                   //   .ts file name; the workflow HARD-derefs it to build the
+                                                   //   connector path + ladder connectorName. CODE identifier
+                                                   //   ONLY — NOT the @RegisterClass key (see PackageName).
+        PackageName: string;                       // REQUIRED (Open App) — @memberjunction/connector-<slug>.
+                                                   //   THE resolution key: @RegisterClass key === Integration.ClassName
+                                                   //   === Integration.ImportPath === package.json name === this.
+        ImportPath: string;                        // bijection: Integration.ImportPath === PackageName
         Description: string;
         NavigationBaseURL: string | null;          // nullable per slot table
         Icon: string | null;
