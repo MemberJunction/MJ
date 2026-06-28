@@ -136,23 +136,21 @@
             <mj-loading text="Loading lists..." size="medium"></mj-loading>
           </div>
         } @else if (filteredLists.length === 0) {
-          <div class="empty-state">
-            @if (searchText) {
-              <span class="fa-solid fa-search empty-icon"></span>
-              <p class="empty-title">No lists found</p>
-              <p class="empty-subtitle">Try a different search term</p>
-            } @else {
-              <span class="fa-solid fa-rectangle-list empty-icon"></span>
-              <p class="empty-title">No lists yet</p>
-              <p class="empty-subtitle">Create your first list to get started</p>
-              @if (config.allowCreate !== false) {
-                <button class="btn btn-primary" (click)="showCreateListForm()">
-                  <span class="fa-solid fa-plus"></span>
-                  Create List
-                </button>
-              }
-            }
-          </div>
+          @if (searchText) {
+            <mj-empty-state
+              Variant="no-results"
+              Icon="fa-solid fa-magnifying-glass"
+              Title="No lists found"
+              Message="Try a different search term" />
+          } @else {
+            <mj-empty-state
+              Icon="fa-solid fa-rectangle-list"
+              Title="No lists yet"
+              Message="Create your first list to get started"
+              [ActionText]="config.allowCreate !== false ? 'Create List' : ''"
+              ActionIcon="fa-solid fa-plus"
+              (Action)="showCreateListForm()" />
+          }
         } @else {
           <div class="list-items">
             @for (vm of filteredLists; track vm.list.ID) {

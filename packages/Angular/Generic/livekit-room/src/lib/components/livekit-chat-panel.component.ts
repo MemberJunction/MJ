@@ -1,6 +1,7 @@
 import { AfterViewChecked, ChangeDetectionStrategy, Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DatePipe } from '@angular/common';
+import { MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
 import type { LiveKitChatMessage } from '../models';
 
 /**
@@ -10,13 +11,13 @@ import type { LiveKitChatMessage } from '../models';
 @Component({
   selector: 'mj-livekit-chat-panel',
   standalone: true,
-  imports: [FormsModule, DatePipe],
+  imports: [FormsModule, DatePipe, MJEmptyStateComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="lk-chat">
       <header class="lk-chat__head">
         <span><i class="fa-solid fa-comment"></i> Chat</span>
-        <button type="button" class="lk-chat__close" title="Close" (click)="Close.emit()"><i class="fa-solid fa-xmark"></i></button>
+        <button type="button" class="lk-chat__close" aria-label="Close chat panel" title="Close" (click)="Close.emit()"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
       </header>
       <div #scroll class="lk-chat__messages">
         @for (msg of Messages; track $index) {
@@ -28,12 +29,12 @@ import type { LiveKitChatMessage } from '../models';
             <div class="lk-chat__bubble">{{ msg.Text }}</div>
           </div>
         } @empty {
-          <div class="lk-chat__empty">No messages yet.</div>
+          <mj-empty-state class="lk-chat__empty" Size="compact" Icon="" Title="No messages yet." />
         }
       </div>
       <form class="lk-chat__composer" (submit)="send($event)">
         <input type="text" class="lk-chat__input" [(ngModel)]="draft" name="draft" autocomplete="off" placeholder="Type a message…" />
-        <button type="submit" class="lk-chat__send" [disabled]="!draft.trim()" title="Send"><i class="fa-solid fa-paper-plane"></i></button>
+        <button type="submit" class="lk-chat__send" aria-label="Send message" [disabled]="!draft.trim()" title="Send"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i></button>
       </form>
     </div>
   `,

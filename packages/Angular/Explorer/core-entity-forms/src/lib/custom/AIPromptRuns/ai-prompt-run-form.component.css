@@ -504,24 +504,6 @@
     color: var(--mj-text-secondary);
 }
 
-/* Empty State */
-.empty-state {
-    text-align: center;
-    padding: 60px 40px;
-    color: var(--mj-text-muted);
-}
-
-.empty-state i {
-    font-size: 3em;
-    margin-bottom: 16px;
-    opacity: 0.3;
-}
-
-.empty-state p {
-    margin: 0;
-    font-size: 1.1em;
-}
-
 /* Loading State */
 .loading-state {
     text-align: center;

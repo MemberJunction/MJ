@@ -24,7 +24,11 @@ import { LazyModuleRegistry, LAZY_FEATURE_CONFIG } from '@memberjunction/ng-expl
 // Import lite class registrations manifest (excludes lazy-loaded dashboard and settings packages)
 import {CLASS_REGISTRATIONS} from '@memberjunction/ng-bootstrap-lite';
 
-// Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
+// Import supplemental manifest for user-defined classes — generated at prebuild with
+// `mj codegen manifest --exclude-packages @memberjunction --open-app-client-bootstrap`.
+// The --open-app-client-bootstrap flag appends side-effect imports for each installed
+// Open App's client package (from mj.config dynamicPackages.client) to the end of this
+// same file, so installed apps' @RegisterClass decorators run when the bundle loads (B2).
 import {CLASS_REGISTRATIONS as LOCAL_CLASSES} from './generated/class-registrations-manifest';
 
 // static code path builder

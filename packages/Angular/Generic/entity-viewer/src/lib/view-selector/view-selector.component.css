@@ -390,36 +390,6 @@
   color: var(--mj-text-primary);
 }
 
-/* Empty State */
-.vs-empty-message {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px;
-  color: var(--mj-text-muted);
-  font-size: 13px;
-}
-
-.vs-empty-message i {
-  font-size: 16px;
-  opacity: 0.5;
-}
-
-.vs-empty-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.vs-empty-text strong {
-  color: var(--mj-text-secondary);
-  font-size: 13px;
-}
-
-.vs-empty-text span {
-  font-size: 12px;
-}
-
 /* Loading */
 .vs-loading {
   display: flex;

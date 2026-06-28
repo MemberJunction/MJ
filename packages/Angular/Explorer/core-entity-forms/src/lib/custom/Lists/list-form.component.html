@@ -243,13 +243,10 @@
         }
         <!-- Empty State -->
         @if (!isLoadingItems && listItems.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fa-solid fa-inbox"></i>
-            </div>
-            <h3>No Items Yet</h3>
-            <p>This list doesn't have any items. Add records from the {{entityDisplayName}} entity.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-inbox"
+            Title="No Items Yet"
+            [Message]="'This list doesn\'t have any items. Add records from the ' + entityDisplayName + ' entity.'" />
         }
         <!-- Items Table -->
         @if (!isLoadingItems && listItems.length > 0) {
@@ -365,23 +362,13 @@
         }
         <!-- Empty state for no shares -->
         @if (stats.shareCount === 0 && stats.invitationCount === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fa-solid fa-share-nodes"></i>
-            </div>
-            <h3>Not Shared Yet</h3>
-            @if (isCurrentUserOwner()) {
-              <p>This list is private. Click "Manage Sharing" to share it with other users or roles.</p>
-            }
-            @if (!isCurrentUserOwner()) {
-              <p>This list hasn't been shared with anyone else.</p>
-            }
-            @if (isCurrentUserOwner()) {
-              <button class="btn-primary" (click)="openShareDialog()">
-                <i class="fa-solid fa-user-plus"></i> Share This List
-              </button>
-            }
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-share-nodes"
+            Title="Not Shared Yet"
+            [Message]="isCurrentUserOwner() ? 'This list is private. Click &quot;Manage Sharing&quot; to share it with other users or roles.' : 'This list hasn\'t been shared with anyone else.'"
+            [ActionText]="isCurrentUserOwner() ? 'Share This List' : ''"
+            ActionIcon="fa-solid fa-user-plus"
+            (Action)="openShareDialog()" />
         }
         <!-- Read-only notice for non-owners -->
         @if (!isCurrentUserOwner() && (stats.shareCount > 0 || stats.invitationCount > 0)) {
@@ -551,16 +538,16 @@
             </div>
           }
           @if (!addDialogLoading && addableRecords.length === 0 && addRecordsSearchFilter.length >= 2) {
-            <div class="empty-results">
-              <span class="fa-solid fa-search empty-icon"></span>
-              <p>No records found matching "{{ addRecordsSearchFilter }}"</p>
-            </div>
+            <mj-empty-state
+              Variant="no-results"
+              Size="compact"
+              [Title]="'No records found matching &quot;' + addRecordsSearchFilter + '&quot;'" />
           }
           @if (!addDialogLoading && addableRecords.length === 0 && addRecordsSearchFilter.length < 2) {
-            <div class="empty-results">
-              <span class="fa-solid fa-list empty-icon"></span>
-              <p>Search for records to add to this list</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-list"
+              Title="Search for records to add to this list" />
           }
           @if (!addDialogLoading && addableRecords.length > 0) {
             <!-- Selection controls -->
@@ -643,10 +630,10 @@
         <p class="dialog-instruction">Select views to add their records to this list:</p>
         <div class="views-list">
           @if (!userViews || userViews.length === 0) {
-            <div class="empty-results">
-              <span class="fa-solid fa-folder-open empty-icon"></span>
-              <p>No saved views found for this entity</p>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-folder-open"
+              Title="No saved views found for this entity" />
           }
           @if (userViews && userViews.length > 0) {
             @for (view of userViews; track view) {

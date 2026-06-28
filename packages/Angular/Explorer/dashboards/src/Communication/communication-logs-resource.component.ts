@@ -84,10 +84,8 @@ import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
               @if (filteredLogs.length === 0 && !isLoading) {
                 <tr>
                   <td colspan="6" class="no-data">
-                    <div class="empty-state">
-                      <i class="fa-solid fa-inbox"></i>
-                      <p>No logs found matching your criteria</p>
-                    </div>
+                    <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+                      Title="No logs found matching your criteria" />
                   </td>
                 </tr>
               }
@@ -191,13 +189,6 @@ import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
     .no-error { color: var(--mj-text-muted); }
 
     .no-data { padding: 0 !important; }
-    .empty-state {
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 48px 0; color: var(--mj-text-muted);
-    }
-    .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
-    .empty-state p { margin: 0; font-size: 13px; }
   `]
 })
 export class CommunicationLogsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {

@@ -50,10 +50,8 @@
 
   <!-- Empty state -->
   @if (!IsLoading && FilteredRuns.length === 0) {
-    <div class="empty-state">
-      <i class="fa-solid fa-inbox"></i>
-      <p>No runs found for the selected filters.</p>
-    </div>
+    <mj-empty-state Variant="no-results" Icon="fa-solid fa-inbox"
+      Title="No runs found for the selected filters." />
   }
 
   <!-- Split View: Run List + Detail Panel -->
@@ -127,10 +125,8 @@
                     <mj-loading text="Loading breakdown..." size="small"></mj-loading>
                   </div>
                 } @else if (GetExpandedDetails().length === 0) {
-                  <div class="expanded-empty">
-                    <i class="fa-solid fa-circle-info"></i>
-                    No entity details for this run.
-                  </div>
+                  <mj-empty-state class="expanded-empty" Size="compact" Icon="fa-solid fa-circle-info"
+                    Title="No entity details for this run." />
                 } @else {
                   <table class="entity-table">
                     <thead>
@@ -227,10 +223,8 @@
                   <mj-loading text="Loading details..." size="small"></mj-loading>
                 </div>
               } @else if (SelectedRunDetails.length === 0) {
-                <div class="detail-empty">
-                  <i class="fa-solid fa-circle-info"></i>
-                  <p>No entity detail records for this run.</p>
-                </div>
+                <mj-empty-state class="detail-empty" Size="compact" Icon="fa-solid fa-circle-info"
+                  Title="No entity detail records for this run." />
               } @else {
                 <table class="detail-table">
                   <thead>
@@ -278,10 +272,8 @@
                   <mj-loading text="Loading watermarks..." size="small"></mj-loading>
                 </div>
               } @else if (WatermarkData.length === 0) {
-                <div class="detail-empty">
-                  <i class="fa-solid fa-droplet-slash"></i>
-                  <p>No watermarks recorded for this integration.</p>
-                </div>
+                <mj-empty-state class="detail-empty" Size="compact" Icon="fa-solid fa-droplet-slash"
+                  Title="No watermarks recorded for this integration." />
               } @else {
                 <table class="detail-table">
                   <thead>

@@ -26,17 +26,37 @@ Before anything else, confirm the `next` branch is healthy:
 - [ ] **"Test migrations"** (`migrations.yml`) — passes if migrations were changed
 - [ ] **"Unit Tests"** (`test.yml`) — passes on any open PR
 
-### Step 2: Check for New AI Models (Optional but Recommended)
+### Step 2: Pull In New AI Models (REQUIRED — every release)
 
-Do this **before** the metadata sync step so new models are included in the migration script.
+> ⚠️ **This is standard practice for every release — not optional.** AI model intelligence is
+> produced on a weekly cadence by an automated Claude routine that opens an **AI model research PR**
+> against `next` (e.g. PR titled `AI Model Research Report — YYYY-MM-DD`, on branch
+> `claude/ai-model-research-YYYY-MM-DD`). If that PR is not merged before the metadata sync step,
+> the new models **silently miss the release.** This happened in **5.43** (PR #2924 was open at
+> release time and the Fable 5 / Mythos 5 / GLM-5.2 entries were left out).
 
-1. Quick web research across major AI provider release pages:
-   - Google (Gemini), OpenAI (GPT), Anthropic (Claude), Mistral, Groq, Meta (Llama), xAI (Grok), DeepSeek
-2. Compare against what's already in `metadata/ai-models/.ai-models.json`
-3. If new models are worth adding:
-   - Use `/add-ai-model` skill or manually edit `metadata/ai-models/.ai-models.json`
-   - Run `mj sync push --dir ./metadata` to sync to your local database
-   - The changes will be captured in the metadata migration script (next step)
+Do this **before** the metadata sync step (Step 3) so new models are captured in the migration script.
+
+**The rule: there must always be a current AI model research PR pulled in, or one generated, for every release.**
+
+1. **Check the repo for an open AI model research PR.**
+   - Look for an open PR titled `AI Model Research Report — *` (head branch `claude/ai-model-research-*`).
+   - If one exists, **review and merge it into `next`** so its `metadata/ai-models/.ai-models.json`
+     changes are present locally before Step 3. Then **close the loop**: comment on / close the PR noting
+     which release it landed in (the routine PRs are one-shot deliverables and rely on the build engineer
+     to merge + close them).
+2. **If no AI model research PR exists**, run the Claude AI-model-research routine to generate one
+   (the same routine that produced the PRs in `reports/ai-model-research/` and PR #2924), then merge it
+   as in step 1. Do not skip the release's model refresh just because a PR wasn't waiting — generate it.
+3. **Sanity-check** the merged entries against `metadata/ai-models/.ai-models.json` and confirm
+   `@lookup:` references resolve.
+4. Run `mj sync push --dir ./metadata` to sync to your local database — the changes are then captured
+   in the metadata migration script generated in Step 3.
+
+> Manual fallback: if neither an existing PR nor the routine is available, do quick web research across
+> major provider release pages (Google/Gemini, OpenAI/GPT, Anthropic/Claude, Mistral, Groq, Meta/Llama,
+> xAI/Grok, DeepSeek, Z.AI/GLM), diff against `.ai-models.json`, and use the `/add-ai-model` skill or edit
+> the file directly. But the AI model research PR is the primary, expected path — use it.
 
 ### Step 3: Handle Metadata Changes
 

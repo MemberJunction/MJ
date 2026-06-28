@@ -76,16 +76,50 @@ import { LiveKitEgressService } from '@memberjunction/livekit-room-server';
 
 const egress = new LiveKitEgressService();
 const rec = await egress.StartRoomRecording({ RoomName: 'support-42' });   // → { EgressID, Status }
-await egress.StopRecording(rec.EgressID);
+const done = await egress.StopRecording(rec.EgressID);
+// On stop/complete, RecordingInfo also surfaces the produced file:
+//   done.OutputLocation    – the file's path/key in the egress sink
+//   done.OutputSizeBytes   – byte count
+//   done.OutputDurationMs  – duration in ms (normalized from the SDK's nanoseconds)
+// These are what the server registers into MJStorage on the Meeting-Room Conversation
+// (Conversation.RecordingFileID + EgressID). While recording is in progress they are undefined.
 ```
 
 Egress output storage (S3 / GCS / Azure / LiveKit Cloud) is configured on the LiveKit project.
 
+## Meeting-recording registration (egress → MJStorage → Conversation)
+
+When the browser stops a room recording, MJServer's `RealtimeBridgeResolver.StopLiveKitRecording` calls
+`registerMeetingRecordingFile` (`packages/MJServer/src/resolvers/meetingRecordingRegistration.ts`), which:
+
+1. Resolves the room's **Meeting-Room Conversation** (by `EgressID`, then room name, else creates one).
+2. Creates an **`MJ: Files`** row for the egress MP4 (`ProviderKey` = `OutputLocation`, `ContentType =
+   video/mp4`, `Status = Uploaded`). **v1 points the Files row directly at the egress output — no byte
+   copy** — so playback streams straight from the sink.
+3. Stamps **`Conversation.RecordingFileID`** (+ `EgressID`) and returns the new file id on the result.
+
+This requires the egress sink and the MJStorage account to target the **same** bucket/container, configured
+via the provider:
+
+- `MJ_MEETING_RECORDING_STORAGE_PROVIDER=<MJ: File Storage Providers ID>` (or
+  `meetingRecordingStorageProviderID` in `mj.config.cjs`).
+
+Optional **copy-to-canonical** ("copy into Box") — set a *different* canonical provider via
+`MJ_MEETING_RECORDING_CANONICAL_STORAGE_PROVIDER` (or `meetingRecordingCanonicalStorageProviderID`) to read
+the bytes out of the sink and re-upload them into a separate provider, pointing the Files row there. OFF by
+default.
+
+Registration is **best-effort**: a missing storage provider or any failure leaves `RecordingFileID` unset
+and logs — the stop-recording mutation still succeeds. See
+[REALTIME_SESSION_CAPTURE_GUIDE.md](../../guides/REALTIME_SESSION_CAPTURE_GUIDE.md#meeting-room-recording-livekit-egress--mjstorage)
+for the full loop incl. Meet-app playback.
+
 ## GraphQL surface
 
 These are exposed to the browser via MJServer's `RealtimeBridgeResolver`:
-`MintLiveKitClientToken`, `StartLiveKitAgentRoomSession`, `StartLiveKitRecording`, `StopLiveKitRecording`.
-Call them from the browser with `GraphQLLiveKitClient` in `@memberjunction/graphql-dataprovider`.
+`MintLiveKitClientToken`, `StartLiveKitAgentRoomSession`, `StartLiveKitRecording`, `StopLiveKitRecording`
+(returns `RecordingFileID` once registered). Call them from the browser with `GraphQLLiveKitClient` in
+`@memberjunction/graphql-dataprovider`.
 
 ## License
 

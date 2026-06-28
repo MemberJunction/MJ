@@ -51,11 +51,11 @@
     <!-- Prompts List/Grid -->
     <div class="prompts-container" [class.grid-view]="viewMode === 'grid'" [class.list-view]="viewMode === 'list'">
       @if ((filteredPrompts$ | async)?.length === 0) {
-        <div class="no-results">
-          <i class="fa-solid fa-search fa-2x"></i>
-          <h4>No prompts found</h4>
-          <p>Try adjusting your search criteria or check that prompts are properly configured.</p>
-        </div>
+        <mj-empty-state
+          Variant="no-results"
+          Title="No prompts found"
+          Message="Try adjusting your search criteria or check that prompts are properly configured."
+          Size="compact" />
       } @else {
         @for (prompt of filteredPrompts$ | async; track prompt.ID) {
           <div class="prompt-card" 

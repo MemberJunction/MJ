@@ -1,4 +1,5 @@
 import type { Type } from '@angular/core';
+import { IMetadataProvider } from '@memberjunction/core';
 import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 
 /**
@@ -18,6 +19,16 @@ import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
 export interface RealtimeChannelContext {
   /** Display name of the agent the live session fronts (e.g. `"Sage"`), fixed at session start. */
   AgentName: string;
+
+  /**
+   * The MJ metadata provider the live session runs on — the SAME `IMetadataProvider` instance that
+   * authenticates the session (NOT necessarily the global default). A channel whose surface renders
+   * MemberJunction-backed data (e.g. the Media channel streaming an `MJ: Files` record through
+   * `mj-storage-media-player`) threads THIS provider into its surface / GraphQL calls so it stays
+   * multi-provider safe. `null` only in degenerate/early states; channels fall back to the global
+   * default when absent.
+   */
+  Provider: IMetadataProvider | null;
 
   /**
    * Feeds a background context note into the live realtime model (no spoken reply is
@@ -182,6 +193,17 @@ export abstract class BaseRealtimeChannelClient<TSurface extends object = object
 
   /** Font Awesome icon class for the channel's tab (e.g. `'fa-solid fa-chalkboard'`). */
   public abstract get TabIcon(): string;
+
+  /**
+   * OPTIONAL accent color for the channel's tab (a CSS color string, e.g. an `hsl()` /
+   * token). When a plugin supplies one, the overlay paints the tab's dot + active underline
+   * with it; when omitted (the default `null`), the overlay derives a stable, deterministic
+   * color from the {@link ChannelName} so every channel still reads as a distinct, colored
+   * surface. A channel only overrides this to enforce a specific brand accent.
+   */
+  public get TabColor(): string | null {
+    return null;
+  }
 
   /**
    * The channel's CLIENT-EXECUTED tool declarations, aggregated by the session service

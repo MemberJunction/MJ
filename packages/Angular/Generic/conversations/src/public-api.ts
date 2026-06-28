@@ -119,3 +119,10 @@ export * from './lib/components/realtime/remote-browser/remote-browser-channel';
 export * from './lib/components/realtime/remote-browser/remote-browser-surface.component';
 export * from './lib/components/realtime/remote-browser/remote-browser-tools';
 export * from './lib/components/realtime/remote-browser/remote-browser-audio-player';
+// Media channel plugin (Tabs-layout media display surface) + its state engine, tools, and surface.
+export * from './lib/components/realtime/media/media-channel';
+export * from './lib/components/realtime/media/media-channel-state';
+export * from './lib/components/realtime/media/media-channel-tools';
+export * from './lib/components/realtime/media/realtime-media-surface.component';
+// Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
+export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';

@@ -625,28 +625,6 @@
   color: var(--mj-text-secondary);
 }
 
-/* -----------------------------------------------------------------------------
-   Empty State Override - flex layout with gap
-   ----------------------------------------------------------------------------- */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-@media (min-width: 768px) {
-  .empty-state {
-    padding: 5rem 2.5rem;
-  }
-}
-
-.empty-state .empty-state-icon {
-  font-size: 4rem;
-  color: var(--mj-border-default);
-  margin-bottom: 0.5rem;
-}
-
 /* Error Container Override - flex layout with min-height */
 .error-container {
   display: flex;

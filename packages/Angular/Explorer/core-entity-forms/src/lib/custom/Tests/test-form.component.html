@@ -586,16 +586,13 @@
         }
         <!-- Empty State -->
         @if (testRunsLoaded && !loadingRuns && testRuns.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-play-circle"></i>
-            </div>
-            <h4>No Test Runs Yet</h4>
-            <p>Run this test to see execution history and results here.</p>
-            <button mjButton (click)="runTest()" variant="primary">
-              <i class="fas fa-play"></i> Run Test Now
-            </button>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-circle-play"
+            Title="No Test Runs Yet"
+            Message="Run this test to see execution history and results here."
+            ActionText="Run Test Now"
+            ActionIcon="fa-solid fa-play"
+            (Action)="runTest()" />
         }
       </div>
     }
@@ -643,13 +640,10 @@
         }
         <!-- Empty State -->
         @if (suiteTestsLoaded && !loadingSuites && suiteTests.length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">
-              <i class="fas fa-folder-open"></i>
-            </div>
-            <h4>Not Part of Any Suite</h4>
-            <p>This test is not included in any test suites. Add it to a suite to run it with other tests.</p>
-          </div>
+          <mj-empty-state
+            Icon="fa-solid fa-folder-open"
+            Title="Not Part of Any Suite"
+            Message="This test is not included in any test suites. Add it to a suite to run it with other tests." />
         }
       </div>
     }
@@ -870,16 +864,13 @@
             }
             <!-- Empty State -->
             @if (historyData.length === 0) {
-              <div class="empty-state">
-                <div class="empty-icon">
-                  <i class="fas fa-chart-line"></i>
-                </div>
-                <h4>No History Available</h4>
-                <p>Run this test to start building history and analytics data.</p>
-                <button mjButton (click)="runTest()" variant="primary">
-                  <i class="fas fa-play"></i> Run Test Now
-                </button>
-              </div>
+              <mj-empty-state
+                Icon="fa-solid fa-chart-line"
+                Title="No History Available"
+                Message="Run this test to start building history and analytics data."
+                ActionText="Run Test Now"
+                ActionIcon="fa-solid fa-play"
+                (Action)="runTest()" />
             }
           </div>
         }

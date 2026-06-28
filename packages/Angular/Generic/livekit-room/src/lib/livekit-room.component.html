@@ -53,10 +53,9 @@
                     [AvatarUrl]="avatarFor(ScreenShareParticipant)"
                   ></mj-livekit-participant-tile>
                 } @else {
-                  <div class="lk-room__empty">
-                    <i class="fa-solid fa-display"></i>
-                    <p>No screen is being shared</p>
-                  </div>
+                  <mj-empty-state class="lk-room__empty" Size="compact"
+                    Icon="fa-solid fa-display"
+                    Title="No screen is being shared" />
                 }
               </div>
               <div class="lk-room__splitter" (pointerdown)="onSplitDragStart($event)" title="Drag to resize"><span></span></div>
@@ -128,10 +127,9 @@
                   ></mj-livekit-participant-tile>
                 </div>
               } @empty {
-                <div class="lk-room__empty">
-                  <i class="fa-solid fa-user-group"></i>
-                  <p>Waiting for participants…</p>
-                </div>
+                <mj-empty-state class="lk-room__empty" Size="compact"
+                  Icon="fa-solid fa-user-group"
+                  Title="Waiting for participants…" />
               }
             </div>
           }

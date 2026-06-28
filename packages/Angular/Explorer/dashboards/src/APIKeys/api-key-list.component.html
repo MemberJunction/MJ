@@ -175,25 +175,13 @@
       }
       <!-- Empty State -->
       @if (FilteredKeys.length === 0) {
-        <div class="empty-state">
-          <i class="fa-solid fa-key"></i>
-          @if (SearchText) {
-            <span>No keys matching "{{SearchText}}"</span>
-          }
-          @if (!SearchText && Filter !== 'all') {
-            <span>No {{Filter}} keys found</span>
-          }
-          @if (!SearchText && Filter === 'all') {
-            <span>No API keys created yet</span>
-          }
-          @if (Filter === 'all' && !SearchText) {
-            <button class="create-empty-btn"
-              (click)="requestCreate()">
-              <i class="fa-solid fa-plus"></i>
-              Generate Your First Key
-            </button>
-          }
-        </div>
+        <mj-empty-state
+          [Variant]="(SearchText || Filter !== 'all') ? 'no-results' : 'empty'"
+          Icon="fa-solid fa-key"
+          [Title]="EmptyStateTitle"
+          [ActionText]="(!SearchText && Filter === 'all') ? 'Generate Your First Key' : ''"
+          ActionIcon="fa-solid fa-plus"
+          (Action)="requestCreate()" />
       }
     </div>
   }

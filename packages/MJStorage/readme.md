@@ -70,6 +70,7 @@ graph TB
 - **Type-Safe**: Full TypeScript support with comprehensive type definitions
 - **Flexible Provider Selection**: Use any number of storage providers simultaneously based on your application needs
 - **Pre-authenticated URLs**: Secure upload and download operations using time-limited URLs
+- **HTTP Range Streaming**: Serve large audio/video via `GetObjectStream` without buffering whole files in memory (all seven providers: AWS S3, Azure Blob, Google Cloud Storage, Google Drive, SharePoint, Dropbox, Box). Capability is introspectable via `SupportsStreaming`. See [docs/STREAMING.md](docs/STREAMING.md).
 - **Metadata Support**: Store and retrieve custom metadata with your files
 - **Error Handling**: Provider-specific errors are normalized with clear error messages
 - **Zod-Validated Configuration**: All configuration schemas are validated at load time via Zod
@@ -81,15 +82,15 @@ graph TB
 
 ### Supported Storage Providers
 
-| Provider | Driver Key | Search | Pre-auth URLs | Native Directories |
-|---|---|---|---|---|
-| [AWS S3](https://aws.amazon.com/s3/) | `AWS S3` | No | Yes | Simulated |
-| [Azure Blob Storage](https://azure.microsoft.com/en-us/products/storage/blobs) | `Azure Blob Storage` | No | Yes | Simulated |
-| [Google Cloud Storage](https://cloud.google.com/storage) | `Google Cloud Storage` | No | Yes | Simulated |
-| [Google Drive](https://developers.google.com/drive/api/guides/about-sdk) | `Google Drive Storage` | Yes (content) | Yes | Native |
-| [Microsoft SharePoint](https://learn.microsoft.com/en-us/sharepoint/dev/) | `SharePoint` | Yes (content) | Yes | Native |
-| [Dropbox](https://www.dropbox.com/developers/documentation) | `Dropbox` | Yes (content) | Yes | Native |
-| [Box](https://developer.box.com/guides/) | `Box` | Yes (metadata) | Yes | Native |
+| Provider | Driver Key | Search | Pre-auth URLs | Native Directories | Range Streaming |
+|---|---|---|---|---|---|
+| [AWS S3](https://aws.amazon.com/s3/) | `AWS S3` | No | Yes | Simulated | Yes |
+| [Azure Blob Storage](https://azure.microsoft.com/en-us/products/storage/blobs) | `Azure Blob Storage` | No | Yes | Simulated | Yes |
+| [Google Cloud Storage](https://cloud.google.com/storage) | `Google Cloud Storage` | No | Yes | Simulated | Yes |
+| [Google Drive](https://developers.google.com/drive/api/guides/about-sdk) | `Google Drive Storage` | Yes (content) | Yes | Native | Yes (non-Workspace files) |
+| [Microsoft SharePoint](https://learn.microsoft.com/en-us/sharepoint/dev/) | `SharePoint` | Yes (content) | Yes | Native | Yes |
+| [Dropbox](https://www.dropbox.com/developers/documentation) | `Dropbox` | Yes (content) | Yes | Native | Yes |
+| [Box](https://developer.box.com/guides/) | `Box` | Yes (metadata) | Yes | Native | Yes |
 
 ### File Operations
 
@@ -748,7 +749,9 @@ All storage providers implement these methods:
 | `CreateDirectory(directoryPath)` | `Promise<boolean>` | Create a directory |
 | `DeleteDirectory(path, recursive?)` | `Promise<boolean>` | Delete a directory |
 | `GetObjectMetadata(params)` | `Promise<StorageObjectMetadata>` | Get file metadata without downloading |
-| `GetObject(params)` | `Promise<Buffer>` | Download file content |
+| `GetObject(params)` | `Promise<Buffer>` | Download full file content into memory |
+| `get SupportsStreaming` | `boolean` | Whether the provider supports `GetObjectStream` (all seven built-in drivers: `true`) |
+| `GetObjectStream(params)` | `Promise<ObjectStreamResult>` | Stream file content (optionally a byte `Range`) without buffering; throws `StreamingNotSupportedError` if unsupported. See [docs/STREAMING.md](docs/STREAMING.md) |
 | `PutObject(name, data, contentType?, metadata?)` | `Promise<boolean>` | Upload file content directly |
 | `CopyObject(source, destination)` | `Promise<boolean>` | Copy a file |
 | `ObjectExists(objectName)` | `Promise<boolean>` | Check if a file exists |

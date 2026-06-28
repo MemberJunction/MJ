@@ -200,21 +200,19 @@
 
           <!-- No Views Message -->
           @if (!HasViews && !IsLoading) {
-            <div class="vs-empty-message">
-              <i class="fa-solid fa-bookmark"></i>
-              <div class="vs-empty-text">
-                <strong>No saved views yet</strong>
-                <span>Save your current configuration as a view</span>
-              </div>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Icon="fa-solid fa-bookmark"
+              Title="No saved views yet"
+              Message="Save your current configuration as a view" />
           }
 
           <!-- No Search Results -->
           @if (HasViews && FilteredMyViews.length === 0 && FilteredSharedViews.length === 0 && SearchText) {
-            <div class="vs-empty-message">
-              <i class="fa-solid fa-search"></i>
-              <span>No views match "{{ SearchText }}"</span>
-            </div>
+            <mj-empty-state
+              Size="compact"
+              Variant="no-results"
+              [Title]="NoViewsMatchMessage" />
           }
 
           <!-- Loading Indicator -->

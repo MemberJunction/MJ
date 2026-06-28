@@ -474,38 +474,6 @@
   color: var(--mj-text-secondary);
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: var(--mj-text-muted);
-  background: var(--mj-bg-surface);
-  border-radius: 8px;
-  padding: 40px;
-}
-
-.empty-icon {
-  font-size: 64px;
-  color: var(--mj-border-default);
-  margin-bottom: 24px;
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-  max-width: 400px;
-  color: var(--mj-text-secondary);
-}
 
 /* ============================================
    CONCEPT D: HOME VIEW LAYOUT
@@ -997,24 +965,6 @@
   text-align: center;
 }
 
-/* No results state for home view */
-.home-no-results {
-  text-align: center;
-  padding: 40px 20px;
-  color: var(--mj-text-muted);
-}
-
-.home-no-results i {
-  font-size: 28px;
-  margin-bottom: 10px;
-  display: block;
-}
-
-.home-no-results p {
-  font-size: 14px;
-  margin: 0;
-}
-
 .detail-panel {
   flex-shrink: 0;
   height: 100%;
@@ -1133,29 +1083,6 @@
 .toggle-label {
   font-size: 12px;
   font-weight: 500;
-}
-
-/* ============================================
-   EMPTY STATE VARIANTS
-   ============================================ */
-
-.empty-state.small {
-  height: auto;
-  padding: 32px;
-  background: var(--mj-bg-surface-card);
-}
-
-.empty-state.small .empty-icon {
-  font-size: 40px;
-  margin-bottom: 16px;
-}
-
-.empty-state.small h3 {
-  font-size: 16px;
-}
-
-.empty-state.small p {
-  font-size: 13px;
 }
 
 /* ============================================

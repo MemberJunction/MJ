@@ -37,6 +37,7 @@ interface CtxLog {
 function makeContext(log: CtxLog): RealtimeChannelContext {
   return {
     AgentName: 'Sage',
+    Provider: null,
     SendContextNote: () => undefined,
     RequestSave: (stateJson: string) => log.Saves.push(stateJson),
     SetFocusMode: () => undefined,

@@ -26,6 +26,7 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'retentionArchiving', sectionName: 'Retention & Archiving', isExpanded: true },
             { sectionKey: 'retrievalRanking', sectionName: 'Retrieval & Ranking', isExpanded: true },
             { sectionKey: 'contextMemoryManagement', sectionName: 'Context & Memory Management', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AIAgent Actions', isExpanded: false },
             { sectionKey: 'mJAIAgentArtifactTypes', sectionName: 'AI Agent Artifact Types', isExpanded: false },
@@ -59,7 +60,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentCoAgentsCoAgentID', sectionName: 'AI Agent Co Agents (Co-Agent)', isExpanded: false },
             { sectionKey: 'mJAIAgentCoAgentsTargetAgentID', sectionName: 'AI Agent Co Agents (Target Agent)', isExpanded: false },
             { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
-            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
+            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false }
         ]);
     }
 }

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+:root{
+  --mj-font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mj-font-semibold:600; --mj-text-sm:0.875rem; --mj-radius-md:8px;
+  --mj-bg-page:#f8fafc; --mj-bg-surface:#ffffff; --mj-border-default:#e2e8f0;
+  --mj-text-primary:#1e293b; --mj-text-secondary:#475569; --mj-text-muted:#64748b;
+  --mj-brand-primary:#0076b6; --mj-brand-on-primary:#ffffff; --mj-bg-surface-sunken:#f1f5f9; --mj-border-strong:#cbd5e1;
+}
+*{box-sizing:border-box} body{font-family:var(--mj-font-family);background:var(--mj-bg-page);color:var(--mj-text-primary);margin:0;padding:32px}
+h1{font-size:20px;margin:0 0 4px} p.sub{color:var(--mj-text-muted);margin:0 0 24px;font-size:14px}
+.panel{background:var(--mj-bg-surface);border:1px solid var(--mj-border-default);border-radius:12px;padding:20px 24px;margin-bottom:20px}
+.panel h2{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--mj-text-muted);margin:0 0 14px}
+.row{display:flex;align-items:center;gap:28px}
+.lbl{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--mj-text-secondary);width:120px}
+.action-buttons{display:flex;gap:0.5rem}
+
+/* ===== STANDARD mjButton directive (button.scss) — the AFTER state ===== */
+.std.mj-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;border:1px solid transparent;border-radius:var(--mj-radius-md);font-family:var(--mj-font-family);font-size:var(--mj-text-sm);font-weight:var(--mj-font-semibold);line-height:1.5;min-height:44px;cursor:pointer;white-space:nowrap}
+.std.mj-btn--primary{background:var(--mj-brand-primary);color:var(--mj-brand-on-primary);border-color:var(--mj-brand-primary)}
+.std.mj-btn--secondary{background:var(--mj-bg-surface-sunken);color:var(--mj-text-primary);border-color:var(--mj-border-default)}
+
+/* ===== BEFORE: directive base + the component .mj-btn override (pill) ===== */
+/* base (directive) */
+.old.mj-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;font-family:var(--mj-font-family);font-size:var(--mj-text-sm);line-height:1.5;cursor:pointer;white-space:nowrap}
+.old.mj-btn--primary{background:var(--mj-brand-primary);color:var(--mj-brand-on-primary);border-color:var(--mj-brand-primary)}
+.old.mj-btn--secondary{background:var(--mj-bg-surface-sunken);color:var(--mj-text-primary);border-color:var(--mj-border-default)}
+/* component override that WON (user-profile-settings .mj-btn) */
+.old.mj-btn{gap:0.5rem;padding:0.75rem 1.5rem;font-size:0.875rem;font-weight:600;border:none;border-radius:9999px;min-height:44px;transition:all 0.2s cubic-bezier(0.4,0,0.2,1)}
+</style>
+</head>
+<body>
+<h1>Button standardization — user-profile-settings action bar</h1>
+<p class="sub">The component's bespoke <code>.mj-btn</code> override forced a pill shape (border-radius: 9999px) and custom padding, forking the standard button appearance. Removing it lets the mjButton directive own the styling — the standardization the consistency gate enforces.</p>
+
+<div class="panel">
+  <h2>Before — bespoke <code>.mj-btn</code> override (pill, radius 9999px)</h2>
+  <div class="row">
+    <span class="lbl">.action-buttons</span>
+    <div class="action-buttons">
+      <button class="old mj-btn mj-btn--primary"><i class="fa-solid fa-save"></i> Save Changes</button>
+      <button class="old mj-btn mj-btn--secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>After — standard mjButton directive (variant=primary / default, radius-md 8px)</h2>
+  <div class="row">
+    <span class="lbl">.action-buttons</span>
+    <div class="action-buttons">
+      <button class="std mj-btn mj-btn--primary"><i class="fa-solid fa-save"></i> Save Changes</button>
+      <button class="std mj-btn mj-btn--secondary">Cancel</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
