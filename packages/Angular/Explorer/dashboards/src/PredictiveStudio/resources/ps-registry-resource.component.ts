@@ -21,7 +21,7 @@ import { PSResourceBase } from './ps-resource-base';
     </mj-page-header-interior>
     <mj-page-body-interior>
       @if (!isLoading) {
-        <ps-registry [engine]="engine"></ps-registry>
+        <ps-registry [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-registry>
       } @else {
         <mj-loading text="Loading Model Registry..." size="medium"></mj-loading>
       }

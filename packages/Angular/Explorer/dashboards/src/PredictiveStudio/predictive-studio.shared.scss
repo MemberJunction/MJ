@@ -17,6 +17,9 @@
   --ps-node-embedding: #7b3ff0;
   --ps-node-target: #1f9d57;
   --ps-node-algorithm: #d98213;
+  /* budget-gauge categorical accents (reuse the node palette so light/dark stay distinct) */
+  --ps-gauge-cost: var(--ps-node-algorithm);
+  --ps-gauge-iterations: var(--ps-node-feature);
 }
 
 .ps-panel {
@@ -242,3 +245,46 @@ svg.ps-edges path { stroke: color-mix(in srgb, var(--mj-brand-primary) 45%, tran
 
 /* loading container */
 .ps-loading { display: flex; align-items: center; justify-content: center; padding: 60px 0; }
+
+/* ---- empty / prompt states ---- */
+.ps-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 10px; padding: 56px 24px; color: var(--mj-text-muted);
+}
+.ps-empty .ps-empty-ico {
+  width: 60px; height: 60px; border-radius: 16px; display: grid; place-items: center;
+  background: var(--mj-bg-surface-sunken); color: var(--mj-text-disabled); font-size: 24px;
+}
+.ps-empty h3 { margin: 4px 0 0; font-size: 16px; font-weight: 650; color: var(--mj-text-secondary); }
+.ps-empty p { margin: 0; max-width: 420px; font-size: 13px; line-height: 1.5; }
+
+/* ---- confirm modal ---- */
+.ps-modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000;
+  background: var(--mj-bg-overlay);
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.ps-modal {
+  width: 100%; max-width: 480px; background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default); border-radius: 14px;
+  box-shadow: var(--mj-shadow-lg, var(--mj-shadow-sm)); overflow: hidden;
+}
+.ps-modal-head {
+  display: flex; align-items: center; gap: 12px; padding: 18px 20px;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+.ps-modal-head .ico {
+  width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
+  font-size: 16px; flex: 0 0 auto;
+  background: var(--mj-status-info-bg); color: var(--mj-status-info-text);
+}
+.ps-modal-head.warn .ico { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+.ps-modal-head.danger .ico { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
+.ps-modal-head h3 { margin: 0; font-size: 15.5px; font-weight: 650; color: var(--mj-text-primary); }
+.ps-modal-body { padding: 18px 20px; font-size: 13.5px; line-height: 1.55; color: var(--mj-text-secondary); }
+.ps-modal-body .ps-field { margin-top: 14px; margin-bottom: 0; }
+.ps-modal-foot {
+  display: flex; align-items: center; gap: 10px; padding: 14px 20px;
+  border-top: 1px solid var(--mj-border-subtle); background: var(--mj-bg-surface-card);
+}
+.ps-modal-foot .ps-spacer { flex: 1; }

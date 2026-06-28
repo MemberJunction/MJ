@@ -1,13 +1,30 @@
-import { Component, EventEmitter, Input, Output, ViewEncapsulation } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, OnInit, Output, ViewEncapsulation, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studio.types';
+import { PSPanelKey } from '../predictive-studio.types';
+import {
+  PSActivityFeedItem,
+  PSHomeKpis,
+  PSModelEventSource,
+  PSProcessRunRow,
+  buildActivityFeed,
+  computeHomeKpis,
+  deriveModelEvents,
+} from '../predictive-studio.view-models';
 
 /**
- * Home panel — the action-forward landing (mockup home-2): a hero "Build a predictive model" band
- * with three entry paths (from data / from template / ask the agent), a vertical recent-activity
- * timeline, and a side rail of weekly KPIs + an agent suggestion.
+ * Home panel — the action-forward landing: a hero "Build a predictive model" band with three entry
+ * paths, a vertical recent-activity timeline, and a side rail of weekly KPIs. Fully live:
+ *
+ * - **KPIs** (published count, active experiments, best holdout AUC, scored-this-week) come from the
+ *   cached models/sessions + recent ML scoring runs loaded on demand, via {@link computeHomeKpis}.
+ * - **Recent activity** merges recent ML scoring process runs and recent model promotions/archives
+ *   into one reverse-chronological feed via {@link buildActivityFeed}.
+ *
+ * Recent scoring runs are loaded once on init (cheap, capped) — `MJ: Process Runs` isn't bulk-cached
+ * because it grows unbounded. 100% entity-agnostic.
  */
 @Component({
   standalone: true,
@@ -21,14 +38,14 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
       <div class="hero" data-testid="ps-home-hero">
         <h2>Build a predictive model</h2>
         <div class="sub">
-          Predict which members will renew this cycle. Bring your data, start from a proven template,
-          or let the Model Dev Agent design the pipeline for you.
+          Train a model on your own data, start from a proven template, or let the Model Dev Agent
+          design the pipeline for you.
         </div>
         <div class="hero-stats">
-          <div class="s"><div class="n">{{ publishedCount }}</div><div class="l">Published</div></div>
-          <div class="s"><div class="n">{{ activeExperiments }}</div><div class="l">Active Experiments</div></div>
-          <div class="s"><div class="n">{{ bestHoldout }}</div><div class="l">Best Holdout AUC</div></div>
-          <div class="s"><div class="n">{{ scoredThisWeek }}</div><div class="l">Scored this week</div></div>
+          <div class="s"><div class="n">{{ kpis.publishedCount }}</div><div class="l">Published</div></div>
+          <div class="s"><div class="n">{{ kpis.activeExperiments }}</div><div class="l">Active Experiments</div></div>
+          <div class="s"><div class="n">{{ kpis.bestHoldout }}</div><div class="l">Best Holdout AUC</div></div>
+          <div class="s"><div class="n">{{ kpis.scoredThisWeek }}</div><div class="l">Scored this week</div></div>
         </div>
         <div class="hero-actions">
           <button mjButton variant="secondary" size="sm" (click)="navigate.emit('pipelines')">
@@ -45,14 +62,14 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
         <div class="path" data-testid="ps-home-path-data" (click)="navigate.emit('pipelines')">
           <div class="ic"><i class="fa-solid fa-table-cells-large"></i></div>
           <h4>Start from data</h4>
-          <p>Point Studio at a Member view, pick your renewal target, and we'll profile features automatically.</p>
+          <p>Point Studio at any entity's records, pick the target you want to predict, and we'll profile features automatically.</p>
           <button mjButton variant="primary" size="sm"><i class="fa-solid fa-arrow-right-to-bracket"></i> Choose dataset</button>
         </div>
         <div class="path" data-testid="ps-home-path-template" (click)="navigate.emit('catalog')">
           <div class="ic green"><i class="fa-solid fa-layer-group"></i></div>
           <h4>Use a template</h4>
-          <p>Renewal Propensity (XGBoost) is pre-wired with cohort filters and the standard FY holdout split.</p>
-          <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-clone"></i> Browse templates</button>
+          <p>Browse the algorithm catalog with a use-case guide that ranks each algorithm for your scenario.</p>
+          <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-clone"></i> Browse catalog</button>
         </div>
         <div class="path" data-testid="ps-home-path-agent" (click)="askAgent.emit()">
           <div class="ic purple"><i class="fa-solid fa-robot"></i></div>
@@ -71,18 +88,25 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
             <span class="ps-spacer"></span>
           </div>
           <div class="ps-card-body">
-            <div class="feed">
-              @for (item of activity; track item.title) {
-                <div class="fitem">
-                  <div class="ev" [class]="item.kind"><i [class]="item.icon"></i></div>
-                  <div>
-                    <div class="ftitle">{{ item.title }}</div>
-                    <div class="ps-muted ps-small">{{ item.detail }}</div>
-                    <div class="when">{{ item.when }}</div>
+            @if (activity.length > 0) {
+              <div class="feed">
+                @for (item of activity; track item.title + item.when) {
+                  <div class="fitem">
+                    <div class="ev" [class]="item.kind"><i [class]="item.icon"></i></div>
+                    <div>
+                      <div class="ftitle">{{ item.title }}</div>
+                      <div class="ps-muted ps-small">{{ item.detail }}</div>
+                      <div class="when">{{ item.when }}</div>
+                    </div>
                   </div>
-                </div>
-              }
-            </div>
+                }
+              </div>
+            } @else {
+              <div class="ps-empty" style="padding:32px 16px">
+                <span class="ps-empty-ico"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                <p>No activity yet. Promote a model or run a scoring batch and it'll show up here.</p>
+              </div>
+            }
           </div>
         </div>
 
@@ -93,21 +117,10 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
               <h3>This Week</h3>
             </div>
             <div class="ps-card-body">
-              <div class="mini-kpi"><div class="ps-muted ps-small">Records scored</div><div class="v">{{ scoredThisWeek }}</div></div>
-              <div class="mini-kpi"><div class="ps-muted ps-small">Best holdout AUC</div><div class="v">{{ bestHoldout }}</div></div>
-              <div class="mini-kpi"><div class="ps-muted ps-small">Experiment runs</div><div class="v">{{ engine.TrainingRuns.length || 12 }}</div></div>
-              <div class="mini-kpi"><div class="ps-muted ps-small">Open review items</div><div class="v">1 <span class="ps-badge amber">leakage</span></div></div>
-            </div>
-          </div>
-
-          <div class="ps-callout info">
-            <i class="fa-solid fa-robot"></i>
-            <div>
-              <strong>Agent suggestion</strong>
-              <div class="ps-small" style="margin-top: 3px">
-                LightGBM is within 0.003 of your champion and trains 2.1× faster. Want me to set up a head-to-head A/B?
-              </div>
-              <button mjButton variant="primary" size="sm" style="margin-top: 8px" (click)="askAgent.emit()">Set up A/B</button>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Records scored</div><div class="v">{{ kpis.scoredThisWeek }}</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Best holdout AUC</div><div class="v">{{ kpis.bestHoldout }}</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Experiment runs</div><div class="v">{{ kpis.experimentRuns }}</div></div>
+              <div class="mini-kpi"><div class="ps-muted ps-small">Published models</div><div class="v">{{ kpis.publishedCount }}</div></div>
             </div>
           </div>
         </div>
@@ -115,32 +128,62 @@ import { PSActivityItem, PSPanelKey, SAMPLE_ACTIVITY } from '../predictive-studi
     </div>
   `,
 })
-export class PSHomeComponent {
+export class PSHomeComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
+  /** Provider to load recent scoring runs through (multi-provider correctness). */
+  @Input() provider: IMetadataProvider | null = null;
+  /** Acting user for the on-demand scoring-runs load. */
+  @Input() currentUser: UserInfo | null = null;
   @Output() navigate = new EventEmitter<PSPanelKey>();
   @Output() askAgent = new EventEmitter<void>();
 
-  public get activity(): PSActivityItem[] {
-    return SAMPLE_ACTIVITY;
+  private cdr = inject(ChangeDetectorRef);
+
+  /** Derived KPI strip. Starts from the synchronously-available counts, refined once runs load. */
+  public kpis: PSHomeKpis = { publishedCount: 0, activeExperiments: 0, bestHoldout: '—', scoredThisWeek: '0', experimentRuns: 0 };
+  /** Recent-activity timeline. */
+  public activity: PSActivityFeedItem[] = [];
+
+  /** Cached recent scoring runs (loaded on demand). */
+  private scoringRuns: PSProcessRunRow[] = [];
+
+  async ngOnInit(): Promise<void> {
+    // Render immediately from cached data, then refine with the on-demand scoring-run load.
+    this.rebuild();
+    await this.loadScoringRuns();
+    this.rebuild();
+    this.cdr.detectChanges();
   }
 
-  public get publishedCount(): number {
-    const live = this.engine?.Models.filter((m) => m.Status === 'Published').length ?? 0;
-    return live || 7;
+  /** Load the recent ML scoring runs once (cheap, capped) for the KPI + activity feed. */
+  private async loadScoringRuns(): Promise<void> {
+    if (!this.provider) return;
+    try {
+      this.scoringRuns = await this.engine.LoadRecentScoringRuns(this.provider, this.currentUser ?? undefined, {
+        sinceDays: 7,
+        maxRows: 50,
+      });
+    } catch {
+      this.scoringRuns = [];
+    }
   }
 
-  public get activeExperiments(): number {
-    const live = this.engine?.Sessions.filter((s) => s.Status === 'Running').length ?? 0;
-    return live || 2;
-  }
+  /** Recompute the KPI strip + activity feed from the current cached data + scoring runs. */
+  private rebuild(): void {
+    const models = this.engine?.Models ?? [];
+    const runningSessions = this.engine?.RunningSessions.length ?? 0;
+    const experimentRuns = this.engine?.Iterations.length ?? 0;
 
-  // TODO: bind to live data — no holdout-metric / weekly-scoring-volume surface is wired into
-  // PredictiveStudioEngine yet, so these two headline figures are representative demo values.
-  public get bestHoldout(): string {
-    return '0.864';
-  }
+    this.kpis = computeHomeKpis(models, runningSessions, this.scoringRuns, experimentRuns);
 
-  public get scoredThisWeek(): string {
-    return '48,210';
+    const eventSources: PSModelEventSource[] = models.map((m) => ({
+      Name: this.engine.ModelDisplayName(m),
+      Algorithm: this.engine.AlgorithmName(m.AlgorithmID),
+      Status: m.Status,
+      Metrics: m.Metrics,
+      HoldoutMetrics: m.HoldoutMetrics,
+      UpdatedAt: m.__mj_UpdatedAt,
+    }));
+    this.activity = buildActivityFeed(this.scoringRuns, deriveModelEvents(eventSources), new Date(), 6);
   }
 }

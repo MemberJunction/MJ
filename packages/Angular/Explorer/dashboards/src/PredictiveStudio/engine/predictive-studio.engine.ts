@@ -3,6 +3,7 @@ import {
   BaseEnginePropertyConfig,
   IMetadataProvider,
   Metadata,
+  RunView,
   UserInfo,
 } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -17,8 +18,10 @@ import {
   MJExperimentEntity,
   MJExperimentSessionEntity,
   MJExperimentSessionIterationEntity,
+  MJProcessRunEntity,
   MJRecordProcessEntity,
 } from '@memberjunction/core-entities';
+import { PSIterationRow, PSProcessRunRow } from '../predictive-studio.view-models';
 
 /**
  * Recommendation levels used by the Algorithm Use Case Rankings matrix, ordered weakest → strongest.
@@ -185,5 +188,111 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
     return this.Iterations.filter((i) => UUIDsEqual(i.ExperimentSessionID, sessionId)).sort(
       (a, b) => a.Sequence - b.Sequence,
     );
+  }
+
+  /** Published models only — the production-quality set used for headline KPIs. */
+  public get PublishedModels(): MJMLModelEntity[] {
+    return this.Models.filter((m) => m.Status === 'Published');
+  }
+
+  /** Sessions whose status is `Running` — the active experiment count. */
+  public get RunningSessions(): MJExperimentSessionEntity[] {
+    return this.Sessions.filter((s) => s.Status === 'Running');
+  }
+
+  /**
+   * Resolve a model's human-readable display name generically: the producing pipeline's name when
+   * available (the most meaningful label — what the model predicts), else the model's denormalized
+   * `Pipeline` view field, else a version-stamped fallback. Entity-agnostic — never hardcodes any
+   * business entity.
+   */
+  public ModelDisplayName(model: MJMLModelEntity): string {
+    const pipeline = this.Pipelines.find((p) => UUIDsEqual(p.ID, model.PipelineID));
+    return pipeline?.Name ?? model.Pipeline ?? `Model v${model.Version}`;
+  }
+
+  /**
+   * Map the engine's cached iterations for a session into the pure {@link PSIterationRow} shape the
+   * view-model derivations consume — joining each iteration to its algorithm name via the resulting
+   * training run (iteration → run → algorithm), since iterations don't carry the algorithm directly.
+   */
+  public IterationRowsForSession(sessionId: string): PSIterationRow[] {
+    return this.IterationsForSession(sessionId).map((it) => ({
+      ID: it.ID,
+      ExperimentSessionID: it.ExperimentSessionID,
+      Sequence: it.Sequence,
+      Label: it.Label,
+      Status: it.Status,
+      Score: it.Score,
+      ComputeCost: it.ComputeCost,
+      TokensUsed: it.TokensUsed,
+      Rationale: it.Rationale,
+      AlgorithmName: this.AlgorithmForIteration(it.ID),
+    }));
+  }
+
+  /** Resolve an iteration's algorithm display name via its training run (or 'Unknown'). */
+  public AlgorithmForIteration(iterationId: string): string {
+    const run = this.TrainingRuns.find((r) => UUIDsEqual(r.ExperimentSessionIterationID, iterationId));
+    return run ? this.AlgorithmName(run.AlgorithmID) : 'Unknown';
+  }
+
+  /**
+   * The `MJ: Record Processes` IDs that ML scoring write-backs run through — every scoring binding's
+   * bound Record Process. Used to scope the Home activity feed to ML-scoring runs without depending
+   * on a typed `WorkType='ML Model'` enum value (which is registered at runtime, not in the type).
+   */
+  public get ScoringRecordProcessIDs(): string[] {
+    const ids = this.ScoringBindings.map((b) => b.RecordProcessID).filter((id): id is string => !!id);
+    return [...new Set(ids)];
+  }
+
+  /**
+   * Load recent ML-scoring process runs on demand (NOT bulk-cached — `MJ: Process Runs` grows
+   * unbounded). Scopes to runs whose `RecordProcessID` is one of the ML scoring bindings'
+   * processes, optionally to the last `sinceDays`, capped at `maxRows`, newest first. Returns the
+   * pure {@link PSProcessRunRow} shape for the Home derivations. Returns `[]` (never throws) on any
+   * failure or when there are no scoring bindings to scope to.
+   *
+   * @param provider The provider to run against (multi-provider correctness).
+   * @param user The acting user (server-side audit/security).
+   * @param options.sinceDays Only runs started within this many days (default 7).
+   * @param options.maxRows Row cap (default 50).
+   */
+  public async LoadRecentScoringRuns(
+    provider: IMetadataProvider,
+    user: UserInfo | undefined,
+    options?: { sinceDays?: number; maxRows?: number },
+  ): Promise<PSProcessRunRow[]> {
+    const processIds = this.ScoringRecordProcessIDs;
+    if (processIds.length === 0) return [];
+    const sinceDays = options?.sinceDays ?? 7;
+    const maxRows = options?.maxRows ?? 50;
+    const sinceIso = new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000).toISOString();
+    const idList = processIds.map((id) => `'${id}'`).join(',');
+
+    const rv = RunView.FromMetadataProvider(provider);
+    const result = await rv.RunView<MJProcessRunEntity>(
+      {
+        EntityName: 'MJ: Process Runs',
+        ExtraFilter: `RecordProcessID IN (${idList}) AND __mj_CreatedAt >= '${sinceIso}'`,
+        OrderBy: '__mj_CreatedAt DESC',
+        MaxRows: maxRows,
+        ResultType: 'entity_object',
+      },
+      user,
+    );
+    if (!result.Success) return [];
+    return (result.Results ?? []).map((r) => ({
+      ID: r.ID,
+      Status: r.Status,
+      StartTime: r.StartTime,
+      CreatedAt: r.__mj_CreatedAt,
+      SuccessCount: r.SuccessCount,
+      TotalItemCount: r.TotalItemCount,
+      ProcessName: r.RecordProcess,
+      EntityName: r.Entity,
+      DryRun: r.DryRun,
+    }));
   }
 }

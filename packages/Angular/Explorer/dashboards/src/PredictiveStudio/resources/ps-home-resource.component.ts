@@ -46,7 +46,7 @@ const PANEL_KEY_TO_NAV_LABEL: Partial<Record<PSPanelKey, string>> = {
     </mj-page-header-interior>
     <mj-page-body-interior>
       @if (!isLoading) {
-        <ps-home [engine]="engine" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent()"></ps-home>
+        <ps-home [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent()"></ps-home>
       } @else {
         <mj-loading text="Loading Predictive Studio..." size="medium"></mj-loading>
       }

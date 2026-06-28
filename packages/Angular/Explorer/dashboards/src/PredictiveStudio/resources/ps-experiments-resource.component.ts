@@ -21,7 +21,7 @@ import { PSResourceBase } from './ps-resource-base';
     </mj-page-header-interior>
     <mj-page-body-interior>
       @if (!isLoading) {
-        <ps-experiments [engine]="engine"></ps-experiments>
+        <ps-experiments [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser"></ps-experiments>
       } @else {
         <mj-loading text="Loading Experiments..." size="medium"></mj-loading>
       }
