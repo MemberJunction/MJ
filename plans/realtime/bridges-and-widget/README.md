@@ -59,6 +59,12 @@ These were decided up front. Alternatives are recorded so a future owner can rev
 | [`telephony-vendor-bindings.md`](./telephony-vendor-bindings.md) | Real Twilio/Vonage/RingCentral clients behind native loaders; inbound webhook + Media-Streams endpoint in MJAPI; integration tests | Medium (real-money calls, media plane) | Medium |
 | [`meeting-vendor-bindings-teams-slack.md`](./meeting-vendor-bindings-teams-slack.md) | Real Teams (ACS+Graph) binding; Slack huddle binding **gated on media-API verification**; calendar + identity provisioner bindings | High (entitlements; Slack media API may not exist) | Medium |
 
+**Operational docs** (how to turn this on / verify it on a real instance):
+
+| Doc | Scope |
+|---|---|
+| [`DEPLOYMENT.md`](./DEPLOYMENT.md) | Everything to enable bridges + widget on an MJ instance — migrations, metadata seed order, `mj.config.cjs` blocks, env vars, ngrok/Twilio setup, and a gotchas table of every non-obvious thing hit during bring-up |
+
 ---
 
 ## 5. Recommended sequencing
