@@ -4,11 +4,9 @@
     } @else {
         <div class="content">
             @if (viewModels.length === 0) {
-                <!-- Empty state -->
-                <div class="empty-state">
-                    <i class="fa-solid fa-bell-slash"></i>
-                    <p>No notification types configured yet.</p>
-                </div>
+                <mj-empty-state
+                    Icon="fa-solid fa-bell-slash"
+                    Title="No notification types configured yet." />
             } @else {
                 <!-- Notification type cards -->
                 <div class="notification-types-grid">

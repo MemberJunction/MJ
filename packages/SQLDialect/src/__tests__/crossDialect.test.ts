@@ -643,4 +643,30 @@ describe('Cross-Dialect Comparison Tests', () => {
             expect(pgFTS).toContain('plpgsql');
         });
     });
+
+    // ─── Canonical Schema Name (identifier folding) ──────────────────
+
+    describe('CanonicalSchemaName', () => {
+        it('SQL Server preserves case (identifiers are case-insensitive, stored as-given)', () => {
+            expect(ss.CanonicalSchemaName('__mj_BizAppsCommon')).toBe('__mj_BizAppsCommon');
+            expect(ss.CanonicalSchemaName('acme_crm')).toBe('acme_crm');
+        });
+
+        it('PostgreSQL folds to lowercase (matching what unquoted CREATE SCHEMA produces)', () => {
+            expect(pg.CanonicalSchemaName('__mj_BizAppsCommon')).toBe('__mj_bizappscommon');
+            expect(pg.CanonicalSchemaName('Acme_CRM')).toBe('acme_crm');
+        });
+
+        it('is idempotent on both dialects (canonicalizing twice equals once)', () => {
+            for (const d of [ss, pg]) {
+                const once = d.CanonicalSchemaName('__mj_BizAppsCommon');
+                expect(d.CanonicalSchemaName(once)).toBe(once);
+            }
+        });
+
+        it('leaves an already-lowercase name unchanged on PostgreSQL', () => {
+            expect(pg.CanonicalSchemaName('__mj_bizappscommon')).toBe('__mj_bizappscommon');
+            expect(pg.CanonicalSchemaName('__mj')).toBe('__mj');
+        });
+    });
 });

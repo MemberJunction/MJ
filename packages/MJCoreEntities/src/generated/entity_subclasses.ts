@@ -3752,6 +3752,26 @@ export const MJAIAgentSessionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RecordingMedia: z.union([z.literal('Audio'), z.literal('AudioVideo'), z.literal('None')]).nullable().describe(`
+        * * Field Name: RecordingMedia
+        * * Display Name: Recording Media
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+        * * Description: The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.`),
+    RecordingStartedAt: z.date().nullable().describe(`
+        * * Field Name: RecordingStartedAt
+        * * Display Name: Recording Started At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -3764,6 +3784,10 @@ export const MJAIAgentSessionSchema = z.object({
         * * Field Name: Conversation
         * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
+    RecordingFile: z.string().nullable().describe(`
+        * * Field Name: RecordingFile
+        * * Display Name: Recording File
+        * * SQL Data Type: nvarchar(500)`),
     RootLastSessionID: z.string().nullable().describe(`
         * * Field Name: RootLastSessionID
         * * Display Name: Root Last Session ID
@@ -4551,6 +4575,22 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`),
+    RecordingDefault: z.union([z.literal('Audio'), z.literal('AudioVideo'), z.literal('None')]).nullable().describe(`
+        * * Field Name: RecordingDefault
+        * * Display Name: Recording Default
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+        * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`),
+    RecordingStorageProviderID: z.string().nullable().describe(`
+        * * Field Name: RecordingStorageProviderID
+        * * Display Name: Recording Storage Provider ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+        * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -4587,6 +4627,10 @@ if this limit is exceeded.`),
         * * Field Name: DefaultCoAgent
         * * Display Name: Default Co-Agent
         * * SQL Data Type: nvarchar(255)`),
+    RecordingStorageProvider: z.string().nullable().describe(`
+        * * Field Name: RecordingStorageProvider
+        * * Display Name: Recording Storage Provider
+        * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -12850,24 +12894,24 @@ export const MJConversationDetailSchema = z.object({
         * * Description: This column stores human or AI-generated reflections on how to improve future responses based on the user feedback and the AI output generated for prior messages in the conversation.`),
     SummaryOfEarlierConversation: z.string().nullable().describe(`
         * * Field Name: SummaryOfEarlierConversation
-        * * Display Name: Conversation Summary
+        * * Display Name: Summary of Earlier Conversation
         * * SQL Data Type: nvarchar(MAX)
         * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.`),
     ArtifactID: z.string().nullable().describe(`
         * * Field Name: ArtifactID
-        * * Display Name: Artifact
+        * * Display Name: Artifact ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
         * * Description: Optional reference to a conversation artifact associated with this conversation detail`),
     ArtifactVersionID: z.string().nullable().describe(`
         * * Field Name: ArtifactVersionID
-        * * Display Name: Artifact Version
+        * * Display Name: Artifact Version ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
         * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail`),
@@ -12878,19 +12922,19 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Duration in milliseconds representing how long the AI response processing took to complete for this conversation detail.`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Pinned
+        * * Display Name: Is Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this message is pinned within the conversation for easy reference`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent Message
+        * * Display Name: Parent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
     AgentID: z.string().nullable().describe(`
         * * Field Name: AgentID
-        * * Display Name: Agent
+        * * Display Name: Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun`),
@@ -12907,12 +12951,12 @@ export const MJConversationDetailSchema = z.object({
         * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
     SuggestedResponses: z.string().nullable().describe(`
         * * Field Name: SuggestedResponses
-        * * Display Name: Suggested Responses (Legacy)
+        * * Display Name: Suggested Responses
         * * SQL Data Type: nvarchar(MAX)
         * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run
+        * * Display Name: Test Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.`),
@@ -12933,43 +12977,68 @@ export const MJConversationDetailSchema = z.object({
         * * Description: JSON array of automatic commands that execute immediately when received (no user interaction). Supports refresh:data (refresh entity data or caches) and notification (show toast messages). Used for keeping UI in sync after agent makes changes and providing user feedback.`),
     OriginalMessageChanged: z.boolean().describe(`
         * * Field Name: OriginalMessageChanged
-        * * Display Name: Message Modified
+        * * Display Name: Original Message Changed
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.`),
     AgentSessionID: z.string().nullable().describe(`
         * * Field Name: AgentSessionID
-        * * Display Name: Agent Session
+        * * Display Name: Agent Session ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
         * * Description: Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.`),
+    TurnEndedAt: z.date().nullable().describe(`
+        * * Field Name: TurnEndedAt
+        * * Display Name: Turn Ended At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.`),
+    UtteranceStartMs: z.number().nullable().describe(`
+        * * Field Name: UtteranceStartMs
+        * * Display Name: Utterance Start (ms)
+        * * SQL Data Type: int
+        * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.`),
+    UtteranceEndMs: z.number().nullable().describe(`
+        * * Field Name: UtteranceEndMs
+        * * Display Name: Utterance End (ms)
+        * * SQL Data Type: int
+        * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.`),
+    MediaType: z.union([z.literal('Audio'), z.literal('Text'), z.literal('Video')]).nullable().describe(`
+        * * Field Name: MediaType
+        * * Display Name: Media Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Text
+    *   * Video
+        * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
-        * * Display Name: Conversation Reference
+        * * Display Name: Conversation
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
-        * * Display Name: User Reference
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact Reference
+        * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
-        * * Display Name: Artifact Version Reference
+        * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Reference
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent Reference
+        * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Reference
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -12990,7 +13059,7 @@ export const MJConversationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
@@ -13014,13 +13083,13 @@ export const MJConversationSchema = z.object({
         * * Description: The type or category of conversation (Skip, Support, Chat, etc.).`),
     IsArchived: z.boolean().describe(`
         * * Field Name: IsArchived
-        * * Display Name: Archived
+        * * Display Name: Is Archived
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity
+        * * Display Name: Linked Entity ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`),
@@ -13031,7 +13100,7 @@ export const MJConversationSchema = z.object({
         * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context
+        * * Display Name: Data Context ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -13056,24 +13125,24 @@ export const MJConversationSchema = z.object({
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment
+        * * Display Name: Environment ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project
+        * * Display Name: Project ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Pinned
+        * * Display Name: Is Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation is pinned to the top of lists`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run
+        * * Display Name: Test Run ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
@@ -13090,13 +13159,13 @@ export const MJConversationSchema = z.object({
         * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application
+        * * Display Name: Application ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
         * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`),
     DefaultAgentID: z.string().nullable().describe(`
         * * Field Name: DefaultAgentID
-        * * Display Name: Default Agent
+        * * Display Name: Default Agent ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`),
@@ -13105,38 +13174,53 @@ export const MJConversationSchema = z.object({
         * * Display Name: Additional Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`),
+    RecordingFileID: z.string().nullable().describe(`
+        * * Field Name: RecordingFileID
+        * * Display Name: Recording File ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`),
+    EgressID: z.string().nullable().describe(`
+        * * Field Name: EgressID
+        * * Display Name: Egress ID
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Name
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity Name
+        * * Display Name: Linked Entity
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
-        * * Display Name: Data Context Name
+        * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment Name
+        * * Display Name: Environment
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project Name
+        * * Display Name: Project
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
-        * * Display Name: Application Name
+        * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
     DefaultAgent: z.string().nullable().describe(`
         * * Field Name: DefaultAgent
-        * * Display Name: Default Agent Name
+        * * Display Name: Default Agent
         * * SQL Data Type: nvarchar(255)`),
+    RecordingFile: z.string().nullable().describe(`
+        * * Field Name: RecordingFile
+        * * Display Name: Recording File
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -14221,7 +14305,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Default Value: newsequentialid()`),
     DuplicateRunDetailID: z.string().describe(`
         * * Field Name: DuplicateRunDetailID
-        * * Display Name: Duplicate Run Detail ID
+        * * Display Name: Duplicate Run Detail
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)`),
     MatchSource: z.union([z.literal('SP'), z.literal('Vector')]).describe(`
@@ -14236,7 +14320,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Either Vector or SP`),
     MatchRecordID: z.string().describe(`
         * * Field Name: MatchRecordID
-        * * Display Name: Match Record ID
+        * * Display Name: Matched Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The ID of the record identified as a potential duplicate match.`),
     MatchProbability: z.number().describe(`
@@ -14270,7 +14354,7 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Description: Current approval status of the proposed action (Pending, Approved, Rejected).`),
     RecordMergeLogID: z.string().nullable().describe(`
         * * Field Name: RecordMergeLogID
-        * * Display Name: Record Merge Log ID
+        * * Display Name: Merge Log
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)`),
     MergeStatus: z.union([z.literal('Complete'), z.literal('Error'), z.literal('Pending')]).describe(`
@@ -14305,14 +14389,64 @@ export const MJDuplicateRunDetailMatchSchema = z.object({
         * * Display Name: Record Metadata
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON metadata snapshot of the matched record from the vector database at detection time. Contains display fields (Name, Description, EntityIcon, etc.) for rich UI rendering without additional lookups.`),
+    AIAgentRunID: z.string().nullable().describe(`
+        * * Field Name: AIAgentRunID
+        * * Display Name: AI Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).`),
+    AIPromptRunID: z.string().nullable().describe(`
+        * * Field Name: AIPromptRunID
+        * * Display Name: AI Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.`),
+    LLMRecommendation: z.union([z.literal('Merge'), z.literal('NotDuplicate'), z.literal('Uncertain')]).nullable().describe(`
+        * * Field Name: LLMRecommendation
+        * * Display Name: LLM Recommendation
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Merge
+    *   * NotDuplicate
+    *   * Uncertain
+        * * Description: The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.`),
+    LLMConfidence: z.number().nullable().describe(`
+        * * Field Name: LLMConfidence
+        * * Display Name: LLM Confidence
+        * * SQL Data Type: numeric(12, 11)
+        * * Description: Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.`),
+    LLMReasoning: z.string().nullable().describe(`
+        * * Field Name: LLMReasoning
+        * * Display Name: LLM Reasoning
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.`),
+    LLMProposedSurvivorRecordID: z.string().nullable().describe(`
+        * * Field Name: LLMProposedSurvivorRecordID
+        * * Display Name: Proposed Survivor Record
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.`),
+    LLMProposedFieldMap: z.string().nullable().describe(`
+        * * Field Name: LLMProposedFieldMap
+        * * Display Name: Proposed Field Map
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.`),
     DuplicateRunDetail: z.string().describe(`
         * * Field Name: DuplicateRunDetail
-        * * Display Name: Duplicate Run Detail
+        * * Display Name: Duplicate Run Detail Object
         * * SQL Data Type: nvarchar(500)`),
     RecordMergeLog: z.string().nullable().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Record Merge Log
+        * * Display Name: Merge Log Object
         * * SQL Data Type: nvarchar(450)`),
+    AIAgentRun: z.string().nullable().describe(`
+        * * Field Name: AIAgentRun
+        * * Display Name: AI Agent Run Object
+        * * SQL Data Type: nvarchar(255)`),
+    AIPromptRun: z.string().nullable().describe(`
+        * * Field Name: AIPromptRun
+        * * Display Name: AI Prompt Run Object
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJDuplicateRunDetailMatchEntityType = z.infer<typeof MJDuplicateRunDetailMatchSchema>;
@@ -15540,6 +15674,11 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RuntimeUXDriverClass: z.string().nullable().describe(`
+        * * Field Name: RuntimeUXDriverClass
+        * * Display Name: Runtime UX Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
         * * Display Name: Entity Action Name
@@ -16070,9 +16209,53 @@ export const MJEntityDocumentSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`),
+    EnableLLMReasoning: z.boolean().describe(`
+        * * Field Name: EnableLLMReasoning
+        * * Display Name: Enable LLM Reasoning
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.`),
+    ReasoningMode: z.union([z.literal('Agent'), z.literal('Prompt')]).describe(`
+        * * Field Name: ReasoningMode
+        * * Display Name: Reasoning Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Prompt
+        * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.`),
+    ReasoningThreshold: z.number().nullable().describe(`
+        * * Field Name: ReasoningThreshold
+        * * Display Name: Reasoning Threshold
+        * * SQL Data Type: numeric(12, 11)
+        * * Description: Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.`),
+    ReasoningPromptID: z.string().nullable().describe(`
+        * * Field Name: ReasoningPromptID
+        * * Display Name: Reasoning Prompt
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.`),
+    ReasoningAgentID: z.string().nullable().describe(`
+        * * Field Name: ReasoningAgentID
+        * * Display Name: Reasoning Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.`),
+    AutomationLevel: z.union([z.literal('AutoMergeAboveAbsolute'), z.literal('LLMGated'), z.literal('ReviewAll')]).describe(`
+        * * Field Name: AutomationLevel
+        * * Display Name: Automation Level
+        * * SQL Data Type: nvarchar(30)
+        * * Default Value: ReviewAll
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AutoMergeAboveAbsolute
+    *   * LLMGated
+    *   * ReviewAll
+        * * Description: Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -16093,6 +16276,14 @@ export const MJEntityDocumentSchema = z.object({
     VectorIndex: z.string().nullable().describe(`
         * * Field Name: VectorIndex
         * * Display Name: Vector Index Name
+        * * SQL Data Type: nvarchar(255)`),
+    ReasoningPrompt: z.string().nullable().describe(`
+        * * Field Name: ReasoningPrompt
+        * * Display Name: Reasoning Prompt Name
+        * * SQL Data Type: nvarchar(255)`),
+    ReasoningAgent: z.string().nullable().describe(`
+        * * Field Name: ReasoningAgent
+        * * Display Name: Reasoning Agent Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -20957,6 +21148,11 @@ export const MJOpenAppSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Subpath: z.string().nullable().describe(`
+        * * Field Name: Subpath
+        * * Display Name: Subpath
+        * * SQL Data Type: nvarchar(500)
+        * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`),
     InstalledByUser: z.string().describe(`
         * * Field Name: InstalledByUser
         * * Display Name: Installed By User
@@ -21390,7 +21586,7 @@ export const MJProcessRunSchema = z.object({
         * * Description: Pause/cancel handshake flag honored by the processor between batches`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
-        * * Display Name: Configuration
+        * * Display Name: Configuration JSON
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON snapshot of the effective configuration for this run`),
     ErrorMessage: z.string().nullable().describe(`
@@ -21414,6 +21610,12 @@ export const MJProcessRunSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DryRun: z.boolean().describe(`
+        * * Field Name: DryRun
+        * * Display Name: Is Dry Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process Name
@@ -23344,7 +23546,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('Infer')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -23352,6 +23554,7 @@ export const MJRecordProcessSchema = z.object({
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * FieldRules
     *   * Infer
         * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
     ActionID: z.string().nullable().describe(`
@@ -23493,33 +23696,38 @@ export const MJRecordProcessSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category (Display)
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity (Display)
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     Action: z.string().nullable().describe(`
         * * Field Name: Action
-        * * Display Name: Action (Display)
+        * * Display Name: Action Name
         * * SQL Data Type: nvarchar(425)`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent (Display)
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     Prompt: z.string().nullable().describe(`
         * * Field Name: Prompt
-        * * Display Name: Prompt (Display)
+        * * Display Name: Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     ScopeView: z.string().nullable().describe(`
         * * Field Name: ScopeView
-        * * Display Name: Scope View (Display)
+        * * Display Name: Scope View Name
         * * SQL Data Type: nvarchar(100)`),
     ScopeList: z.string().nullable().describe(`
         * * Field Name: ScopeList
-        * * Display Name: Scope List (Display)
+        * * Display Name: Scope List Name
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -23614,7 +23822,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the input shape (same mechanism as EntityField JSON-type definitions)`),
     InputTypeIsArray: z.boolean().describe(`
         * * Field Name: InputTypeIsArray
-        * * Display Name: Is Input Array
+        * * Display Name: Input Is Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the input type is emitted as an array (TInput[])`),
@@ -23630,7 +23838,7 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Raw TypeScript interface/type source defining the output shape`),
     OutputTypeIsArray: z.boolean().describe(`
         * * Field Name: OutputTypeIsArray
-        * * Display Name: Is Output Array
+        * * Display Name: Output Is Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When 1, the output type is emitted as an array (TOutput[])`),
@@ -23668,12 +23876,12 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: How the server implementation is provided: Manual (hand-written subclass), AI (generated from Description), or Default (standard generated plumbing)`),
     Code: z.string().nullable().describe(`
         * * Field Name: Code
-        * * Display Name: Implementation Code
+        * * Display Name: Code
         * * SQL Data Type: nvarchar(MAX)
         * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes`),
     CodeApprovalStatus: z.union([z.literal('Approved'), z.literal('Pending'), z.literal('Rejected')]).describe(`
         * * Field Name: CodeApprovalStatus
-        * * Display Name: Approval Status
+        * * Display Name: Code Approval Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
@@ -23684,13 +23892,13 @@ export const MJRemoteOperationSchema = z.object({
         * * Description: Human approval gate for AI-generated code: Pending, Approved, or Rejected. Only Approved AI code is emitted and routable.`),
     CodeApprovedByUserID: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUserID
-        * * Display Name: Approved By User ID
+        * * Display Name: Code Approved By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Foreign key to the user who approved the generated code`),
     CodeApprovedAt: z.date().nullable().describe(`
         * * Field Name: CodeApprovedAt
-        * * Display Name: Approved At
+        * * Display Name: Code Approved At
         * * SQL Data Type: datetimeoffset
         * * Description: When the generated code was approved`),
     ContractFingerprint: z.string().nullable().describe(`
@@ -23734,13 +23942,30 @@ export const MJRemoteOperationSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    CodeLocked: z.boolean().describe(`
+        * * Field Name: CodeLocked
+        * * Display Name: Code Locked
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.`),
+    CodeComments: z.string().nullable().describe(`
+        * * Field Name: CodeComments
+        * * Display Name: Code Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.`),
+    Libraries: z.any().nullable().describe(`
+        * * Field Name: Libraries
+        * * Display Name: Libraries
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+        * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     CodeApprovedByUser: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUser
-        * * Display Name: Approved By User
+        * * Display Name: Code Approved By User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -39908,6 +40133,50 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
 
     /**
+    * * Field Name: RecordingMedia
+    * * Display Name: Recording Media
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+    * * Description: The media actually captured for this session, resolved at session start (runtime param > agent-level RecordingDefault > OFF). Values: None, Audio, AudioVideo. NULL/None = not recorded.
+    */
+    get RecordingMedia(): 'Audio' | 'AudioVideo' | 'None' | null {
+        return this.Get('RecordingMedia');
+    }
+    set RecordingMedia(value: 'Audio' | 'AudioVideo' | 'None' | null) {
+        this.Set('RecordingMedia', value);
+    }
+
+    /**
+    * * Field Name: RecordingStartedAt
+    * * Display Name: Recording Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Recording alignment origin (t0): the wall-clock moment audio capture began for this session. Per-turn ConversationDetail timestamps are converted to audio seek offsets relative to this value.
+    */
+    get RecordingStartedAt(): Date | null {
+        return this.Get('RecordingStartedAt');
+    }
+    set RecordingStartedAt(value: Date | null) {
+        this.Set('RecordingStartedAt', value);
+    }
+
+    /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -39932,6 +40201,15 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     */
     get Conversation(): string | null {
         return this.Get('Conversation');
+    }
+
+    /**
+    * * Field Name: RecordingFile
+    * * Display Name: Recording File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RecordingFile(): string | null {
+        return this.Get('RecordingFile');
     }
 
     /**
@@ -42043,6 +42321,38 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: RecordingDefault
+    * * Display Name: Recording Default
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * AudioVideo
+    *   * None
+    * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.
+    */
+    get RecordingDefault(): 'Audio' | 'AudioVideo' | 'None' | null {
+        return this.Get('RecordingDefault');
+    }
+    set RecordingDefault(value: 'Audio' | 'AudioVideo' | 'None' | null) {
+        this.Set('RecordingDefault', value);
+    }
+
+    /**
+    * * Field Name: RecordingStorageProviderID
+    * * Display Name: Recording Storage Provider ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
+    * * Description: OPTIONAL override for where session recordings are stored. When NULL, recordings fall back to the agent's AttachmentStorageProviderID. Set this only when recordings must live in a different storage account than attachments.
+    */
+    get RecordingStorageProviderID(): string | null {
+        return this.Get('RecordingStorageProviderID');
+    }
+    set RecordingStorageProviderID(value: string | null) {
+        this.Set('RecordingStorageProviderID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -42121,6 +42431,15 @@ if this limit is exceeded.
     */
     get DefaultCoAgent(): string | null {
         return this.Get('DefaultCoAgent');
+    }
+
+    /**
+    * * Field Name: RecordingStorageProvider
+    * * Display Name: Recording Storage Provider
+    * * SQL Data Type: nvarchar(50)
+    */
+    get RecordingStorageProvider(): string | null {
+        return this.Get('RecordingStorageProvider');
     }
 
     /**
@@ -64283,7 +64602,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: SummaryOfEarlierConversation
-    * * Display Name: Conversation Summary
+    * * Display Name: Summary of Earlier Conversation
     * * SQL Data Type: nvarchar(MAX)
     * * Description: This column optionally stores a summary of the entire conversation leading up to this particular conversation detail record. It is used in long-running conversations to optimize performance by summarizing earlier parts.
     */
@@ -64296,7 +64615,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: This field, when populated, overrides the UserID at the Conversation level to specify a different user created the message.
@@ -64310,7 +64629,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactID
-    * * Display Name: Artifact
+    * * Display Name: Artifact ID
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
@@ -64325,7 +64644,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersionID
-    * * Display Name: Artifact Version
+    * * Display Name: Artifact Version ID
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
@@ -64353,7 +64672,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Pinned
+    * * Display Name: Is Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this message is pinned within the conversation for easy reference
@@ -64367,7 +64686,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent Message
+    * * Display Name: Parent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
     * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.
@@ -64381,7 +64700,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: AgentID
-    * * Display Name: Agent
+    * * Display Name: Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun
@@ -64414,7 +64733,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: SuggestedResponses
-    * * Display Name: Suggested Responses (Legacy)
+    * * Display Name: Suggested Responses
     * * 
     * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
     * * Description: DEPRECATED: Use ResponseForm, ActionableCommands, and AutomaticCommands instead. Legacy field for simple text-based suggested responses. Replaced in v2.118 by more powerful structured forms and commands system. Retained for historical data only.
@@ -64428,7 +64747,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run
+    * * Display Name: Test Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation detail to a test run if this message was part of a test conversation. Allows filtering and analyzing test-specific conversation turns.
@@ -64481,7 +64800,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: OriginalMessageChanged
-    * * Display Name: Message Modified
+    * * Display Name: Original Message Changed
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if the original message content was modified after initial creation. Set automatically by the server when the Message field is changed on update.
@@ -64495,7 +64814,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: AgentSessionID
-    * * Display Name: Agent Session
+    * * Display Name: Agent Session ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
     * * Description: Links this message to the AIAgentSession that was active when it was created. NULL for messages typed in standard text chat outside any live session. Lets the conversation timeline group a sessions messages into a single collapsible block.
@@ -64508,8 +64827,65 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     }
 
     /**
+    * * Field Name: TurnEndedAt
+    * * Display Name: Turn Ended At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Immutable timestamp marking when this turn ended/finalized. Set once on turn completion (do NOT read __mj_UpdatedAt for this — it moves on later edits). Paired with __mj_CreatedAt (turn start) and AIAgentSession.RecordingStartedAt (t0) to derive audio seek offsets.
+    */
+    get TurnEndedAt(): Date | null {
+        return this.Get('TurnEndedAt');
+    }
+    set TurnEndedAt(value: Date | null) {
+        this.Set('TurnEndedAt', value);
+    }
+
+    /**
+    * * Field Name: UtteranceStartMs
+    * * Display Name: Utterance Start (ms)
+    * * SQL Data Type: int
+    * * Description: Precise media-relative start of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise (fall back to __mj_CreatedAt - t0). Used by the evidence player for click-to-seek.
+    */
+    get UtteranceStartMs(): number | null {
+        return this.Get('UtteranceStartMs');
+    }
+    set UtteranceStartMs(value: number | null) {
+        this.Set('UtteranceStartMs', value);
+    }
+
+    /**
+    * * Field Name: UtteranceEndMs
+    * * Display Name: Utterance End (ms)
+    * * SQL Data Type: int
+    * * Description: Precise media-relative end of this turn, in integer milliseconds from the recording t0 (AIAgentSession.RecordingStartedAt). Populated only when the realtime driver supplies frame timing; NULL otherwise. Used by the evidence player for click-to-seek.
+    */
+    get UtteranceEndMs(): number | null {
+        return this.Get('UtteranceEndMs');
+    }
+    set UtteranceEndMs(value: number | null) {
+        this.Set('UtteranceEndMs', value);
+    }
+
+    /**
+    * * Field Name: MediaType
+    * * Display Name: Media Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Audio
+    *   * Text
+    *   * Video
+    * * Description: Modality of this turn's content: Text, Audio, or Video. Forward-compat so video turns reuse the same record shape when realtime models support it. NULL = text (legacy default).
+    */
+    get MediaType(): 'Audio' | 'Text' | 'Video' | null {
+        return this.Get('MediaType');
+    }
+    set MediaType(value: 'Audio' | 'Text' | 'Video' | null) {
+        this.Set('MediaType', value);
+    }
+
+    /**
     * * Field Name: Conversation
-    * * Display Name: Conversation Reference
+    * * Display Name: Conversation
     * * SQL Data Type: nvarchar(255)
     */
     get Conversation(): string | null {
@@ -64518,7 +64894,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: User
-    * * Display Name: User Reference
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string | null {
@@ -64527,7 +64903,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Artifact
-    * * Display Name: Artifact Reference
+    * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string | null {
@@ -64536,7 +64912,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: ArtifactVersion
-    * * Display Name: Artifact Version Reference
+    * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
     */
     get ArtifactVersion(): string | null {
@@ -64545,7 +64921,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Reference
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
     */
     get Parent(): string | null {
@@ -64554,7 +64930,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent Reference
+    * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -64563,7 +64939,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Reference
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -64724,7 +65100,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -64788,7 +65164,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsArchived
-    * * Display Name: Archived
+    * * Display Name: Is Archived
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation has been archived and should not appear in active lists.
@@ -64802,7 +65178,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity
+    * * Display Name: Linked Entity ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.
@@ -64829,7 +65205,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context
+    * * Display Name: Data Context ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
     */
@@ -64880,7 +65256,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment
+    * * Display Name: Environment ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -64894,7 +65270,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project
+    * * Display Name: Project ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -64907,7 +65283,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Pinned
+    * * Display Name: Is Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation is pinned to the top of lists
@@ -64921,7 +65297,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run
+    * * Display Name: Test Run ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.
@@ -64954,7 +65330,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application
+    * * Display Name: Application ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
     * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.
@@ -64968,7 +65344,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgentID
-    * * Display Name: Default Agent
+    * * Display Name: Default Agent ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.
@@ -64994,8 +65370,35 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: RecordingFileID
+    * * Display Name: Recording File ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.
+    */
+    get RecordingFileID(): string | null {
+        return this.Get('RecordingFileID');
+    }
+    set RecordingFileID(value: string | null) {
+        this.Set('RecordingFileID', value);
+    }
+
+    /**
+    * * Field Name: EgressID
+    * * Display Name: Egress ID
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.
+    */
+    get EgressID(): string | null {
+        return this.Get('EgressID');
+    }
+    set EgressID(value: string | null) {
+        this.Set('EgressID', value);
+    }
+
+    /**
     * * Field Name: User
-    * * Display Name: User Name
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -65004,7 +65407,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity Name
+    * * Display Name: Linked Entity
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -65013,7 +65416,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContext
-    * * Display Name: Data Context Name
+    * * Display Name: Data Context
     * * SQL Data Type: nvarchar(255)
     */
     get DataContext(): string | null {
@@ -65022,7 +65425,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment Name
+    * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -65031,7 +65434,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project Name
+    * * Display Name: Project
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -65040,7 +65443,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -65049,7 +65452,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Application
-    * * Display Name: Application Name
+    * * Display Name: Application
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string | null {
@@ -65058,11 +65461,20 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgent
-    * * Display Name: Default Agent Name
+    * * Display Name: Default Agent
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultAgent(): string | null {
         return this.Get('DefaultAgent');
+    }
+
+    /**
+    * * Field Name: RecordingFile
+    * * Display Name: Recording File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get RecordingFile(): string | null {
+        return this.Get('RecordingFile');
     }
 }
 
@@ -67915,7 +68327,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: DuplicateRunDetailID
-    * * Display Name: Duplicate Run Detail ID
+    * * Display Name: Duplicate Run Detail
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Duplicate Run Details (vwDuplicateRunDetails.ID)
     */
@@ -67946,7 +68358,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: MatchRecordID
-    * * Display Name: Match Record ID
+    * * Display Name: Matched Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The ID of the record identified as a potential duplicate match.
     */
@@ -68020,7 +68432,7 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLogID
-    * * Display Name: Record Merge Log ID
+    * * Display Name: Merge Log
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Merge Logs (vwRecordMergeLogs.ID)
     */
@@ -68098,8 +68510,106 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
     }
 
     /**
+    * * Field Name: AIAgentRunID
+    * * Display Name: AI Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: When the match was reasoned by an AI Agent (ReasoningMode = Agent), the AIAgentRun that produced the recommendation. Full audit trail; NULL when no agent ran (gated out, or Prompt mode, or reasoning disabled).
+    */
+    get AIAgentRunID(): string | null {
+        return this.Get('AIAgentRunID');
+    }
+    set AIAgentRunID(value: string | null) {
+        this.Set('AIAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: AIPromptRunID
+    * * Display Name: AI Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: When the match was reasoned by a single-shot AI Prompt (ReasoningMode = Prompt, the default), the AIPromptRun that produced the recommendation. Full audit trail; NULL when no prompt ran.
+    */
+    get AIPromptRunID(): string | null {
+        return this.Get('AIPromptRunID');
+    }
+    set AIPromptRunID(value: string | null) {
+        this.Set('AIPromptRunID', value);
+    }
+
+    /**
+    * * Field Name: LLMRecommendation
+    * * Display Name: LLM Recommendation
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Merge
+    *   * NotDuplicate
+    *   * Uncertain
+    * * Description: The LLM's recommendation for this candidate match: Merge, NotDuplicate, or Uncertain. Annotates the vector-derived candidate; NULL when reasoning did not run for this match.
+    */
+    get LLMRecommendation(): 'Merge' | 'NotDuplicate' | 'Uncertain' | null {
+        return this.Get('LLMRecommendation');
+    }
+    set LLMRecommendation(value: 'Merge' | 'NotDuplicate' | 'Uncertain' | null) {
+        this.Set('LLMRecommendation', value);
+    }
+
+    /**
+    * * Field Name: LLMConfidence
+    * * Display Name: LLM Confidence
+    * * SQL Data Type: numeric(12, 11)
+    * * Description: Reasoning-adjusted confidence (0-1) that this is a true duplicate. Distinct from MatchProbability (the vector/RRF score); the LLM strengthens or weakens the vector signal rather than replacing it.
+    */
+    get LLMConfidence(): number | null {
+        return this.Get('LLMConfidence');
+    }
+    set LLMConfidence(value: number | null) {
+        this.Set('LLMConfidence', value);
+    }
+
+    /**
+    * * Field Name: LLMReasoning
+    * * Display Name: LLM Reasoning
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable rationale for the LLM's recommendation. Surfaced in the review UI and powers the transparency / disagreement explanation.
+    */
+    get LLMReasoning(): string | null {
+        return this.Get('LLMReasoning');
+    }
+    set LLMReasoning(value: string | null) {
+        this.Set('LLMReasoning', value);
+    }
+
+    /**
+    * * Field Name: LLMProposedSurvivorRecordID
+    * * Display Name: Proposed Survivor Record
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The record the LLM proposes as the surviving record for this matched set, as a URL-segment composite key. Preloads the comparison panel; the user can override.
+    */
+    get LLMProposedSurvivorRecordID(): string | null {
+        return this.Get('LLMProposedSurvivorRecordID');
+    }
+    set LLMProposedSurvivorRecordID(value: string | null) {
+        this.Set('LLMProposedSurvivorRecordID', value);
+    }
+
+    /**
+    * * Field Name: LLMProposedFieldMap
+    * * Display Name: Proposed Field Map
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON of the LLM's proposed per-field survivor choices for the matched set. Resolved to literal {FieldName, Value} entries (the existing MergeRecords FieldMap contract) and applied to the surviving record before the transactional merge; the user can override per field.
+    */
+    get LLMProposedFieldMap(): string | null {
+        return this.Get('LLMProposedFieldMap');
+    }
+    set LLMProposedFieldMap(value: string | null) {
+        this.Set('LLMProposedFieldMap', value);
+    }
+
+    /**
     * * Field Name: DuplicateRunDetail
-    * * Display Name: Duplicate Run Detail
+    * * Display Name: Duplicate Run Detail Object
     * * SQL Data Type: nvarchar(500)
     */
     get DuplicateRunDetail(): string {
@@ -68108,11 +68618,29 @@ export class MJDuplicateRunDetailMatchEntity extends BaseEntity<MJDuplicateRunDe
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Record Merge Log
+    * * Display Name: Merge Log Object
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string | null {
         return this.Get('RecordMergeLog');
+    }
+
+    /**
+    * * Field Name: AIAgentRun
+    * * Display Name: AI Agent Run Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIAgentRun(): string | null {
+        return this.Get('AIAgentRun');
+    }
+
+    /**
+    * * Field Name: AIPromptRun
+    * * Display Name: AI Prompt Run Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AIPromptRun(): string | null {
+        return this.Get('AIPromptRun');
     }
 }
 
@@ -71149,6 +71677,19 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
     }
 
     /**
+    * * Field Name: RuntimeUXDriverClass
+    * * Display Name: Runtime UX Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional class name of a registered runtime-UX driver component (a BaseEntityActionRuntimeUX subclass resolved via MJGlobal.ClassFactory) that owns this invocation's interaction — parameter collection, dry-run preview, confirmation, and progress. NULL invokes the action directly with no custom UX. This lets any action opt into a richer, reusable runtime experience while the grid/toolbar stays operation-agnostic.
+    */
+    get RuntimeUXDriverClass(): string | null {
+        return this.Get('RuntimeUXDriverClass');
+    }
+    set RuntimeUXDriverClass(value: string | null) {
+        this.Set('RuntimeUXDriverClass', value);
+    }
+
+    /**
     * * Field Name: EntityAction
     * * Display Name: Entity Action Name
     * * SQL Data Type: nvarchar(425)
@@ -72577,8 +73118,100 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     }
 
     /**
+    * * Field Name: EnableLLMReasoning
+    * * Display Name: Enable LLM Reasoning
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Master switch for the LLM reasoning layer on this entity. When 0 (default), duplicate detection runs the existing vector-only path unchanged and the reasoning columns/AutomationLevel are ignored. When 1, candidates above ReasoningThreshold are reasoned over.
+    */
+    get EnableLLMReasoning(): boolean {
+        return this.Get('EnableLLMReasoning');
+    }
+    set EnableLLMReasoning(value: boolean) {
+        this.Set('EnableLLMReasoning', value);
+    }
+
+    /**
+    * * Field Name: ReasoningMode
+    * * Display Name: Reasoning Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Prompt
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Prompt
+    * * Description: Which reasoning provider runs for this entity. Prompt (default) = a single-shot AI Prompt (cheap/fast); Agent = an AI Agent with memory + context-exploration tools (for heavy entities needing deeper reasoning). Both consume one shared core instruction set.
+    */
+    get ReasoningMode(): 'Agent' | 'Prompt' {
+        return this.Get('ReasoningMode');
+    }
+    set ReasoningMode(value: 'Agent' | 'Prompt') {
+        this.Set('ReasoningMode', value);
+    }
+
+    /**
+    * * Field Name: ReasoningThreshold
+    * * Display Name: Reasoning Threshold
+    * * SQL Data Type: numeric(12, 11)
+    * * Description: Vector-score gate (0-1): reasoning runs once per source record's matched set only when the set's top MatchProbability is at or above this value. Controls cost and reasoning-log volume at scale. NULL falls back to engine/Configuration defaults.
+    */
+    get ReasoningThreshold(): number | null {
+        return this.Get('ReasoningThreshold');
+    }
+    set ReasoningThreshold(value: number | null) {
+        this.Set('ReasoningThreshold', value);
+    }
+
+    /**
+    * * Field Name: ReasoningPromptID
+    * * Display Name: Reasoning Prompt
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+    * * Description: The AI Prompt used when ReasoningMode = Prompt. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution" prompt. The prompt's own model configuration is the per-entity model knob for the prompt path.
+    */
+    get ReasoningPromptID(): string | null {
+        return this.Get('ReasoningPromptID');
+    }
+    set ReasoningPromptID(value: string | null) {
+        this.Set('ReasoningPromptID', value);
+    }
+
+    /**
+    * * Field Name: ReasoningAgentID
+    * * Display Name: Reasoning Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: The AI Agent used when ReasoningMode = Agent. Defaults (resolved in code/metadata) to the seeded "Duplicate Resolution Agent". Unlocks memory-note injection and context-exploration tools.
+    */
+    get ReasoningAgentID(): string | null {
+        return this.Get('ReasoningAgentID');
+    }
+    set ReasoningAgentID(value: string | null) {
+        this.Set('ReasoningAgentID', value);
+    }
+
+    /**
+    * * Field Name: AutomationLevel
+    * * Display Name: Automation Level
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: ReviewAll
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AutoMergeAboveAbsolute
+    *   * LLMGated
+    *   * ReviewAll
+    * * Description: Graduated human-in-the-loop level, consulted only when EnableLLMReasoning = 1. ReviewAll = every proposed merge goes to human review; LLMGated = only LLM "Merge" recommendations surface (NotDuplicate suppressed but logged); AutoMergeAboveAbsolute = at/above AbsoluteMatchThreshold AND LLM "Merge", auto-execute (still honoring the per-merge AllowRecordMerge guard).
+    */
+    get AutomationLevel(): 'AutoMergeAboveAbsolute' | 'LLMGated' | 'ReviewAll' {
+        return this.Get('AutomationLevel');
+    }
+    set AutomationLevel(value: 'AutoMergeAboveAbsolute' | 'LLMGated' | 'ReviewAll') {
+        this.Set('AutomationLevel', value);
+    }
+
+    /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string {
@@ -72628,6 +73261,24 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     */
     get VectorIndex(): string | null {
         return this.Get('VectorIndex');
+    }
+
+    /**
+    * * Field Name: ReasoningPrompt
+    * * Display Name: Reasoning Prompt Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ReasoningPrompt(): string | null {
+        return this.Get('ReasoningPrompt');
+    }
+
+    /**
+    * * Field Name: ReasoningAgent
+    * * Display Name: Reasoning Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ReasoningAgent(): string | null {
+        return this.Get('ReasoningAgent');
     }
 }
 
@@ -84966,6 +85617,19 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
     }
 
     /**
+    * * Field Name: Subpath
+    * * Display Name: Subpath
+    * * SQL Data Type: nvarchar(500)
+    * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.
+    */
+    get Subpath(): string | null {
+        return this.Get('Subpath');
+    }
+    set Subpath(value: string | null) {
+        this.Set('Subpath', value);
+    }
+
+    /**
     * * Field Name: InstalledByUser
     * * Display Name: Installed By User
     * * SQL Data Type: nvarchar(100)
@@ -86055,7 +86719,7 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
 
     /**
     * * Field Name: Configuration
-    * * Display Name: Configuration
+    * * Display Name: Configuration JSON
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON snapshot of the effective configuration for this run
     */
@@ -86111,6 +86775,20 @@ export class MJProcessRunEntity extends BaseEntity<MJProcessRunEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: DryRun
+    * * Display Name: Is Dry Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this run was a dry-run (compute-only) preview: the per-record diffs were computed and persisted as Process Run Details, but no changes were written back to the target records. When 0, the run applied its changes.
+    */
+    get DryRun(): boolean {
+        return this.Get('DryRun');
+    }
+    set DryRun(value: boolean) {
+        this.Set('DryRun', value);
     }
 
     /**
@@ -91035,13 +91713,14 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     * * Possible Values 
     *   * Action
     *   * Agent
+    *   * FieldRules
     *   * Infer
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'Infer' {
+    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'Infer') {
+    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer') {
         this.Set('WorkType', value);
     }
 
@@ -91355,8 +92034,21 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     }
 
     /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration for the process's work, used by work types that need structured config beyond Input/Output mappings. For WorkType='FieldRules' this holds the serialized FieldRuleSet (the rules applied to each record). NULL for work types that do not use it.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
     * * Field Name: Category
-    * * Display Name: Category (Display)
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
     */
     get Category(): string | null {
@@ -91365,7 +92057,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Entity
-    * * Display Name: Entity (Display)
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -91374,7 +92066,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Action
-    * * Display Name: Action (Display)
+    * * Display Name: Action Name
     * * SQL Data Type: nvarchar(425)
     */
     get Action(): string | null {
@@ -91383,7 +92075,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Agent
-    * * Display Name: Agent (Display)
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -91392,7 +92084,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: Prompt
-    * * Display Name: Prompt (Display)
+    * * Display Name: Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get Prompt(): string | null {
@@ -91401,7 +92093,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScopeView
-    * * Display Name: Scope View (Display)
+    * * Display Name: Scope View Name
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeView(): string | null {
@@ -91410,7 +92102,7 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
 
     /**
     * * Field Name: ScopeList
-    * * Display Name: Scope List (Display)
+    * * Display Name: Scope List Name
     * * SQL Data Type: nvarchar(100)
     */
     get ScopeList(): string | null {
@@ -91543,6 +92235,20 @@ export class MJRemoteOperationCategoryEntity extends BaseEntity<MJRemoteOperatio
 
 
 /**
+ * One library that an AI-authored Remote Operation body imports. CodeGen turns the `LibrariesObject` array
+ * (the strongly-typed accessor bound to `MJ: Remote Operations.Libraries` via JSONType metadata) into one
+ * `import { ...ItemsUsed } from "Library"` per entry at the top of the generated `remote_operations.ts`.
+ * The always-available default libraries (RunView / Metadata / RunQuery from @memberjunction/core) are NOT
+ * listed here — they are emitted for every operation automatically.
+ */
+export interface MJRemoteOperationEntity_RemoteOperationLibrary {
+    /** The npm package to import from, e.g. "@memberjunction/ai-prompts". */
+    Library: string;
+    /** The exported items used from that package, e.g. ["AIPromptRunner"]. */
+    ItemsUsed: string[];
+}
+
+/**
  * MJ: Remote Operations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: RemoteOperation
@@ -91666,7 +92372,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: InputTypeIsArray
-    * * Display Name: Is Input Array
+    * * Display Name: Input Is Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the input type is emitted as an array (TInput[])
@@ -91706,7 +92412,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: OutputTypeIsArray
-    * * Display Name: Is Output Array
+    * * Display Name: Output Is Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When 1, the output type is emitted as an array (TOutput[])
@@ -91784,7 +92490,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: Code
-    * * Display Name: Implementation Code
+    * * Display Name: Code
     * * SQL Data Type: nvarchar(MAX)
     * * Description: The AI-generated implementation body (when GenerationType=AI); regenerated only when Description changes
     */
@@ -91797,7 +92503,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovalStatus
-    * * Display Name: Approval Status
+    * * Display Name: Code Approval Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
     * * Value List Type: List
@@ -91816,7 +92522,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUserID
-    * * Display Name: Approved By User ID
+    * * Display Name: Code Approved By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Foreign key to the user who approved the generated code
@@ -91830,7 +92536,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedAt
-    * * Display Name: Approved At
+    * * Display Name: Code Approved At
     * * SQL Data Type: datetimeoffset
     * * Description: When the generated code was approved
     */
@@ -91933,6 +92639,68 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
     }
 
     /**
+    * * Field Name: CodeLocked
+    * * Display Name: Code Locked
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the AI-generated Code is frozen and Save() will not regenerate it even if Description changes (the Generated-Actions CodeLocked analog). Default 0.
+    */
+    get CodeLocked(): boolean {
+        return this.Get('CodeLocked');
+    }
+    set CodeLocked(value: boolean) {
+        this.Set('CodeLocked', value);
+    }
+
+    /**
+    * * Field Name: CodeComments
+    * * Display Name: Code Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The model's explanation / comments for the AI-generated Code (populated alongside Code when GenerationType=AI). Human-facing review aid.
+    */
+    get CodeComments(): string | null {
+        return this.Get('CodeComments');
+    }
+    set CodeComments(value: string | null) {
+        this.Set('CodeComments', value);
+    }
+
+    /**
+    * * Field Name: Libraries
+    * * Display Name: Libraries
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJRemoteOperationEntity_RemoteOperationLibrary>
+    * * Description: JSON array of the libraries the generated body imports: [{ "Library": "@memberjunction/ai-prompts", "ItemsUsed": ["AIPromptRunner"] }, ...]. Bound to the RemoteOperationLibrary JSONType via metadata sync so CodeGen emits a typed LibrariesObject accessor; CodeGen uses it to emit the imports at the top of the generated remote_operations.ts. NULL/empty = only the default always-available libraries are imported.
+    */
+    get Libraries(): string | null {
+        return this.Get('Libraries');
+    }
+    set Libraries(value: string | null) {
+        this.Set('Libraries', value);
+    }
+
+    private _LibrariesObject_cached: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null | undefined = undefined;
+    private _LibrariesObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for Libraries — returns parsed JSON as Array<MJRemoteOperationEntity_RemoteOperationLibrary>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get LibrariesObject(): Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null {
+        const raw = this.Libraries;
+        if (raw !== this._LibrariesObject_lastRaw) {
+            this._LibrariesObject_cached = raw ? JSON.parse(raw) : null;
+            this._LibrariesObject_lastRaw = raw;
+        }
+        return this._LibrariesObject_cached!;
+    }
+    set LibrariesObject(value: Array<MJRemoteOperationEntity_RemoteOperationLibrary> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Libraries = raw;
+        this._LibrariesObject_cached = value;
+        this._LibrariesObject_lastRaw = raw;
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
@@ -91943,7 +92711,7 @@ export class MJRemoteOperationEntity extends BaseEntity<MJRemoteOperationEntityT
 
     /**
     * * Field Name: CodeApprovedByUser
-    * * Display Name: Approved By User
+    * * Display Name: Code Approved By User
     * * SQL Data Type: nvarchar(100)
     */
     get CodeApprovedByUser(): string | null {

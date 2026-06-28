@@ -1,0 +1,37 @@
+[
+  {
+    "_comments": [
+      "Binds JSONType metadata to MJ: Remote Operations.Libraries so CodeGen emits a typed `LibrariesObject`",
+      "accessor conforming to Array<RemoteOperationLibrary>. Apply AFTER the v5.43",
+      "Remote_Operation_AI_Authoring migration + CodeGen have created the Libraries field on the",
+      "'MJ: Remote Operations' entity. If CodeGen names the entity/field differently, update the @lookup below."
+    ],
+    "fields": {
+      "Name": "MJ: Remote Operations"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "RemoteOperationLibrary",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/RemoteOperationLibrary.ts"
+          },
+          "_comments": [
+            "Libraries field — strongly-typed array of { Library, ItemsUsed[] } the AI-authored body imports"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Remote Operations&Name=Libraries"
+          },
+          "sync": {
+            "lastModified": "2026-06-26T21:32:07.228Z",
+            "checksum": "d0d313ffc604eb5134f0a8f34013f97bc70099bc25e0c7888b04e785d6c78151"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Remote Operations"
+    }
+  }
+]

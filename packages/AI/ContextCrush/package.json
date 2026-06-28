@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/context-crush",
   "type": "module",
-  "version": "5.42.0",
+  "version": "5.43.0",
   "description": "Dependency-light token-optimization primitives: structural JSON compression, cache-aligned prompt prefixes, and AST-aware code reduction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -242,7 +242,7 @@
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
       "Description": "Simple Agent Demo! This agent demonstrates the basic functionality of a flow agent, which follows a deterministic pathway",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
-      "Status": "Disabled",
+      "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-chart-diagram"
@@ -258,10 +258,10 @@
             "StartingStep": 0,
             "StepType": "ForEach",
             "LoopBodyType": "Action",
-            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "Configuration": {
               "type": "ForEach",
-              "collectionPath": "payload.countArray",
+              "collectionPath": "static:[1,2,3,4,5]",
               "itemVariable": "number",
               "indexVariable": "i",
               "maxIterations": 5,
@@ -283,8 +283,8 @@
             "ID": "DBA4B3D9-19A3-4ECE-9F35-BC1B127CD045"
           },
           "sync": {
-            "lastModified": "2026-02-13T21:09:22.735Z",
-            "checksum": "a3b8aa5cc20d0ffe0f36a6b5a3006fa805eac46af017f87a0d6463f08c3dd878"
+            "lastModified": "2026-06-26T21:32:06.375Z",
+            "checksum": "adb170417851637ecd5936ca6a6ed0f91cd6f749941c33916c5a2841c3338d9b"
           }
         },
         {
@@ -300,8 +300,7 @@
             },
             "ActionOutputMapping": {
               "currentTemp": "currentTemperature",
-              "currentConditions": "weatherConditions",
-              "countArray": "[1,2,3,4,5]"
+              "currentConditions": "weatherConditions"
             },
             "Status": "Active",
             "PositionX": -1620,
@@ -333,8 +332,8 @@
             "ID": "5B5A74F8-33A6-48ED-A0AF-0E31CE3C4AD2"
           },
           "sync": {
-            "lastModified": "2026-02-13T21:09:22.737Z",
-            "checksum": "844f413289fff2dccc018aa9c4450d168c4845a0949aa1f04b4b8973d993d952"
+            "lastModified": "2026-06-26T21:32:06.347Z",
+            "checksum": "510f30665ffa69ee861120464309aed9f6a64202c330e32f9d4d2d66388b6993"
           }
         },
         {
@@ -344,13 +343,12 @@
             "Description": "Perform a web search as an alternative step in the flow. See why NVIDIA stock price is lower than $500.",
             "StartingStep": 0,
             "StepType": "Action",
-            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "ActionInputMapping": {
               "SearchTerms": "NVIDIA stock decline reasons"
             },
             "ActionOutputMapping": {
-              "SearchResults": "webSearchResults",
-              "countArray": "[1,2,3,4,5]"
+              "SearchResults": "webSearchResults"
             },
             "Status": "Active",
             "PositionX": -860,
@@ -382,8 +380,8 @@
             "ID": "F28499A1-0B28-4AE5-B695-7F4B48C38C20"
           },
           "sync": {
-            "lastModified": "2026-02-13T21:09:22.738Z",
-            "checksum": "27fa0a72f42afd5cfe069e30a01e710ae36673eee254e08bd4f6f8c909d3491d"
+            "lastModified": "2026-06-26T21:32:06.361Z",
+            "checksum": "b3d169e312c95ecb0d3791eb3fdfa0f661ead1f3e3a7b489fb67dd72f9afdc31"
           }
         },
         {
@@ -526,8 +524,8 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:48.467Z",
-      "checksum": "4c73600f9765ff32c2c9deccf4df7c6b0806ea6b959ae475c20e6896425bed24"
+      "lastModified": "2026-06-26T21:32:06.300Z",
+      "checksum": "2265f074256e4a0fc80212bd4c549cbeaa9f6893e2dc3132d75fd509fe985a4c"
     }
   },
   {

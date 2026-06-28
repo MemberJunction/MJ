@@ -360,6 +360,59 @@ describe('ConversationEngine', () => {
     });
 
     // ========================================================================
+    // ENSURE CONVERSATION LOADED (server-created conversation reactivity)
+    // ========================================================================
+    describe('EnsureConversationLoaded', () => {
+        it('returns the cached entity without a load when the conversation is already present', async () => {
+            runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1' })] });
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(1);
+
+            mockConversationEntity.Load.mockClear();
+            const result = await engine.EnsureConversationLoaded('c1', contextUser);
+
+            expect(result).toBeDefined();
+            // Already cached → no single-row Load round-trip
+            expect(mockConversationEntity.Load).not.toHaveBeenCalled();
+            expect(engine.Conversations).toHaveLength(1);
+        });
+
+        it('loads the single row and prepends it, emitting via Conversations$ (the server-created case)', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser);
+            expect(engine.Conversations).toHaveLength(0);
+
+            // The single-row Load hydrates the shared mock entity as the new conversation
+            mockConversationEntity.ID = 'cNew';
+            mockConversationEntity.IsArchived = false;
+            mockConversationEntity.Load.mockResolvedValue(true);
+
+            const emitted: unknown[][] = [];
+            const sub = engine.Conversations$.subscribe(v => emitted.push(v));
+
+            const result = await engine.EnsureConversationLoaded('cNew', contextUser);
+
+            expect(result).toBeDefined();
+            expect(mockConversationEntity.Load).toHaveBeenCalledWith('cNew');
+            expect(engine.Conversations).toHaveLength(1);
+            // A reactive emission landed (the sidebar list subscribes to exactly this)
+            expect(emitted[emitted.length - 1]).toHaveLength(1);
+            sub.unsubscribe();
+        });
+
+        it('returns null and does not touch the list when the row cannot be loaded', async () => {
+            runViewResultQueue.push({ Success: true, Results: [] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            mockConversationEntity.Load.mockResolvedValue(false);
+
+            const result = await engine.EnsureConversationLoaded('missing', contextUser);
+            expect(result).toBeNull();
+            expect(engine.Conversations).toHaveLength(0);
+        });
+    });
+
+    // ========================================================================
     // DELETE CONVERSATION
     // ========================================================================
     describe('DeleteConversation', () => {

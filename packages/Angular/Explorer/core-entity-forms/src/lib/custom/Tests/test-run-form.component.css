@@ -1273,50 +1273,6 @@
 }
 
 /* ===========================
-   Empty States
-   =========================== */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 24px;
-  text-align: center;
-  background: var(--test-surface);
-  border-radius: var(--test-radius-lg);
-}
-
-.empty-icon {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--test-bg);
-  border-radius: 50%;
-  margin-bottom: 20px;
-}
-
-.empty-icon i {
-  font-size: 36px;
-  color: var(--test-text-muted);
-}
-
-.empty-state h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--test-text);
-}
-
-.empty-state p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--test-text-secondary);
-  max-width: 300px;
-}
-
-/* ===========================
    Keyboard Shortcuts Help
    =========================== */
 .shortcuts-hint {
@@ -1591,19 +1547,6 @@
 
   .log-actions button {
     flex: 1;
-  }
-
-  .empty-state {
-    padding: 40px 20px;
-  }
-
-  .empty-icon {
-    width: 64px;
-    height: 64px;
-  }
-
-  .empty-icon i {
-    font-size: 28px;
   }
 }
 

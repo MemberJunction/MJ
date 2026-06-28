@@ -186,10 +186,8 @@
                     </div>
                   }
                   @if (TopUsedKeys.length === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-key"></i>
-                      <span>No active keys with recent usage</span>
-                    </div>
+                    <mj-empty-state Size="compact" Icon="fa-solid fa-key"
+                      Title="No active keys with recent usage" />
                   }
                 </div>
               </div>
@@ -248,10 +246,8 @@
                     </div>
                   }
                   @if (ScopeStats.length === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-shield-halved"></i>
-                      <span>No scopes configured</span>
-                    </div>
+                    <mj-empty-state Size="compact" Icon="fa-solid fa-shield-halved"
+                      Title="No scopes configured" />
                   }
                 </div>
               </div>
@@ -288,10 +284,8 @@
                     </div>
                   }
                   @if (RecentActivity.length === 0) {
-                    <div class="empty-state">
-                      <i class="fa-solid fa-inbox"></i>
-                      <span>No recent activity</span>
-                    </div>
+                    <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
+                      Title="No recent activity" />
                   }
                 </div>
               </div>

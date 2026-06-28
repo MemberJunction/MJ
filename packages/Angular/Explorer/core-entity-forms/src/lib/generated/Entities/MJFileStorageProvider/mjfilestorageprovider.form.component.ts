@@ -23,8 +23,9 @@ export class MJFileStorageProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJFiles', sectionName: 'Files', isExpanded: false },
             { sectionKey: 'mJFileStorageAccounts', sectionName: 'File Storage Accounts', isExpanded: false },
+            { sectionKey: 'mJAIAgentsRecordingStorageProviderID', sectionName: 'AI Agents (Recording Storage Provider ID)', isExpanded: false },
             { sectionKey: 'mJAIConfigurations', sectionName: 'AI Configurations', isExpanded: false },
-            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
+            { sectionKey: 'mJAIAgentsAttachmentStorageProviderID', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

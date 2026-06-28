@@ -28,6 +28,11 @@ export interface BridgeRoomTranscriptSinkOptions {
     ApplicationScope?: ConversationApplicationScope;
     /** Optional owning application id (e.g. the Meet app) so its surface can list its rooms. */
     ApplicationID?: string;
+    /**
+     * Optional owning application NAME (e.g. `'Meet'`) — resolved to an id lazily on first use (cached), so
+     * the binding site doesn't hardcode a seed GUID. Ignored when {@link ApplicationID} is supplied.
+     */
+    ApplicationName?: string;
 }
 
 /**
@@ -70,6 +75,9 @@ const CONVERSATION_DETAIL_ENTITY = 'MJ: Conversation Details';
  */
 export function CreateBridgeRoomTranscriptSink(options: BridgeRoomTranscriptSinkOptions): BridgeRoomTranscriptSink {
     const scope: ConversationApplicationScope = options.ApplicationScope ?? 'Application';
+    /** Lazily-resolved owning application id (explicit id wins; else resolved-by-name once and cached). */
+    let resolvedApplicationID: string | undefined = options.ApplicationID;
+    let applicationResolved = !!options.ApplicationID || !options.ApplicationName;
     /** roomKey(lower) → resolved ConversationID (populated once get-or-create settles). */
     const roomToConversation = new Map<string, string>();
     /** roomKey(lower) → in-flight get-or-create promise (dedupes concurrent first lines for a room). */
@@ -81,7 +89,12 @@ export function CreateBridgeRoomTranscriptSink(options: BridgeRoomTranscriptSink
         if (!contextUser || !provider) {
             return; // a server-side write needs a user + provider; nothing to do without them
         }
-        const conversationID = await ensureRoomConversation(line.RoomKey, options.ConversationType, scope, options.ApplicationID, roomToConversation, ensureInFlight, contextUser, provider);
+        // Resolve the owning application by name once (e.g. 'Meet' → its id) so its surface can list the rooms.
+        if (!applicationResolved) {
+            applicationResolved = true; // attempt once; a miss just leaves it unlinked (still scoped-out of chat)
+            resolvedApplicationID = (await resolveApplicationIdByName(options.ApplicationName!, contextUser, provider)) ?? undefined;
+        }
+        const conversationID = await ensureRoomConversation(line.RoomKey, options.ConversationType, scope, resolvedApplicationID, roomToConversation, ensureInFlight, contextUser, provider);
         if (!conversationID) {
             return;
         }
@@ -189,6 +202,27 @@ async function writeTranscriptDetail(
     if (!(await detail.Save())) {
         LogError(`CreateBridgeRoomTranscriptSink: failed to write transcript detail: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
     }
+}
+
+/** Resolves an `MJ: Applications` id by Name (e.g. `'Meet'`). Returns `null` if absent (room stays unlinked). */
+async function resolveApplicationIdByName(
+    name: string,
+    contextUser: UserInfo,
+    provider: IMetadataProvider,
+): Promise<string | null> {
+    const rv = new RunView();
+    const result = await rv.RunView<{ ID: string }>({
+        EntityName: 'MJ: Applications',
+        ExtraFilter: `Name='${escapeSql(name)}'`,
+        Fields: ['ID'],
+        MaxRows: 1,
+        ResultType: 'simple',
+    }, contextUser);
+    if (result.Success && result.Results.length > 0) {
+        return result.Results[0].ID;
+    }
+    LogStatus(`CreateBridgeRoomTranscriptSink: application '${name}' not found — room transcripts stay unlinked (still scoped out of normal chat).`);
+    return null;
 }
 
 /** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */

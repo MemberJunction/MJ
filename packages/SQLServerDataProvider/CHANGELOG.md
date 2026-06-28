@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.43.0
+
+### Patch Changes
+
+- 4e05350: Save-capture `@ResultTable` now matches the base view's **actual** column order (read from `sys.columns` at `Config`, cached per entity) instead of inferring it from `EntityField` metadata.
+
+  The save wrapper captures the row via a **positional** `INSERT INTO @ResultTable EXEC <sp>` where the sp returns `SELECT * FROM <BaseView>`; SQL Server maps that result set by ordinal, so `@ResultTable` must be declared in the view's physical column order. The prior heuristics (≤5.40.1 `EntityField.Sequence` order; 5.42 non-virtual-then-virtual partition) only matched canonical CodeGen views. For a manually-maintained view that places a base column **after** the virtual/join columns, the declared order diverged from the view and values mis-routed into wrong-typed slots — a `nvarchar→bit`/`nvarchar→uniqueidentifier` type-conversion error that failed the save and rolled back the transaction.
+
+  Reading the view directly makes the column order authoritative by construction — correct for canonical, computed-column, and hand-maintained views alike. Output is byte-identical to the 5.42 partition for canonical views (a no-op for the overwhelming majority); falls back to the partition when a view is uncached or has a column with no matching field.
+
+- Updated dependencies [40eb4e0]
+- Updated dependencies [9f6aa87]
+- Updated dependencies [b98366b]
+- Updated dependencies [9200b13]
+- Updated dependencies [ad8d8f1]
+- Updated dependencies [a4cdfb0]
+  - @memberjunction/core@5.43.0
+  - @memberjunction/global@5.43.0
+  - @memberjunction/actions@5.43.0
+  - @memberjunction/ai@5.43.0
+  - @memberjunction/sql-dialect@5.43.0
+  - @memberjunction/core-entities@5.43.0
+  - @memberjunction/aiengine@5.43.0
+  - @memberjunction/ai-vectordb@5.43.0
+  - @memberjunction/ai-vector-dupe@5.43.0
+  - @memberjunction/actions-base@5.43.0
+  - @memberjunction/encryption@5.43.0
+  - @memberjunction/generic-database-provider@5.43.0
+  - @memberjunction/queue@5.43.0
+  - @memberjunction/query-processor@5.43.0
+  - @memberjunction/ai-provider-bundle@5.43.0
+
 ## 5.42.0
 
 ### Patch Changes

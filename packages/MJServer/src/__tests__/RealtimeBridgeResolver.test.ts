@@ -33,6 +33,13 @@ vi.mock('@memberjunction/ai-agents', () => ({
   CreateBridgeRoomTranscriptSink: vi.fn(),
 }));
 
+// Mock the meeting-recording registration so the thin resolver is tested in isolation (no MJStorage /
+// core-entities graph). Its own behavior is covered by meetingRecordingRegistration.test.ts.
+vi.mock('../resolvers/meetingRecordingRegistration', () => ({
+  registerMeetingRecordingFile: vi.fn(async () => ({ Success: true, RecordingFileID: 'file-1', ConversationID: 'conv-1' })),
+  correlateRecordingStart: vi.fn(async () => true),
+}));
+
 import { RealtimeBridgeResolver, MintLiveKitClientTokenInput, LiveKitRecordingInput } from '../resolvers/RealtimeBridgeResolver';
 import type { AppContext } from '../types.js';
 
@@ -83,10 +90,12 @@ describe('RealtimeBridgeResolver', () => {
       expect(result.Status).toBe('EGRESS_ACTIVE');
     });
 
-    it('stops a recording and maps the result', async () => {
+    it('stops a recording, registers the MP4, and returns the RecordingFileID', async () => {
       const result = await resolver.StopLiveKitRecording('eg-1', ctx);
       expect(result.Success).toBe(true);
       expect(result.Status).toBe('EGRESS_COMPLETE');
+      // The registration mock returns a file id, which the resolver surfaces on the result.
+      expect(result.RecordingFileID).toBe('file-1');
     });
 
     it('requires an authenticated user to record', async () => {

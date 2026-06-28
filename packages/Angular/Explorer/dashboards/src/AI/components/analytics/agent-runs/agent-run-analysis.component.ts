@@ -146,7 +146,8 @@ const COST_COLORS = [
                 </div>
                 <div class="panel-body">
                     @if (CostAttributionRows.length === 0) {
-                        <div class="panel-empty">No agent cost data for selected period</div>
+                        <mj-empty-state Size="compact" Variant="empty" Icon="fa-solid fa-chart-bar"
+                            Title="No agent cost data for selected period" />
                     }
                     @for (row of CostAttributionRows; track row.AgentID) {
                         <div class="attribution-row">
@@ -314,13 +315,6 @@ const COST_COLORS = [
 
         .panel-body {
             padding: 16px 18px;
-        }
-
-        .panel-empty {
-            text-align: center;
-            padding: 24px;
-            color: var(--mj-text-disabled);
-            font-size: 13px;
         }
 
         /* ── Cost Attribution ── */

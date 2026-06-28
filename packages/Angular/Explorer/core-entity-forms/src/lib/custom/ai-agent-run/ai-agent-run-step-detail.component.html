@@ -124,18 +124,18 @@
                     [treatNullAsUndefined]="true">
                   </mj-deep-diff>
                 } @else if (stepScratchpadOutput) {
-                  <div class="scratchpad-empty-state">
-                    <i class="fa-solid fa-circle-plus"></i>
-                    <span>Scratchpad created in this step (no prior state)</span>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-circle-plus"
+                    Title="Scratchpad created in this step (no prior state)" />
                   <div class="scratchpad-snapshot">
                     <ng-container *ngTemplateOutlet="scratchpadSnapshotTpl; context: { $implicit: stepScratchpadOutput }"></ng-container>
                   </div>
                 } @else {
-                  <div class="scratchpad-empty-state">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <span>No scratchpad changes in this step</span>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-circle-info"
+                    Title="No scratchpad changes in this step" />
                 }
               </div>
             }
@@ -145,10 +145,10 @@
                 @if (stepScratchpadInput) {
                   <ng-container *ngTemplateOutlet="scratchpadSnapshotTpl; context: { $implicit: stepScratchpadInput }"></ng-container>
                 } @else {
-                  <div class="scratchpad-empty-state">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <span>No scratchpad input for this step</span>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-circle-info"
+                    Title="No scratchpad input for this step" />
                 }
               </div>
             }
@@ -158,10 +158,10 @@
                 @if (stepScratchpadOutput) {
                   <ng-container *ngTemplateOutlet="scratchpadSnapshotTpl; context: { $implicit: stepScratchpadOutput }"></ng-container>
                 } @else {
-                  <div class="scratchpad-empty-state">
-                    <i class="fa-solid fa-circle-info"></i>
-                    <span>No scratchpad output for this step</span>
-                  </div>
+                  <mj-empty-state
+                    Size="compact"
+                    Icon="fa-solid fa-circle-info"
+                    Title="No scratchpad output for this step" />
                 }
               </div>
             }
@@ -225,10 +225,10 @@
       </div>
     }
     @if (!snapshot.notes && (!snapshot.tasks || snapshot.tasks.length === 0)) {
-      <div class="scratchpad-empty-state">
-        <i class="fa-solid fa-circle-info"></i>
-        <span>Empty scratchpad</span>
-      </div>
+      <mj-empty-state
+        Size="compact"
+        Icon="fa-solid fa-circle-info"
+        Title="Empty scratchpad" />
     }
   </div>
 </ng-template>

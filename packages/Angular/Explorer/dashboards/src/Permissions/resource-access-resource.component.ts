@@ -29,6 +29,11 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
     LastQueryLabel: string | null = null;
     ErrorMessage: string | null = null;
 
+    /** Message shown when a lookup returns no grantees (echoes the query). */
+    public get NoGranteesMessage(): string {
+        return `No grantees found for ${this.LastQueryLabel ?? 'this resource'}.`;
+    }
+
     constructor(private cdr: ChangeDetectorRef) {
         super();
     }

@@ -24,19 +24,23 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
         
           <!-- Error state -->
           @if (ErrorMessage && !IsLoading) {
-            <div class="error-state">
-              <i class="fa-solid fa-exclamation-triangle"></i>
-              <span>{{ ErrorMessage }}</span>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Variant="error"
+              Icon="fa-solid fa-triangle-exclamation"
+              Title="Couldn't load query"
+              [Message]="ErrorMessage"
+              Size="compact" />
           }
-        
+
           <!-- No query configured -->
           @if (!IsLoading && !ErrorMessage && !hasQuery) {
-            <div class="empty-state">
-              <i class="fa-solid fa-flask"></i>
-              <h4>No Query Selected</h4>
-              <p>Click the configure button to select a query for this part.</p>
-            </div>
+            <mj-empty-state
+              class="part-placeholder"
+              Icon="fa-solid fa-flask"
+              Title="No Query Selected"
+              Message="Click the configure button to select a query for this part."
+              Size="compact" />
           }
         
           <!-- Query Viewer -->
@@ -71,9 +75,7 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             background: var(--mj-bg-surface);
         }
 
-        .loading-state,
-        .error-state,
-        .empty-state {
+        .loading-state {
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -84,25 +86,8 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             padding: 24px;
         }
 
-        .error-state i,
-        .empty-state i {
-            font-size: 48px;
-            color: var(--mj-text-muted);
-            margin-bottom: 16px;
-        }
-
-        .error-state i {
-            color: var(--mj-status-error);
-        }
-
-        .empty-state h4 {
-            margin: 0 0 8px 0;
-            color: var(--mj-text-primary);
-        }
-
-        .empty-state p {
-            margin: 0;
-            font-size: 13px;
+        .part-placeholder {
+            height: 100%;
         }
 
         .query-content {

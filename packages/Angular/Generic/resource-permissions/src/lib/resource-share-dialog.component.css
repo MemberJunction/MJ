@@ -189,13 +189,6 @@
     opacity: 1;
 }
 
-.share-no-results {
-    padding: 16px;
-    text-align: center;
-    color: var(--mj-text-secondary);
-    font-size: 13px;
-}
-
 /* Avatar */
 .share-avatar {
     width: 32px;
@@ -376,23 +369,6 @@
 .share-remove-btn:hover {
     background: var(--mj-bg-error);
     color: var(--mj-status-error);
-}
-
-/* Empty State */
-.share-empty {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 20px;
-    color: var(--mj-text-disabled);
-    font-size: 13px;
-    background: var(--mj-bg-surface-card);
-    border-radius: 8px;
-    justify-content: center;
-}
-
-.share-empty i {
-    font-size: 16px;
 }
 
 /* Removed Section */

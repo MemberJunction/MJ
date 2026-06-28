@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe v2 · A — Augment in place</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+    /* faithful recreation of the existing comparison grid + a minimal LLM overlay.
+       LLM elements use a distinct accent (--llm) so they read as a separate layer. */
+    :root { --llm: var(--mj-brand-primary); --vec: var(--vector-accent); }
+    .page { padding:18px 22px; }
+    .panel-frame { max-width:1320px; margin:0 auto; }
+
+    .cmp-header { display:flex; align-items:center; gap:14px; padding:14px 18px; background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-bottom:none; border-radius:var(--mj-radius) var(--mj-radius) 0 0; }
+    .cmp-header .eicon { width:38px; height:38px; border-radius:9px; background:var(--mj-brand-soft); color:var(--mj-text-link); display:flex; align-items:center; justify-content:center; font-size:18px; }
+    .cmp-title { font-weight:700; font-size:16px; }
+    .cmp-sub { display:flex; gap:8px; align-items:center; margin-top:3px; }
+    .cmp-header .spacer { flex:1; }
+    .toggle-group { display:inline-flex; border:1px solid var(--mj-border-default); border-radius:7px; overflow:hidden; }
+    .toggle-group button { border:none; background:var(--mj-bg-surface); color:var(--mj-text-secondary); font-size:12px; font-weight:600; padding:7px 12px; cursor:pointer; }
+    .toggle-group button.active { background:var(--mj-brand-primary); color:#fff; }
+    .closebtn { width:32px; height:32px; border-radius:7px; border:1px solid var(--mj-border-default); background:var(--mj-bg-surface-sunken); cursor:pointer; color:var(--mj-text-muted); }
+
+    /* ---- NEW: LLM reasoning banner ---- */
+    .reason-strip { display:flex; align-items:stretch; gap:0; background:var(--mj-bg-surface); border-left:1px solid var(--mj-border-default); border-right:1px solid var(--mj-border-default); }
+    .reason-strip .accent { width:4px; background:var(--llm); }
+    .reason-body { display:flex; align-items:center; gap:18px; padding:12px 18px; flex:1; border-bottom:1px solid var(--mj-border-default); background:color-mix(in srgb, var(--llm) 5%, var(--mj-bg-surface)); }
+    .verdict-pill { display:inline-flex; align-items:center; gap:8px; font-weight:800; font-size:14px; padding:6px 13px; border-radius:999px; }
+    .verdict-pill.merge { background:var(--mj-status-success-bg); color:var(--mj-status-success-text); border:1px solid var(--mj-status-success-border); }
+    .reason-text { flex:1; color:var(--mj-text-secondary); font-size:13px; }
+    .reason-text b { color:var(--mj-text-primary); }
+    .scorepair-big { display:flex; flex-direction:column; gap:5px; min-width:200px; }
+    .scorepair-big .ln { display:flex; align-items:center; gap:8px; font-size:11.5px; }
+    .scorepair-big .ln .lbl { width:46px; text-align:right; font-weight:700; }
+    .scorepair-big .ln .bar { flex:1; height:7px; }
+    .src-tag { font-size:10px; font-weight:700; color:var(--mj-text-muted); text-transform:uppercase; letter-spacing:.4px; }
+
+    /* ---- comparison grid ---- */
+    .grid-wrap { border:1px solid var(--mj-border-default); border-top:none; border-radius:0 0 var(--mj-radius) var(--mj-radius); overflow:auto; background:var(--mj-bg-surface); }
+    .cgrid { display:grid; grid-template-columns:170px repeat(3, minmax(220px,1fr)); min-width:100%; }
+    .corner { position:sticky; left:0; top:0; z-index:4; background:var(--mj-bg-surface-card); padding:10px 12px; font-size:10.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--mj-text-muted); font-weight:700; border-bottom:1px solid var(--mj-border-default); border-right:1px solid var(--mj-border-default); }
+    .colhd { position:sticky; top:0; z-index:3; background:var(--mj-bg-surface-card); padding:11px 13px; border-bottom:1px solid var(--mj-border-default); border-right:1px solid var(--mj-border-subtle); display:flex; flex-direction:column; gap:7px; }
+    .colhd.source { box-shadow: inset 3px 0 0 var(--mj-brand-primary); }
+    .colhd.survivor { background:color-mix(in srgb, var(--mj-brand-primary) 7%, var(--mj-bg-surface-card)); }
+    .colhd .crow { display:flex; align-items:center; gap:7px; }
+    .colhd .cname { font-weight:700; font-size:13.5px; flex:1; }
+    .scorechips { display:flex; gap:6px; flex-wrap:wrap; }
+    .schip { font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:5px; border:1px solid; }
+    .schip.vec { color:var(--vec); border-color:color-mix(in srgb,var(--vec) 35%,transparent); background:color-mix(in srgb,var(--vec) 8%,transparent); }
+    .schip.llm { color:var(--llm); border-color:color-mix(in srgb,var(--llm) 35%,transparent); background:color-mix(in srgb,var(--llm) 8%,transparent); }
+    .schip.high{ }
+    .surv-select { display:flex; align-items:center; gap:7px; font-size:12px; cursor:pointer; }
+    .radio { width:15px; height:15px; border-radius:50%; border:2px solid var(--mj-border-strong); flex:0 0 auto; }
+    .radio.on { border-color:var(--mj-brand-primary); background:radial-gradient(circle,var(--mj-brand-primary) 0 3.5px,transparent 4.5px); }
+    .llm-rec-badge { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800; color:var(--llm); background:color-mix(in srgb,var(--llm) 10%,transparent); border:1px solid color-mix(in srgb,var(--llm) 30%,transparent); padding:2px 7px; border-radius:5px; }
+    .deps-mini { display:flex; align-items:center; gap:6px; font-size:11px; color:var(--mj-text-muted); }
+    .star { color:#eab308; }
+
+    .lblcell { position:sticky; left:0; z-index:2; background:var(--mj-bg-surface); padding:9px 12px; font-size:12px; color:var(--mj-text-secondary); font-weight:600; border-bottom:1px solid var(--mj-border-subtle); border-right:1px solid var(--mj-border-default); }
+    .vcell { padding:9px 13px; font-size:13px; border-bottom:1px solid var(--mj-border-subtle); border-right:1px solid var(--mj-border-subtle); cursor:pointer; position:relative; display:flex; align-items:center; gap:8px; }
+    .vcell:hover { background:var(--mj-bg-surface-hover); }
+    .vcell.diff { background:color-mix(in srgb,var(--mj-status-warning) 8%,transparent); box-shadow: inset 3px 0 0 var(--mj-status-warning); }
+    .vcell.selected { background:color-mix(in srgb,var(--mj-brand-primary) 9%,transparent); box-shadow: inset 3px 0 0 var(--mj-brand-primary); font-weight:600; }
+    .vcell .pickdot { margin-left:auto; font-size:9.5px; font-weight:800; color:var(--llm); white-space:nowrap; opacity:0; }
+    .vcell.llmpick .pickdot { opacity:1; }
+    .row-odd .lblcell, .row-odd .vcell { background-image:linear-gradient(color-mix(in srgb,var(--mj-bg-surface-sunken) 45%,transparent),color-mix(in srgb,var(--mj-bg-surface-sunken) 45%,transparent)); }
+    .empty { color:var(--mj-text-disabled); font-style:italic; }
+
+    .collapse-row { grid-column:1/-1; padding:9px 14px; color:var(--mj-text-link); font-weight:600; font-size:12.5px; cursor:pointer; border-bottom:1px solid var(--mj-border-subtle); }
+
+    .cmp-footer { display:flex; align-items:center; gap:16px; max-width:1320px; margin:0 auto; padding:13px 4px; }
+    .merge-summary { font-size:13px; }
+    .merge-summary b { color:var(--mj-text-link); }
+    .mergequality { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--mj-text-muted); padding:5px 11px; border:1px solid var(--mj-border-default); border-radius:7px; background:var(--mj-bg-surface); }
+    .cmp-footer .spacer { flex:1; }
+    .callout { max-width:1320px; margin:14px auto 0; font-size:12.5px; color:var(--mj-text-muted); padding:10px 14px; border:1px dashed var(--mj-border-default); border-radius:8px; }
+    .callout b { color:var(--mj-text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Dupe Detection <small>· v2 mockups</small></div>
+    <div class="links">
+        <a href="index.html">v2 Overview</a>
+        <a href="a-augment-in-place.html" class="active">A · Augment</a>
+        <a href="b-recommendation-board.html">B · Reco Board</a>
+        <a href="c-reasoning-copilot.html">C · Copilot</a>
+        <a href="../index.html">↩ v1</a>
+    </div>
+    <div class="spacer"></div>
+    <span class="pattern-tag">v2-A — minimal additive overlay on the EXISTING comparison grid</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="page">
+<div class="panel-frame">
+    <!-- header (unchanged from today) -->
+    <div class="cmp-header">
+        <div class="eicon"><i>⚇</i></div>
+        <div>
+            <div class="cmp-title">Acme Corporation</div>
+            <div class="cmp-sub"><span class="chip ghost tiny">Accounts</span><span class="muted tiny">3 potential duplicates</span></div>
+        </div>
+        <div class="spacer"></div>
+        <div class="toggle-group"><button>All fields</button><button class="active">Differences only</button></div>
+        <button class="closebtn">✕</button>
+    </div>
+
+    <!-- NEW: LLM reasoning banner (the only structural addition above the grid) -->
+    <div class="reason-strip">
+        <div class="accent"></div>
+        <div class="reason-body">
+            <span class="verdict-pill merge">✓ Merge</span>
+            <div class="reason-text">
+                Reasoning <b>strengthened</b> the vector score. Same domain <span class="mono">acme.com</span> + address; “Corp”/“LLC” are formatting variants. Proposes keeping <b>Acme Corporation</b> as survivor but adopting the Salesforce phone &amp; address.
+            </div>
+            <div class="scorepair-big">
+                <div class="ln"><span class="lbl src-tag" style="color:var(--vec)">VECTOR</span><div class="bar vector"><span style="width:96%"></span></div><b style="color:var(--vec)">.96</b></div>
+                <div class="ln"><span class="lbl src-tag" style="color:var(--llm)">LLM</span><div class="bar llm"><span style="width:98%"></span></div><b style="color:var(--llm)">.98</b></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- comparison grid (today's structure, with LLM chips + per-field picks added) -->
+    <div class="grid-wrap">
+        <div class="cgrid">
+            <!-- header row -->
+            <div class="corner">Field</div>
+            <div class="colhd source survivor">
+                <div class="crow"><span class="cname">Acme Corporation</span></div>
+                <div class="scorechips"><span class="schip vec">source</span></div>
+                <label class="surv-select"><span class="radio on"></span> Surviving record</label>
+                <span class="llm-rec-badge">✦ LLM recommends survivor</span>
+                <div class="deps-mini"><span class="star">★</span> 47 deps · most</div>
+            </div>
+            <div class="colhd">
+                <div class="crow"><span class="cname">Acme Corp</span><span class="prov sf tiny"><span class="swatch"></span>SF</span></div>
+                <div class="scorechips"><span class="schip vec">vec .96</span><span class="schip llm">LLM .98</span></div>
+                <label class="surv-select"><span class="radio"></span> Set as survivor</label>
+                <div class="deps-mini">🔗 12 deps · 4 differences</div>
+            </div>
+            <div class="colhd">
+                <div class="crow"><span class="cname">Acme Corporation LLC</span><span class="prov hubspot tiny"><span class="swatch"></span>HS</span></div>
+                <div class="scorechips"><span class="schip vec">vec .94</span><span class="schip llm">LLM .97</span></div>
+                <label class="surv-select"><span class="radio"></span> Set as survivor</label>
+                <div class="deps-mini">🔗 5 deps · 5 differences</div>
+            </div>
+
+            <!-- field rows -->
+            <div class="lblcell">Phone</div>
+            <div class="vcell diff">555-0100</div>
+            <div class="vcell selected llmpick">+1 (555) 010-0100 <span class="pickdot">LLM ✓</span></div>
+            <div class="vcell">555.0100</div>
+
+            <div class="lblcell row-odd">Billing Address</div>
+            <div class="vcell diff row-odd">123 Main St</div>
+            <div class="vcell selected llmpick row-odd">123 Main Street, Suite 400 <span class="pickdot">LLM ✓</span></div>
+            <div class="vcell row-odd">123 Main St</div>
+
+            <div class="lblcell">Annual Revenue</div>
+            <div class="vcell selected llmpick">$12.4M <span class="pickdot">LLM ✓</span></div>
+            <div class="vcell"><span class="empty">(not available)</span></div>
+            <div class="vcell">$11.9M</div>
+
+            <div class="lblcell row-odd">City</div>
+            <div class="vcell selected row-odd">San Francisco</div>
+            <div class="vcell row-odd">San Francisco</div>
+            <div class="vcell diff row-odd">SF</div>
+
+            <div class="collapse-row">▸ Show 18 identical fields (Domain, Owner, Industry…)</div>
+        </div>
+    </div>
+
+    <!-- footer (adds an LLM merge-quality chip; everything else is today's) -->
+    <div class="cmp-footer">
+        <div class="merge-summary">Surviving: <b>Acme Corporation</b> · 2 fields cherry-picked</div>
+        <div class="mergequality">✦ LLM merge confidence <b style="color:var(--llm)">0.98</b></div>
+        <div class="spacer"></div>
+        <button class="btn danger-ghost">Reject all</button>
+        <button class="btn success">⌥ Merge records</button>
+    </div>
+
+    <div class="callout">
+        <b>What changed vs. today:</b> only three additions — the reasoning banner, the per-match <b>vec/LLM</b> chips + <b>survivor recommendation</b> badge in the column headers, and the per-field <b>LLM ✓</b> picks (which preload <span class="mono">SelectedColumnIndex</span>). The grid, survivor radios, deps preview, cherry-pick and merge flow are all the existing component. Lowest-risk path to ship; reasoning is decoration + preloaded selections.
+    </div>
+</div>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+</script>
+</body>
+</html>

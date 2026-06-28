@@ -745,10 +745,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         namedThisSession = false;
-        const created = this.RealtimeSession.SessionCreatedConversationId;
-        if (created) {
-          this.realtimeConversationReady.emit({ conversationId: created, select: false });
-        }
+        this.onVoiceSessionStarted();
       });
     let voiceWasActive = false;
     this.RealtimeSession.Active$
@@ -2748,17 +2745,74 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Post-call hook for sessions that created their own conversation: kicks the shared
-   * auto-naming helper in the background (first user utterance as the seed) and emits
-   * {@link realtimeConversationReady} so the workspace can refresh + select.
+   * Session-START hook for a realtime session that CREATED its own conversation (started
+   * without one). Folds that server-created conversation into the engine's reactive cache
+   * directly — ONE single-row load, only when it isn't already cached — so the sidebar list
+   * emits via `Conversations$` the moment the call starts, independent of the host's refresh
+   * round-trip. Also emits {@link realtimeConversationReady} so the host can react (it
+   * selects on close). No-op when the session joined an existing conversation. Fire-and-forget
+   * on the load: a failed load just leaves the host's emit to fold it in.
+   */
+  private onVoiceSessionStarted(): void {
+    const created = this.RealtimeSession.SessionCreatedConversationId;
+    if (!created) {
+      return;
+    }
+    void this.engine.EnsureConversationLoaded(created, this.currentUser);
+    this.realtimeConversationReady.emit({ conversationId: created, select: false });
+  }
+
+  /**
+   * Post-call hook. Two responsibilities:
+   *  1. Reload the ACTIVE conversation's timeline so the session that just ended — whose
+   *     session-stamped `MJ: Conversation Details` were persisted server-side during the
+   *     call — surfaces as a reviewable past-session block WITHOUT a manual refresh.
+   *  2. For a session that CREATED its own conversation, kick the shared auto-naming
+   *     helper (covered elsewhere on first utterance; this covers a silent call) and
+   *     emit {@link realtimeConversationReady} so the host can refresh the list + select.
    */
   private onVoiceSessionEnded(): void {
+    // (1) Refresh the active conversation's timeline (cheap — single conversation).
+    void this.reloadActiveConversationTimeline();
+
+    // (2) New-conversation case: let the host fold + select it.
     const conversationId = this.RealtimeSession.SessionCreatedConversationId;
     if (!conversationId) {
       return;
     }
     // Naming normally fired at the first utterance; this covers a silent call's default.
     this.realtimeConversationReady.emit({ conversationId, select: true });
+  }
+
+  /**
+   * Surgically reloads the CURRENTLY-OPEN conversation's details so newly-persisted rows
+   * (e.g. a just-ended realtime session's session-stamped caption turns) appear in the
+   * timeline — and therefore in the "review past sessions" affordances — without a manual
+   * browser refresh. Re-queries ONLY the active conversation (no broad reload), mirrors the
+   * agent-completion refresh path, and no-ops when no conversation is open.
+   */
+  private async reloadActiveConversationTimeline(): Promise<void> {
+    const conversationId = this.conversationId;
+    if (!conversationId) {
+      return;
+    }
+    try {
+      await this.engine.RefreshConversationDetails(conversationId, this.currentUser);
+
+      // Re-read messages from the surgically updated engine cache
+      const freshDetails = this.engine.GetCachedDetails(conversationId);
+      if (freshDetails) {
+        this.messages = freshDetails;
+      }
+
+      // Reprocess peripheral data + realtime session meta (drives the timeline's session cards)
+      this.lastLoadedConversationId = null;
+      await this.loadPeripheralData(conversationId);
+
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Failed to reload conversation timeline after the session ended:', error);
+    }
   }
 
   /**

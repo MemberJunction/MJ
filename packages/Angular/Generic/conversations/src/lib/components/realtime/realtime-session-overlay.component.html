@@ -136,6 +136,8 @@
           [DevMode]="DevMode"
           [CurrentUser]="CurrentUser"
           [EnvironmentID]="EnvironmentID"
+          [ShowActivityTab]="ShowActivityTab"
+          [ExtraArtifacts]="ReviewArtifacts"
           [Fill]="ChannelFocusMode"
           (OpenRunRequested)="OnOpenRunRequested($event)"
           (CollapsedChange)="OnPanelCollapsedChange($event)"
@@ -192,4 +194,18 @@
       </mj-realtime-whiteboard>
     </div>
   }
+</ng-template>
+
+<!-- SESSION REVIEW recording pane body: the reviewed session's recorded audio synced to its
+     transcript, replayed via the shared storage media player (click-to-seek transcript + playhead
+     highlight). Registered as a template-based channel tab ONLY when the reviewed session carries a
+     RecordingFileID; the player resolves the authenticated audio itself from that file id. -->
+<ng-template #recordingTpl>
+  <div class="review-recording-host">
+    <mj-storage-media-player
+      [FileID]="ReviewRecordingFileID"
+      [Transcript]="ReviewCues"
+      [Provider]="Provider">
+    </mj-storage-media-player>
+  </div>
 </ng-template>

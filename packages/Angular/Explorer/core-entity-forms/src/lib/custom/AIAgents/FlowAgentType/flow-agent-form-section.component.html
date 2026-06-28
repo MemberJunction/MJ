@@ -7,8 +7,9 @@
         (FullScreenToggled)="OnFullScreenToggled($event)">
     </mj-flow-agent-editor>
 } @else {
-    <div class="flow-empty-state">
-        <i class="fa-solid fa-info-circle"></i>
-        <p>Save the agent first to configure the workflow.</p>
-    </div>
+    <mj-empty-state
+        class="flow-empty-state"
+        Variant="warning"
+        Icon="fa-solid fa-circle-info"
+        Title="Save the agent first to configure the workflow." />
 }

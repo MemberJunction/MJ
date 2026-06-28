@@ -100,6 +100,75 @@ export interface RealtimeVideoConfig {
     providers?: Record<string, JSONObjectLike>;
 }
 
+/**
+ * Turn-taking configuration for a multi-agent realtime room — how an agent participates, and (room-wide)
+ * which **turn moderator** decides who speaks each turn. See the "Turn moderator" sections of the Realtime
+ * Co-Agents / Bridges guides.
+ *
+ * Informally this is the multi-agent meeting's **moderator** — and note it does NOT merely restrain agents
+ * (that would be "nanny mode"); its larger job is to *bring the right agents in* so a multi-party voice room
+ * feels like a real panel discussion: route a question to Sage AND Skip when both are relevant, let a
+ * productive agent↔agent exchange run, and only go quiet when nobody should speak or a loop turns unproductive.
+ *
+ * Two layers of the effective-config cascade carry different parts:
+ * - **Per target agent** (the voiced agent's `TypeConfiguration`): {@link RealtimeTurnTakingConfig.mode}.
+ * - **Room-wide** (the Realtime agent TYPE's `DefaultConfiguration`): {@link RealtimeTurnTakingConfig.moderator}.
+ */
+export interface RealtimeTurnTakingConfig {
+    /**
+     * This agent's participation style in a MULTI-agent room:
+     * - `'proactive'` (default): may jump in unaddressed when the moderator judges it relevant.
+     * - `'addressed-only'`: speaks only when directly addressed by name.
+     * Single-agent rooms ignore this entirely (a lone agent is a normal 1:1 voice with auto-response).
+     */
+    mode?: 'proactive' | 'addressed-only';
+    /**
+     * The room-level **turn moderator**: a fast LLM that — once per turn — decides which agent(s) (0+) should
+     * speak next, routes to all of them (spoken serially via the floor so they never overlap), respects each
+     * agent's {@link RealtimeTurnTakingConfig.mode}, and lets a *productive* agent↔agent discussion continue
+     * while suppressing unproductive ping-pong. It runs as a PROMPT (not an agent run) tied to the co-agent's
+     * `AIAgentRun` for observability. Configured ONCE on the Realtime agent type's default configuration — a
+     * room has one moderator brain.
+     */
+    moderator?: RealtimeModeratorConfig;
+}
+
+/** The room-wide turn-moderator settings (see {@link RealtimeTurnTakingConfig.moderator}). Absent fields fall back to {@link REALTIME_MODERATOR_DEFAULTS}. */
+export interface RealtimeModeratorConfig {
+    /** The moderator AI Prompt — an `MJ: AI Prompts` **ID** (authored as `@lookup:` in metadata, stored as the resolved ID). */
+    promptId?: string;
+    /** How many recent diarized turns the moderator sees. Default 30; clamped to ≤ 50. */
+    contextWindowTurns?: number;
+    /** Each lookback turn is clipped to this many characters (token savings + a stable, cacheable prompt prefix). Default 240. */
+    maxCharsPerTurn?: number;
+    /**
+     * OPTIONAL hard backstop on consecutive agent-only turns (no human turn between) before the room goes
+     * quiet. `null`/absent (default) = **no cap** — rely on the moderator's own progress assessment to end
+     * unproductive loops, so genuine agent↔agent discussion is never gated by a counter.
+     */
+    maxConsecutiveAgentOnlyTurns?: number | null;
+    /** Moderator call budget in ms; exceeding it triggers {@link RealtimeModeratorConfig.onError}. Default 800. */
+    timeoutMs?: number;
+    /** Behavior when the moderator errors/times out: `'silent'` (no one speaks — never spiral) or `'addressed-only'` (cheap name-contains fallback). Default `'silent'`. */
+    onError?: 'silent' | 'addressed-only';
+    /**
+     * When `true` (default), run the NEXT moderator decision DURING the current agent's audio playback — the
+     * model emits its full response text seconds before the user finishes hearing it, so the agent→agent
+     * hand-off pays ~zero added latency. A human barge-in discards the pre-staged decision.
+     */
+    prestageOnAgentSpeech?: boolean;
+}
+
+/** Default moderator settings, applied per-field when a {@link RealtimeModeratorConfig} omits a value. */
+export const REALTIME_MODERATOR_DEFAULTS = {
+    contextWindowTurns: 30,
+    maxCharsPerTurn: 240,
+    maxConsecutiveAgentOnlyTurns: null as number | null,
+    timeoutMs: 800,
+    onError: 'silent' as 'silent' | 'addressed-only',
+    prestageOnAgentSpeech: true,
+} as const;
+
 /** The `realtime` section of a co-agent's effective configuration. */
 export interface RealtimeConfigSection {
     /** Preferred realtime model — an `MJ: AI Models` Name OR ID. Degrades gracefully when unsatisfiable. */
@@ -117,6 +186,8 @@ export interface RealtimeConfigSection {
     allowUserModelOverride?: boolean;
     /** Progress-narration tuning. */
     narration?: RealtimeNarrationConfig;
+    /** Multi-agent turn-taking: this agent's participation {@link RealtimeTurnTakingConfig.mode} + the room-wide moderator. */
+    turnTaking?: RealtimeTurnTakingConfig;
 }
 
 /** The fully-normalized effective configuration for a Realtime co-agent. */
@@ -302,7 +373,106 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
         section.video = video;
     }
 
+    const turnTaking = normalizeTurnTaking(rawRealtime['turnTaking']);
+    if (turnTaking) {
+        section.turnTaking = turnTaking;
+    }
+
     return Object.keys(section).length > 0 ? { realtime: section } : { realtime: {} };
+}
+
+/** Normalizes the `turnTaking` block (participation mode + room moderator); returns `null` when nothing usable survives. */
+function normalizeTurnTaking(raw: unknown): RealtimeTurnTakingConfig | null {
+    if (!isPlainObject(raw)) {
+        return null;
+    }
+    const tt: RealtimeTurnTakingConfig = {};
+
+    const mode = raw['mode'];
+    if (mode === 'proactive' || mode === 'addressed-only') {
+        tt.mode = mode;
+    }
+
+    const moderator = normalizeModerator(raw['moderator']);
+    if (moderator) {
+        tt.moderator = moderator;
+    }
+
+    return Object.keys(tt).length > 0 ? tt : null;
+}
+
+/** Normalizes the `moderator` block; returns `null` when nothing usable survives. The window is clamped to ≤ 50. */
+function normalizeModerator(raw: unknown): RealtimeModeratorConfig | null {
+    if (!isPlainObject(raw)) {
+        return null;
+    }
+    const m: RealtimeModeratorConfig = {};
+
+    if (typeof raw['promptId'] === 'string' && raw['promptId'].trim().length > 0) {
+        m.promptId = raw['promptId'].trim();
+    }
+    const window = raw['contextWindowTurns'];
+    if (typeof window === 'number' && Number.isFinite(window) && window > 0) {
+        m.contextWindowTurns = Math.min(50, Math.floor(window));
+    }
+    const clip = raw['maxCharsPerTurn'];
+    if (typeof clip === 'number' && Number.isFinite(clip) && clip > 0) {
+        m.maxCharsPerTurn = Math.floor(clip);
+    }
+    const cap = raw['maxConsecutiveAgentOnlyTurns'];
+    if (cap === null) {
+        m.maxConsecutiveAgentOnlyTurns = null; // explicit "no cap"
+    } else if (typeof cap === 'number' && Number.isFinite(cap) && cap > 0) {
+        m.maxConsecutiveAgentOnlyTurns = Math.floor(cap);
+    }
+    const timeout = raw['timeoutMs'];
+    if (typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0) {
+        m.timeoutMs = Math.floor(timeout);
+    }
+    if (raw['onError'] === 'silent' || raw['onError'] === 'addressed-only') {
+        m.onError = raw['onError'];
+    }
+    if (typeof raw['prestageOnAgentSpeech'] === 'boolean') {
+        m.prestageOnAgentSpeech = raw['prestageOnAgentSpeech'];
+    }
+
+    return Object.keys(m).length > 0 ? m : null;
+}
+
+/**
+ * Reads the effective {@link RealtimeModeratorConfig} from a resolved config, filling absent fields from
+ * {@link REALTIME_MODERATOR_DEFAULTS}. Returns `null` when no moderator is configured at all (e.g. no
+ * `promptId`), which the engine treats as "no moderator — fall back to per-agent matchers".
+ *
+ * @param config The normalized effective configuration.
+ * @returns The fully-defaulted moderator settings, or `null` when none is configured.
+ */
+export function GetEffectiveModeratorConfig(
+    config: RealtimeCoAgentConfig | null | undefined
+): Required<RealtimeModeratorConfig> | null {
+    const m = config?.realtime?.turnTaking?.moderator;
+    if (!m || !m.promptId) {
+        return null;
+    }
+    return {
+        promptId: m.promptId,
+        contextWindowTurns: m.contextWindowTurns ?? REALTIME_MODERATOR_DEFAULTS.contextWindowTurns,
+        maxCharsPerTurn: m.maxCharsPerTurn ?? REALTIME_MODERATOR_DEFAULTS.maxCharsPerTurn,
+        maxConsecutiveAgentOnlyTurns:
+            m.maxConsecutiveAgentOnlyTurns === undefined
+                ? REALTIME_MODERATOR_DEFAULTS.maxConsecutiveAgentOnlyTurns
+                : m.maxConsecutiveAgentOnlyTurns,
+        timeoutMs: m.timeoutMs ?? REALTIME_MODERATOR_DEFAULTS.timeoutMs,
+        onError: m.onError ?? REALTIME_MODERATOR_DEFAULTS.onError,
+        prestageOnAgentSpeech: m.prestageOnAgentSpeech ?? REALTIME_MODERATOR_DEFAULTS.prestageOnAgentSpeech,
+    };
+}
+
+/** The per-target-agent participation mode from a resolved config (default `'proactive'`). */
+export function GetEffectiveTurnMode(
+    config: RealtimeCoAgentConfig | null | undefined
+): 'proactive' | 'addressed-only' {
+    return config?.realtime?.turnTaking?.mode ?? 'proactive';
 }
 
 /** Normalizes the `video` block; returns `null` when nothing usable survives. */

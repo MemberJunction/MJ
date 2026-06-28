@@ -1,0 +1,113 @@
+<div class="flow-cockpit">
+  <!-- mode segmented control -->
+  <div class="flow-modes">
+    @for (m of modes; track m.key) {
+      <button class="flow-mode" [class.on]="mode === m.key" [class.soon]="!m.enabled"
+              [disabled]="!m.enabled" (click)="selectMode(m)"
+              [title]="m.enabled ? m.label : m.label + ' — coming soon'">
+        <i class="fas" [ngClass]="m.icon"></i>
+        <span>{{ m.label }}</span>
+        @if (!m.enabled) { <span class="soon-tag">Soon</span> }
+      </button>
+    }
+  </div>
+
+  <div class="flow-main">
+    <!-- stage -->
+    <div class="flow-stage">
+      @if (loading) {
+        <div class="flow-overlay"><mj-loading text="Building flow…"></mj-loading></div>
+      } @else if (!hasData) {
+        <div class="flow-overlay flow-empty">
+          <i class="fas fa-wind"></i>
+          <p>No steps recorded for this run yet.</p>
+        </div>
+      }
+
+      <mj-agent-flow-flame [class.flow-hidden]="mode !== 'flame'" [Model]="model" (nodeSelected)="selectStep($event)"></mj-agent-flow-flame>
+      <mj-agent-flow-subway [class.flow-hidden]="mode !== 'subway'" [Model]="model" (nodeSelected)="selectStep($event)"></mj-agent-flow-subway>
+      <mj-agent-flow-constellation [class.flow-hidden]="mode !== 'constellation'" [Model]="model" (nodeSelected)="selectStep($event)"></mj-agent-flow-constellation>
+      <mj-agent-flow-flowchart [class.flow-hidden]="mode !== 'flow'" [Model]="model"
+                               (nodeSelected)="selectStep($event)"
+                               (selectionCleared)="closeDetail()"></mj-agent-flow-flowchart>
+
+      @if (hasData) {
+        <div class="flow-zoom">
+          <button class="fz-btn" (click)="zoomIn()" title="Zoom in"><i class="fas fa-magnifying-glass-plus"></i></button>
+          <button class="fz-btn" (click)="zoomOut()" title="Zoom out"><i class="fas fa-magnifying-glass-minus"></i></button>
+          <button class="fz-btn" (click)="fitReset()" title="Fit to view"><i class="fas fa-expand"></i></button>
+        </div>
+      }
+    </div>
+
+    <!-- narration rail (animated modes, nothing selected) -->
+    @if (showRail) {
+      <aside class="flow-rail" [style.width.px]="panelWidth">
+        <div class="flow-resizer" (mousedown)="startResize($event)" title="Drag to resize"></div>
+        <div class="now">
+          <div class="rail-lbl">Now executing</div>
+          <div class="breadcrumb" #crumb></div>
+          <div class="nowcard">
+            <div class="ico" #nowIco>🤖</div>
+            <h3 #nowName>—</h3>
+            <div class="type" #nowType>Agent run</div>
+            <div class="meta">
+              <div>Duration<b #nowDur>—</b></div>
+              <div>Status<b #nowStat>—</b></div>
+              <div>Model<b #nowModel>—</b></div>
+            </div>
+            <div class="barbg"><div class="barfg" #nowBar></div></div>
+          </div>
+        </div>
+        <div class="log">
+          <div class="rail-lbl sticky">Execution log</div>
+          <div #loglist class="loglist"></div>
+        </div>
+      </aside>
+    }
+
+    <!-- step inspector (any mode) -->
+    @if (selectedStepItem) {
+      <aside class="flow-detail" [style.width.px]="panelWidth">
+        <div class="flow-resizer" (mousedown)="startResize($event)" title="Drag to resize"></div>
+        <mj-ai-agent-run-step-detail
+          [selectedTimelineItem]="selectedStepItem"
+          (closePanel)="closeDetail()"
+          (navigateToActionLog)="onDetailNavigateActionLog($event)"
+          (copyToClipboard)="onDetailCopy($event)">
+        </mj-ai-agent-run-step-detail>
+      </aside>
+    }
+  </div>
+
+  <!-- transport (animated modes only) -->
+  @if (isAnimated) {
+  <div class="flow-transport">
+    <button class="pbtn" (click)="togglePlay()" [disabled]="!hasData" [title]="playing ? 'Pause' : 'Play'">
+      <i class="fas" [ngClass]="playing ? 'fa-pause' : 'fa-play'"></i>
+    </button>
+    <button class="ibtn" (click)="restart()" [disabled]="!hasData" title="Restart">
+      <i class="fas fa-rotate-left"></i>
+    </button>
+    <input #scrub class="scrub" type="range" min="0" max="1000" value="0"
+           [disabled]="!hasData" (input)="onScrub(scrub.value)"/>
+    <div class="clock" #clock>0s / 0s</div>
+    <div class="speedbox">
+      <i class="fas fa-gauge-high"></i>
+      <input class="speed" type="range" min="25" max="300" value="100" (input)="onSpeed($any($event.target).value)"/>
+      <span class="spdval">{{ speed.toFixed(1) }}×</span>
+    </div>
+  </div>
+  }
+
+  <!-- legend / hint -->
+  <div class="flow-legend">
+    @if (isAnimated) {
+      <span><i class="lg" style="background: var(--mj-text-muted)"></i>Hint:</span>
+      <span class="legend-note">Playback is compressed so every step is visible — real duration shows through heat, size &amp; speed, not literal width.</span>
+    } @else {
+      <span><i class="lg" style="background: var(--mj-text-muted)"></i>Tip:</span>
+      <span class="legend-note">Drag to pan, scroll to zoom, click any node to inspect it. Layout is the full execution tree, top to bottom.</span>
+    }
+  </div>
+</div>
