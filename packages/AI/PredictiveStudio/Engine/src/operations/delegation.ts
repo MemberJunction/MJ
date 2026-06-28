@@ -109,22 +109,28 @@ export function wasTrainingLeakageFlagged(result: TrainModelResult): boolean {
 // ----- Scoring ----------------------------------------------------------------
 
 /**
- * Build the production scoring runner wired with the single {@link LocalArtifactLoader}
- * — the read-side inverse of `MJFilesArtifactStore`. The model's `ArtifactFileID` is
- * the real `MJ: Files` row id the bytes were stored under, and the loader reads them
- * from local disk by that id (dev / on-prem). No provider lookup is needed at score
- * time — the File id IS the artifact key.
+ * The production {@link MLInferenceDeps} bundle the scorer runs with — the
+ * {@link RunViewMLModelLoader} (loads the `MJ: ML Models` row), the
+ * {@link MJSidecarPredictor} (runs `/predict` against the Python sidecar) and the
+ * {@link LocalArtifactLoader} (reads the model bytes back by their `MJ: Files` row id,
+ * the read-side inverse of `MJFilesArtifactStore`). Shared by {@link buildScoreRecordSetRunner}
+ * (the Score action / Remote Op path) AND the startup work-type registration so a model
+ * trained one way is always scored the same way — one source of truth (CLAUDE.md DRY).
  *
  * **Production follow-up**: swap `LocalArtifactLoader` for a provider `GetObject`
  * loader; the id contract (read by File id) is unchanged.
  */
+export function buildProductionMLInferenceDeps(): MLInferenceDeps {
+  return { modelLoader: new RunViewMLModelLoader(), sidecar: new MJSidecarPredictor(), artifactLoader: new LocalArtifactLoader() };
+}
+
+/**
+ * Build the production scoring runner wired with the production {@link MLInferenceDeps}
+ * (see {@link buildProductionMLInferenceDeps}). No provider lookup is needed at score
+ * time — the File id IS the artifact key.
+ */
 export function buildScoreRecordSetRunner(): ProductionScoreRecordSetRunner {
-  const deps: MLInferenceDeps = {
-    modelLoader: new RunViewMLModelLoader(),
-    sidecar: new MJSidecarPredictor(),
-    artifactLoader: new LocalArtifactLoader(),
-  };
-  return new ProductionScoreRecordSetRunner({ deps });
+  return new ProductionScoreRecordSetRunner({ deps: buildProductionMLInferenceDeps() });
 }
 
 /**

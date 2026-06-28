@@ -145,7 +145,9 @@ export class RecordProcessExecutor {
     /**
      * Builds the processor from the process's Work. `FieldRules` reads its rule set from `Configuration`
      * and writes itself (honoring `dryRun`); the other work types build a base processor wrapped with
-     * output-mapping write-back when configured.
+     * output-mapping write-back when configured. The write-back wrapper also honors `dryRun` — on a
+     * dry-run the inner work runs but the mapping only previews (nothing is saved), so EVERY work type's
+     * dry-run is side-effect-free, not just FieldRules.
      */
     public buildProcessor(rp: MJRecordProcessEntity, dryRun?: boolean): IRecordProcessor {
         if (rp.WorkType === 'FieldRules') {
@@ -183,7 +185,7 @@ export class RecordProcessExecutor {
 
         const outputMapping = rp.OutputMapping ? SafeJSONParse<OutputMappingConfig>(rp.OutputMapping) : undefined;
         if (outputMapping && (outputMapping.fields || outputMapping.childRecord)) {
-            return new WriteBackProcessor(base, outputMapping);
+            return new WriteBackProcessor(base, outputMapping, dryRun);
         }
         return base;
     }

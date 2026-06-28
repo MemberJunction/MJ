@@ -222,4 +222,52 @@ describe('applyOutputMapping', () => {
         expect(out.createdChildID).toBe('child-1');
         expect(created[0].sets).toEqual({ CustomerID: 'c1', Summary: 'great' });
     });
+
+    it('dry-run resolves field values into previewFields but saves NOTHING', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: { fields: { Satisfaction: '$.satisfaction', Sentiment: '$.sentiment' } },
+            result: { satisfaction: 'High', sentiment: 0.8 },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.dryRun).toBe(true);
+        expect(out.updatedRecord).toBe(false);
+        expect(out.previewFields).toEqual({ Satisfaction: 'High', Sentiment: 0.8 });
+        // No entity object is even created on a dry-run (nothing loaded, nothing saved).
+        expect(created.length).toBe(0);
+    });
+
+    it('dry-run previews the child record values but creates NOTHING', async () => {
+        const { provider, created } = fakeProvider();
+        const out = await applyOutputMapping({
+            outputMapping: { childRecord: { entity: 'Customer Insights', parentField: 'CustomerID', map: { Summary: '$.summary' } } },
+            result: { summary: 'great' },
+            record,
+            contextUser: USER,
+            provider,
+            dryRun: true,
+        });
+        expect(out.dryRun).toBe(true);
+        expect(out.createdChildID).toBeUndefined();
+        expect(out.previewChild).toEqual({ CustomerID: 'c1', Summary: 'great' });
+        expect(created.length).toBe(0);
+    });
+
+    it('WriteBackProcessor threads dryRun through so the inner work runs but nothing is saved', async () => {
+        const { provider, created } = fakeProvider();
+        const inner: IRecordProcessor = {
+            ProcessRecord: async () => ({ Status: 'Succeeded', ResultPayload: { satisfaction: 'High' } }),
+        };
+        const proc = new WriteBackProcessor(inner, { fields: { Satisfaction: '$.satisfaction' } }, true);
+        const result = await proc.ProcessRecord(record, { contextUser: USER, provider } as unknown as RecordProcessorContext);
+        expect(result.Status).toBe('Succeeded');
+        // The write-back payload carries the dry-run preview; the entity was never created/saved.
+        const writeBack = (result.ResultPayload as { writeBack: { dryRun?: boolean; previewFields?: Record<string, unknown> } }).writeBack;
+        expect(writeBack.dryRun).toBe(true);
+        expect(writeBack.previewFields).toEqual({ Satisfaction: 'High' });
+        expect(created.length).toBe(0);
+    });
 });
