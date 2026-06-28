@@ -23,6 +23,13 @@ import {
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService, ActivityService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import {
+    buildDuplicateAgentContext,
+    resolveEntityDoc,
+    resolveEntityFilter,
+    DupeEntityDocCandidate,
+} from './duplicate-detection-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Represents a group of duplicate matches for a single source record,
@@ -387,26 +394,71 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (this.HideToolbar) {
             return;
         }
-        this.navigationService.SetAgentContext(this, {
-            DetectionStatus: this.IsDetecting ? 'running' : 'idle',
+        const selectedDoc = this.SelectedDocumentThresholds;
+        this.navigationService.SetAgentContext(this, buildDuplicateAgentContext({
+            IsDetecting: this.IsDetecting,
             DetectionProgress: this.DetectionProgress,
+            DetectionStage: this.DetectionStage,
+            TotalGroupCount: this.TotalGroupCount,
             PendingCount: this.PendingGroups.length,
             ApprovedCount: this.ApprovedGroups.length,
             RejectedCount: this.RejectedGroups.length,
-            SelectedEntityDoc: this.SelectedEntityDocumentID || null,
+            SelectedEntityDocID: this.SelectedEntityDocumentID || null,
+            SelectedEntityDocName: selectedDoc?.Name ?? null,
             DisplayMode: this.DisplayMode,
-            EntityFilter: this.SelectedEntityFilter || 'All',
-        });
+            EntityFilter: this.SelectedEntityFilter,
+            MinScore: this.Filters.MinScore,
+            MaxScore: this.Filters.MaxScore,
+            DateFrom: this.Filters.DateFrom,
+            DateTo: this.Filters.DateTo,
+            HasActiveFilters: this.HasActiveFilters,
+            EntityNames: this.EntityNames,
+            EntityDocNames: this.EntityDocuments.map(d => d.Name),
+            MergeEnabled: this.MergeEnabled,
+        }));
+    }
+
+    /** Build the resolver candidate list from the loaded entity-document picker options. */
+    private getEntityDocCandidates(): DupeEntityDocCandidate[] {
+        return this.EntityDocuments.map(d => ({ ID: d.ID, Name: d.Name, EntityName: d.EntityName }));
     }
 
     /**
-     * Register the safe, agent-actionable operations: re-run detection and
-     * reload results. Group-level approve/reject are intentionally NOT exposed
-     * as agent tools — they mutate match approval state and require an explicit
-     * group identity (and a selection model) the agent can't safely reference.
+     * 🚨 SAFETY BOUNDARY 🚨
+     * Register the safe, agent-actionable operations. Exposed:
+     *  - SelectEntityDocument (id/name resolution) → drives which doc detection runs against
+     *  - RunDuplicateDetection (idempotent — creates a run; the server hook re-detects)
+     *  - FilterDuplicatesByEntity / SetDuplicateDisplayMode (read-only board navigation)
+     *  - RefreshDuplicateDetection (read-only reload)
+     *
+     * INTENTIONALLY NOT EXPOSED (gated):
+     *  - Group-level Approve/Reject (ApproveMatch / RejectMatch / updateGroupApprovalStatus) and
+     *    drag-to-column — they mutate match ApprovalStatus and there is NO current-selection model,
+     *    so the agent would have to fabricate a group id.
+     *  - Merge (ExecuteMerge / MergeRecords) and per-match approve/reject — destructive, irreversible
+     *    record consolidation that requires the human comparison-panel review flow.
      */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SelectEntityDocument',
+                Description: 'Select the entity document that duplicate detection will run against. Accepts the document ID, the document name, or the underlying entity name.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { document: { type: 'string', description: 'Entity document ID, document name, or entity name' } },
+                    required: ['document'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['document'], 'document');
+                    if (!v.ok) return v.result;
+                    const resolved = resolveEntityDoc(v.value, this.getEntityDocCandidates());
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    this.SelectedEntityDocumentID = resolved.value.ID;
+                    this.emitAgentContext();
+                    this.cdr.detectChanges();
+                    return { Success: true, Data: { SelectedEntityDocID: resolved.value.ID, SelectedEntityDocName: resolved.value.Name } };
+                },
+            },
             {
                 Name: 'RunDuplicateDetection',
                 Description: 'Run duplicate detection for the currently selected entity document. Requires an entity document to be selected first.',
@@ -416,10 +468,47 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                         return { Success: false, ErrorMessage: 'A detection run is already in progress' };
                     }
                     if (!this.SelectedEntityDocumentID) {
-                        return { Success: false, ErrorMessage: 'No entity document is selected' };
+                        return { Success: false, ErrorMessage: 'No entity document is selected. Use SelectEntityDocument first.' };
                     }
                     await this.RunDetection();
                     return { Success: true };
+                },
+            },
+            {
+                Name: 'FilterDuplicatesByEntity',
+                Description: 'Filter the duplicate board to a single entity. Pass an entity name, or "all" / empty to clear the filter.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { entityName: { type: 'string', description: 'Entity name, or "all" to clear' } },
+                    required: ['entityName'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['entityName'], 'entityName');
+                    if (!v.ok) return v.result;
+                    const resolved = resolveEntityFilter(v.value, this.EntityNames);
+                    if (!resolved.ok) return { Success: false, ErrorMessage: resolved.error };
+                    this.FilterByEntity(resolved.value);
+                    return { Success: true, Data: { EntityFilter: resolved.value || 'All', PendingCount: this.PendingGroups.length } };
+                },
+            },
+            {
+                Name: 'SetDuplicateDisplayMode',
+                Description: 'Switch the duplicate board between the kanban card board and the paged table.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { mode: { type: 'string', enum: ['kanban', 'table'], description: 'kanban or table' } },
+                    required: ['mode'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const mode = String(params['mode'] ?? '');
+                    if (mode !== 'kanban' && mode !== 'table') {
+                        return { Success: false, ErrorMessage: 'Invalid mode. Expected "kanban" or "table".' };
+                    }
+                    if (this.DisplayMode !== mode) {
+                        this.ToggleDisplayMode();
+                    }
+                    this.emitAgentContext();
+                    return { Success: true, Data: { DisplayMode: this.DisplayMode } };
                 },
             },
             {

@@ -5,6 +5,11 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 import { validateStringParam } from '../shared/agent-tool-validation';
+import {
+    buildPermissionsNotFoundError,
+    buildResourceAccessAgentContext,
+    resolvePermissionsCandidate,
+} from './permissions-agent-context';
 
 /**
  * Resource Access Report resource — one of three tabs in the Permissions admin application.
@@ -78,21 +83,34 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
     // revoke access, mutate any domain, impersonate a user, alter audit records, or
     // bulk-export effective permissions — those operations are DELIBERATELY NOT
     // exposed and must remain human-initiated. Context exposes only the current
-    // selection and the row count of the last lookup.
+    // selection, the available domains/resource-types, the last-lookup row count,
+    // and a BOUNDED sample of grantee DISPLAY names — never credentials or secrets.
     // ================================================================
 
     /**
      * Publish the current resource-access state to the AI agent. Re-invoked on
-     * every meaningful state change (domain change, lookup completion).
+     * every meaningful state change (domain change, lookup completion). The shaping
+     * lives in the pure {@link buildResourceAccessAgentContext} helper so it stays
+     * unit-testable and decoupled from change-detection timing.
      */
     private publishAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
+        const context = buildResourceAccessAgentContext({
             SelectedDomainName: this.SelectedDomainName,
-            ResourceTypeInput: this.ResourceTypeInput || null,
-            ResourceIdInput: this.ResourceIdInput || null,
-            ResourceAccessRowCount: this.ResourceAccessRows.length,
+            AvailableDomainNames: this.Domains.map((d) => d.Name),
+            ResourceTypes: this.ResourceTypes,
+            ResourceTypeInput: this.ResourceTypeInput,
+            ResourceIdInput: this.ResourceIdInput,
+            LastQueryLabel: this.LastQueryLabel,
+            GranteeCount: this.ResourceAccessRows.length,
+            GranteeNames: this.ResourceAccessRows.map((r) => r.GranteeName ?? r.GranteeType).filter((n): n is string => !!n),
             IsLoading: this.IsLoading,
         });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /** Domain candidates (id+name) for the tolerant id→name→contains resolver. */
+    private domainCandidates(): { ID: string; Name: string }[] {
+        return this.Domains.map((d) => ({ ID: d.ID, Name: d.Name }));
     }
 
     /**
@@ -105,11 +123,11 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
             {
                 Name: 'LookupResourcePermissions',
                 Description:
-                    'Look up the grantees (who can access) for a specific resource. Read-only — does not grant or revoke any access. Requires the permission domain name, resource type, and resource ID.',
+                    'Look up the grantees (who can access) for a specific resource. Read-only — does not grant or revoke any access. Requires the permission domain (name or ID), resource type, and resource ID.',
                 ParameterSchema: {
                     type: 'object',
                     properties: {
-                        domainName: { type: 'string', description: 'The permission domain name' },
+                        domainName: { type: 'string', description: 'The permission domain name or ID' },
                         resourceType: { type: 'string', description: 'The resource type within the domain' },
                         resourceId: { type: 'string', description: 'The ID of the resource to inspect' },
                     },
@@ -120,13 +138,34 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
             {
                 Name: 'ChangeDomain',
                 Description:
-                    'Select a different permission domain for resource lookups. Read-only — only changes the active selection, does not mutate any domain.',
+                    'Select a different permission domain for resource lookups (by name or ID). Read-only — only changes the active selection, does not mutate any domain.',
                 ParameterSchema: {
                     type: 'object',
-                    properties: { domainName: { type: 'string', description: 'The permission domain name to select' } },
+                    properties: { domainName: { type: 'string', description: 'The permission domain name or ID to select' } },
                     required: ['domainName'],
                 },
                 Handler: async (params: Record<string, unknown>) => this.handleChangeDomainTool(params),
+            },
+            {
+                Name: 'ListResourceTypesForDomain',
+                Description:
+                    'Read-only: list the resource types supported by a permission domain (by name or ID). Helps the user pick a valid resource type before a lookup.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { domainName: { type: 'string', description: 'The permission domain name or ID (defaults to the current selection)' } },
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleListResourceTypesTool(params),
+            },
+            {
+                Name: 'SearchResourceGrantees',
+                Description:
+                    'Read-only: search the grantees from the most recent lookup by a name substring. Returns the matching grantee display names — does not modify any access.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { query: { type: 'string', description: 'Case-insensitive substring to match against grantee names' } },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleSearchGranteesTool(params),
             },
         ]);
     }
@@ -145,15 +184,12 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
             return { Success: false, ErrorMessage: 'domainName, resourceType, and resourceId are all required.' };
         }
 
-        const known = this.Domains.some((d) => d.Name === domain.value.trim());
-        if (!known) {
-            return {
-                Success: false,
-                ErrorMessage: `Unknown permission domain "${domain.value.trim()}".`,
-            };
+        const match = resolvePermissionsCandidate(domain.value, this.domainCandidates());
+        if (!match) {
+            return { Success: false, ErrorMessage: buildPermissionsNotFoundError(domain.value, 'permission domain', this.domainCandidates()) };
         }
 
-        this.SelectedDomainName = domain.value.trim();
+        this.SelectedDomainName = match.Name;
         this.loadResourceTypesForDomain(this.SelectedDomainName);
         this.ResourceTypeInput = type.value.trim();
         this.ResourceIdInput = id.value.trim();
@@ -164,21 +200,62 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
         if (this.ErrorMessage) {
             return { Success: false, ErrorMessage: this.ErrorMessage };
         }
-        return { Success: true, Data: { ResourceAccessRowCount: this.ResourceAccessRows.length } };
+        return {
+            Success: true,
+            Data: {
+                DomainName: match.Name,
+                GranteeCount: this.ResourceAccessRows.length,
+                GranteeNames: this.ResourceAccessRows.slice(0, 25).map((r) => r.GranteeName ?? r.GranteeType),
+            },
+        };
     }
 
-    private handleChangeDomainTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    private handleChangeDomainTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
         const domain = validateStringParam(params?.['domainName'], 'domainName');
         if (!domain.ok) return domain.result;
 
-        const known = this.Domains.some((d) => d.Name === domain.value.trim());
-        if (!known) {
-            return { Success: false, ErrorMessage: `Unknown permission domain "${domain.value.trim()}".` };
+        const match = resolvePermissionsCandidate(domain.value, this.domainCandidates());
+        if (!match) {
+            return { Success: false, ErrorMessage: buildPermissionsNotFoundError(domain.value, 'permission domain', this.domainCandidates()) };
         }
 
-        this.OnDomainChanged(domain.value.trim());
+        this.OnDomainChanged(match.Name);
         this.publishAgentContext();
-        return { Success: true };
+        return { Success: true, Data: { DomainName: match.Name, ResourceTypes: this.ResourceTypes.slice(0, 25) } };
+    }
+
+    private handleListResourceTypesTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
+        const raw = validateStringParam(params?.['domainName'] ?? '', 'domainName');
+        if (!raw.ok) return raw.result;
+        let domainName = this.SelectedDomainName;
+        if (raw.value.trim()) {
+            const match = resolvePermissionsCandidate(raw.value, this.domainCandidates());
+            if (!match) {
+                return { Success: false, ErrorMessage: buildPermissionsNotFoundError(raw.value, 'permission domain', this.domainCandidates()) };
+            }
+            domainName = match.Name;
+        }
+        if (!domainName) {
+            return { Success: false, ErrorMessage: 'No permission domain is selected. Provide a domain name or ID.' };
+        }
+        const types = PermissionEngine.Instance.GetResourceTypes(domainName, this.ProviderToUse);
+        return { Success: true, Data: { DomainName: domainName, ResourceTypes: types.slice(0, 25), ResourceTypeCount: types.length } };
+    }
+
+    private handleSearchGranteesTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
+        const q = validateStringParam(params?.['query'], 'query');
+        if (!q.ok) return q.result;
+        const needle = q.value.trim().toLowerCase();
+        if (!needle) {
+            return { Success: false, ErrorMessage: 'query is required.' };
+        }
+        if (this.ResourceAccessRows.length === 0) {
+            return { Success: false, ErrorMessage: 'No grantees are loaded. Run a resource lookup first.' };
+        }
+        const matches = this.ResourceAccessRows
+            .map((r) => r.GranteeName ?? r.GranteeType)
+            .filter((n): n is string => !!n && n.toLowerCase().includes(needle));
+        return { Success: true, Data: { MatchCount: matches.length, Matches: matches.slice(0, 25) } };
     }
 
     async OnLookupResource(): Promise<void> {

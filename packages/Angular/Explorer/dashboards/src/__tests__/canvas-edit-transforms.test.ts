@@ -8,13 +8,23 @@ import {
     addFieldToCanvas,
     addSectionToCanvas,
     buildCanvasEditClientTools,
+    buildCanvasStateSummary,
     collectFieldNames,
+    duplicateElementInCanvas,
+    elementDisplayLabel,
     findElement,
     findSection,
+    findSectionOfElement,
+    moveElementToSection,
+    moveSectionToIndex,
+    normalizeElementType,
     normalizeSpan,
     removeElementFromCanvas,
     removeSectionFromCanvas,
+    reorderSections,
     reorderSectionElements,
+    resolveElement,
+    resolveSection,
     updateElementInCanvas,
     updateSectionInCanvas,
     type CanvasEditHost,
@@ -228,6 +238,153 @@ describe('normalizeSpan', () => {
     });
 });
 
+// ── New element transforms: move / duplicate / type / labels ─────────────────
+
+describe('findSectionOfElement / elementDisplayLabel / normalizeElementType', () => {
+    it('finds the section containing an element', () => {
+        expect(findSectionOfElement(canvas(), 'e3')?.id).toBe('s2');
+        expect(findSectionOfElement(canvas(), 'ghost')).toBeNull();
+    });
+    it('prefers label, then field name, then type for display', () => {
+        expect(elementDisplayLabel(field('e', 'Email', { label: 'E-mail' }))).toBe('E-mail');
+        expect(elementDisplayLabel(field('e', 'Email'))).toBe('Email');
+        expect(elementDisplayLabel({ id: 'x', type: 'spacer' })).toBe('spacer');
+    });
+    it('normalizes a valid element type case-insensitively, else null', () => {
+        expect(normalizeElementType('FIELD')).toBe('field');
+        expect(normalizeElementType('static-text')).toBe('static-text');
+        expect(normalizeElementType('nope')).toBeNull();
+    });
+});
+
+describe('resolveElement / resolveSection', () => {
+    it('resolves an element by id, exact label, then partial', () => {
+        const c = canvas();
+        expect(resolveElement(c, 'e1')?.id).toBe('e1');
+        expect(resolveElement(c, 'email')?.id).toBe('e2');     // exact label, ci
+        expect(resolveElement(c, 'not')?.id).toBe('e3');       // partial of "Notes"
+        expect(resolveElement(c, 'zzz')).toBeNull();
+    });
+    it('resolves a section by id, exact title, then partial', () => {
+        const c = canvas();
+        expect(resolveSection(c, 's2')?.id).toBe('s2');
+        expect(resolveSection(c, 'identity')?.id).toBe('s1');  // exact title, ci
+        expect(resolveSection(c, 'detail')?.id).toBe('s2');    // partial of "Details"
+        expect(resolveSection(c, 'zzz')).toBeNull();
+    });
+});
+
+describe('moveElementToSection', () => {
+    it('moves an element to another section (appended)', () => {
+        const after = moveElementToSection(canvas(), 'e1', 's2');
+        expect(findSection(after, 's1')!.elements.map(e => e.id)).toEqual(['e2']);
+        expect(findSection(after, 's2')!.elements.map(e => e.id)).toEqual(['e3', 'e1']);
+    });
+    it('honours an insert index within the destination', () => {
+        const after = moveElementToSection(canvas(), 'e1', 's2', 0);
+        expect(findSection(after, 's2')!.elements.map(e => e.id)).toEqual(['e1', 'e3']);
+    });
+    it('repositions within the same section', () => {
+        const after = moveElementToSection(canvas(), 'e1', 's1', 1);
+        expect(findSection(after, 's1')!.elements.map(e => e.id)).toEqual(['e2', 'e1']);
+    });
+    it('is a no-op for an absent element or section', () => {
+        const before = canvas();
+        expect(moveElementToSection(before, 'ghost', 's2')).toBe(before);
+        expect(moveElementToSection(before, 'e1', 'ghost')).toBe(before);
+    });
+    it('does not mutate the input', () => {
+        const before = canvas();
+        const snap = JSON.parse(JSON.stringify(before));
+        moveElementToSection(before, 'e1', 's2');
+        expect(before).toEqual(snap);
+    });
+});
+
+describe('duplicateElementInCanvas', () => {
+    it('inserts a clone right after the original', () => {
+        const after = duplicateElementInCanvas(canvas(), 'e1', 'clone1');
+        expect(findSection(after, 's1')!.elements.map(e => e.id)).toEqual(['e1', 'clone1', 'e2']);
+        expect(findElement(after, 'clone1')!.fieldName).toBe('Name');
+    });
+    it('is a no-op when the source is absent', () => {
+        const before = canvas();
+        expect(duplicateElementInCanvas(before, 'ghost', 'x')).toBe(before);
+    });
+});
+
+// ── Section reordering ───────────────────────────────────────────────────────
+
+describe('reorderSections / moveSectionToIndex', () => {
+    it('reorders to the requested permutation', () => {
+        const after = reorderSections(canvas(), ['s2', 's1']);
+        expect(after.sections.map(s => s.id)).toEqual(['s2', 's1']);
+    });
+    it('refuses a non-permutation (same ref)', () => {
+        const before = canvas();
+        expect(reorderSections(before, ['s1'])).toBe(before);
+        expect(reorderSections(before, ['s1', 'sX'])).toBe(before);
+        expect(reorderSections(before, ['s1', 's1'])).toBe(before);
+    });
+    it('moves a section to a clamped index', () => {
+        expect(moveSectionToIndex(canvas(), 's2', 0).sections.map(s => s.id)).toEqual(['s2', 's1']);
+        expect(moveSectionToIndex(canvas(), 's1', 99).sections.map(s => s.id)).toEqual(['s2', 's1']);
+        expect(moveSectionToIndex(canvas(), 's1', -3).sections.map(s => s.id)).toEqual(['s1', 's2']);
+    });
+    it('moveSectionToIndex is a no-op for an absent section', () => {
+        const before = canvas();
+        expect(moveSectionToIndex(before, 'ghost', 0)).toBe(before);
+    });
+});
+
+// ── Bounded context summary ──────────────────────────────────────────────────
+
+describe('buildCanvasStateSummary', () => {
+    it('returns null for a null canvas', () => {
+        expect(buildCanvasStateSummary(null, [], null, null)).toBeNull();
+    });
+    it('summarises sections, elements, and field counts', () => {
+        const s = buildCanvasStateSummary(canvas(), ['Name', 'Email', 'Notes', 'Phone'], null, null)!;
+        expect(s.EntityName).toBe('MJ: Users');
+        expect(s.SectionCount).toBe(2);
+        expect(s.ElementCount).toBe(3);
+        expect(s.FieldCount).toBe(3);
+        expect(s.Sections.map(x => x.fieldCount)).toEqual([2, 1]);
+        expect(s.PlacedFieldNames).toEqual(['Name', 'Email', 'Notes']);
+    });
+    it('computes AvailableFieldNames as schema minus placed (ci)', () => {
+        const s = buildCanvasStateSummary(canvas(), ['Name', 'email', 'Phone', 'Fax'], null, null)!;
+        expect(s.AvailableFieldNames).toEqual(['Phone', 'Fax']);
+        expect(s.AvailableFieldNameCount).toBe(2);
+        expect(s.AvailableFieldNamesTruncated).toBe(false);
+    });
+    it('resolves the selected element and section by id', () => {
+        const s = buildCanvasStateSummary(canvas(), [], 'e2', 's2')!;
+        expect(s.SelectedElement?.label).toBe('Email');
+        expect(s.SelectedElement?.sectionId).toBe('s1');
+        expect(s.SelectedSection?.title).toBe('Details');
+    });
+    it('null selections resolve to null', () => {
+        const s = buildCanvasStateSummary(canvas(), [], null, null)!;
+        expect(s.SelectedElement).toBeNull();
+        expect(s.SelectedSection).toBeNull();
+    });
+    it('caps lists at 25 and flags truncation', () => {
+        const many: FormCanvasSection[] = Array.from({ length: 30 }, (_, i) =>
+            section(`s${i}`, `S${i}`, [field(`e${i}`, `F${i}`)]));
+        const big: FormCanvasModel = { entityName: 'E', sections: many };
+        const schemaNames = Array.from({ length: 60 }, (_, i) => `Extra${i}`);
+        const s = buildCanvasStateSummary(big, schemaNames, null, null)!;
+        expect(s.Sections).toHaveLength(25);
+        expect(s.SectionsTruncated).toBe(true);
+        expect(s.Elements).toHaveLength(25);
+        expect(s.ElementsTruncated).toBe(true);
+        expect(s.AvailableFieldNames).toHaveLength(25);
+        expect(s.AvailableFieldNamesTruncated).toBe(true);
+        expect(s.AvailableFieldNameCount).toBe(60);
+    });
+});
+
 // ── Client-tool factory ──────────────────────────────────────────────────────
 
 describe('buildCanvasEditClientTools', () => {
@@ -258,9 +415,11 @@ describe('buildCanvasEditClientTools', () => {
     it('exposes the full granular suite plus the pane tools', () => {
         const names = buildCanvasEditClientTools(host).map(t => t.Name).sort();
         expect(names).toEqual([
-            'AddField', 'AddSection', 'PreviewForm', 'RemoveField', 'RemoveSection',
-            'ReorderFields', 'SetFieldLabel', 'SetFieldSpan', 'SetSectionTitle',
-            'ToggleFieldRequired', 'ViewFormCode', 'ViewFormLayout',
+            'AddField', 'AddSection', 'DuplicateField', 'MoveFieldToSection',
+            'PreviewForm', 'RemoveField', 'RemoveSection', 'ReorderFields',
+            'SetFieldHelpText', 'SetFieldLabel', 'SetFieldSpan', 'SetFieldType',
+            'SetSectionCollapsible', 'SetSectionColumns', 'SetSectionOrder',
+            'SetSectionTitle', 'ToggleFieldRequired', 'ViewFormCode', 'ViewFormLayout',
         ]);
     });
 
@@ -379,9 +538,86 @@ describe('buildCanvasEditClientTools', () => {
     it('every transform tool fails gracefully when no form is loaded', async () => {
         current = null;
         for (const name of ['AddField', 'RemoveField', 'SetFieldLabel', 'ToggleFieldRequired',
-            'SetFieldSpan', 'ReorderFields', 'AddSection', 'RemoveSection', 'SetSectionTitle']) {
-            const res = await tool(name).Handler({ elementId: 'e1', sectionId: 's1', fieldName: 'X', span: 1, title: 'T', fieldIds: [] });
+            'SetFieldSpan', 'ReorderFields', 'AddSection', 'RemoveSection', 'SetSectionTitle',
+            'SetFieldType', 'SetFieldHelpText', 'MoveFieldToSection', 'DuplicateField',
+            'SetSectionCollapsible', 'SetSectionColumns', 'SetSectionOrder']) {
+            const res = await tool(name).Handler({
+                elementId: 'e1', sectionId: 's1', section: 's1', field: 'e1', fieldName: 'X',
+                span: 1, title: 'T', fieldIds: [], elementType: 'field', columns: 2, index: 0,
+            });
             expect(res.Success, `${name} should fail with no canvas`).toBe(false);
+        }
+    });
+
+    // ── New deepened tools ────────────────────────────────────────────────
+
+    it('SetFieldType changes the element type by label and validates it', async () => {
+        const ok = await tool('SetFieldType').Handler({ field: 'Email', elementType: 'computed' });
+        expect(ok.Success).toBe(true);
+        expect(findElement(current!, 'e2')!.type).toBe('computed');
+
+        const bad = await tool('SetFieldType').Handler({ field: 'e1', elementType: 'bogus' });
+        expect(bad.Success).toBe(false);
+    });
+
+    it('SetFieldType reports available labels on a miss', async () => {
+        const res = await tool('SetFieldType').Handler({ field: 'zzz', elementType: 'field' });
+        expect(res.Success).toBe(false);
+        expect(res.ErrorMessage).toMatch(/Email/);
+    });
+
+    it('SetFieldHelpText sets and clears helper text', async () => {
+        await tool('SetFieldHelpText').Handler({ field: 'e1', helpText: 'Enter your name' });
+        expect(findElement(current!, 'e1')!.helper).toBe('Enter your name');
+        await tool('SetFieldHelpText').Handler({ field: 'e1', helpText: '' });
+        expect(findElement(current!, 'e1')!.helper).toBeUndefined();
+    });
+
+    it('MoveFieldToSection moves by label/title and resolves names', async () => {
+        const res = await tool('MoveFieldToSection').Handler({ field: 'Name', section: 'Details' });
+        expect(res.Success).toBe(true);
+        expect(findSection(current!, 's1')!.elements.map(e => e.id)).toEqual(['e2']);
+        expect(findSection(current!, 's2')!.elements.map(e => e.fieldName)).toEqual(['Notes', 'Name']);
+    });
+
+    it('MoveFieldToSection fails clearly for an unknown destination', async () => {
+        const res = await tool('MoveFieldToSection').Handler({ field: 'e1', section: 'ghost' });
+        expect(res.Success).toBe(false);
+        expect(res.ErrorMessage).toMatch(/ghost/);
+    });
+
+    it('DuplicateField clones in place and returns the new id', async () => {
+        const res = await tool('DuplicateField').Handler({ field: 'e1' });
+        expect(res.Success).toBe(true);
+        expect(findSection(current!, 's1')!.elements).toHaveLength(3);
+        const dataKey = (res.Data as { newElementId: string }).newElementId;
+        expect(findElement(current!, dataKey)!.fieldName).toBe('Name');
+    });
+
+    it('SetSectionCollapsible toggles and honours an explicit value', async () => {
+        await tool('SetSectionCollapsible').Handler({ section: 'Identity' });
+        expect(findSection(current!, 's1')!.collapsible).toBe(true);
+        await tool('SetSectionCollapsible').Handler({ section: 's1', collapsible: false });
+        expect(findSection(current!, 's1')!.collapsible).toBe(false);
+    });
+
+    it('SetSectionColumns clamps to 1 or 2', async () => {
+        await tool('SetSectionColumns').Handler({ section: 's1', columns: 1 });
+        expect(findSection(current!, 's1')!.columns).toBe(1);
+        await tool('SetSectionColumns').Handler({ section: 's1', columns: 5 });
+        expect(findSection(current!, 's1')!.columns).toBe(2);
+    });
+
+    it('SetSectionOrder repositions a section by title', async () => {
+        const res = await tool('SetSectionOrder').Handler({ section: 'Details', index: 0 });
+        expect(res.Success).toBe(true);
+        expect(current!.sections.map(s => s.id)).toEqual(['s2', 's1']);
+    });
+
+    it('🔒 SAFETY: the deepened suite still exposes no Save/Publish/Delete-form path', () => {
+        const names = buildCanvasEditClientTools(host).map(t => t.Name.toLowerCase());
+        for (const banned of ['save', 'publish', 'persist', 'deleteform', 'activate', 'override']) {
+            expect(names.some(n => n.includes(banned)), `tool name contains '${banned}'`).toBe(false);
         }
     });
 });

@@ -222,11 +222,15 @@ export class LazyModuleStatusComponent extends BaseResourceComponent implements 
 
     /** Publish the current lazy-module status to the AI agent. */
     private publishAgentContext(): void {
+        const visible = this.FilteredChunks;
         const context = buildLazyModuleStatusAgentContext({
             Available: this.Available,
             TotalModules: this.Stats.chunkCount,
             LoadedModules: this.Stats.loadedChunks,
             Filter: this.Filter,
+            SearchQuery: this.SearchQuery,
+            VisibleModuleCount: visible.length,
+            VisibleModuleNames: visible.map(c => c.label),
         });
         this.navigationService.SetAgentContext(this, context);
     }

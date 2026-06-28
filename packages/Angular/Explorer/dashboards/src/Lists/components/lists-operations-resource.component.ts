@@ -12,6 +12,7 @@ import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql
 import type { ListDelta, ListSource } from '@memberjunction/lists-base';
 import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
 import { resolveVennRegion } from './lists-operations-region-resolver';
+import { buildListOperationsAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface ListSelection {
   list: MJListEntity;
   entityName: string;
@@ -1935,19 +1936,43 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * change so the agent always knows what is on the canvas.
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, {
+    this.navigationService.SetAgentContext(this, buildListOperationsAgentContext({
+      // Deep context: the operands on the canvas (name / kind / entity), the
+      // entity-filter options, the available Venn regions, and a preview of the
+      // selected region's records — so the agent sees everything on screen and
+      // can act on operands/regions by name.
+      Operands: [
+        ...this.selectedLists.map(s => ({ Name: s.list.Name, Kind: 'list' as const, EntityName: s.entityName })),
+        ...this.selectedViews.map(s => ({ Name: s.view.Name, Kind: 'view' as const, EntityName: s.entityName })),
+      ],
       ListOperandCount: this.selectedLists.length,
       ViewOperandCount: this.selectedViews.length,
       TotalOperandCount: this.totalOperandCount,
       MaxOperands: this.maxLists,
       LockedEntityName: this.lockedEntityName,
       ComposeOp: this.composeOp,
+      AvailableEntityNames: this.entityOptions.map(o => o.name),
+      AvailableRegions: (this.vennData?.intersections ?? []).map(r => ({ Label: r.label, Size: r.size })),
       SelectedRegionLabel: this.selectedRegion?.label ?? null,
       SelectedRegionSize: this.selectedRegion?.size ?? null,
+      PreviewRecordNames: this.previewRecordsDisplay.map(p => p.displayName),
       LastOperation: this.lastOperationResult
         ? { operation: this.lastOperationResult.operation, resultCount: this.lastOperationResult.resultCount }
         : null,
-    });
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a list ID or NAME, exact or partial) to
+   * one of the lists available as operands, via the pure {@link resolveNamedRecord}
+   * helper. Returns the matching {@link MJListEntity}, or null.
+   */
+  private resolveAvailableList(input: string): MJListEntity | null {
+    const match = resolveNamedRecord(input, this.availableLists.map(l => ({ ID: l.ID, Name: l.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.availableLists.find(l => UUIDsEqual(l.ID, match.ID)) ?? null;
   }
 
   /**
@@ -1959,17 +1984,17 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.navigationService.SetAgentClientTools(this, [
       {
         Name: 'AddListOperand',
-        Description: 'Add a list (by ID) as an operand to the comparison. Operands are locked to a single entity type; the first operand sets the type.',
-        ParameterSchema: { type: 'object', properties: { listId: { type: 'string', description: 'The ID of the list to add' } }, required: ['listId'] },
+        Description: 'Add a list as an operand to the comparison, by its ID or name. Operands are locked to a single entity type; the first operand sets the type. The tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to add' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['listId'], 'listId');
+          const check = validateStringParam(params['list'] ?? params['listId'], 'list');
           if (!check.ok) return check.result;
           if (this.totalOperandCount >= this.maxLists) {
             return { Success: false, ErrorMessage: `Maximum of ${this.maxLists} operands already selected.` };
           }
-          const list = this.availableLists.find(l => UUIDsEqual(l.ID, check.value));
-          if (!list) return { Success: false, ErrorMessage: `No available list found with ID "${check.value}".` };
-          if (this.selectedLists.some(s => UUIDsEqual(s.list.ID, check.value))) {
+          const list = this.resolveAvailableList(check.value);
+          if (!list) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.availableLists.map(l => ({ ID: l.ID, Name: l.Name })), 'list') };
+          if (this.selectedLists.some(s => UUIDsEqual(s.list.ID, list.ID))) {
             return { Success: false, ErrorMessage: `List "${list.Name}" is already an operand.` };
           }
           if (this.lockedEntityID && !UUIDsEqual(list.EntityID, this.lockedEntityID)) {

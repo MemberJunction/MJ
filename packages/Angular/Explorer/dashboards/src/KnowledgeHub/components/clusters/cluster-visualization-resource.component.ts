@@ -32,6 +32,14 @@ import {
     ViewportTransform,
 } from '@memberjunction/ng-clustering';
 import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-clustering';
+import {
+    buildClusterAgentContext,
+    capClusterList,
+    resolveSavedVisualization,
+    buildClusterNotFoundError,
+    ClusterSummary,
+} from './cluster-agent-context';
+import { validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
 
 /**
  * Build an environment-scoped storage key so cluster data does not bleed
@@ -150,28 +158,73 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
 
     /**
      * Publish the current clustering state to the AI agent. Re-emitted whenever
-     * a run completes, a saved visualization is selected, or the analysis is
-     * reset — so the streamed context tracks what's on screen. No-op when
-     * embedded (the Visualize host owns reporting).
+     * a run completes, a saved visualization is selected, the source entity or
+     * algorithm changes, or the analysis is reset — so the streamed context
+     * tracks what's on screen. No-op when embedded (the Visualize host owns
+     * reporting). Deepened to Data-Explorer depth: per-cluster summaries (id +
+     * resolved label + point count), the active source/algorithm/dimensions
+     * config, the silhouette quality score, the available source entities, and
+     * the saved-visualization landscape (id+name of the active one).
      */
     private emitAgentContext(): void {
         if (this.Embedded) {
             return;
         }
-        this.navigationService.SetAgentContext(this, {
-            IsVisualizationLoaded: !!this.Result,
+        const activeSaved = this.ActiveSavedId
+            ? this.SavedVisualizations.find(s => s.Id === this.ActiveSavedId)
+            : undefined;
+        this.navigationService.SetAgentContext(this, buildClusterAgentContext({
+            IsVisualizationLoaded: this.HasResult,
             VisualizationTitle: this.VisualizationTitle || null,
+            IsRunning: this.IsRunning,
+            RunError: this.RunError,
+            ConfigEntityName: this.ActiveConfig.EntityName || '',
+            ConfigAlgorithm: this.ActiveConfig.Algorithm,
+            ConfigDimensions: this.ActiveConfig.Dimensions ?? 2,
             ClusterCount: this.Result?.Clusters?.length ?? 0,
             TotalPoints: this.Result?.Points?.length ?? 0,
-            IsRunning: this.IsRunning,
+            Clusters: this.buildClusterSummaries(),
+            SilhouetteScore: this.Result?.Metrics?.SilhouetteScore ?? null,
+            AvailableEntityNames: this.EntityOptions.map(o => o.Name),
             SavedVisualizationCount: this.SavedVisualizations.length,
+            SavedVisualizationNames: this.SavedVisualizations.map(s => s.Name),
+            ActiveSavedId: this.ActiveSavedId,
+            ActiveSavedName: activeSaved?.Name ?? null,
+        }));
+    }
+
+    /**
+     * Build per-cluster summaries (id, resolved label, point count) for the
+     * agent context. The label prefers an LLM-generated / user-edited
+     * {@link ClusterLabels} entry, then the cluster's own Label, then a generic
+     * "Cluster N".
+     */
+    private buildClusterSummaries(): ClusterSummary[] {
+        if (!this.Result || this.Result.Clusters.length === 0) {
+            return [];
+        }
+        return this.Result.Clusters.map(cluster => {
+            const labelEntry = this.ClusterLabels.find(l => l.ClusterId === cluster.Id);
+            const label = labelEntry?.Label || cluster.Label || `Cluster ${cluster.Id}`;
+            const pointCount = this.Result!.Points.filter(p => p.ClusterId === cluster.Id).length;
+            return { ClusterId: cluster.Id, Label: label, PointCount: pointCount };
         });
     }
 
     /**
-     * Register the agent-actionable operations: re-run clustering with the
-     * current configuration, and reset to a fresh analysis. Both wire to
-     * existing methods and never throw.
+     * 🚨 SAFETY BOUNDARY (Knowledge Hub · Clusters)
+     * ------------------------------------------------------------------
+     * The agent may RE-RUN / RESET / RE-PROJECT / RE-NAME a clustering
+     * visualization, SET the source entity & algorithm before a run, and
+     * OPEN a saved visualization or the underlying entity record. All of
+     * these are idempotent recomputes or read-only navigations.
+     *
+     * Intentionally NOT exposed:
+     *   - DELETE a saved visualization (OnDeleteSaved — destructive, irreversible)
+     *   - SAVE a visualization (OnSaveVisualization — writes a User Setting row;
+     *     left to the deliberate UI action)
+     * Tolerant handlers: every Handler returns { Success, Data?, ErrorMessage? }
+     * and never throws; agent-supplied references resolve id→name→contains.
      */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
@@ -186,7 +239,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     await this.OnRunClustering(this.ActiveConfig);
                     return this.RunError
                         ? { Success: false, ErrorMessage: this.RunError }
-                        : { Success: true, Data: { ClusterCount: this.Result?.Clusters?.length ?? 0 } };
+                        : { Success: true, Data: { ClusterCount: this.Result?.Clusters?.length ?? 0, TotalPoints: this.Result?.Points?.length ?? 0 } };
                 },
             },
             {
@@ -198,7 +251,112 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                     return { Success: true };
                 },
             },
+            {
+                Name: 'SetClusterSourceEntity',
+                Description: 'Set the source entity that the next clustering run will pull vectors from (by name). Does not run the analysis — call RegenerateClusters after.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { entityName: { type: 'string', description: 'The entity name to cluster (e.g. "Companies").' } },
+                    required: ['entityName'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const check = validateStringParam(params['entityName'], 'entityName');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    const candidates = this.EntityOptions.map(o => ({ Id: o.Name, Name: o.Name }));
+                    const match = resolveSavedVisualization(check.value, candidates);
+                    if (!match) {
+                        return buildClusterNotFoundError(check.value, candidates.map(c => c.Name), 'source entity');
+                    }
+                    this.OnEntitySourceChanged(match.Name);
+                    return { Success: true, Data: { ConfigEntityName: match.Name } };
+                },
+            },
+            {
+                Name: 'SetClusterAlgorithm',
+                Description: 'Set the clustering algorithm for the next run (kmeans or dbscan). Does not run the analysis — call RegenerateClusters after.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { algorithm: { type: 'string', enum: ['kmeans', 'dbscan'] } },
+                    required: ['algorithm'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const check = validateEnumParam(params['algorithm'], ['kmeans', 'dbscan'] as const, 'algorithm');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    this.ActiveConfig = { ...this.ActiveConfig, Algorithm: check.value };
+                    this.emitAgentContext();
+                    this.cdr.detectChanges();
+                    return { Success: true, Data: { ConfigAlgorithm: check.value } };
+                },
+            },
+            {
+                Name: 'SetClusterDimensions',
+                Description: 'Switch the projection between 2D and 3D. Re-projects immediately when a visualization is already loaded.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { dimensions: { type: 'number', enum: [2, 3] } },
+                    required: ['dimensions'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const dims = params['dimensions'];
+                    if (dims !== 2 && dims !== 3) {
+                        return { Success: false, ErrorMessage: 'dimensions must be 2 or 3.' };
+                    }
+                    this.OnDimensionsChanged(dims);
+                    return { Success: true, Data: { ConfigDimensions: dims } };
+                },
+            },
+            {
+                Name: 'OpenSavedVisualization',
+                Description: 'Open a previously saved cluster visualization from the sidebar, by id or name. Restores it instantly when cached.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { reference: { type: 'string', description: 'The saved visualization id or display name.' } },
+                    required: ['reference'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const check = validateStringParam(params['reference'], 'reference');
+                    if (!check.ok) {
+                        return check.result;
+                    }
+                    const match = resolveSavedVisualization(check.value, this.SavedVisualizations);
+                    if (!match) {
+                        return buildClusterNotFoundError(check.value, this.SavedVisualizations.map(s => s.Name), 'saved visualization');
+                    }
+                    await this.OnSelectSaved(match);
+                    return { Success: true, Data: { Name: match.Name, ClusterCount: this.Result?.Clusters?.length ?? 0 } };
+                },
+            },
+            {
+                Name: 'ListSavedVisualizations',
+                Description: 'List the saved cluster visualizations available in the sidebar (bounded).',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    return {
+                        Success: true,
+                        Data: {
+                            SavedVisualizations: capClusterList(this.SavedVisualizations.map(s => ({ Id: s.Id, Name: s.Name }))),
+                            TotalCount: this.SavedVisualizations.length,
+                        },
+                    };
+                },
+            },
         ]);
+    }
+
+    /**
+     * Set the source entity for the next clustering run and refresh the dependent
+     * document options. Idempotent; emits agent context. Exposed to the agent via
+     * SetClusterSourceEntity and usable from the config panel.
+     */
+    public OnEntitySourceChanged(entityName: string): void {
+        this.ActiveConfig = { ...this.ActiveConfig, EntityName: entityName, EntityDocumentID: '' };
+        this.updateEntityDocOptions(entityName);
+        this.emitAgentContext();
+        this.cdr.detectChanges();
     }
 
     ngOnDestroy(): void {

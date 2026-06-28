@@ -245,12 +245,15 @@ export class ClassRegistryInspectorComponent extends BaseResourceComponent imple
 
     /** Publish the current Class Registry browse state to the AI agent. */
     private publishAgentContext(): void {
+        const visible = this.FilteredGroups;
         const context = buildClassRegistryAgentContext({
             TotalClassCount: this.Stats.total,
             BaseClassCount: this.Stats.baseClasses,
             OverrideCount: this.Stats.withOverrides,
             SearchTerm: this.SearchQuery,
             FilterByBase: this.activeBaseClassFilter,
+            VisibleGroupCount: visible.length,
+            VisibleBaseClassNames: visible.map(g => g.baseClassName),
         });
         this.navigationService.SetAgentContext(this, context);
     }

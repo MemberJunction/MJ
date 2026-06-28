@@ -4,7 +4,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData } from '@memberjunction/core-entities';
 import { RecordProcessStudioComponent } from '@memberjunction/ng-record-process-studio';
 import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
-import { buildStudioAgentContext, resolveRowByID } from './bulk-operations-agent-helpers';
+import { buildStudioAgentContext, resolveRowByIDOrName } from './bulk-operations-agent-helpers';
 
 /**
  * "Operations" sub-page of the Bulk Operations shell. A thin host that renders the generic, self-contained
@@ -85,7 +85,7 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
         this.navigationService.SetAgentContext(this, buildStudioAgentContext({
             Mode: s.Mode,
             ProcessCount: s.Processes.length,
-            FilteredCount: s.Filtered.length,
+            Filtered: s.Filtered,
             Search: s.Search,
             EditingID: s.EditingID,
             IsRunning: s.RunDriver != null,
@@ -130,23 +130,23 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
             },
             {
                 Name: 'EditProcess',
-                Description: 'Open the editor for an existing bulk operation by its ID. This only opens the editor for the user — it does NOT save anything.',
+                Description: 'Open the editor for an existing bulk operation, referenced by its ID or name (a partial, case-insensitive name match is accepted). This only opens the editor for the user — it does NOT save anything.',
                 ParameterSchema: {
                     type: 'object',
-                    properties: { processID: { type: 'string', description: 'The ID of the Record Process to edit.' } },
-                    required: ['processID'],
+                    properties: { process: { type: 'string', description: 'The ID or name of the bulk operation (Record Process) to edit.' } },
+                    required: ['process'],
                 },
                 Handler: async (params) => this.handleEdit(params),
             },
             {
                 Name: 'PreviewProcessChanges',
                 Description:
-                    'Open a SAFE dry-run preview of a bulk operation by its ID. This opens the runner, which computes and shows the proposed changes WITHOUT writing anything. ' +
+                    'Open a SAFE dry-run preview of a bulk operation, referenced by its ID or name (a partial, case-insensitive name match is accepted). This opens the runner, which computes and shows the proposed changes WITHOUT writing anything. ' +
                     'Applying the changes for real always requires a separate, manual user confirmation in the runner — the agent cannot apply changes.',
                 ParameterSchema: {
                     type: 'object',
-                    properties: { processID: { type: 'string', description: 'The ID of the Record Process to preview.' } },
-                    required: ['processID'],
+                    properties: { process: { type: 'string', description: 'The ID or name of the bulk operation (Record Process) to preview.' } },
+                    required: ['process'],
                 },
                 Handler: async (params) => this.handlePreview(params),
             },
@@ -197,15 +197,15 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
         return { Success: true };
     }
 
-    /** Open the editor for an existing process, resolved from the studio's loaded list. */
-    private async handleEdit(params: Record<string, unknown>): Promise<AgentToolResult> {
+    /** Open the editor for an existing process, resolved from the studio's loaded list by id or name. */
+    private async handleEdit(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
         const s = this.requireStudio();
         if (!s) return this.notReady();
-        const proc = this.findProcess(s, params['processID']);
+        const proc = this.findProcess(s, params['process']);
         if (!proc.ok) return proc.result;
         s.Edit(proc.value);
         this.publishAgentContext();
-        return { Success: true };
+        return { Success: true, Data: { ProcessID: proc.value.ID, ProcessName: proc.value.Name } };
     }
 
     /**
@@ -213,14 +213,14 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
      * the RecordProcessRunnerUX — that runner ALWAYS previews (dry-run) first and requires a manual user
      * click to apply real changes. The agent therefore triggers only the preview, never the apply.
      */
-    private async handlePreview(params: Record<string, unknown>): Promise<AgentToolResult> {
+    private async handlePreview(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
         const s = this.requireStudio();
         if (!s) return this.notReady();
-        const proc = this.findProcess(s, params['processID']);
+        const proc = this.findProcess(s, params['process']);
         if (!proc.ok) return proc.result;
         s.Run(proc.value);
         this.publishAgentContext();
-        return { Success: true };
+        return { Success: true, Data: { ProcessID: proc.value.ID, ProcessName: proc.value.Name, Mode: 'dry-run-preview' } };
     }
 
     /** Return to the list view from the editor or preview. */
@@ -247,15 +247,17 @@ export class BulkOperationsOperationsComponent extends BaseResourceComponent imp
     }
 
     /**
-     * Resolve a process row from the studio's loaded list by ID (delegates to the pure, unit-tested
-     * {@link resolveRowByID} helper). Returns a structured failure if the param is missing/non-string
-     * or the ID isn't found in the current list.
+     * Resolve a process row from the studio's loaded list by ID OR name (delegates to the pure,
+     * unit-tested {@link resolveRowByIDOrName} helper: exact ID → exact name → partial-name contains).
+     * Returns a structured failure (listing available names) if the param is missing/non-string or no
+     * row matches. Resolves against the full loaded `Processes` set, not just the filtered view, so a
+     * search filter never hides an operation the agent references by name.
      */
     private findProcess(
         s: RecordProcessStudioComponent,
-        rawID: unknown,
+        rawRef: unknown,
     ): { ok: true; value: RecordProcessStudioComponent['Processes'][number] } | { ok: false; result: AgentToolResult } {
-        return resolveRowByID(s.Processes, rawID, 'processID', 'bulk operation');
+        return resolveRowByIDOrName(s.Processes, rawRef, 'process', 'bulk operation', (p) => p.Name);
     }
 
     /** Build a minimal synthetic input event so we can drive the studio's `onSearch(event)` API. */

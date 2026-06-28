@@ -263,24 +263,34 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
 
     /**
      * Publish METADATA-ONLY context for the App State Inspector. Reports the
-     * size of the active section's serialized JSON and its top-level key count —
-     * deliberately never the values. See SAFETY BOUNDARY above.
+     * size of the active section's serialized JSON, its top-level key count, the
+     * section label/ids, and the top-level KEY NAMES (structural identifiers like
+     * "Email"/"Roles" — never their values). See SAFETY BOUNDARY above.
      */
     private publishAgentContext(): void {
         const context = buildAppStateInspectorAgentContext({
             StateSize: this.StateJson.length,
-            KeyCount: this.activeSectionKeyCount(),
+            KeyCount: this.activeSectionKeys().length,
             ActiveSection: this.ActiveSection,
+            ActiveSectionLabel: this.SectionLabel,
+            SectionIds: this.Sections.map(s => s.id),
+            // 🔒 KEY NAMES only — never values.
+            TopLevelKeys: this.activeSectionKeys(),
         });
         this.navigationService.SetAgentContext(this, context);
     }
 
-    /** Count top-level keys of the active section's data — metadata only, no values. */
-    private activeSectionKeyCount(): number {
+    /**
+     * Top-level KEY NAMES of the active section's data — METADATA ONLY, never
+     * any value. For an array, returns the numeric indices as strings.
+     */
+    private activeSectionKeys(): string[] {
         const data = this.computeSectionData(this.ActiveSection);
         if (data && typeof data === 'object') {
-            return Array.isArray(data) ? data.length : Object.keys(data as Record<string, unknown>).length;
+            return Array.isArray(data)
+                ? data.map((_, i) => String(i))
+                : Object.keys(data as Record<string, unknown>);
         }
-        return 0;
+        return [];
     }
 }

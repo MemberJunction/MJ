@@ -113,3 +113,30 @@ export function normalizeQueryParameters(raw: unknown): Record<string, unknown> 
     }
     return Object.keys(out).length > 0 ? out : undefined;
 }
+
+/**
+ * Resolve the TRUE total row count a stored query would return, independent of
+ * the MaxRows / StartRow cap applied for this call.
+ *
+ * `RunQueryResult.TotalRowCount` is the authoritative total — it only differs
+ * from the bounded `RowCount` when StartRow or MaxRows are used (so a single
+ * unbounded run already has TotalRowCount === RowCount). We read it defensively:
+ * if a provider doesn't populate it (non-finite / negative / missing), we fall
+ * back to the number of rows actually returned (`returnedRowCount`) so the tool
+ * never reports a misleading total. Never throws.
+ *
+ * @param rawTotal - the provider's reported TotalRowCount (untrusted shape)
+ * @param returnedRowCount - the bounded count of rows actually returned
+ * @returns a non-negative integer total, falling back to returnedRowCount
+ */
+export function resolveTotalRowCount(rawTotal: unknown, returnedRowCount: number): number {
+    // Treat null/undefined as "not provided" — fall back. (Number(null) === 0,
+    // which would otherwise masquerade as a legitimate total of zero.)
+    if (rawTotal != null) {
+        const value = typeof rawTotal === 'number' ? rawTotal : Number(rawTotal);
+        if (Number.isFinite(value) && value >= 0) {
+            return Math.floor(value);
+        }
+    }
+    return Number.isFinite(returnedRowCount) && returnedRowCount >= 0 ? Math.floor(returnedRowCount) : 0;
+}

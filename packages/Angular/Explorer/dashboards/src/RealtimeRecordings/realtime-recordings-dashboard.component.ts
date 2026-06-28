@@ -7,7 +7,13 @@ import { MediaTranscriptCue } from '@memberjunction/ng-media-player';
 import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 import {
   buildRealtimeRecordingsAgentContext,
+  buildSessionNotFoundError,
+  isValidSessionSortDirection,
+  isValidSessionSortField,
+  resolveSessionByIdOrName,
   sessionMatchesQuery,
+  type SessionSortDirection,
+  type SessionSortField,
 } from './realtime-recordings-agent-context';
 
 /**
@@ -57,6 +63,12 @@ interface RecordedSession {
 export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
   /** All recorded sessions (master list), newest first. */
   public Sessions: RecordedSession[] = [];
+  /** Active client-side text filter applied to the list (empty when none). */
+  public SearchQuery = '';
+  /** Active client-side sort field for the list. */
+  public SortField: SessionSortField = 'date';
+  /** Active client-side sort direction for the list. */
+  public SortDirection: SessionSortDirection = 'desc';
   /** The session currently selected for playback, or null. */
   public SelectedSession: RecordedSession | null = null;
   /** Transcript turns for the selected session (used to build the cues). */
@@ -183,6 +195,44 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
     return session.ID;
   }
 
+  /**
+   * The recordings currently visible — the master list narrowed by the active client-side
+   * text filter and ordered by the active sort field + direction. Pure derivation from
+   * `Sessions` / `SearchQuery` / `SortField` / `SortDirection`; drives both the list UI and
+   * the agent context, so the agent's "what's selectable" view matches the screen exactly.
+   */
+  public get VisibleSessions(): RecordedSession[] {
+    const filtered = this.Sessions.filter(s => sessionMatchesQuery(s, this.SearchQuery));
+    const dir = this.SortDirection === 'asc' ? 1 : -1;
+    return filtered.sort((a, b) => this.compareSessions(a, b, this.SortField) * dir);
+  }
+
+  /** Comparator for two recordings on the given sort field (ascending; caller applies direction). */
+  private compareSessions(a: RecordedSession, b: RecordedSession, field: SessionSortField): number {
+    switch (field) {
+      case 'agent':
+        return a.AgentName.localeCompare(b.AgentName);
+      case 'duration':
+        return this.durationSortKey(a) - this.durationSortKey(b);
+      case 'date':
+      default:
+        return (a.CreatedAt?.getTime() ?? 0) - (b.CreatedAt?.getTime() ?? 0);
+    }
+  }
+
+  /** A stable numeric sort key for a recording's duration (createdAt epoch as a coarse proxy when absent). */
+  private durationSortKey(session: RecordedSession): number {
+    if (!session.DurationLabel) {
+      return 0;
+    }
+    // DurationLabel is `m:ss` or `h:mm:ss` — parse to total seconds for a stable ordering.
+    const parts = session.DurationLabel.split(':').map(p => Number(p));
+    if (parts.some(n => !Number.isFinite(n))) {
+      return 0;
+    }
+    return parts.reduce((acc, n) => acc * 60 + n, 0);
+  }
+
   /** A short, localized date/time label for a session row. */
   public SessionDateLabel(session: RecordedSession): string {
     if (!session.CreatedAt) {
@@ -211,15 +261,18 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
   // AI AGENT CONTEXT & CLIENT TOOLS
   //
   // 🚨 SAFETY BOUNDARY: This is a read-only session-playback surface. Only playback-navigation
-  // tools are exposed to the agent (select / deselect a recording, refresh the list, narrow the
-  // list by a client-side text filter). NO tool mutates, deletes, or exports a recording, a
-  // session, or its transcript.
+  // tools are exposed to the agent (select / play / deselect a recording, refresh the list, narrow
+  // the list by a client-side text filter, re-order the list). NO tool mutates, deletes, or exports
+  // a recording, a session, or its transcript — there is no such tool, and none may ever be added.
   // ========================================
 
   /**
    * Publish the current Realtime Recordings state to the AI agent via NavigationService.
-   * The shaping lives in the pure {@link buildRealtimeRecordingsAgentContext} helper so it stays
-   * unit-testable. Called on init and after every meaningful state change (load, select, deselect).
+   * Reports the recordings-list size (total + filtered), the active search/sort state, the open
+   * selection (id / agent / conversation / media / duration), the loaded turn count, the detail
+   * loading flag, and a bounded structured summary of the visible recordings. The shaping lives in
+   * the pure {@link buildRealtimeRecordingsAgentContext} helper so it stays unit-testable. Called
+   * on init and after every meaningful state change (load, select, deselect, search, sort).
    */
   private publishAgentContext(): void {
     const selected = this.SelectedSession;
@@ -236,6 +289,16 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
         : null,
       TurnCount: this.SelectedTurns.length,
       IsDetailLoading: this.IsDetailLoading,
+      SearchQuery: this.SearchQuery,
+      VisibleSessions: this.VisibleSessions.map(s => ({
+        ID: s.ID,
+        AgentName: s.AgentName,
+        ConversationName: s.ConversationName,
+        RecordingMedia: s.RecordingMedia,
+        DurationLabel: s.DurationLabel,
+      })),
+      SortField: this.SortField,
+      SortDirection: this.SortDirection,
     });
     this.navigationService.SetAgentContext(this, context);
   }
@@ -247,17 +310,24 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
    * Handlers are tolerant — they never throw.
    *
    * Tools (read-only — see the SAFETY BOUNDARY comment above):
-   * - SelectSession: select a recording by its session id and load its transcript for playback.
+   * - SelectSession / PlayRecording: select a recording by id OR name and load/play its transcript.
    * - DeselectSession: clear the current playback selection.
    * - RefreshSessionList: reload the master list of recorded sessions.
-   * - SearchSessions: client-side filter of the loaded recordings by agent / conversation / media.
+   * - SearchSessions: narrow the visible list by a client-side text filter (updates the list).
+   * - SortSessions: re-order the visible list by date / agent / duration, asc or desc.
    */
   private registerAgentClientTools(): void {
     this.navigationService.SetAgentClientTools(this, [
       {
         Name: 'SelectSession',
-        Description: 'Select a recorded realtime session by its session ID and load its transcript for playback.',
-        ParameterSchema: { type: 'object', properties: { sessionId: { type: 'string' } }, required: ['sessionId'] },
+        Description: 'Select a recorded realtime session by its session ID OR name (the agent name, conversation name, or "Agent — Conversation" label) and load its transcript for playback.',
+        ParameterSchema: { type: 'object', properties: { session: { type: 'string', description: 'Session ID or name.' } }, required: ['session'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSelectSession(params),
+      },
+      {
+        Name: 'PlayRecording',
+        Description: 'Open and play a recording by its session ID OR name — selects it and mounts the synchronized audio + transcript player (alias of SelectSession).',
+        ParameterSchema: { type: 'object', properties: { session: { type: 'string', description: 'Session ID or name.' } }, required: ['session'] },
         Handler: async (params: Record<string, unknown>) => this.toolSelectSession(params),
       },
       {
@@ -280,38 +350,57 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
       },
       {
         Name: 'SearchSessions',
-        Description: 'Filter the loaded recordings by a free-text query, matched against the agent name, conversation name, and captured-media type. Returns the matching sessions (read-only; does not change the selection).',
+        Description: 'Narrow the visible recordings by a free-text query, matched against the agent name, conversation name, and captured-media type. Updates the list shown to the user (read-only; does not change the selection). Pass an empty string to clear the filter.',
         ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
         Handler: async (params: Record<string, unknown>) => this.toolSearchSessions(params),
+      },
+      {
+        Name: 'SortSessions',
+        Description: 'Re-order the visible recordings by "date", "agent", or "duration", in "asc" or "desc" direction. Read-only display ordering.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            field: { type: 'string', enum: ['date', 'agent', 'duration'] },
+            direction: { type: 'string', enum: ['asc', 'desc'] },
+          },
+          required: ['field'],
+        },
+        Handler: async (params: Record<string, unknown>) => this.toolSortSessions(params),
       },
     ]);
   }
 
-  /** Resolve a session id (case-insensitively) to a loaded recording and select it for playback. */
+  /**
+   * Resolve a session reference (id OR name) to a loaded recording and select it for playback.
+   * Tolerant: returns a structured failure (with a sample of available recordings) on a miss.
+   */
   private async toolSelectSession(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
-    const validation = validateStringParam(params['sessionId'], 'sessionId');
+    const validation = validateStringParam(params['session'], 'session');
     if (!validation.ok) {
       return validation.result;
     }
-    const sessionId = validation.value.trim();
-    if (sessionId.length === 0) {
-      return { Success: false, ErrorMessage: 'A sessionId is required.' };
+    const ref = validation.value.trim();
+    if (ref.length === 0) {
+      return { Success: false, ErrorMessage: 'A session ID or name is required.' };
     }
-    const session = this.Sessions.find(s => UUIDsEqual(s.ID, sessionId));
+    const session = resolveSessionByIdOrName(ref, this.Sessions);
     if (!session) {
-      return { Success: false, ErrorMessage: `No recorded session with id "${sessionId}" is loaded.` };
+      return { Success: false, ErrorMessage: buildSessionNotFoundError(ref, this.Sessions) };
     }
     await this.SelectSession(session);
     return { Success: true, Data: { SelectedSessionId: session.ID, AgentName: session.AgentName } };
   }
 
-  /** Client-side filter of the loaded recordings; reports the matches without changing selection. */
+  /** Apply a client-side text filter to the visible list (updates the UI + agent context). */
   private toolSearchSessions(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
     const validation = validateStringParam(params['query'], 'query');
     if (!validation.ok) {
       return validation.result;
     }
-    const matches = this.Sessions.filter(s => sessionMatchesQuery(s, validation.value));
+    this.SearchQuery = validation.value;
+    this.publishAgentContext();
+    this.cdr.detectChanges();
+    const matches = this.VisibleSessions;
     return {
       Success: true,
       Data: {
@@ -325,6 +414,29 @@ export class RealtimeRecordingsDashboardComponent extends BaseResourceComponent 
         })),
       },
     };
+  }
+
+  /** Re-order the visible list by date / agent / duration, asc or desc. Read-only display ordering. */
+  private toolSortSessions(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const rawField = params['field'];
+    if (!isValidSessionSortField(rawField)) {
+      return { Success: false, ErrorMessage: 'field must be one of: date, agent, duration.' };
+    }
+    const rawDirection = params['direction'];
+    // direction is optional — default to the sensible per-field default (date: desc, else asc).
+    let direction: SessionSortDirection;
+    if (rawDirection === undefined || rawDirection === null) {
+      direction = rawField === 'date' ? 'desc' : 'asc';
+    } else if (isValidSessionSortDirection(rawDirection)) {
+      direction = rawDirection;
+    } else {
+      return { Success: false, ErrorMessage: 'direction must be one of: asc, desc.' };
+    }
+    this.SortField = rawField;
+    this.SortDirection = direction;
+    this.publishAgentContext();
+    this.cdr.detectChanges();
+    return { Success: true, Data: { SortField: this.SortField, SortDirection: this.SortDirection } };
   }
 
   // ----- helpers ----------------------------------------------------------------------------

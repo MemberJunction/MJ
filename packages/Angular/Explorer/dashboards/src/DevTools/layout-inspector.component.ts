@@ -173,6 +173,8 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
             SelectedSection: this.ActiveSection,
             SelectedSectionLabel: this.SectionLabel,
             SectionCount: this.Sections.length,
+            SectionIds: this.Sections.map(s => s.id),
+            SnapshotSize: this.LayoutJson.length,
         });
         this.navigationService.SetAgentContext(this, context);
     }

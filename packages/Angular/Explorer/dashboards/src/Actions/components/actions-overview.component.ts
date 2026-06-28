@@ -6,8 +6,8 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
-import { validateEnumParam } from '../../shared/agent-tool-validation';
-import { findByIdOrError } from '../agent-tool-helpers';
+import { validateEnumParam, boundNameList } from '../../shared/agent-tool-validation';
+import { findByIdOrError, findByIdOrNameOrError } from '../agent-tool-helpers';
 interface ActionMetrics {
   totalActions: number;
   activeActions: number;
@@ -66,6 +66,10 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   /** Full (un-sliced) collections retained so agent tools can resolve any id, not just the visible top-10. */
   private allActions: MJActionEntity[] = [];
   private allExecutions: MJActionExecutionLogEntity[] = [];
+  private allCategories: MJActionCategoryEntity[] = [];
+
+  /** Last action the agent (or user) selected/opened — surfaced in context as id + name. */
+  private selectedAction: MJActionEntity | null = null;
 
   public searchTerm$ = new BehaviorSubject<string>('');
   public selectedStatus$ = new BehaviorSubject<string>('all');
@@ -75,6 +79,10 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   private readonly statusFilterValues = ['all', 'Active', 'Pending', 'Disabled'] as const;
   /** Allowed type filter values (mirrors the Filter popover dropdown). */
   private readonly typeFilterValues = ['all', 'Generated', 'Custom'] as const;
+  /** Allowed sort fields for the visible-actions list. */
+  private readonly sortFieldValues = ['name', 'status', 'type', 'updated'] as const;
+  /** Allowed sort directions. */
+  private readonly sortDirectionValues = ['asc', 'desc'] as const;
 
   protected override destroy$ = new Subject<void>();
 
@@ -119,18 +127,36 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   // failure on bad input).
   // ================================================================
 
-  /** Publish the current overview state to the agent. Called on load and on every filter change. */
+  /** Publish the current overview state to the agent. Called on load and on every filter change.
+   *  Deep context: counts by status/type, success rate, all filter state, the visible
+   *  (bounded) action + category names, and the currently selected action (id + name). */
   private publishAgentContext(): void {
     this.navigationService.SetAgentContext(this, {
+      // Action counts by status
       TotalActionCount: this.metrics.totalActions,
       ActiveActionCount: this.metrics.activeActions,
       PendingActionCount: this.metrics.pendingActions,
       DisabledActionCount: this.metrics.disabledActions,
+      // Action counts by type
+      AIGeneratedActionCount: this.metrics.aiGeneratedActions,
+      CustomActionCount: this.metrics.customActions,
+      // Execution metrics
       TotalExecutionCount: this.metrics.totalExecutions,
+      RecentExecutionCount: this.metrics.recentExecutions,
       SuccessRate: this.metrics.successRate,
+      // Category metrics
+      TotalCategoryCount: this.metrics.totalCategories,
+      // Filter / search state
       CurrentSearchTerm: this.searchTerm$.value,
       CurrentStatusFilter: this.selectedStatus$.value,
       CurrentTypeFilter: this.selectedType$.value,
+      // What the user is looking at — bounded name lists so the agent can pick by name
+      VisibleActionCount: this.recentActions.length,
+      VisibleActionNames: boundNameList(this.recentActions.map(a => a.Name)),
+      TopCategoryNames: boundNameList(this.topCategories.map(c => c.Name)),
+      // Current selection (id + NAME)
+      SelectedActionId: this.selectedAction?.ID ?? null,
+      SelectedActionName: this.selectedAction?.Name ?? null,
     });
   }
 
@@ -179,14 +205,49 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
         },
       },
       {
-        Name: 'OpenActionDetail',
-        Description: 'Open the detail record for an action by its id (navigation only — does NOT run the action).',
-        ParameterSchema: { type: 'object', properties: { actionId: { type: 'string' } }, required: ['actionId'] },
+        Name: 'SortVisibleActions',
+        Description: 'Sort the visible recent-actions list. field: name, status, type, updated. direction: asc, desc (default asc).',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            field: { type: 'string', enum: [...this.sortFieldValues] },
+            direction: { type: 'string', enum: [...this.sortDirectionValues] },
+          },
+          required: ['field'],
+        },
         Handler: async (params) => {
-          const found = findByIdOrError(params['actionId'], this.allActions, 'action');
+          const f = validateEnumParam(params['field'], this.sortFieldValues, 'field');
+          if (!f.ok) return f.result;
+          let direction: 'asc' | 'desc' = 'asc';
+          if (params['direction'] !== undefined) {
+            const d = validateEnumParam(params['direction'], this.sortDirectionValues, 'direction');
+            if (!d.ok) return d.result;
+            direction = d.value;
+          }
+          this.sortVisibleActions(f.value, direction);
+          return { Success: true };
+        },
+      },
+      {
+        Name: 'OpenActionDetail',
+        Description: 'Open the detail record for an action by its id OR its name (navigation only — does NOT run the action). Name matching is case-insensitive (exact then contains).',
+        ParameterSchema: { type: 'object', properties: { action: { type: 'string' } }, required: ['action'] },
+        Handler: async (params) => {
+          const found = findByIdOrNameOrError(params['action'], this.allActions, 'action');
           if (!found.ok) return found.result;
           this.openAction(found.value);
-          return { Success: true, Data: { Name: found.value.Name } };
+          return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
+        },
+      },
+      {
+        Name: 'OpenCategoryDetail',
+        Description: 'Open the detail record for an action category by its id OR its name (navigation only). Name matching is case-insensitive (exact then contains).',
+        ParameterSchema: { type: 'object', properties: { category: { type: 'string' } }, required: ['category'] },
+        Handler: async (params) => {
+          const found = findByIdOrNameOrError(params['category'], this.allCategories, 'category');
+          if (!found.ok) return found.result;
+          this.openCategory(found.value.ID);
+          return { Success: true, Data: { Id: found.value.ID, Name: found.value.Name } };
         },
       },
       {
@@ -249,6 +310,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
 
       this.allActions = actions;
       this.allExecutions = executions;
+      this.allCategories = categories;
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
       this.recentActions = actions.slice(0, 10);
@@ -424,8 +486,33 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   }
 
   public openAction(action: MJActionEntity): void {
+    this.selectedAction = action;
+    this.publishAgentContext();
     const key = new CompositeKey([{ FieldName: 'ID', Value: action.ID }]);
     this.navigationService.OpenEntityRecord('MJ: Actions', key);
+  }
+
+  /** Sort the visible recent-actions list in place (agent tool — view-only). */
+  private sortVisibleActions(field: 'name' | 'status' | 'type' | 'updated', direction: 'asc' | 'desc'): void {
+    const dir = direction === 'asc' ? 1 : -1;
+    const sorted = [...this.recentActions].sort((a, b) => {
+      let cmp = 0;
+      switch (field) {
+        case 'name': cmp = (a.Name || '').localeCompare(b.Name || ''); break;
+        case 'status': cmp = (a.Status || '').localeCompare(b.Status || ''); break;
+        case 'type': cmp = (a.Type || '').localeCompare(b.Type || ''); break;
+        case 'updated': {
+          const da = a.__mj_UpdatedAt ? new Date(a.__mj_UpdatedAt).getTime() : 0;
+          const db = b.__mj_UpdatedAt ? new Date(b.__mj_UpdatedAt).getTime() : 0;
+          cmp = da - db;
+          break;
+        }
+      }
+      return cmp * dir;
+    });
+    this.recentActions = sorted;
+    this.publishAgentContext();
+    this.cdr.detectChanges();
   }
 
   public openCategory(categoryId: string): void {

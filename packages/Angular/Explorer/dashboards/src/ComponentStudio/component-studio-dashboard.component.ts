@@ -29,6 +29,7 @@ import {
 import { generateCodeFromCanvas } from './services/canvas-to-code';
 import {
   buildCanvasEditClientTools,
+  buildCanvasStateSummary,
   type CanvasEditHost,
 } from './services/canvas-edit-transforms';
 
@@ -107,6 +108,13 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   // --- Preferences ---
   private prefsLoaded = false;
+
+  /**
+   * True once the user has invoked "Open in Chat" and the form agent
+   * context + tools are wired. Gates {@link reemitFormAgentContext} so canvas
+   * edits made before the agent is involved don't register context/tools.
+   */
+  private formAgentContextActive = false;
 
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
 
@@ -554,6 +562,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.state.FormCanvas = next;
     this.state.HasUnsavedChanges = true;
     this.regenerateFormCodeFromCanvas();
+    this.reemitFormAgentContext();
     this.cdr.detectChanges();
   }
 
@@ -571,6 +580,50 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       NewElementId: () => generateCanvasId('field'),
       NewSectionId: () => generateCanvasId('section'),
     };
+  }
+
+  /**
+   * Build the deep, bounded agent-context slice for the active form canvas.
+   * Mirrors the Form Builder cockpit's depth: a section/element summary the
+   * agent can target by id OR label, the curated entity field names not yet
+   * placed (AddField candidates), the resolved selected element/section names,
+   * the dirty flag, and the active tab. All lists are capped inside
+   * {@link buildCanvasStateSummary}.
+   */
+  private buildFormAgentContext(canvas: FormCanvasModel): Record<string, unknown> {
+    const schema = this.state.FormSchema;
+    return {
+      activeForm: {
+        entityName: canvas.entityName,
+        title: canvas.title,
+        sections: canvas.sections,
+        // Deep canvas-state summary (bounded) — same shape Form Builder
+        // publishes, so a co-agent driving either surface sees one model.
+        CanvasSummary: buildCanvasStateSummary(
+          canvas,
+          schema?.fields.map(f => f.name) ?? [],
+          this.state.FormSelectedElementId,
+          this.state.FormSelectedSectionId,
+        ),
+        IsDirty: this.state.HasUnsavedChanges,
+        ActiveTab: this.state.ActiveTab,
+        SelectedElementId: this.state.FormSelectedElementId,
+        SelectedSectionId: this.state.FormSelectedSectionId,
+      },
+    };
+  }
+
+  /**
+   * Re-publish the form agent context after a canvas mutation, but ONLY when
+   * the agent tools were already wired (the user invoked "Open in Chat"). We
+   * track that with {@link formAgentContextActive} so a canvas edit before the
+   * agent is involved doesn't spuriously register context/tools.
+   */
+  private reemitFormAgentContext(): void {
+    if (!this.formAgentContextActive) return;
+    const canvas = this.state.FormCanvas;
+    if (!canvas || !this.navigationService) return;
+    this.navigationService.SetAgentContext(this, this.buildFormAgentContext(canvas));
   }
 
   /**
@@ -601,13 +654,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       return;
     }
     try {
-      this.navigationService?.SetAgentContext(this, {
-        activeForm: {
-          entityName: canvas.entityName,
-          title: canvas.title,
-          sections: canvas.sections,
-        },
-      });
+      this.navigationService?.SetAgentContext(this, this.buildFormAgentContext(canvas));
       // 🔒 SAFETY BOUNDARY: the granular suite below exposes ONLY reversible
       // canvas-DEFINITION edits (no Save / Publish / override-activation /
       // delete-the-whole-form). Component Studio omits the center-pane
@@ -634,6 +681,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         },
         ...buildCanvasEditClientTools(this.buildCanvasEditHost()),
       ]);
+      // From now on, canvas edits re-publish context so the agent's view of
+      // the form stays live (mirrors the Form Builder cockpit's re-emit).
+      this.formAgentContextActive = true;
       this.notificationService.CreateSimpleNotification(
         'Form context sent to chat. Open the chat panel to continue.',
         'info', 4000,

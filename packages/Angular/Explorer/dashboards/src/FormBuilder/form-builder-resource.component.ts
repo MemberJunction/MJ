@@ -37,6 +37,7 @@ import {
 } from '../ComponentStudio/services/form-canvas-model';
 import {
     buildCanvasEditClientTools,
+    buildCanvasStateSummary,
     collectFieldNames,
     type CanvasEditHost,
 } from '../ComponentStudio/services/canvas-edit-transforms';
@@ -2455,24 +2456,32 @@ export class FormBuilderResourceComponent
         this.Canvas = next;
         this.markDirty();
         this.regenerateCode();
+        // Re-emit on every canvas change so the agent's CanvasSummary /
+        // AvailableFieldNames / ValidationIssues stay live (mirrors how the
+        // cockpit publishes on load and on form switch).
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
     public OnElementSelected(payload: { sectionId: string; elementId: string }): void {
         this.SelectedSectionId = null;
         this.SelectedElementId = payload.elementId;
+        // Selection drives SelectedElementName / SelectedElement in context.
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
     public OnSectionSelected(sectionId: string): void {
         this.SelectedElementId = null;
         this.SelectedSectionId = sectionId;
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
     public OnDeselected(): void {
         this.SelectedElementId = null;
         this.SelectedSectionId = null;
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
@@ -3128,6 +3137,57 @@ export class FormBuilderResourceComponent
         };
     }
 
+    /** Display label of the currently-selected element (or null). */
+    private selectedElementLabel(): string | null {
+        if (!this.Canvas || !this.SelectedElementId) return null;
+        for (const section of this.Canvas.sections) {
+            const el = section.elements.find(e => e.id === this.SelectedElementId);
+            if (el) return el.label?.trim() || el.fieldName?.trim() || el.type;
+        }
+        return null;
+    }
+
+    /** Title of the currently-selected section (or null). */
+    private selectedSectionTitle(): string | null {
+        if (!this.Canvas || !this.SelectedSectionId) return null;
+        return this.Canvas.sections.find(s => s.id === this.SelectedSectionId)?.title ?? null;
+    }
+
+    /**
+     * Derive lightweight, non-persisting canvas validation issues for the
+     * agent: an empty form, sections with no fields, and the same entity field
+     * placed more than once. Read-only — surfaces problems the agent can offer
+     * to fix via the granular tools; never blocks or saves. Bounded to a
+     * handful of entries.
+     */
+    private deriveCanvasValidationIssues(): string[] {
+        const canvas = this.Canvas;
+        if (!canvas) return [];
+        const issues: string[] = [];
+        const totalFields = collectFieldNames(canvas).length;
+        if (totalFields === 0) {
+            issues.push('The form has no fields placed yet.');
+        }
+        for (const section of canvas.sections) {
+            const fieldCount = section.elements.filter(e => e.type === 'field' && e.fieldName).length;
+            if (fieldCount === 0) {
+                issues.push(`Section '${section.title}' has no fields.`);
+            }
+        }
+        const counts = new Map<string, number>();
+        for (const section of canvas.sections) {
+            for (const el of section.elements) {
+                if (el.type === 'field' && el.fieldName) {
+                    counts.set(el.fieldName, (counts.get(el.fieldName) ?? 0) + 1);
+                }
+            }
+        }
+        for (const [name, n] of counts) {
+            if (n > 1) issues.push(`Field '${name}' is placed ${n} times.`);
+        }
+        return issues.slice(0, 10);
+    }
+
     private registerAgentContext(): void {
         try {
             const ctx: Record<string, unknown> = {
@@ -3154,6 +3214,33 @@ export class FormBuilderResourceComponent
                         SelectedSectionId: this.SelectedSectionId,
                         CenterPaneMode: this.CenterPaneMode,
                         AllFieldNames: this.Canvas ? collectFieldNames(this.Canvas) : [],
+                        // Deep, bounded canvas-state summary: section list with
+                        // per-section field counts, every placed element
+                        // addressable by id AND label, the curated entity
+                        // field names NOT yet placed (the AddField candidate
+                        // set), and the resolved selected element/section by
+                        // NAME — so the realtime co-agent can act on "make the
+                        // email field required" or "add the Phone field" with
+                        // no tool round-trip to discover what's there. All
+                        // lists are capped (with *Truncated / *Count companions).
+                        CanvasSummary: buildCanvasStateSummary(
+                            this.Canvas,
+                            this.Schema?.fields.map(f => f.name) ?? [],
+                            this.SelectedElementId,
+                            this.SelectedSectionId,
+                        ),
+                        // Names of the currently-selected element/section (not
+                        // just their ids) so the agent's narration matches what
+                        // the user sees highlighted on the canvas.
+                        SelectedElementName: this.selectedElementLabel(),
+                        SelectedSectionName: this.selectedSectionTitle(),
+                        // Lightweight, derived canvas validation so the agent can
+                        // proactively flag problems ("section 'Audit' is empty")
+                        // without persisting anything. Bounded list of issues.
+                        ValidationIssues: this.deriveCanvasValidationIssues(),
+                        // Live preview error surfaced from the mounted form
+                        // runtime, if any — lets the agent see a broken preview.
+                        PreviewError: this.PreviewError,
                         // Full canvas model (sections + element ids) so the
                         // agent can reference element/section ids in the
                         // granular AddField/RemoveField/Reorder/etc. tools.

@@ -35,15 +35,54 @@ function capNames(names: readonly string[]): string[] {
 }
 
 /**
+ * A read-only dependency summary for the currently selected entity: its id +
+ * name + schema, the counts of entities that reference it (it is the "one" side)
+ * and the entities it depends on (it is the "many" side), plus bounded lists of
+ * those neighbour names so the co-agent can describe the entity's place in the
+ * graph and offer them as next selections.
+ */
+export interface VersionHistoryGraphSelectedEntitySummary {
+    /** The selected entity's ID. */
+    ID: string;
+    /** The selected entity's name. */
+    Name: string;
+    /** The selected entity's schema. */
+    SchemaName: string;
+    /** Number of entities that reference the selected entity (its dependents). */
+    ReferencedByCount: number;
+    /** Number of entities the selected entity depends on. */
+    DependsOnCount: number;
+    /**
+     * Names of the entities that reference the selected entity. The component
+     * supplies the full list; this helper bounds it — see
+     * {@link VERSION_HISTORY_GRAPH_NAME_LIST_CAP}.
+     */
+    ReferencedByEntityNames: string[];
+    /**
+     * Names of the entities the selected entity depends on. The component supplies
+     * the full list; this helper bounds it.
+     */
+    DependsOnEntityNames: string[];
+}
+
+/**
  * The plain, component-supplied snapshot used to build the agent context.
  * Mirrors the salient slice of the Dependency Graph state: the currently
- * selected entity, the graph-wide counts, the active search/schema filters, the
- * count of visible (filtered) entities, and the names available for selection /
- * schema filtering.
+ * selected entity (id + name + dependency summary), the graph-wide counts, the
+ * active search/schema filters, the count of visible (filtered) entities, and
+ * the names available for selection / schema filtering.
  */
 export interface VersionHistoryGraphAgentContextInput {
     /** Name of the currently selected entity, or null when none is selected. */
     SelectedEntityName: string | null;
+    /** ID of the currently selected entity, or null when none is selected. */
+    SelectedEntityId: string | null;
+    /**
+     * The selected entity's dependency summary, or null when no entity is
+     * selected. Surfaced only when present (never fabricated for the no-selection
+     * state). See {@link VersionHistoryGraphSelectedEntitySummary}.
+     */
+    SelectedEntitySummary: VersionHistoryGraphSelectedEntitySummary | null;
     /** Total number of entities in the graph. */
     TotalEntities: number;
     /** Number of entities that have at least one dependent (referenced by others). */
@@ -87,6 +126,7 @@ export function buildVersionHistoryGraphAgentContext(
 ): Record<string, unknown> {
     const context: Record<string, unknown> = {
         SelectedEntityName: input.SelectedEntityName,
+        SelectedEntityId: input.SelectedEntityId,
         TotalEntities: input.TotalEntities,
         EntitiesWithDependents: input.EntitiesWithDependents,
         TotalRelationships: input.TotalRelationships,
@@ -104,5 +144,74 @@ export function buildVersionHistoryGraphAgentContext(
     if (input.AvailableSchemas.length > VERSION_HISTORY_GRAPH_NAME_LIST_CAP) {
         context['AvailableSchemaCount'] = input.AvailableSchemas.length;
     }
+
+    // The selected entity's dependency summary — surfaced ONLY when an entity is
+    // selected (never fabricated zeros for the no-selection state).
+    const summary = input.SelectedEntitySummary;
+    if (summary) {
+        context['SelectedEntity'] = {
+            ID: summary.ID,
+            Name: summary.Name,
+            SchemaName: summary.SchemaName,
+            ReferencedByCount: summary.ReferencedByCount,
+            DependsOnCount: summary.DependsOnCount,
+            ReferencedByEntities: capNames(summary.ReferencedByEntityNames),
+            DependsOnEntities: capNames(summary.DependsOnEntityNames),
+        };
+        if (summary.ReferencedByEntityNames.length > VERSION_HISTORY_GRAPH_NAME_LIST_CAP) {
+            (context['SelectedEntity'] as Record<string, unknown>)['ReferencedByEntityCount'] =
+                summary.ReferencedByEntityNames.length;
+        }
+        if (summary.DependsOnEntityNames.length > VERSION_HISTORY_GRAPH_NAME_LIST_CAP) {
+            (context['SelectedEntity'] as Record<string, unknown>)['DependsOnEntityCount'] =
+                summary.DependsOnEntityNames.length;
+        }
+    }
     return context;
+}
+
+/** Minimal name/id-bearing entity descriptor for {@link resolveGraphEntity}. */
+export interface GraphEntityCandidate {
+    ID: string;
+    Name: string;
+}
+
+/** Outcome of {@link resolveGraphEntity}: a matched entity, or a tolerant error. */
+export type GraphEntityResolution<T extends GraphEntityCandidate> =
+    | { ok: true; entity: T }
+    | { ok: false; error: string };
+
+/**
+ * Resolve an agent-supplied entity reference (an ID or a name) to one of the
+ * graph's entities, in order: exact ID (case-insensitive) → exact name
+ * (case-insensitive) → first name-contains match. Pure + deterministic over the
+ * supplied candidate list, so it's unit-testable in isolation. Returns a tolerant
+ * error listing a sample of available names on a miss.
+ *
+ * @param reference - whatever the agent passed (an entity ID or name)
+ * @param candidates - the entities available in the graph
+ * @returns the matched entity, or a clear error message
+ */
+export function resolveGraphEntity<T extends GraphEntityCandidate>(
+    reference: string,
+    candidates: readonly T[],
+): GraphEntityResolution<T> {
+    const needle = reference.trim().toLowerCase();
+    if (!needle) {
+        return { ok: false, error: 'An entity ID or name is required.' };
+    }
+    const byId = candidates.find((c) => c.ID.toLowerCase() === needle);
+    if (byId) {
+        return { ok: true, entity: byId };
+    }
+    const byName = candidates.find((c) => c.Name.toLowerCase() === needle);
+    if (byName) {
+        return { ok: true, entity: byName };
+    }
+    const byContains = candidates.find((c) => c.Name.toLowerCase().includes(needle));
+    if (byContains) {
+        return { ok: true, entity: byContains };
+    }
+    const sample = capNames(candidates.map((c) => c.Name)).join(', ');
+    return { ok: false, error: `Entity "${reference}" was not found in the dependency graph. Available entities include: ${sample}.` };
 }

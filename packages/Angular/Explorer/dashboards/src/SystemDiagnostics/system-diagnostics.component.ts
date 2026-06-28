@@ -10,6 +10,12 @@ import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInf
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { TabConfig } from '@memberjunction/ng-ui-components';
 import { validateEnumParam, validateNonNegativeNumberParam } from '../shared/agent-tool-validation';
+import {
+    buildSystemDiagnosticsAgentContext,
+    VALID_DIAGNOSTICS_SECTIONS,
+    VALID_PERF_TABS,
+    VALID_TELEMETRY_CATEGORIES,
+} from './system-diagnostics-agent-context';
 import * as d3 from 'd3';
 
 /**
@@ -1532,33 +1538,81 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     // ================================================================
     // AI Agent Context & Client Tools
     //
-    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+    // 🚨 SAFETY BOUNDARY — READ-ONLY DIAGNOSTIC METRICS ONLY 🚨
     // System Diagnostics is a monitoring surface. The agent context and the
     // client tools registered here are strictly NAVIGATIONAL + READ-ONLY:
     // section/tab switches, refresh, telemetry category filter, and the
     // slow-query display threshold. Destructive maintenance operations that
     // exist on this component (clearTelemetry, clearAllCache, toggleTelemetry,
     // refreshAllEngines) are DELIBERATELY NOT exposed to the agent — they mutate
-    // runtime state and must remain human-initiated. Context exposes only
-    // aggregate read-only metrics, never raw telemetry payloads or cache values.
+    // runtime state and must remain human-initiated.
+    //
+    // Context exposes ONLY read-only diagnostic METRICS + bounded runtime SHAPE
+    // names: engine class names, redundantly-loaded entity names, slow-operation
+    // labels (op / entity name + duration), telemetry category breakdown, and
+    // cache counts/sizes. It NEVER exposes raw telemetry payloads, filter SQL
+    // bodies, cache entry VALUES, query results, connection strings, or any
+    // secret — no such value is read into the published context. See
+    // system-diagnostics-agent-context.ts for the read-only context contract and
+    // the no-secret-leak unit test.
     // ================================================================
 
     /**
      * Publish the current diagnostics state to the AI agent. Re-invoked on every
-     * meaningful state change (section/tab switch, data refresh) so the agent
-     * always sees a fresh, read-only snapshot of the dashboard.
+     * meaningful state change (section/tab switch, data refresh, threshold change)
+     * so the agent always sees a fresh, read-only snapshot of the dashboard.
      */
     private publishAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
+        const byType = this.cacheStats?.byType;
+        this.navigationService.SetAgentContext(this, buildSystemDiagnosticsAgentContext({
+            // Navigation
             ActiveSection: this.activeSection,
             PerfTab: this.perfTab,
-            EngineCount: this.engineStats?.totalEngines ?? 0,
-            TotalMemoryBytes: this.engineStats?.totalEstimatedMemoryBytes ?? 0,
-            RedundantLoadCount: this.redundantLoads.length,
+            TelemetrySource: this.telemetrySource,
             TelemetryEnabled: this.telemetryEnabled,
+            ServerTelemetryEnabled: this.serverTelemetryEnabled,
+            CategoryFilter: this.categoryFilter,
+            SlowQueryThresholdMs: this.slowQueryThresholdMs,
+
+            // Engines
+            EngineCount: this.engineStats?.totalEngines ?? this.engines.length,
+            LoadedEngineCount: this.engines.filter(e => e.isLoaded).length,
+            TotalMemoryBytes: this.engineStats?.totalEstimatedMemoryBytes ?? 0,
+            TotalMemoryDisplay: this.formatBytes(this.engineStats?.totalEstimatedMemoryBytes ?? 0),
+            EngineNames: this.engines.map(e => e.className),
+
+            // Redundant loading
+            RedundantLoadCount: this.redundantLoads.length,
+            RedundantEntityNames: this.redundantLoads.map(r => r.entityName),
+
+            // Telemetry aggregates
+            TotalEvents: this.telemetrySummary?.totalEvents ?? 0,
+            TotalPatterns: this.telemetrySummary?.totalPatterns ?? 0,
+            TotalInsights: this.telemetrySummary?.totalInsights ?? 0,
+            ActiveEvents: this.telemetrySummary?.activeEvents ?? 0,
             SlowQueryCount: this.slowQueries.length,
+            SlowOperations: this.slowQueries.map(q => ({
+                Label: q.entityName || q.operation,
+                Category: q.category,
+                ElapsedMs: Math.round(q.elapsedMs ?? 0),
+            })),
+            CategoryBreakdown: this.categoriesWithData.map(c => ({
+                Name: c.name,
+                Events: c.events,
+                AvgMs: Math.round(c.avgMs),
+            })),
+
+            // Cache (counts + sizes only — never entry values)
+            CacheInitialized: this.cacheInitialized,
+            CacheTotalEntries: this.cacheStats?.totalEntries ?? 0,
+            CacheTotalSizeBytes: this.cacheStats?.totalSizeBytes ?? 0,
+            CacheHits: this.cacheStats?.hits ?? 0,
+            CacheMisses: this.cacheStats?.misses ?? 0,
             CacheHitRate: this.cacheHitRate,
-        });
+            CacheDatasetCount: byType?.dataset?.count ?? 0,
+            CacheRunViewCount: byType?.runview?.count ?? 0,
+            CacheRunQueryCount: byType?.runquery?.count ?? 0,
+        }));
     }
 
     /**
@@ -1601,9 +1655,9 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         ]);
     }
 
-    private static readonly DIAGNOSTICS_SECTIONS = ['engines', 'redundant', 'performance', 'cache'] as const;
-    private static readonly PERF_TABS = ['monitor', 'overview', 'events', 'patterns', 'insights'] as const;
-    private static readonly TELEMETRY_CATEGORIES = ['all', 'RunView', 'RunQuery', 'Engine', 'AI', 'Cache'] as const;
+    private static readonly DIAGNOSTICS_SECTIONS = VALID_DIAGNOSTICS_SECTIONS;
+    private static readonly PERF_TABS = VALID_PERF_TABS;
+    private static readonly TELEMETRY_CATEGORIES = VALID_TELEMETRY_CATEGORIES;
 
     private handleSwitchSectionTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
         const v = validateEnumParam(params?.['section'], SystemDiagnosticsComponent.DIAGNOSTICS_SECTIONS, 'section');

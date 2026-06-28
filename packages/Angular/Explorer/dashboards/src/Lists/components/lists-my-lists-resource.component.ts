@@ -8,6 +8,7 @@ import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface ListViewModel {
   list: MJListEntity;
   itemCount: number;
@@ -1157,12 +1158,27 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
   /** Report the My-Lists surface's salient state to the AI agent. */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, {
+    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
       SearchTerm: this.searchTerm,
       ViewMode: this.viewMode,
       AllListCount: this.allLists.length,
       FilteredListCount: this.filteredLists.length,
-    });
+      // Deep context: the NAMES of the user's currently-visible lists (bounded),
+      // so the agent can open them by name rather than an opaque GUID.
+      VisibleListNames: this.filteredLists.map(i => i.list.Name),
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a list ID or NAME, exact or partial) to
+   * one of the user's loaded lists via the pure {@link resolveNamedRecord} helper.
+   */
+  private resolveMyListItem(input: string): ListViewModel | null {
+    const match = resolveNamedRecord(input, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.allLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
   }
 
   /** Register the My-Lists surface's agent-actionable tools. */
@@ -1170,13 +1186,13 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.navigationService.SetAgentClientTools(this, [
       {
         Name: 'OpenList',
-        Description: 'Open one of my lists by its ID in a new tab.',
-        ParameterSchema: { type: 'object', properties: { listId: { type: 'string', description: 'The ID of the list to open' } }, required: ['listId'] },
+        Description: 'Open one of my lists in a new tab by its ID or name. Pass the list name the user says (see VisibleListNames) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to open' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['listId'], 'listId');
+          const check = validateStringParam(params['list'] ?? params['listId'], 'list');
           if (!check.ok) return check.result;
-          const item = this.allLists.find(l => UUIDsEqual(l.list.ID, check.value));
-          if (!item) return { Success: false, ErrorMessage: `No list found with ID "${check.value}".` };
+          const item = this.resolveMyListItem(check.value);
+          if (!item) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
           this.openList(item.list);
           return { Success: true, Data: { listName: item.list.Name } };
         },

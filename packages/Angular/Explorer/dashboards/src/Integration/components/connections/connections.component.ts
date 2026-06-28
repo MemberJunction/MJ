@@ -13,8 +13,15 @@ import {
   IntegrationSummary,
   EntityMapRow
 } from '../../services/integration-data.service';
-import { buildIntegrationAgentContext, resolveIntegrationSurface, navLabelForSurface } from '../../integration-agent-context';
-import { AgentToolResult } from '../../../shared/agent-tool-validation';
+import {
+  buildConnectionsAgentContext,
+  resolveIntegrationSurface,
+  navLabelForSurface,
+  resolveIntegrationRecord,
+  buildIntegrationNotFoundError,
+  NamedIntegrationRecord,
+} from '../../integration-agent-context';
+import { AgentToolResult, validateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Brand color mapping for known integration names */
 const BRAND_COLOR_MAP: Array<{ Pattern: RegExp; Color: string }> = [
@@ -268,11 +275,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // ---------------------------------------------------------------------------
   // AI Agent Context & Client Tools
   //
-  // 🔒 SAFETY BOUNDARY: The Connections surface exposes ONLY navigational and
-  // read-only refresh tools to the agent. It deliberately does NOT expose any
-  // sync trigger (RunSync — a LIVE external sync), nor edit-mapping,
+  // 🔒 SAFETY BOUNDARY: The Connections surface exposes ONLY navigational,
+  // read-only select / search / open-record / refresh tools to the agent
+  // (SwitchIntegrationSurface, SelectIntegrationConnection, SearchConnectionEntityMaps,
+  // OpenIntegrationRecord, CloseConnectionDetail, RefreshIntegrationData). It
+  // deliberately does NOT expose any sync trigger (RunSync / StartSyncWithDirection —
+  // a LIVE external sync), nor edit-mapping (CreateEntityMap / CycleSyncDirection /
+  // ToggleEntityMapEnabled / AutoMap / CreateTables / FindAndAddNewTables),
   // update-schedule, or change-credentials. Creating / editing / deleting
   // connections and testing credentials remain user-driven from the UI.
+  // OpenIntegrationRecord opens the record in a tab for VIEWING — it does not edit.
   // ---------------------------------------------------------------------------
 
   ngAfterViewInit(): void {
@@ -286,9 +298,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     for (const value of this.EntityMapCounts.values()) {
       pipelineCount += value;
     }
-    const context = buildIntegrationAgentContext({
-      Surface: 'Connections',
-      IsLoading: this.IsLoading,
+    const context = buildConnectionsAgentContext({
       KPIs: {
         TotalIntegrations: kpis.TotalIntegrations,
         ActiveSyncs: kpis.ActiveSyncs,
@@ -297,6 +307,14 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
         PipelineCount: pipelineCount,
         ScheduledSyncCount: 0,
       },
+      IsLoading: this.IsLoading,
+      ConnectionCount: this.Connections.length,
+      ActiveConnectionCount: this.Connections.filter(c => c.Integration.IsActive === true).length,
+      VisibleConnectionNames: this.Connections.map(c => c.Integration.Name),
+      SelectedConnectionId: this.SelectedSummary?.Integration.ID ?? null,
+      SelectedConnectionName: this.SelectedSummary?.Integration.Name ?? null,
+      SelectedEntityMapCount: this.SelectedSummary ? this.DetailEntityMaps.length : null,
+      DetailSearchTerm: this.SelectedSummary ? this.DetailSearchTerm : null,
     });
     this.navigationService.SetAgentContext(this, context);
   }
@@ -308,6 +326,34 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
         Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
         ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
         Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'SelectIntegrationConnection',
+        Description: 'Open the detail view (entity maps) for a connection. Accepts the connection ID or name (exact or partial).',
+        ParameterSchema: { type: 'object', properties: { connection: { type: 'string' } }, required: ['connection'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSelectConnection(params),
+      },
+      {
+        Name: 'SearchConnectionEntityMaps',
+        Description: 'Filter the selected connection\'s entity-map detail list by external object or entity name. Requires a connection to be selected.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchEntityMaps(params),
+      },
+      {
+        Name: 'OpenIntegrationRecord',
+        Description: 'Open a company-integration record in a tab for viewing. Accepts the connection ID or name (exact or partial).',
+        ParameterSchema: { type: 'object', properties: { connection: { type: 'string' } }, required: ['connection'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenConnectionRecord(params),
+      },
+      {
+        Name: 'CloseConnectionDetail',
+        Description: 'Close the connection detail view and return to the connection grid.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          this.CloseDetailView();
+          this.emitAgentContext();
+          return { Success: true };
+        },
       },
       {
         Name: 'RefreshIntegrationData',
@@ -331,6 +377,63 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
     return { Success: true };
+  }
+
+  private connectionCandidates(): NamedIntegrationRecord[] {
+    return this.Connections.map(c => ({ ID: c.Integration.ID, Name: c.Integration.Name }));
+  }
+
+  private async toolSelectConnection(params: Record<string, unknown>): Promise<AgentToolResult> {
+    const check = validateStringParam(params['connection'], 'connection');
+    if (!check.ok) {
+      return check.result;
+    }
+    const candidates = this.connectionCandidates();
+    const match = resolveIntegrationRecord(check.value, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'connection') };
+    }
+    const summary = this.Connections.find(c => UUIDsEqual(c.Integration.ID, match.ID));
+    if (!summary) {
+      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'connection') };
+    }
+    await this.SelectIntegrationCard(summary);
+    this.emitAgentContext();
+    return { Success: true };
+  }
+
+  private toolSearchEntityMaps(params: Record<string, unknown>): AgentToolResult {
+    const check = validateStringParam(params['query'], 'query');
+    if (!check.ok) {
+      return check.result;
+    }
+    if (!this.SelectedSummary) {
+      return { Success: false, ErrorMessage: 'No connection is selected. Use SelectIntegrationConnection first.' };
+    }
+    this.DetailSearchTerm = check.value;
+    this.DetailFilteredMaps = this.applyDetailFilterPublic();
+    this.cdr.detectChanges();
+    this.emitAgentContext();
+    return { Success: true };
+  }
+
+  private toolOpenConnectionRecord(params: Record<string, unknown>): AgentToolResult {
+    const check = validateStringParam(params['connection'], 'connection');
+    if (!check.ok) {
+      return check.result;
+    }
+    const candidates = this.connectionCandidates();
+    const match = resolveIntegrationRecord(check.value, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'connection') };
+    }
+    this.navigationService.OpenEntityRecord('MJ: Company Integrations', CompositeKey.FromID(match.ID));
+    return { Success: true };
+  }
+
+  /** Public wrapper so agent tools can re-apply the detail-search filter. */
+  private applyDetailFilterPublic(): EntityMapRow[] {
+    return this.applyDetailFilter();
   }
 
   // ---------------------------------------------------------------------------
@@ -691,6 +794,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     } finally {
       this.IsDetailLoading = false;
       this.cdr.detectChanges();
+      this.emitAgentContext();
     }
   }
 
@@ -702,6 +806,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.ScheduledJobID = null;
     this.ShowScheduleSlidePanel = false;
     this.cdr.detectChanges();
+    this.emitAgentContext();
   }
 
   // ---------------------------------------------------------------------------
@@ -776,6 +881,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.DetailSearchTerm = input.value;
     this.DetailFilteredMaps = this.applyDetailFilter();
     this.cdr.detectChanges();
+    this.emitAgentContext();
   }
 
   DirectionLabel(direction: string): string {

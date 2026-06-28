@@ -1,11 +1,19 @@
 import { ChangeDetectorRef, Component, OnInit, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJCompanyIntegrationEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { IntegrationDataService, ResolveIntegrationIcon } from '../../services/integration-data.service';
-import { buildIntegrationAgentContext, resolveIntegrationSurface, navLabelForSurface } from '../../integration-agent-context';
-import { AgentToolResult } from '../../../shared/agent-tool-validation';
+import {
+  buildSchedulesAgentContext,
+  resolveIntegrationSurface,
+  navLabelForSurface,
+  resolveIntegrationRecord,
+  buildIntegrationNotFoundError,
+  ScheduleSummary,
+  NamedIntegrationRecord,
+} from '../../integration-agent-context';
+import { AgentToolResult, validateStringParam } from '../../../shared/agent-tool-validation';
 
 // ---------------------------------------------------------------------------
 // Data interfaces
@@ -135,11 +143,15 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   // ---------------------------------------------------------------------------
   // AI Agent Context & Client Tools
   //
-  // 🔒 SAFETY BOUNDARY: The Schedules surface exposes ONLY navigational and
-  // read-only refresh tools to the agent. It deliberately does NOT expose any
-  // sync trigger (RunSync — a LIVE external sync), nor update-schedule
-  // (enable/disable, change interval/cron), nor edit-mapping /
-  // change-credentials. Changing a schedule remains user-driven from the UI.
+  // 🔒 SAFETY BOUNDARY: The Schedules surface exposes ONLY navigational,
+  // read-only open-record, and refresh tools to the agent
+  // (SwitchIntegrationSurface, OpenScheduleRecord, RefreshIntegrationData). It
+  // deliberately does NOT expose any sync trigger (RunSync / RunNow — a LIVE
+  // external sync), nor update-schedule (SaveSchedule / ToggleScheduleEnabled /
+  // SetScheduleType / SetInterval / SetCronExpression — which create/update/disable
+  // the linked ScheduledJob), nor edit-mapping / change-credentials. Changing a
+  // schedule remains user-driven from the UI. OpenScheduleRecord opens the record
+  // in a tab for VIEWING — it does not edit.
   // ---------------------------------------------------------------------------
 
   ngAfterViewInit(): void {
@@ -148,9 +160,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   }
 
   private emitAgentContext(): void {
-    const context = buildIntegrationAgentContext({
-      Surface: 'Schedules',
-      IsLoading: this.IsLoading,
+    const context = buildSchedulesAgentContext({
       KPIs: {
         TotalIntegrations: this.Schedules.length,
         ActiveSyncs: 0,
@@ -159,8 +169,14 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
         PipelineCount: 0,
         ScheduledSyncCount: this.ScheduledCount,
       },
-      SchedulesEnabledCount: this.ScheduledCount,
-      SchedulesLockedCount: this.LockedCount,
+      IsLoading: this.IsLoading,
+      ScheduleCount: this.Schedules.length,
+      EnabledCount: this.ScheduledCount,
+      LockedCount: this.LockedCount,
+      IntervalCount: this.countByType('Interval'),
+      CronCount: this.countByType('Cron'),
+      ManualCount: this.countByType('Manual'),
+      VisibleSchedules: this.Schedules.map(s => this.buildScheduleSummary(s)),
     });
     this.navigationService.SetAgentContext(this, context);
   }
@@ -172,6 +188,12 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
         Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
         ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
         Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'OpenScheduleRecord',
+        Description: 'Open a scheduled integration\'s company-integration record in a tab for viewing. Accepts the integration ID or name (exact or partial).',
+        ParameterSchema: { type: 'object', properties: { integration: { type: 'string' } }, required: ['integration'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenScheduleRecord(params),
       },
       {
         Name: 'RefreshIntegrationData',
@@ -195,6 +217,38 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
     return { Success: true };
+  }
+
+  private toolOpenScheduleRecord(params: Record<string, unknown>): AgentToolResult {
+    const check = validateStringParam(params['integration'], 'integration');
+    if (!check.ok) {
+      return check.result;
+    }
+    const candidates: NamedIntegrationRecord[] = this.Schedules.map(s => ({
+      ID: s.ID,
+      Name: s.Integration ?? s.Name,
+    }));
+    const match = resolveIntegrationRecord(check.value, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'integration') };
+    }
+    this.navigationService.OpenEntityRecord('MJ: Company Integrations', CompositeKey.FromID(match.ID));
+    return { Success: true };
+  }
+
+  /** Count of schedules of a given cadence type. */
+  private countByType(type: 'Manual' | 'Interval' | 'Cron'): number {
+    return this.Schedules.filter(s => s.ScheduleType === type).length;
+  }
+
+  private buildScheduleSummary(s: ScheduleRow): ScheduleSummary {
+    return {
+      Name: `${s.Integration ?? s.Name} · ${this.GetNextRunRelative(s)}`,
+      Type: s.ScheduleType,
+      Enabled: s.ScheduleEnabled,
+      Locked: s.IsLocked,
+      NextRun: this.GetNextRunRelative(s),
+    };
   }
 
   // ---------------------------------------------------------------------------

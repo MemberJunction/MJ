@@ -5,7 +5,7 @@
     Subtitle="Review and replay recorded realtime sessions — time-aligned audio + transcript.">
     @if (!IsLoading && Sessions.length > 0) {
       <div meta>
-        <mj-stat-badge [Count]="Sessions.length" Label="recorded sessions" />
+        <mj-stat-badge [Count]="VisibleSessions.length" [Total]="Sessions.length" Label="recorded sessions" />
       </div>
     }
     <div actions>
@@ -36,7 +36,7 @@
       <as-split direction="horizontal" unit="pixel" class="rr-split">
         <as-split-area [size]="360" [minSize]="260" [maxSize]="560">
           <ul class="rr-list" role="listbox" aria-label="Recorded sessions">
-            @for (session of Sessions; track TrackBySession($index, session)) {
+            @for (session of VisibleSessions; track TrackBySession($index, session)) {
               <li
                 class="rr-list-item"
                 role="option"

@@ -8,7 +8,15 @@ import { debounceTime } from 'rxjs/operators';
 import { ERDCompositeComponent, ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
 import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 
-import { buildEntityAdminAgentContext } from './entity-admin-agent-context';
+import {
+  buildEntityAdminAgentContext,
+  buildEntityNotFoundError,
+  entityDisplayName,
+  resolveEntityByIdOrName,
+  EntityNameCandidate,
+  RelatedEntitySummary,
+  SchemaGroupSummary,
+} from './entity-admin-agent-context';
 import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 
 /** Settings key for ERD state persistence */
@@ -206,20 +214,64 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   /**
    * Publish the current Entity Admin ERD-browser state to the AI agent via
-   * NavigationService. Reports the entity counts (total + filtered), the current
-   * selection, and filter-panel visibility. The shaping lives in the pure
-   * {@link buildEntityAdminAgentContext} helper so it stays unit-testable.
+   * NavigationService. Reports — at Data-Explorer depth — the entity counts (total +
+   * filtered), the active filter values (schema / search / status), the current
+   * selection (id + registered name + DISPLAY name + schema + description + field count
+   * + a bounded relationship summary), filter-panel visibility, a bounded list of
+   * available entity DISPLAY names, and the schema-grouping landscape. The shaping lives
+   * in the pure {@link buildEntityAdminAgentContext} helper so it stays unit-testable.
    * Called on init (ngAfterViewInit) and on every ERD state change (onStateChange).
    */
   private publishAgentContext(): void {
+    const filters = this.erdComposite?.filters;
     const context = buildEntityAdminAgentContext({
       TotalEntityCount: this.TotalEntityCount,
       FilteredEntityCount: this.filteredEntities.length,
       SelectedEntityId: this.selectedEntity?.ID ?? null,
       SelectedEntityName: this.selectedEntity?.Name ?? null,
+      SelectedEntityDisplayName: this.selectedEntity
+        ? entityDisplayName(this.selectedEntity.Name, this.selectedEntity.DisplayName)
+        : null,
+      SelectedEntitySchema: this.selectedEntity?.SchemaName ?? null,
+      SelectedEntityDescription: this.selectedEntity?.Description ?? null,
+      SelectedEntityFieldCount: this.selectedEntity?.Fields?.length ?? null,
+      RelatedEntities: this.buildRelatedEntitySummaries(),
       FilterPanelVisible: this.filterPanelVisible,
+      SchemaFilter: filters?.schemaName ?? null,
+      SearchText: filters?.entityName ?? '',
+      StatusFilter: filters?.entityStatus ?? null,
+      AvailableEntityNames: this.filteredEntities.map(e => entityDisplayName(e.Name, e.DisplayName)),
+      SchemaGroups: this.buildSchemaGroupSummaries(),
     });
     this.navigationService.SetAgentContext(this, context);
+  }
+
+  /** Related-entity summaries for the selected entity (display name + relationship type). */
+  private buildRelatedEntitySummaries(): RelatedEntitySummary[] {
+    if (!this.selectedEntity) {
+      return [];
+    }
+    return this.selectedEntity.RelatedEntities.map(re => ({
+      Name: re.RelatedEntity ?? re.RelatedEntityID ?? '(unknown)',
+      RelationshipType: re.Type ?? 'Related',
+    }));
+  }
+
+  /** Schema-grouping summaries across the currently-visible (filtered) entities. */
+  private buildSchemaGroupSummaries(): SchemaGroupSummary[] {
+    const counts = new Map<string, number>();
+    for (const e of this.filteredEntities) {
+      const schema = e.SchemaName || '(no schema)';
+      counts.set(schema, (counts.get(schema) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .map(([SchemaName, EntityCount]) => ({ SchemaName, EntityCount }))
+      .sort((a, b) => b.EntityCount - a.EntityCount);
+  }
+
+  /** The ERD's loaded entities, narrowed to the resolver's structural shape. */
+  private get entityCandidates(): EntityNameCandidate[] {
+    return this.erdComposite?.entities ?? [];
   }
 
   /**
@@ -229,17 +281,19 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
    * success or `{ Success: false, ErrorMessage }` on failure. Handlers never throw.
    *
    * Tools (browse only — see SAFETY BOUNDARY above):
-   * - SelectEntity: select an entity in the ERD by its ID and focus it.
+   * - SelectEntity: select/focus an entity by its ID, registered Name, or DISPLAY name.
    * - ToggleFilterPanel: show/hide the ERD filter panel.
    * - ClearEntitySelection: deselect the currently selected entity.
    * - RefreshERD: re-render the ERD diagram.
+   * - FilterEntities: narrow the ERD by schema and/or a name search.
+   * - NavigateToEntityRecord: open an entity's record list/view (read-only navigation).
    */
   private registerAgentClientTools(): void {
     this.navigationService.SetAgentClientTools(this, [
       {
         Name: 'SelectEntity',
-        Description: 'Select and focus an entity in the ERD by its entity ID (read-only — opens nothing for edit).',
-        ParameterSchema: { type: 'object', properties: { entityId: { type: 'string' } }, required: ['entityId'] },
+        Description: 'Select and focus an entity in the ERD by its ID, registered name, or the display name shown on screen (e.g. "AI Models" rather than "MJ: AI Models"). Read-only — opens nothing for edit.',
+        ParameterSchema: { type: 'object', properties: { entity: { type: 'string', description: 'Entity ID, registered name, or display name.' } }, required: ['entity'] },
         Handler: async (params: Record<string, unknown>) => this.toolSelectEntity(params),
       },
       {
@@ -264,24 +318,47 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
         ParameterSchema: { type: 'object', properties: {} },
         Handler: async () => this.toolRefreshERD(),
       },
+      {
+        Name: 'FilterEntities',
+        Description: 'Narrow the entities shown in the ERD by schema name and/or an entity-name search. Pass an empty string for a field to clear it; pass neither to reset all filters. No data is modified.',
+        ParameterSchema: {
+          type: 'object',
+          properties: {
+            schema: { type: 'string', description: 'Schema name to filter by (empty string clears it).' },
+            search: { type: 'string', description: 'Entity-name search text (empty string clears it).' },
+          },
+        },
+        Handler: async (params: Record<string, unknown>) => this.toolFilterEntities(params),
+      },
+      {
+        Name: 'NavigateToEntityRecord',
+        Description: 'Open the record list / data view for an entity (by ID, registered name, or display name) for viewing. Read-only navigation — opens nothing for edit and creates no records.',
+        ParameterSchema: { type: 'object', properties: { entity: { type: 'string', description: 'Entity ID, registered name, or display name.' } }, required: ['entity'] },
+        Handler: async (params: Record<string, unknown>) => this.toolNavigateToEntityRecord(params),
+      },
     ]);
   }
 
-  /** Resolve an entity by ID from the ERD's loaded entities and select/focus it. */
+  /** Resolve an entity by ID / registered name / display name and select/focus it. */
   private toolSelectEntity(params: Record<string, unknown>): AgentToolResult {
-    const validated = validateStringParam(params['entityId'], 'entityId');
+    const validated = validateStringParam(params['entity'], 'entity');
     if (!validated.ok) {
       return validated.result;
     }
     if (!this.erdComposite) {
       return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
     }
-    const entity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, validated.value));
+    const candidates = this.entityCandidates;
+    const match = resolveEntityByIdOrName(validated.value, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, candidates) };
+    }
+    const entity = this.erdComposite.entities.find(e => UUIDsEqual(e.ID, match.ID));
     if (!entity) {
-      return { Success: false, ErrorMessage: `Entity with ID "${validated.value}" is not available in the ERD.` };
+      return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, candidates) };
     }
     this.erdComposite.onEntitySelected(entity);
-    return { Success: true };
+    return { Success: true, ErrorMessage: undefined };
   }
 
   /** Deselect the currently selected entity in the ERD. */
@@ -299,6 +376,69 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
       return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
     }
     this.erdComposite.refreshERD();
+    return { Success: true };
+  }
+
+  /** Narrow the ERD by schema and/or a name search (read-only — only changes what's shown). */
+  private toolFilterEntities(params: Record<string, unknown>): AgentToolResult {
+    if (!this.erdComposite) {
+      return { Success: false, ErrorMessage: 'The ERD is not ready yet.' };
+    }
+    const schemaRaw = params['schema'];
+    const searchRaw = params['search'];
+
+    // Neither provided → reset all filters.
+    if (schemaRaw === undefined && searchRaw === undefined) {
+      this.erdComposite.onResetFilters();
+      this.publishAgentContext();
+      return { Success: true };
+    }
+
+    const next = { ...this.erdComposite.filters };
+    if (schemaRaw !== undefined) {
+      const validated = validateStringParam(schemaRaw, 'schema');
+      if (!validated.ok) {
+        return validated.result;
+      }
+      const schema = validated.value.trim();
+      // Tolerant case-insensitive match against the known schemas; empty clears it.
+      if (!schema) {
+        next.schemaName = null;
+      } else {
+        const known = Array.from(new Set(this.entityCandidates.map(e => (e as { SchemaName?: string }).SchemaName).filter((s): s is string => !!s)));
+        const resolved = known.find(s => s.toLowerCase() === schema.toLowerCase());
+        if (!resolved) {
+          return { Success: false, ErrorMessage: `No schema matches "${schema}". Available schemas: ${known.join(', ') || '(none)'}.` };
+        }
+        next.schemaName = resolved;
+      }
+    }
+    if (searchRaw !== undefined) {
+      const validated = validateStringParam(searchRaw, 'search');
+      if (!validated.ok) {
+        return validated.result;
+      }
+      next.entityName = validated.value;
+    }
+
+    this.erdComposite.onFiltersChange(next);
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  /** Open an entity's record list / data view for viewing (read-only navigation). */
+  private toolNavigateToEntityRecord(params: Record<string, unknown>): AgentToolResult {
+    const validated = validateStringParam(params['entity'], 'entity');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    const candidates = this.entityCandidates;
+    const match = resolveEntityByIdOrName(validated.value, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildEntityNotFoundError(validated.value, candidates) };
+    }
+    // Open the entity's dynamic record view (read-only navigation — no edit, no create).
+    this.navigationService.OpenDynamicView(match.Name);
     return { Success: true };
   }
 }

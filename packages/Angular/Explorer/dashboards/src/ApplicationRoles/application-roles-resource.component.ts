@@ -4,7 +4,13 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
-import { buildApplicationRolesAgentContext } from './application-roles-agent-context';
+import {
+  ApplicationRoleExportRow,
+  buildApplicationNotFoundError,
+  buildApplicationRolesAgentContext,
+  buildApplicationRolesCsv,
+  resolveApplicationByIdOrName,
+} from './application-roles-agent-context';
 
 /**
  * Represents an application's role assignment for display in the grid.
@@ -50,6 +56,10 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
   HasUnsavedChanges = false;
   ErrorMessage: string | null = null;
   SuccessMessage: string | null = null;
+
+  /** Application currently selected for inspection (read-only, agent-driven select / inspect). */
+  SelectedApplicationId: string | null = null;
+  SelectedApplicationName: string | null = null;
 
   // For the "Add Role" dropdown per application
   SelectedRoleIdToAdd: Map<string, string> = new Map();
@@ -367,24 +377,44 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
   //   - ToggleCanAccess / ToggleCanAdmin (flip a role's access/admin permission)
   //   - AddRole / RemoveRole            (grant / revoke a role assignment)
   //   - SaveChanges / DiscardChanges    (persist or discard permission mutations)
-  // Only filter / read / navigate / refresh capabilities are wired below. Do NOT add a mutating tool
-  // here — permission changes must originate from an explicit human action in the UI.
+  // Only select / read / filter / navigate / refresh / export capabilities are wired below. Export
+  // serializes ONLY the already-visible matrix (no credential, no secret). Do NOT add a mutating
+  // tool here — permission changes must originate from an explicit human action in the UI. The
+  // published context carries counts, names, and CanAccess/CanAdmin are NEVER streamed into context.
   // ========================================
 
   /**
    * Publish the current Application Roles state to the AI agent via NavigationService. The shaping
    * lives in the pure {@link buildApplicationRolesAgentContext} helper so it stays unit-testable.
-   * Called on init and on every meaningful state change (load, expand/collapse).
+   * Called on init and on every meaningful state change (load, expand/collapse, select).
    */
   private publishAgentContext(): void {
+    const selectedGroup = this.SelectedApplicationId
+      ? this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, this.SelectedApplicationId!))
+      : undefined;
     const context = buildApplicationRolesAgentContext({
       ApplicationGroupCount: this.ApplicationGroups.length,
       TotalRoleAssignmentCount: this.ApplicationGroups.reduce((sum, g) => sum + g.Roles.length, 0),
       HasUnsavedChanges: this.HasUnsavedChanges,
       IsLoading: this.IsLoading,
       ExpandedApplicationIds: this.ApplicationGroups.filter(g => g.Expanded).map(g => g.ApplicationID),
+      ApplicationSummaries: this.ApplicationGroups.map(g => ({
+        ApplicationID: g.ApplicationID,
+        ApplicationName: g.ApplicationName,
+        RoleCount: g.Roles.length,
+        Expanded: g.Expanded,
+      })),
+      SelectedApplicationId: this.SelectedApplicationId,
+      SelectedApplicationName: this.SelectedApplicationName,
+      SelectedApplicationRoleNames: selectedGroup ? selectedGroup.Roles.map(r => r.RoleName) : [],
+      AvailableRoleCount: this.AvailableRoles.length,
     });
     this.navigationService.SetAgentContext(this, context);
+  }
+
+  /** Application candidates (id+name) for the tolerant id→name→contains resolver. */
+  private applicationCandidates(): { ApplicationID: string; ApplicationName: string }[] {
+    return this.ApplicationGroups.map(g => ({ ApplicationID: g.ApplicationID, ApplicationName: g.ApplicationName }));
   }
 
   /**
@@ -398,15 +428,21 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
     this.navigationService.SetAgentClientTools(this, [
       {
         Name: 'ToggleApplicationGroup',
-        Description: 'Expand or collapse the role assignments for one application by its application ID. This only changes the UI expand/collapse state — it does not modify any permissions.',
-        ParameterSchema: { type: 'object', properties: { applicationId: { type: 'string' } }, required: ['applicationId'] },
+        Description: 'Expand or collapse the role assignments for one application (by application ID or name). This only changes the UI expand/collapse state — it does not modify any permissions.',
+        ParameterSchema: { type: 'object', properties: { applicationId: { type: 'string', description: 'The application ID or name' } }, required: ['applicationId'] },
         Handler: async (params: Record<string, unknown>) => this.toolToggleApplicationGroup(params),
       },
       {
         Name: 'GetRoleCountForApplication',
-        Description: 'Read-only: return the number of roles assigned to one application by its application ID.',
-        ParameterSchema: { type: 'object', properties: { applicationId: { type: 'string' } }, required: ['applicationId'] },
+        Description: 'Read-only: return the number of roles assigned to one application (by application ID or name), and the names of those roles.',
+        ParameterSchema: { type: 'object', properties: { applicationId: { type: 'string', description: 'The application ID or name' } }, required: ['applicationId'] },
         Handler: async (params: Record<string, unknown>) => this.toolGetRoleCountForApplication(params),
+      },
+      {
+        Name: 'SelectApplication',
+        Description: 'Read-only: select an application (by application ID or name) to inspect its assigned roles. Expands its group and reports its role names. Does not modify any permission.',
+        ParameterSchema: { type: 'object', properties: { applicationId: { type: 'string', description: 'The application ID or name to inspect' } }, required: ['applicationId'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSelectApplication(params),
       },
       {
         Name: 'RefreshApplicationRoleData',
@@ -417,34 +453,99 @@ export class ApplicationRolesResourceComponent extends BaseResourceComponent imp
           return { Success: true };
         },
       },
+      {
+        Name: 'ExportApplicationRoles',
+        Description: 'Read-only: export the currently displayed application→roles matrix to a CSV download (application, role, can-access, can-admin). Serializes only on-screen data — does not modify anything.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => this.toolExportApplicationRoles(),
+      },
     ]);
   }
 
-  /** Resolve an application group by id and toggle its expand/collapse state (UI only). */
+  /** Resolve an application group by id or name and toggle its expand/collapse state (UI only). */
   private toolToggleApplicationGroup(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
     const validated = validateStringParam(params['applicationId'], 'applicationId');
     if (!validated.ok) {
       return validated.result;
     }
-    const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, validated.value));
-    if (!group) {
-      return { Success: false, ErrorMessage: `No application with ID "${validated.value}" is shown in this matrix.` };
+    const match = resolveApplicationByIdOrName(validated.value, this.applicationCandidates());
+    if (!match) {
+      return { Success: false, ErrorMessage: buildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
     }
+    const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, match.ApplicationID))!;
     this.ToggleGroup(group);
     return { Success: true, Data: { ApplicationName: group.ApplicationName, Expanded: group.Expanded } };
   }
 
-  /** Read-only: resolve an application group by id and return its assigned-role count. */
+  /** Read-only: resolve an application group by id or name and return its assigned-role count + names. */
   private toolGetRoleCountForApplication(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
     const validated = validateStringParam(params['applicationId'], 'applicationId');
     if (!validated.ok) {
       return validated.result;
     }
-    const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, validated.value));
-    if (!group) {
-      return { Success: false, ErrorMessage: `No application with ID "${validated.value}" is shown in this matrix.` };
+    const match = resolveApplicationByIdOrName(validated.value, this.applicationCandidates());
+    if (!match) {
+      return { Success: false, ErrorMessage: buildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
     }
-    return { Success: true, Data: { ApplicationName: group.ApplicationName, RoleCount: group.Roles.length } };
+    const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, match.ApplicationID))!;
+    return {
+      Success: true,
+      Data: { ApplicationName: group.ApplicationName, RoleCount: group.Roles.length, RoleNames: group.Roles.slice(0, 25).map(r => r.RoleName) },
+    };
+  }
+
+  /** Read-only: select an application to inspect (sets selection, expands its group, reports roles). */
+  private toolSelectApplication(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const validated = validateStringParam(params['applicationId'], 'applicationId');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    const match = resolveApplicationByIdOrName(validated.value, this.applicationCandidates());
+    if (!match) {
+      return { Success: false, ErrorMessage: buildApplicationNotFoundError(validated.value, this.applicationCandidates()) };
+    }
+    const group = this.ApplicationGroups.find(g => UUIDsEqual(g.ApplicationID, match.ApplicationID))!;
+    this.SelectedApplicationId = group.ApplicationID;
+    this.SelectedApplicationName = group.ApplicationName;
+    if (!group.Expanded) {
+      group.Expanded = true;
+    }
+    this.cdr.detectChanges();
+    this.publishAgentContext();
+    return {
+      Success: true,
+      Data: { ApplicationName: group.ApplicationName, RoleCount: group.Roles.length, RoleNames: group.Roles.slice(0, 25).map(r => r.RoleName) },
+    };
+  }
+
+  /** Read-only: serialize the visible matrix to CSV and trigger a browser download. */
+  private toolExportApplicationRoles(): AgentToolResult & { Data?: Record<string, unknown> } {
+    const rows: ApplicationRoleExportRow[] = [];
+    for (const group of this.ApplicationGroups) {
+      if (group.Roles.length === 0) {
+        rows.push({ ApplicationName: group.ApplicationName, RoleName: '(open access)', CanAccess: true, CanAdmin: false });
+        continue;
+      }
+      for (const role of group.Roles) {
+        rows.push({ ApplicationName: group.ApplicationName, RoleName: role.RoleName, CanAccess: role.CanAccess, CanAdmin: role.CanAdmin });
+      }
+    }
+    const csv = buildApplicationRolesCsv(rows);
+    this.downloadCsv(csv, `application-roles-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.csv`);
+    return { Success: true, Data: { RowCount: rows.length } };
+  }
+
+  /** Trigger a client-side CSV download. Side-effect-only (no mutation of any record). */
+  private downloadCsv(csv: string, fileName: string): void {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 }
 

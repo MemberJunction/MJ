@@ -12,8 +12,16 @@ import {
   DailyRecordCount,
   EntityMapRow
 } from '../../services/integration-data.service';
-import { buildIntegrationAgentContext, resolveIntegrationSurface, navLabelForSurface } from '../../integration-agent-context';
-import { AgentToolResult } from '../../../shared/agent-tool-validation';
+import {
+  buildOverviewAgentContext,
+  resolveIntegrationSurface,
+  navLabelForSurface,
+  resolveIntegrationRecord,
+  buildIntegrationNotFoundError,
+  NamedIntegrationRecord,
+} from '../../integration-agent-context';
+import { CompositeKey } from '@memberjunction/core';
+import { AgentToolResult, validateStringParam } from '../../../shared/agent-tool-validation';
 
 type StatusColorType = 'green' | 'amber' | 'red' | 'gray';
 
@@ -112,9 +120,7 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
   }
 
   private emitAgentContext(): void {
-    const context = buildIntegrationAgentContext({
-      Surface: 'Overview',
-      IsLoading: this.IsLoading,
+    const context = buildOverviewAgentContext({
       KPIs: {
         TotalIntegrations: this.KPIs.TotalIntegrations,
         ActiveSyncs: this.KPIs.ActiveSyncs,
@@ -123,6 +129,20 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
         PipelineCount: this.computePipelineCount(),
         ScheduledSyncCount: 0,
       },
+      IsLoading: this.IsLoading,
+      SuccessRate: this.SuccessRate,
+      HealthyCount: this.countByStatusColor('green'),
+      WarningCount: this.countByStatusColor('amber'),
+      ErrorCount: this.countByStatusColor('red'),
+      InactiveCount: this.countByStatusColor('gray'),
+      AverageSyncDurationMs: this.KPIs.AverageSyncDurationMs,
+      VisibleIntegrationNames: this.Summaries.map(s => s.Integration.Name),
+      ActivityFeedCount: this.ActivityFeed.length,
+      RecentActivity: this.ActivityFeed.map(a => ({
+        Integration: a.IntegrationName,
+        Status: a.Status,
+        When: a.RelativeTime,
+      })),
     });
     this.navigationService.SetAgentContext(this, context);
   }
@@ -134,6 +154,12 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
         Description: 'Switch to a different Integration surface. Valid surfaces: Overview, Connections, Activity, Schedules.',
         ParameterSchema: { type: 'object', properties: { surface: { type: 'string' } }, required: ['surface'] },
         Handler: async (params: Record<string, unknown>) => this.toolSwitchSurface(params),
+      },
+      {
+        Name: 'OpenIntegrationRecord',
+        Description: 'Open a company-integration record in a tab for viewing. Accepts the integration ID or name (exact or partial).',
+        ParameterSchema: { type: 'object', properties: { integration: { type: 'string' } }, required: ['integration'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenIntegrationRecord(params),
       },
       {
         Name: 'RefreshIntegrationData',
@@ -158,6 +184,29 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
       return { Success: false, ErrorMessage: `Could not open the "${surface}" surface.` };
     }
     return { Success: true };
+  }
+
+  /** Open a company-integration record (read-only nav) by id or name. */
+  private toolOpenIntegrationRecord(params: Record<string, unknown>): AgentToolResult {
+    const check = validateStringParam(params['integration'], 'integration');
+    if (!check.ok) {
+      return check.result;
+    }
+    const candidates: NamedIntegrationRecord[] = this.Summaries.map(s => ({
+      ID: s.Integration.ID,
+      Name: s.Integration.Name,
+    }));
+    const match = resolveIntegrationRecord(check.value, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildIntegrationNotFoundError(check.value, candidates, 'integration') };
+    }
+    this.navigationService.OpenEntityRecord('MJ: Company Integrations', CompositeKey.FromID(match.ID));
+    return { Success: true };
+  }
+
+  /** Count of integrations whose health-status color matches. */
+  private countByStatusColor(color: StatusColorType): number {
+    return this.Summaries.filter(s => s.StatusColor === color).length;
   }
 
   /** Count of entity-map "pipelines" (enabled maps) across all integrations. */

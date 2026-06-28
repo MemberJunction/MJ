@@ -4,7 +4,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { ResourceData } from '@memberjunction/core-entities';
 import { RecordProcessHistoryComponent } from '@memberjunction/ng-record-process-studio';
 import { AgentToolResult } from '../shared/agent-tool-validation';
-import { buildHistoryAgentContext, resolveRowByID } from './bulk-operations-agent-helpers';
+import { buildHistoryAgentContext, resolveRowByIDOrName } from './bulk-operations-agent-helpers';
 
 /**
  * "Run History" sub-page of the Bulk Operations shell. A thin host that renders the generic, self-contained
@@ -78,10 +78,11 @@ export class BulkOperationsRunHistoryComponent extends BaseResourceComponent imp
         const open = h.OpenRunRow;
         this.navigationService.SetAgentContext(this, buildHistoryAgentContext({
             Mode: h.Mode,
-            RunCount: h.Runs.length,
+            Runs: h.Runs,
             OpenRunID: open?.ID ?? null,
             OpenRunStatus: open?.Status ?? null,
             OpenRunIsDryRun: open?.DryRun ?? null,
+            OpenRunProcessName: open?.ProcessName ?? null,
         }));
     }
 
@@ -103,11 +104,21 @@ export class BulkOperationsRunHistoryComponent extends BaseResourceComponent imp
             },
             {
                 Name: 'ViewRunDetails',
-                Description: 'Open the per-record detail view for a specific bulk operation run by its run ID. Read-only — shows what each record\'s outcome was.',
+                Description: 'Open the per-record detail view for a specific bulk operation run, referenced by its run ID or by the operation name that produced it (a partial, case-insensitive name match resolves to the most recent matching run). Read-only — shows what each record\'s outcome was.',
                 ParameterSchema: {
                     type: 'object',
-                    properties: { runID: { type: 'string', description: 'The ID of the Process Run to view.' } },
-                    required: ['runID'],
+                    properties: { run: { type: 'string', description: 'The ID of the Process Run, or the name of the bulk operation that produced it.' } },
+                    required: ['run'],
+                },
+                Handler: async (params) => this.handleViewDetails(params),
+            },
+            {
+                Name: 'SelectRun',
+                Description: 'Open (drill into) a bulk operation run by ID or operation name. Alias of ViewRunDetails for agents that phrase selection as "select" — read-only navigation, opens the per-record detail.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { run: { type: 'string', description: 'The ID of the Process Run, or the name of the bulk operation that produced it.' } },
+                    required: ['run'],
                 },
                 Handler: async (params) => this.handleViewDetails(params),
             },
@@ -133,15 +144,15 @@ export class BulkOperationsRunHistoryComponent extends BaseResourceComponent imp
         return { Success: true, Data: { RunCount: h.Runs.length } };
     }
 
-    /** Open a run's per-record details, resolved from the history component's loaded run list. */
-    private async handleViewDetails(params: Record<string, unknown>): Promise<AgentToolResult> {
+    /** Open a run's per-record details, resolved from the history component's loaded run list by id or operation name. */
+    private async handleViewDetails(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
         const h = this.requireHistory();
         if (!h) return this.notReady();
-        const run = this.findRun(h, params['runID']);
+        const run = this.findRun(h, params['run']);
         if (!run.ok) return run.result;
         await h.openRun(run.value);
         this.publishAgentContext();
-        return { Success: true };
+        return { Success: true, Data: { RunID: run.value.ID, ProcessName: run.value.ProcessName, Status: run.value.Status, DryRun: run.value.DryRun } };
     }
 
     /** Return to the run list from a detail view. */
@@ -168,14 +179,16 @@ export class BulkOperationsRunHistoryComponent extends BaseResourceComponent imp
     }
 
     /**
-     * Resolve a run row from the history component's loaded list by ID (delegates to the pure,
-     * unit-tested {@link resolveRowByID} helper). Returns a structured failure if the param is
-     * missing/non-string or the ID isn't found in the current list.
+     * Resolve a run row from the history component's loaded list by ID OR operation name (delegates to
+     * the pure, unit-tested {@link resolveRowByIDOrName} helper: exact run ID → exact operation name →
+     * partial operation-name contains). Because runs are listed most-recent-first, a name match yields
+     * the most recent run of that operation. Returns a structured failure (listing available operation
+     * names) if the param is missing/non-string or no row matches.
      */
     private findRun(
         h: RecordProcessHistoryComponent,
-        rawID: unknown,
+        rawRef: unknown,
     ): { ok: true; value: RecordProcessHistoryComponent['Runs'][number] } | { ok: false; result: AgentToolResult } {
-        return resolveRowByID(h.Runs, rawID, 'runID', 'bulk operation run');
+        return resolveRowByIDOrName(h.Runs, rawRef, 'run', 'bulk operation run', (r) => r.ProcessName);
     }
 }

@@ -45,6 +45,12 @@ import {
   type FeaturePipelineSummary,
   type FeaturePipelineRunStatus,
 } from './feature-pipeline.engine';
+import {
+  buildFeaturePipelinesAgentContext,
+  resolvePipeline,
+  buildPipelineNotFoundError,
+} from './feature-pipelines-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Stable operation key of the Run Feature Pipeline Remote Operation. */
 const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
@@ -351,21 +357,47 @@ export class FeaturePipelinesResourceComponent
   }
 
   // ---- Agent context + client tools (required for every dashboard) ----
+  //
+  // 🔒 SAFETY BOUNDARY (Feature Pipelines surface)
+  // ----------------------------------------------
+  // EXPOSED to the agent: idempotent refresh, read-only search/filter, selection,
+  // opening a pipeline's authoring editor (UI — no auto-save), and the existing
+  // on-demand RUN (RunFeaturePipeline). Running a feature pipeline is intentionally
+  // exposed: it is an idempotent, hardened Record-Set-Processing pass that derives
+  // and writes feature values back via the pipeline's own OutputMapping — the same
+  // run path the platform uses everywhere, with no agent-supplied parameters.
+  //
+  // NEVER EXPOSED: there is no agent tool that saves/deletes a pipeline definition
+  // or its OutputMapping (authoring is a deliberate UI action via the editor
+  // dialog). The agent may *open* the editor, never commit it.
 
   private emitAgentContext(): void {
-    this.navigationService.SetAgentContext(this, {
-      PipelineCount: this.AllPipelines.length,
-      ActiveCount: this.ActiveCount,
-      NeverRunCount: this.NeverRunCount,
-      FailedCount: this.FailedCount,
+    this.navigationService.SetAgentContext(this, buildFeaturePipelinesAgentContext({
+      AllPipelines: this.AllPipelines,
+      FilteredPipelines: this.FilteredPipelines,
       SearchQuery: this.SearchQuery,
-      Pipelines: this.AllPipelines.map((p) => ({
-        Name: p.Name,
-        TargetEntity: p.TargetEntity,
-        OutputAttribute: p.OutputAttribute,
-        LastRunStatus: p.LastRunStatus,
-      })),
-    });
+      RunningIDs: this.RunningIDs,
+      IsLoading: this.IsLoading,
+    }));
+  }
+
+  /** Resolve a pipeline reference (id/name/contains) or return a tolerant failure. */
+  private resolvePipelineOrFail(
+    raw: unknown,
+  ): { ok: true; pipeline: FeaturePipelineSummary } | { ok: false; result: { Success: false; ErrorMessage: string } } {
+    const v = validateStringParam(raw, 'pipeline');
+    if (!v.ok) return { ok: false, result: v.result };
+    const match = resolvePipeline(v.value, this.AllPipelines);
+    if (!match) {
+      return {
+        ok: false,
+        result: {
+          Success: false,
+          ErrorMessage: buildPipelineNotFoundError(v.value, this.AllPipelines.map((p) => p.Name)),
+        },
+      };
+    }
+    return { ok: true, pipeline: match };
   }
 
   private registerAgentTools(): void {
@@ -373,32 +405,61 @@ export class FeaturePipelinesResourceComponent
       {
         Name: 'RunFeaturePipeline',
         Description:
-          'Run a Feature Pipeline on demand by its name. Derives + persists feature values back to the target entity.',
+          'Run a Feature Pipeline on demand by its id or name. Derives + persists feature values back to the target entity via the pipeline OutputMapping (idempotent Record-Set-Processing pass; no agent-supplied parameters).',
         ParameterSchema: {
           type: 'object',
-          properties: { name: { type: 'string', description: 'The feature pipeline name' } },
-          required: ['name'],
+          properties: { pipeline: { type: 'string', description: 'The feature pipeline id or name' } },
+          required: ['pipeline'],
         },
         Handler: async (params: Record<string, unknown>) => {
-          const name = String(params['name'] ?? '').toLowerCase();
-          const match = this.AllPipelines.find((p) => p.Name.toLowerCase() === name);
-          if (!match) return { Success: false, ErrorMessage: `No feature pipeline named "${params['name']}"` };
-          await this.OnRunPipeline(match);
-          return { Success: true };
+          const r = this.resolvePipelineOrFail(params['pipeline'] ?? params['name']);
+          if (!r.ok) return r.result;
+          if (!r.pipeline.OnDemandEnabled) {
+            return { Success: false, ErrorMessage: `"${r.pipeline.Name}" is not enabled for on-demand runs.` };
+          }
+          await this.OnRunPipeline(r.pipeline);
+          return { Success: true, Data: { Pipeline: r.pipeline.Name } };
         },
       },
       {
         Name: 'SearchFeaturePipelines',
-        Description: 'Filter the feature pipeline list by a search term (name / target entity / attribute).',
+        Description: 'Filter the feature pipeline list by a search term (name / target entity / attribute). Pass empty to clear. Read-only.',
         ParameterSchema: {
           type: 'object',
           properties: { query: { type: 'string' } },
           required: ['query'],
         },
         Handler: async (params: Record<string, unknown>) => {
-          this.SearchQuery = String(params['query'] ?? '');
+          const v = validateStringParam(params['query'], 'query');
+          if (!v.ok) return v.result;
+          this.SearchQuery = v.value;
           this.OnSearchChanged();
-          return { Success: true };
+          return { Success: true, Data: { FilteredCount: this.FilteredPipelines.length } };
+        },
+      },
+      {
+        Name: 'RefreshFeaturePipelines',
+        Description: 'Reload the feature pipelines and their latest run/freshness from the server. Idempotent.',
+        ParameterSchema: { type: 'object', properties: {} },
+        Handler: async () => {
+          await this.Refresh();
+          this.emitAgentContext();
+          return { Success: true, Data: { PipelineCount: this.AllPipelines.length } };
+        },
+      },
+      {
+        Name: 'OpenFeaturePipelineEditor',
+        Description: 'Open the authoring editor for a feature pipeline by id or name (UI dialog — does NOT auto-save). Use to inspect or edit a pipeline definition.',
+        ParameterSchema: {
+          type: 'object',
+          properties: { pipeline: { type: 'string', description: 'The feature pipeline id or name' } },
+          required: ['pipeline'],
+        },
+        Handler: async (params: Record<string, unknown>) => {
+          const r = this.resolvePipelineOrFail(params['pipeline'] ?? params['name']);
+          if (!r.ok) return r.result;
+          this.OnEditPipeline(r.pipeline);
+          return { Success: true, Data: { Pipeline: r.pipeline.Name } };
         },
       },
     ]);

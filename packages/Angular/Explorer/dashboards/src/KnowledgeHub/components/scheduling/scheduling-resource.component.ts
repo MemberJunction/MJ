@@ -11,12 +11,19 @@
 
 import { Component, Input, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { ResourceData, MJScheduledJobEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ScheduledJobService, ScheduledJobDialogResult } from '@memberjunction/ng-scheduling';
+import {
+    buildSchedulingAgentContext,
+    resolveScheduledJob,
+    buildScheduleNotFoundError,
+    VALID_SCHEDULE_STATUSES,
+} from './scheduling-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 /** Simple cron-to-English mapping for common patterns */
 interface CronParts {
@@ -119,36 +126,72 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
     // ================================================================
 
     /**
+     * 🔒 SAFETY BOUNDARY (Knowledge Hub Scheduling surface)
+     * -----------------------------------------------------
+     * EXPOSED to the agent: idempotent refresh, read-only filter (by status) +
+     * search, selection, opening a job's record for VIEWING, and navigation to
+     * the full Scheduling application. All resolve job references tolerantly
+     * (id → name → contains) and never throw.
+     *
+     * NEVER EXPOSED (operational mutations — deliberate UI actions only):
+     * create a job (OnNewSchedule), edit/save a job (OnEditJob via the dialog),
+     * trigger a run (OnRunNow), pause/resume, or delete. The agent may *navigate
+     * to* and *open* these, never commit them.
+     *
+     * No-op when embedded (HideToolbar) — the host surface owns agent reporting.
+     */
+
+    /**
      * Publish the scheduling surface state to the AI agent. Re-emitted whenever
      * jobs reload or the filter/search changes, so the streamed context tracks
-     * the visible job set. No-op when embedded (the host owns reporting).
+     * the visible job set. Deep context is shaped by the pure
+     * {@link buildSchedulingAgentContext}. No-op when embedded.
      */
     private emitAgentContext(): void {
         if (this.HideToolbar) {
             return;
         }
-        this.navigationService.SetAgentContext(this, {
-            TotalJobs: this.AllJobs.length,
-            VisibleJobs: this.FilteredJobs.length,
-            ActiveCount: this.ActiveCount,
-            PausedCount: this.PausedCount,
-            DisabledCount: this.DisabledCount,
-            StatusFilter: this.StatusFilter || 'All',
+        this.navigationService.SetAgentContext(this, buildSchedulingAgentContext({
+            AllJobs: this.AllJobs.map(j => ({
+                ID: j.ID,
+                Name: j.Name,
+                Description: j.Description,
+                Status: j.Status,
+                CronExpression: j.CronExpression,
+                NextRunAt: j.NextRunAt,
+                LastRunAt: j.LastRunAt,
+                RunCount: j.RunCount,
+                SuccessCount: j.SuccessCount,
+            })),
+            FilteredJobs: this.FilteredJobs.map(j => ({
+                ID: j.ID,
+                Name: j.Name,
+                Description: j.Description,
+                Status: j.Status,
+                CronExpression: j.CronExpression,
+                NextRunAt: j.NextRunAt,
+                LastRunAt: j.LastRunAt,
+                RunCount: j.RunCount,
+                SuccessCount: j.SuccessCount,
+            })),
+            StatusFilter: this.StatusFilter,
             SearchQuery: this.SearchQuery,
             RecentRunCount: this.RecentRuns.length,
-        });
+            IsLoading: this.IsLoading,
+        }));
     }
 
     /**
-     * Register the safe, agent-actionable operations for the scheduling surface:
-     * refresh, filter by status, and open the full Scheduling application. All
-     * wire to existing methods and never throw.
+     * Register the SAFE, agent-actionable operations for the scheduling surface:
+     * refresh, filter by status, search, select/open a job (view only), and open
+     * the full Scheduling application. All wire to existing methods, resolve job
+     * references tolerantly, and never throw. See the SAFETY BOUNDARY above.
      */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
             {
                 Name: 'RefreshSchedules',
-                Description: 'Reload the scheduled jobs and recent run history from the server.',
+                Description: 'Reload the scheduled jobs and recent run history from the server. Idempotent.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => {
                     await this.loadData();
@@ -158,20 +201,59 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
             },
             {
                 Name: 'FilterSchedulesByStatus',
-                Description: 'Filter the scheduled jobs by status. Pass an empty string to clear. Valid statuses: Active, Paused, Disabled.',
+                Description: 'Filter the scheduled jobs by status. Pass an empty string to clear. Valid statuses: Active, Paused, Disabled. Read-only.',
                 ParameterSchema: {
                     type: 'object',
-                    properties: { status: { type: 'string', enum: ['', 'Active', 'Paused', 'Disabled'] } },
+                    properties: { status: { type: 'string', enum: ['', ...VALID_SCHEDULE_STATUSES] } },
                     required: ['status'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
                     const status = String(params['status'] ?? '');
-                    if (status && !['Active', 'Paused', 'Disabled'].includes(status)) {
-                        return { Success: false, ErrorMessage: `Unknown status "${status}"` };
+                    if (status && !(VALID_SCHEDULE_STATUSES as readonly string[]).includes(status)) {
+                        return { Success: false, ErrorMessage: `Unknown status "${status}". Expected one of: ${VALID_SCHEDULE_STATUSES.join(', ')}.` };
                     }
                     this.StatusFilter = status;
                     this.OnFilterChanged();
                     return { Success: true, Data: { VisibleJobs: this.FilteredJobs.length } };
+                },
+            },
+            {
+                Name: 'SearchSchedules',
+                Description: 'Filter the scheduled jobs by a search term (name / description). Pass empty to clear. Read-only.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { query: { type: 'string' } },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['query'], 'query');
+                    if (!v.ok) return v.result;
+                    this.SearchQuery = v.value;
+                    this.OnSearchChanged();
+                    return { Success: true, Data: { VisibleJobs: this.FilteredJobs.length } };
+                },
+            },
+            {
+                Name: 'OpenScheduleRecord',
+                Description: 'Open a scheduled job\'s record by id or name in a new tab for VIEWING (does NOT edit, run, pause, or delete).',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { job: { type: 'string', description: 'Scheduled job id or name' } },
+                    required: ['job'],
+                },
+                Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['job'], 'job');
+                    if (!v.ok) return v.result;
+                    const match = resolveScheduledJob(v.value, this.AllJobs);
+                    if (!match) {
+                        return {
+                            Success: false,
+                            ErrorMessage: buildScheduleNotFoundError(v.value, this.AllJobs.map(j => j.Name)),
+                        };
+                    }
+                    const pkey = new CompositeKey([{ FieldName: 'ID', Value: match.ID }]);
+                    this.navigationService.OpenEntityRecord('MJ: Scheduled Jobs', pkey);
+                    return { Success: true, Data: { Job: match.Name } };
                 },
             },
             {

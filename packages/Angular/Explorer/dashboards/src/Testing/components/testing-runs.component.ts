@@ -11,7 +11,7 @@ import {
   HostListener
 } from '@angular/core';
 import { Observable, Subject, BehaviorSubject, combineLatest } from 'rxjs';
-import { takeUntil, map } from 'rxjs/operators';
+import { takeUntil, map, tap } from 'rxjs/operators';
 import { CompositeKey } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestingDialogService } from '@memberjunction/ng-testing';
@@ -1127,6 +1127,9 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   SelectedRun: TestRunWithFeedbackSummary | null = null;
 
+  /** Latest filtered/visible runs, cached for state reporting (agent context). */
+  private latestVisibleRuns: TestRunWithFeedbackSummary[] = [];
+
   EvalPreferences: EvaluationPreferences = { ...DEFAULT_EVALUATION_PREFERENCES, showAuto: true };
 
   // Observables
@@ -1156,6 +1159,41 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     this.updateServiceDateRange();
     this.setupObservables();
     this.subscribeToAgentFilterIntents();
+    this.subscribeToAgentSelectionIntents();
+  }
+
+  /**
+   * Apply agent-driven run-SELECTION intents published on the shared
+   * instrumentation service (from the dashboard's `SelectTestRun` / open-run
+   * client tools). The dashboard owns no `SelectedRun` UI state — it publishes a
+   * target run id (+ open flag + monotonic nonce) here, and this surface resolves
+   * it against the currently-loaded runs. Read-only navigational affordance:
+   * selecting opens the detail panel; `open` additionally opens the run's record
+   * in the entity workspace. Neither executes a test.
+   */
+  private subscribeToAgentSelectionIntents(): void {
+    let lastNonce = -1;
+    combineLatest([
+      this.instrumentationService.runSelectionIntent$,
+      this.instrumentationService.testRunsWithFeedback$,
+    ]).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(([intent, runs]) => {
+      if (!intent || intent.nonce === lastNonce) {
+        return;
+      }
+      const run = runs.find(r => r.id.toLowerCase() === intent.runId.toLowerCase());
+      if (!run) {
+        return; // Run not in the loaded set yet; a later testRunsWithFeedback$ tick may carry it.
+      }
+      lastNonce = intent.nonce;
+      this.SelectRun(run);
+      if (intent.open) {
+        SharedService.Instance.OpenEntityRecord('MJ: Test Runs', CompositeKey.FromID(run.id));
+      }
+      this.emitStateChange();
+      this.cdr.markForCheck();
+    });
   }
 
   /**
@@ -1248,11 +1286,13 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   SelectRun(run: TestRunWithFeedbackSummary): void {
     this.SelectedRun = run;
     this.resetFeedbackForm();
+    this.emitStateChange();
     this.cdr.markForCheck();
   }
 
   CloseDetailPanel(): void {
     this.SelectedRun = null;
+    this.emitStateChange();
     this.cdr.markForCheck();
   }
 
@@ -1357,6 +1397,11 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
     this.FilteredRuns$ = combineLatest([data$, this.filterTrigger$]).pipe(
       map(([runs]) => this.applyClientFilters(runs)),
+      tap(runs => {
+        this.latestVisibleRuns = runs;
+        // Re-report so the dashboard's agent context reflects the visible set.
+        this.emitStateChange();
+      }),
       takeUntil(this.destroy$)
     );
 
@@ -1471,7 +1516,15 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
     this.stateChange.emit({
       status: this.filterState.status,
       timeRange: this.filterState.timeRange,
-      searchText: this.filterState.searchText
+      searchText: this.filterState.searchText,
+      // Richer state for the dashboard's agent context (selected run id+NAME,
+      // visible run names + count, detail-panel state). Read-only — the dashboard
+      // does not mutate this; it only publishes it to the agent.
+      visibleRunCount: this.latestVisibleRuns.length,
+      visibleRunNames: this.latestVisibleRuns.map(r => r.testName),
+      selectedRunId: this.SelectedRun?.id ?? null,
+      selectedRunName: this.SelectedRun?.testName ?? null,
+      detailPanelOpen: this.SelectedRun != null
     });
   }
 

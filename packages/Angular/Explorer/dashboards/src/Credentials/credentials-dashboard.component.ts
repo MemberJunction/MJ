@@ -11,7 +11,7 @@ import {
     isValidCredentialsTab,
     VALID_CREDENTIALS_TABS,
 } from './credentials-agent-context';
-import { validateEnumParam, AgentToolResult } from '../shared/agent-tool-validation';
+import { validateEnumParam, validateStringParam, AgentToolResult } from '../shared/agent-tool-validation';
 
 interface CredentialsDashboardState {
     activeTab: string;
@@ -33,6 +33,13 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
     // Counts for badges
     public credentialCount = 0;
     public typeCount = 0;
+    public categoryCount = 0;
+    public expiringSoonCount = 0;
+
+    // Bounded definition names (non-sensitive: schema/organizational definitions,
+    // NOT individual credential records or secret values).
+    public typeNames: string[] = [];
+    public categoryNames: string[] = [];
 
     // Track visited tabs for lazy loading
     private visitedTabs = new Set<string>();
@@ -74,16 +81,21 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
     // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
     // Credentials is a highly security-sensitive surface. The agent context and
     // client tools registered here are strictly NAVIGATIONAL + READ-ONLY: tab
-    // switches and a metadata-count refresh. The following are DELIBERATELY NOT
-    // exposed to the agent and must remain human-initiated:
-    //   - Reading / revealing any credential SECRET value, API key, password,
-    //     token, or connection string.
+    // switches, a metadata-count refresh, and a credential-TYPE-definition lookup
+    // that navigates to the Types tab. The following are DELIBERATELY NOT exposed
+    // to the agent and must remain human-initiated:
+    //   - Reading / revealing any credential SECRET value (`Values`), API key,
+    //     password, token, or connection string.
     //   - Creating, editing, or deleting credentials.
-    //   - Creating or deleting credential types or categories.
+    //   - Creating, renaming, or deleting credential types or categories.
     //   - Writing to the audit trail.
-    // Context exposes ONLY the active tab, its label, two aggregate counts, and
-    // the loading flag — NEVER any secret/credential material. See
-    // credentials-agent-context.ts for the metadata-only context contract.
+    // Context exposes ONLY the active tab + label, aggregate counts (credentials /
+    // types / categories / expiring-soon), the loading flag, and bounded
+    // credential-TYPE + CATEGORY *definition* names (e.g. "OAuth 2.0", "API Key" —
+    // reusable schema/organizational definitions, NOT individual credential
+    // records and NEVER a secret). It never exposes an individual credential's
+    // name or its secret payload. See credentials-agent-context.ts for the
+    // metadata-only context contract and the no-secret-leak unit test.
     // ================================================================
 
     /**
@@ -97,7 +109,11 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
             TabLabel: this.getCurrentTabLabel(),
             CredentialCount: this.credentialCount,
             TypeCount: this.typeCount,
+            CategoryCount: this.categoryCount,
+            ExpiringSoonCount: this.expiringSoonCount,
             IsLoading: this.isLoading,
+            TypeNames: this.typeNames,
+            CategoryNames: this.categoryNames,
         }));
     }
 
@@ -121,6 +137,12 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => this.handleRefreshCountsTool(),
             },
+            {
+                Name: 'FindCredentialType',
+                Description: 'Look up a credential TYPE definition (e.g. "OAuth 2.0", "API Key") by name and switch to the Types tab to view it. Read-only navigation — does not reveal any credential or secret. Returns the matched type name, or the available type names on a miss.',
+                ParameterSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+                Handler: async (params: Record<string, unknown>) => this.handleFindCredentialTypeTool(params),
+            },
         ]);
     }
 
@@ -130,6 +152,30 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
             return v.result;
         }
         this.onTabChange(v.value);
+        return { Success: true };
+    }
+
+    /**
+     * Resolve a credential-type definition by name (exact, case-insensitive, then
+     * partial-contains) and navigate to the Types tab. Read-only: opens the Types
+     * tab for viewing; never reveals a credential record or secret value.
+     */
+    private handleFindCredentialTypeTool(params: Record<string, unknown>): AgentToolResult {
+        const v = validateStringParam(params?.['name'], 'name');
+        if (!v.ok) {
+            return v.result;
+        }
+        const query = v.value.trim().toLowerCase();
+        if (!query) {
+            return { Success: false, ErrorMessage: 'name must be a non-empty string.' };
+        }
+        const exact = this.typeNames.find(n => n.toLowerCase() === query);
+        const match = exact ?? this.typeNames.find(n => n.toLowerCase().includes(query));
+        if (!match) {
+            const available = this.typeNames.slice(0, 25).join(', ');
+            return { Success: false, ErrorMessage: `No credential type matches "${v.value}". Available types: ${available || '(none)'}.` };
+        }
+        this.onTabChange('types');
         return { Success: true };
     }
 
@@ -152,23 +198,52 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
         try {
             const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
-            // Load credential count
-            const credResult = await rv.RunView({
-                EntityName: 'MJ: Credentials',
-                ExtraFilter: 'IsActive = 1',
-                ResultType: 'count_only'
-            });
+            // Batch the read-only metadata queries. We load credential-type and
+            // category DEFINITIONS (names + the type's Category enum) — these are
+            // schema/organizational definitions, NOT credential records or secret
+            // values. We deliberately never load the `Values` (secret payload)
+            // field, nor individual credential names.
+            const now = new Date();
+            const [credResult, typeResult, categoryResult, expiringResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Credentials',
+                    ExtraFilter: 'IsActive = 1',
+                    ResultType: 'count_only'
+                },
+                {
+                    EntityName: 'MJ: Credential Types',
+                    Fields: ['Name', 'Category'],
+                    OrderBy: 'Name',
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: Credential Categories',
+                    Fields: ['Name'],
+                    OrderBy: 'Name',
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: Credentials',
+                    ExtraFilter: `IsActive = 1 AND ExpiresAt IS NOT NULL AND ExpiresAt > '${now.toISOString()}' AND ExpiresAt < '${new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()}'`,
+                    ResultType: 'count_only'
+                }
+            ]);
+
             if (credResult.Success) {
                 this.credentialCount = credResult.RowCount;
             }
-
-            // Load type count
-            const typeResult = await rv.RunView({
-                EntityName: 'MJ: Credential Types',
-                ResultType: 'count_only'
-            });
             if (typeResult.Success) {
-                this.typeCount = typeResult.RowCount;
+                const rows = typeResult.Results as Array<{ Name?: string }>;
+                this.typeNames = rows.map(r => r.Name ?? '').filter(n => n.length > 0);
+                this.typeCount = rows.length;
+            }
+            if (categoryResult.Success) {
+                const rows = categoryResult.Results as Array<{ Name?: string }>;
+                this.categoryNames = rows.map(r => r.Name ?? '').filter(n => n.length > 0);
+                this.categoryCount = rows.length;
+            }
+            if (expiringResult.Success) {
+                this.expiringSoonCount = expiringResult.RowCount;
             }
 
             this.publishAgentContext();

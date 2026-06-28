@@ -5,6 +5,12 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 import { PermissionsUserOption, loadPermissionsUsers, parseAuditFilterParams } from './permissions-shared';
+import {
+    buildAuditLogAgentContext,
+    buildPermissionsNotFoundError,
+    resolvePermissionsCandidate,
+} from './permissions-agent-context';
+import { validateStringParam } from '../shared/agent-tool-validation';
 
 /**
  * Audit Log resource — one of three tabs in the Permissions admin application.
@@ -79,18 +85,33 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
 
     /**
      * Publish the current audit-log state to the AI agent. Re-invoked on every
-     * meaningful state change (query run, filter reset).
+     * meaningful state change (query run, filter reset). The shaping lives in the
+     * pure {@link buildAuditLogAgentContext} helper so it stays unit-testable.
      */
     private publishAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
-            DomainFilter: this.DomainFilter || null,
-            UserFilter: this.UserFilter || null,
-            StartDate: this.StartDate || null,
-            EndDate: this.EndDate || null,
+        const userFilterName = this.UserFilter
+            ? this.Users.find((u) => u.ID === this.UserFilter)?.Name ?? null
+            : null;
+        const context = buildAuditLogAgentContext({
+            DomainFilter: this.DomainFilter,
+            UserFilter: this.UserFilter,
+            UserFilterName: userFilterName,
+            StartDate: this.StartDate,
+            EndDate: this.EndDate,
             EntryCount: this.Entries.length,
+            RecentEntries: this.Entries.map((e) => ({
+                ChangedAt: e.ChangedAt instanceof Date ? e.ChangedAt.toISOString() : String(e.ChangedAt),
+                ChangedByUserName: e.ChangedByUserName ?? null,
+                DomainName: e.DomainName,
+                ChangeType: e.ChangeType,
+            })),
+            AvailableDomainNames: this.Domains.map((d) => d.Name),
+            AvailableUserNames: this.Users.map((u) => u.Name),
+            AvailableUserCount: this.Users.length,
             IsLoading: this.IsLoading,
             HasRunQuery: this.HasRunQuery,
         });
+        this.navigationService.SetAgentContext(this, context);
     }
 
     /**
@@ -122,7 +143,47 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => this.handleResetFiltersTool(),
             },
+            {
+                Name: 'SearchAuditEntries',
+                Description:
+                    'Read-only: search the currently displayed audit entries by a substring matched against the changing user name, domain, or change type. Returns matching entry summaries — does not modify any record.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: { query: { type: 'string', description: 'Case-insensitive substring to match against user / domain / change type' } },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleSearchEntriesTool(params),
+            },
         ]);
+    }
+
+    private handleSearchEntriesTool(params: Record<string, unknown>): { Success: boolean; Data?: unknown; ErrorMessage?: string } {
+        const q = validateStringParam(params?.['query'], 'query');
+        if (!q.ok) return q.result;
+        const needle = q.value.trim().toLowerCase();
+        if (!needle) {
+            return { Success: false, ErrorMessage: 'query is required.' };
+        }
+        if (this.Entries.length === 0) {
+            return { Success: false, ErrorMessage: 'No audit entries are loaded. Run a timeline query first.' };
+        }
+        const matches = this.Entries.filter(
+            (e) =>
+                (e.ChangedByUserName ?? '').toLowerCase().includes(needle) ||
+                e.DomainName.toLowerCase().includes(needle) ||
+                e.ChangeType.toLowerCase().includes(needle)
+        );
+        return {
+            Success: true,
+            Data: {
+                MatchCount: matches.length,
+                Matches: matches.slice(0, 25).map((e) => ({
+                    ChangedByUserName: e.ChangedByUserName ?? null,
+                    DomainName: e.DomainName,
+                    ChangeType: e.ChangeType,
+                })),
+            },
+        };
     }
 
     private async handleRunQueryTool(
@@ -133,15 +194,45 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
             return { Success: false, ErrorMessage: parsed.error };
         }
 
-        if (parsed.value.DomainName && !this.Domains.some((d) => d.Name === parsed.value.DomainName)) {
-            return { Success: false, ErrorMessage: `Unknown permission domain "${parsed.value.DomainName}".` };
-        }
-        if (parsed.value.ChangedByUserID && !this.Users.some((u) => u.ID === parsed.value.ChangedByUserID)) {
-            return { Success: false, ErrorMessage: `Unknown user ID "${parsed.value.ChangedByUserID}".` };
+        // Resolve domain (name or ID) tolerantly.
+        let resolvedDomain = '';
+        if (parsed.value.DomainName) {
+            const domainMatch = resolvePermissionsCandidate(
+                parsed.value.DomainName,
+                this.Domains.map((d) => ({ ID: d.ID, Name: d.Name }))
+            );
+            if (!domainMatch) {
+                return {
+                    Success: false,
+                    ErrorMessage: buildPermissionsNotFoundError(
+                        parsed.value.DomainName,
+                        'permission domain',
+                        this.Domains.map((d) => ({ ID: d.ID, Name: d.Name }))
+                    ),
+                };
+            }
+            resolvedDomain = domainMatch.Name;
         }
 
-        this.DomainFilter = parsed.value.DomainName;
-        this.UserFilter = parsed.value.ChangedByUserID;
+        // Resolve user (ID, name, or email) tolerantly; the audit query filters by user ID.
+        let resolvedUserId = '';
+        if (parsed.value.ChangedByUserID) {
+            const userMatch = this.resolveAuditUserRef(parsed.value.ChangedByUserID);
+            if (!userMatch) {
+                return {
+                    Success: false,
+                    ErrorMessage: buildPermissionsNotFoundError(
+                        parsed.value.ChangedByUserID,
+                        'user',
+                        this.Users.map((u) => ({ ID: u.ID, Name: u.Name }))
+                    ),
+                };
+            }
+            resolvedUserId = userMatch.ID;
+        }
+
+        this.DomainFilter = resolvedDomain;
+        this.UserFilter = resolvedUserId;
         this.StartDate = parsed.value.StartDate;
         this.EndDate = parsed.value.EndDate;
 
@@ -152,6 +243,21 @@ export class PermissionsAuditLogResourceComponent extends BaseResourceComponent 
             return { Success: false, ErrorMessage: this.ErrorMessage };
         }
         return { Success: true, Data: { EntryCount: this.Entries.length } };
+    }
+
+    /** Resolve an audit user-filter reference: id → name → email → name-contains. */
+    private resolveAuditUserRef(input: string): PermissionsUserOption | null {
+        const needle = (input ?? '').trim().toLowerCase();
+        if (!needle) return null;
+        const byCandidate = resolvePermissionsCandidate(input, this.Users.map((u) => ({ ID: u.ID, Name: u.Name })));
+        if (byCandidate) {
+            return this.Users.find((u) => u.ID === byCandidate.ID) ?? null;
+        }
+        return (
+            this.Users.find((u) => u.Email.trim().toLowerCase() === needle) ??
+            this.Users.find((u) => u.Email.toLowerCase().includes(needle)) ??
+            null
+        );
     }
 
     private handleResetFiltersTool(): { Success: boolean } {

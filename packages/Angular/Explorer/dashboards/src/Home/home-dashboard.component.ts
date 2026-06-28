@@ -11,7 +11,7 @@ import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ActionPinConfigResult } from './action-pin-config-dialog.component';
 import { ActionPinRunResult } from './action-pin-runner-dialog.component';
-import { buildHomeAgentContext } from './home-agent-context';
+import { buildHomeAgentContext, buildHomeNotFoundError, resolveNamedRecord, NamedRecord, RecentItemSummary } from './home-agent-context';
 import { AgentToolResult, validateStringParam } from '../shared/agent-tool-validation';
 
 /**
@@ -295,15 +295,26 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       AppNames: this.apps.map(a => a.Name),
       PinnedItemCount: this.PinnedItems.length,
       PinGroupCount: this.PinGroups.length,
+      PinGroupNames: this.PinGroups,
       PinNames: this.PinnedItems.map(p => p.DisplayName),
       UnreadNotifications: this.unreadNotifications.length,
+      NotificationTitles: this.unreadNotifications.map(n => n.Title ?? '(untitled)'),
       RecentItemsCount: this.recentItems.length,
+      RecentItems: this.buildRecentItemSummaries(),
       EditMode: this.EditMode,
       AddPanelOpen: this.AddPanelOpen,
       SidebarOpen: this.sidebarOpen,
       AddPanelSearchQuery: this.AddPanelSearchQuery,
     });
     this.navigationService.SetAgentContext(this, context);
+  }
+
+  /** Structured recent-item summaries (display name + resource type) for the agent context. */
+  private buildRecentItemSummaries(): RecentItemSummary[] {
+    return this.recentItems.map(item => ({
+      Name: item.recordName || item.entityName || item.recordId,
+      ResourceType: item.resourceType,
+    }));
   }
 
   /**
@@ -313,8 +324,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    * would call and returns a tolerant result.
    *
    * Tools:
-   * - OpenApp: switch to an application by name.
-   * - OpenPin: open a pinned item by its display name.
+   * - OpenApp: switch to an application by name (exact or partial match).
+   * - OpenPin: open a pinned item by its display name (exact or partial match).
+   * - SearchPins: find pinned items by a name query (read-only — returns matches).
+   * - OpenRecent: open a recently-accessed item by display name (read-only navigation).
    * - SearchAddPinPanel: open the Add Pin panel (if needed) and apply a search query.
    * - ClearAddPinPanelSearch: clear the Add Pin panel search query.
    * - OpenAddPinPanel / CloseAddPinPanel: toggle the Add Pin panel.
@@ -331,9 +344,21 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       },
       {
         Name: 'OpenPin',
-        Description: 'Open a pinned item on the Home screen by its display name.',
+        Description: 'Open a pinned item on the Home screen by its display name (exact or partial match).',
         ParameterSchema: { type: 'object', properties: { pinName: { type: 'string' } }, required: ['pinName'] },
         Handler: async (params: Record<string, unknown>) => this.toolOpenPin(params),
+      },
+      {
+        Name: 'SearchPins',
+        Description: 'Find pinned items on the Home screen whose display name matches a query (case-insensitive contains). Read-only — returns the matching pin names; does not open anything.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchPins(params),
+      },
+      {
+        Name: 'OpenRecent',
+        Description: 'Open a recently-accessed item from the Home sidebar by its display name (exact or partial match). Read-only navigation.',
+        ParameterSchema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenRecent(params),
       },
       {
         Name: 'SearchAddPinPanel',
@@ -390,7 +415,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     ]);
   }
 
-  /** Resolve an app by name (case-insensitive) and switch to it. */
+  /** Resolve an app by name (exact then partial, case-insensitive) and switch to it. */
   private async toolOpenApp(params: Record<string, unknown>): Promise<AgentToolResult & { Data?: Record<string, unknown> }> {
     const parsed = validateStringParam(params['appName'], 'appName');
     if (!parsed.ok) {
@@ -400,15 +425,25 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!appName) {
       return { Success: false, ErrorMessage: 'appName is required.' };
     }
-    const app = this.apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    const candidates: NamedRecord[] = this.apps.map(a => ({ Name: a.Name }));
+    const match = resolveNamedRecord(appName, candidates);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(appName, 'app', candidates) };
+    }
+    const app = this.apps.find(a => a.Name === match.Name);
     if (!app) {
-      return { Success: false, ErrorMessage: `App "${appName}" is not available. Available apps: ${this.apps.map(a => a.Name).join(', ') || '(none)'}.` };
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(appName, 'app', candidates) };
     }
     await this.onAppClick(app);
     return { Success: true, Data: { AppName: app.Name } };
   }
 
-  /** Resolve a pinned item by display name (case-insensitive) and open it. */
+  /** The pinned items narrowed to the resolver's structural shape (Name == DisplayName). */
+  private get pinNamedRecords(): NamedRecord[] {
+    return this.PinnedItems.map(p => ({ Name: p.DisplayName }));
+  }
+
+  /** Resolve a pinned item by display name (exact then partial, case-insensitive) and open it. */
   private toolOpenPin(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
     const parsed = validateStringParam(params['pinName'], 'pinName');
     if (!parsed.ok) {
@@ -418,10 +453,13 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!pinName) {
       return { Success: false, ErrorMessage: 'pinName is required.' };
     }
-    const lowered = pinName.toLowerCase();
-    const pin = this.PinnedItems.find(p => p.DisplayName.toLowerCase() === lowered);
+    const match = resolveNamedRecord(pinName, this.pinNamedRecords);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
+    }
+    const pin = this.PinnedItems.find(p => p.DisplayName === match.Name);
     if (!pin) {
-      return { Success: false, ErrorMessage: `No pinned item named "${pinName}". Pinned items: ${this.PinnedItems.map(p => p.DisplayName).join(', ') || '(none)'}.` };
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(pinName, 'pinned item', this.pinNamedRecords) };
     }
     // OnPinClick is a no-op while in edit mode; clear edit mode so the open succeeds.
     if (this.EditMode) {
@@ -429,6 +467,46 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     }
     this.OnPinClick(pin);
     return { Success: true, Data: { PinName: pin.DisplayName } };
+  }
+
+  /** Find pinned items whose display name matches a query (read-only — returns matches). */
+  private toolSearchPins(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const parsed = validateStringParam(params['query'], 'query');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const query = parsed.value.trim().toLowerCase();
+    const matches = query
+      ? this.PinnedItems.filter(p => p.DisplayName.toLowerCase().includes(query))
+      : [...this.PinnedItems];
+    return { Success: true, Data: { Matches: matches.map(p => p.DisplayName), MatchCount: matches.length } };
+  }
+
+  /** Resolve a recent item by display name (exact then partial) and navigate to it. */
+  private toolOpenRecent(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+    const parsed = validateStringParam(params['name'], 'name');
+    if (!parsed.ok) {
+      return parsed.result;
+    }
+    const name = parsed.value.trim();
+    if (!name) {
+      return { Success: false, ErrorMessage: 'name is required.' };
+    }
+    // Build the same display name the context publishes, then resolve against it.
+    const named: NamedRecord[] = this.recentItems.map(item => ({
+      Name: item.recordName || item.entityName || item.recordId,
+    }));
+    const match = resolveNamedRecord(name, named);
+    if (!match) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(name, 'recent item', named) };
+    }
+    const idx = named.findIndex(n => n.Name === match.Name);
+    const item = this.recentItems[idx];
+    if (!item) {
+      return { Success: false, ErrorMessage: buildHomeNotFoundError(name, 'recent item', named) };
+    }
+    this.onRecentClick(item);
+    return { Success: true, Data: { Name: match.Name, ResourceType: item.resourceType } };
   }
 
   /** Open the Add Pin panel (if needed) and apply a search query. */

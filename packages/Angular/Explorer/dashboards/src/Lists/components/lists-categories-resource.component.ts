@@ -6,6 +6,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { validateStringParam } from '../../shared/agent-tool-validation';
+import { buildListCategoriesAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface CategoryViewModel {
   category: MJListCategoryEntity;
   listCount: number;
@@ -875,12 +876,34 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
    * Re-called whenever the selection changes or data reloads.
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, {
+    this.navigationService.SetAgentContext(this, buildListCategoriesAgentContext({
       SelectedCategoryId: this.selectedCategory?.ID ?? null,
       SelectedCategoryName: this.selectedCategory?.Name ?? null,
       CategoryCount: this.categories.length,
       SelectedCategoryListCount: this.selectedCategoryLists.length,
-    });
+      // Deep context: the member-list NAMES under the selection (bounded) and a
+      // bounded view of the category tree (name / count / expanded), so the agent
+      // sees what the user sees and can act by name.
+      SelectedCategoryListNames: this.selectedCategoryLists.map(l => l.Name),
+      CategoryNodes: this.categoryViewModels.map(vm => ({
+        Name: vm.category.Name,
+        ListCount: vm.listCount,
+        Expanded: vm.isExpanded,
+      })),
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a category ID or NAME, exact or
+   * partial) to one of the loaded categories via the pure {@link resolveNamedRecord}
+   * helper. Returns the matching {@link MJListCategoryEntity}, or null.
+   */
+  private resolveCategory(input: string): MJListCategoryEntity | null {
+    const match = resolveNamedRecord(input, this.categories.map(c => ({ ID: c.ID, Name: c.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.categories.find(c => UUIDsEqual(c.ID, match.ID)) ?? null;
   }
 
   /**
@@ -892,13 +915,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.navigationService.SetAgentClientTools(this, [
       {
         Name: 'SelectCategory',
-        Description: 'Select a category by its ID to view its detail and member lists.',
-        ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string', description: 'The ID of the category to select' } }, required: ['categoryId'] },
+        Description: 'Select a category to view its detail and member lists. Pass the category ID or name (see CategoryNodes) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category ID or name to select' }, categoryId: { type: 'string', description: 'Deprecated alias for "category".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['categoryId'], 'categoryId');
+          const check = validateStringParam(params['category'] ?? params['categoryId'], 'category');
           if (!check.ok) return check.result;
-          const category = this.categories.find(c => UUIDsEqual(c.ID, check.value));
-          if (!category) return { Success: false, ErrorMessage: `No category found with ID "${check.value}".` };
+          const category = this.resolveCategory(check.value);
+          if (!category) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
           this.selectCategory(category);
           this.publishAgentContext();
           return { Success: true, Data: { categoryName: category.Name, listCount: this.selectedCategoryLists.length } };
@@ -906,14 +929,17 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
       },
       {
         Name: 'ExpandCategory',
-        Description: 'Expand (or collapse) a category node in the tree by its ID.',
-        ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string', description: 'The ID of the category to toggle' } }, required: ['categoryId'] },
+        Description: 'Expand (or collapse) a category node in the tree. Pass the category ID or name (see CategoryNodes) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category ID or name to toggle' }, categoryId: { type: 'string', description: 'Deprecated alias for "category".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const check = validateStringParam(params['categoryId'], 'categoryId');
+          const check = validateStringParam(params['category'] ?? params['categoryId'], 'category');
           if (!check.ok) return check.result;
-          const vm = this.categoryViewModels.find(v => UUIDsEqual(v.category.ID, check.value));
-          if (!vm) return { Success: false, ErrorMessage: `No category found with ID "${check.value}".` };
+          const category = this.resolveCategory(check.value);
+          if (!category) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
+          const vm = this.categoryViewModels.find(v => UUIDsEqual(v.category.ID, category.ID));
+          if (!vm) return { Success: false, ErrorMessage: buildNotFoundError(check.value, this.categories.map(c => ({ ID: c.ID, Name: c.Name })), 'category') };
           vm.isExpanded = !vm.isExpanded;
+          this.publishAgentContext();
           this.cdr.detectChanges();
           return { Success: true, Data: { categoryName: vm.category.Name, isExpanded: vm.isExpanded } };
         },

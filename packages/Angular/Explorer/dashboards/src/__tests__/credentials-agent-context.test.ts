@@ -14,6 +14,7 @@ import {
     VALID_CREDENTIALS_TABS,
     CredentialsAgentContextInput,
 } from '../Credentials/credentials-agent-context';
+import { AGENT_CONTEXT_NAME_LIST_CAP } from '../shared/agent-tool-validation';
 
 function makeInput(overrides: Partial<CredentialsAgentContextInput> = {}): CredentialsAgentContextInput {
     return {
@@ -21,7 +22,11 @@ function makeInput(overrides: Partial<CredentialsAgentContextInput> = {}): Crede
         TabLabel: 'Overview',
         CredentialCount: 12,
         TypeCount: 4,
+        CategoryCount: 3,
+        ExpiringSoonCount: 1,
         IsLoading: false,
+        TypeNames: ['OAuth 2.0', 'API Key', 'Basic Auth'],
+        CategoryNames: ['AI', 'Communication'],
         ...overrides,
     };
 }
@@ -57,8 +62,21 @@ describe('buildCredentialsAgentContext', () => {
             TabLabel: 'Overview',
             CredentialCount: 12,
             TypeCount: 4,
+            CategoryCount: 3,
+            ExpiringSoonCount: 1,
             IsLoading: false,
+            TypeNames: ['OAuth 2.0', 'API Key', 'Basic Auth'],
+            TypeNamesTruncated: false,
+            CategoryNames: ['AI', 'Communication'],
+            CategoryNamesTruncated: false,
         });
+    });
+
+    it('bounds the type-name list with a truncation flag', () => {
+        const many = Array.from({ length: AGENT_CONTEXT_NAME_LIST_CAP + 6 }, (_, i) => `Type ${i}`);
+        const ctx = buildCredentialsAgentContext(makeInput({ TypeNames: many }));
+        expect((ctx['TypeNames'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
+        expect(ctx['TypeNamesTruncated']).toBe(true);
     });
 
     it('carries through the active tab and label', () => {
@@ -74,10 +92,14 @@ describe('buildCredentialsAgentContext', () => {
         expect(ctx['TypeCount']).toBe(0);
     });
 
-    it('exposes exactly five keys — no extra fields slip in', () => {
+    it('exposes only the known non-sensitive keys — no extra fields slip in', () => {
         const ctx = buildCredentialsAgentContext(makeInput());
         expect(Object.keys(ctx).sort()).toEqual(
-            ['ActiveTab', 'CredentialCount', 'IsLoading', 'TabLabel', 'TypeCount'],
+            [
+                'ActiveTab', 'CategoryCount', 'CategoryNames', 'CategoryNamesTruncated',
+                'CredentialCount', 'ExpiringSoonCount', 'IsLoading', 'TabLabel',
+                'TypeCount', 'TypeNames', 'TypeNamesTruncated',
+            ],
         );
     });
 
@@ -114,11 +136,11 @@ describe('buildCredentialsAgentContext', () => {
             }
         }
 
-        // Defensive: the whitelist of keys is fixed and contains no secret material.
+        // Defensive: the whitelist of keys is fixed (counts/names/flags only) and contains no secret material.
         expect(Object.keys(ctx)).toEqual(
             expect.arrayContaining(['ActiveTab', 'TabLabel', 'CredentialCount', 'TypeCount', 'IsLoading']),
         );
-        expect(Object.keys(ctx)).toHaveLength(5);
+        expect(Object.keys(ctx)).toHaveLength(11);
     });
 
     it('VALID_CREDENTIALS_TABS matches the dashboard tab order', () => {

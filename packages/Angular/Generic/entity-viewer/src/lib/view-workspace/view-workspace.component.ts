@@ -664,6 +664,16 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
+   * Programmatically select a record in the inner grid — highlights the row and emits
+   * {@link RecordSelected} for the host (the no-UI equivalent of a user row-click). Returns
+   * false when the viewer isn't mounted or has no entity context. The record must be one of
+   * the loaded rows; the host resolves it (e.g. from {@link loadedRecords}).
+   */
+  public SelectRecord(record: Record<string, unknown>): boolean {
+    return this.entityViewerRef?.SelectRecord(record) ?? false;
+  }
+
+  /**
    * Export the current view's records via the inner viewer's active renderer. Returns false
    * when the viewer isn't mounted or the active view type doesn't support export. The grid
    * renderer downloads the file itself.

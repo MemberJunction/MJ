@@ -3,7 +3,7 @@ import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { Metadata, CompositeKey, RunQuery } from '@memberjunction/core';
+import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine } from '@memberjunction/core-entities';
 import {
@@ -20,6 +20,7 @@ import {
     computePaging,
     boundResultRows,
     normalizeQueryParameters,
+    resolveTotalRowCount,
 } from './query-execution-helpers';
 /**
  * Tree node for the query category hierarchy
@@ -40,7 +41,14 @@ interface CategoryNode {
 interface QueryExecutionToolResult {
     Success: boolean;
     Results?: unknown[];
+    /** Rows actually returned in this (bounded) response. */
     RowCount?: number;
+    /**
+     * The TRUE total number of rows the query would return, independent of the
+     * MaxRows / page cap — read from RunQueryResult.TotalRowCount. This is what
+     * answers "how many rows does this query return?".
+     */
+    TotalRowCount?: number;
     PageNumber?: number;
     PageSize?: number;
     ErrorMessage?: string;
@@ -122,6 +130,22 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
      */
     private lastExecutedQueryId: string | null = null;
     private lastExecutedQueryName: string | null = null;
+
+    /**
+     * The embedded query VIEWER's executed state for the CURRENTLY SELECTED
+     * query, captured from its QueryComplete output. The viewer auto-runs on
+     * select (when params are satisfied) or on user-run, at which point it emits
+     * its result and we record the TRUE total row count here. Reset to "not run"
+     * whenever the selection changes so the published context never reports a
+     * stale count for a freshly-selected query.
+     *
+     * 🚨 SAFETY: only the COUNT + a has-run flag are kept — never SQL, never the
+     * result rows. These feed `SelectedQueryHasRun` / `SelectedQueryRowCount`
+     * in the agent context so the agent can answer "how many rows" from context
+     * WITHOUT re-running, while honoring the same no-SQL / no-rows boundary.
+     */
+    private selectedQueryHasRun = false;
+    private selectedQueryRowCount: number | null = null;
 
     private metadata = this.ProviderToUse;
     protected override destroy$ = new Subject<void>();
@@ -229,6 +253,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // Selecting/opening a query only DISPLAYS its definition; it never executes
     // it. Context exposes catalog metadata (query/category names, counts, filter
     // state) plus the LAST-EXECUTED query id/name — never SQL or result data.
+    //
+    // SELECTED-QUERY ROW COUNT: the embedded viewer auto-runs the selected query
+    // (when params are satisfied) and emits its result via QueryComplete. We
+    // capture ONLY the COUNT (TotalRowCount) + a has-run flag from that event and
+    // publish them as SelectedQueryHasRun / SelectedQueryRowCount so the agent can
+    // answer "how many rows?" from context without re-running. Still NO SQL and NO
+    // result rows — the same boundary as everything else here.
     // ================================================================
 
     /**
@@ -253,11 +284,24 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         // filters applied) — what the agent would see in the tree right now.
         const visibleQueryNames = boundNameList(this.filteredQueries.map(q => q.Name));
 
+        // Whether the SELECTED query has actually executed in the embedded viewer
+        // and, if so, its TRUE total row count. Only meaningful while a query is
+        // selected; null/false otherwise. NO SQL, NO rows — just the count + flag.
+        const hasSelection = this.selectedQuery != null;
+        const selectedQueryHasRun = hasSelection && this.selectedQueryHasRun;
+        const selectedQueryRowCount = selectedQueryHasRun ? this.selectedQueryRowCount : null;
+
         this.navigationService.SetAgentContext(this, {
             // — Selection —
             SelectedQueryId: this.selectedQuery?.ID ?? null,
             SelectedQueryName: this.selectedQuery?.Name ?? null,
             SelectedCategory: this.selectedQuery?.Category ?? null,
+            // — Selected query's executed row count (when run in the viewer) —
+            // The agent can answer "how many rows?" from these WITHOUT re-running.
+            // SelectedQueryHasRun=false means "select-only; run it to get the count"
+            // (the agent can then call RunStoredQuery and read TotalRowCount).
+            SelectedQueryHasRun: selectedQueryHasRun,
+            SelectedQueryRowCount: selectedQueryRowCount,
             // — Filter state —
             SearchText: this.searchText,
             ActiveStatusFilters: activeStatusFilters,
@@ -345,7 +389,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             },
             {
                 Name: 'RunStoredQuery',
-                Description: `Execute a PRE-VETTED, permission-checked STORED query (by NAME or ID) and return bounded results. Optional Parameters object is passed to the query's template parameters (see GetQueryMetadata). MaxRows defaults to ${DEFAULT_QUERY_MAX_ROWS} and is hard-capped at ${QUERY_MAX_ROWS_HARD_CAP}. You CANNOT supply raw SQL — only name an existing stored query. Returns { Success, Results, RowCount, ErrorMessage? }.`,
+                Description: `Execute a PRE-VETTED, permission-checked STORED query (by NAME or ID) and return bounded results. Optional Parameters object is passed to the query's template parameters (see GetQueryMetadata). MaxRows defaults to ${DEFAULT_QUERY_MAX_ROWS} and is hard-capped at ${QUERY_MAX_ROWS_HARD_CAP}. You CANNOT supply raw SQL — only name an existing stored query. Returns { Success, Results, RowCount, TotalRowCount, ErrorMessage? }, where RowCount = rows returned (bounded by MaxRows) and TotalRowCount = the total rows the query would return overall. To answer "how many rows does this query return?", run it and read TotalRowCount.`,
                 ParameterSchema: {
                     type: 'object',
                     properties: {
@@ -359,7 +403,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             },
             {
                 Name: 'PageQueryResults',
-                Description: `Run the same STORED query (by NAME or ID) for a given 1-based PageNumber, returning that page of bounded results. PageSize defaults to ${DEFAULT_QUERY_PAGE_SIZE} and is hard-capped at ${QUERY_MAX_ROWS_HARD_CAP}. Optional Parameters as in RunStoredQuery. Returns { Success, Results, RowCount, PageNumber, PageSize, ErrorMessage? }.`,
+                Description: `Run the same STORED query (by NAME or ID) for a given 1-based PageNumber, returning that page of bounded results. PageSize defaults to ${DEFAULT_QUERY_PAGE_SIZE} and is hard-capped at ${QUERY_MAX_ROWS_HARD_CAP}. Optional Parameters as in RunStoredQuery. Returns { Success, Results, RowCount, TotalRowCount, PageNumber, PageSize, ErrorMessage? }, where RowCount = rows on THIS page (bounded) and TotalRowCount = the total rows across ALL pages — use TotalRowCount to answer "how many rows in total?".`,
                 ParameterSchema: {
                     type: 'object',
                     properties: {
@@ -544,7 +588,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         maxRows: number,
         parameters: Record<string, unknown> | undefined,
         startRow?: number,
-    ): Promise<{ Success: boolean; Results: unknown[]; RowCount: number; ErrorMessage?: string }> {
+    ): Promise<{ Success: boolean; Results: unknown[]; RowCount: number; TotalRowCount: number; ErrorMessage?: string }> {
         try {
             // Thread the component's provider (multi-provider safe) — NEVER set SQL.
             const runQuery = new RunQuery(this.RunQueryToUse);
@@ -559,7 +603,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             );
 
             if (!result.Success) {
-                return { Success: false, Results: [], RowCount: 0, ErrorMessage: result.ErrorMessage || 'Query execution failed.' };
+                return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: result.ErrorMessage || 'Query execution failed.' };
             }
 
             // Record execution for context continuity (identity only).
@@ -569,9 +613,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             // Defensive second bound: a provider that ignored MaxRows can never
             // leak more than the cap to the agent.
             const bounded = boundResultRows(result.Results, maxRows);
-            return { Success: true, Results: bounded, RowCount: bounded.length };
+            // The TRUE total available, independent of the MaxRows/page cap —
+            // this is what answers "how many rows does this query return?".
+            const totalRowCount = resolveTotalRowCount(result.TotalRowCount, bounded.length);
+            return { Success: true, Results: bounded, RowCount: bounded.length, TotalRowCount: totalRowCount };
         } catch (e) {
-            return { Success: false, Results: [], RowCount: 0, ErrorMessage: e instanceof Error ? e.message : 'Query execution failed.' };
+            return { Success: false, Results: [], RowCount: 0, TotalRowCount: 0, ErrorMessage: e instanceof Error ? e.message : 'Query execution failed.' };
         }
     }
 
@@ -948,7 +995,12 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         if (event) {
             event.stopPropagation();
         }
+        const changed = !UUIDsEqual(this.selectedQuery?.ID, query.ID);
         this.selectedQuery = query;
+        if (changed) {
+            // New selection — the viewer will re-run; clear any prior run state.
+            this.resetSelectedQueryRunState();
+        }
         if (query.CategoryID) {
             this.activeCategoryID = query.CategoryID;
         }
@@ -991,6 +1043,31 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public onRowDoubleClick(event: QueryRowClickEvent): void {
         // Could show record details or other action
+    }
+
+    /**
+     * Capture the embedded viewer's executed row count when it finishes running
+     * the SELECTED query (auto-run on select, or user-run). We read the TRUE
+     * total (TotalRowCount, falling back to the returned row count) so the agent
+     * can answer "how many rows?" from context without re-running.
+     *
+     * 🚨 SAFETY: we store ONLY the count + a has-run flag here — never the SQL,
+     * never the result rows. The published context honors the same boundary.
+     */
+    public onViewerQueryComplete(result: RunQueryResult): void {
+        this.selectedQueryHasRun = true;
+        this.selectedQueryRowCount = resolveTotalRowCount(result?.TotalRowCount, result?.RowCount ?? 0);
+        this.publishAgentContext();
+    }
+
+    /**
+     * Reset the SELECTED query's executed-run state. Called whenever the
+     * selection changes so the published context never reports a stale row count
+     * for a freshly-selected (not-yet-run) query.
+     */
+    private resetSelectedQueryRunState(): void {
+        this.selectedQueryHasRun = false;
+        this.selectedQueryRowCount = null;
     }
 
     public onOpenQueryRecord(event: { queryId: string; queryName: string }): void {
@@ -1276,6 +1353,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public refresh(): void {
         this.selectedQuery = null;
+        this.resetSelectedQueryRunState();
         this.UpdateQueryParams({ queryId: null });
         this.NotifyDisplayNameChanged('Queries');
         this.loadData(true);
@@ -1302,11 +1380,13 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         if (query) {
             if (!UUIDsEqual(this.selectedQuery?.ID, query.ID)) {
                 this.selectedQuery = query;
+                this.resetSelectedQueryRunState();
                 this.expandCategoryForQuery(query);
                 this.NotifyDisplayNameChanged(query.Name || 'Query');
             }
         } else {
             this.selectedQuery = null;
+            this.resetSelectedQueryRunState();
             this.NotifyDisplayNameChanged('Queries');
         }
         this.cdr.markForCheck();
@@ -1322,6 +1402,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.selectQueryById(params['queryId']);
         } else {
             this.selectedQuery = null;
+            this.resetSelectedQueryRunState();
             this.NotifyDisplayNameChanged('Queries');
             this.cdr.markForCheck();
         }

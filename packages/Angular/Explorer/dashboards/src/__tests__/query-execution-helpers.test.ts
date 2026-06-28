@@ -17,6 +17,7 @@ import {
     computePaging,
     boundResultRows,
     normalizeQueryParameters,
+    resolveTotalRowCount,
 } from '../QueryBrowser/query-execution-helpers';
 
 describe('query-execution-helpers', () => {
@@ -158,6 +159,46 @@ describe('query-execution-helpers', () => {
         it('passes values through untouched (server validates/coerces)', () => {
             const out = normalizeQueryParameters({ flag: true, list: [1, 2], nested: { a: 1 } });
             expect(out).toEqual({ flag: true, list: [1, 2], nested: { a: 1 } });
+        });
+    });
+
+    describe('resolveTotalRowCount', () => {
+        it('returns the provider TotalRowCount when it is a valid non-negative number', () => {
+            // The whole point: the true total can EXCEED the bounded returned count.
+            expect(resolveTotalRowCount(1234, 50)).toBe(1234);
+            expect(resolveTotalRowCount(0, 0)).toBe(0);
+        });
+
+        it('returns the total even when it equals the returned count (unbounded run)', () => {
+            expect(resolveTotalRowCount(7, 7)).toBe(7);
+        });
+
+        it('floors a fractional total', () => {
+            expect(resolveTotalRowCount(99.9, 10)).toBe(99);
+        });
+
+        it('coerces a numeric-string total', () => {
+            expect(resolveTotalRowCount('500', 50)).toBe(500);
+        });
+
+        it('falls back to the returned count when the total is missing / non-numeric', () => {
+            expect(resolveTotalRowCount(undefined, 42)).toBe(42);
+            expect(resolveTotalRowCount(null, 42)).toBe(42);
+            expect(resolveTotalRowCount('abc', 42)).toBe(42);
+            expect(resolveTotalRowCount(Number.NaN, 42)).toBe(42);
+        });
+
+        it('falls back to the returned count when the total is negative', () => {
+            expect(resolveTotalRowCount(-1, 25)).toBe(25);
+        });
+
+        it('falls back to 0 when BOTH total and returned count are invalid', () => {
+            expect(resolveTotalRowCount(undefined, Number.NaN)).toBe(0);
+            expect(resolveTotalRowCount('x', -3)).toBe(0);
+        });
+
+        it('floors a fractional fallback returned count', () => {
+            expect(resolveTotalRowCount(undefined, 10.8)).toBe(10);
         });
     });
 });

@@ -182,6 +182,26 @@ export interface RunsFilterIntent {
   searchText?: string;
 }
 
+/**
+ * A run-selection intent published by the AI agent (via the Testing dashboard's
+ * `SelectTestRun` client tool) for the Runs surface to act on. The Runs component
+ * owns the actual `SelectedRun` UI state (per the data-down/events-up Angular
+ * convention), so the agent publishes the target run ID here and the (possibly
+ * not-yet-mounted) Runs component consumes it when it mounts / when it changes.
+ *
+ * `open` distinguishes "open the detail panel for this run" (select) from
+ * "open the run's record in the entity workspace" — both are read-only,
+ * navigational affordances (no test execution side effects).
+ */
+export interface RunSelectionIntent {
+  /** Target test-run ID to select (and optionally open). */
+  runId: string;
+  /** When true, also open the run's record in the entity workspace. */
+  open?: boolean;
+  /** Monotonic nonce so re-selecting the SAME run id still replays the intent. */
+  nonce: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -204,6 +224,34 @@ export class TestingInstrumentationService {
   /** Publish an agent-driven filter intent for the Runs surface to apply. */
   setRunsFilterIntent(intent: RunsFilterIntent): void {
     this._runsFilterIntent$.next(intent);
+  }
+
+  /**
+   * Agent-driven run-SELECTION intents for the Runs surface. Published by the
+   * Testing dashboard's `SelectTestRun` / open-run client tools; consumed by the
+   * Runs component (which owns the actual {@link TestRunWithFeedbackSummary}
+   * `SelectedRun` UI state). Starts as null (no pending intent). A monotonic
+   * nonce on each intent lets the Runs component replay the SAME run id again
+   * (re-select / re-open) even though the BehaviorSubject would otherwise
+   * de-duplicate identical references.
+   */
+  private readonly _runSelectionIntent$ = new BehaviorSubject<RunSelectionIntent | null>(null);
+
+  /** Observable of agent-driven run-selection intents. */
+  readonly runSelectionIntent$ = this._runSelectionIntent$.asObservable();
+
+  /** Monotonic source for {@link RunSelectionIntent.nonce}. */
+  private _runSelectionNonce = 0;
+
+  /**
+   * Publish an agent-driven run-selection intent for the Runs surface to act on.
+   * Assigns the next monotonic nonce so re-selecting the same run id still
+   * replays. Returns the published intent (with its assigned nonce).
+   */
+  setRunSelectionIntent(runId: string, open: boolean = false): RunSelectionIntent {
+    const intent: RunSelectionIntent = { runId, open, nonce: ++this._runSelectionNonce };
+    this._runSelectionIntent$.next(intent);
+    return intent;
   }
 
   private readonly _suiteFilter$ = new BehaviorSubject<string | null>(null);

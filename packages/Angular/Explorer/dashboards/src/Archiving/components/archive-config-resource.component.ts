@@ -29,6 +29,7 @@ import { AgentToolResult } from '../../shared/agent-tool-validation';
 import {
     buildArchiveConfigAgentContext,
     ArchiveConfigAgentContextInput,
+    ARCHIVE_NAME_LIST_CAP,
 } from '../archive-agent-context';
 
 /** Active policy statuses — anything other than 'Disabled' counts as active. */
@@ -60,6 +61,9 @@ export class ArchiveConfigResourceComponent extends BaseResourceComponent implem
     private policyCount = 0;
     private activePolicyCount = 0;
     private entitiesUnderArchive = 0;
+    /** Bounded policy + archived-entity names for the agent context. */
+    private policyNames: string[] = [];
+    private archivedEntityNames: string[] = [];
 
     async ngAfterViewInit(): Promise<void> {
         await this.loadSummaryCounts();
@@ -93,6 +97,8 @@ export class ArchiveConfigResourceComponent extends BaseResourceComponent implem
             PolicyCount: this.policyCount,
             ActivePolicyCount: this.activePolicyCount,
             EntitiesUnderArchive: this.entitiesUnderArchive,
+            PolicyNames: this.policyNames,
+            ArchivedEntityNames: this.archivedEntityNames,
             IsLoading: this.configAdmin?.IsLoading ?? false,
         };
         this.navigationService.SetAgentContext(this, buildArchiveConfigAgentContext(input));
@@ -127,6 +133,8 @@ export class ArchiveConfigResourceComponent extends BaseResourceComponent implem
                     PolicyCount: this.policyCount,
                     ActivePolicyCount: this.activePolicyCount,
                     EntitiesUnderArchive: this.entitiesUnderArchive,
+                    PolicyNames: this.policyNames.slice(0, ARCHIVE_NAME_LIST_CAP),
+                    ArchivedEntityNames: this.archivedEntityNames.slice(0, ARCHIVE_NAME_LIST_CAP),
                 },
             };
         } catch (err: unknown) {
@@ -146,13 +154,15 @@ export class ArchiveConfigResourceComponent extends BaseResourceComponent implem
             {
                 EntityName: 'MJ: Archive Configurations',
                 ExtraFilter: '',
-                Fields: ['ID', 'Status'],
+                Fields: ['ID', 'Name', 'Status'],
+                OrderBy: 'Name',
                 ResultType: 'simple',
             },
             {
                 EntityName: 'MJ: Archive Configuration Entities',
                 ExtraFilter: '',
-                Fields: ['ID'],
+                Fields: ['ID', 'Entity'],
+                OrderBy: 'Entity',
                 ResultType: 'simple',
             },
         ]);
@@ -162,7 +172,16 @@ export class ArchiveConfigResourceComponent extends BaseResourceComponent implem
         this.activePolicyCount = configs.filter(
             (c) => String(c['Status'] ?? '').toLowerCase() !== DISABLED_STATUS,
         ).length;
-        this.entitiesUnderArchive = entityResult.Success ? entityResult.Results.length : 0;
+        this.policyNames = configs
+            .map((c) => String(c['Name'] ?? '').trim())
+            .filter((n) => !!n);
+
+        const entities = entityResult.Success ? entityResult.Results : [];
+        this.entitiesUnderArchive = entities.length;
+        // De-duplicate entity names (a single entity can appear under multiple policies).
+        this.archivedEntityNames = Array.from(
+            new Set(entities.map((e) => String(e['Entity'] ?? '').trim()).filter((n) => !!n)),
+        );
     }
 }
 

@@ -12,6 +12,7 @@ import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShar
 import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -1924,17 +1925,33 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    * what the user is looking at.
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, {
+    this.navigationService.SetAgentContext(this, buildListBrowseAgentContext({
       SearchTerm: this.searchTerm,
       ViewMode: this.viewMode,
       AllListCount: this.allLists.length,
       FilteredListCount: this.filteredLists.length,
+      // Deep context: the NAMES of the lists currently on screen (bounded), so
+      // the agent can refer to / open them by name rather than an opaque GUID.
+      VisibleListNames: this.filteredLists.map(i => i.list.Name),
       SelectedSort: this.selectedSort,
       ActiveFilterCount: this.TotalActiveFilterCount,
       SelectedOwner: this.selectedOwner,
       SelectedEntity: this.selectedEntity,
       ShowOnlyFavorites: this.showOnlyFavorites,
-    });
+    }));
+  }
+
+  /**
+   * Resolve an agent-supplied reference (a list ID or a list NAME, exact or
+   * partial) to one of the loaded Browse list items. Delegates the matching to
+   * the pure {@link resolveNamedRecord} helper over the filtered lists' rows.
+   */
+  private resolveBrowseListItem(input: string): BrowseListItem | null {
+    const match = resolveNamedRecord(input, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })));
+    if (!match) {
+      return null;
+    }
+    return this.allLists.find(i => UUIDsEqual(i.list.ID, match.ID)) ?? null;
   }
 
   /**
@@ -1946,13 +1963,13 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.navigationService.SetAgentClientTools(this, [
       {
         Name: 'OpenList',
-        Description: 'Open a list by its ID in a new tab.',
-        ParameterSchema: { type: 'object', properties: { listId: { type: 'string', description: 'The ID of the list to open' } }, required: ['listId'] },
+        Description: 'Open a list in a new tab by its ID or name. Pass the list name the user says (see VisibleListNames) — the tool resolves an exact ID, an exact name, or a partial name match.',
+        ParameterSchema: { type: 'object', properties: { list: { type: 'string', description: 'The list ID or name to open' }, listId: { type: 'string', description: 'Deprecated alias for "list".' } } },
         Handler: async (params: Record<string, unknown>) => {
-          const idCheck = validateStringParam(params['listId'], 'listId');
+          const idCheck = validateStringParam(params['list'] ?? params['listId'], 'list');
           if (!idCheck.ok) return idCheck.result;
-          const item = this.allLists.find(l => UUIDsEqual(l.list.ID, idCheck.value));
-          if (!item) return { Success: false, ErrorMessage: `No list found with ID "${idCheck.value}".` };
+          const item = this.resolveBrowseListItem(idCheck.value);
+          if (!item) return { Success: false, ErrorMessage: buildNotFoundError(idCheck.value, this.allLists.map(i => ({ ID: i.list.ID, Name: i.list.Name })), 'list') };
           this.openList(item);
           return { Success: true, Data: { listName: item.list.Name } };
         },

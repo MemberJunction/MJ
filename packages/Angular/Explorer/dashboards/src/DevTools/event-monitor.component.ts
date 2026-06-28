@@ -344,8 +344,10 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
 
     /** Publish the current Event Monitor capture state to the AI agent. */
     private publishAgentContext(): void {
+        const filtered = this.FilteredEvents;
         const context = buildEventMonitorAgentContext({
             EventCount: this.Stats.captured,
+            BufferedCount: this.Stats.kept,
             EventsPerSecond: this.Stats.perSecond,
             Paused: this.Paused,
             TextFilter: this.Filter,
@@ -354,6 +356,17 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
             CodeFilter: this.CodeFilter,
             SortField: this.SortField,
             SortDirection: this.SortDir,
+            FilteredCount: filtered.length,
+            KnownTypes: this.KnownTypes,
+            KnownComponents: this.KnownComponents,
+            KnownCodes: this.KnownCodes,
+            // Secret-free summaries of the most-recent visible events. `summary` is
+            // already a redacted payload-shape preview (keys/length, never values).
+            RecentEvents: filtered.slice(0, 25).map(e => ({
+                Type: e.type,
+                Component: e.componentName,
+                Summary: e.summary,
+            })),
         });
         this.navigationService.SetAgentContext(this, context);
     }
@@ -362,7 +375,8 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
      * Register the client tools the AI agent can invoke against the Event Monitor.
      * All operate on the inspector's own capture state — no application mutation.
      * Tools: PauseEventMonitor / ResumeEventMonitor, ClearEventLog,
-     * FilterEventsByType, SetEventMonitorSort.
+     * FilterEventsByType, FilterEventsByComponent, ClearEventFilters,
+     * SetEventMonitorSort.
      */
     private registerAgentClientTools(): void {
         this.navigationService.SetAgentClientTools(this, [
@@ -400,6 +414,22 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
                 Handler: async (params: Record<string, unknown>) => this.toolFilterByType(params),
             },
             {
+                Name: 'FilterEventsByComponent',
+                Description: 'Filter the event log to a single emitting component name. Pass an empty string to clear the component filter.',
+                ParameterSchema: { type: 'object', properties: { component: { type: 'string' } }, required: ['component'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterByComponent(params),
+            },
+            {
+                Name: 'ClearEventFilters',
+                Description: 'Clear all active Event Monitor filters (text, type, component, code) so every captured event is shown.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    this.ClearFilters();
+                    this.cdr.markForCheck();
+                    return { Success: true };
+                },
+            },
+            {
                 Name: 'SetEventMonitorSort',
                 Description: 'Set the event log sort field (time | type | eventCode | component) and direction (asc | desc).',
                 ParameterSchema: {
@@ -422,6 +452,19 @@ export class EventMonitorComponent extends BaseResourceComponent implements OnIn
             return validated.result;
         }
         this.TypeFilter = validated.value;
+        this.savePrefs();
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+        return { Success: true };
+    }
+
+    /** Apply (or clear, on empty string) the component-name filter. */
+    private toolFilterByComponent(params: Record<string, unknown>): AgentToolResult {
+        const validated = validateStringParam(params['component'], 'component');
+        if (!validated.ok) {
+            return validated.result;
+        }
+        this.ComponentFilter = validated.value;
         this.savePrefs();
         this.publishAgentContext();
         this.cdr.markForCheck();

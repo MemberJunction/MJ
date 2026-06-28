@@ -1392,6 +1392,28 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
+   * Programmatically select a record — the no-UI equivalent of a user row-click. Highlights
+   * the row (by pushing {@link SelectedRecordID} down to the active renderer) AND emits
+   * {@link RecordSelected} so the host runs its selection path (open the detail panel, etc.).
+   * Returns false when there's no entity context. This is the entry point for an external
+   * driver (the AI agent's SelectRecord tool); the record must be one of the loaded rows.
+   *
+   * @param record - a record from the currently-loaded set
+   * @returns true when selection was applied, false when no entity context is available
+   */
+  public SelectRecord(record: Record<string, unknown>): boolean {
+    const entity = this.EffectiveEntity;
+    if (!entity || !record) {
+      return false;
+    }
+    const compositeKey = buildCompositeKey(record, entity);
+    // Drive the highlight through the same input the user-click path uses.
+    this.SelectedRecordID = compositeKey.ToConcatenatedString();
+    this.RecordSelected.emit({ record, entity, compositeKey });
+    return true;
+  }
+
+  /**
    * Export the current view's records via the active renderer's optional imperative export
    * ({@link IViewRenderer.exportRecords}). Returns false when no renderer is mounted or the
    * active view type doesn't support export (e.g. timeline/map). The grid renderer downloads

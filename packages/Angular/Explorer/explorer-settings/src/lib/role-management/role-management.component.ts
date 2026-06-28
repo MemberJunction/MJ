@@ -1,12 +1,19 @@
 import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { RunView, Metadata } from '@memberjunction/core';
-import { ResourceData, MJRoleEntity } from '@memberjunction/core-entities';
+import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
+import { ResourceData, MJRoleEntity, MJEntityPermissionEntity } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { RoleDialogData, RoleDialogResult } from './role-dialog/role-dialog.component';
+import {
+  buildRoleManagementAgentContext,
+  isValidRoleTypeFilter,
+  resolveRoleByIDOrName,
+  RoleManagementAgentContextInput,
+  RolePermissionSummary,
+} from './role-management-agent-context';
 
 interface RoleStats {
   totalRoles: number;
@@ -62,6 +69,11 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   // Role permissions (simplified view)
   public rolePermissions: Map<string, string[]> = new Map();
 
+  // Read-only entity-permission summary per role id (lazily loaded on selection),
+  // used only to surface a non-sensitive count summary to the agent context.
+  private permissionSummaryCache = new Map<string, RolePermissionSummary>();
+  private selectedRolePermissionSummary: RolePermissionSummary | null = null;
+
   protected override destroy$ = new Subject<void>();
   private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
@@ -84,28 +96,41 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   // ================================================================
   // AI Agent Context & Client Tools
   //
-  // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
+  // 🚨 SAFETY BOUNDARY — READ-ONLY / GOVERNANCE SURFACE 🚨
   // Role Management is a security-sensitive admin surface. The agent context
-  // and client tools registered here are strictly READ-ONLY: type filter,
-  // free-text search, clearing filters, and refreshing the list. The mutating
-  // operations on this component (create/edit/delete roles) are DELIBERATELY
-  // NOT exposed to the agent — they must remain human-initiated. Context exposes
-  // only counts and the active filter selection.
+  // and client tools registered here are strictly READ-ONLY / navigational:
+  // type filter, free-text search, SELECTING a role (view, with a read-only
+  // permission-count summary), clearing filters, refreshing, and navigating to
+  // a role's record for viewing. The mutating operations on this component —
+  // create/edit/delete roles — AND any permission-grant/revoke surface are
+  // DELIBERATELY NOT exposed to the agent; they remain human-initiated. The
+  // permission summary published here is COUNTS ONLY (how many entities the role
+  // can read/create/update/delete) — never a grant control. Context exposes only
+  // counts, active filter selection, and on-screen display names.
   // ================================================================
 
   /**
    * Publish the current role-management state to the AI agent. Re-invoked on
-   * every meaningful state change (data load, filter change).
+   * every meaningful state change (data load, filter, selection). Shaped by the
+   * pure {@link buildRoleManagementAgentContext} helper (unit-tested in isolation).
    */
   private publishAgentContext(): void {
-    this.navigationService.SetAgentContext(this, {
+    const selected = this.expandedRoleId
+      ? this.roles.find(r => UUIDsEqual(r.ID, this.expandedRoleId!)) ?? null
+      : null;
+    const input: RoleManagementAgentContextInput = {
       TotalRoleCount: this.roles.length,
       FilteredRoleCount: this.filteredRoles.length,
       SystemRoleCount: this.stats.systemRoles,
       CustomRoleCount: this.stats.customRoles,
-      CurrentFilterType: this.filters$.value.type,
-      SelectedRoleId: this.expandedRoleId ?? null,
-    });
+      TypeFilter: this.filters$.value.type,
+      SearchText: this.filters$.value.search,
+      SelectedRoleId: selected?.ID ?? null,
+      SelectedRoleName: selected?.Name ?? null,
+      VisibleRoleNames: this.filteredRoles.map(r => r.Name ?? '').filter(n => n !== ''),
+      SelectedRolePermissions: selected ? this.selectedRolePermissionSummary : null,
+    };
+    this.navigationService.SetAgentContext(this, buildRoleManagementAgentContext(input));
   }
 
   /**
@@ -128,6 +153,18 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
         Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
       },
       {
+        Name: 'SelectRole',
+        Description: 'Select a role for VIEWING by ID or name (exact ID → exact name → partial match). Read-only — does not edit the role. Loads a read-only permission-count summary into SelectedRolePermissions.',
+        ParameterSchema: { type: 'object', properties: { role: { type: 'string' } }, required: ['role'] },
+        Handler: async (params: Record<string, unknown>) => this.handleSelectRoleTool(params),
+      },
+      {
+        Name: 'NavigateToRoleRecord',
+        Description: 'Open the record for a role (by ID or name) in a tab for VIEWING. Read-only navigation — does not edit the role.',
+        ParameterSchema: { type: 'object', properties: { role: { type: 'string' } }, required: ['role'] },
+        Handler: async (params: Record<string, unknown>) => this.handleNavigateToRoleRecordTool(params),
+      },
+      {
         Name: 'ClearRoleFilters',
         Description: 'Clear all role filters (type and search) and show the full list.',
         ParameterSchema: { type: 'object', properties: {} },
@@ -143,9 +180,9 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private handleFilterByTypeTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-    const type = String(params?.['type'] ?? '');
-    if (type !== 'all' && type !== 'system' && type !== 'custom') {
-      return { Success: false, ErrorMessage: `Invalid type "${type}". Expected one of: all, system, custom.` };
+    const type = params?.['type'];
+    if (!isValidRoleTypeFilter(type)) {
+      return { Success: false, ErrorMessage: `Invalid type "${String(type)}". Expected one of: all, system, custom.` };
     }
     this.onTypeFilterChange(type);
     this.publishAgentContext();
@@ -162,6 +199,56 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
     return { Success: true };
   }
 
+  private async handleSelectRoleTool(params: Record<string, unknown>): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    const raw = String(params?.['role'] ?? '');
+    const resolved = resolveRoleByIDOrName(raw, this.roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
+    if (!resolved.ok) {
+      return { Success: false, ErrorMessage: resolved.error };
+    }
+    this.expandedRoleId = resolved.match.ID;
+    this.selectedRolePermissionSummary = await this.loadPermissionSummary(resolved.match.ID);
+    this.cdr.markForCheck();
+    this.publishAgentContext();
+    return { Success: true };
+  }
+
+  private handleNavigateToRoleRecordTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+    const raw = String(params?.['role'] ?? '');
+    const resolved = resolveRoleByIDOrName(raw, this.roles.map(r => ({ ID: r.ID, Name: r.Name ?? '' })));
+    if (!resolved.ok) {
+      return { Success: false, ErrorMessage: resolved.error };
+    }
+    this.navigationService.OpenEntityRecord('MJ: Roles', CompositeKey.FromID(resolved.match.ID));
+    return { Success: true };
+  }
+
+  /**
+   * Lazily load and cache the READ-ONLY entity-permission count summary for a role.
+   * Surfaces only how broadly the role is granted access — never a grant control.
+   */
+  private async loadPermissionSummary(roleId: string): Promise<RolePermissionSummary> {
+    const cached = this.permissionSummaryCache.get(roleId);
+    if (cached) {
+      return cached;
+    }
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const result = await rv.RunView<MJEntityPermissionEntity>({
+      EntityName: 'MJ: Entity Permissions',
+      ExtraFilter: `RoleID='${roleId.replace(/'/g, "''")}'`,
+      ResultType: 'entity_object'
+    });
+    const rows = result.Success ? result.Results : [];
+    const summary: RolePermissionSummary = {
+      EntityCount: rows.length,
+      ReadCount: rows.filter(p => p.CanRead).length,
+      CreateCount: rows.filter(p => p.CanCreate).length,
+      UpdateCount: rows.filter(p => p.CanUpdate).length,
+      DeleteCount: rows.filter(p => p.CanDelete).length,
+    };
+    this.permissionSummaryCache.set(roleId, summary);
+    return summary;
+  }
+
   private handleClearFiltersTool(): { Success: boolean } {
     this.resetAllFiltersAndSearch();
     this.publishAgentContext();
@@ -170,6 +257,8 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
 
   private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
     try {
+      this.permissionSummaryCache.clear();
+      this.selectedRolePermissionSummary = null;
       await this.loadInitialData();
       this.publishAgentContext();
       return { Success: true };
@@ -344,6 +433,17 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   
   public toggleRoleExpansion(roleId: string): void {
     this.expandedRoleId = this.expandedRoleId === roleId ? null : roleId;
+    if (this.expandedRoleId) {
+      // Lazy-load the read-only permission summary so the agent context reflects
+      // the user's current selection; fire-and-forget (re-publishes on completion).
+      void this.loadPermissionSummary(this.expandedRoleId).then(summary => {
+        this.selectedRolePermissionSummary = summary;
+        this.publishAgentContext();
+      });
+    } else {
+      this.selectedRolePermissionSummary = null;
+    }
+    this.publishAgentContext();
   }
   
   public isRoleExpanded(roleId: string): boolean {

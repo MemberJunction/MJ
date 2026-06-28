@@ -17,6 +17,101 @@ const VALID_VIEW_MODES: readonly DataExplorerViewMode[] = ['grid', 'cards', 'tim
 export const VALID_ENTITY_BROWSER_MODES: readonly ('all' | 'favorites')[] = ['all', 'favorites'] as const;
 
 /**
+ * The "MJ: " schema prefix carried by newer core entities (e.g. "MJ: ML Models",
+ * "MJ: AI Models"). The UI strips it when an entity has no explicit DisplayName,
+ * and users almost always say the stripped form ("ML Models", "AI Models") rather
+ * than the full registered Name. See {@link entityDisplayName} / {@link stripMJPrefix}.
+ */
+export const MJ_ENTITY_NAME_PREFIX = 'MJ: ';
+
+/**
+ * Upper bound on how many currently-loaded record display values we publish in the
+ * record-view context (VisibleRecordNames). Bounded so the streamed note stays small
+ * even when a page holds hundreds of rows; a companion LoadedRecordCount reports the
+ * true number loaded.
+ */
+export const AGENT_CONTEXT_RECORD_LIST_CAP = 25;
+
+/**
+ * Strip the leading "MJ: " schema prefix from an entity Name, if present.
+ * Pure + deterministic. Returns the input unchanged when the prefix is absent.
+ *
+ * @param name - a (possibly prefixed) entity Name, e.g. "MJ: ML Models"
+ * @returns the name without the "MJ: " prefix, e.g. "ML Models"
+ */
+export function stripMJPrefix(name: string): string {
+    return name.startsWith(MJ_ENTITY_NAME_PREFIX) ? name.slice(MJ_ENTITY_NAME_PREFIX.length) : name;
+}
+
+/**
+ * The display label the Data Explorer shows for an entity — the same value the entity
+ * cards render via `EntityInfo.DisplayNameOrName`, except we additionally strip the
+ * "MJ: " schema prefix when no explicit DisplayName is set. This is what the user reads
+ * on screen and therefore what they say ("ML Models", not "MJ: ML Models").
+ *
+ * @param name - the entity's registered Name (may carry an "MJ: " prefix)
+ * @param displayName - the entity's DisplayName, if any (takes precedence, used verbatim)
+ * @returns the user-facing display label
+ */
+export function entityDisplayName(name: string, displayName?: string | null): string {
+    if (displayName) {
+        return displayName;
+    }
+    return stripMJPrefix(name);
+}
+
+/**
+ * A minimal name-bearing entity descriptor, supplied by the component so the pure
+ * resolver can match agent input against what the user sees. Mirrors the salient
+ * slice of `EntityInfo` ({@link entityDisplayName} reads the same two fields).
+ */
+export interface EntityNameCandidate {
+    Name: string;
+    DisplayName?: string | null;
+}
+
+/**
+ * Resolve an agent-supplied entity reference to one of the available entities, matching
+ * the way a user names things. The user says the DISPLAY name (what the card shows),
+ * but the registered Name may carry an "MJ: " prefix — so we try, in order:
+ *   1. exact registered Name (case-insensitive)
+ *   2. display name (case-insensitive) — DisplayName, else the prefix-stripped Name
+ *   3. display name ignoring the "MJ: " prefix (case-insensitive)
+ *
+ * Pure + deterministic over the supplied candidate list, so it's unit-testable in
+ * isolation; the component passes its `EntityInfo[]` (structurally `EntityNameCandidate[]`).
+ *
+ * @param input - whatever the agent passed (typically the on-screen display name)
+ * @param candidates - the entities available in this explorer
+ * @returns the matched candidate, or null on a miss
+ */
+export function resolveEntityByName<T extends EntityNameCandidate>(input: string, candidates: readonly T[]): T | null {
+    const needle = input.trim().toLowerCase();
+    if (!needle) {
+        return null;
+    }
+    // 1. exact registered Name (case-insensitive)
+    const byName = candidates.find(c => c.Name.toLowerCase() === needle);
+    if (byName) {
+        return byName;
+    }
+    // 2. display name (DisplayName, else prefix-stripped Name)
+    const byDisplay = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === needle);
+    if (byDisplay) {
+        return byDisplay;
+    }
+    // 3. display name ignoring the "MJ: " prefix (covers an input that itself carries the prefix)
+    const strippedNeedle = stripMJPrefix(input.trim()).toLowerCase();
+    if (strippedNeedle !== needle) {
+        const byStripped = candidates.find(c => entityDisplayName(c.Name, c.DisplayName).toLowerCase() === strippedNeedle);
+        if (byStripped) {
+            return byStripped;
+        }
+    }
+    return null;
+}
+
+/**
  * Upper bound on how many names we publish in a name-list context field
  * (AvailableViews, VisibleColumns, AvailableEntities). Keeping the streamed note
  * bounded avoids flooding the co-agent with hundreds of names; when the underlying
@@ -31,6 +126,92 @@ export const AGENT_CONTEXT_NAME_LIST_CAP = 25;
  * while still letting the co-agent see the full landscape.
  */
 export const AGENT_CONTEXT_APP_GROUP_CAP = 25;
+
+/**
+ * A request to select a loaded record, as the agent expresses it: either by ordinal
+ * {@link RecordSelectionRequest.position} ('first' | 'last' | a 1-based index) OR by
+ * {@link RecordSelectionRequest.name} (a contains/case-insensitive match on the record's
+ * display value). Exactly one is honored; `position` takes precedence when both are given.
+ */
+export interface RecordSelectionRequest {
+    position?: 'first' | 'last' | number;
+    name?: string;
+}
+
+/** Outcome of {@link resolveRecordSelection}: a 0-based index into the loaded records, or an error. */
+export type RecordSelectionResult =
+    | { ok: true; index: number }
+    | { ok: false; error: string };
+
+/**
+ * Resolve an agent record-selection request against the display values of the records
+ * currently loaded in the grid. Pure + deterministic over the supplied `recordNames`
+ * (the component derives those from its `loadedRecords` via the entity's name field, in
+ * the same order). Returns a 0-based index the component maps back to the actual record.
+ *
+ * Resolution order:
+ *   - `position` first when present: 'first' → 0, 'last' → last, a 1-based number → number-1.
+ *   - otherwise `name`: an exact case-insensitive match wins; failing that, the first
+ *     case-insensitive *contains* match.
+ *
+ * @param recordNames - display values of the loaded records, in grid order
+ * @param request - the agent's selection request
+ * @returns the resolved 0-based index, or a clear error message
+ */
+export function resolveRecordSelection(recordNames: readonly string[], request: RecordSelectionRequest): RecordSelectionResult {
+    if (recordNames.length === 0) {
+        return { ok: false, error: 'No records are currently loaded in the view to select from.' };
+    }
+
+    if (request.position !== undefined && request.position !== null) {
+        return resolveRecordByPosition(recordNames, request.position);
+    }
+
+    const name = (request.name ?? '').trim();
+    if (name) {
+        return resolveRecordByName(recordNames, name);
+    }
+
+    return { ok: false, error: 'Provide either a position ("first", "last", or a 1-based index) or a record name to select.' };
+}
+
+/** Resolve a 'first' | 'last' | 1-based-index position to a 0-based index. */
+function resolveRecordByPosition(recordNames: readonly string[], position: 'first' | 'last' | number): RecordSelectionResult {
+    const count = recordNames.length;
+    if (position === 'first') {
+        return { ok: true, index: 0 };
+    }
+    if (position === 'last') {
+        return { ok: true, index: count - 1 };
+    }
+    if (typeof position === 'number' && Number.isInteger(position) && position >= 1 && position <= count) {
+        return { ok: true, index: position - 1 };
+    }
+    return { ok: false, error: `Position "${String(position)}" is out of range. There ${count === 1 ? 'is 1 record' : `are ${count} records`} loaded (use 1-${count}, "first", or "last").` };
+}
+
+/** Resolve a record by an exact (then contains) case-insensitive display-value match. */
+function resolveRecordByName(recordNames: readonly string[], name: string): RecordSelectionResult {
+    const needle = name.toLowerCase();
+    const exact = recordNames.findIndex(n => n.toLowerCase() === needle);
+    if (exact >= 0) {
+        return { ok: true, index: exact };
+    }
+    const contains = recordNames.findIndex(n => n.toLowerCase().includes(needle));
+    if (contains >= 0) {
+        return { ok: true, index: contains };
+    }
+    const sample = recordNames.slice(0, 5).join(', ');
+    return { ok: false, error: `No loaded record matches "${name}". Loaded records include: ${sample}.` };
+}
+
+/**
+ * Cap an array of record display values to {@link AGENT_CONTEXT_RECORD_LIST_CAP} entries.
+ * Pure + deterministic, mirroring {@link capNames}.
+ */
+function capRecordNames(names: readonly string[]): string[] {
+    return names.slice(0, AGENT_CONTEXT_RECORD_LIST_CAP);
+}
 
 /**
  * Cap an array of names to {@link AGENT_CONTEXT_NAME_LIST_CAP} entries.
@@ -155,6 +336,15 @@ export interface DataExplorerAgentContextInput {
     SelectedRecordName: string | null;
     /** Whether the detail panel is currently open. */
     DetailPanelOpen: boolean;
+    /**
+     * Display values of the records currently loaded in the grid, in grid order — so the
+     * agent knows what's selectable (and can pick "the first one" or one by name via the
+     * SelectRecord tool). The component supplies the full loaded set; this helper bounds it —
+     * see {@link AGENT_CONTEXT_RECORD_LIST_CAP}. Empty at the home level / before first load.
+     */
+    VisibleRecordNames: string[];
+    /** Total number of records loaded in the current page of the grid (may exceed VisibleRecordNames after the cap). */
+    LoadedRecordCount: number;
     /** Home-view mode (all vs favorites) — only meaningful at the home level. */
     HomeViewMode: 'all' | 'favorites';
     /** The entity-search text on the home screen. */
@@ -195,6 +385,12 @@ function buildRecordBrowsingContext(input: DataExplorerAgentContextInput): Recor
         DetailPanelOpen: input.DetailPanelOpen,
         AvailableViews: capNames(input.AvailableViewNames),
     };
+
+    // Loaded records — so the agent knows what rows are selectable (SelectRecord tool).
+    if (input.VisibleRecordNames.length > 0) {
+        context['VisibleRecordNames'] = capRecordNames(input.VisibleRecordNames);
+        context['LoadedRecordCount'] = input.LoadedRecordCount;
+    }
 
     // Pagination — prefer the live values the inner grid reports; fall back to deriving
     // total pages from the filtered count and page size. A page size of 0 or a

@@ -5,7 +5,11 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { AgentToolResult, validateStringParam } from '../../shared/agent-tool-validation';
-import { buildVersionHistoryGraphAgentContext } from '../version-history-graph-agent-context';
+import {
+    buildVersionHistoryGraphAgentContext,
+    resolveGraphEntity,
+    VersionHistoryGraphSelectedEntitySummary,
+} from '../version-history-graph-agent-context';
 
 interface VersionGraphPreferences {
     SchemaFilter: string;
@@ -105,6 +109,8 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
     private publishAgentContext(): void {
         const context = buildVersionHistoryGraphAgentContext({
             SelectedEntityName: this.SelectedEntity?.Name ?? null,
+            SelectedEntityId: this.SelectedEntity?.ID ?? null,
+            SelectedEntitySummary: this.buildSelectedEntitySummary(),
             TotalEntities: this.TotalEntities,
             EntitiesWithDependents: this.EntitiesWithDependents,
             TotalRelationships: this.TotalRelationships,
@@ -115,6 +121,28 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
             AvailableSchemas: this.AvailableSchemas,
         });
         this.navigationService.SetAgentContext(this, context);
+    }
+
+    /**
+     * Build the selected entity's dependency summary for the agent context, or
+     * null when no entity is selected. Reads the already-derived ReferencedBy /
+     * DependsOn relationship lists so the co-agent can describe the entity's place
+     * in the graph and suggest neighbours as next selections.
+     */
+    private buildSelectedEntitySummary(): VersionHistoryGraphSelectedEntitySummary | null {
+        const node = this.SelectedEntity;
+        if (!node) {
+            return null;
+        }
+        return {
+            ID: node.ID,
+            Name: node.Name,
+            SchemaName: node.SchemaName,
+            ReferencedByCount: this.ReferencedByEntities.length,
+            DependsOnCount: this.DependsOnEntities.length,
+            ReferencedByEntityNames: this.ReferencedByEntities.map(r => r.ToEntity),
+            DependsOnEntityNames: this.DependsOnEntities.map(r => r.FromEntity),
+        };
     }
 
     /**
@@ -133,8 +161,8 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
         this.navigationService.SetAgentClientTools(this, [
             {
                 Name: 'SelectEntityForDependencyView',
-                Description: 'Select an entity by name to inspect what references it and what it depends on. Clears any active schema filter so the entity is reachable.',
-                ParameterSchema: { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+                Description: 'Select an entity by its ID or name to inspect what references it and what it depends on. Resolution: exact ID, then exact name, then a name-contains match. Clears any active schema filter so the entity is reachable. View-only.',
+                ParameterSchema: { type: 'object', properties: { entityName: { type: 'string', description: 'Entity ID or name.' } }, required: ['entityName'] },
                 Handler: async (params: Record<string, unknown>) => this.toolSelectEntity(params),
             },
             {
@@ -152,19 +180,21 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
         ]);
     }
 
-    /** Resolve an entity by name and select it for the dependency view. */
+    /**
+     * Resolve an entity by ID or name (exact ID → exact name → name-contains) and
+     * select it for the dependency view. View-only.
+     */
     private toolSelectEntity(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
         const parsed = validateStringParam(params['entityName'], 'entityName');
         if (!parsed.ok) {
             return parsed.result;
         }
-        const lowered = parsed.value.trim().toLowerCase();
-        const node = this.AllEntities.find(e => e.Name.toLowerCase() === lowered);
-        if (!node) {
-            return { Success: false, ErrorMessage: `Entity "${parsed.value}" was not found in the dependency graph.` };
+        const resolution = resolveGraphEntity(parsed.value, this.AllEntities);
+        if (!resolution.ok) {
+            return { Success: false, ErrorMessage: resolution.error };
         }
-        this.NavigateToEntity(node.Name);
-        return { Success: true, Data: { SelectedEntityName: node.Name } };
+        this.NavigateToEntity(resolution.entity.Name);
+        return { Success: true, Data: { SelectedEntityId: resolution.entity.ID, SelectedEntityName: resolution.entity.Name } };
     }
 
     /** Apply a schema filter deterministically (no toggle), validating it exists. */

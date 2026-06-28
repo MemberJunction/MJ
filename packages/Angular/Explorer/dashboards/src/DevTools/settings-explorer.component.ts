@@ -224,17 +224,22 @@ export class SettingsExplorerComponent extends BaseResourceComponent implements 
 
     /**
      * Publish METADATA-ONLY context for the Settings Explorer. Reports setting
-     * counts (current scope + per-scope) and the active search term — never any
-     * setting value. See SAFETY BOUNDARY above.
+     * counts (current scope + per-scope), the active search term, the
+     * post-filter count, and the setting KEY NAMES — never any setting value.
+     * See SAFETY BOUNDARY above.
      */
     private publishAgentContext(): void {
         const currentScopeCount = this.Scope === 'user' ? this.Counts.user : this.Counts.instance;
+        const filtered = this.FilteredRows;
         const context = buildSettingsExplorerAgentContext({
             SettingCount: currentScopeCount,
             UserSettingCount: this.Counts.user,
             InstanceSettingCount: this.Counts.instance,
             Scope: this.Scope,
             SearchTerm: this.SearchQuery,
+            FilteredCount: filtered.length,
+            // 🔒 KEY NAMES only (e.g. "mj.formBuilder.…") — never the .rawValue.
+            SettingKeys: filtered.map(r => r.key),
         });
         this.navigationService.SetAgentContext(this, context);
     }

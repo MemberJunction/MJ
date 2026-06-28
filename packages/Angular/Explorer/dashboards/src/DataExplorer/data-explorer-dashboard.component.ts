@@ -26,7 +26,7 @@ import { ExplorerStateService } from './services/explorer-state.service';
 import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup, DataExplorerViewMode } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
-import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary } from './data-explorer-agent-context';
+import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary, entityDisplayName, resolveEntityByName, resolveRecordSelection, RecordSelectionRequest } from './data-explorer-agent-context';
 import { validateStringParam, validateEnumParam, validateNonNegativeNumberParam, VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION } from '../shared/agent-tool-validation';
 
 /**
@@ -570,11 +570,15 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       RelatedEntityNames: this.getRelatedEntityNames(),
       SelectedRecordName: this.state.selectedRecordName,
       DetailPanelOpen: this.state.detailPanelOpen,
+      VisibleRecordNames: this.getVisibleRecordNames(),
+      LoadedRecordCount: this.loadedRecords.length,
       HomeViewMode: this.state.homeViewMode,
       EntitySearchText: this.entityFilterText,
       VisibleEntityCount: this.filteredEntityCount,
       FavoriteEntityCount: this.state.favoriteEntities.length,
-      AvailableEntityNames: this.entities.map(e => e.Name),
+      // Publish the DISPLAY names the user sees on the entity cards (the "MJ: " prefix
+      // stripped / DisplayName), so the agent passes back what the user actually says.
+      AvailableEntityNames: this.entities.map(e => entityDisplayName(e.Name, e.DisplayName)),
       AppGroups: this.getAgentAppGroupSummaries(),
     });
     this.navigationService.SetAgentContext(this, context);
@@ -608,6 +612,28 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       }
     }
     return names;
+  }
+
+  /**
+   * Display values of the records currently loaded in the grid (from {@link loadedRecords}),
+   * in grid order, using the same name-field logic the detail panel / state use
+   * ({@link getRecordDisplayName}). Drives the agent's VisibleRecordNames context and the
+   * SelectRecord tool. Returns [] when no entity is selected or nothing is loaded.
+   */
+  private getVisibleRecordNames(): string[] {
+    if (!this.selectedEntity || this.loadedRecords.length === 0) {
+      return [];
+    }
+    return this.loadedRecords.map(r => this.getRecordDisplayName(r));
+  }
+
+  /**
+   * Resolve an agent-supplied entity reference to one of the available entities, matching
+   * the way the user names things (display name with the "MJ: " prefix stripped, e.g.
+   * "ML Models" → "MJ: ML Models"). Delegates to the pure {@link resolveEntityByName} helper.
+   */
+  private resolveEntityByName(input: string): EntityInfo | null {
+    return resolveEntityByName(input, this.entities);
   }
 
   /**
@@ -771,13 +797,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return [
       this.buildAgentTool(
         'OpenEntityData',
-        'Open and load data for an entity by its name (e.g. "Users", "Accounts").',
+        'Open and load data for an entity by its name. Pass the display name the user says (e.g. "AI Models", "ML Models", "Users") exactly as it appears on the entity cards — the tool resolves it even though the full entity name may carry an "MJ: " prefix (e.g. "MJ: ML Models").',
         { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
         async (params) => this.toolOpenEntityData(params),
       ),
       this.buildAgentTool(
         'OpenEntity',
-        'Open and load data for an entity by its name (alias of OpenEntityData, e.g. "Users", "Accounts").',
+        'Open and load data for an entity by its name (alias of OpenEntityData). Pass the display name the user says (e.g. "AI Models", "ML Models") — the tool resolves the "MJ: " prefix.',
         { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
         async (params) => this.toolOpenEntityData(params),
       ),
@@ -795,7 +821,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       ),
       this.buildAgentTool(
         'ToggleEntityFavorite',
-        "Add or remove an entity from the user's favorites by entity name (reversible toggle).",
+        "Add or remove an entity from the user's favorites by entity name (reversible toggle). Pass the display name the user says (e.g. \"AI Models\") — the tool resolves the \"MJ: \" prefix.",
         { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
         async (params) => this.toolToggleEntityFavorite(params),
       ),
@@ -860,6 +886,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         },
       ),
       this.buildAgentTool(
+        'SelectRecord',
+        'Select a row in the current view (the equivalent of the user clicking a row): this highlights the row and opens its detail panel. Pick the row by position ("first", "last", or a 1-based index number) OR by name (matches a loaded record\'s display value — see VisibleRecordNames, case-insensitive/contains). Compose with OpenRecord to then open the full form.',
+        {
+          type: 'object',
+          properties: {
+            position: { type: 'string', description: '"first", "last", or a 1-based index (a number is also accepted).' },
+            name: { type: 'string', description: 'A loaded record display value to match (case-insensitive, contains).' },
+          },
+        },
+        async (params) => this.toolSelectRecord(params),
+      ),
+      this.buildAgentTool(
         'OpenRecord',
         'Open the currently-selected record in its full record form.',
         { type: 'object', properties: {} },
@@ -873,7 +911,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       ),
       this.buildAgentTool(
         'NavigateToRelated',
-        'Navigate to a related entity by name (see the RelatedEntities context field), optionally applying a SQL filter to show related records.',
+        'Navigate to a related entity by name (see the RelatedEntities context field), optionally applying a SQL filter to show related records. Pass the display name the user says — the tool resolves the "MJ: " prefix.',
         {
           type: 'object',
           properties: { entityName: { type: 'string' }, filter: { type: 'string' } },
@@ -930,12 +968,21 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     ];
   }
 
+  /**
+   * Build a tolerant "entity not found" error listing a few of the DISPLAY names the user
+   * actually sees, so the agent can correct itself.
+   */
+  private entityNotFoundError(input: string): string {
+    const sample = this.entities.slice(0, 6).map(e => entityDisplayName(e.Name, e.DisplayName)).join(', ');
+    return `Entity "${input}" is not available in this explorer. Available entities include: ${sample || '(none)'}.`;
+  }
+
   /** Resolve an entity by name and open its data. */
   private toolOpenEntityData(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
     const entityName = String(params['entityName'] ?? '');
-    const entity = this.entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const entity = this.resolveEntityByName(entityName);
     if (!entity) {
-      return { Success: false, ErrorMessage: `Entity "${entityName}" is not available in this explorer.` };
+      return { Success: false, ErrorMessage: this.entityNotFoundError(entityName) };
     }
     this.onEntitySelected(entity);
     return { Success: true, Data: { EntityName: entity.Name } };
@@ -992,6 +1039,85 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     return { Success: true, Data: { ViewId: match.ID, ViewName: match.Name } };
   }
 
+  /**
+   * Select a record/row in the current view by position or name, then drive the same
+   * selection path a user row-click takes (open the detail panel, track recent, highlight
+   * the grid row via the viewer's additive SelectRecord). Tolerant: clear errors when no
+   * records are loaded or the position/name doesn't match.
+   */
+  private toolSelectRecord(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (!this.selectedEntity) {
+      return { Success: false, ErrorMessage: 'No entity is selected, so there are no records to select.' };
+    }
+    const request = this.parseRecordSelectionRequest(params);
+    const recordNames = this.getVisibleRecordNames();
+    const resolution = resolveRecordSelection(recordNames, request);
+    if (!resolution.ok) {
+      return { Success: false, ErrorMessage: resolution.error };
+    }
+    const record = this.loadedRecords[resolution.index];
+    if (!record) {
+      return { Success: false, ErrorMessage: 'The resolved record is no longer loaded in the view.' };
+    }
+    this.applyRecordSelection(record);
+    return { Success: true, Data: { SelectedRecordName: this.getRecordDisplayName(record), Index: resolution.index + 1 } };
+  }
+
+  /**
+   * Coerce the agent's loosely-typed SelectRecord params into a {@link RecordSelectionRequest}.
+   * `position` may arrive as a string ('first'/'last'/'2') or a number; `name` as a string.
+   */
+  private parseRecordSelectionRequest(params: Record<string, unknown>): RecordSelectionRequest {
+    const rawPosition = params['position'];
+    const request: RecordSelectionRequest = {};
+    if (typeof rawPosition === 'number') {
+      request.position = rawPosition;
+    } else if (typeof rawPosition === 'string') {
+      const trimmed = rawPosition.trim().toLowerCase();
+      if (trimmed === 'first' || trimmed === 'last') {
+        request.position = trimmed;
+      } else if (trimmed) {
+        const n = Number(trimmed);
+        if (Number.isFinite(n)) {
+          request.position = n;
+        } else {
+          // A non-numeric, non-first/last "position" is really a name — fall back to name matching.
+          request.name = rawPosition;
+        }
+      }
+    }
+    if (params['name'] != null) {
+      request.name = String(params['name']);
+    }
+    return request;
+  }
+
+  /**
+   * Drive the selection of a loaded record exactly like {@link onViewerRecordSelected}: set the
+   * selected record + detail-panel entity, open the detail panel via the state service, and ask
+   * the inner viewer to highlight the matching grid row (additive viewer.SelectRecord). Mirrors
+   * the user row-click path so the detail panel opens and the grid reflects the selection.
+   */
+  private applyRecordSelection(record: Record<string, unknown>): void {
+    const entity = this.selectedEntity;
+    if (!entity) {
+      return;
+    }
+    this.selectedRecord = record;
+    this.detailPanelEntity = entity;
+    const recordName = this.getRecordDisplayName(record);
+    const pkString = buildPkString(record, entity);
+    this.stateService.selectRecord(pkString, recordName);
+    this.stateService.addRecentItem({
+      entityName: entity.Name,
+      compositeKeyString: pkString,
+      displayName: recordName,
+    });
+    // Highlight the row in the grid (no-op when the grid view isn't mounted, e.g. cards/timeline).
+    this.viewWorkspaceRef?.SelectRecord(record);
+    this.cdr.detectChanges();
+  }
+
   /** Open the currently-selected record in its full form. */
   private toolOpenSelectedRecord(): { Success: boolean; ErrorMessage?: string } {
     if (!this.selectedRecord) {
@@ -1021,9 +1147,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** Navigate to a related entity, optionally applying a filter. */
   private toolNavigateToRelated(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
     const entityName = String(params['entityName'] ?? '');
-    const entity = this.entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+    const entity = this.resolveEntityByName(entityName);
     if (!entity) {
-      return { Success: false, ErrorMessage: `Entity "${entityName}" is not available in this explorer.` };
+      return { Success: false, ErrorMessage: this.entityNotFoundError(entityName) };
     }
     const filter = params['filter'] != null ? String(params['filter']) : '';
     this.onNavigateToRelated({ entityName: entity.Name, filter });
@@ -1061,9 +1187,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (!validated.ok) {
       return validated.result;
     }
-    const entity = this.entities.find(e => e.Name.toLowerCase() === validated.value.toLowerCase());
+    const entity = this.resolveEntityByName(validated.value);
     if (!entity) {
-      return { Success: false, ErrorMessage: `Entity "${validated.value}" is not available in this explorer.` };
+      return { Success: false, ErrorMessage: this.entityNotFoundError(validated.value) };
     }
     const wasFavorited = this.stateService.isEntityFavorited(entity.ID);
     const ok = wasFavorited

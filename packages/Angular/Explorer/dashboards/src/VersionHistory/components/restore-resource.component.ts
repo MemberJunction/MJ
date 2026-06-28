@@ -9,7 +9,11 @@ import { AgentToolResult, validateStringParam } from '../../shared/agent-tool-va
 import {
     buildVersionHistoryRestoreAgentContext,
     isValidRestoreStatusFilter,
+    resolveRestore,
     RESTORE_STATUS_FILTERS,
+    RESTORE_LIST_CAP,
+    RestoreSnapshot,
+    RestoreSummaryItem,
 } from '../version-history-restore-agent-context';
 
 interface VersionRestorePreferences {
@@ -75,12 +79,13 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
     // ========================================
     // AI AGENT CONTEXT & CLIENT TOOLS
     //
-    // 🔒 SAFETY BOUNDARY: This surface exposes ONLY read-only / filter / refresh
-    // tools to the agent. The actual restore/rollback operation is DESTRUCTIVE
-    // (it overwrites live records from a historical version) and is intentionally
-    // NOT exposed as a client tool — neither is any label mutation or deletion.
-    // The agent can browse and filter restore history; a human must initiate any
-    // real restore from the UI.
+    // 🔒 SAFETY BOUNDARY: This surface exposes ONLY read-only / filter / refresh /
+    // select-for-view tools to the agent. The actual restore/rollback operation is
+    // DESTRUCTIVE (it overwrites live records from a historical version) and is
+    // intentionally NOT exposed as a client tool — neither is any label mutation
+    // or deletion. SelectRestore only EXPANDS a history row for inspection; it
+    // performs no restore. The agent can browse, filter, and inspect restore
+    // history; a human must initiate any real restore from the UI.
     // ========================================
 
     /**
@@ -89,6 +94,12 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
      * so it stays unit-testable. Called on load and on every filter change.
      */
     private publishAgentContext(): void {
+        const recentRestores: RestoreSummaryItem[] = this.FilteredRestores
+            .slice(0, RESTORE_LIST_CAP)
+            .map(r => ({ ID: r.ID ?? '', Name: r.Name ?? '', Status: r.Status ?? '' }));
+        const selected = this.ExpandedRestoreId
+            ? this.Restores.find(r => r.ID === this.ExpandedRestoreId)
+            : undefined;
         const context = buildVersionHistoryRestoreAgentContext({
             TotalRestores: this.TotalRestores,
             SuccessfulRestores: this.SuccessfulRestores,
@@ -96,8 +107,16 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             PartialRestores: this.PartialRestores,
             StatusFilter: this.StatusFilter,
             FilteredRestoreCount: this.FilteredRestores.length,
+            RecentRestores: recentRestores,
+            SelectedRestoreId: selected?.ID ?? null,
+            SelectedRestoreName: selected?.Name ?? null,
         });
         this.navigationService.SetAgentContext(this, context);
+    }
+
+    /** The loaded restores narrowed to the resolver's {@link RestoreSnapshot} shape. */
+    private restoreSnapshots(): RestoreSnapshot[] {
+        return this.Restores.map(r => ({ ID: r.ID ?? '', Name: r.Name ?? '', Status: r.Status ?? '' }));
     }
 
     /**
@@ -109,6 +128,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
      * - FilterRestoresByStatus: filter the history by a restore status.
      * - RefreshRestoreHistory: reload the restore history from the server.
      * - GetRestoreStats: return the current restore-status counts.
+     * - SelectRestore: expand a restore's detail row (by ID or name) for viewing.
      */
     private registerAgentClientTools(): void {
         this.navigationService.SetAgentClientTools(this, [
@@ -143,7 +163,35 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
                     },
                 }),
             },
+            {
+                Name: 'SelectRestore',
+                Description: 'Expand a restore history entry by its ID or name to inspect its details. Resolution: exact ID, then exact name, then a name-contains match. View-only — performs no restore, rollback, or mutation.',
+                ParameterSchema: { type: 'object', properties: { restore: { type: 'string', description: 'Restore ID or name.' } }, required: ['restore'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSelectRestore(params),
+            },
         ]);
+    }
+
+    /**
+     * Expand a restore's detail row by ID or name (view-only). Resolves via the
+     * pure {@link resolveRestore} helper (exact ID → exact name → name-contains).
+     * Never throws.
+     */
+    private toolSelectRestore(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+        const parsed = validateStringParam(params['restore'], 'restore');
+        if (!parsed.ok) {
+            return parsed.result;
+        }
+        const resolution = resolveRestore(parsed.value, this.restoreSnapshots());
+        if (!resolution.ok) {
+            return { Success: false, ErrorMessage: resolution.error };
+        }
+        // Set the expanded id directly (ToggleExpand has toggle semantics; we want
+        // the agent to always land on the resolved restore being expanded).
+        this.ExpandedRestoreId = resolution.restore.ID;
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+        return { Success: true, Data: { SelectedRestoreId: resolution.restore.ID, SelectedRestoreName: resolution.restore.Name } };
     }
 
     /**

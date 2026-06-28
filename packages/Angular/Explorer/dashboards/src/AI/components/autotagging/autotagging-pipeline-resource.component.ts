@@ -27,6 +27,8 @@ import { ClassifySetupWizardComponent } from './dialogs/classify-setup-wizard.co
 // ── Shared types (extracted to ./shared/classify.types.ts) ──
 import { TabName, NavItem, KPIMetric, PipelineStageInfo, FeedItem, SourceMini, SourceCard, ContentTypeCard, TagCloudItem, ContentDuplicateRow, RunDetailRow, WeightedTag, ItemPipelineStatus, ContentItemDetail } from './shared/classify.types';
 import { formatNumber, formatDate, getSourceTypeIcon, mapRunDetailRecords, deriveDisplayName } from './shared/classify.format';
+import { buildAutotagAgentContext, isValidAutotagTab } from './autotagging-agent-context';
+import { validateStringParam } from '../../../shared/agent-tool-validation';
 
 @RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
 @Component({
@@ -442,21 +444,60 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
     }
 
-    /** Report current classify dashboard state to the agent */
+    /** Report current classify dashboard state to the agent (deep, bounded). */
     private emitAgentContext(): void {
-        this.navigationService.SetAgentContext(this, {
+        this.navigationService.SetAgentContext(this, buildAutotagAgentContext({
             ActiveTab: this.ActiveTab,
             SourceCount: this.contentSourcesRaw.length,
             ContentItemCount: this.contentItemsRaw.length,
+            TotalContentItemCount: this.TotalContentItemCount,
             TagCount: this.contentTagsRaw.length,
-            PipelineStatus: this.IsRunning ? 'running' : 'idle',
+            TotalContentTagCount: this.TotalContentTagCount,
+            ContentTypeCount: this.contentTypesRaw.length,
+            RunHistoryCount: this.contentRunsRaw.length,
+            IsRunning: this.IsRunning,
+            IsPaused: this.IsPaused,
             PipelineProgress: this.RunProgress,
+            PipelineStage: this.RunStage,
             ShowPipelineConfig: this.ShowPipelineConfig,
             InboxPendingCount: this.InboxPendingCount,
-        });
+            HealthPendingCount: this.HealthPendingCount,
+            SourceNames: this.collectSourceNames(),
+            ContentTypeNames: this.collectContentTypeNames(),
+        }));
     }
 
-    /** Register client tools the agent can invoke on the Classify dashboard */
+    /** Distinct content-source display names from the loaded raw rows (for bounded context). */
+    private collectSourceNames(): string[] {
+        return this.contentSourcesRaw
+            .map(r => String(r['Name'] ?? '').trim())
+            .filter(n => n.length > 0);
+    }
+
+    /** Distinct content-type display names from the loaded raw rows (for bounded context). */
+    private collectContentTypeNames(): string[] {
+        return this.contentTypesRaw
+            .map(r => String(r['Name'] ?? '').trim())
+            .filter(n => n.length > 0);
+    }
+
+    /**
+     * 🚨 SAFETY BOUNDARY 🚨
+     * Register client tools the agent can invoke on the Classify dashboard. Exposed:
+     *  - SwitchClassifyTab (read-only tab navigation; tolerant tab validation)
+     *  - SearchClassifyTags (filters the tag library — read-only)
+     *  - RunClassificationPipeline (the documented "run autotagging" happy path — parallels
+     *    RunDuplicateDetection; it ingests + tags content, but is the surface's primary purpose
+     *    and is gated server-side by the pipeline run lifecycle)
+     *  - RefreshClassifyData / ReloadClassifyRunHistory (read-only reloads)
+     *
+     * INTENTIONALLY NOT EXPOSED (gated):
+     *  - PausePipeline / ResumePipeline / CancelPipeline — operational control of a live process.
+     *  - ConfirmContentDuplicate / DismissContentDuplicate — write duplicate-resolution status
+     *    (no selection model for the agent to reference safely).
+     *  - Source / content-type create/edit/delete (OpenAddSourceForm / OpenEditSourceForm /
+     *    onFormSaved) — config mutations the user owns.
+     */
     private registerAgentTools(): void {
         this.navigationService.SetAgentClientTools(this, [
             {
@@ -470,7 +511,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                     required: ['tab'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
-                    await this.SwitchTab(params['tab'] as TabName);
+                    const tab = params['tab'];
+                    if (!isValidAutotagTab(tab)) {
+                        return { Success: false, ErrorMessage: `Invalid tab "${String(tab)}". Expected one of: pipeline, sources, types, tags, taxonomy, inbox, health, history.` };
+                    }
+                    await this.SwitchTab(tab as TabName);
                     return { Success: true, Data: { ActiveTab: this.ActiveTab } };
                 },
             },
@@ -500,12 +545,34 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                     required: ['query'],
                 },
                 Handler: async (params: Record<string, unknown>) => {
+                    const v = validateStringParam(params['query'], 'query');
+                    if (!v.ok) return v.result;
                     // Ensure the Tag Library tab is active + rendered so its
                     // ViewChild resolves, then delegate the search to it.
                     await this.SwitchTab('tags');
                     this.cdr.detectChanges();
-                    const matchCount = this.tagsTab?.ApplySearch(String(params['query'] ?? '')) ?? 0;
+                    const matchCount = this.tagsTab?.ApplySearch(v.value) ?? 0;
                     return { Success: true, Data: { MatchCount: matchCount } };
+                },
+            },
+            {
+                Name: 'RefreshClassifyData',
+                Description: 'Reload the Classify pipeline base data (sources, items, tags, runs, content types) from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.LoadPipelineData();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { SourceCount: this.contentSourcesRaw.length, ContentItemCount: this.TotalContentItemCount } };
+                },
+            },
+            {
+                Name: 'ReloadClassifyRunHistory',
+                Description: 'Reload the Classify pipeline run history from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.ReloadRunHistory();
+                    this.emitAgentContext();
+                    return { Success: true, Data: { RunHistoryCount: this.contentRunsRaw.length } };
                 },
             },
         ]);
