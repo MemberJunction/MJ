@@ -5,6 +5,8 @@
 **Date:** 2026-06-25
 **Supersedes:** the original "Model Studio" brief; folds in the founding design conversation + a grounded codebase study (Record Set Processing, Flow Agents, Content Sources/Knowledge Hub, Remote Operations, Agent Manager, Artifacts/Conversations, PRs #2449 & #2770).
 
+> **➡️ Next up — the experience layer:** Phase 1 (platform) and Phase 2 (model-as-primitive reach, §17) are built + integration-proven. The work to make the north-star real, visible, and demoable for a **non-technical business user** (the conversational "build a model → write renewal risk onto members → schedule monthly", plus the member-record risk card and a models-in-production view) is planned in its own doc: **[predictive-studio-business-experience.md](./predictive-studio-business-experience.md)**. Read that for the current/next workstream.
+
 ---
 
 ## 0. How to read this document
