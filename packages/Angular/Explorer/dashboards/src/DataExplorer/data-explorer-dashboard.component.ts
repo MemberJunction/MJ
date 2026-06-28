@@ -23,10 +23,18 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup, DataExplorerViewMode } from './models/explorer-state.interface';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
-import { buildDataExplorerAgentContext, isValidViewMode } from './data-explorer-agent-context';
+import { buildDataExplorerAgentContext, isValidViewMode, isValidEntityBrowserMode, AppGroupSummary } from './data-explorer-agent-context';
+import { validateStringParam, validateEnumParam, VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION } from '../shared/agent-tool-validation';
+
+/**
+ * Default server-side page size used by the inner entity viewer when {@link viewerConfig}
+ * doesn't override `pageSize`. Mirrors the viewer's own default (EntityViewerComponent),
+ * and is used to derive the agent-reported total page count.
+ */
+const DATA_EXPLORER_DEFAULT_PAGE_SIZE = 100;
 
 /**
  * Data Explorer Dashboard - Power user interface for exploring data across entities
@@ -540,6 +548,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const context = buildDataExplorerAgentContext({
       SelectedEntityName: this.selectedEntity?.Name ?? null,
       ViewMode: this.state.viewMode,
+      AvailableViewTypes: this.getAvailableViewTypesForSelectedEntity(),
       ActiveViewId: this.state.selectedViewId,
       ActiveViewName: this.resolveActiveViewName(accessibleViews),
       AvailableViewNames: accessibleViews.map(v => v.Name),
@@ -547,14 +556,64 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       FilterText: this.debouncedFilterText,
       TotalRecordCount: this.totalRecordCount,
       FilteredRecordCount: this.filteredRecordCount,
+      PageSize: this.getEffectivePageSize(),
       SelectedRecordName: this.state.selectedRecordName,
       DetailPanelOpen: this.state.detailPanelOpen,
       HomeViewMode: this.state.homeViewMode,
       EntitySearchText: this.entityFilterText,
       VisibleEntityCount: this.filteredEntityCount,
+      FavoriteEntityCount: this.state.favoriteEntities.length,
       AvailableEntityNames: this.entities.map(e => e.Name),
+      AppGroups: this.getAgentAppGroupSummaries(),
     });
     this.navigationService.SetAgentContext(this, context);
+  }
+
+  /**
+   * The record-view modes the CURRENT entity actually supports. Mirrors the gating in
+   * {@link reconcileViewModeForEntity}: 'grid' and 'cards' are always available; 'timeline'
+   * requires at least one Date field; 'map' requires geocoding support. Returns [] at the
+   * home level. Read straight from in-memory {@link EntityInfo} metadata (no lookup).
+   */
+  private getAvailableViewTypesForSelectedEntity(): DataExplorerViewMode[] {
+    const entity = this.selectedEntity;
+    if (!entity) {
+      return [];
+    }
+    const modes: DataExplorerViewMode[] = ['grid', 'cards'];
+    if (entity.Fields.some(f => f.TSType === EntityFieldTSType.Date)) {
+      modes.push('timeline');
+    }
+    if (entity.SupportsGeoCoding) {
+      modes.push('map');
+    }
+    return modes;
+  }
+
+  /**
+   * The grid's server-side page size. The dashboard forwards {@link viewerConfig} to the inner
+   * viewer; when it doesn't set `pageSize` the viewer's default (100) applies. We surface that
+   * effective value so the agent can derive total pages from the record counts.
+   */
+  private getEffectivePageSize(): number {
+    return this.viewerConfig.pageSize ?? DATA_EXPLORER_DEFAULT_PAGE_SIZE;
+  }
+
+  /**
+   * Summaries of the application groups currently shown on the home-screen entity browser
+   * (name, visible-entity count, expanded flag). Reuses the same filtered grouping the UI
+   * renders ({@link filteredAppEntityGroups}), so the agent sees exactly what the user sees.
+   * Returns [] when scoped to a single application (no grouping).
+   */
+  private getAgentAppGroupSummaries(): AppGroupSummary[] {
+    if (this.entityFilter?.applicationId) {
+      return [];
+    }
+    return this.filteredAppEntityGroups.map(g => ({
+      Name: g.applicationName,
+      EntityCount: g.entities.length,
+      Expanded: g.isExpanded,
+    }));
   }
 
   /**
@@ -620,6 +679,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * - OpenRecord: open the currently-selected record in its full form.
    * - CreateNewRecord: open a new-record form for the selected entity.
    * - NavigateToRelated: navigate to a related entity, optionally with a filter.
+   * Home / entity-browser level:
+   * - OpenEntity: alias of OpenEntityData.
+   * - SearchEntities: drive the home-screen entity-search box.
+   * - SetEntityBrowserMode: switch the entity browser between all/favorites.
+   * - ToggleEntityFavorite: add/remove an entity from favorites (reversible).
+   * - ExpandAppGroup / CollapseAppGroup: open/close an application group by name.
+   * View / record-list level:
+   * - ChangeViewType: alias of SetViewMode (grid/cards/timeline/map).
    */
   private registerAgentClientTools(): void {
     this.navigationService.SetAgentClientTools(this, [
@@ -683,6 +750,50 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           required: ['entityName'],
         },
         Handler: async (params: Record<string, unknown>) => this.toolNavigateToRelated(params),
+      },
+      // ----- Home / entity-browser level -----
+      {
+        Name: 'OpenEntity',
+        Description: 'Open and load data for an entity by its name (alias of OpenEntityData, e.g. "Users", "Accounts").',
+        ParameterSchema: { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolOpenEntityData(params),
+      },
+      {
+        Name: 'SearchEntities',
+        Description: 'Type into the home-screen entity-search box to filter the list of available entities by name/description.',
+        ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSearchEntities(params),
+      },
+      {
+        Name: 'SetEntityBrowserMode',
+        Description: 'Switch the home-screen entity browser between showing all entities and favorites only. Valid modes: all, favorites.',
+        ParameterSchema: { type: 'object', properties: { mode: { type: 'string' } }, required: ['mode'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSetEntityBrowserMode(params),
+      },
+      {
+        Name: 'ToggleEntityFavorite',
+        Description: 'Add or remove an entity from the user\'s favorites by entity name (reversible toggle).',
+        ParameterSchema: { type: 'object', properties: { entityName: { type: 'string' } }, required: ['entityName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolToggleEntityFavorite(params),
+      },
+      {
+        Name: 'ExpandAppGroup',
+        Description: 'Expand an application group in the home-screen entity browser by its application name (e.g. "AI", "Admin").',
+        ParameterSchema: { type: 'object', properties: { appName: { type: 'string' } }, required: ['appName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSetAppGroupExpanded(params, true),
+      },
+      {
+        Name: 'CollapseAppGroup',
+        Description: 'Collapse an application group in the home-screen entity browser by its application name (e.g. "AI", "Admin").',
+        ParameterSchema: { type: 'object', properties: { appName: { type: 'string' } }, required: ['appName'] },
+        Handler: async (params: Record<string, unknown>) => this.toolSetAppGroupExpanded(params, false),
+      },
+      // ----- View / record-list level -----
+      {
+        Name: 'ChangeViewType',
+        Description: 'Change the record-view type for the selected entity. Alias of SetViewMode. Valid types: grid, cards, timeline, map.',
+        ParameterSchema: { type: 'object', properties: { type: { type: 'string' } }, required: ['type'] },
+        Handler: async (params: Record<string, unknown>) => this.toolChangeViewType(params),
       },
     ]);
   }
@@ -785,6 +896,86 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const filter = params['filter'] != null ? String(params['filter']) : '';
     this.onNavigateToRelated({ entityName: entity.Name, filter });
     return { Success: true };
+  }
+
+  /** Drive the home-screen entity-search box. */
+  private toolSearchEntities(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const validated = validateStringParam(params['query'], 'query');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    this.entityFilterText = validated.value;
+    this.publishAgentContext();
+    this.cdr.detectChanges();
+    return { Success: true, Data: { Query: validated.value, VisibleEntityCount: this.filteredEntityCount } };
+  }
+
+  /** Switch the home-screen entity browser between 'all' and 'favorites'. */
+  private toolSetEntityBrowserMode(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    const validated = validateEnumParam(params['mode'], VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION, 'mode');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    if (!isValidEntityBrowserMode(validated.value)) {
+      return { Success: false, ErrorMessage: `Invalid mode "${String(params['mode'])}". Valid modes: all, favorites.` };
+    }
+    this.setHomeViewMode(validated.value);
+    return { Success: true, Data: { EntityBrowserMode: validated.value } };
+  }
+
+  /** Add or remove an entity from favorites by name (reversible). */
+  private async toolToggleEntityFavorite(params: Record<string, unknown>): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
+    const validated = validateStringParam(params['entityName'], 'entityName');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    const entity = this.entities.find(e => e.Name.toLowerCase() === validated.value.toLowerCase());
+    if (!entity) {
+      return { Success: false, ErrorMessage: `Entity "${validated.value}" is not available in this explorer.` };
+    }
+    const wasFavorited = this.stateService.isEntityFavorited(entity.ID);
+    const ok = wasFavorited
+      ? await this.stateService.removeEntityFromFavorites(entity.ID)
+      : await this.stateService.addEntityToFavorites(entity.Name, entity.ID);
+    if (!ok) {
+      return { Success: false, ErrorMessage: `Failed to ${wasFavorited ? 'remove' : 'add'} "${entity.Name}" ${wasFavorited ? 'from' : 'to'} favorites.` };
+    }
+    this.ngZone.run(() => {
+      this.publishAgentContext();
+      this.cdr.detectChanges();
+    });
+    return { Success: true, Data: { EntityName: entity.Name, Favorited: !wasFavorited } };
+  }
+
+  /**
+   * Expand or collapse an application group by its application NAME (the agent sees names,
+   * not the internal application IDs). Resolves the name against the currently-shown groups.
+   */
+  private toolSetAppGroupExpanded(params: Record<string, unknown>, expand: boolean): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    if (this.entityFilter?.applicationId) {
+      return { Success: false, ErrorMessage: 'The entity browser is scoped to a single application, so there are no groups to expand or collapse.' };
+    }
+    const validated = validateStringParam(params['appName'], 'appName');
+    if (!validated.ok) {
+      return validated.result;
+    }
+    const lowered = validated.value.trim().toLowerCase();
+    const group = this.appEntityGroups.find(g => g.applicationName.toLowerCase() === lowered);
+    if (!group) {
+      const available = this.appEntityGroups.map(g => g.applicationName).join(', ') || '(none)';
+      return { Success: false, ErrorMessage: `No application group named "${validated.value}". Available groups: ${available}.` };
+    }
+    // toggleAppGroup flips state; only call it when the current state differs from the target.
+    if (group.isExpanded !== expand) {
+      this.toggleAppGroup(group.applicationId);
+    }
+    this.publishAgentContext();
+    return { Success: true, Data: { AppName: group.applicationName, Expanded: expand } };
+  }
+
+  /** Change the record-view type (alias of SetViewMode). */
+  private toolChangeViewType(params: Record<string, unknown>): { Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string } {
+    return this.toolSetViewMode({ mode: params['type'] });
   }
 
   /**

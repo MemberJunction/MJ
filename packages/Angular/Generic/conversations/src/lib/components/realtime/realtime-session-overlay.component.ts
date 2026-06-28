@@ -459,7 +459,18 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public OnPanelWideChanged(wide: boolean): void {
     this.PanelWide = wide;
     if (this.userPanelWidth === null) {
-      this.PanelWidthPx = DefaultSurfacePanelWidth(wide, this.hostWidth());
+      // This can fire synchronously from the surface-tabs child during the FIRST change-detection
+      // pass, while hostWidth() transitions 0 → real across that same pass — setting the bound width
+      // inline then trips ExpressionChangedAfterItHasBeenCheckedError (380 → 308). Defer to a
+      // microtask so the recompute lands in a fresh CD cycle. (Drag/reset handlers stay synchronous —
+      // those run on real user events, not during CD.)
+      Promise.resolve().then(() => {
+        if (this.userPanelWidth === null) {
+          this.PanelWidthPx = DefaultSurfacePanelWidth(this.PanelWide, this.hostWidth());
+          this.cdr.markForCheck();
+        }
+      });
+      return;
     }
     this.cdr.markForCheck();
   }

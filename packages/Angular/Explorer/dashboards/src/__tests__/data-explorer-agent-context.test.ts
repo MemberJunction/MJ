@@ -7,7 +7,11 @@ import { describe, it, expect } from 'vitest';
 import {
     buildDataExplorerAgentContext,
     isValidViewMode,
+    isValidEntityBrowserMode,
+    computeTotalPages,
     AGENT_CONTEXT_NAME_LIST_CAP,
+    AGENT_CONTEXT_APP_GROUP_CAP,
+    AppGroupSummary,
     DataExplorerAgentContextInput,
 } from '../DataExplorer/data-explorer-agent-context';
 
@@ -15,6 +19,7 @@ function makeInput(overrides: Partial<DataExplorerAgentContextInput> = {}): Data
     return {
         SelectedEntityName: 'Users',
         ViewMode: 'grid',
+        AvailableViewTypes: ['grid', 'cards', 'timeline'],
         ActiveViewId: 'view-123',
         ActiveViewName: 'Active Users',
         AvailableViewNames: ['Active Users', 'All Users', 'Inactive Users'],
@@ -22,14 +27,26 @@ function makeInput(overrides: Partial<DataExplorerAgentContextInput> = {}): Data
         FilterText: 'smith',
         TotalRecordCount: 100,
         FilteredRecordCount: 12,
+        PageSize: 100,
         SelectedRecordName: 'John Smith',
         DetailPanelOpen: true,
         HomeViewMode: 'all',
         EntitySearchText: '',
         VisibleEntityCount: 42,
+        FavoriteEntityCount: 3,
         AvailableEntityNames: ['Users', 'Accounts', 'Contacts'],
+        AppGroups: [],
         ...overrides,
     };
+}
+
+/** Build N application-group summaries with the given expanded flag. */
+function appGroups(count: number, expanded = false): AppGroupSummary[] {
+    return Array.from({ length: count }, (_, i) => ({
+        Name: `App ${i + 1}`,
+        EntityCount: i + 1,
+        Expanded: expanded,
+    }));
 }
 
 /** Build a list of N distinct generated names. */
@@ -59,24 +76,84 @@ describe('isValidViewMode', () => {
     });
 });
 
+describe('isValidEntityBrowserMode', () => {
+    it('accepts the two known modes', () => {
+        expect(isValidEntityBrowserMode('all')).toBe(true);
+        expect(isValidEntityBrowserMode('favorites')).toBe(true);
+    });
+
+    it('rejects unknown / non-string values', () => {
+        expect(isValidEntityBrowserMode('All')).toBe(false); // case-sensitive
+        expect(isValidEntityBrowserMode('')).toBe(false);
+        expect(isValidEntityBrowserMode(null)).toBe(false);
+        expect(isValidEntityBrowserMode(undefined)).toBe(false);
+        expect(isValidEntityBrowserMode(1)).toBe(false);
+    });
+});
+
+describe('computeTotalPages', () => {
+    it('rounds up partial pages', () => {
+        expect(computeTotalPages(250, 100)).toBe(3);
+        expect(computeTotalPages(100, 100)).toBe(1);
+        expect(computeTotalPages(101, 100)).toBe(2);
+    });
+
+    it('returns 1 for empty or non-positive inputs', () => {
+        expect(computeTotalPages(0, 100)).toBe(1);
+        expect(computeTotalPages(50, 0)).toBe(1);
+        expect(computeTotalPages(50, -5)).toBe(1);
+        expect(computeTotalPages(50, NaN)).toBe(1);
+    });
+});
+
 describe('buildDataExplorerAgentContext', () => {
     describe('entity selected (record-browsing surface)', () => {
-        it('reports the full record-browsing context including the new view/column fields', () => {
+        it('reports the full record-browsing context including the new view/column/pagination fields', () => {
             const ctx = buildDataExplorerAgentContext(makeInput());
             expect(ctx).toEqual({
                 AtHomeLevel: false,
                 SelectedEntityName: 'Users',
                 ViewMode: 'grid',
+                AvailableViewTypes: ['grid', 'cards', 'timeline'],
                 ActiveViewId: 'view-123',
                 ActiveViewName: 'Active Users',
                 FilterText: 'smith',
                 TotalRecordCount: 100,
                 FilteredRecordCount: 12,
+                PageSize: 100,
+                TotalPages: 1, // 12 filtered records / 100 page size → 1 page
                 SelectedRecordName: 'John Smith',
                 DetailPanelOpen: true,
                 AvailableViews: ['Active Users', 'All Users', 'Inactive Users'],
                 VisibleColumns: ['ID', 'Name', 'Email'],
             });
+        });
+
+        it('derives TotalPages from the filtered record count and page size', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ FilteredRecordCount: 250, PageSize: 100 })
+            );
+            expect(ctx['PageSize']).toBe(100);
+            expect(ctx['TotalPages']).toBe(3); // ceil(250 / 100)
+        });
+
+        it('reports TotalPages of 1 when there are no records', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ FilteredRecordCount: 0, PageSize: 100 })
+            );
+            expect(ctx['TotalPages']).toBe(1);
+        });
+
+        it('publishes the view types the current entity supports', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ AvailableViewTypes: ['grid', 'cards', 'map'] })
+            );
+            expect(ctx['AvailableViewTypes']).toEqual(['grid', 'cards', 'map']);
+        });
+
+        it('omits AvailableViewTypes when none are supplied', () => {
+            const ctx = buildDataExplorerAgentContext(makeInput({ AvailableViewTypes: [] }));
+            expect(ctx).not.toHaveProperty('AvailableViewTypes');
         });
 
         it('resolves the active view NAME (not just the id)', () => {
@@ -132,11 +209,15 @@ describe('buildDataExplorerAgentContext', () => {
         });
 
         it('does not leak home-level fields when an entity is selected', () => {
-            const ctx = buildDataExplorerAgentContext(makeInput());
+            const ctx = buildDataExplorerAgentContext(makeInput({ AppGroups: appGroups(3) }));
             expect(ctx).not.toHaveProperty('HomeViewMode');
+            expect(ctx).not.toHaveProperty('EntityBrowserMode');
             expect(ctx).not.toHaveProperty('EntitySearchText');
             expect(ctx).not.toHaveProperty('VisibleEntityCount');
+            expect(ctx).not.toHaveProperty('FavoriteEntityCount');
             expect(ctx).not.toHaveProperty('AvailableEntities');
+            expect(ctx).not.toHaveProperty('AppGroups');
+            expect(ctx).not.toHaveProperty('ExpandedAppGroups');
         });
 
         it('carries null record selection through', () => {
@@ -157,17 +238,60 @@ describe('buildDataExplorerAgentContext', () => {
                     HomeViewMode: 'favorites',
                     EntitySearchText: 'acc',
                     VisibleEntityCount: 7,
+                    FavoriteEntityCount: 5,
                     AvailableEntityNames: ['Accounts', 'Activities'],
+                    AppGroups: [],
                 })
             );
             expect(ctx).toEqual({
                 AtHomeLevel: true,
                 SelectedEntityName: null,
                 HomeViewMode: 'favorites',
+                EntityBrowserMode: 'favorites',
                 EntitySearchText: 'acc',
                 VisibleEntityCount: 7,
+                FavoriteEntityCount: 5,
                 AvailableEntities: ['Accounts', 'Activities'],
             });
+        });
+
+        it('surfaces EntityBrowserMode as an alias of HomeViewMode', () => {
+            const all = buildDataExplorerAgentContext(makeInput({ SelectedEntityName: null, HomeViewMode: 'all' }));
+            expect(all['EntityBrowserMode']).toBe('all');
+            const favs = buildDataExplorerAgentContext(makeInput({ SelectedEntityName: null, HomeViewMode: 'favorites' }));
+            expect(favs['EntityBrowserMode']).toBe('favorites');
+        });
+
+        it('publishes application-group summaries and the expanded subset', () => {
+            const groups: AppGroupSummary[] = [
+                { Name: 'AI', EntityCount: 12, Expanded: true },
+                { Name: 'Admin', EntityCount: 8, Expanded: false },
+                { Name: 'Archiving', EntityCount: 3, Expanded: true },
+            ];
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ SelectedEntityName: null, AppGroups: groups })
+            );
+            expect(ctx['AppGroups']).toEqual(groups);
+            expect(ctx['ExpandedAppGroups']).toEqual(['AI', 'Archiving']);
+            expect(ctx).not.toHaveProperty('AppGroupCount'); // small list: no count
+        });
+
+        it('omits AppGroups entirely when there are none (single-application scope)', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ SelectedEntityName: null, AppGroups: [] })
+            );
+            expect(ctx).not.toHaveProperty('AppGroups');
+            expect(ctx).not.toHaveProperty('ExpandedAppGroups');
+            expect(ctx).not.toHaveProperty('AppGroupCount');
+        });
+
+        it('bounds AppGroups to the cap and reports the true count when over', () => {
+            const many = appGroups(AGENT_CONTEXT_APP_GROUP_CAP + 4);
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ SelectedEntityName: null, AppGroups: many })
+            );
+            expect((ctx['AppGroups'] as AppGroupSummary[]).length).toBe(AGENT_CONTEXT_APP_GROUP_CAP);
+            expect(ctx['AppGroupCount']).toBe(AGENT_CONTEXT_APP_GROUP_CAP + 4);
         });
 
         it('bounds AvailableEntities and reports the true count when over the cap', () => {

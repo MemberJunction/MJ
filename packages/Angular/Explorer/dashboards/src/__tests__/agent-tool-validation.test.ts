@@ -12,6 +12,8 @@ import {
     validateEnumParam,
     validateStringParam,
     validateNonNegativeNumberParam,
+    boundNameList,
+    AGENT_CONTEXT_NAME_LIST_CAP,
 } from '../shared/agent-tool-validation';
 
 describe('agent-tool-validation', () => {
@@ -97,6 +99,46 @@ describe('agent-tool-validation', () => {
         it('rejects NaN / Infinity', () => {
             expect(validateNonNegativeNumberParam(NaN, 'thresholdMs').ok).toBe(false);
             expect(validateNonNegativeNumberParam(Infinity, 'thresholdMs').ok).toBe(false);
+        });
+    });
+
+    describe('boundNameList', () => {
+        it('returns the full list when under the cap', () => {
+            const names = ['A', 'B', 'C'];
+            expect(boundNameList(names)).toEqual(['A', 'B', 'C']);
+        });
+
+        it('truncates to the default cap when over it', () => {
+            const names = Array.from({ length: 100 }, (_, i) => `Q${i}`);
+            const result = boundNameList(names);
+            expect(result).toHaveLength(AGENT_CONTEXT_NAME_LIST_CAP);
+            expect(result[0]).toBe('Q0');
+            expect(result[AGENT_CONTEXT_NAME_LIST_CAP - 1]).toBe(`Q${AGENT_CONTEXT_NAME_LIST_CAP - 1}`);
+        });
+
+        it('honors an explicit cap', () => {
+            expect(boundNameList(['a', 'b', 'c', 'd'], 2)).toEqual(['a', 'b']);
+        });
+
+        it('returns a new array — never mutates the input', () => {
+            const names = ['x', 'y'];
+            const result = boundNameList(names);
+            expect(result).not.toBe(names);
+            expect(names).toEqual(['x', 'y']);
+        });
+
+        it('handles an empty list', () => {
+            expect(boundNameList([])).toEqual([]);
+        });
+
+        it('falls back to the default cap for a negative or non-finite cap', () => {
+            const names = Array.from({ length: 30 }, (_, i) => `N${i}`);
+            expect(boundNameList(names, -5)).toHaveLength(AGENT_CONTEXT_NAME_LIST_CAP);
+            expect(boundNameList(names, NaN)).toHaveLength(AGENT_CONTEXT_NAME_LIST_CAP);
+        });
+
+        it('treats cap 0 as an empty result', () => {
+            expect(boundNameList(['a', 'b'], 0)).toEqual([]);
         });
     });
 });

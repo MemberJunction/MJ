@@ -1557,7 +1557,9 @@ describe('RealtimeClientSessionService — app awareness', () => {
         expect(prompt).toContain('CURRENT APP CONTEXT');
         expect(prompt).toContain('[app-context]');
         expect(prompt).toContain('Knowledge Hub');
-        expect(prompt).toContain('available tools: ExportCSV');
+        // tool now rendered as a callable signature (name + params + description), not just a name list
+        expect(prompt).toContain('actions you can run right now');
+        expect(prompt).toContain('ExportCSV()');
     });
 
     it('omits the app-context section entirely when no snapshot is supplied', () => {

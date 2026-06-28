@@ -15,6 +15,13 @@ export interface AgentToolResult {
 }
 
 /**
+ * Allowed values for the Data Explorer's entity-browser mode tool
+ * (`SetEntityBrowserMode`). Exposed here so the tolerant {@link validateEnumParam}
+ * guard has a single, reusable source of truth that stays Angular-free.
+ */
+export const VALID_ENTITY_BROWSER_MODES_FOR_VALIDATION = ['all', 'favorites'] as const;
+
+/**
  * Validate that a raw, untrusted tool parameter is one of an allowed set of
  * string values. Returns the narrowed value on success, or a typed failure
  * result describing the allowed values. Never throws.
@@ -54,6 +61,28 @@ export function validateStringParam(
         return { ok: true, value: raw };
     }
     return { ok: false, result: { Success: false, ErrorMessage: `${paramName} must be a string.` } };
+}
+
+/**
+ * Default upper bound on how many names an Admin surface publishes in a
+ * name-list context field (e.g. visible query names, available categories).
+ * Keeping the streamed note bounded avoids flooding the co-agent with hundreds
+ * of names; surfaces should publish a companion total-count field so the agent
+ * still knows the true size when the list is truncated.
+ */
+export const AGENT_CONTEXT_NAME_LIST_CAP = 25;
+
+/**
+ * Cap an array of names to at most `cap` entries. Pure + deterministic so the
+ * published context shape stays unit-testable. Never throws.
+ *
+ * @param names - the full list of names (the caller owns de-duplication / ordering)
+ * @param cap - maximum entries to keep (defaults to {@link AGENT_CONTEXT_NAME_LIST_CAP})
+ * @returns the first `cap` names; a new array (never mutates the input)
+ */
+export function boundNameList(names: readonly string[], cap: number = AGENT_CONTEXT_NAME_LIST_CAP): string[] {
+    const safeCap = Number.isFinite(cap) && cap >= 0 ? Math.floor(cap) : AGENT_CONTEXT_NAME_LIST_CAP;
+    return names.slice(0, safeCap);
 }
 
 /**

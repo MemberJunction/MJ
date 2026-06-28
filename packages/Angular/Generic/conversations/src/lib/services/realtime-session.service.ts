@@ -669,7 +669,14 @@ export class RealtimeSessionService {
     // into the companion prompt at mint. Stored so the ClientContextChannel can stream subsequent
     // deltas. Absent ⇒ no app layer / no mint-time context (the pre-app behavior).
     this.applicationId = applicationId ?? null;
-    this._appContext$.next(appContext ?? null);
+    // Prefer the explicit param, but fall back to the snapshot the host has ALREADY pushed via
+    // UpdateAppContext (explorer-app streams the live snapshot continuously). The overlay's
+    // [appContext] binding can still read null at the instant the mic is clicked — without this
+    // fallback, StartRealtimeSession(null) would clobber a perfectly good snapshot and mint the
+    // companion prompt with no app context (no NavigableApps / no tool schemas → the co-agent guesses
+    // parameter names and navigation fails). Never overwrite a good value with null.
+    const effectiveAppContext = appContext ?? this._appContext$.value;
+    this._appContext$.next(effectiveAppContext);
 
     if (agentName) {
       this._agentName$.next(agentName);
@@ -687,7 +694,7 @@ export class RealtimeSessionService {
       // Resolve + initialize the interactive-channel plugins FIRST: their client-executed
       // tool sets must be declared to the realtime model at session mint.
       const allClientTools = [...(clientTools ?? []), ...(await this.startChannels())];
-      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, appContext ?? null);
+      const session = await this.mintSession(targetAgentId, conversationId, lastSessionId, preferredModelId, allClientTools, coAgentId, configOverridesJson, consent, this.recordingStartedAtIso, mediaCollectionId, this.applicationId, effectiveAppContext);
       this.agentSessionId = session.AgentSessionId;
       // A null input conversationId means the SERVER created a fresh conversation for
       // this session — track it so the host can fold it into the cached list, select

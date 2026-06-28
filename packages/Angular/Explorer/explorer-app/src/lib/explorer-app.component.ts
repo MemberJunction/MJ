@@ -368,9 +368,33 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
   /** Build and update the application context snapshot for AI agent awareness */
   private async updateAppContext(): Promise<void> {
+    // Guard: this fires from BehaviorSubjects during early boot, before the provider is ready —
+    // `ProviderToUse` (and thus CurrentUser) can be undefined. Read defensively, never throw.
+    const md = this.ProviderToUse;
+    const currentUser = md?.CurrentUser ?? null;
+    // Apps the user can open — the valid AppName values for a NavigateToApp call. Computed here so
+    // it's available even when there's NO active app (overlay open over Home/Chat, pre-app boot).
+    const navigableApps = (this.appManager.GetAllApps() ?? [])
+      .map(a => ({ Name: a.Name, Description: a.Description || undefined }));
+
     const activeApp = this.appManager.GetActiveApp();
     if (!activeApp) {
-      this.AppContextSnapshot = null;
+      // No specific app is open, but the co-agent must STILL be able to navigate the user into one
+      // and run the global tools — so ship a navigable baseline instead of a null (thin) snapshot.
+      this.AppContextSnapshot = {
+        App: { Name: 'MemberJunction', Description: 'No specific app is open right now — you can open one.' },
+        ActiveNavItem: { Name: '(none)' },
+        OtherNavItems: [],
+        NavigableApps: navigableApps,
+        User: {
+          Name: currentUser?.Name || '',
+          Roles: currentUser?.UserRoles?.map(r => r.Role) || []
+        },
+        Capabilities: { Tools: [...this.globalToolManifest] }
+      };
+      this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+      this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
+      this.cdr.detectChanges();
       return;
     }
 
@@ -383,9 +407,6 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     const activeNavItem = activeNavItemName
       ? navItems.find(n => n.Label === activeNavItemName)
       : navItems.find(n => n.isDefault) || navItems[0];
-
-    const md = this.ProviderToUse;
-    const currentUser = md.CurrentUser;
 
     this.AppContextSnapshot = {
       App: {
@@ -402,9 +423,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         .map(n => ({ Name: n.Label, Description: n.Description })),
       // Other apps the user can open — the valid AppName values for a NavigateToApp call. Without
       // this the co-agent guesses the app name and navigation fails with "application undefined".
-      NavigableApps: this.appManager.GetAllApps()
-        .filter(a => a.Name !== activeApp.Name)
-        .map(a => ({ Name: a.Name, Description: a.Description || undefined })),
+      NavigableApps: navigableApps.filter(a => a.Name !== activeApp.Name),
       User: {
         Name: currentUser?.Name || '',
         Roles: currentUser?.UserRoles?.map(r => r.Role) || []
@@ -534,6 +553,26 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   private globalToolManifest: ClientToolMetadata[] = [];
 
+  /**
+   * Case-insensitive parameter lookup across candidate keys. The realtime co-agent calls tools via
+   * the ContextTool proxy and can vary the casing/name of a parameter ('AppName' vs 'appName' vs
+   * 'name'/'target'); this makes the global nav handlers tolerant so a correct VALUE isn't lost to a
+   * keying mismatch. Returns the first non-empty match, else undefined.
+   */
+  private readToolParam(params: Record<string, unknown>, ...keys: string[]): string | undefined {
+    const lowerMap = new Map<string, unknown>();
+    for (const [k, v] of Object.entries(params ?? {})) {
+      lowerMap.set(k.toLowerCase(), v);
+    }
+    for (const key of keys) {
+      const v = lowerMap.get(key.toLowerCase());
+      if (v != null && String(v).trim().length > 0) {
+        return String(v);
+      }
+    }
+    return undefined;
+  }
+
   private registerClientTools(): void {
     // Register each global tool on BOTH the async agent-client AND capture it for the realtime
     // session (one set of handlers, both agents) + the streamed capability manifest (schemas).
@@ -561,8 +600,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         required: ['EntityName', 'RecordID']
       },
       Handler: async (params) => {
-        const entityName = String(params['EntityName']);
-        const recordId = String(params['RecordID']);
+        const entityName = this.readToolParam(params, 'EntityName', 'entity') ?? '';
+        const recordId = this.readToolParam(params, 'RecordID', 'recordId', 'id', 'record') ?? '';
         const md = this.ProviderToUse;
         const entityInfo = md.Entities.find(e => e.Name === entityName);
         const pkey = new CompositeKey();
@@ -588,8 +627,8 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         required: ['AppName']
       },
       Handler: async (params) => {
-        const appName = String(params['AppName']);
-        const navItemName = params['NavItemName'] ? String(params['NavItemName']) : undefined;
+        const appName = this.readToolParam(params, 'AppName', 'app', 'application', 'name', 'target') ?? '';
+        const navItemName = this.readToolParam(params, 'NavItemName', 'navItem', 'tab', 'section');
 
         // If currently in full chat workspace, hand conversation to overlay for continuity
         if (this.isChatRoute) {

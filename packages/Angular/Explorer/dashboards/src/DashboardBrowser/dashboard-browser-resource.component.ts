@@ -68,6 +68,13 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     public viewMode: DashboardBrowserViewMode = 'cards';
     public showAddPanelDialog = false;
 
+    /**
+     * Free-text search the agent has applied to the dashboard list (via the
+     * SearchDashboards tool). Reported in the agent context so the agent knows
+     * how the visible list is currently narrowed; cleared by ClearDashboardFilters.
+     */
+    private agentSearchText = '';
+
     // Config dialog state
     public showConfigDialog = false;
     public configDialogPanel: DashboardPanel | null = null;
@@ -154,9 +161,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
     // ========================================
     // Agent Context & Client Tools
     //
-    // 🔒 SAFETY BOUNDARY: the Dashboard Browser exposes ONLY browse / navigate
-    // tools to the AI agent — search, filter-by-category, open-for-viewing,
-    // switch view mode, refresh, and back-to-list. Mutating operations
+    // 🔒 SAFETY BOUNDARY: the Dashboard Browser exposes ONLY read-only /
+    // navigational tools to the AI agent — search, select/filter-by-category
+    // (by name or id), clear-filters, open-for-viewing (by name or id), switch
+    // view mode, refresh, and back-to-list. Mutating operations
     // (create / delete / save / share / move) are intentionally NOT exposed.
     // The agent helps the user find and open dashboards; the user performs any
     // create/edit/delete/share/move from the UI. Do not add a mutating tool
@@ -169,15 +177,35 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * view mode, or loading state changes.
      */
     private emitAgentContext(): void {
+        const selectedCategory = this.selectedCategoryId
+            ? this.categories.find(c => UUIDsEqual(c.ID, this.selectedCategoryId!)) ?? null
+            : null;
+
         this.navigationService.SetAgentContext(this, buildDashboardBrowserAgentContext({
             Mode: this.mode,
             SelectedDashboardId: this.selectedDashboard?.ID ?? null,
             SelectedDashboardName: this.selectedDashboard?.Name ?? null,
-            TotalDashboardCount: this.dashboards.length,
+            VisibleDashboardNames: this.dashboards.map(d => d.Name || '(untitled)'),
+            TotalDashboardCount: this.TotalAccessibleDashboardCount,
+            FilteredDashboardCount: this.dashboards.length,
+            SearchText: this.agentSearchText,
+            AvailableCategoryNames: this.categories.map(c => c.Name),
             SelectedCategoryId: this.selectedCategoryId,
+            SelectedCategoryName: selectedCategory?.Name ?? null,
             ViewMode: this.viewMode,
             IsLoading: this.isLoading,
         }));
+    }
+
+    /**
+     * The total number of dashboards accessible to the current user, independent
+     * of any in-memory search narrowing the agent has applied. `this.dashboards`
+     * shrinks when SearchDashboards filters it, so we read the unfiltered count
+     * straight from the engine to keep TotalDashboardCount honest.
+     */
+    private get TotalAccessibleDashboardCount(): number {
+        const md = this.ProviderToUse;
+        return DashboardEngine.Instance.GetAccessibleDashboards(md.CurrentUser.ID).length;
     }
 
     /** Register the browse-only client tools the agent may invoke. */
@@ -194,21 +222,37 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 },
             },
             {
+                Name: 'SelectCategory',
+                Description: 'Filter the dashboard list to a category. Accepts either the category NAME (as listed in AvailableCategories) or its ID. Pass an empty string to clear the category filter (show root).',
+                ParameterSchema: { type: 'object', properties: { category: { type: 'string', description: 'The category name or ID to filter by. Empty string clears the filter.' } }, required: ['category'] },
+                Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
+                    const v = validateStringParam(params['category'], 'category');
+                    if (!v.ok) return v.result;
+                    return this.AgentSelectCategory(v.value);
+                },
+            },
+            {
                 Name: 'FilterByCategory',
-                Description: 'Filter the dashboard list to a category by its ID. Pass an empty string to clear the category filter (show root).',
+                Description: 'Filter the dashboard list to a category by its ID. Pass an empty string to clear the category filter (show root). Prefer SelectCategory, which also accepts a category name.',
                 ParameterSchema: { type: 'object', properties: { categoryId: { type: 'string' } }, required: ['categoryId'] },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
                     const v = validateStringParam(params['categoryId'], 'categoryId');
                     if (!v.ok) return v.result;
-                    return this.AgentFilterByCategory(v.value);
+                    return this.AgentSelectCategory(v.value);
                 },
             },
             {
+                Name: 'ClearDashboardFilters',
+                Description: 'Clear all active dashboard-list filters — both the text search and the category filter — and return to the full list at the root category.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async (): Promise<AgentToolResult> => this.AgentClearDashboardFilters(),
+            },
+            {
                 Name: 'OpenDashboard',
-                Description: 'Open a dashboard for viewing (inline) by its ID.',
-                ParameterSchema: { type: 'object', properties: { dashboardId: { type: 'string' } }, required: ['dashboardId'] },
+                Description: 'Open a dashboard for viewing (inline). Accepts either the dashboard NAME (as listed in VisibleDashboards) or its ID.',
+                ParameterSchema: { type: 'object', properties: { dashboard: { type: 'string', description: 'The dashboard name or ID to open.' }, dashboardId: { type: 'string', description: 'Deprecated alias for "dashboard" — the dashboard ID.' } } },
                 Handler: async (params: Record<string, unknown>): Promise<AgentToolResult> => {
-                    const v = validateStringParam(params['dashboardId'], 'dashboardId');
+                    const v = validateStringParam(params['dashboard'] ?? params['dashboardId'], 'dashboard');
                     if (!v.ok) return v.result;
                     return this.AgentOpenDashboard(v.value);
                 },
@@ -226,6 +270,9 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 Description: 'Reload the list of dashboards and categories from the server.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async (): Promise<AgentToolResult> => {
+                    // loadDashboards() rebuilds the full list, so any prior agent
+                    // search no longer applies — clear the tracked search text.
+                    this.agentSearchText = '';
                     await this.loadDashboards();
                     this.emitAgentContext();
                     return { Success: true };
@@ -262,6 +309,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 (d.Description || '').toLowerCase().includes(q))
             : all;
 
+        this.agentSearchText = query.trim();
         this.dashboards = matched.sort((a, b) =>
             new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
         this.mode = 'list';
@@ -271,13 +319,38 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         return { Success: true };
     }
 
-    /** Apply a category filter (empty string clears it) and return to the list. */
-    private AgentFilterByCategory(categoryId: string): AgentToolResult {
-        const trimmed = categoryId.trim();
-        if (trimmed && !this.categories.some(c => UUIDsEqual(c.ID, trimmed))) {
-            return { Success: false, ErrorMessage: `No accessible category found with ID "${trimmed}".` };
+    /**
+     * Apply a category filter by NAME or ID (empty string clears it) and return
+     * to the list. Resolves a supplied name (case-insensitive) to its id against
+     * the loaded, accessible category list — mirroring the Data Explorer's
+     * SelectView name→id resolution.
+     */
+    private AgentSelectCategory(categoryNameOrId: string): AgentToolResult {
+        const raw = categoryNameOrId.trim();
+
+        // Empty string clears the filter.
+        if (!raw) {
+            this.selectedCategoryId = null;
+            this.mode = 'list';
+            this.selectedDashboard = null;
+            this.updateUrlQueryParams();
+            this.emitAgentContext();
+            this.cdr.detectChanges();
+            return { Success: true };
         }
-        this.selectedCategoryId = trimmed || null;
+
+        // Prefer an exact id match, then fall back to a case-insensitive name match.
+        const lowered = raw.toLowerCase();
+        const match =
+            this.categories.find(c => UUIDsEqual(c.ID, raw)) ??
+            this.categories.find(c => (c.Name || '').toLowerCase() === lowered);
+
+        if (!match) {
+            const available = this.categories.map(c => c.Name).join(', ') || '(none)';
+            return { Success: false, ErrorMessage: `No accessible category named or identified by "${raw}". Available categories: ${available}.` };
+        }
+
+        this.selectedCategoryId = match.ID;
         this.mode = 'list';
         this.selectedDashboard = null;
         this.updateUrlQueryParams();
@@ -286,14 +359,48 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         return { Success: true };
     }
 
-    /** Open a dashboard for inline viewing by ID. */
-    private AgentOpenDashboard(dashboardId: string): AgentToolResult {
-        const id = dashboardId.trim();
-        if (!id) return { Success: false, ErrorMessage: 'dashboardId must not be empty.' };
+    /** Clear both the text search and the category filter, returning to the full root list. */
+    private AgentClearDashboardFilters(): AgentToolResult {
+        this.agentSearchText = '';
+        this.selectedCategoryId = null;
+        this.mode = 'list';
+        this.selectedDashboard = null;
 
-        const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, id));
+        // Restore the full accessible list (the search may have narrowed this.dashboards).
+        const engine = DashboardEngine.Instance;
+        const md = this.ProviderToUse;
+        this.dashboards = [...engine.GetAccessibleDashboards(md.CurrentUser.ID)].sort((a, b) =>
+            new Date(b.__mj_UpdatedAt).getTime() - new Date(a.__mj_UpdatedAt).getTime());
+
+        this.updateUrlQueryParams();
+        this.emitAgentContext();
+        this.cdr.detectChanges();
+        return { Success: true };
+    }
+
+    /**
+     * Open a dashboard for inline viewing by NAME or ID. Resolves a supplied name
+     * (case-insensitive) to its dashboard against the loaded, accessible list —
+     * mirroring the Data Explorer's SelectView name→id resolution.
+     */
+    private AgentOpenDashboard(dashboardNameOrId: string): AgentToolResult {
+        const raw = dashboardNameOrId.trim();
+        if (!raw) return { Success: false, ErrorMessage: 'A dashboard name or ID is required.' };
+
+        // Search against the full accessible set (not just this.dashboards, which a
+        // prior search may have narrowed) so the agent can open any dashboard by name.
+        const engine = DashboardEngine.Instance;
+        const md = this.ProviderToUse;
+        const accessible = engine.GetAccessibleDashboards(md.CurrentUser.ID);
+
+        const lowered = raw.toLowerCase();
+        const dashboard =
+            accessible.find(d => UUIDsEqual(d.ID, raw)) ??
+            accessible.find(d => (d.Name || '').toLowerCase() === lowered);
+
         if (!dashboard) {
-            return { Success: false, ErrorMessage: `No accessible dashboard found with ID "${id}".` };
+            const available = accessible.map(d => d.Name || '(untitled)').slice(0, 25).join(', ') || '(none)';
+            return { Success: false, ErrorMessage: `No accessible dashboard named or identified by "${raw}". Available dashboards include: ${available}.` };
         }
         this.openDashboard(dashboard);
         this.emitAgentContext();

@@ -11,7 +11,7 @@ import {
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
-import { validateStringParam } from '../shared/agent-tool-validation';
+import { validateStringParam, boundNameList } from '../shared/agent-tool-validation';
 /**
  * Tree node for the query category hierarchy
  */
@@ -145,28 +145,62 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // AI Agent Context & Client Tools
     //
     // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
-    // Query Browser can execute stored SQL. The agent context and client tools
-    // registered here are strictly NAVIGATIONAL + READ-ONLY: search the query
-    // catalog, filter by status, select a query to view, and refresh the list.
-    // DELIBERATELY NOT exposed to the agent: saving/deleting queries, and —
-    // critically — RUNNING queries (with or without arbitrary parameters).
-    // Selecting a query only opens its definition in the viewer; it does not
-    // execute it. Context exposes only catalog metadata (query name/id, search
-    // text, category, count) — never SQL text or result data.
+    // Query Browser is an ADMIN surface that can execute stored SQL. The agent
+    // context and client tools registered here are strictly NAVIGATIONAL +
+    // READ-ONLY: search the query catalog, filter by status/category, select a
+    // query to view, open its record, clear filters, expand/collapse the tree,
+    // and refresh the list.
+    //
+    // DELIBERATELY NOT exposed to the agent (do NOT wire any of these):
+    //   • RUNNING a query — with or without arbitrary parameters. The Query
+    //     Viewer has a run/execute affordance; it is NOT surfaced as a tool.
+    //     Arbitrary execution against a stored SQL catalog is the exact thing
+    //     this boundary exists to prevent.
+    //   • Creating / editing / deleting queries (the drawer + SaveDrawer path).
+    //   • Exposing SQL text or query RESULT values in context or tool output.
+    //
+    // Selecting/opening a query only DISPLAYS its definition; it never executes
+    // it. Context exposes only catalog metadata (query/category names, counts,
+    // filter state) — never SQL or result data.
     // ================================================================
 
     /**
      * Publish the current Query Browser state to the AI agent. Re-invoked on
-     * every meaningful state change (selection, search, refresh). Only catalog
-     * metadata is exposed — never SQL or query results.
+     * every meaningful state change (selection, search, refresh, filter). Only
+     * catalog METADATA is exposed — query NAMES, CATEGORY names, counts, and the
+     * active filter state — NEVER SQL text or query RESULTS. Name lists are
+     * bounded (see {@link AGENT_CONTEXT_NAME_LIST_CAP}); companion total/filtered
+     * counts tell the agent the true sizes when the lists are truncated.
      */
     private publishAgentContext(): void {
+        // Active status filters (the statuses currently toggled ON in the tree).
+        const activeStatusFilters = this.AllStatuses.filter(s => this.StatusFilters[s] === true);
+
+        // Bounded list of category names the user can navigate (excludes the
+        // virtual Uncategorized bucket, which has no real category record).
+        const categoryNames = boundNameList(
+            this.categories.map(c => c.Name).filter((n): n is string => !!n)
+        );
+
+        // Bounded list of the query names currently visible (status + search
+        // filters applied) — what the agent would see in the tree right now.
+        const visibleQueryNames = boundNameList(this.filteredQueries.map(q => q.Name));
+
         this.navigationService.SetAgentContext(this, {
+            // — Selection —
             SelectedQueryId: this.selectedQuery?.ID ?? null,
             SelectedQueryName: this.selectedQuery?.Name ?? null,
-            SearchText: this.searchText,
             SelectedCategory: this.selectedQuery?.Category ?? null,
-            QueryCount: this.queries.length,
+            // — Filter state —
+            SearchText: this.searchText,
+            ActiveStatusFilters: activeStatusFilters,
+            // — Counts —
+            TotalQueryCount: this.queries.length,
+            FilteredQueryCount: this.filteredQueries.length,
+            CategoryCount: this.categories.length,
+            // — Bounded navigable name lists (NO SQL, NO results) —
+            AvailableCategories: categoryNames,
+            VisibleQueryNames: visibleQueryNames,
         });
     }
 
@@ -180,7 +214,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.navigationService.SetAgentClientTools(this, [
             {
                 Name: 'SearchQueries',
-                Description: 'Free-text search across the stored-query catalog (name, description, category).',
+                Description: 'Free-text search across the stored-query catalog (name, description, category). Read-only — does not run any query.',
                 ParameterSchema: { type: 'object', properties: { searchText: { type: 'string' } }, required: ['searchText'] },
                 Handler: async (params: Record<string, unknown>) => this.handleSearchTool(params),
             },
@@ -191,10 +225,40 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 Handler: async (params: Record<string, unknown>) => this.handleFilterByStatusTool(params),
             },
             {
+                Name: 'FilterQueriesByCategory',
+                Description: 'Narrow the visible catalog to a single category by its NAME (case-insensitive). Use AvailableCategories from context for valid names. Read-only navigation.',
+                ParameterSchema: { type: 'object', properties: { category: { type: 'string' } }, required: ['category'] },
+                Handler: async (params: Record<string, unknown>) => this.handleFilterByCategoryTool(params),
+            },
+            {
                 Name: 'SelectQuery',
-                Description: 'Open a stored query in the viewer by its ID. This only displays the query definition; it does NOT run the query.',
-                ParameterSchema: { type: 'object', properties: { queryId: { type: 'string' } }, required: ['queryId'] },
+                Description: 'Open a stored query in the viewer by its NAME or ID. This only DISPLAYS the query definition; it does NOT run the query.',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
                 Handler: async (params: Record<string, unknown>) => this.handleSelectQueryTool(params),
+            },
+            {
+                Name: 'OpenQuery',
+                Description: 'Open the full query record (for viewing/editing in its own tab) by query NAME or ID. Opens the entity form; it does NOT run the query.',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>) => this.handleOpenQueryTool(params),
+            },
+            {
+                Name: 'ClearQueryFilters',
+                Description: 'Clear the search text and reset status filters to the default (Approved only). Read-only navigation.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleClearFiltersTool(),
+            },
+            {
+                Name: 'ExpandAllCategories',
+                Description: 'Expand every category node in the catalog tree so all queries are visible. Read-only navigation.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleExpandAllTool(),
+            },
+            {
+                Name: 'CollapseAllCategories',
+                Description: 'Collapse every category node in the catalog tree. Read-only navigation.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleCollapseAllTool(),
             },
             {
                 Name: 'RefreshQueries',
@@ -230,17 +294,91 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         return { Success: true };
     }
 
+    /**
+     * Resolve an agent-supplied identifier (query NAME or ID) to a query the
+     * current user can view. Prefers an exact ID match, then a case-insensitive
+     * NAME match — mirrors DataExplorer's SelectView resolution. Returns null
+     * when nothing matches.
+     */
+    private resolveQuery(raw: string): MJQueryEntityExtended | null {
+        const trimmed = raw.trim();
+        if (!trimmed) return null;
+        const lowered = trimmed.toLowerCase();
+        return (
+            this.queries.find(q => UUIDsEqual(q.ID, trimmed)) ??
+            this.queries.find(q => q.Name.toLowerCase() === lowered) ??
+            null
+        );
+    }
+
     private handleSelectQueryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
-        const queryId = String(params?.['queryId'] ?? '');
-        if (!queryId) {
-            return { Success: false, ErrorMessage: 'queryId is required.' };
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? '');
+        if (!raw.trim()) {
+            return { Success: false, ErrorMessage: 'A query name or ID is required.' };
         }
-        const query = this.queries.find(q => UUIDsEqual(q.ID, queryId));
+        const query = this.resolveQuery(raw);
         if (!query) {
-            return { Success: false, ErrorMessage: `No query found with ID "${queryId}" (or you lack permission to view it).` };
+            return { Success: false, ErrorMessage: `No query named or identified by "${raw}" (or you lack permission to view it).` };
         }
         this.selectQuery(query);
         this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleOpenQueryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? '');
+        if (!raw.trim()) {
+            return { Success: false, ErrorMessage: 'A query name or ID is required.' };
+        }
+        const query = this.resolveQuery(raw);
+        if (!query) {
+            return { Success: false, ErrorMessage: `No query named or identified by "${raw}" (or you lack permission to view it).` };
+        }
+        // Opens the full Query entity record for viewing — does NOT execute it.
+        this.onOpenQueryRecord({ queryId: query.ID, queryName: query.Name });
+        return { Success: true };
+    }
+
+    private handleFilterByCategoryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateStringParam(params?.['category'], 'category');
+        if (!v.ok) return v.result;
+        const raw = v.value.trim();
+        if (!raw) {
+            return { Success: false, ErrorMessage: 'A category name is required.' };
+        }
+        const lowered = raw.toLowerCase();
+        const category = this.categories.find(c => (c.Name ?? '').toLowerCase() === lowered);
+        if (!category) {
+            const available = boundNameList(this.categories.map(c => c.Name).filter((n): n is string => !!n)).join(', ') || '(none)';
+            return { Success: false, ErrorMessage: `No category named "${raw}". Available categories: ${available}.` };
+        }
+        // The search filter already matches on category name (applyFilters), so
+        // scoping the visible tree to a category reuses that read-only path.
+        this.onSearchChange(category.Name);
+        return { Success: true };
+    }
+
+    private handleClearFiltersTool(): { Success: boolean; ErrorMessage?: string } {
+        // Clear search text and reset status filters to the default (Approved only).
+        this.searchText = '';
+        for (const s of this.AllStatuses) {
+            this.StatusFilters[s] = s === 'Approved';
+        }
+        this.applyFilters();
+        this.buildCategoryTree();
+        this.saveStatusFilters();
+        this.cdr.markForCheck();
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleExpandAllTool(): { Success: boolean; ErrorMessage?: string } {
+        this.expandAll();
+        return { Success: true };
+    }
+
+    private handleCollapseAllTool(): { Success: boolean; ErrorMessage?: string } {
+        this.collapseAll();
         return { Success: true };
     }
 
