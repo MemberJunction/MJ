@@ -5,8 +5,9 @@
  * {@link MLModelInferenceProcessor} Record Set Processing work type, its
  * dependency-injection seams (model loader, artifact loader, sidecar predictor)
  * and their production + in-memory implementations, the work-type registration +
- * dynamic resolver, the startup sink that registers it at boot, and the
- * `MJ: ML Model Scoring Binding` lineage helper.
+ * dynamic resolver, the startup sink that registers it at boot, the
+ * `MJ: ML Model Scoring Binding` lineage helper, and the scored-query enricher that
+ * lets RunQuery append model predictions to result rows (PS2-3).
  *
  * See `./ml-model-inference-processor` for the per-record scoring flow.
  */
@@ -18,3 +19,4 @@ export * from './ml-model-inference-processor';
 export * from './register';
 export * from './startup-register';
 export * from './scoring-binding';
+export * from './ml-model-score-enricher';
