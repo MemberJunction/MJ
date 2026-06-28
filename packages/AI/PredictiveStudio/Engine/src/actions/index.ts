@@ -27,6 +27,7 @@ export * from './run-experiment.action';
 export * from './run-experiment.deps';
 export * from './promote-model.action';
 export * from './promote-model.gate';
+export * from './model-scoring-action-generator';
 
 import { PredictiveStudioTrainModelAction } from './train-model.action';
 import { PredictiveStudioScoreRecordSetAction } from './score-record-set.action';

@@ -16,11 +16,12 @@
  * standard 0.6). This is deterministic and needs no extra state on the model.
  */
 
-import { RunView, LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { RunView, LogError, LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
 import type { MJMLModelEntity, MJMLTrainingPipelineEntity } from '@memberjunction/core-entities';
 import type { FeatureImportance, LeakageGuard } from '@memberjunction/predictive-studio-core';
 
 import { detectSingleFeatureDominance } from '../feature-assembly/leakage-guard';
+import { ModelScoringActionGenerator } from './model-scoring-action-generator';
 import type {
   IModelPromotionGate,
   PromoteModelRequest,
@@ -65,7 +66,7 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
       signOffNote = this.recordSignOff(model, request, leakage, reason);
     }
 
-    return this.transition(model, request.targetStatus, signOffNote);
+    return this.transition(model, request.targetStatus, signOffNote, request.contextUser, request.provider);
   }
 
   /**
@@ -197,6 +198,8 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     model: MJMLModelEntity,
     targetStatus: PromoteModelRequest['targetStatus'],
     signOffNote?: string,
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
   ): Promise<PromoteModelOutcome> {
     const currentStatus = model.Status ?? 'Draft';
     const allowed = ProductionModelPromotionGate.ALLOWED_TRANSITIONS[currentStatus] ?? [];
@@ -208,7 +211,42 @@ export class ProductionModelPromotionGate implements IModelPromotionGate {
     if (!saved) {
       return { kind: 'save-failed', message: model.LatestResult?.CompleteMessage ?? 'unknown error' };
     }
+    await this.syncScoringAction(model, targetStatus, contextUser, provider);
     return { kind: 'promoted', newStatus: targetStatus, signOffNote };
+  }
+
+  /**
+   * Keep the per-model scoring Action (PS2-2) in step with the model's new
+   * lifecycle status — generate/refresh it on `Published` (the status that makes a
+   * model usable for scoring) and disable it on `Archived`. This is a pure
+   * enhancement, NOT part of the promotion contract: any failure is logged and
+   * swallowed so it can never fail an otherwise-successful promotion.
+   */
+  protected async syncScoringAction(
+    model: MJMLModelEntity,
+    targetStatus: PromoteModelRequest['targetStatus'],
+    contextUser?: UserInfo,
+    provider?: IMetadataProvider,
+  ): Promise<void> {
+    // The generator needs a contextUser + provider to read/write Action metadata.
+    // Without them (e.g. a bare in-process call) we simply skip — the live path
+    // always supplies both.
+    if (!contextUser || !provider) {
+      return;
+    }
+    try {
+      const generator = new ModelScoringActionGenerator();
+      if (targetStatus === 'Published') {
+        await generator.generateForModel(model, contextUser, provider);
+      } else if (targetStatus === 'Archived') {
+        await generator.disableForModel(model, contextUser, provider);
+      }
+    } catch (e) {
+      LogError(
+        `ProductionModelPromotionGate: scoring-action sync for model '${model.ID}' (→ ${targetStatus}) failed ` +
+          `but the promotion succeeded: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
   }
 
   // ----- helpers -------------------------------------------------------------
