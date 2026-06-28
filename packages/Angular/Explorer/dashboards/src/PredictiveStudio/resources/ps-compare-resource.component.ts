@@ -21,13 +21,15 @@ import { PSResourceBase } from './ps-resource-base';
       Title="Compare Runs"
       Subtitle="Side-by-side run metrics, overfit gaps, and feature-importance diffs">
     </mj-page-header-interior>
-    @if (!isLoading) {
-      <ps-compare></ps-compare>
-    } @else {
-      <mj-loading text="Loading Compare Runs..." size="medium"></mj-loading>
-    }
+    <mj-page-body-interior>
+      @if (!isLoading) {
+        <ps-compare></ps-compare>
+      } @else {
+        <mj-loading text="Loading Compare Runs..." size="medium"></mj-loading>
+      }
+    </mj-page-body-interior>
   `,
-  styles: [`:host { display: block; width: 100%; height: 100%; }`],
+  styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }`],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PSCompareResourceComponent extends PSResourceBase {

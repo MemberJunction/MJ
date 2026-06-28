@@ -44,13 +44,15 @@ const PANEL_KEY_TO_NAV_LABEL: Partial<Record<PSPanelKey, string>> = {
       Title="Predictive Studio"
       Subtitle="Build a predictive model — from your data, a proven template, or the Model Dev Agent">
     </mj-page-header-interior>
-    @if (!isLoading) {
-      <ps-home [engine]="engine" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent()"></ps-home>
-    } @else {
-      <mj-loading text="Loading Predictive Studio..." size="medium"></mj-loading>
-    }
+    <mj-page-body-interior>
+      @if (!isLoading) {
+        <ps-home [engine]="engine" (navigate)="mapNavigate($event)" (askAgent)="onAskAgent()"></ps-home>
+      } @else {
+        <mj-loading text="Loading Predictive Studio..." size="medium"></mj-loading>
+      }
+    </mj-page-body-interior>
   `,
-  styles: [`:host { display: block; width: 100%; height: 100%; }`],
+  styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }`],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PSHomeResourceComponent extends PSResourceBase {

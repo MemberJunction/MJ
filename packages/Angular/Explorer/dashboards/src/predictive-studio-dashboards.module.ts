@@ -7,6 +7,7 @@ import {
   MJPageHeaderComponent,
   MJPageHeaderInteriorComponent,
   MJPageBodyComponent,
+  MJPageBodyInteriorComponent,
   MJStatBadgeComponent,
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -65,6 +66,7 @@ import { PSCompareResourceComponent } from './PredictiveStudio/resources/ps-comp
     MJPageHeaderComponent,
     MJPageHeaderInteriorComponent,
     MJPageBodyComponent,
+    MJPageBodyInteriorComponent,
     MJStatBadgeComponent,
     SharedGenericModule,
     ConversationsModule,

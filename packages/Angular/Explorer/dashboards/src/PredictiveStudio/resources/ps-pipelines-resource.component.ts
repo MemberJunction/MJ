@@ -19,13 +19,15 @@ import { PSResourceBase } from './ps-resource-base';
       Title="Training Pipelines"
       Subtitle="Assemble features, pick an algorithm, and train models from your own data">
     </mj-page-header-interior>
-    @if (!isLoading) {
-      <ps-pipelines [engine]="engine"></ps-pipelines>
-    } @else {
-      <mj-loading text="Loading Training Pipelines..." size="medium"></mj-loading>
-    }
+    <mj-page-body-interior>
+      @if (!isLoading) {
+        <ps-pipelines [engine]="engine"></ps-pipelines>
+      } @else {
+        <mj-loading text="Loading Training Pipelines..." size="medium"></mj-loading>
+      }
+    </mj-page-body-interior>
   `,
-  styles: [`:host { display: block; width: 100%; height: 100%; }`],
+  styles: [`:host { display: flex; flex-direction: column; width: 100%; height: 100%; min-height: 0; }`],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class PSPipelinesResourceComponent extends PSResourceBase {
