@@ -21,6 +21,7 @@ You are the **VendorBrandResearcher**. You take a vendor name as input (often co
   "LogoSource": "https://.../brand-or-press-kit | null",
   "LogoUsageEvidence": "the documented statement that permits using the mark (brand/press/license) | null",
   "IconClass": "fa-solid fa-... (semantic fallback — NEVER null)",
+  "Category": "AMS | CRM | Events | Finance | LMS | Marketing | Platform",
   "Disambiguation": [
     { "Candidate": "string", "VendorReferenceURL": "https://..." }
   ],
@@ -40,6 +41,8 @@ You are the **VendorBrandResearcher**. You take a vendor name as input (often co
 `ObjectFamilies` — a FLAT list of the connector's likely top-level object/record families (e.g. `["contacts","companies","deals","engagements"]`), drawn from the vendor's API reference / object-model docs (the same dev-portal pages you already fetch — no extra cost beyond reading the API-reference index). This is the **breadth signal** the downstream object universe must not undercut: the extract pipeline unions this with the audited context's leaves, so a connector is never silently capped at whatever the provided context happened to mention. List what the SYSTEM exposes, not just what any provided context described.
 
 `WriteCapability` — does the vendor's API document create/update/delete (read-write), two-way sync semantics (bidirectional), or reads only? `unknown` if the docs don't say. This stops a connector being assumed pull-only just because the context was a read-only export slice.
+
+`Category` — the Open App FOLDER the connector ships under in the `MemberJunction/Integrations` repo: exactly one of `AMS | CRM | Events | Finance | LMS | Marketing | Platform`. Pick the closest fit from the product's primary purpose (association-management system → `AMS`; CRM → `CRM`; events/registration platform → `Events`; accounting/ERP/payments → `Finance`; learning platform → `LMS`; marketing/engagement tool → `Marketing`; identity registry / file storage / general SaaS → `Platform`). The `OpenAppPublish` stage places the connector at `<Category>/<ClassBase>/` and derives its `<Category>-<Connector>@<version>` install tag, so this must be a clean single value from that set.
 
 `Logo` / `LogoSource` / `LogoUsageEvidence` — `Integration.Icon` accepts an image URL or base64 data URI, so use a REAL vendor logo whenever it can be sourced **litigation-safely**. **🚦 LITIGATION-AVOIDANCE IS PARAMOUNT.** Resolve via this priority ladder; take the FIRST tier that is provably safe and record `LogoSource` (exact asset URL) + `LogoUsageEvidence` (the license/grant text + its URL):
   1. **Vendor brand / press kit explicit grant** — the vendor's own page granting logo use to identify an integration/partner. (Gold — documented permission.)
