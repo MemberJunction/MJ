@@ -50,7 +50,7 @@ import {
   resolvePipeline,
   buildPipelineNotFoundError,
 } from './feature-pipelines-agent-context';
-import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { validateStringParam, AgentToolResult } from '../../../shared/agent-tool-validation';
 
 /** Stable operation key of the Run Feature Pipeline Remote Operation. */
 const RUN_FEATURE_PIPELINE_OP = 'PredictiveStudio.RunFeaturePipeline';
@@ -384,7 +384,7 @@ export class FeaturePipelinesResourceComponent
   /** Resolve a pipeline reference (id/name/contains) or return a tolerant failure. */
   private resolvePipelineOrFail(
     raw: unknown,
-  ): { ok: true; pipeline: FeaturePipelineSummary } | { ok: false; result: { Success: false; ErrorMessage: string } } {
+  ): { ok: true; pipeline: FeaturePipelineSummary } | { ok: false; result: AgentToolResult } {
     const v = validateStringParam(raw, 'pipeline');
     if (!v.ok) return { ok: false, result: v.result };
     const match = resolvePipeline(v.value, this.AllPipelines);

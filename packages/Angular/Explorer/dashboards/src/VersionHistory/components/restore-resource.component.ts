@@ -96,7 +96,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
     private publishAgentContext(): void {
         const recentRestores: RestoreSummaryItem[] = this.FilteredRestores
             .slice(0, RESTORE_LIST_CAP)
-            .map(r => ({ ID: r.ID ?? '', Name: r.Name ?? '', Status: r.Status ?? '' }));
+            .map(r => ({ ID: r.ID ?? '', Name: r.VersionLabel ?? '', Status: r.Status ?? '' }));
         const selected = this.ExpandedRestoreId
             ? this.Restores.find(r => r.ID === this.ExpandedRestoreId)
             : undefined;
@@ -109,14 +109,14 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             FilteredRestoreCount: this.FilteredRestores.length,
             RecentRestores: recentRestores,
             SelectedRestoreId: selected?.ID ?? null,
-            SelectedRestoreName: selected?.Name ?? null,
+            SelectedRestoreName: selected?.VersionLabel ?? null,
         });
         this.navigationService.SetAgentContext(this, context);
     }
 
     /** The loaded restores narrowed to the resolver's {@link RestoreSnapshot} shape. */
     private restoreSnapshots(): RestoreSnapshot[] {
-        return this.Restores.map(r => ({ ID: r.ID ?? '', Name: r.Name ?? '', Status: r.Status ?? '' }));
+        return this.Restores.map(r => ({ ID: r.ID ?? '', Name: r.VersionLabel ?? '', Status: r.Status ?? '' }));
     }
 
     /**
