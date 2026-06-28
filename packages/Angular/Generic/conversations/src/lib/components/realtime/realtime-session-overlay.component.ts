@@ -21,9 +21,14 @@ import {
   SURFACE_PANEL_COLLAPSED_WIDTH, SURFACE_PANEL_DEFAULT_WIDTH, SURFACE_PANEL_PREF_KEY
 } from './realtime-surface-panel-prefs';
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
+import {
+  resolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS,
+  RealtimeUiInputs, RealtimeUiSignals, ResolvedRealtimeUi,
+  RealtimeChromeMode, RealtimeControlId, RealtimeUiConnectionState
+} from './realtime-ui-config';
 import { RealtimeAudioVisualFrame, RealtimeAudioVisualSmoother, RealtimeDirection } from './realtime-audio-visuals';
 import { RealtimeChannelTabRegistration, ShouldRemoveReviewWhiteboardTab } from './realtime-surface-tabs.model';
-import { ShouldRegisterChannelTabUpFront, ShouldShowActivityTab } from './realtime-surface-tab-style';
+import { ShouldRegisterChannelTabUpFront } from './realtime-surface-tab-style';
 import { BaseRealtimeChannelClient } from './channels/base-realtime-channel-client';
 import { RealtimeWhiteboardBoardComponent, WhiteboardState } from '@memberjunction/ng-whiteboard';
 
@@ -147,6 +152,132 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** The active environment id, threaded to the surface panel's artifact viewer. */
   @Input() EnvironmentID = '';
 
+  // ── Declarative UI configuration (host controls every aspect of the surface) ──
+  //
+  // Each input is a thin, PascalCase setter over a private slot in {@link _uiInputs}.
+  // When a host binds it, that field wins over the {@link UiConfig} bag (individual
+  // input precedence). Setting any of these recomputes the resolved view-model so the
+  // change takes effect on the next CD pass. Every field is optional and defaults to
+  // the historical behaviour via {@link DEFAULT_REALTIME_UI_INPUTS}, so existing call
+  // sites that bind none of them behave exactly as before.
+  //
+  // See {@link RealtimeUiInputs} / the package README for the full contract + recipes.
+
+  /**
+   * The chrome the widget renders: the ambient `'orb'`, the structured `'console'`, or
+   * `'auto'` (default) which starts as an orb and graduates to a console once the
+   * container is wide enough AND the user has revealed text. Mirrors
+   * {@link RealtimeUiInputs.chrome}.
+   *
+   * @example Force the rich console for a full-screen route:
+   * ```html
+   * <mj-realtime-session-overlay [Chrome]="'console'"></mj-realtime-session-overlay>
+   * ```
+   */
+  @Input()
+  set Chrome(value: RealtimeChromeMode | undefined) { this.setUiInput('chrome', value); }
+  get Chrome(): RealtimeChromeMode | undefined { return this._uiInputs.chrome; }
+
+  /**
+   * In `'auto'` chrome, the container width (px) at/above which the widget may graduate
+   * to a console (still gated on text being revealed). Default `560`. Mirrors
+   * {@link RealtimeUiInputs.consoleBreakpointPx}.
+   */
+  @Input()
+  set ConsoleBreakpointPx(value: number | undefined) { this.setUiInput('consoleBreakpointPx', value); }
+  get ConsoleBreakpointPx(): number | undefined { return this._uiInputs.consoleBreakpointPx; }
+
+  /**
+   * Force dense spacing/typography regardless of width (useful for tight mobile sheets).
+   * Default `false` — compactness is otherwise inferred from the container width.
+   */
+  @Input()
+  set Compact(value: boolean | undefined) { this.setUiInput('compact', value); }
+  get Compact(): boolean | undefined { return this._uiInputs.compact; }
+
+  /** Fade non-essential controls when the session is idle (orb chrome only). Default `true`. */
+  @Input()
+  set AutoHideControls(value: boolean | undefined) { this.setUiInput('autoHideControls', value); }
+  get AutoHideControls(): boolean | undefined { return this._uiInputs.autoHideControls; }
+
+  /**
+   * May the user reveal the transcript at all? `false` makes the widget a pure voice orb
+   * with no path to text (and never graduates to a console in `'auto'`). Default `true`.
+   */
+  @Input()
+  set AllowTextReveal(value: boolean | undefined) { this.setUiInput('allowTextReveal', value); }
+  get AllowTextReveal(): boolean | undefined { return this._uiInputs.allowTextReveal; }
+
+  /** Show the captions toggle. Default `true`. */
+  @Input()
+  set ShowCaptionsControl(value: boolean | undefined) { this.setUiInput('showCaptionsControl', value); }
+  get ShowCaptionsControl(): boolean | undefined { return this._uiInputs.showCaptionsControl; }
+
+  /** Show the density picker inside the gear menu. Default `true`. */
+  @Input()
+  set ShowDensityPicker(value: boolean | undefined) { this.setUiInput('showDensityPicker', value); }
+  get ShowDensityPicker(): boolean | undefined { return this._uiInputs.showDensityPicker; }
+
+  /** Show the minimize control (collapse the call without ending it). Default `true`. */
+  @Input()
+  set ShowMinimize(value: boolean | undefined) { this.setUiInput('showMinimize', value); }
+  get ShowMinimize(): boolean | undefined { return this._uiInputs.showMinimize; }
+
+  /** Show the end-call control. Default `true` (hosts that own their own end button may hide it). */
+  @Input()
+  set ShowEnd(value: boolean | undefined) { this.setUiInput('showEnd', value); }
+  get ShowEnd(): boolean | undefined { return this._uiInputs.showEnd; }
+
+  /**
+   * Show the right-hand surface panel (whiteboard / browser / interactive channels).
+   * Default `true`; only renders in console chrome and once a panel is actually earned.
+   */
+  @Input()
+  set ShowSurfacePanel(value: boolean | undefined) { this.setUiInput('showSurfacePanel', value); }
+  get ShowSurfacePanel(): boolean | undefined { return this._uiInputs.showSurfacePanel; }
+
+  /** Show the channel strip (active interactive channels). Default `true`. */
+  @Input()
+  set ShowChannels(value: boolean | undefined) { this.setUiInput('showChannels', value); }
+  get ShowChannels(): boolean | undefined { return this._uiInputs.showChannels; }
+
+  /** Show the Activity rail/tab (delegations, artifacts timeline). Default `true`. */
+  @Input()
+  set ShowActivityRail(value: boolean | undefined) { this.setUiInput('showActivityRail', value); }
+  get ShowActivityRail(): boolean | undefined { return this._uiInputs.showActivityRail; }
+
+  /**
+   * Show developer affordances ("open session / open run" links). Default `true`, but
+   * still additionally gated by the per-session dev-mode toggle — a hard ceiling, not a
+   * force-on.
+   */
+  @Input()
+  set ShowDevLinks(value: boolean | undefined) { this.setUiInput('showDevLinks', value); }
+  get ShowDevLinks(): boolean | undefined { return this._uiInputs.showDevLinks; }
+
+  /** Allow drag-to-resize of the surface panel. Default `true`. */
+  @Input()
+  set AllowResize(value: boolean | undefined) { this.setUiInput('allowResize', value); }
+  get AllowResize(): boolean | undefined { return this._uiInputs.allowResize; }
+
+  /**
+   * A programmatic override bag, merged UNDER the individual inputs — any field also set
+   * via a dedicated `@Input()` wins over its entry here. Lets a host configure the whole
+   * surface in one binding (e.g. a saved per-context preset) without enumerating a dozen
+   * attributes.
+   *
+   * @example
+   * ```html
+   * <mj-realtime-session-overlay [UiConfig]="leanOverlayPreset"></mj-realtime-session-overlay>
+   * ```
+   */
+  @Input()
+  set UiConfig(value: RealtimeUiInputs | null | undefined) {
+    this._uiConfigBag = value ?? null;
+    this.recomputeUi();
+  }
+  get UiConfig(): RealtimeUiInputs | null | undefined { return this._uiConfigBag; }
+
   /**
    * SESSION REVIEW data: when set (and no live session is active) the overlay renders
    * the reviewed past session instead of a live call. Setting it populates the shared
@@ -189,8 +320,85 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Review mode's Close: the host clears its review state, returning to the conversation. */
   @Output() ReviewClosed = new EventEmitter<void>();
 
+  // ── Declarative UI outputs (observe everything the surface does) ─────────────
+
+  /** Emitted when the user minimizes the call view (the call stays live). */
+  @Output() Minimized = new EventEmitter<void>();
+
+  /** Emitted when the user reveals the transcript (opens text from the orb). */
+  @Output() TextRevealed = new EventEmitter<void>();
+
+  /** Emitted whenever the EFFECTIVE chrome flips between `'orb'` and `'console'`. */
+  @Output() ChromeChanged = new EventEmitter<'orb' | 'console'>();
+
+  /** Emitted when the connection lifecycle state changes (e.g. connecting → listening). */
+  @Output() ConnectionStateChanged = new EventEmitter<RealtimeUiConnectionState>();
+
+  /** Emitted when the mic mute is toggled; payload is the new muted state. */
+  @Output() MuteChanged = new EventEmitter<boolean>();
+
+  /** Emitted when the interface density changes. */
+  @Output() DensityChanged = new EventEmitter<RealtimeUxDensity>();
+
+  /** Emitted (px) when the user finishes resizing the surface panel. */
+  @Output() SurfacePanelResized = new EventEmitter<number>();
+
+  /**
+   * A generic hook fired when ANY control is invoked — even one the host hid via inputs
+   * and re-rendered itself. Lets a host observe/react to the full control surface from a
+   * single binding.
+   */
+  @Output() ControlInvoked = new EventEmitter<RealtimeControlId>();
+
   private realtime = inject(RealtimeSessionService);
   private cdr = inject(ChangeDetectorRef);
+
+  /**
+   * The consumer's individually-bound UI inputs (each dedicated `@Input()` writes its own
+   * slot here). Starts empty; only fields a host actually binds appear, so the resolver's
+   * defaults fill the rest. Merged OVER {@link _uiConfigBag} (individual inputs win).
+   */
+  private _uiInputs: RealtimeUiInputs = {};
+
+  /** The programmatic {@link UiConfig} override bag, merged UNDER the individual inputs. */
+  private _uiConfigBag: RealtimeUiInputs | null = null;
+
+  /**
+   * The latest measured width (px) of the rendered overlay element, fed to the resolver as
+   * {@link RealtimeUiSignals.containerWidthPx}. Maintained by a {@link ResizeObserver}; 0
+   * until the first measurement (the resolver treats 0 as "narrow", i.e. an orb in auto).
+   */
+  private containerWidthPx = 0;
+
+  /** Observes the rendered overlay element so chrome re-resolves as the host resizes. */
+  private resizeObserver: ResizeObserver | null = null;
+
+  /** The last connection state seen on {@link RealtimeSessionService.ConnectionState$}. */
+  private currentConnectionState: RealtimeConnectionState = 'closed';
+
+  /**
+   * The resolved, render-ready view-model — the SINGLE source of truth the template binds
+   * to (no `&&` chains in HTML). Rebuilt by {@link recomputeUi} whenever an input, the
+   * disclosure model, the connection state, the container width, or the channel/activity
+   * set changes. Read-only to consumers via the {@link Ui} getter.
+   */
+  private _ui: ResolvedRealtimeUi = resolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, this.buildSignals());
+
+  /**
+   * The current resolved UI view-model. Every visibility/affordance decision the template
+   * makes reads from this — bind to its boolean fields rather than composing logic inline.
+   *
+   * @example
+   * ```ts
+   * if (this.voice.Ui.chrome === 'console') { ... }
+   * ```
+   */
+  public get Ui(): ResolvedRealtimeUi {
+    return this._ui;
+  }
+
+  /** Local mic-muted state, the single source the resolver-independent controls reflect. */
+  public Muted = false;
 
   private _reviewData: RealtimeSessionReview | null = null;
 
@@ -390,20 +598,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.subs.push(
       // Re-render on merged-state changes; content arrival raises the disclosure level.
       this.State.Changed$.subscribe(() => this.onSessionStateChanged()),
-      this.Disclosure.Changed$.subscribe(() => this.cdr.markForCheck()),
+      // Disclosure ratchet moved — re-resolve the view-model (thread/composer/gear gates).
+      this.Disclosure.Changed$.subscribe(() => this.recomputeUi()),
       // One surface tab per registry-resolved channel plugin (replays the current set).
-      this.realtime.ActiveChannels$.subscribe(channels => this.registerChannelTabs(channels)),
+      this.realtime.ActiveChannels$.subscribe(channels => { this.registerChannelTabs(channels); this.recomputeUi(); }),
       // Any channel may request the focus layout through its host context.
       this.realtime.ChannelFocus$.subscribe(event => this.onChannelFocus(event.Channel, event.Focused)),
       // The agent ACTED on a channel — auto-reveal its surface tab on first activity.
       this.realtime.ChannelActivity$.subscribe(plugin => this.onChannelActivity(plugin)),
       // Live/idle flips: reset/ratchet disclosure + re-evaluate the review-vs-live branch.
-      this.realtime.Active$.subscribe(active => this.onActiveChanged(active))
+      this.realtime.Active$.subscribe(active => this.onActiveChanged(active)),
+      // Connection lifecycle drives chrome (the `connecting` loader) + the public output.
+      this.realtime.ConnectionState$.subscribe(state => this.onConnectionStateChanged(state))
     );
   }
 
   ngAfterViewInit(): void {
     this.viewReady = true;
+    this.startResizeObserver();
     this.flushPendingChannelTabs();
     this.registerReviewBoardTab();
     this.registerReviewArtifactTabs();
@@ -411,6 +623,135 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     // (re)register the recording tab now that the #recordingTpl ref exists. The storage media
     // player resolves the authenticated audio itself from the RecordingFileID.
     this.registerReviewRecordingTab();
+  }
+
+  // ── Declarative UI config: inputs → signals → resolved view-model ────────────
+
+  /**
+   * Writes one individually-bound UI input into {@link _uiInputs} and re-resolves the
+   * view-model. `undefined` clears the slot (so the {@link UiConfig} bag / default applies).
+   * Called by every dedicated `@Input()` setter.
+   *
+   * @param key   the {@link RealtimeUiInputs} field to set
+   * @param value the bound value, or `undefined` to clear the override
+   */
+  private setUiInput<K extends keyof RealtimeUiInputs>(key: K, value: RealtimeUiInputs[K] | undefined): void {
+    if (value === undefined) {
+      delete this._uiInputs[key];
+    } else {
+      this._uiInputs[key] = value;
+    }
+    this.recomputeUi();
+  }
+
+  /**
+   * The effective consumer inputs: the {@link UiConfig} bag with the individually-bound
+   * inputs layered ON TOP, so a dedicated `@Input()` always wins over its bag entry.
+   */
+  private get mergedUiInputs(): RealtimeUiInputs {
+    return { ...(this._uiConfigBag ?? {}), ...this._uiInputs };
+  }
+
+  /**
+   * Maps the runtime {@link RealtimeConnectionState} onto the resolver's
+   * {@link RealtimeUiConnectionState}. `'closed'` (no live call) maps to `'idle'`; the
+   * other states pass through 1:1.
+   */
+  private mapConnectionState(state: RealtimeConnectionState): RealtimeUiConnectionState {
+    return state === 'closed' ? 'idle' : state;
+  }
+
+  /**
+   * Builds the live {@link RealtimeUiSignals} the resolver consumes, reading current facts
+   * from the disclosure model, the session/channel state, review mode, focus mode, and the
+   * {@link ResizeObserver}-measured width. Pure read — no side effects.
+   */
+  private buildSignals(): RealtimeUiSignals {
+    const reviewing = this.IsReviewing;
+    return {
+      containerWidthPx: this.containerWidthPx,
+      // Text intent = the user has reached the text disclosure level (level ≥ 1).
+      textRevealed: this.Disclosure.SessionLevel >= 1,
+      disclosureShowThread: this.Disclosure.ShowThread,
+      disclosureShowComposer: this.Disclosure.ShowComposer,
+      disclosureShowPanel: this.Disclosure.ShowPanel,
+      disclosureShowGear: this.Disclosure.ShowGear,
+      // A surface to populate: the on-demand Details peek, or review (always has a surface).
+      surfacePanelEarned: this.DetailsPeek || reviewing,
+      hasChannels: this.realtime.ActiveChannels.some(c => c.HasSurface()),
+      hasActivity: this.State.Cards.length > 0,
+      devMode: this.DevMode,
+      isReviewing: reviewing,
+      channelFocus: this.ChannelFocusMode,
+      connectionState: this.mapConnectionState(this.currentConnectionState)
+    };
+  }
+
+  /**
+   * Re-resolves {@link Ui} from the merged inputs + current signals and emits the chrome /
+   * connection-state outputs when they actually change. Safe to call on any of the wired
+   * change sources (input write, disclosure ratchet, connection flip, resize, channel set);
+   * the resolver is pure so redundant calls are cheap. Always marks for check.
+   */
+  private recomputeUi(): void {
+    const next = resolveRealtimeUi(this.mergedUiInputs, this.buildSignals());
+    const prevChrome = this._ui.chrome;
+    this._ui = next;
+    if (next.chrome !== prevChrome) {
+      this.ChromeChanged.emit(next.chrome);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Connection lifecycle changed: store it, re-resolve chrome, and surface the public output. */
+  private onConnectionStateChanged(state: RealtimeConnectionState): void {
+    if (state === this.currentConnectionState) {
+      return;
+    }
+    this.currentConnectionState = state;
+    this.ConnectionStateChanged.emit(this.mapConnectionState(state));
+    this.recomputeUi();
+  }
+
+  // ── Container-width observation (drives the auto orb ↔ console graduation) ────
+
+  /**
+   * Starts observing the rendered overlay element's width so the resolver can graduate
+   * `'auto'` chrome to a console when the host gives it room. Guards SSR / environments
+   * without `ResizeObserver` (plain-node tests) — there the width simply stays 0 (an orb in
+   * auto), which is the safe ambient default. Idempotent.
+   */
+  private startResizeObserver(): void {
+    if (this.resizeObserver || typeof ResizeObserver !== 'function') {
+      return;
+    }
+    const el = this.overlayElement() ?? (this.hostRef.nativeElement as HTMLElement);
+    if (!el) {
+      return;
+    }
+    // Seed an immediate measurement so the first resolve sees a real width, then observe.
+    this.applyContainerWidth(el.getBoundingClientRect ? el.getBoundingClientRect().width : 0);
+    this.resizeObserver = new ResizeObserver(entries => {
+      const width = entries[0]?.contentRect?.width ?? 0;
+      this.ngZone.run(() => this.applyContainerWidth(width));
+    });
+    this.resizeObserver.observe(el);
+  }
+
+  /** Adopts a new measured width and re-resolves only when it actually changed. */
+  private applyContainerWidth(width: number): void {
+    const rounded = Math.round(width);
+    if (rounded === this.containerWidthPx) {
+      return;
+    }
+    this.containerWidthPx = rounded;
+    this.recomputeUi();
+  }
+
+  /** Disconnects the container-width observer. */
+  private stopResizeObserver(): void {
+    this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
   }
 
   // ── Surface-panel sizing (flex layout + pointer-drag handle; width persisted per-user) ──
@@ -445,9 +786,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this.PanelCollapsed ? SURFACE_PANEL_COLLAPSED_WIDTH : this.PanelWidthPx;
   }
 
-  /** Resizing is meaningless while collapsed or when the surface fills (focus mode). */
+  /**
+   * Resizing is meaningless while collapsed or when the surface fills (focus mode), and a
+   * host may hard-disable it via `[AllowResize]="false"` — in review the resolver's
+   * `allowResize` is false (no live surface to resize), so this also reads the host flag
+   * directly (defaulting to the historical `true`) rather than the resolved value, keeping
+   * drag available in review exactly as before.
+   */
   public get PanelResizeDisabled(): boolean {
-    return this.PanelCollapsed || this.ChannelFocusMode;
+    const hostAllows = this.mergedUiInputs.allowResize ?? DEFAULT_REALTIME_UI_INPUTS.allowResize;
+    return this.PanelCollapsed || this.ChannelFocusMode || !hostAllows;
   }
 
   public OnPanelCollapsedChange(collapsed: boolean): void {
@@ -514,14 +862,20 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       return;
     }
     this.teardownPanelResize();
+    let resizedTo: number | null = null;
     if (IsSurfacePanelDrag(this.panelResizeStartX, event.clientX)) {
       this.userPanelWidth = this.PanelWidthPx;
       this.persistPanelWidth(this.PanelWidthPx);
+      resizedTo = this.PanelWidthPx;
     } else {
       this.PanelWidthPx = this.panelResizeStartWidth;
     }
     this.ngZone.run(() => {
       this.IsPanelResizing = false;
+      // Surface the new width to the host only on a genuine drag (not a bare click).
+      if (resizedTo !== null) {
+        this.SurfacePanelResized.emit(resizedTo);
+      }
       this.cdr.markForCheck();
     });
   }
@@ -580,38 +934,50 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // ── Progressive disclosure (the console that grows with you) ────────────────
 
   /**
-   * True while the PURE-AUDIO hero (the orb) owns the main column. The captions
-   * preference IS the text-vs-orb switch: captions off (the voice-first default) shows
-   * the breathing orb at ANY disclosure level; captions on shows the thread. Review
-   * always shows the thread.
+   * True while the PURE-AUDIO hero (the orb) owns the main column. Now reads from the
+   * resolved view-model ({@link Ui}): the resolver decides hero-vs-thread from the
+   * effective chrome + text intent + review, so host inputs (`[Chrome]`,
+   * `[AllowTextReveal]`, the breakpoint) gate it. Review still always shows the thread.
    */
   public get ShowHero(): boolean {
-    return !this.IsReviewing && !this.ShowCaptions;
+    return this._ui.showHero;
   }
 
   /**
-   * Whether the surface-panel area renders. The tabs have their OWN control (the
-   * Details toggle, plus the board auto-reveal and artifact-view requests) — they are
-   * deliberately DECOUPLED from typing/disclosure levels: revealing the composer must
-   * never surprise the user with the whole tab panel.
+   * Whether the surface-panel area renders. Driven by the resolved {@link Ui.showSurfacePanel}
+   * (console + earned + host's `[ShowSurfacePanel]`) OR review mode, which always carries the
+   * panel. The Details toggle still earns the panel on demand (it flips `surfacePanelEarned`).
    */
   public get ShowPanelArea(): boolean {
-    return this.IsReviewing || this.DetailsPeek;
+    return this._ui.showSurfacePanel || this.IsReviewing;
   }
 
-  /** The Details (tabs) toggle is always offered while live — it's the panel's one door. */
+  /** The Details (tabs) toggle is offered while live — it's the panel's one door. */
   public get ShowDetailsControl(): boolean {
     return !this.IsReviewing;
   }
 
   /**
-   * Whether the surface panel's Activity tab should be shown: gated on ≥1 underlying agent
-   * run having occurred this session (the first delegated agent-run card the rail consumes),
-   * or review mode (a past session's activity is always relevant). Bound into the surface
-   * panel; re-evaluated on every merged-state change (delegation cards land on `State.Cards`).
+   * Whether the active-channels strip renders. Preserves the historical disclosure gate
+   * (level 2+, {@link RealtimeDisclosureModel.ShowComposer}) AND honours the host's
+   * `[ShowChannels]` input + the resolver's focus rule: a host that sets `[ShowChannels]`
+   * false hard-disables the strip, and channel-focus mode hides it. The strip component
+   * itself self-hides when no channels are active, so this stays decluttered.
+   */
+  public get ChannelStripVisible(): boolean {
+    return this.Disclosure.ShowComposer
+      && (this.mergedUiInputs.showChannels ?? DEFAULT_REALTIME_UI_INPUTS.showChannels)
+      && !this.ChannelFocusMode;
+  }
+
+  /**
+   * Whether the surface panel's Activity tab should be shown. Reads the resolved
+   * {@link Ui.showActivityTab} (host's `[ShowActivityRail]` AND activity/review AND console)
+   * OR review mode — a past session's activity is always relevant even before the resolver's
+   * console gate would otherwise allow it.
    */
   public get ShowActivityTab(): boolean {
-    return ShouldShowActivityTab(this.State.Cards.length, this.IsReviewing);
+    return this._ui.showActivityTab || this.IsReviewing;
   }
 
   /** Reads the persisted disclosure milestones (tolerant; defaults to day one). */
@@ -659,7 +1025,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * A pure-audio user stays in pure audio until THEY ask for more.
    */
   private onSessionStateChanged(): void {
-    this.cdr.markForCheck();
+    // State.Cards drives the resolver's hasActivity signal — re-resolve (also marks for check).
+    this.recomputeUi();
   }
 
   /**
@@ -692,7 +1059,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // Panel not rendered yet (the peek just created it) — reveal once it exists.
       this.pendingRevealKey = plugin.ChannelName;
     }
-    this.cdr.markForCheck();
+    // DetailsPeek flipped — surfacePanelEarned changed; re-resolve (marks for check).
+    this.recomputeUi();
   }
 
   /** Active$ edges: session start resets the volatile level; session end ratchets + persists. */
@@ -798,18 +1166,24 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       // Land on the marquee surface (channels lead the strip; Activity is pinned last).
       setTimeout(() => this.surfaceTabs?.FocusFirstTab());
     }
-    this.cdr.markForCheck();
+    this.ControlInvoked.emit('surface');
+    // DetailsPeek drives surfacePanelEarned — re-resolve (marks for check).
+    this.recomputeUi();
   }
 
-  /** The gear popover picked an interface density — apply + persist immediately. */
+  /** The gear popover picked an interface density — apply + persist + emit. */
   public OnDensityChanged(density: RealtimeUxDensity): void {
     this.Disclosure.SetDensity(density);
     this.persistDisclosure(SerializeUxMilestones(this.Disclosure.Milestones));
+    this.DensityChanged.emit(density);
+    this.ControlInvoked.emit('density');
   }
 
   /** The hero's "Show the conversation" affordance — turns the text preference on. */
   public OnTextReveal(): void {
     this.OnCaptionsToggled(true);
+    this.TextRevealed.emit();
+    this.ControlInvoked.emit('reveal-text');
   }
 
   /**
@@ -823,16 +1197,21 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.Disclosure.SetDensity('simple');
     this.persistDisclosure(SerializeUxMilestones(this.Disclosure.Milestones));
     this.DetailsPeek = false;
-    this.cdr.markForCheck();
+    this.ControlInvoked.emit('pure-audio');
+    // DetailsPeek + density changed — re-resolve (marks for check).
+    this.recomputeUi();
   }
 
   /** App-bar Minimize: hide the call view (CSS) — the call stays fully live. */
   public OnMinimize(): void {
     this.realtime.SetMinimized(true);
+    this.Minimized.emit();
+    this.ControlInvoked.emit('minimize');
   }
 
   /** App-bar / strip End: tear the session down, then notify the host. */
   public async OnEndCall(): Promise<void> {
+    this.ControlInvoked.emit('end');
     await this.realtime.EndRealtimeSession();
     this.Ended.emit();
   }
@@ -915,7 +1294,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public OnComposerOpenChanged(open: boolean): void {
     this.ComposerOpen = open;
     if (open) {
-      this.Disclosure.Raise('engaged');
+      this.Disclosure.Raise('engaged'); // emits Changed$ → recomputeUi()
+      this.ControlInvoked.emit('type');
       setTimeout(() => this.composer?.FocusInput());
     }
     this.cdr.markForCheck();
@@ -923,6 +1303,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
 
   ngOnDestroy(): void {
     this.stopAudioVisualLoop();
+    this.stopResizeObserver();
     if (this.IsPanelResizing) {
       this.teardownPanelResize();
       this.IsPanelResizing = false;
@@ -1039,15 +1420,19 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   public OnCaptionsToggled(on: boolean): void {
     this.ShowCaptions = on;
     if (on) {
-      this.Disclosure.Raise('text');
+      this.Disclosure.Raise('text'); // emits Changed$ → recomputeUi()
     }
     this.persistCaptionsPref();
+    this.ControlInvoked.emit('captions');
     this.cdr.markForCheck();
   }
 
   /** Reflect the gear toggle from the controls into the dev affordances. */
   public OnDevModeToggled(on: boolean): void {
     this.DevMode = on;
+    this.ControlInvoked.emit('gear');
+    // devMode drives the resolver's showDevLinks signal — re-resolve (marks for check).
+    this.recomputeUi();
   }
 
   /** A dev link asked to open a delegated agent run record. */
@@ -1125,7 +1510,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
         this.registerReviewRecordingTab();
       }), 0);
     }
-    this.cdr.markForCheck();
+    // isReviewing flipped on — review always wants the console (marks for check).
+    this.recomputeUi();
   }
 
   /**
@@ -1187,7 +1573,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       this.reviewArtifacts = [];
       this.State.Clear();
     }
-    this.cdr.markForCheck();
+    // isReviewing flipped off — re-resolve the chrome/gates (marks for check).
+    this.recomputeUi();
   }
 
   /**
@@ -1285,12 +1672,13 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   private onChannelFocus(channel: BaseRealtimeChannelClient, focused: boolean): void {
     this.ChannelFocusMode = focused;
     this.focusChannel = focused ? channel : null;
-    this.cdr.markForCheck();
+    // channelFocus drives the resolver (hides panel + strip) — re-resolve (marks for check).
+    this.recomputeUi();
   }
 
-  /** Focus pill: toggle the mic mute. */
+  /** Focus pill: toggle the mic mute (routes through the overlay's single mute path). */
   public OnFocusPillMute(): void {
-    this.FocusPillMuted = this.realtime.ToggleMute();
+    this.ToggleMute();
   }
 
   /** Focus pill: leave focus mode (show the thread column again). */
@@ -1318,5 +1706,139 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       case 'connecting': return 'Connecting…';
       default: return '';
     }
+  }
+
+  /**
+   * The composer dock toggled the mic. Syncs the overlay's single {@link Muted} source (and
+   * the focus pill) and surfaces the {@link MuteChanged} / {@link ControlInvoked} outputs.
+   */
+  public OnComposerMuteChanged(muted: boolean): void {
+    if (muted !== this.Muted) {
+      this.Muted = muted;
+      this.FocusPillMuted = muted;
+      this.cdr.markForCheck();
+    }
+    this.MuteChanged.emit(muted);
+    this.ControlInvoked.emit('mute');
+  }
+
+  // ── Imperative API — drive the surface from a host via @ViewChild ────────────
+  //
+  // Each method maps to an existing internal handler/service so behaviour matches the
+  // user clicking the corresponding control. See the package README's "Methods" table.
+
+  /**
+   * Override the chrome at runtime (equivalent to binding `[Chrome]`). Pass `'auto'` to
+   * return to the size/intent-driven default.
+   *
+   * @param mode the chrome to force.
+   * @example `voice.SetChrome('console');`
+   */
+  public SetChrome(mode: RealtimeChromeMode): void {
+    this.setUiInput('chrome', mode);
+  }
+
+  /**
+   * Reveal the transcript programmatically — the imperative twin of the orb's "Show the
+   * conversation" affordance. Raises the text disclosure level, turns captions on, and
+   * emits {@link TextRevealed}.
+   */
+  public RevealText(): void {
+    this.OnTextReveal();
+  }
+
+  /**
+   * Set the mic mute to an explicit state (no-op when already there). Drives the session
+   * service, syncs every mute affordance, and emits {@link MuteChanged}.
+   *
+   * @param muted the desired muted state.
+   */
+  public SetMuted(muted: boolean): void {
+    if (muted === this.Muted) {
+      return;
+    }
+    this.ToggleMute();
+  }
+
+  /**
+   * Toggle the mic mute. Drives the session service, syncs the overlay's {@link Muted}
+   * source + the composer/focus-pill affordances, and emits {@link MuteChanged} +
+   * {@link ControlInvoked}.
+   */
+  public ToggleMute(): void {
+    this.Muted = this.realtime.ToggleMute();
+    this.FocusPillMuted = this.Muted;
+    this.MuteChanged.emit(this.Muted);
+    this.ControlInvoked.emit('mute');
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Set captions (the text-vs-orb preference) to an explicit state. Persisted per-user;
+   * turning them on also raises the text disclosure level.
+   *
+   * @param on whether captions/text should be shown.
+   */
+  public SetCaptions(on: boolean): void {
+    if (on === this.ShowCaptions) {
+      return;
+    }
+    this.OnCaptionsToggled(on);
+  }
+
+  /** Toggle captions (the text-vs-orb preference). */
+  public ToggleCaptions(): void {
+    this.OnCaptionsToggled(!this.ShowCaptions);
+  }
+
+  /**
+   * Set the UX interface density (the gear's escape hatch). Applied + persisted immediately;
+   * emits {@link DensityChanged}.
+   *
+   * @param density the density to apply.
+   */
+  public SetDensity(density: RealtimeUxDensity): void {
+    this.OnDensityChanged(density);
+  }
+
+  /**
+   * Open the surface panel (the on-demand Details peek), optionally focusing a specific
+   * channel's tab. Equivalent to the strip's Details control plus a channel reveal.
+   *
+   * @param channelId when supplied, the channel tab to reveal once the panel is shown.
+   */
+  public OpenSurfacePanel(channelId?: string): void {
+    if (!this.DetailsPeek) {
+      this.DetailsPeek = true;
+      this.ControlInvoked.emit('surface');
+      this.recomputeUi();
+    }
+    setTimeout(() => {
+      if (channelId) {
+        this.surfaceTabs?.RevealChannel(channelId);
+      } else {
+        this.surfaceTabs?.FocusFirstTab();
+      }
+    });
+  }
+
+  /** Collapse the surface panel (hide the Details peek). No-op in review (always shown). */
+  public CollapseSurfacePanel(): void {
+    if (this.IsReviewing || !this.DetailsPeek) {
+      return;
+    }
+    this.DetailsPeek = false;
+    this.ControlInvoked.emit('surface');
+    this.recomputeUi();
+  }
+
+  /** Minimize the call (it stays live) — the imperative twin of the app-bar Minimize. */
+  public Minimize(): void {
+    this.OnMinimize();
+  }
+
+  /** End the session (tear down the call) — the imperative twin of the End control. */
+  public EndSession(): void {
+    void this.OnEndCall();
   }
 }

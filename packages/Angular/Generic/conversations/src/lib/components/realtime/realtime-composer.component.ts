@@ -57,11 +57,18 @@ export class RealtimeComposerComponent {
   /** Emitted when the user ends the call from the strip's End control. */
   @Output() EndRequested = new EventEmitter<void>();
 
+  /** Emitted with the new muted state whenever the user toggles the mic from the dock. */
+  @Output() MuteChanged = new EventEmitter<boolean>();
+
   /** Current draft text in the dock's composer input. */
   public Draft = '';
 
-  /** Local mic mute state, reflected from the service. */
-  public IsMuted = false;
+  /**
+   * The mic mute state. A two-way reflection: the overlay may push it down (e.g. its
+   * `SetMuted()` / focus-pill toggle) so all mute affordances stay in sync, and this
+   * component updates it locally + emits {@link MuteChanged} when its own button is used.
+   */
+  @Input() IsMuted = false;
 
   @ViewChild('dockInput') private dockInput?: ElementRef<HTMLInputElement>;
 
@@ -77,9 +84,10 @@ export class RealtimeComposerComponent {
     return !this.Open;
   }
 
-  /** Toggle the local microphone mute. */
+  /** Toggle the local microphone mute and surface the new state to the overlay. */
   public ToggleMute(): void {
     this.IsMuted = this.realtime.ToggleMute();
+    this.MuteChanged.emit(this.IsMuted);
   }
 
   /** Toggle captions visibility and notify the overlay. */

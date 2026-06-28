@@ -115,18 +115,20 @@
     @if (GearOpen) {
       <div class="gear-pop" (click)="$event.stopPropagation()" role="menu" aria-label="Interface settings">
         <div class="gp-h">Interface</div>
-        <div class="gp-row">
-          <span class="gp-l">Density</span>
-          <div class="gp-seg" role="radiogroup" aria-label="Interface density">
-            @for (d of Densities; track d.Key) {
-              <button type="button" [class.on]="Density === d.Key"
-                      (click)="SelectDensity(d.Key)"
-                      [attr.aria-checked]="Density === d.Key" role="radio">{{ d.Label }}</button>
-            }
+        @if (ShowDensityPicker) {
+          <div class="gp-row">
+            <span class="gp-l">Density</span>
+            <div class="gp-seg" role="radiogroup" aria-label="Interface density">
+              @for (d of Densities; track d.Key) {
+                <button type="button" [class.on]="Density === d.Key"
+                        (click)="SelectDensity(d.Key)"
+                        [attr.aria-checked]="Density === d.Key" role="radio">{{ d.Label }}</button>
+              }
+            </div>
           </div>
-        </div>
-        <div class="gp-note">Simple returns to the pure-audio surface. Auto grows the console as you use it.</div>
-        <div class="gp-div"></div>
+          <div class="gp-note">Simple returns to the pure-audio surface. Auto grows the console as you use it.</div>
+          <div class="gp-div"></div>
+        }
         <button type="button" class="gp-link" (click)="ToggleDev()" [attr.aria-pressed]="DevMode">
           <i class="fa-solid" [ngClass]="DevMode ? 'fa-toggle-on' : 'fa-toggle-off'" aria-hidden="true"></i>
           Developer links {{ DevMode ? 'on' : 'off' }}

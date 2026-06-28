@@ -399,6 +399,9 @@
       [CurrentUser]="currentUser"
       [EnvironmentID]="environmentId"
       [ReviewData]="RealtimeReview"
+      [Chrome]="'auto'"
+      [ShowDevLinks]="!overlayMode"
+      [ShowDensityPicker]="!overlayMode"
       (NavigateRequest)="onRealtimeNavigateRequest($event)"
       (StartLiveRequested)="onReviewStartLive($event)"
       (ReviewClosed)="onReviewClosed()">

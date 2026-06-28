@@ -74,6 +74,14 @@ export class RealtimeAgentBannerComponent {
   /** Whether the gear (density escape hatch + dev toggle) renders (disclosure level 2+). */
   @Input() ShowGear = false;
 
+  /**
+   * Whether the interface-density segmented control renders inside the gear popover.
+   * Default `true` (historical behaviour); a host may hide it via the overlay's
+   * `[ShowDensityPicker]` input. The gear itself (and its developer-links toggle) still
+   * renders when {@link ShowGear} is true even if the density picker is hidden.
+   */
+  @Input() ShowDensityPicker = true;
+
   /** Whether the End-call pill renders here (level 2+; the strip's big End owns it below). */
   @Input() ShowEnd = false;
 
