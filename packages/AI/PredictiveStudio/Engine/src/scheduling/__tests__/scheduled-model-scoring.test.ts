@@ -12,10 +12,15 @@ import {
 /**
  * Unit tests for the PS2-6 scheduled-model-scoring helper. NO live DB — a fake
  * provider supplies `EntityByName` (entity-id resolution) and a captured-state
- * `GetEntityObject` returning an in-memory Record Process double. These prove the
- * helper assembles the correct scheduled `MJ: Record Processes` row (work type,
- * status, schedule, cron-per-cadence, Configuration, OutputMapping, scope) and that
- * its validation rejects missing inputs / a bad scope / an unknown entity.
+ * `GetEntityObject` that returns an in-memory Record Process double for
+ * `'MJ: Record Processes'` and an in-memory Scoring Binding double for
+ * `'MJ: ML Model Scoring Bindings'` (the helper creates the binding through the
+ * production `MetadataEntityFactory`, which calls `provider.GetEntityObject`). These
+ * prove the helper assembles the correct scheduled `MJ: Record Processes` row (work
+ * type, status, schedule, cron-per-cadence, Configuration, OutputMapping, scope) AND
+ * upserts the lineage `MJ: ML Model Scoring Bindings` row (model / record-process /
+ * target-entity / target-column / Mode='Scheduled'), and that its validation rejects
+ * missing inputs / a bad scope / an unknown entity.
  */
 
 /** An in-memory MJ: Record Processes double capturing the fields the helper sets. */
@@ -67,11 +72,50 @@ class FakeRecordProcess {
   }
 }
 
-/** Build a fake provider that resolves the named entity to an id and hands back the RP double. */
+/**
+ * An in-memory MJ: ML Model Scoring Bindings double capturing the lineage fields the
+ * helper upserts (model / record-process / target-entity / target-column / mode) plus
+ * a freshly-assigned ID, so the helper's returned binding has a stable identity.
+ */
+class FakeScoringBinding {
+  public ID = 'binding-1';
+  public MLModelID = '';
+  public RecordProcessID: string | null = null;
+  public TargetEntityID: string | null = null;
+  public TargetColumn: string | null = null;
+  public Mode: 'OnDemand' | 'Scheduled' | 'Materialized' = 'OnDemand';
+  public LastScoredAt: Date | null = null;
+  public LastRowCount: number | null = null;
+  public SaveCalled = false;
+
+  public constructor(
+    private readonly saveResult: boolean,
+    private readonly completeMessage?: string,
+  ) {}
+
+  public async Load(): Promise<boolean> {
+    return true;
+  }
+  public async Save(): Promise<boolean> {
+    this.SaveCalled = true;
+    return this.saveResult;
+  }
+  public get LatestResult(): { CompleteMessage?: string } | undefined {
+    return this.saveResult ? undefined : { CompleteMessage: this.completeMessage };
+  }
+}
+
+/**
+ * Build a fake provider that resolves the named target entity to an id and dispatches
+ * `GetEntityObject` by entity name: the RP double for `'MJ: Record Processes'` and the
+ * binding double for `'MJ: ML Model Scoring Bindings'` (the binding entity the helper's
+ * `MetadataEntityFactory` creates). Throws on any other entity so a wrong name surfaces.
+ */
 function fakeProvider(
   entityName: string,
   entityId: string,
   rp: FakeRecordProcess,
+  binding: FakeScoringBinding,
 ): IMetadataProvider {
   return {
     EntityByName(n: string) {
@@ -79,8 +123,10 @@ function fakeProvider(
         ? { ID: entityId, Name: entityName }
         : undefined;
     },
-    async GetEntityObject() {
-      return rp;
+    async GetEntityObject(name: string) {
+      if (name === 'MJ: Record Processes') return rp;
+      if (name === 'MJ: ML Model Scoring Bindings') return binding;
+      throw new Error(`unexpected GetEntityObject('${name}')`);
     },
   } as unknown as IMetadataProvider;
 }
@@ -89,14 +135,22 @@ const USER = { ID: 'test-user' } as unknown as UserInfo;
 const ENTITY_NAME = 'Memberships';
 const ENTITY_ID = 'ENT-MEMBERSHIPS';
 
-/** Minimal valid options (filter scope) + a freshly-saved RP double + its provider. */
+/**
+ * Minimal valid options (filter scope) + a freshly-saved RP double + the scoring
+ * binding double + their provider. `saveResult` / `completeMessage` drive the RP save;
+ * `bindingSaveResult` (default success) drives the binding save so a test can exercise
+ * the "RP saved but binding failed" path independently.
+ */
 function setup(
   overrides: Partial<ScheduleModelScoringOptions> = {},
   saveResult = true,
   completeMessage?: string,
-): { opts: ScheduleModelScoringOptions; rp: FakeRecordProcess } {
+  bindingSaveResult = true,
+  bindingCompleteMessage?: string,
+): { opts: ScheduleModelScoringOptions; rp: FakeRecordProcess; binding: FakeScoringBinding } {
   const rp = new FakeRecordProcess(saveResult, completeMessage);
-  const provider = fakeProvider(ENTITY_NAME, ENTITY_ID, rp);
+  const binding = new FakeScoringBinding(bindingSaveResult, bindingCompleteMessage);
+  const provider = fakeProvider(ENTITY_NAME, ENTITY_ID, rp, binding);
   const opts: ScheduleModelScoringOptions = {
     modelId: 'model-1',
     targetEntityName: ENTITY_NAME,
@@ -106,7 +160,7 @@ function setup(
     provider,
     ...overrides,
   };
-  return { opts, rp };
+  return { opts, rp, binding };
 }
 
 // ----- cadenceToCron (pure) ----------------------------------------------------
@@ -134,9 +188,9 @@ describe('cadenceToCron', () => {
 describe('createScheduledModelScoring — assembled Record Process', () => {
   it('sets Active status, ML Model work type, schedule, and resolves the entity id', async () => {
     const { opts, rp } = setup();
-    const saved = (await createScheduledModelScoring(opts)) as unknown as FakeRecordProcess;
+    const result = await createScheduledModelScoring(opts);
 
-    expect(saved).toBe(rp);
+    expect(result.recordProcess as unknown as FakeRecordProcess).toBe(rp);
     expect(rp.NewRecordCalled).toBe(true);
     expect(rp.SaveCalled).toBe(true);
     expect(rp.Status).toBe('Active');
@@ -202,6 +256,40 @@ describe('createScheduledModelScoring — assembled Record Process', () => {
     const { opts, rp } = setup({ name: 'Monthly Renewal Scoring' });
     await createScheduledModelScoring(opts);
     expect(rp.Name).toBe('Monthly Renewal Scoring');
+  });
+});
+
+// ----- scoring binding (lineage) -----------------------------------------------
+
+describe('createScheduledModelScoring — scoring binding (lineage row)', () => {
+  it('upserts a binding with the model, record-process, target-entity, target-column, and Mode=Scheduled', async () => {
+    const { opts, rp, binding } = setup();
+    const result = await createScheduledModelScoring(opts);
+
+    expect(binding.SaveCalled).toBe(true);
+    expect(binding.MLModelID).toBe('model-1');
+    expect(binding.RecordProcessID).toBe(rp.ID);
+    expect(binding.TargetEntityID).toBe(ENTITY_ID);
+    expect(binding.TargetColumn).toBe('RenewalScore');
+    expect(binding.Mode).toBe('Scheduled');
+    // The helper returns BOTH rows; the binding is the same double we captured.
+    expect(result.binding as unknown as FakeScoringBinding).toBe(binding);
+  });
+
+  it('binds the resolved target entity id (not a re-resolved one) and the configured output field', async () => {
+    const { opts, binding } = setup({ outputField: 'RenewalSegment' });
+    await createScheduledModelScoring(opts);
+    expect(binding.TargetEntityID).toBe(ENTITY_ID);
+    expect(binding.TargetColumn).toBe('RenewalSegment');
+  });
+
+  it('throws (and does not swallow) when the binding fails to save after the RP saved', async () => {
+    // RP saves OK (true); the binding save fails (false) with a message.
+    const { opts, rp, binding } = setup({}, true, undefined, false, 'binding duplicate key');
+    await expect(createScheduledModelScoring(opts)).rejects.toThrow(/binding duplicate key/);
+    // The RP WAS saved (the failure is surfaced, not rolled back — no cross-row txn).
+    expect(rp.SaveCalled).toBe(true);
+    expect(binding.SaveCalled).toBe(true);
   });
 });
 

@@ -23,10 +23,17 @@
  *      `RecordProcessScheduledJobDriver → RecordProcessExecutor.RunByID(...)`,
  *      which resolves the scope, scores each row with the model, and writes the
  *      prediction back per the `OutputMapping`.
+ *   4. AFTER the Record Process is saved, this helper also creates a
+ *      `MJ: ML Model Scoring Bindings` row (`Mode='Scheduled'`) tying the model to
+ *      that Record Process + target entity/column. The binding is the **lineage
+ *      record** the new UX surfaces read — the model-prediction form panel and the
+ *      "Models in Production" dashboard both list operationalized models from these
+ *      binding rows — so without it the scheduled scoring would run but be invisible.
  *
- * So binding a model to a recurring write-back is a single create-and-save — no new
- * scheduling, dispatch, or write-back code. This module only validates inputs, maps
- * a cadence to a cron string, and populates that one row.
+ * So binding a model to a recurring write-back is a single create-and-save (plus a
+ * lineage binding) — no new scheduling, dispatch, or write-back code. This module
+ * only validates inputs, maps a cadence to a cron string, populates that one Record
+ * Process row, and records the binding for it.
  *
  * The `'ML Model'` `WorkType` is a runtime-registered extension (PS2-1) that the
  * CodeGen'd `WorkType` value-list union (`'Action' | 'Agent' | 'FieldRules' |
@@ -34,8 +41,10 @@
  * the same legitimate, documented exception PS2-1's scoring path uses.
  */
 
-import { type UserInfo, type IMetadataProvider, Metadata } from '@memberjunction/core';
-import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+import { LogError, type UserInfo, type IMetadataProvider, Metadata } from '@memberjunction/core';
+import type { MJRecordProcessEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
+import { upsertScoringBinding } from '../scoring/scoring-binding';
+import { MetadataEntityFactory } from '../training/seams';
 
 /**
  * Recurrence for the scheduled scoring run. The named cadences map to a fixed cron
@@ -112,19 +121,40 @@ export const CADENCE_CRON: Readonly<Record<'Monthly' | 'Weekly' | 'Daily', strin
 const ML_MODEL_WORK_TYPE = 'ML Model';
 
 /**
+ * The result of {@link createScheduledModelScoring}: the saved scheduled Record
+ * Process AND its lineage binding. Both are returned because operationalizing a
+ * model produces two coupled rows — the Record Process that *does* the recurring
+ * scoring, and the `MJ: ML Model Scoring Bindings` row that *records* it (the latter
+ * is what the model-prediction form panel and "Models in Production" dashboard read).
+ */
+export interface ScheduledModelScoringResult {
+  /** The saved scheduled `MJ: Record Processes` entity (its owned scheduled job already reconciled). */
+  recordProcess: MJRecordProcessEntity;
+  /** The saved `MJ: ML Model Scoring Bindings` lineage row (`Mode='Scheduled'`). */
+  binding: MJMLModelScoringBindingEntity;
+}
+
+/**
  * Create and save a scheduled write-back Record Process that scores `targetEntity`'s
  * rows with `modelId` on a recurring cadence and writes the prediction into
- * `outputField`. Saving the returned row (this function does the save) auto-creates
- * its owned `MJ: Scheduled Jobs` row, so the run is live on the schedule immediately.
+ * `outputField`, then record its `MJ: ML Model Scoring Bindings` lineage row.
+ *
+ * Saving the Record Process auto-creates its owned `MJ: Scheduled Jobs` row (so the
+ * run is live on the schedule immediately); the subsequent binding ties the model →
+ * Record Process → target entity/column at `Mode='Scheduled'` so the operationalized
+ * model is discoverable by the UX surfaces that read those bindings.
  *
  * @param opts the model + target + scope + cadence (see {@link ScheduleModelScoringOptions})
- * @returns the saved `MJ: Record Processes` entity (its owned scheduled job already reconciled)
+ * @returns the saved Record Process AND its scoring binding (see {@link ScheduledModelScoringResult})
  * @throws if a required input is missing, the scope is not exactly one selector, the
- *   target entity is unknown, or the Record Process fails to save (message carries the cause)
+ *   target entity is unknown, the Record Process fails to save, or — after the Record
+ *   Process was saved — the binding fails to save (the message carries the cause).
+ *   The binding save is intentionally fail-loud (not swallowed): a saved RP without a
+ *   binding would run invisibly to the lineage UX, so we surface the inconsistency.
  */
 export async function createScheduledModelScoring(
   opts: ScheduleModelScoringOptions,
-): Promise<MJRecordProcessEntity> {
+): Promise<ScheduledModelScoringResult> {
   validateOptions(opts);
 
   const provider = opts.provider ?? Metadata.Provider;
@@ -141,7 +171,52 @@ export async function createScheduledModelScoring(
         `${rp.LatestResult?.CompleteMessage ?? 'unknown error'}`,
     );
   }
-  return rp;
+
+  const binding = await createScoringBinding(opts, rp.ID, entityID, provider);
+  return { recordProcess: rp, binding };
+}
+
+/**
+ * Record the `MJ: ML Model Scoring Bindings` lineage row for a just-saved scheduled
+ * Record Process. Reuses the already-resolved `entityID` (no second metadata lookup)
+ * and the production `MetadataEntityFactory` over the same provider so the binding
+ * lands on the right server in multi-provider setups.
+ *
+ * Fail-loud on save failure: {@link upsertScoringBinding} throws (after `LogError`)
+ * when the binding `Save()` fails, which propagates out of this helper. We do NOT
+ * swallow it — a scheduled Record Process whose lineage binding is missing would
+ * score records but stay invisible to the model-prediction panel / production
+ * dashboard, the exact bug this wiring exists to prevent. The Record Process is
+ * already persisted at this point, so the failure is surfaced for operator follow-up
+ * rather than rolled back (there is no cross-row transaction across the two saves).
+ */
+async function createScoringBinding(
+  opts: ScheduleModelScoringOptions,
+  recordProcessId: string,
+  entityID: string,
+  provider: IMetadataProvider,
+): Promise<MJMLModelScoringBindingEntity> {
+  try {
+    return await upsertScoringBinding(
+      {
+        mlModelId: opts.modelId,
+        recordProcessId,
+        targetEntityId: entityID,
+        targetColumn: opts.outputField,
+        mode: 'Scheduled',
+      },
+      new MetadataEntityFactory(provider),
+      opts.contextUser,
+    );
+  } catch (e) {
+    // upsertScoringBinding already LogError'd the underlying Save() failure; add the
+    // scheduled-scoring context (the saved RP id) so the inconsistency is traceable.
+    LogError(
+      `createScheduledModelScoring: Record Process '${recordProcessId}' saved but its scoring binding ` +
+        `failed for model '${opts.modelId}': ${e instanceof Error ? e.message : String(e)}`,
+    );
+    throw e;
+  }
 }
 
 // ----- field population --------------------------------------------------------

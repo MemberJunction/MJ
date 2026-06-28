@@ -22,12 +22,12 @@ import type { ActionResultSimple, RunActionParams } from '@memberjunction/action
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
-import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
 import {
   createScheduledModelScoring,
   type ScheduleModelScoringOptions,
+  type ScheduledModelScoringResult,
   type ScoringCadence,
   type ScoringValueKind,
 } from '../scheduling/scheduled-model-scoring';
@@ -37,10 +37,11 @@ export const SCHEDULE_MODEL_SCORING_DRIVER_CLASS = 'PredictiveStudioScheduleMode
 
 /**
  * The scheduling seam this action depends on — "create + save a scheduled scoring
- * Record Process for these options, give me the saved row". The production
- * implementation is {@link createScheduledModelScoring}; tests inject a fake.
+ * Record Process (and its lineage binding) for these options, give me the saved
+ * rows". The production implementation is {@link createScheduledModelScoring}; tests
+ * inject a fake.
  */
-export type ScheduleModelScoringFn = (opts: ScheduleModelScoringOptions) => Promise<MJRecordProcessEntity>;
+export type ScheduleModelScoringFn = (opts: ScheduleModelScoringOptions) => Promise<ScheduledModelScoringResult>;
 
 /**
  * Binds a trained `MJ: ML Models` to a recurring write-back: scores the target
@@ -73,7 +74,7 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
         return this.fail('VALIDATION_ERROR', 'ContextUser is required to schedule model scoring (server-side data access is user-scoped)');
       }
 
-      const rp = await this.schedule()({
+      const result = await this.schedule()({
         modelId,
         targetEntityName,
         outputField,
@@ -87,17 +88,24 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
         provider: params.Provider,
       });
 
-      return this.mapResult(params, rp);
+      return this.mapResult(params, result);
     } catch (e) {
       LogError(e);
       return this.fail('SCHEDULE_FAILED', `Scheduling model scoring failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  /** Map the saved Record Process onto output params + a human-readable message. */
-  protected mapResult(params: RunActionParams, rp: MJRecordProcessEntity): ActionResultSimple {
+  /**
+   * Map the saved Record Process + scoring binding onto output params + a
+   * human-readable message. Outputs the Record Process id + cron (the scheduled
+   * write-back) and the scoring binding id (the lineage row the model-prediction
+   * panel / "Models in Production" dashboard read).
+   */
+  protected mapResult(params: RunActionParams, result: ScheduledModelScoringResult): ActionResultSimple {
+    const { recordProcess: rp, binding } = result;
     this.addOutputParam(params, 'RecordProcessID', rp.ID);
     this.addOutputParam(params, 'CronExpression', rp.CronExpression);
+    this.addOutputParam(params, 'ScoringBindingID', binding.ID);
     return this.ok(
       params,
       `Scheduled scoring Record Process '${rp.Name}' (${rp.CronExpression}); it will score and write back on its cadence.`,

@@ -57,6 +57,7 @@ import {
   MJProcessRunEntity,
   MJScheduledJobEntity,
   MJScheduledJobRunEntity,
+  MJMLModelScoringBindingEntity,
 } from '@memberjunction/core-entities';
 import { RecordProcessExecutor } from '@memberjunction/record-set-processor';
 // Side-effect import: runs the @RegisterClass decorator for the 'ML Model' scoring work type, and
@@ -261,12 +262,13 @@ async function clearWrittenColumns(md: IMetadataProvider, user: UserInfo, rows: 
 }
 
 /**
- * Best-effort cleanup, child→parent: the owned Scheduled Job (+ its Job Runs) → the Record Process's
- * Process Run Details → Process Runs → the Record Process → the model's training run(s) → model →
- * pipeline → algorithm. Logs LatestResult on every delete failure.
+ * Best-effort cleanup, child→parent: the owned Scheduled Job (+ its Job Runs) → the ML Model Scoring
+ * Binding (it FKs both the model AND the Record Process, so delete it before either) → the Record
+ * Process's Process Run Details → Process Runs → the Record Process → the model's training run(s) →
+ * model → pipeline → algorithm. Logs LatestResult on every delete failure.
  */
 async function cleanup(md: IMetadataProvider, user: UserInfo, ids: {
-  scheduledJobId?: string; recordProcessId?: string; pipelineId?: string; modelId?: string;
+  scheduledJobId?: string; scoringBindingId?: string; recordProcessId?: string; pipelineId?: string; modelId?: string;
   algorithmId?: string; algorithmCreated?: boolean;
 }): Promise<void> {
   banner('CLEANUP');
@@ -294,6 +296,11 @@ async function cleanup(md: IMetadataProvider, user: UserInfo, ids: {
       }
     }
     await del('MJ: Scheduled Jobs', ids.scheduledJobId);
+  }
+
+  // The ML Model Scoring Binding FKs both the model AND the Record Process — delete it before either.
+  if (ids.scoringBindingId) {
+    await del('MJ: ML Model Scoring Bindings', ids.scoringBindingId);
   }
 
   // The Record Process's Process Runs (+ their details) FK the Record Process; delete child→parent.
@@ -338,6 +345,7 @@ async function main(): Promise<void> {
 
   let scheduledJobId: string | undefined;
   let recordProcessId: string | undefined;
+  let scoringBindingId: string | undefined;
   let pipelineId: string | undefined;
   let modelId: string | undefined;
   let algorithm: { id: string; created: boolean } | undefined;
@@ -384,7 +392,7 @@ async function main(): Promise<void> {
 
     // ── 3. Bind the model to a MONTHLY write-back schedule — ONE helper call ───
     banner('3. createScheduledModelScoring(...) — bind model → monthly RenewalScore write-back');
-    const rp = await createScheduledModelScoring({
+    const scheduled = await createScheduledModelScoring({
       modelId: modelId!,
       targetEntityName: 'Memberships',
       outputField: OUTPUT_FIELD,
@@ -394,8 +402,11 @@ async function main(): Promise<void> {
       contextUser: user,
       provider,
     });
+    const rp = scheduled.recordProcess;
     recordProcessId = rp.ID;
+    scoringBindingId = scheduled.binding.ID;
     console.log(`  Record Process ${rp.ID} ('${rp.Name}')`);
+    console.log(`  Scoring Binding ${scheduled.binding.ID} (Mode='${scheduled.binding.Mode}')`);
 
     // ── 4. Verify the scheduled Record Process row ────────────────────────────
     banner('4. VERIFY RECORD PROCESS (re-read, BypassCache)');
@@ -435,6 +446,25 @@ async function main(): Promise<void> {
       check(jobCfg?.RecordProcessID === rp.ID, `Job Configuration.RecordProcessID === the RP id`);
     }
 
+    // ── 5b. Verify the ML Model Scoring Binding (the lineage row) ─────────────
+    // The new UX surfaces (model-prediction form panel + "Models in Production"
+    // dashboard) read these binding rows; assert EXACTLY ONE exists for the model,
+    // tying it to this RP + target entity/column at Mode='Scheduled'.
+    banner('5b. VERIFY ML MODEL SCORING BINDING (the lineage row)');
+    const bindings = await new RunView().RunView<MJMLModelScoringBindingEntity>(
+      { EntityName: 'MJ: ML Model Scoring Bindings', ExtraFilter: `MLModelID='${modelId}'`, ResultType: 'entity_object', BypassCache: true }, user,
+    );
+    const bindingRows = bindings.Results ?? [];
+    check(bindingRows.length === 1, `exactly ONE scoring binding exists for the model (found ${bindingRows.length})`);
+    const binding = bindingRows[0];
+    if (binding) {
+      check(binding.ID === scoringBindingId, `binding id matches the helper's returned binding (${scoringBindingId})`);
+      check(binding.RecordProcessID === rp.ID, `binding RecordProcessID === the RP id`);
+      check(binding.TargetEntityID === entityId(md, 'Memberships'), `binding TargetEntityID === Memberships entity id`);
+      check(binding.TargetColumn === OUTPUT_FIELD, `binding TargetColumn === '${OUTPUT_FIELD}' (got '${binding.TargetColumn}')`);
+      check(binding.Mode === 'Scheduled', `binding Mode === 'Scheduled' (got '${binding.Mode}')`);
+    }
+
     // ── 6. Prove the actual scoring + write-back (the scheduler's dispatch path) ──
     // SchedulingEngine fires the cron monthly via RecordProcessExecutor.RunByID; we invoke the SAME
     // path now (we can't wait a month) and assert the column was written back.
@@ -464,7 +494,7 @@ async function main(): Promise<void> {
       console.log('  (no read-back rows captured — nothing to clear)');
     }
     await cleanup(md, user, {
-      scheduledJobId, recordProcessId, pipelineId, modelId,
+      scheduledJobId, scoringBindingId, recordProcessId, pipelineId, modelId,
       algorithmId: algorithm?.id, algorithmCreated: algorithm?.created,
     });
   }
