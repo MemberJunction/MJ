@@ -63,7 +63,9 @@ Operate against the **same repository** that owns the PR. Derive `owner/repo` fr
    - The trailing `/cc` line tags **every non-bot participant** gathered in step 2 (author, assignees, requested reviewers, reviewers, and commenters), de-duplicated, so everyone who touched the PR is notified of the new tracking issue. **If, after excluding bots, nobody is left, omit the `/cc` line entirely** — never emit a dangling `/cc` with no handles.
    - Carry over relevant labels/assignees from the PR if it's easy to do so (optional, best-effort).
 
-5. **Create the issue** in the same repo and capture its number and URL.
+5. **Create the issue, then post a conversion back-link comment:**
+   - Create the issue in the same repo and capture its number and URL.
+   - **Immediately add a comment on the new issue** that restates the conversion-from-PR linkage — the same `## Source` content (PR link, branch, original author, and the `/cc` line). This guarantees the back-link to the now-closed PR is always present as a distinct, easy-to-find comment, **even when the plan doc was large enough to be truncated or split across the body + continuation comments** (in which case the body's `Source` footer gets buried at the bottom of a huge body, or pushed into a separate continuation comment that has no back-link of its own). Treat this comment as the canonical, can't-be-lost record of where the issue came from — always post it, regardless of whether the body also carried a `Source` section.
 
 6. **Close the PR with a pointer comment:**
    - Post a comment on the PR first, then close it (so the comment is the last thing readers see). The comment should read roughly:
@@ -82,5 +84,6 @@ Operate against the **same repository** that owns the PR. Derive `owner/repo` fr
 - **Never merge** the PR — it is closed unmerged.
 - **Only operate on `open`, unmerged PRs.** If the PR is already `closed` or `merged`, make **zero** changes — no issue, no comments, no state change — and just tell the user. Re-running on an already-converted PR must be a clean no-op (no duplicate issue, no repeat comment).
 - **Tag the humans, not the bots.** The issue's `/cc` line should notify every non-bot person who authored, was assigned to, was asked to review, reviewed, or commented on the PR — de-duplicated. Exclude `[bot]` / `type: Bot` / automation accounts entirely.
+- **Always post the conversion back-link as a dedicated comment** on the new issue (step 5), not just as a `Source` footer in the body. When a long plan doc forces the body to be truncated or split across continuation comments, the body footer can be buried or lost — the standalone comment is the guaranteed link back to the closed PR.
 - Keep the branch name and PR link prominent in the issue so the work is trivially resumable.
 - If anything is ambiguous (e.g. multiple candidate plan docs), ask the user which to use rather than guessing.
