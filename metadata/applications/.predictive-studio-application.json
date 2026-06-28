@@ -39,6 +39,12 @@
         "DriverClass": "PredictiveStudioRegistryResource"
       },
       {
+        "Label": "Models in Production",
+        "Icon": "fa-solid fa-satellite-dish",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioProductionResource"
+      },
+      {
         "Label": "Compare Runs",
         "Icon": "fa-solid fa-chart-column",
         "ResourceType": "Custom",
@@ -53,7 +59,7 @@
     "ID": "299C9272-8D38-40CA-85D4-0980F2C9FAD1"
   },
   "sync": {
-    "lastModified": "2026-06-28T01:58:51.979Z",
-    "checksum": "7cef4aa92e7857e91659851db7dab7251fee368122f20cf14382380ed83cd090"
+    "lastModified": "2026-06-28T22:48:10.614Z",
+    "checksum": "b0df671a9d2a9c5421ebe590f8a52a06480f8cd5f9d8169cb217263e6c4515e1"
   }
 }

@@ -1,0 +1,135 @@
+<div class="ps-panel ps-production" data-testid="ps-production-panel">
+  @if (loading) {
+    <div class="ps-loading"><mj-loading text="Loading production models..." size="medium"></mj-loading></div>
+  } @else if (rows.length === 0) {
+    <!-- empty state: nothing in production yet -->
+    <div class="ps-card prod-empty" data-testid="ps-production-empty">
+      <div class="ps-card-body empty-body">
+        <div class="empty-ico"><i class="fa-solid fa-satellite-dish"></i></div>
+        <h2>No models in production yet</h2>
+        <p class="ps-muted">
+          When a published model is wired to an entity and column through a scoring binding, it shows up
+          here — with its schedule, last run, and the live distribution of what it writes.
+        </p>
+      </div>
+    </div>
+  } @else {
+    <!-- headline strip -->
+    <div class="prod-kpis" data-testid="ps-production-kpis">
+      <div class="ps-kpi">
+        <div class="label">In production</div>
+        <div class="val">{{ rows.length }}</div>
+      </div>
+      <div class="ps-kpi">
+        <div class="label">Scheduled</div>
+        <div class="val">{{ scheduledCount }}</div>
+      </div>
+      <div class="ps-kpi">
+        <div class="label">Records scored (last run)</div>
+        <div class="val">{{ totalLastScored | number }}</div>
+      </div>
+    </div>
+
+    <!-- one card per scoring binding -->
+    <div class="prod-list">
+      @for (row of rows; track row.bindingId) {
+        <div class="ps-card prod-row" data-testid="ps-production-row">
+          <!-- header: model + target + mode -->
+          <div class="ps-card-head prod-head">
+            <div class="prod-ico"><i class="fa-solid fa-satellite-dish"></i></div>
+            <div class="prod-title">
+              <div class="nm" data-testid="ps-production-model">{{ row.modelLabel }}</div>
+              <div class="ln2 ps-muted ps-small">
+                {{ row.algorithm }} · {{ row.problemType }}
+                <span class="ps-badge gray">{{ row.modelStatus }}</span>
+              </div>
+            </div>
+            <span class="ps-badge" [class]="modeBadge(row.mode)" data-testid="ps-production-mode">{{ row.mode }}</span>
+          </div>
+
+          <div class="ps-card-body prod-body">
+            <!-- writes -->
+            <div class="prod-meta">
+              <div class="meta-item">
+                <div class="ps-section-title">Writes to</div>
+                <div class="meta-val">
+                  <i class="fa-solid fa-table ps-muted"></i>
+                  {{ row.targetEntity }}<span class="ps-muted"> · </span><span class="ps-mono">{{ row.targetColumn }}</span>
+                </div>
+              </div>
+
+              <!-- schedule -->
+              <div class="meta-item">
+                <div class="ps-section-title">Schedule</div>
+                <div class="meta-val">
+                  @if (row.mode === 'Scheduled') {
+                    <i class="fa-solid fa-clock ps-muted"></i> {{ row.schedulePhrase || 'Scheduled' }}
+                  } @else if (row.mode === 'Materialized') {
+                    <i class="fa-solid fa-database ps-muted"></i> Materialized
+                  } @else {
+                    <i class="fa-solid fa-hand-pointer ps-muted"></i> On demand
+                  }
+                  @if (row.processName) {
+                    <span class="ps-muted ps-small"> · {{ row.processName }}</span>
+                  }
+                </div>
+              </div>
+
+              <!-- last run -->
+              <div class="meta-item">
+                <div class="ps-section-title">Last run</div>
+                <div class="meta-val">
+                  @if (row.loadingDetail) {
+                    <span class="ps-muted ps-small">Loading…</span>
+                  } @else if (row.lastRun) {
+                    <span class="ps-badge" [class]="row.lastRun.statusVariant">{{ row.lastRun.status }}</span>
+                    <span class="ps-muted ps-small">
+                      {{ row.lastRun.when ? (row.lastRun.when | date: 'medium') : '—' }}
+                      · {{ row.lastRun.successCount | number }} ok
+                      @if (row.lastRun.errorCount > 0) {
+                        · <span class="ps-danger">{{ row.lastRun.errorCount | number }} failed</span>
+                      }
+                    </span>
+                  } @else if (row.lastScoredAt) {
+                    <span class="ps-muted ps-small">
+                      {{ row.lastScoredAt | date: 'medium' }} · {{ (row.lastRowCount ?? 0) | number }} scored
+                    </span>
+                  } @else {
+                    <span class="ps-muted ps-small">Never run</span>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <!-- distribution -->
+            <div class="prod-dist" data-testid="ps-production-distribution">
+              <div class="ps-card-head dist-head">
+                <h3>Current prediction distribution</h3>
+                @if (row.distribution) {
+                  <span class="ps-muted ps-small">
+                    {{ row.distribution.sampled | number }}{{ row.distribution.capped ? '+ (sample)' : '' }} records
+                  </span>
+                }
+              </div>
+              @if (row.loadingDetail) {
+                <div class="ps-muted ps-small dist-msg">Computing distribution…</div>
+              } @else if (!row.distribution || row.distribution.buckets.length === 0) {
+                <div class="ps-muted ps-small dist-msg">
+                  No values to summarize — the bound column has no data yet (or isn't materialized).
+                </div>
+              } @else {
+                @for (b of row.distribution.buckets; track b.label) {
+                  <div class="ps-fbar dist-bar">
+                    <span class="name ps-small" [title]="b.label">{{ b.label }}</span>
+                    <div class="track"><span [style.width.%]="b.pct"></span></div>
+                    <span class="ps-mono">{{ b.pct }}%</span>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

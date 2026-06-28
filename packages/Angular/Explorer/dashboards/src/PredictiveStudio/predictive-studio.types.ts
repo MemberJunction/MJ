@@ -7,7 +7,7 @@
  * mockups. Each panel falls back to samples only when its cached entity array is empty.
  */
 
-export type PSPanelKey = 'home' | 'catalog' | 'pipelines' | 'experiments' | 'registry' | 'compare';
+export type PSPanelKey = 'home' | 'catalog' | 'pipelines' | 'experiments' | 'registry' | 'production' | 'compare';
 
 /** A vertical activity-feed item on the Home panel. */
 export interface PSActivityItem {

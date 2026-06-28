@@ -1,0 +1,155 @@
+/* Models in Production panel — deployment / control-tower view.
+   All colors via --mj-* semantic tokens (design-token clean). */
+
+.ps-production {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px;
+}
+
+/* headline KPI strip */
+.prod-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+/* list of binding cards */
+.prod-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.prod-head {
+  gap: 12px;
+}
+
+.prod-ico {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-size: 15px;
+  flex: 0 0 auto;
+}
+
+.prod-title {
+  flex: 1;
+  min-width: 0;
+}
+.prod-title .nm {
+  font-weight: 650;
+  font-size: 14.5px;
+  color: var(--mj-text-primary);
+}
+.prod-title .ln2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.prod-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .prod-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* writes / schedule / last-run meta column */
+.prod-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.meta-item .meta-val {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+}
+.meta-item .meta-val i {
+  font-size: 12px;
+}
+
+.ps-danger {
+  color: var(--mj-status-error-text);
+  font-weight: 600;
+}
+
+/* distribution column */
+.prod-dist {
+  border-left: 1px solid var(--mj-border-subtle);
+  padding-left: 20px;
+}
+@media (max-width: 900px) {
+  .prod-dist {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid var(--mj-border-subtle);
+    padding-top: 14px;
+  }
+}
+.dist-head {
+  padding: 0 0 10px;
+  border-bottom: none;
+}
+.dist-head h3 {
+  font-size: 13px;
+  font-weight: 650;
+  margin: 0;
+  color: var(--mj-text-primary);
+}
+.dist-msg {
+  padding: 8px 0;
+}
+.dist-bar .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* empty state */
+.prod-empty .empty-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 56px 24px;
+}
+.prod-empty .empty-ico {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-size: 26px;
+}
+.prod-empty h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 680;
+  color: var(--mj-text-primary);
+}
+.prod-empty p {
+  max-width: 480px;
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+}

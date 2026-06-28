@@ -21,6 +21,7 @@ import { PSPipelinesComponent } from './PredictiveStudio/components/ps-pipelines
 import { PSExperimentsComponent } from './PredictiveStudio/components/ps-experiments.component';
 import { PSRegistryComponent } from './PredictiveStudio/components/ps-registry.component';
 import { PSCompareComponent } from './PredictiveStudio/components/ps-compare.component';
+import { PSProductionComponent } from './PredictiveStudio/components/ps-production.component';
 
 import { PSHomeResourceComponent } from './PredictiveStudio/resources/ps-home-resource.component';
 import { PSPipelinesResourceComponent } from './PredictiveStudio/resources/ps-pipelines-resource.component';
@@ -28,6 +29,7 @@ import { PSCatalogResourceComponent } from './PredictiveStudio/resources/ps-cata
 import { PSExperimentsResourceComponent } from './PredictiveStudio/resources/ps-experiments-resource.component';
 import { PSRegistryResourceComponent } from './PredictiveStudio/resources/ps-registry-resource.component';
 import { PSCompareResourceComponent } from './PredictiveStudio/resources/ps-compare-resource.component';
+import { PSProductionResourceComponent } from './PredictiveStudio/resources/ps-production-resource.component';
 
 /**
  * PredictiveStudioDashboardsModule — the lazy-loadable feature chunk for the Predictive Studio app.
@@ -57,6 +59,7 @@ import { PSCompareResourceComponent } from './PredictiveStudio/resources/ps-comp
     PSExperimentsResourceComponent,
     PSRegistryResourceComponent,
     PSCompareResourceComponent,
+    PSProductionResourceComponent,
   ],
   imports: [
     CommonModule,
@@ -76,6 +79,7 @@ import { PSCompareResourceComponent } from './PredictiveStudio/resources/ps-comp
     PSExperimentsComponent,
     PSRegistryComponent,
     PSCompareComponent,
+    PSProductionComponent,
   ],
   exports: [
     PredictiveStudioDashboardComponent,
@@ -86,6 +90,7 @@ import { PSCompareResourceComponent } from './PredictiveStudio/resources/ps-comp
     PSExperimentsResourceComponent,
     PSRegistryResourceComponent,
     PSCompareResourceComponent,
+    PSProductionResourceComponent,
   ],
 })
 export class PredictiveStudioDashboardsModule {}
@@ -104,3 +109,4 @@ export { PSCatalogResourceComponent, LoadPSCatalogResource } from './PredictiveS
 export { PSExperimentsResourceComponent, LoadPSExperimentsResource } from './PredictiveStudio/resources/ps-experiments-resource.component';
 export { PSRegistryResourceComponent, LoadPSRegistryResource } from './PredictiveStudio/resources/ps-registry-resource.component';
 export { PSCompareResourceComponent, LoadPSCompareResource } from './PredictiveStudio/resources/ps-compare-resource.component';
+export { PSProductionResourceComponent, LoadPSProductionResource } from './PredictiveStudio/resources/ps-production-resource.component';

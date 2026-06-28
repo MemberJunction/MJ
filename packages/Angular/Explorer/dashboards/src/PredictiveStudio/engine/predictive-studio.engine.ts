@@ -11,11 +11,13 @@ import {
   MJMLAlgorithmUseCaseEntity,
   MJMLAlgorithmUseCaseRankingEntity,
   MJMLModelEntity,
+  MJMLModelScoringBindingEntity,
   MJMLTrainingPipelineEntity,
   MJMLTrainingRunEntity,
   MJExperimentEntity,
   MJExperimentSessionEntity,
   MJExperimentSessionIterationEntity,
+  MJRecordProcessEntity,
 } from '@memberjunction/core-entities';
 
 /**
@@ -79,6 +81,8 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
   private _UseCases: MJMLAlgorithmUseCaseEntity[] = [];
   private _Rankings: MJMLAlgorithmUseCaseRankingEntity[] = [];
   private _Models: MJMLModelEntity[] = [];
+  private _ScoringBindings: MJMLModelScoringBindingEntity[] = [];
+  private _RecordProcesses: MJRecordProcessEntity[] = [];
   private _Pipelines: MJMLTrainingPipelineEntity[] = [];
   private _TrainingRuns: MJMLTrainingRunEntity[] = [];
   private _Experiments: MJExperimentEntity[] = [];
@@ -91,6 +95,8 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
       { Type: 'entity', EntityName: 'MJ: ML Algorithm Use Cases', PropertyName: '_UseCases', OrderBy: 'DisplayOrder' },
       { Type: 'entity', EntityName: 'MJ: ML Algorithm Use Case Rankings', PropertyName: '_Rankings' },
       { Type: 'entity', EntityName: 'MJ: ML Models', PropertyName: '_Models', OrderBy: '__mj_UpdatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: ML Model Scoring Bindings', PropertyName: '_ScoringBindings', OrderBy: '__mj_UpdatedAt DESC' },
+      { Type: 'entity', EntityName: 'MJ: Record Processes', PropertyName: '_RecordProcesses', OrderBy: 'Name' },
       { Type: 'entity', EntityName: 'MJ: ML Training Pipelines', PropertyName: '_Pipelines', OrderBy: 'Name' },
       { Type: 'entity', EntityName: 'MJ: ML Training Runs', PropertyName: '_TrainingRuns', OrderBy: '__mj_CreatedAt DESC' },
       { Type: 'entity', EntityName: 'MJ: Experiments', PropertyName: '_Experiments', OrderBy: 'Name' },
@@ -114,6 +120,14 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
   public get Models(): MJMLModelEntity[] {
     return this._Models ?? [];
   }
+  /** Scoring bindings — a model → (target entity + column, optional Record Process) deployment link. */
+  public get ScoringBindings(): MJMLModelScoringBindingEntity[] {
+    return this._ScoringBindings ?? [];
+  }
+  /** Record Processes — used to resolve the schedule (cron) + status of a binding's bound process. */
+  public get RecordProcesses(): MJRecordProcessEntity[] {
+    return this._RecordProcesses ?? [];
+  }
   public get Pipelines(): MJMLTrainingPipelineEntity[] {
     return this._Pipelines ?? [];
   }
@@ -131,6 +145,18 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
   }
 
   // ---- Domain helpers ----
+
+  /** Look up an ML Model by ID (for joining a scoring binding to its model). */
+  public ModelByID(modelId: string | null | undefined): MJMLModelEntity | undefined {
+    if (!modelId) return undefined;
+    return this.Models.find((m) => UUIDsEqual(m.ID, modelId));
+  }
+
+  /** Look up a Record Process by ID (for resolving a binding's schedule/status). */
+  public RecordProcessByID(processId: string | null | undefined): MJRecordProcessEntity | undefined {
+    if (!processId) return undefined;
+    return this.RecordProcesses.find((p) => UUIDsEqual(p.ID, processId));
+  }
 
   /** Look up an algorithm name by ID (for joining iterations/runs/models to a display name). */
   public AlgorithmName(algorithmId: string | null | undefined): string {
