@@ -18,7 +18,7 @@
 
 import { RunView, UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import type { MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
-import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
+import { AIBridgeEngine, type StartBridgeSessionParams } from '@memberjunction/ai-bridge-server';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
 import { BaseRealtimeBridge, type BridgeNativeSdkBinding } from '@memberjunction/ai-bridge-base';
 import { RealTeamsBindings, RealGraphCallsClient, PumpBackedAcsMedia, type TeamsBridge } from '@memberjunction/ai-bridge-teams';
@@ -115,6 +115,50 @@ export class TeamsMeetingsService {
         this.graphClientsByCall.get(callId)?.DriveCallEnded(callId);
         this.graphClientsByCall.delete(callId);
         this.registry.EndCall(callId);
+    }
+
+    /**
+     * Builds the {@link StartBridgeSessionParams} for a SCHEDULED Teams join — a bridge the
+     * {@link ScheduledBridgeRunner} owns (it created the `MJ: AI Agent Sessions` row and owns the
+     * `StartBridgeSession` call). Reuses the same provider resolution, realtime-session factory, Graph
+     * client, and bind-sdk as an on-demand join, so a scheduled Teams join is identical to a live one
+     * for audio (the ACS media registry is wired via {@link buildBindSdk}).
+     *
+     * NOTE: an on-demand join also registers the live Graph client by call id for webhook-driven
+     * roster/ended routing; the runner abstracts the post-start call id away, so for a SCHEDULED join
+     * that notification routing is a documented follow-on. Audio is fully wired here.
+     */
+    public async BuildScheduledStartParams(args: {
+        agentID: string;
+        joinUrl: string;
+        agentSessionID: string;
+        contextUser: UserInfo;
+        provider: IMetadataProvider;
+    }): Promise<StartBridgeSessionParams> {
+        await this.engine.Config(false, args.contextUser, args.provider);
+        const teamsProvider = this.resolveProvider();
+        const realtimeSession = await this.sessionFactory({
+            AgentID: args.agentID,
+            TargetAgentID: args.agentID,
+            ContextUser: args.contextUser,
+            MetadataProvider: args.provider,
+            AgentSessionID: args.agentSessionID,
+            RoomName: args.joinUrl,
+        });
+        const graphClient = this.graphClientFactory(this.config.botAccessToken ?? '', this.config.tenantId);
+        return {
+            AgentSessionID: args.agentSessionID,
+            AgentID: args.agentID,
+            TargetAgentID: args.agentID,
+            Provider: teamsProvider,
+            RealtimeSession: realtimeSession,
+            Address: args.joinUrl,
+            Direction: 'Outbound',
+            Configuration: this.buildSessionConfiguration(),
+            BindSdk: this.buildBindSdk(graphClient),
+            ContextUser: args.contextUser,
+            MetadataProvider: args.provider,
+        };
     }
 
     // ── internals ────────────────────────────────────────────────────────────────

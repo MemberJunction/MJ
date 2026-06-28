@@ -37,3 +37,6 @@ export * from './teamsAcsMediaRegistry.js';
 export * from './TeamsMeetingsService.js';
 export * from './TeamsMeetingsRouter.js';
 export * from './teams-meetings-runtime.js';
+
+// ── Scheduled / invite-driven meeting join loop (M2: calendar watcher + due-bridge runner) ──
+export * from './calendar-scheduler.js';

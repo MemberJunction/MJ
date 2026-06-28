@@ -46,7 +46,7 @@ import { createWidgetHandler, WIDGET_MOUNT_PATH } from './widget/index.js';
 import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
 import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
 import { createRingCentralTelephonyHandler, RINGCENTRAL_TELEPHONY_MOUNT_PATH, SetRingCentralTelephonyService } from './telephony/index.js';
-import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService } from './telephony/index.js';
+import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService, GetTeamsMeetingsService, StartCalendarScheduler } from './telephony/index.js';
 import { InstallMediaUpgradeDispatcher } from './telephony/index.js';
 
 import { resolve } from 'node:path';
@@ -1273,6 +1273,23 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (resumeUser && Metadata.Provider instanceof DatabaseProviderBase) { // global-provider-ok: server startup recovery — boot-time session janitor uses the server's own provider
     SessionJanitor.Instance.Start(Metadata.Provider, resumeUser) // global-provider-ok: server-owned background reconciler runs under the server's provider + system user
       .catch(err => console.warn(`[SessionJanitor] Startup failed: ${err}`));
+  }
+
+  // Launch the calendar / scheduled-bridge loop (M2): poll agent calendars for meeting invites and
+  // start due meeting bridges. Mirrors the SessionJanitor lifecycle (run-once + interval, timer
+  // unref'd). Gated on Teams meetings being enabled (the provider whose scheduled-join is wired) and
+  // reuses the SAME meetings service as the ingress; identities without configured calendar creds are
+  // skipped, so this is a harmless no-op until a Graph-backed identity + token are configured.
+  if (resumeUser && configInfo.telephony?.teams?.enabled) { // global-provider-ok: server-owned background poller under the server's provider + system user
+    const teamsMeetingsService = GetTeamsMeetingsService();
+    if (teamsMeetingsService) {
+      StartCalendarScheduler({
+        Provider: Metadata.Provider,
+        ContextUser: resumeUser,
+        TeamsService: teamsMeetingsService,
+        TeamsConfig: configInfo.telephony.teams,
+      });
+    }
   }
 
   // Set up graceful shutdown handlers
