@@ -165,6 +165,22 @@ export interface IViewRenderer<TConfig = unknown> {
    * NOT a signal that drives the outer app.)
    */
   dataRequest?: EventEmitter<ViewDataRequest>;
+
+  /**
+   * Optional IMPERATIVE export entry point. A renderer that owns a self-contained export
+   * affordance (e.g. the grid's export dialog) may expose this so an external driver — the
+   * host's programmatic API, ultimately the AI agent — can trigger an export of the current
+   * record set WITHOUT going through the renderer's own toolbar UI. Renderers that don't
+   * support export simply don't implement it (the host treats absence as "not exportable").
+   *
+   * This is NOT a navigation/UI-coordination signal — it's a direct method call the host makes
+   * on the active renderer, mirroring how export is otherwise self-contained in the plug-in.
+   *
+   * @param format optional output format ('csv' | 'excel' | 'json'); the renderer picks a sensible
+   *   default (typically 'excel') when omitted.
+   * @returns true when the export was initiated, false when it couldn't be (no data / unsupported).
+   */
+  exportRecords?(format?: 'csv' | 'excel' | 'json'): Promise<boolean>;
 }
 
 /**

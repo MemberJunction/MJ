@@ -123,9 +123,34 @@ export interface DataExplorerAgentContextInput {
     FilteredRecordCount: number;
     /**
      * Number of records loaded per page in the grid (server-side pagination page size).
-     * Used to derive {@link TotalPages}.
+     * Used to derive {@link TotalPages} when the live grid hasn't reported a page count.
      */
     PageSize: number;
+    /**
+     * Live 1-based current page reported by the inner grid, or null when the grid
+     * hasn't mounted / reported yet (e.g. before first data load).
+     */
+    CurrentPage: number | null;
+    /**
+     * Live total page count reported by the inner grid, or null when unavailable.
+     * When present it takes precedence over the count derived from record counts.
+     */
+    TotalPages: number | null;
+    /**
+     * Field/column the grid is currently sorted by, or null when unsorted.
+     */
+    SortColumn: string | null;
+    /**
+     * Active sort direction ('asc' | 'desc'), or null when unsorted.
+     */
+    SortDirection: 'asc' | 'desc' | null;
+    /**
+     * Names of the entities related to the selected entity (from EntityInfo.RelatedEntities
+     * metadata), so the agent can suggest NavigateToRelated targets. The component supplies
+     * the full list; this helper bounds it — see {@link AGENT_CONTEXT_NAME_LIST_CAP}.
+     * Empty at the home level.
+     */
+    RelatedEntityNames: string[];
     /** Display name of the currently selected record, or null. */
     SelectedRecordName: string | null;
     /** Whether the detail panel is currently open. */
@@ -171,10 +196,26 @@ function buildRecordBrowsingContext(input: DataExplorerAgentContextInput): Recor
         AvailableViews: capNames(input.AvailableViewNames),
     };
 
-    // Pagination — derive total pages from the filtered count (what's actually being paged)
-    // and the page size. A page size of 0 or a non-positive count yields 1 page.
+    // Pagination — prefer the live values the inner grid reports; fall back to deriving
+    // total pages from the filtered count and page size. A page size of 0 or a
+    // non-positive count yields 1 page.
     context['PageSize'] = input.PageSize;
-    context['TotalPages'] = computeTotalPages(input.FilteredRecordCount, input.PageSize);
+    context['CurrentPage'] = input.CurrentPage ?? 1;
+    context['TotalPages'] = input.TotalPages ?? computeTotalPages(input.FilteredRecordCount, input.PageSize);
+
+    // Sort — only surfaced when the grid is actually sorted by a column.
+    if (input.SortColumn) {
+        context['SortColumn'] = input.SortColumn;
+        context['SortDirection'] = input.SortDirection ?? 'asc';
+    }
+
+    // Related entities — so the agent can suggest NavigateToRelated targets.
+    if (input.RelatedEntityNames.length > 0) {
+        context['RelatedEntities'] = capNames(input.RelatedEntityNames);
+        if (input.RelatedEntityNames.length > AGENT_CONTEXT_NAME_LIST_CAP) {
+            context['RelatedEntityCount'] = input.RelatedEntityNames.length;
+        }
+    }
 
     // The view types the current entity actually supports (so the agent doesn't request
     // an unsupported one — e.g. 'map' on an entity without geocoding).

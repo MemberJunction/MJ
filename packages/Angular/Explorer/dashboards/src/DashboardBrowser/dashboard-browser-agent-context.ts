@@ -15,6 +15,20 @@
 /** The two browser-mode levels surfaced to the agent. */
 type BrowserMode = 'list' | 'view' | 'edit';
 
+/**
+ * A single panel/widget on the currently-open dashboard, as surfaced to the
+ * agent. Purely descriptive — no entity references, no config payloads, just
+ * enough for the agent to reason about (and describe) what's on the dashboard.
+ */
+export interface OpenedDashboardPanelSummary {
+    /** The panel's display title (e.g. "Active Members"). */
+    Title: string;
+    /** The part-type name (e.g. "View", "Query", "WebURL", "Artifact"). */
+    PartTypeName: string;
+    /** Optional Font Awesome icon class for the panel, when one is set. */
+    Icon?: string;
+}
+
 /** The two record-view modes the browser list supports. */
 const VALID_BROWSER_VIEW_MODES = ['cards', 'list'] as const;
 
@@ -96,6 +110,31 @@ export interface DashboardBrowserAgentContextInput {
     ViewMode: BrowserViewMode;
     /** Whether the browser is currently loading data. */
     IsLoading: boolean;
+
+    // ----------------------------------------------------------------------
+    // Opened-dashboard awareness (present only when Mode is 'view' or 'edit').
+    // When a dashboard is open these describe its contents so the agent isn't
+    // blind to what's on screen. All null/empty at the list level.
+    // ----------------------------------------------------------------------
+
+    /**
+     * Name of the dashboard currently open in the view/edit pane, or null when
+     * at the list level. Distinct from {@link SelectedDashboardName} only in
+     * intent: this field is the explicit "a dashboard is OPEN" signal.
+     */
+    OpenedDashboardName?: string | null;
+    /** ID of the dashboard currently open, or null at the list level. */
+    OpenedDashboardId?: string | null;
+    /** Whether the open dashboard is in edit mode (Mode === 'edit'). */
+    OpenedDashboardIsEditing?: boolean;
+    /** Whether the current user may edit the open dashboard (from permissions). */
+    OpenedDashboardCanEdit?: boolean;
+    /**
+     * The panels/widgets on the open dashboard. Empty array when none / not
+     * open. The component supplies the full list; this helper bounds it — see
+     * {@link AGENT_CONTEXT_NAME_LIST_CAP}.
+     */
+    OpenedDashboardPanels?: OpenedDashboardPanelSummary[];
 }
 
 /**
@@ -135,6 +174,20 @@ export function buildDashboardBrowserAgentContext(
     }
     if (input.AvailableCategoryNames.length > AGENT_CONTEXT_NAME_LIST_CAP) {
         context['AvailableCategoryCount'] = input.AvailableCategoryNames.length;
+    }
+
+    // Opened-dashboard awareness: only publish these fields when a dashboard is
+    // actually open (view/edit). At the list level we omit them entirely so the
+    // agent's context stays focused on browse/filter state.
+    if (input.Mode !== 'list') {
+        context['OpenedDashboardName'] = input.OpenedDashboardName ?? null;
+        context['OpenedDashboardId'] = input.OpenedDashboardId ?? null;
+        context['OpenedDashboardIsEditing'] = input.OpenedDashboardIsEditing ?? false;
+        context['OpenedDashboardCanEdit'] = input.OpenedDashboardCanEdit ?? false;
+
+        const panels = input.OpenedDashboardPanels ?? [];
+        context['OpenedDashboardPanelCount'] = panels.length;
+        context['OpenedDashboardPanels'] = panels.slice(0, AGENT_CONTEXT_NAME_LIST_CAP);
     }
 
     return context;

@@ -28,6 +28,11 @@ function makeInput(overrides: Partial<DataExplorerAgentContextInput> = {}): Data
         TotalRecordCount: 100,
         FilteredRecordCount: 12,
         PageSize: 100,
+        CurrentPage: null,
+        TotalPages: null,
+        SortColumn: null,
+        SortDirection: null,
+        RelatedEntityNames: [],
         SelectedRecordName: 'John Smith',
         DetailPanelOpen: true,
         HomeViewMode: 'all',
@@ -121,6 +126,7 @@ describe('buildDataExplorerAgentContext', () => {
                 TotalRecordCount: 100,
                 FilteredRecordCount: 12,
                 PageSize: 100,
+                CurrentPage: 1, // no live grid page reported → defaults to 1
                 TotalPages: 1, // 12 filtered records / 100 page size → 1 page
                 SelectedRecordName: 'John Smith',
                 DetailPanelOpen: true,
@@ -142,6 +148,68 @@ describe('buildDataExplorerAgentContext', () => {
                 makeInput({ FilteredRecordCount: 0, PageSize: 100 })
             );
             expect(ctx['TotalPages']).toBe(1);
+        });
+
+        it('prefers the LIVE grid page/total-page count over the derived values', () => {
+            // Live grid reports page 2 of 5; derived from counts would be 1 — live wins.
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ CurrentPage: 2, TotalPages: 5, FilteredRecordCount: 12, PageSize: 100 })
+            );
+            expect(ctx['CurrentPage']).toBe(2);
+            expect(ctx['TotalPages']).toBe(5);
+        });
+
+        it('defaults CurrentPage to 1 and derives TotalPages when the grid has not reported yet', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ CurrentPage: null, TotalPages: null, FilteredRecordCount: 250, PageSize: 100 })
+            );
+            expect(ctx['CurrentPage']).toBe(1);
+            expect(ctx['TotalPages']).toBe(3); // ceil(250 / 100)
+        });
+
+        it('publishes the sort column + direction only when sorted', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ SortColumn: 'CreatedAt', SortDirection: 'desc' })
+            );
+            expect(ctx['SortColumn']).toBe('CreatedAt');
+            expect(ctx['SortDirection']).toBe('desc');
+        });
+
+        it('defaults sort direction to asc when a column is present without a direction', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ SortColumn: 'Name', SortDirection: null })
+            );
+            expect(ctx['SortColumn']).toBe('Name');
+            expect(ctx['SortDirection']).toBe('asc');
+        });
+
+        it('omits sort fields entirely when the grid is unsorted', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ SortColumn: null, SortDirection: null })
+            );
+            expect(ctx).not.toHaveProperty('SortColumn');
+            expect(ctx).not.toHaveProperty('SortDirection');
+        });
+
+        it('publishes related entity names so the agent can suggest NavigateToRelated targets', () => {
+            const ctx = buildDataExplorerAgentContext(
+                makeInput({ RelatedEntityNames: ['Orders', 'Invoices', 'Contacts'] })
+            );
+            expect(ctx['RelatedEntities']).toEqual(['Orders', 'Invoices', 'Contacts']);
+            expect(ctx).not.toHaveProperty('RelatedEntityCount'); // small list: no count
+        });
+
+        it('bounds RelatedEntities to the cap and reports the true count when over', () => {
+            const many = names('Related', AGENT_CONTEXT_NAME_LIST_CAP + 7);
+            const ctx = buildDataExplorerAgentContext(makeInput({ RelatedEntityNames: many }));
+            expect((ctx['RelatedEntities'] as string[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
+            expect(ctx['RelatedEntityCount']).toBe(AGENT_CONTEXT_NAME_LIST_CAP + 7);
+        });
+
+        it('omits RelatedEntities entirely when the entity has no related entities', () => {
+            const ctx = buildDataExplorerAgentContext(makeInput({ RelatedEntityNames: [] }));
+            expect(ctx).not.toHaveProperty('RelatedEntities');
+            expect(ctx).not.toHaveProperty('RelatedEntityCount');
         });
 
         it('publishes the view types the current entity supports', () => {
@@ -312,6 +380,11 @@ describe('buildDataExplorerAgentContext', () => {
             expect(ctx).not.toHaveProperty('AvailableViews');
             expect(ctx).not.toHaveProperty('ActiveViewName');
             expect(ctx).not.toHaveProperty('VisibleColumns');
+            expect(ctx).not.toHaveProperty('CurrentPage');
+            expect(ctx).not.toHaveProperty('TotalPages');
+            expect(ctx).not.toHaveProperty('SortColumn');
+            expect(ctx).not.toHaveProperty('SortDirection');
+            expect(ctx).not.toHaveProperty('RelatedEntities');
         });
 
         it('treats empty-string entity name as home level', () => {

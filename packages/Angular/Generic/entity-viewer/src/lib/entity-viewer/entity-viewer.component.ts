@@ -15,6 +15,7 @@ import {
   DataLoadedEvent,
   FilteredCountChangedEvent,
   SortState,
+  SortDirection,
   PaginationState,
   ViewGridState
 } from '../types';
@@ -1299,6 +1300,109 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
       this.resetPaginationState(false);
       this.LoadData();
     }
+  }
+
+  // ========================================
+  // PROGRAMMATIC GRID CONTROL (agent / external driver)
+  // ========================================
+  // These thin, public methods expose the same pagination/sort the user drives
+  // interactively so an external driver (e.g. the AI agent, via the dashboard's
+  // ViewWorkspace passthrough) can page and sort the grid. They are no-ops when
+  // records are externally supplied (no internal RunView to retrigger).
+
+  /** Current (1-based) page number the grid is showing. Internally stored 0-based. */
+  public get CurrentPageNumber(): number {
+    return this.Pagination.currentPage + 1;
+  }
+
+  /** Number of records loaded per page. */
+  public get CurrentPageSize(): number {
+    return this.Pagination.pageSize;
+  }
+
+  /** Total records available for the current entity/view/filter (from the server). */
+  public get TotalRecords(): number {
+    return this.Pagination.totalRecords;
+  }
+
+  /** The grid's active sort state, or null when unsorted. */
+  public get CurrentSortState(): SortState | null {
+    return this.InternalSortState;
+  }
+
+  /**
+   * Navigate to a specific (1-based) page. Clamps to the valid range. Returns the
+   * page actually navigated to, or null when paging isn't applicable (externally
+   * supplied records).
+   */
+  public GoToPageNumber(pageNumber: number): number | null {
+    if (this._records) {
+      return null;
+    }
+    const totalPages = this.TotalPageCount;
+    const clamped = Math.min(Math.max(1, Math.floor(pageNumber)), Math.max(1, totalPages));
+    this.OnPageChange({ PageNumber: clamped, PageSize: this.Pagination.pageSize } as PageChangeEvent);
+    return clamped;
+  }
+
+  /** Total page count derived from total records and page size (min 1). */
+  public get TotalPageCount(): number {
+    const size = this.Pagination.pageSize;
+    if (size <= 0 || this.Pagination.totalRecords <= 0) {
+      return 1;
+    }
+    return Math.ceil(this.Pagination.totalRecords / size);
+  }
+
+  /** Advance to the next page (no-op past the last page). Returns the new 1-based page or null. */
+  public NextPage(): number | null {
+    return this.GoToPageNumber(this.CurrentPageNumber + 1);
+  }
+
+  /** Go to the previous page (no-op before the first page). Returns the new 1-based page or null. */
+  public PreviousPage(): number | null {
+    return this.GoToPageNumber(this.CurrentPageNumber - 1);
+  }
+
+  /**
+   * Set the server-side page size and reload from page 1. Returns the size applied,
+   * or null when paging isn't applicable (externally supplied records).
+   */
+  public SetServerPageSize(pageSize: number): number | null {
+    if (this._records || !Number.isFinite(pageSize) || pageSize <= 0) {
+      return null;
+    }
+    const size = Math.floor(pageSize);
+    this.Pagination.pageSize = size;
+    this.OnPageChange({ PageNumber: 1, PageSize: size } as PageChangeEvent);
+    return size;
+  }
+
+  /**
+   * Apply a server-side sort by field + direction and reload. Returns true when the
+   * sort was applied, false when sorting isn't applicable (externally supplied records).
+   */
+  public ApplySort(field: string, direction: SortDirection): boolean {
+    if (this._records) {
+      return false;
+    }
+    // Drive through the public SortState input so the reload logic stays in one place.
+    this.SortState = { field, direction };
+    return true;
+  }
+
+  /**
+   * Export the current view's records via the active renderer's optional imperative export
+   * ({@link IViewRenderer.exportRecords}). Returns false when no renderer is mounted or the
+   * active view type doesn't support export (e.g. timeline/map). The grid renderer downloads
+   * the file itself; this is the no-UI entry point for an external driver (the AI agent).
+   */
+  public async ExportRecords(format?: 'csv' | 'excel' | 'json'): Promise<boolean> {
+    const renderer = this.dynamicRendererRef?.instance;
+    if (!renderer || typeof renderer.exportRecords !== 'function') {
+      return false;
+    }
+    return renderer.exportRecords(format);
   }
 
   // ========================================

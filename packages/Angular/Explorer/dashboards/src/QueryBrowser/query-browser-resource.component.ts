@@ -3,7 +3,7 @@ import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, RunQuery } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine } from '@memberjunction/core-entities';
 import {
@@ -12,6 +12,15 @@ import {
 } from '@memberjunction/ng-query-viewer';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { validateStringParam, boundNameList } from '../shared/agent-tool-validation';
+import {
+    DEFAULT_QUERY_MAX_ROWS,
+    QUERY_MAX_ROWS_HARD_CAP,
+    DEFAULT_QUERY_PAGE_SIZE,
+    normalizeMaxRows,
+    computePaging,
+    boundResultRows,
+    normalizeQueryParameters,
+} from './query-execution-helpers';
 /**
  * Tree node for the query category hierarchy
  */
@@ -21,6 +30,38 @@ interface CategoryNode {
     queries: MJQueryEntityExtended[];
     expanded: boolean;
     level: number;
+}
+
+/**
+ * Tolerant result returned by the stored-query execution tools (RunStoredQuery /
+ * PageQueryResults). Results are ALWAYS bounded to the hard cap; SQL is never
+ * included.
+ */
+interface QueryExecutionToolResult {
+    Success: boolean;
+    Results?: unknown[];
+    RowCount?: number;
+    PageNumber?: number;
+    PageSize?: number;
+    ErrorMessage?: string;
+}
+
+/** A single query parameter definition surfaced by GetQueryMetadata (no SQL). */
+interface QueryParameterMetadata {
+    Name: string;
+    Type: 'array' | 'boolean' | 'date' | 'number' | 'string';
+    IsRequired: boolean;
+    Description: string | null;
+}
+
+/** Result returned by GetQueryMetadata — definitions only, never SQL or data. */
+interface QueryMetadataToolResult {
+    Success: boolean;
+    QueryName?: string;
+    Description?: string | null;
+    Parameters?: QueryParameterMetadata[];
+    Fields?: string[];
+    ErrorMessage?: string;
 }
 
 /**
@@ -72,6 +113,15 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     /** Tracks expanded state by category ID — persisted across sessions */
     private expandedState = new Map<string, boolean>();
+
+    /**
+     * The id/name of the most recent query executed via an agent execution tool
+     * (RunStoredQuery / PageQueryResults). Published in the agent context so the
+     * agent has continuity ("the query I just ran") WITHOUT ever putting result
+     * data or SQL into the always-on snapshot. Null until the first execution.
+     */
+    private lastExecutedQueryId: string | null = null;
+    private lastExecutedQueryName: string | null = null;
 
     private metadata = this.ProviderToUse;
     protected override destroy$ = new Subject<void>();
@@ -144,24 +194,41 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // ================================================================
     // AI Agent Context & Client Tools
     //
-    // 🚨 SAFETY BOUNDARY — READ-ONLY / NAVIGATIONAL ONLY 🚨
-    // Query Browser is an ADMIN surface that can execute stored SQL. The agent
-    // context and client tools registered here are strictly NAVIGATIONAL +
-    // READ-ONLY: search the query catalog, filter by status/category, select a
-    // query to view, open its record, clear filters, expand/collapse the tree,
-    // and refresh the list.
+    // 🚨 SAFETY BOUNDARY — CATALOG NAVIGATION + BOUNDED STORED-QUERY EXECUTION 🚨
+    // Query Browser is an ADMIN surface backed by a stored-query catalog. The
+    // agent context + client tools fall into two safe tiers:
     //
-    // DELIBERATELY NOT exposed to the agent (do NOT wire any of these):
-    //   • RUNNING a query — with or without arbitrary parameters. The Query
-    //     Viewer has a run/execute affordance; it is NOT surfaced as a tool.
-    //     Arbitrary execution against a stored SQL catalog is the exact thing
-    //     this boundary exists to prevent.
+    // TIER 1 — Navigational / read-only catalog tools (search, filter by
+    //   status/category, select to view, open record, clear filters,
+    //   expand/collapse, refresh). These never execute anything.
+    //
+    // TIER 2 — Bounded execution of *STORED* queries only:
+    //   • RunStoredQuery — runs a pre-vetted, permission-checked stored query
+    //     and returns AT MOST QUERY_MAX_ROWS_HARD_CAP rows.
+    //   • GetQueryMetadata — returns a query's parameter + field definitions so
+    //     the agent knows what to pass / what it returns. No SQL, no data.
+    //   • PageQueryResults — same stored query, offset by page (StartRow).
+    //   Why this is safe: stored queries are pre-authored SELECTs, permission-
+    //   gated (we DEFENSIVELY re-check UserCanRun before every run), and the
+    //   server rejects mutations via SQLExpressionValidator on a read-only
+    //   connection. Results are HARD-CAPPED so the agent can't exfiltrate a
+    //   whole table. We resolve queries ONLY from `this.queries` — the list
+    //   already filtered to what the current user may run.
+    //
+    // DELIBERATELY STILL NOT exposed to the agent (do NOT wire any of these):
+    //   • RAW / AD-HOC SQL execution — RunQueryParams.SQL is NEVER set from a
+    //     tool. The agent cannot supply arbitrary SQL; it may only name a
+    //     stored query. Arbitrary SQL against the DB is exactly what this
+    //     boundary exists to prevent.
     //   • Creating / editing / deleting queries (the drawer + SaveDrawer path).
-    //   • Exposing SQL text or query RESULT values in context or tool output.
+    //   • Exposing SQL TEXT in context or tool output (definitions/params only).
+    //   • Putting query RESULT data or SQL into the PUBLISHED CONTEXT — results
+    //     flow back only as a tool's return value (bounded), never streamed in
+    //     the always-on context snapshot.
     //
     // Selecting/opening a query only DISPLAYS its definition; it never executes
-    // it. Context exposes only catalog metadata (query/category names, counts,
-    // filter state) — never SQL or result data.
+    // it. Context exposes catalog metadata (query/category names, counts, filter
+    // state) plus the LAST-EXECUTED query id/name — never SQL or result data.
     // ================================================================
 
     /**
@@ -201,6 +268,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             // — Bounded navigable name lists (NO SQL, NO results) —
             AvailableCategories: categoryNames,
             VisibleQueryNames: visibleQueryNames,
+            // — Last execution continuity (identity ONLY — never SQL or rows) —
+            LastExecutedQueryId: this.lastExecutedQueryId,
+            LastExecutedQueryName: this.lastExecutedQueryName,
         });
     }
 
@@ -265,6 +335,42 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 Description: 'Reload the stored-query catalog from the server. Read-only.',
                 ParameterSchema: { type: 'object', properties: {} },
                 Handler: async () => this.handleRefreshTool(),
+            },
+            // ---- TIER 2: bounded execution of STORED queries only (see SAFETY BOUNDARY) ----
+            {
+                Name: 'GetQueryMetadata',
+                Description: 'Return a stored query\'s parameter definitions (Name/Type/IsRequired/Description) and result field names, plus its description — so you know what to pass to RunStoredQuery and what columns it returns. Identify the query by NAME or ID. Does NOT run the query and NEVER returns SQL text.',
+                ParameterSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+                Handler: async (params: Record<string, unknown>) => this.handleGetQueryMetadataTool(params),
+            },
+            {
+                Name: 'RunStoredQuery',
+                Description: `Execute a PRE-VETTED, permission-checked STORED query (by NAME or ID) and return bounded results. Optional Parameters object is passed to the query's template parameters (see GetQueryMetadata). MaxRows defaults to ${DEFAULT_QUERY_MAX_ROWS} and is hard-capped at ${QUERY_MAX_ROWS_HARD_CAP}. You CANNOT supply raw SQL — only name an existing stored query. Returns { Success, Results, RowCount, ErrorMessage? }.`,
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string' },
+                        Parameters: { type: 'object' },
+                        MaxRows: { type: 'number' },
+                    },
+                    required: ['query'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handleRunStoredQueryTool(params),
+            },
+            {
+                Name: 'PageQueryResults',
+                Description: `Run the same STORED query (by NAME or ID) for a given 1-based PageNumber, returning that page of bounded results. PageSize defaults to ${DEFAULT_QUERY_PAGE_SIZE} and is hard-capped at ${QUERY_MAX_ROWS_HARD_CAP}. Optional Parameters as in RunStoredQuery. Returns { Success, Results, RowCount, PageNumber, PageSize, ErrorMessage? }.`,
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string' },
+                        PageNumber: { type: 'number' },
+                        PageSize: { type: 'number' },
+                        Parameters: { type: 'object' },
+                    },
+                    required: ['query', 'PageNumber'],
+                },
+                Handler: async (params: Record<string, unknown>) => this.handlePageQueryResultsTool(params),
             },
         ]);
     }
@@ -390,6 +496,142 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         } catch (e) {
             return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
         }
+    }
+
+    // ================================================================
+    // TIER 2 — Bounded STORED-QUERY execution tool handlers
+    //
+    // Every handler is tolerant (never throws), resolves the query ONLY from the
+    // already-permission-filtered `this.queries` list, DEFENSIVELY re-checks
+    // UserCanRun before running, threads the component's RunQuery provider via
+    // `this.RunQueryToUse`, and HARD-CAPS the returned rows. SQL text is never
+    // returned; result data is never written to the published context.
+    // ================================================================
+
+    /** Tolerant result shape for the stored-query execution tools. */
+    private resolveRunnableQuery(raw: string):
+        { ok: true; query: MJQueryEntityExtended } | { ok: false; result: QueryExecutionToolResult } {
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            return { ok: false, result: { Success: false, ErrorMessage: 'A query name or ID is required.' } };
+        }
+        const query = this.resolveQuery(trimmed);
+        if (!query) {
+            return { ok: false, result: { Success: false, ErrorMessage: `No query named or identified by "${raw}" (or you lack permission to run it).` } };
+        }
+        // DEFENSIVE permission re-check — `this.queries` was already filtered to
+        // runnable queries at load time, but dependencies/permissions may have
+        // changed since. Re-verify before every execution.
+        const user = this.metadata.CurrentUser;
+        const permission = query.UserCanRun(user);
+        if (!permission.canRun) {
+            const denied = permission.deniedEntities.length > 0
+                ? ` Denied on: ${permission.deniedEntities.join(', ')}.`
+                : '';
+            return { ok: false, result: { Success: false, ErrorMessage: `You do not have permission to run "${query.Name}".${denied}` } };
+        }
+        return { ok: true, query };
+    }
+
+    /**
+     * Execute a stored query with a bounded row count and optional StartRow
+     * offset, returning a tolerant, hard-capped result. Centralizes the
+     * RunQuery call + double row-bounding shared by RunStoredQuery and
+     * PageQueryResults. Never throws; never sets RunQueryParams.SQL.
+     */
+    private async executeStoredQuery(
+        query: MJQueryEntityExtended,
+        maxRows: number,
+        parameters: Record<string, unknown> | undefined,
+        startRow?: number,
+    ): Promise<{ Success: boolean; Results: unknown[]; RowCount: number; ErrorMessage?: string }> {
+        try {
+            // Thread the component's provider (multi-provider safe) — NEVER set SQL.
+            const runQuery = new RunQuery(this.RunQueryToUse);
+            const result = await runQuery.RunQuery(
+                {
+                    QueryID: query.ID,
+                    Parameters: parameters,
+                    MaxRows: maxRows,
+                    StartRow: startRow,
+                },
+                this.metadata.CurrentUser,
+            );
+
+            if (!result.Success) {
+                return { Success: false, Results: [], RowCount: 0, ErrorMessage: result.ErrorMessage || 'Query execution failed.' };
+            }
+
+            // Record execution for context continuity (identity only).
+            this.lastExecutedQueryId = query.ID;
+            this.lastExecutedQueryName = query.Name;
+
+            // Defensive second bound: a provider that ignored MaxRows can never
+            // leak more than the cap to the agent.
+            const bounded = boundResultRows(result.Results, maxRows);
+            return { Success: true, Results: bounded, RowCount: bounded.length };
+        } catch (e) {
+            return { Success: false, Results: [], RowCount: 0, ErrorMessage: e instanceof Error ? e.message : 'Query execution failed.' };
+        }
+    }
+
+    private async handleRunStoredQueryTool(params: Record<string, unknown>): Promise<QueryExecutionToolResult> {
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? params?.['QueryId'] ?? '');
+        const resolved = this.resolveRunnableQuery(raw);
+        if (!resolved.ok) return resolved.result;
+
+        const maxRows = normalizeMaxRows(params?.['MaxRows'], DEFAULT_QUERY_MAX_ROWS);
+        const parameters = normalizeQueryParameters(params?.['Parameters']);
+
+        const exec = await this.executeStoredQuery(resolved.query, maxRows, parameters);
+        if (exec.Success) {
+            this.publishAgentContext();
+        }
+        return exec;
+    }
+
+    private async handlePageQueryResultsTool(params: Record<string, unknown>): Promise<QueryExecutionToolResult> {
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? params?.['QueryId'] ?? '');
+        const resolved = this.resolveRunnableQuery(raw);
+        if (!resolved.ok) return resolved.result;
+
+        const { startRow, pageNumber, pageSize } = computePaging(params?.['PageNumber'], params?.['PageSize']);
+        const parameters = normalizeQueryParameters(params?.['Parameters']);
+
+        const exec = await this.executeStoredQuery(resolved.query, pageSize, parameters, startRow);
+        if (exec.Success) {
+            this.publishAgentContext();
+        }
+        return { ...exec, PageNumber: pageNumber, PageSize: pageSize };
+    }
+
+    /**
+     * Return a stored query's parameter + result-field definitions so the agent
+     * knows what to pass and what it gets back. Read-only — NEVER returns SQL.
+     */
+    private handleGetQueryMetadataTool(params: Record<string, unknown>): QueryMetadataToolResult {
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? params?.['QueryId'] ?? '');
+        if (!raw.trim()) {
+            return { Success: false, ErrorMessage: 'A query name or ID is required.' };
+        }
+        const query = this.resolveQuery(raw);
+        if (!query) {
+            return { Success: false, ErrorMessage: `No query named or identified by "${raw}" (or you lack permission to view it).` };
+        }
+        const parameters: QueryParameterMetadata[] = query.QueryParameters.map(p => ({
+            Name: p.Name,
+            Type: p.Type,
+            IsRequired: p.IsRequired === true,
+            Description: p.Description ?? null,
+        }));
+        const fields: string[] = query.QueryFields.map(f => f.Name);
+        return {
+            Success: true,
+            QueryName: query.Name,
+            Description: query.Description ?? null,
+            Parameters: parameters,
+            Fields: fields,
+        };
     }
 
     ngOnDestroy(): void {

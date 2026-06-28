@@ -15,6 +15,7 @@ import {
     isValidBrowserViewMode,
     AGENT_CONTEXT_NAME_LIST_CAP,
     DashboardBrowserAgentContextInput,
+    OpenedDashboardPanelSummary,
 } from '../DashboardBrowser/dashboard-browser-agent-context';
 
 /** Build a list of `count` distinct placeholder names. */
@@ -175,6 +176,95 @@ describe('dashboard-browser-agent-context', () => {
                 'ViewMode',
                 'VisibleDashboards',
             ]);
+        });
+
+        it('omits ALL opened-dashboard fields in list mode (no leakage at the list level)', () => {
+            const ctx = buildDashboardBrowserAgentContext({
+                ...base,
+                Mode: 'list',
+                // Even if a caller accidentally supplies opened-dashboard data, list
+                // mode must not publish it.
+                OpenedDashboardName: 'Should Not Appear',
+                OpenedDashboardId: 'nope-1',
+                OpenedDashboardIsEditing: true,
+                OpenedDashboardCanEdit: true,
+                OpenedDashboardPanels: [{ Title: 'X', PartTypeName: 'View' }],
+            });
+            expect(ctx).not.toHaveProperty('OpenedDashboardName');
+            expect(ctx).not.toHaveProperty('OpenedDashboardId');
+            expect(ctx).not.toHaveProperty('OpenedDashboardIsEditing');
+            expect(ctx).not.toHaveProperty('OpenedDashboardCanEdit');
+            expect(ctx).not.toHaveProperty('OpenedDashboardPanels');
+            expect(ctx).not.toHaveProperty('OpenedDashboardPanelCount');
+        });
+    });
+
+    /**
+     * Opened-dashboard awareness: when a dashboard is OPEN (Mode view/edit) the
+     * context must describe the open dashboard + its panels so the agent isn't
+     * blind to what's on screen. These fields are present ONLY in view/edit mode.
+     */
+    describe('opened-dashboard awareness (view / edit modes)', () => {
+        const panels: OpenedDashboardPanelSummary[] = [
+            { Title: 'Active Members', PartTypeName: 'View', Icon: 'fa-solid fa-users' },
+            { Title: 'Renewals Query', PartTypeName: 'Query' },
+        ];
+
+        function openCtx(overrides: Partial<DashboardBrowserAgentContextInput> = {}): Record<string, unknown> {
+            return buildDashboardBrowserAgentContext({
+                ...base,
+                Mode: 'view',
+                SelectedDashboardId: 'dash-1',
+                SelectedDashboardName: 'Membership',
+                OpenedDashboardName: 'Membership',
+                OpenedDashboardId: 'dash-1',
+                OpenedDashboardIsEditing: false,
+                OpenedDashboardCanEdit: true,
+                OpenedDashboardPanels: panels,
+                ...overrides,
+            });
+        }
+
+        it('publishes the opened-dashboard identity + access in view mode', () => {
+            const ctx = openCtx();
+            expect(ctx['OpenedDashboardName']).toBe('Membership');
+            expect(ctx['OpenedDashboardId']).toBe('dash-1');
+            expect(ctx['OpenedDashboardIsEditing']).toBe(false);
+            expect(ctx['OpenedDashboardCanEdit']).toBe(true);
+        });
+
+        it('publishes the panel list + panel count', () => {
+            const ctx = openCtx();
+            expect(ctx['OpenedDashboardPanelCount']).toBe(2);
+            expect(ctx['OpenedDashboardPanels']).toEqual(panels);
+        });
+
+        it('marks editing in edit mode', () => {
+            const ctx = openCtx({ Mode: 'edit', OpenedDashboardIsEditing: true });
+            expect(ctx['Mode']).toBe('edit');
+            expect(ctx['OpenedDashboardIsEditing']).toBe(true);
+        });
+
+        it('defaults opened-dashboard fields tolerantly when not supplied', () => {
+            const ctx = buildDashboardBrowserAgentContext({ ...base, Mode: 'view' });
+            // Present (because mode !== 'list') but defaulted.
+            expect(ctx['OpenedDashboardName']).toBeNull();
+            expect(ctx['OpenedDashboardId']).toBeNull();
+            expect(ctx['OpenedDashboardIsEditing']).toBe(false);
+            expect(ctx['OpenedDashboardCanEdit']).toBe(false);
+            expect(ctx['OpenedDashboardPanelCount']).toBe(0);
+            expect(ctx['OpenedDashboardPanels']).toEqual([]);
+        });
+
+        it('caps the opened-dashboard panel list at the name-list cap', () => {
+            const many: OpenedDashboardPanelSummary[] = Array.from(
+                { length: AGENT_CONTEXT_NAME_LIST_CAP + 7 },
+                (_, i) => ({ Title: `Panel ${i + 1}`, PartTypeName: 'View' }),
+            );
+            const ctx = openCtx({ OpenedDashboardPanels: many });
+            expect((ctx['OpenedDashboardPanels'] as unknown[]).length).toBe(AGENT_CONTEXT_NAME_LIST_CAP);
+            // The count reports the true (uncapped) total.
+            expect(ctx['OpenedDashboardPanelCount']).toBe(many.length);
         });
     });
 
