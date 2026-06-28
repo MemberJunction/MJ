@@ -152,6 +152,7 @@ export const meta = {
         { title: 'CodeBuild' },
         { title: 'VerificationLadder' },
         { title: 'FloorCheck' },
+        { title: 'OpenAppPublish' },
     ],
 };
 
@@ -212,6 +213,23 @@ const verdict = await workflow(
     { scriptPath: 'packages/Integration/connector-builder-workshop/primitives/floor-check.workflow.js' },
     { runID: <runID>, vendor: args.vendor, slotsPath: 'packages/Integration/connector-builder-workshop/floor/phase0-slots.json', manifest: <manifest>, journal: <journal> }
 );
+
+phase('OpenAppPublish');
+// REQUIRED final stage (v2). Build + verify happened in THIS MJ sandbox under the TS class SYMBOL
+// <ClassBase>Connector; this assembles the verified connector into the MemberJunction/Integrations repo as a
+// standalone Open App and forces the FOUR-WAY identity: @RegisterClass key === Integration.ClassName ===
+// Integration.ImportPath === package.json name === @memberjunction/connector-<slug>. The TS class symbol stays
+// <ClassBase>Connector (separate identity); IntegrationName === Integration.Name (display). publish-open-app.mjs
+// REUSES the Integrations-repo scripts (new-connector / build-seed-migrations / build-connectors-catalog /
+// validate-invariants) — validate-invariants is the gate; a failed seed step from no-DB is non-blocking.
+// Category = brand.Category (AMS|CRM|Events|Finance|LMS|Marketing|Platform). Run ONLY after verdict.pass.
+// KEEP this phase when customizing the template — dropping it leaves the connector un-shipped.
+const publish = verdict?.pass ? await agent(
+    'Run packages/Integration/connector-builder-workshop/scripts/publish-open-app.mjs (--repo <integrationsRepo> ' +
+    '--category <brand.Category> --class-base <ClassBase> --connector <codeResult.ConnectorFile> --metadata <metadataFile> ' +
+    '--display "<CanonicalName>") and return its JSON verbatim. ok=true means the Open App passed validate-invariants.',
+    { agentType: 'code-builder', schema: PUBLISH_SCHEMA }
+) : null;
 
 return { identity, extractStats, frozen, review, codeResult, ladder, verdict };
 ```

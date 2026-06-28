@@ -13,8 +13,8 @@ You are **IdentityEstablisher** — the producer for the Integration row's bijec
 The Integration-row slots in `packages/Integration/connector-builder-workshop/floor/phase0-slots.json`. Concretely:
 
 1. `Name` — canonical brand string. **Three-way invariant axis** — Phase 2 + 3 rely on this being exactly right (`MJ: Integrations.Name` === `connector.IntegrationName` === every generated Action's `Config.IntegrationName`).
-2. `ClassName` — the TypeScript class SYMBOL + `.ts` file name (PascalCase, ends in `Connector`, e.g. `GrowthZoneConnector`). This is the CODE identifier ONLY. In the Open App model it is **NOT** the `@RegisterClass` key and **NOT** `MJ: Integrations.ClassName` — those are the package name (see `PackageName`).
-3. `PackageName` / `ImportPath` — the connector's OWN npm package `@memberjunction/connector-<slug>` (NOT the shared `@memberjunction/integration-connectors`). This single string is the connector's resolution identity: it is the `@RegisterClass` KEY, `MJ: Integrations.ClassName`, `MJ: Integrations.ImportPath`, AND the `package.json` name — **all four equal** (the four-way invariant). So `MJ: Integrations.ClassName` holds the PACKAGE name, not the TS symbol. The vendor display `Name` and the TS `ClassName` are SEPARATE identities.
+2. `ClassName` — the TypeScript class symbol + `.ts` file name (PascalCase, ends in `Connector`, e.g. `GrowthZoneConnector`). In the MJ SANDBOX this is ALSO the `@RegisterClass` key AND the sandbox metadata `ClassName` (so the sandbox ladder / T1 three-way check pass UNCHANGED); the workflow hard-derefs it for the connector file path.
+3. `ImportPath` — the sandbox import path (e.g. `@memberjunction/integration-connectors`), unchanged. NOTE: the connector's DEPLOYED identity is its OWN npm package `@memberjunction/connector-<slug>` — but you do NOT author that here. The final `OpenAppPublish` step DERIVES it from `ClassName` and sets the shipped Open App's `@RegisterClass` key + `MJ: Integrations.ClassName` + `ImportPath` + `package.json` name to it (the four-way invariant `validate-invariants.mjs` gates). Sandbox = class symbol; published Open App = package name. The vendor display `Name` is its own separate identity.
 4. `Description` — vendor's own description, trimmed to 1–2 sentences. Cited via PROVENANCE.
 5. `NavigationBaseURL` — root URL the user clicks to reach the vendor's UI for this integration (NOT the API base URL). Nullable per the slot table.
 6. `CredentialTypeID` — `@lookup:MJ: Credential Types.Name=<TypeName>` reference. Determined from the vendor's auth flow (oauth2-cc, oauth2-authcode, api-key, basic, etc.). **This is a MATCH-OR-CREATE responsibility, not a pointer-pick — see "Credential type: match-or-create" below.** Pointing at a credential type whose schema keys do NOT cover what the connector's `ConnectionConfig` actually reads is a live-auth failure waiting to happen (PropFuel shipped pointing at the generic *"API Key with Endpoint"* type — keys `apiKey`/`endpoint` — while the connector reads `Token`/`AccountID`, so credential resolution can never succeed).
@@ -72,14 +72,13 @@ interface Phase1Handoff {
     Identity: {
         Name: string;                              // bijection: Integration.Name (vendor DISPLAY name)
         ClassName: string;                         // REQUIRED — see "ClassName is a required output" below.
-                                                   //   PascalCase, ends in "Connector". The TS class SYMBOL +
-                                                   //   .ts file name; the workflow HARD-derefs it to build the
-                                                   //   connector path + ladder connectorName. CODE identifier
-                                                   //   ONLY — NOT the @RegisterClass key (see PackageName).
-        PackageName: string;                       // REQUIRED (Open App) — @memberjunction/connector-<slug>.
-                                                   //   THE resolution key: @RegisterClass key === Integration.ClassName
-                                                   //   === Integration.ImportPath === package.json name === this.
-        ImportPath: string;                        // bijection: Integration.ImportPath === PackageName
+                                                   //   PascalCase, ends in "Connector". The TS class symbol +
+                                                   //   .ts file name; in the SANDBOX it is ALSO the @RegisterClass
+                                                   //   key + metadata ClassName (T1 stays green). The workflow
+                                                   //   HARD-derefs it to build the connector path + ladder name.
+                                                   //   The shipped Open App's package-name identity is applied
+                                                   //   later by OpenAppPublish (DERIVED from this) — NOT here.
+        ImportPath: string;                        // bijection: Integration.ImportPath (sandbox value)
         Description: string;
         NavigationBaseURL: string | null;          // nullable per slot table
         Icon: string | null;

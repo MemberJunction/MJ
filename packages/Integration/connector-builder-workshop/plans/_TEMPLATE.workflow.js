@@ -39,6 +39,7 @@ export const meta = {
         { title: 'VerificationLadder', detail: 'T0..maxTier + two-pass volatile-field idempotency rung (v2 P3).' },
         { title: 'HybridE2E', detail: 'Deep §1→§7 e2e: real MJ engine → real SQL Server, FRESH DB. LIVE MANDATORY when credential exists (mock cannot satisfy — v2 P6). Outcome gates: rowcounts vs ground truth, two-pass zero-growth, first-sync completeness, capture engaged, bounded typing. Env per HYBRID_E2E_ENV_RUNBOOK.md.' },
         { title: 'FloorCheck', detail: 'Bijection + manifest + v2 EMPIRICAL gates (reality-probe, e2e-mock-dodge, capability-honesty, env-preflight, second-sync-grew, first-sync-incomplete, capture-engaged). Verdict states the EMPIRICAL/LINT split.' },
+        { title: 'OpenAppPublish', detail: 'Assemble the verified connector into the MemberJunction/Integrations repo as a standalone Open App: scaffold + package-name @RegisterClass key + metadata ClassName/ImportPath=package + seed migration + catalog + changeset + validate-invariants gate. Machinery in MJ; deliverable in Integrations.' },
     ],
 };
 
@@ -49,6 +50,11 @@ export const meta = {
 const A = (typeof args === 'string') ? (() => { try { return JSON.parse(args); } catch { return {}; } })() : (args ?? {});
 const VENDOR = A?.vendor ?? '(unknown)';
 const VENDOR_SLUG = String(VENDOR).toLowerCase();
+// Open App publish target (v2): the connector is built + verified in THIS MJ sandbox, then the verified
+// DELIVERABLE is assembled into the MemberJunction/Integrations repo as a standalone Open App (the build
+// MACHINERY stays here in MJ; the connector PACKAGE goes there). See the OpenAppPublish stage at the end.
+const INTEGRATIONS_REPO = A?.integrationsRepo ?? '../Integrations';
+const PUBLISH_OPEN_APP = A?.publishOpenApp !== false;   // default ON; set false to stop after sandbox verify
 const REGISTRY_DIR = `packages/Integration/connectors-registry/${VENDOR_SLUG}`;
 const METADATA_FILE = `metadata/integrations/${VENDOR_SLUG}/.${VENDOR_SLUG}.integration.json`;
 const RUNS_DIR = `${REGISTRY_DIR}/runs/${A?.runID ?? 'unknown'}`;
@@ -132,13 +138,14 @@ const BRAND_SCHEMA = {
         Description: { type: 'string' },
         NavigationBaseURL: { type: ['string', 'null'] },
         IconClass: { type: ['string', 'null'] },
+        Category: { type: ['string', 'null'] },   // Open App folder: AMS|CRM|Events|Finance|LMS|Marketing|Platform
         Disambiguation: { type: 'array' },
         Sources: { type: 'array', items: { type: 'string' } },
         ProductTaxonomy: { type: 'object' },
     },
 };
 const brand = await agent(
-    `Research vendor "${VENDOR}". Resolve canonical name, description, navigation URL, icon class, and ProductTaxonomy. Schema-bound output only.`,
+    `Research vendor "${VENDOR}". Resolve canonical name, description, navigation URL, icon class, ProductTaxonomy, and the Open App Category (one of AMS|CRM|Events|Finance|LMS|Marketing|Platform — the folder the connector ships under in the MemberJunction/Integrations repo). Schema-bound output only.`,
     { agentType: 'vendor-brand-researcher', schema: BRAND_SCHEMA, phase: 'BrandResearch', label: `brand:${VENDOR_SLUG}` }
 );
 
@@ -663,6 +670,32 @@ const verdict = await workflow(
     }
 );
 
+// ── OpenAppPublish (v2 — assemble the verified connector into the Integrations repo as an Open App) ──
+// Additive final stage: runs ONLY after FloorCheck passes and does NOT touch the sandbox build/verify flow
+// above. publish-open-app.mjs scaffolds the Open App, copies the connector forcing the package-name
+// @RegisterClass key, copies the metadata forcing ClassName/ImportPath = package name, generates the seed
+// migration, regenerates the catalog, adds a changeset, and runs validate-invariants as the four-way gate.
+let publish = null;
+if (PUBLISH_OPEN_APP && verdict?.pass) {
+    phase('OpenAppPublish');
+    const CLASS_BASE = String(identity?.Identity?.ClassName ?? '').replace(/Connector$/, '');
+    const CATEGORY = A?.category ?? brand?.Category ?? null;
+    const CONNECTOR_TS = codeResult?.ConnectorFile ?? `packages/Integration/connectors/src/${identity?.Identity?.ClassName}.ts`;
+    const PUBLISH_SCHEMA = { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' }, package: { type: 'string' }, appDir: { type: 'string' }, steps: { type: 'array' } } };
+    if (!CATEGORY || !CLASS_BASE) {
+        log(`OpenAppPublish: missing ${!CATEGORY ? 'Category (brand.Category/args.category)' : 'ClassName'} — cannot place the Open App; skipping publish (sandbox build is still verified).`);
+        publish = { ok: false, skipped: true, reason: !CATEGORY ? 'no-category' : 'no-classname' };
+    } else {
+        publish = await agent(
+            `Publish the verified ${brand.CanonicalName} connector as an Open App. Run EXACTLY this and return its JSON stdout VERBATIM:\n` +
+            `  node packages/Integration/connector-builder-workshop/scripts/publish-open-app.mjs --repo ${INTEGRATIONS_REPO} --category ${CATEGORY} --class-base ${CLASS_BASE} --connector ${CONNECTOR_TS} --metadata ${METADATA_FILE} --display ${JSON.stringify(brand.CanonicalName)}\n` +
+            `ok=true means the Open App PASSED validate-invariants (the four-way identity + Open App shape gate). A failed 'seed' step (no reachable DB) is acceptable and NON-blocking — surface it but do not fail on it; every other step must be ok.`,
+            { schema: PUBLISH_SCHEMA, phase: 'OpenAppPublish', label: 'publish:open-app' }
+        );
+        log(`OpenAppPublish: ok=${publish.ok} package=${publish.package ?? '?'} appDir=${publish.appDir ?? '?'}`);
+    }
+}
+
 return {
     runID: A?.runID,
     vendor: VENDOR,
@@ -678,5 +711,6 @@ return {
     codeRound,
     ladder,
     verdict,
+    publish,
     status: verdict?.pass ? 'Complete' : 'PartialPass',
 };
