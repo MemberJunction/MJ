@@ -56,6 +56,38 @@ SystemDiagnostics alerts live in the **inline template of
    above, plus the inline-style heuristic; scans `.ts`). Baseline at start: **0% — 0 / 72**.
    CI ratchet: `check-alerts.sh --max <N>` fails if bespoke exceeds N; lower N as we migrate.
    `--list` prints every site.
+
+### ⚠️ Marker widening (2026-06-29) — the gate was UNDER-counting
+The first marker set keyed on `.alert`/`*-banner` and missed a whole class of genuine
+alerts — most visibly the **confirm-delete modal warning boxes** (`<p class="text-warning">`
+in role-management + application-management) that used the **primitive** `--mj-color-warning-50`
+background → cream-on-dark. A 4-agent warning sweep then surfaced ~14 more genuine alerts the
+gate never saw. Markers widened accordingly:
+- **classes added**: `validation-banner`, `no-schemas-warning`, `calibration-warning`,
+  `ddl-warning`, `auto-map-partial`, `provider-picker-(warning|error)`.
+- **inline heuristic** now also matches the hardcoded Bootstrap alert palette
+  (`#fff3cd`/`#f8d7da`/`#d4edda`/`#f0fff4`/`#d1ecf1`/`#fff5f5`/`#fef3c7`) AND counts
+  per-occurrence (was per-file) — but stays PRECISE: it does NOT match raw
+  `background: color-mix(... var(--mj-status-X) ...)` because badges/pills/kpi-icons/legends
+  use that too. The few inline alerts written that way (action-form wildcard/approval) are
+  tracked here and migrated regardless, just not auto-counted.
+- **excluded**: `initial-prototype-now-old/` (dead mockup), `no-index-warning` (greedy — matched
+  a modal's 5 child elements; the modal is a borderline review case anyway), the `<pre>` error blob.
+- **honest baseline after widening: ~12% — 11 / 88** (was a misleading 0/72; +14 alerts were invisible).
+- **Lesson (again):** narrow class markers under-count; the only reliable catch for the
+  `text-warning`-style boxes was browsing a real page in dark mode. Classify broad hits, don't trust the grep.
+
+### Warning-alert migration targets (from the 2026-06-29 sweep)
+Goal is STANDARDIZATION (one shared `<mj-alert>`), not just fixing dark-mode breakage —
+dark breakage was only the symptom that exposed the gap. Genuine warning alerts to migrate
+(2 already done: role-management + application-management confirm boxes):
+- **SystemDiagnostics**: `.recommendation-banner`, `.warning-banner` (×2 uses), `.pattern-warning`, `.insight-card.severity-warning`*
+- **Integration**: `.validation-banner` (mapping-workspace), `.auto-map-partial` (connections), `.ddl-warning` (connections), `pending-entity-panel`*
+- **core-entity-forms**: ai-prompt-form output-example warning (inline `#fff3cd`), action-form wildcard + approval warnings (inline color-mix), query-form `.status-warning-banner`, searchscopeprovider `.provider-picker-warning`/`.provider-picker-error`, query-run-dialog error (inline `#f8d7da`)
+- **dashboards (AI/Testing/DBDesigner)**: duplicate-detection `.merge-warning-banner`, testing-review `.calibration-warning`, step-basics `.no-schemas-warning`, vector-management `.no-index-warning-dialog`*
+- **explorer-settings**: notification-preferences info-message warning
+
+`*` = flag-for-review (not a clean one-line banner — expandable card list / big centered card / whole modal; needs layout judgment, not a swap).
 ### 🔴 STANDARD: every visual capture is DUAL-MODE (light + dark)
 A migration that looks right in light can still be wrong in dark (and vice-versa) —
 so **every** visual check covers **both** themes. No single-mode screenshots.

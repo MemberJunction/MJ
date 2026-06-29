@@ -33,19 +33,26 @@ while [ $# -gt 0 ]; do
 done
 
 INC=(--include='*.html' --include='*.ts')
-EXC=(--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=generated)
+EXC=(--exclude-dir=node_modules --exclude-dir=dist --exclude-dir=generated --exclude-dir=initial-prototype-now-old)
 
 # Genuine bespoke-alert class markers (verified). Bootstrap-style .alert + its
 # modifiers, the *-banner family, box/card/panel forms, the .message+X-message
 # pair, and the verified named one-offs.
-GENUINE='class="[^"]*(alert-(error|danger|warning|info|success)|(error|mj-error|info|warning|status|status-warning|sync-result|recommendation|success|merge-warning|fields-error|mj-flow-node-warning)-banner|warning-box|info-box|success-card|error-card|error-panel|result-header|suggestion-error|no-scopes-warning|key-warning|security-note|security-notice|scope-tip|pattern-warning|beta-warning|parent-info|alert-item|(message[^"]*(error|success)-message))[^"]*"|class="alert"|class="alert "'
+GENUINE='class="[^"]*(alert-(error|danger|warning|info|success)|(error|mj-error|info|warning|status|status-warning|sync-result|recommendation|validation|success|merge-warning|fields-error|mj-flow-node-warning)-banner|warning-box|info-box|success-card|error-card|error-panel|result-header|suggestion-error|no-scopes-warning|no-schemas-warning|key-warning|security-note|security-notice|scope-tip|pattern-warning|calibration-warning|ddl-warning|auto-map-partial|provider-picker-(warning|error)|beta-warning|parent-info|alert-item|(message[^"]*(error|success)-message))[^"]*"|class="alert"|class="alert "'
 
 # False-positives that the GENUINE pattern would otherwise sweep in
 # (chrome/hero/state/transient) — see inventory. Dropped line-wise.
 EXCLUDE='health-banner|health-warning|health-critical|health-alert|alert-header|clear-header|sync-progress-banner|saving-overlay|error-container|error-content'
 
 # Markerless inline-style alerts: a status-tinted background set inline (no class).
-INLINE='style="[^"]*--mj-status-(error|success|warning|info)-bg'
+# Two PRECISE signals only: the alert-designed semantic -bg token, and the hardcoded
+# Bootstrap alert palette (warning #fff3cd, danger #f8d7da, success #d4edda/#f0fff4,
+# info #d1ecf1, error #fff5f5, warn #fef3c7). NOTE: we deliberately do NOT match raw
+# `background: color-mix(... var(--mj-status-X) ...)` — badges/pills/kpi-icons/legends
+# use that too, so it can't tell an alert from a decoration. The handful of inline
+# alerts written that way (e.g. action-form's wildcard/approval boxes) are tracked in
+# the inventory and get migrated regardless; they're just not auto-counted here.
+INLINE='style="[^"]*background:[^;"]*(--mj-status-(error|success|warning|info)-bg|#fff3cd|#f8d7da|#d4edda|#f0fff4|#d1ecf1|#fff5f5|#fef3c7)'
 
 # Count <mj-alert> usage in CONSUMERS — exclude the component's own source
 # (its TSDoc examples + DOM-test host template) which aren't real adoption.
@@ -55,7 +62,9 @@ canonical=$(grep -rHno "${EXC[@]}" "${INC[@]}" '<mj-alert' "$SCOPE" 2>/dev/null 
 bespoke_matches=$(grep -rhnoE "${EXC[@]}" "${INC[@]}" "$GENUINE" "$SCOPE" 2>/dev/null | grep -vE "$EXCLUDE" || true)
 bespoke=$(printf '%s' "$bespoke_matches" | grep -c . || true)
 
-inline_matches=$(grep -rlE "${EXC[@]}" "${INC[@]}" "$INLINE" "$SCOPE" 2>/dev/null || true)
+# Count inline-style alerts per-occurrence (not per-file). Exclude the <pre> error
+# blob (a monospace content dump, not a banner — see inventory).
+inline_matches=$(grep -rhnE "${EXC[@]}" "${INC[@]}" "$INLINE" "$SCOPE" 2>/dev/null | grep -v '<pre' || true)
 inline=$(printf '%s' "$inline_matches" | grep -c . || true)
 
 remaining=$((bespoke + inline))
@@ -73,7 +82,7 @@ if [ "$LIST" = "1" ]; then
   echo; echo "── bespoke (class) ──"
   grep -rlnE "${EXC[@]}" "${INC[@]}" "$GENUINE" "$SCOPE" 2>/dev/null | grep -vE "$EXCLUDE" | sed "s#$REPO_ROOT/##" || true
   echo; echo "── markerless (inline-style status bg) ──"
-  printf '%s\n' "$inline_matches" | sed "s#$REPO_ROOT/##"
+  grep -rnE "${EXC[@]}" "${INC[@]}" "$INLINE" "$SCOPE" 2>/dev/null | grep -v '<pre' | sed "s#$REPO_ROOT/##" | cut -c1-160 || true
 fi
 
 if [ -n "$MAX" ] && [ "$remaining" -gt "$MAX" ]; then
