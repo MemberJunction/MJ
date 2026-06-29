@@ -264,7 +264,59 @@ export class PredictiveStudioEngine extends BaseEngine<PredictiveStudioEngine> {
     user: UserInfo | undefined,
     options?: { sinceDays?: number; maxRows?: number },
   ): Promise<PSProcessRunRow[]> {
-    const processIds = this.ScoringRecordProcessIDs;
+    return this.loadRunsForProcessIds(this.ScoringRecordProcessIDs, provider, user, options);
+  }
+
+  /**
+   * Record Processes (`WorkType='ML Model'`) configured to score with `modelId` — the cached link from a
+   * model to the processes that run it, idle/scheduled/bound alike (no DB hit). The `modelId` is read from
+   * each Record Process's stored `Configuration` JSON.
+   */
+  public RecordProcessesForModel(modelId: string): MJRecordProcessEntity[] {
+    return this.RecordProcesses.filter((rp) => {
+      const id = this.recordProcessModelId(rp);
+      return id != null && UUIDsEqual(id, modelId);
+    });
+  }
+
+  /** The cached Record-Process ids scoring with `modelId`. */
+  public RecordProcessIDsForModel(modelId: string): string[] {
+    return this.RecordProcessesForModel(modelId).map((rp) => rp.ID);
+  }
+
+  /** Parse a Record Process's stored `modelId` (the `WorkType='ML Model'` config), or null. */
+  private recordProcessModelId(rp: MJRecordProcessEntity): string | null {
+    try {
+      const cfg: unknown = JSON.parse(rp.Configuration ?? '{}');
+      const id = (cfg as { modelId?: unknown })?.modelId;
+      return typeof id === 'string' ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Load recent process runs for ONE model's Record Processes — same DB-light, on-demand contract as
+   * {@link LoadRecentScoringRuns}, scoped to a single model. Powers the "Models in Production" per-model
+   * run history (a model needs no scoring binding to have runs — any `WorkType='ML Model'` Record Process
+   * run persists here).
+   */
+  public async LoadRecentRunsForModel(
+    modelId: string,
+    provider: IMetadataProvider,
+    user: UserInfo | undefined,
+    options?: { sinceDays?: number; maxRows?: number },
+  ): Promise<PSProcessRunRow[]> {
+    return this.loadRunsForProcessIds(this.RecordProcessIDsForModel(modelId), provider, user, options);
+  }
+
+  /** Shared run-loader: recent `MJ: Process Runs` for a set of Record-Process ids (capped, newest-first). */
+  private async loadRunsForProcessIds(
+    processIds: string[],
+    provider: IMetadataProvider,
+    user: UserInfo | undefined,
+    options?: { sinceDays?: number; maxRows?: number },
+  ): Promise<PSProcessRunRow[]> {
     if (processIds.length === 0) return [];
     const sinceDays = options?.sinceDays ?? 7;
     const maxRows = options?.maxRows ?? 50;
