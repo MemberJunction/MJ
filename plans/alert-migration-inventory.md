@@ -127,3 +127,46 @@ so **every** visual check covers **both** themes. No single-mode screenshots.
 - **Token remap on migrate**: `user-app-config` uses Material `--mat-sys-*` tokens.
 - **Visual-review-before-migrate**: `key-warning` (dark key box), `mj-flow-node-warning-banner` (~10px inside a graph node — mj-alert chrome may be too heavy), borderline info/empty hybrids (`no-roles-message`).
 - **Boundary**: don't migrate the `error-container` error-STATE screens here — they're the empty-state effort's.
+
+---
+
+## Error / Info / Success inventory (2026-06-29 sweep)
+
+Same 4-agent classification, run for the non-warning variants. ~58 genuine
+error/info/success alerts (≈36 error / 12 info / 7 success), cross-checking the
+gate's bespoke count (~66). Goal is STANDARDIZATION — every bespoke inline alert
+→ the shared `<mj-alert>`, regardless of variant or whether it's dark-broken.
+Sorted into four migration buckets.
+
+### ① Clean swaps (~40) — single-variant, semantic tokens, one-line replace
+- **MCP**: `mcp-dashboard.html:76` error (dismissible); `components/mcp-server-dialog.html:10` error; `components/mcp-connection-dialog.html:10` error; inline `mcp-dashboard.html:645/724` error, `:870` success, `:875` error (dark-broken hardcoded hex)
+- **SystemDiagnostics** (inline template `.ts`): `:395` error (dismissible, primitive — dark-broken); `:617` success (primitive — dark-broken)
+- **explorer-settings**: `notification-preferences` info-message (info); `application-settings:34` error + `:39` success (`.message.error/.success` pair); `user-app-config:97` error (Material `--mat-sys-*` token — dark-broken, remap)
+- **explorer-core**: `conversation-feedback` `.error-banner` (dismissible)
+- **core-entity-forms/custom**: `Queries/query-run-dialog.html:267` error (`#f8d7da` — dark-broken); `Actions/action-form.html:449` error (inline color-mix); `SearchScopes/searchscopeprovider-form.html:36` `.provider-picker-error`; `AIAgents/ai-agent-form.html:416` `.error-section`; `Tests/test-run-form.html:419` `.error-section`
+- **core-entity-forms/panels**: `ai-agents/agent-realtime.panel.html:11` `.rt-error`
+- **Generic/base-forms**: `interactive-form.html:6` + `:35` `.mj-error-banner`
+- **Generic**: `resource-permissions/resource-share-dialog.html:18` error; `list-management/save-view-as-list-dialog.html:8` info-banner; `artifacts/.../component-feedback-panel.html:147` success + `:153` error (`.message.*-message` pair); `export-service/export-dialog.html:109` `.mj-export-error`
+- **AI**: `prompts/prompt-version-control.html:409` `alert alert-danger`; `vectors/vector-management-resource.html:486` `.suggestion-error`
+- **Actions**: `explorer/new-action-panel.html:18` + `new-category-panel.html:18` `.error-banner`; `new-action-panel.html:90` `.info-box` (info)
+- **DatabaseDesigner**: `entity-list.html:51` `.entity-list-error`; `create-wizard/database-create-wizard.html:30` `.wizard-banner-error`; `modify/database-modify.html:12` `.modify-error`; `shared/entity-fields-grid.html:5` `.fields-error-banner`; `create-wizard/steps/step-review.html:9` `.step-banner-success` (success)
+- **APIKeys**: `api-key-create-dialog.html:162` `.scope-tip` (info)
+- **ComponentStudio**: `form-builder/form-builder-tab.html:93` `.fbt-lossy-banner` (info); `workspace/component-preview.html:62` `.form-preview-banner` (info)
+
+### ② Dynamic-variant (~6) — one element, variant flips by state; needs computed `[Variant]`
+- MCP `mcp-dashboard.html:248` `.sync-result-banner` (success/error)
+- MCP `components/mcp-log-detail-panel.html:35` `.status-banner` (success/error/info by log status)
+- Integration `connections.component.html:362` `.sync-result-banner` (success/error)
+- Scheduling `scheduling-overview.component.html:156` `.alert-item` (multi-variant, dismissible, +Release action)
+- Generic `list-management/list-delta-confirm.html:35` `.delta-banner--safe` (success) + `:40` `.delta-banner--danger` (error) — a pair
+
+### ③ Structural / look-changing (~10) — review individually, NOT auto-swap
+- explorer-core `system-validation-banner.ts:102` error + `:112` info — a **fixed-position stacked** alert system (its own component); migrating means rethinking the stack, not a swap
+- **cards / +actions**: MCP `mcp-test-tool-dialog.html:293` `.error-panel` (wraps `<pre>`); MCP `mcp-log-detail-panel.html:102` `.error-card` (expandable); DatabaseDesigner `entity-pipeline-panel.html:77` `.error-card` + `:44` `.success-card`; `test-run-form.html:4` `.error-banner` (+Retry → `[actions]`); AI `prompts/model-prompt-priority-matrix.html:397` `alert alert-danger` (+Retry)
+- **gradient/brand look-change** (mapping to flat `info` changes appearance): APIKeys `api-key-create-dialog.html:221` `.security-note`, `api-key-edit-panel.html:208` `.revoked-notice`, `api-keys-resource.html:318` `.security-notice`; Home `home-dashboard.html:39` `.edit-mode-banner` (brand-colored mode banner)
+
+### Dark-broken subset (for awareness; not the deciding factor)
+MCP inline `mcp-dashboard.html:645/724/870/875`; SystemDiagnostics `.ts:395/617` (primitive); `user-app-config` (Material token); `query-run-dialog` (`#f8d7da`).
+
+### NOT-alerts confirmed across the sweep (leave)
+Full-page error-STATE screens (error-container/retry-button → mj-empty-state's job), bare field-validation `.error-message`/`.field-error`, `<pre>`/code-dump error blobs, status badges/pills/chips/dots (`streaming-chip-*`, `rr-state--error`, `health-banner`), timeline rows, legend swatches, info display grids (`.info-label`/`.info-value`), `sql-logging .info-box` (how-to content), `coming-soon`/promo banners, toasts (NotificationService).
