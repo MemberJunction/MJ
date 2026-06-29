@@ -27,7 +27,7 @@ interface RecordProcessDouble {
   Name: string;
   Description: string | null;
   Status: 'Active' | 'Disabled' | 'Draft';
-  WorkType: 'Action' | 'Agent' | 'FieldRules' | 'Infer';
+  WorkType: MJRecordProcessEntity['WorkType'];
   EntityID: string;
   Entity: string;
   Category: string | null;

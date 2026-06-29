@@ -253,6 +253,11 @@ export class FeaturePipelinesResourceComponent
         return 'fa-solid fa-bolt';
       case 'FieldRules':
         return 'fa-solid fa-list-check';
+      case 'ML Model':
+        return 'fa-solid fa-brain';
+      default:
+        // Keeps the function total against future CodeGen-added work types.
+        return 'fa-solid fa-gear';
     }
   }
 

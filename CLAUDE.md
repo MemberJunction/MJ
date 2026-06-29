@@ -62,6 +62,34 @@ Sub-directory CLAUDE.md files extend this root guide with topic-specific rules. 
   - The types don't exist yet because CodeGen hasn't run — wait for it before writing dependent code
 - **Why**: `.Get()`/`.Set()` fail silently on typos, have no IntelliSense, no refactoring support, and no compile-time checking. They are the `any` of the entity world.
 
+### 2c. DERIVE FIELD TYPES FROM THE ENTITY — NEVER HAND-COPY A VALUE-LIST UNION
+- **When you need the TYPE of an entity field, derive it from the generated entity class (`SomeEntity['FieldName']`) or its underlying Zod schema — NEVER re-type the union by hand.**
+- This matters most for **value-list / dropdown fields**, whose TypeScript union (e.g. `'Action' | 'Agent' | 'Infer' | 'FieldRules'`) is **CodeGen-generated from the column's CHECK constraint**. The union is a moving target: the moment a migration adds a value to the CHECK and CodeGen re-runs, the generated union grows. A hand-copied union does **not** grow with it.
+- A hand-copied union is the typed equivalent of a magic string — it looks safe but **silently drifts** from the source of truth. The two real failure modes (both caught in this codebase when `'ML Model'` was added to `RecordProcess.WorkType`):
+  1. **Assignment break** — copying `entity.WorkType` (the now-5-value generated union) into a projection/DTO/interface field still typed with the old 4 values fails to compile (`Type '"ML Model"' is not assignable to ...`).
+  2. **Non-exhaustive switch** — a `switch (workType)` that returned for each of the old 4 cases now falls through on the new value (`Function lacks ending return statement`). Deriving the parameter type from the entity is precisely what surfaces this at compile time so you handle the new case.
+- **The pattern:**
+  ```typescript
+  import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+
+  // ✅ CORRECT — tracks the CodeGen union forever; new CHECK values flow through automatically
+  interface FeaturePipelineSummary {
+      WorkType: MJRecordProcessEntity['WorkType'];   // entity field type
+  }
+  // ✅ ALSO CORRECT — derive from another type that already derives from the entity
+  interface FeaturePipelineCandidate {
+      WorkType: FeaturePipelineSummary['WorkType'];  // stays in lockstep with the summary
+  }
+
+  // ❌ WRONG — a frozen copy; breaks (or goes non-exhaustive) the next time CodeGen widens the union
+  interface FeaturePipelineSummary {
+      WorkType: 'Action' | 'Agent' | 'FieldRules' | 'Infer';
+  }
+  ```
+- This applies to **projection types, DTOs, view-models, agent-context shapes, AND test mock interfaces** — anywhere you'd otherwise restate an entity field's literal union. Indexed access (`Entity['Field']`) is zero-cost and erased at runtime; `import type { ... }` adds no runtime dependency.
+- For switches over such a field, derive the parameter type from the entity **and** add a `default` branch — so the function stays total when CodeGen adds a value, while still giving known values explicit handling.
+- **Related**: the CHECK constraint is the source of truth for the value list — see the value-list rule in [`migrations/CLAUDE.md`](migrations/CLAUDE.md) (drop + re-add the CHECK in one migration, then `mj codegen`).
+
 ### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 - **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
 - **NEVER run `git reset --hard`** without explicit approval

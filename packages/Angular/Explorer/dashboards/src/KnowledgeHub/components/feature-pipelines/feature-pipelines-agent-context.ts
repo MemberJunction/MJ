@@ -25,7 +25,8 @@ export interface FeaturePipelineCandidate {
     TargetEntity: string;
     OutputAttribute: string | null;
     Status: 'Active' | 'Disabled' | 'Draft';
-    WorkType: 'Action' | 'Agent' | 'FieldRules' | 'Infer';
+    /** Derived from {@link FeaturePipelineSummary} (ultimately the entity's CodeGen union) so the two never drift. */
+    WorkType: FeaturePipelineSummary['WorkType'];
     LastRunStatus: FeaturePipelineRunStatus;
     OnDemandEnabled: boolean;
 }

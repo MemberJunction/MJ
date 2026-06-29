@@ -37,8 +37,12 @@ export interface FeaturePipelineSummary {
   Description: string | null;
   /** Record Process lifecycle status. */
   Status: 'Active' | 'Disabled' | 'Draft';
-  /** The per-record work the pipeline performs. */
-  WorkType: 'Action' | 'Agent' | 'FieldRules' | 'Infer';
+  /**
+   * The per-record work the pipeline performs. Derived from the entity's `WorkType` so it tracks
+   * the CodeGen-generated union (sourced from the `CK_RecordProcess_WorkType` CHECK constraint) and
+   * never drifts as work types are added (e.g. `'ML Model'`).
+   */
+  WorkType: MJRecordProcessEntity['WorkType'];
   /** Id of the target entity whose records the pipeline derives features for. */
   TargetEntityID: string;
   /** Display name of the target entity. */
