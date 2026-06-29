@@ -67,3 +67,58 @@ describe('MaterializationRefresher.buildFullRebuildStatementsSQLServer', () => {
         });
     });
 });
+
+/**
+ * PG counterpart of the full-rebuild + atomic-swap builder (plan §11.2). Pure logic; live PG
+ * behavior is a gated integration follow-up. PG quoting: schema bare, object double-quoted.
+ */
+describe('MaterializationRefresher.buildFullRebuildStatementsPostgreSQL', () => {
+    const base = { schema: '__mj', tableName: 'materialized_demo', viewName: 'materialized_vw_demo' };
+
+    describe('query case (synthetic surrogate as the FIRST column)', () => {
+        const stmts = MaterializationRefresher.buildFullRebuildStatementsPostgreSQL({
+            ...base,
+            sourceSelect: 'SELECT a, b FROM __mj.foo',
+            surrogateColumn: MATERIALIZATION_SURROGATE_COLUMN,
+        });
+
+        it('produces the 6-statement build → atomic-swap → rename → repoint sequence', () => {
+            expect(stmts).toHaveLength(6);
+        });
+
+        it('builds the shadow with the surrogate FIRST via ROW_NUMBER (PG view-column-order strictness)', () => {
+            expect(stmts[0]).toBe('DROP TABLE IF EXISTS __mj."materialized_demo__shadow" CASCADE');
+            expect(stmts[1]).toBe(`CREATE TABLE __mj."materialized_demo__shadow" AS SELECT ROW_NUMBER() OVER () AS "${MATERIALIZATION_SURROGATE_COLUMN}", src.* FROM (SELECT a, b FROM __mj.foo) AS src`);
+            // surrogate must precede the source columns so CREATE OR REPLACE VIEW stays column-compatible
+            expect(stmts[1].indexOf(MATERIALIZATION_SURROGATE_COLUMN)).toBeLessThan(stmts[1].indexOf('src.*'));
+        });
+
+        it('repoints via CREATE OR REPLACE VIEW, then drops (CASCADE) / renames / repoints back', () => {
+            expect(stmts[2]).toBe('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"');
+            expect(stmts[3]).toBe('DROP TABLE IF EXISTS __mj."materialized_demo" CASCADE');
+            expect(stmts[4]).toBe('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo"');
+            expect(stmts[5]).toBe('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo"');
+        });
+
+        it('never truncates the live table in place (no TRUNCATE)', () => {
+            expect(stmts.some((s) => /TRUNCATE/i.test(s))).toBe(false);
+        });
+    });
+
+    describe('base-view case (no surrogate — source already carries its PK)', () => {
+        const stmts = MaterializationRefresher.buildFullRebuildStatementsPostgreSQL({
+            ...base,
+            sourceSelect: 'SELECT * FROM __mj.vw_demo_source',
+        });
+
+        it('copies the source shape directly with CREATE TABLE AS (no ROW_NUMBER surrogate)', () => {
+            expect(stmts[1]).toBe('CREATE TABLE __mj."materialized_demo__shadow" AS SELECT * FROM (SELECT * FROM __mj.vw_demo_source) AS src');
+            expect(stmts[1]).not.toContain('ROW_NUMBER');
+        });
+
+        it('still performs the atomic swap + rename + repoint', () => {
+            expect(stmts[2]).toContain('CREATE OR REPLACE VIEW __mj."materialized_vw_demo" AS SELECT * FROM __mj."materialized_demo__shadow"');
+            expect(stmts[4]).toBe('ALTER TABLE __mj."materialized_demo__shadow" RENAME TO "materialized_demo"');
+        });
+    });
+});

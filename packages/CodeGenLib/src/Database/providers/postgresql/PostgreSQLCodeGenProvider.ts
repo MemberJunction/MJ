@@ -6,6 +6,7 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    MaterializedColumnSpec,
     PhasedExecutionResult,
 } from '../../codeGenDatabaseProvider';
 import { configInfo } from '../../../Config/config';
@@ -343,6 +344,55 @@ EXCEPTION WHEN invalid_table_definition THEN
   DROP TABLE _vw_regen_fn_deps;
 END $vw_regen$;
 `;
+    }
+
+    // ─── MATERIALIZATION ─────────────────────────────────────────────────
+
+    /**
+     * PostgreSQL materialized-table DDL. The create is **conditional** (`CREATE TABLE IF NOT
+     * EXISTS`) so a migration-provided `materialized_<name>` table with bespoke indexing is
+     * detected and reused rather than clobbered (plan §12). Emits the single-column surrogate
+     * PRIMARY KEY, which is itself the required unique index.
+     *
+     * PG dialect vs. SQL Server: double-quoted identifiers, `CREATE TABLE IF NOT EXISTS` in
+     * place of the `IF OBJECT_ID(...) IS NULL` guard, and the surrogate column carries PG's
+     * `GENERATED ALWAYS AS IDENTITY` clause (see {@link getMaterializedSurrogateColumnType}).
+     */
+    override generateMaterializedTableSQL(schema: string, tableName: string, columns: MaterializedColumnSpec[]): string {
+        const colLines = columns.map(
+            (c) => `    ${pgDialect.QuoteIdentifier(c.Name)} ${c.SQLType} ${c.Nullable ? 'NULL' : 'NOT NULL'}`,
+        );
+        const pkCols = columns.filter((c) => c.IsPrimaryKey).map((c) => c.Name);
+        const pkClause = pkCols.length
+            ? `,\n    CONSTRAINT ${pgDialect.QuoteIdentifier(`PK_${tableName}`)} PRIMARY KEY (${pkCols
+                  .map((n) => pgDialect.QuoteIdentifier(n))
+                  .join(', ')})`
+            : '';
+        return `CREATE TABLE IF NOT EXISTS ${pgDialect.QuoteSchema(schema, tableName)} (
+${colLines.join(',\n')}${pkClause}
+);`;
+    }
+
+    /**
+     * PostgreSQL wrapper-view DDL — the stable read contract over the materialized table.
+     * Uses `CREATE OR REPLACE VIEW` so the same statement both creates the view and atomically
+     * repoints it at a freshly-built table during refresh (plan §11.2). The body is always
+     * `SELECT * FROM <table>` and the shadow table shares the column shape, so PG's
+     * `CREATE OR REPLACE` column-compatibility rule is satisfied on the swap.
+     */
+    override generateMaterializedWrapperViewSQL(schema: string, viewName: string, tableName: string): string {
+        return `CREATE OR REPLACE VIEW ${pgDialect.QuoteSchema(schema, viewName)}
+AS
+SELECT * FROM ${pgDialect.QuoteSchema(schema, tableName)};`;
+    }
+
+    /**
+     * PostgreSQL synthetic surrogate key: a SQL-standard auto-assigned identity column
+     * (`GENERATED ALWAYS AS IDENTITY`), `bigint` for headroom on large materialized sets.
+     * v1 full-rebuild only; the deterministic combined-key hashing in §5 replaces this in Phase 3.
+     */
+    override getMaterializedSurrogateColumnType(): string {
+        return 'bigint GENERATED ALWAYS AS IDENTITY';
     }
 
     // ─── CRUD CREATE ─────────────────────────────────────────────────────
