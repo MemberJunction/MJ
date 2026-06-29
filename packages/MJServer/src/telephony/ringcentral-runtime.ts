@@ -1,9 +1,8 @@
 /**
  * @fileoverview Process-wide holder for the startup-constructed RingCentral telephony service, so the
  * outbound `PlaceRingCentralCall` GraphQL resolver reaches the SAME {@link RingCentralTelephonyService}
- * (and thus the same {@link import('./ringcentralMediaRegistry.js').RingCentralCallMediaRegistry} the
- * media WSS attaches sockets to) that the inbound webhook router uses. Set once during server boot; read
- * by the resolver.
+ * (and thus the same long-lived SIP-softphone registration) that the inbound INVITE coordinator uses. Set
+ * once during server boot; read by the resolver.
  *
  * @module @memberjunction/server/telephony
  */

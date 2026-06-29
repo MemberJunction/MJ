@@ -45,7 +45,7 @@ import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAut
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './widget/index.js';
 import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
 import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
-import { createRingCentralTelephonyHandler, RINGCENTRAL_TELEPHONY_MOUNT_PATH, SetRingCentralTelephonyService } from './telephony/index.js';
+import { RingCentralTelephonyService, SetRingCentralTelephonyService } from './telephony/index.js';
 import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService, GetTeamsMeetingsService, StartCalendarScheduler } from './telephony/index.js';
 import { InstallMediaUpgradeDispatcher } from './telephony/index.js';
 
@@ -1062,17 +1062,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     startupLog.LogIf('verbose', `[Telephony] Vonage routes registered at ${VONAGE_TELEPHONY_MOUNT_PATH}/answer + /event + media WSS`);
   }
 
-  // ─── Telephony (RingCentral) ingress: Call-Control webhook + media WSS (PUBLIC) ──
-  // Carriers cannot present an MJ JWT — RingCentral's Validation-Token handshake (registration) +
-  // verification-token (delivery) are the gate. The public webhook router mounts BEFORE the auth
-  // middleware; the media WSS attaches to the shared HTTP server. The outbound PlaceRingCentralCall
-  // mutation reuses the same service.
+  // ─── Telephony (RingCentral) ingress: SIP softphone registration (no HTTP webhook / media WSS) ──
+  // RingCentral's only bidirectional-audio transport is a registered SIP softphone — inbound calls arrive
+  // as SIP INVITEs on its own SIP/TLS connection, so there is no public webhook or media WSS to mount.
+  // start() registers the softphone fire-and-forget so SIP registration never blocks boot; the outbound
+  // PlaceRingCentralCall mutation reuses the same service via the runtime holder.
   if (configInfo.telephony?.enabled && configInfo.telephony.ringcentral) {
-    const ringCentralHandler = createRingCentralTelephonyHandler(configInfo.telephony.ringcentral);
-    app.use(RINGCENTRAL_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), ringCentralHandler.publicRouter);
-    ringCentralHandler.attachMediaStreamServer();
-    SetRingCentralTelephonyService(ringCentralHandler.service);
-    startupLog.LogIf('verbose', `[Telephony] RingCentral routes registered at ${RINGCENTRAL_TELEPHONY_MOUNT_PATH}/webhook + media WSS`);
+    const ringCentralService = new RingCentralTelephonyService(configInfo.telephony.ringcentral);
+    SetRingCentralTelephonyService(ringCentralService);
+    void ringCentralService.start();
+    startupLog.LogIf('verbose', `[Telephony] RingCentral SIP softphone starting (codec ${configInfo.telephony.ringcentral.codec ?? 'OPUS/16000'})`);
   }
 
   // ─── Teams meetings ingress: Graph change-notification webhook (PUBLIC) ──────────────

@@ -77,10 +77,15 @@ export const FROM_NUMBER_CONFIG_KEY = 'FromNumber';
 export const INBOUND_CALL_ID_CONFIG_KEY = 'InboundCallId';
 
 /**
- * Telephony media is ALWAYS G.711 μ-law at 8 kHz (the PSTN rate). Realtime models speak PCM16 at a
- * higher rate (e.g. OpenAI 24 kHz, Gemini 16 kHz in / 24 kHz out), so {@link BaseTelephonyBridge}
- * resamples between the carrier's 8 kHz and the model's rate on BOTH legs. Skipping this plays the
- * audio at the wrong rate — e.g. 24 kHz samples emitted as 8 kHz are ~3× slow and pitched down ("deep").
+ * The **default** carrier media rate: G.711 μ-law at 8 kHz, the PSTN rate Twilio/Vonage carry. Realtime
+ * models speak PCM16 at a higher rate (e.g. OpenAI 24 kHz, Gemini 16 kHz in / 24 kHz out), so
+ * {@link BaseTelephonyBridge} resamples between the carrier rate and the model's rate on BOTH legs.
+ * Skipping this plays the audio at the wrong rate — e.g. 24 kHz samples emitted as 8 kHz are ~3× slow and
+ * pitched down ("deep").
+ *
+ * Not every carrier is 8 kHz: a SIP/RTP leg negotiated as OPUS/16000 (e.g. the RingCentral softphone) is
+ * wideband 16 kHz. Such drivers override the per-call rate via {@link CARRIER_SAMPLE_RATE_CONFIG_KEY};
+ * this constant remains the default when that key is absent, so the 8 kHz carriers are unaffected.
  */
 export const TELEPHONY_SAMPLE_RATE = 8000;
 
@@ -89,6 +94,15 @@ export const INBOUND_SAMPLE_RATE_CONFIG_KEY = 'InboundSampleRate';
 
 /** Config key carrying the realtime model's OUTPUT sample rate (the rate the model's outbound audio arrives at). */
 export const OUTBOUND_SAMPLE_RATE_CONFIG_KEY = 'OutboundSampleRate';
+
+/**
+ * Config key carrying the **carrier's** PCM16 media rate (Hz) for this call — the rate the SDK seam
+ * sends/receives audio at, which the bridge resamples to/from the model rate. Defaults to
+ * {@link TELEPHONY_SAMPLE_RATE} (8 kHz) when absent, so the G.711 carriers (Twilio/Vonage) need not set it.
+ * A wideband SIP/RTP driver (RingCentral softphone, OPUS/16000) sets it to its negotiated rate so the
+ * audio isn't needlessly bottlenecked through 8 kHz.
+ */
+export const CARRIER_SAMPLE_RATE_CONFIG_KEY = 'CarrierSampleRate';
 
 /**
  * The role of the single remote party on a telephony call, surfaced through
@@ -255,8 +269,15 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     /** The realtime model's INPUT rate (Hz) — inbound 8 kHz caller audio is resampled UP to this. */
     protected modelInputRate: number = 24000;
 
-    /** The realtime model's OUTPUT rate (Hz) — outbound model audio is resampled DOWN to 8 kHz from this. */
+    /** The realtime model's OUTPUT rate (Hz) — outbound model audio is resampled DOWN to the carrier rate from this. */
     protected modelOutputRate: number = 24000;
+
+    /**
+     * The carrier's PCM16 media rate (Hz) — what the SDK seam sends/receives audio at, between which and the
+     * model rate the bridge resamples. Defaults to {@link TELEPHONY_SAMPLE_RATE} (8 kHz); a wideband SIP/RTP
+     * driver overrides it per-call via {@link CARRIER_SAMPLE_RATE_CONFIG_KEY}.
+     */
+    protected carrierSampleRate: number = TELEPHONY_SAMPLE_RATE;
 
     /** The inbound-media handler registered via {@link OnMedia}; inbound audio is forwarded to it. */
     private mediaHandler?: (frame: BridgeMediaFrame) => void;
@@ -332,6 +353,9 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         // The engine forwards the realtime session's sample rates here; default 24 kHz when absent.
         this.modelInputRate = this.readNumberConfig(config, INBOUND_SAMPLE_RATE_CONFIG_KEY) ?? 24000;
         this.modelOutputRate = this.readNumberConfig(config, OUTBOUND_SAMPLE_RATE_CONFIG_KEY) ?? 24000;
+        // The carrier's media rate — 8 kHz G.711 (Twilio/Vonage) by default, or a wideband SIP rate (e.g.
+        // 16 kHz for the RingCentral softphone's OPUS/16000) when the driver/service sets it.
+        this.carrierSampleRate = this.readNumberConfig(config, CARRIER_SAMPLE_RATE_CONFIG_KEY) ?? TELEPHONY_SAMPLE_RATE;
 
         this.sdk = this.sdkFactory(ctx.Configuration);
         this.wireInboundAudio(this.sdk);
@@ -386,9 +410,9 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
         if (track === 'audio-out') {
             const pcm = this.framePcm(frame);
             if (pcm) {
-                // Resample the model's output (e.g. 24 kHz) DOWN to the carrier's 8 kHz before the SDK
-                // μ-law-encodes it; otherwise the caller hears it ~3× slow + pitched down ("deep").
-                const out = this.modelOutputRate === TELEPHONY_SAMPLE_RATE ? pcm : resamplePcm16Buffer(pcm, this.modelOutputRate, TELEPHONY_SAMPLE_RATE);
+                // Resample the model's output (e.g. 24 kHz) DOWN to the carrier rate before the SDK sends it;
+                // otherwise the caller hears it at the wrong rate (24 kHz emitted as 8 kHz is ~3× slow + "deep").
+                const out = this.modelOutputRate === this.carrierSampleRate ? pcm : resamplePcm16Buffer(pcm, this.modelOutputRate, this.carrierSampleRate);
                 this.sdk.sendAudioFrame(out);
             }
         }
@@ -553,9 +577,9 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
     /** Wires the SDK's inbound-audio callback to a single-party inbound {@link BridgeMediaFrame}. */
     private wireInboundAudio(sdk: ITelephonyCallSdk): void {
         sdk.onAudioFrame((pcm: ArrayBuffer) => {
-            // The SDK hands us 8 kHz PCM16 (μ-law decoded). Resample UP to the model's input rate
-            // (e.g. 24 kHz) so the model hears the caller at the correct pitch/speed.
-            const inbound = this.modelInputRate === TELEPHONY_SAMPLE_RATE ? pcm : resamplePcm16Buffer(pcm, TELEPHONY_SAMPLE_RATE, this.modelInputRate);
+            // The SDK hands us carrier-rate PCM16 (8 kHz μ-law-decoded, or 16 kHz from a wideband SIP leg).
+            // Resample UP to the model's input rate (e.g. 24 kHz) so it hears the caller at the right pitch/speed.
+            const inbound = this.modelInputRate === this.carrierSampleRate ? pcm : resamplePcm16Buffer(pcm, this.carrierSampleRate, this.modelInputRate);
             this.mediaHandler?.({
                 Track: 'audio-in',
                 Bytes: inbound,

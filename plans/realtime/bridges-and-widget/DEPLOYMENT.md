@@ -18,7 +18,8 @@ exists before the thing that references it.
 |---|---|---|
 | **Public web widget** (text+voice guest support) | DB migrations + metadata + `widget.enabled` config | OpenAI Realtime key (voice only) |
 | **Twilio telephony** (in/outbound voice) | DB migrations + agent-identity metadata + `telephony` config + env | Twilio account, ngrok (public URL), OpenAI Realtime key |
-| **Vonage / RingCentral** | same shape as Twilio, vendor config block | that vendor's account |
+| **Vonage telephony** | same shape as Twilio (webhook + media WSS), vendor config block | Vonage account, ngrok, OpenAI Realtime key |
+| **RingCentral telephony** | **SIP softphone** — agent-identity metadata + `telephony.ringcentral` SIP-creds block. **No webhook, no ngrok** (outbound SIP registration). | paid RingEX account + an "Existing Phone" device, OpenAI Realtime key |
 
 The widget's **text** path needs no AI vendor key beyond what the pinned agent already uses. The
 **voice** path (widget or telephony) needs a realtime model key (see §5).
@@ -85,8 +86,11 @@ What each provides:
   | `AuthStrategy` | `Anonymous` | guest-default; `magic-link` upgrade is the escalation |
   | `SessionTTLMinutes` / `RateLimitPerMinute` / `VoiceMaxSessionMinutes` | 15 / 30 / 10 | per-instance ceilings |
 
-- **`ai-bridge-agent-identities`** → maps a `PhoneNumber` (e.g. `+18669016546`) + a `ProviderID`
-  (`@lookup …Twilio`) to the agent that answers it. Inbound calls resolve the agent by the dialed number.
+- **`ai-bridge-agent-identities`** → maps a `PhoneNumber` + a `ProviderID` (`@lookup …Twilio` /
+  `@lookup …Vonage`) to the agent that answers it. Inbound calls resolve the agent by the dialed number.
+  **Number format is provider-specific**: Twilio uses the `+`-prefixed E.164 (`+18669016546`); Vonage's
+  webhook `to` is **bare digits** (`14782450323`), so seed the Vonage row without the `+`. The Vonage
+  provider row itself ships pre-seeded (`ai-bridge-providers`, `DriverClass = VonageBridge`, Active).
 
 ---
 
@@ -101,14 +105,46 @@ widget: {
   audience: 'mj-magic-link',   // MUST equal magicLink.audience or guest tokens won't validate
 },
 
-// Telephony — `enabled` gates whether /telephony/* routes + media WSS mount at boot.
+// Telephony — `enabled` gates whether telephony starts at boot.
+// Gate on ANY configured vendor so one block can carry several.
 telephony: {
-  enabled: !!process.env.TWILIO_ACCOUNT_SID,
+  enabled: !!(process.env.TWILIO_ACCOUNT_SID || process.env.VONAGE_APPLICATION_ID || process.env.RINGCENTRAL_SIP_USERNAME),
   twilio: process.env.TWILIO_ACCOUNT_SID ? {
     accountSid: process.env.TWILIO_ACCOUNT_SID,
     authToken: process.env.TWILIO_AUTH_TOKEN,         // also the HMAC key for webhook signature verify
     streamPublicUrl: process.env.TWILIO_STREAM_PUBLIC_URL, // wss://<public-host>/telephony/twilio/media
     webhookSigningSecret: process.env.TWILIO_WEBHOOK_SIGNING_SECRET || undefined,
+  } : undefined,
+
+  // Vonage — Voice API auth is application-scoped (Application ID + RSA private key → signed JWTs).
+  // The account apiKey/apiSecret pair is carried for key-scoped ops; signatureSecret is the webhook
+  // verification key (the ingress fails CLOSED if it's absent — see gotchas). `enabled` gates on
+  // VONAGE_APPLICATION_ID because that — not the API key — is what actually places/answers calls.
+  vonage: process.env.VONAGE_APPLICATION_ID ? {
+    applicationId: process.env.VONAGE_APPLICATION_ID,
+    // Read the PEM from a file path so a multi-line key never has to live in .env:
+    privateKey: process.env.VONAGE_PRIVATE_KEY_PATH
+      ? require('fs').readFileSync(process.env.VONAGE_PRIVATE_KEY_PATH, 'utf8')
+      : process.env.VONAGE_PRIVATE_KEY || undefined,
+    apiKey: process.env.VONAGE_API_KEY || undefined,
+    apiSecret: process.env.VONAGE_API_SECRET || undefined,
+    signatureSecret: process.env.VONAGE_SIGNATURE_SECRET || process.env.VONAGE_API_SECRET || undefined,
+    mediaPublicUrl: process.env.VONAGE_MEDIA_PUBLIC_URL, // wss://<public-host>/telephony/vonage/media
+    eventUrl: process.env.VONAGE_EVENT_URL || undefined,
+  } : undefined,
+
+  // RingCentral — SIP softphone (the ONLY RingCentral transport that carries bidirectional call audio;
+  // its WebSocket "Call Streaming" product is receive-only). No webhook, no public URL, no media WSS:
+  // it's an outbound SIP registration that receives inbound INVITEs on its own SIP/TLS connection. The
+  // five creds come from an "Existing Phone" (BYOD) device — see §6b. Strip the :port off sipDomain.
+  ringcentral: process.env.RINGCENTRAL_SIP_USERNAME ? {
+    sipDomain: process.env.RINGCENTRAL_SIP_DOMAIN,                 // e.g. sip.ringcentral.com (NO port)
+    sipOutboundProxy: process.env.RINGCENTRAL_SIP_OUTBOUND_PROXY,  // e.g. sip20.ringcentral.com:5096
+    sipUsername: process.env.RINGCENTRAL_SIP_USERNAME,
+    sipPassword: process.env.RINGCENTRAL_SIP_PASSWORD,
+    sipAuthorizationId: process.env.RINGCENTRAL_SIP_AUTHORIZATION_ID,
+    // codec defaults to 'OPUS/16000' (wideband PCM16 — the least-friction realtime path). Override only
+    // if your carrier forces G.711 ('PCMU/8000'). The bridge auto-sets the carrier sample rate to match.
   } : undefined,
 },
 ```
@@ -118,7 +154,8 @@ The widget **reuses the magic-link RS256 key + auth provider**, initialized idem
 do NOT need to enable magic-link unless you want the guest→verified **upgrade** path (then set
 `magicLink.enabled: true`).
 
-Vonage / RingCentral: add a `telephony.vonage` / `telephony.ringcentral` sub-block mirroring twilio.
+RingCentral is **not** the same shape as Twilio/Vonage — it carries SIP device creds, not a webhook
+signing secret or public URL (it needs no ngrok). See §6b for where the five SIP values come from.
 
 ---
 
@@ -129,8 +166,19 @@ Vonage / RingCentral: add a `telephony.vonage` / `telephony.ringcentral` sub-blo
 | `AI_VENDOR_API_KEY__OpenAIRealtime` | **voice (widget + telephony)** | **driverClass-specific** — the realtime driver is `OpenAIRealtime`, NOT `OpenAILLM`. A key under the wrong name → "no usable Realtime model". |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | Twilio | live = billable; test creds only work with magic numbers |
 | `TWILIO_STREAM_PUBLIC_URL` | Twilio media | `wss://<ngrok-host>/telephony/twilio/media` |
-| `MJAPI_PUBLIC_URL` | Twilio inbound | MUST match the ngrok host — the inbound webhook signature is verified against the full public URL |
+| `MJAPI_PUBLIC_URL` | Twilio/Vonage inbound | MUST match the ngrok host — the inbound webhook signature is verified against the full public URL |
 | `TWILIO_TEST_ACCOUNT_SID` / `_AUTH_TOKEN` / `_FROM` / `_TO` | the credential-gated integration test | absent → test self-skips |
+| `VONAGE_APPLICATION_ID` | Vonage | the Voice app UUID — also the `enabled` gate for the Vonage block |
+| `VONAGE_PRIVATE_KEY_PATH` | Vonage | absolute path to the app's `private.key` (PEM). Read into config at boot — keeps the multi-line key out of `.env`. (`VONAGE_PRIVATE_KEY` with the inline PEM is the fallback.) |
+| `VONAGE_API_KEY` / `VONAGE_API_SECRET` | Vonage | account key:secret (top of the dashboard). Needed for key-scoped ops; **not** sufficient alone to place Voice calls (that needs the app JWT above). |
+| `VONAGE_SIGNATURE_SECRET` | Vonage webhook gate | **REQUIRED** — the HMAC/JWT key the answer/event webhooks verify against. Absent → the ingress rejects every webhook (fails closed). Dashboard → Settings. |
+| `VONAGE_MEDIA_PUBLIC_URL` | Vonage media | `wss://<ngrok-host>/telephony/vonage/media` |
+| `VONAGE_EVENT_URL` | Vonage (optional) | `https://<ngrok-host>/telephony/vonage/event` — lifecycle events |
+| `RINGCENTRAL_SIP_USERNAME` | RingCentral | SIP User Name from the "Existing Phone" device — also the `enabled` gate for the RingCentral block. **No ngrok / public URL needed.** |
+| `RINGCENTRAL_SIP_PASSWORD` | RingCentral | SIP Password (rotates if you re-provision the device). |
+| `RINGCENTRAL_SIP_AUTHORIZATION_ID` | RingCentral | SIP Authorization ID. |
+| `RINGCENTRAL_SIP_DOMAIN` | RingCentral | SIP Domain, e.g. `sip.ringcentral.com` — **strip the `:port`** (the proxy keeps its port, the domain doesn't). |
+| `RINGCENTRAL_SIP_OUTBOUND_PROXY` | RingCentral | Outbound Proxy `host:port`, e.g. `sip20.ringcentral.com:5096` (region-specific). |
 
 ---
 
@@ -143,6 +191,73 @@ Vonage / RingCentral: add a `telephony.vonage` / `telephony.ringcentral` sub-blo
 3. **OpenAI Realtime** API key under the env name in §5.
 
 The widget needs none of this — it's same-origin-to-MJAPI over normal HTTPS.
+
+### 6a. Vonage setup (end-to-end)
+
+Same ngrok in §6.1 applies (point it at MJAPI's port). Then:
+
+1. **Create a Voice application** — Dashboard → Applications → *Create*, enable **Voice**. Set:
+   - **Answer URL** → `https://<public-host>/telephony/vonage/answer`, **method POST** (Vonage defaults
+     answer to GET — you MUST switch it to POST or the ingress 404s the GET).
+   - **Event URL** → `https://<public-host>/telephony/vonage/event`, **method POST**.
+
+   This yields the **Application ID** and a one-time **`private.key`** download → save it and point
+   `VONAGE_PRIVATE_KEY_PATH` at it. (Scriptable instead of the dashboard: `POST
+   https://api.nexmo.com/v2/applications` with Basic auth `api_key:api_secret` — the response carries
+   both the `id` and `keys.private_key` inline, and you set the webhooks in the same call.)
+
+2. **Enable signed webhooks** — Dashboard → Settings → toggle **"Use signed webhooks"** on and copy the
+   **Signature secret** → `VONAGE_SIGNATURE_SECRET`. **Not optional**: the ingress verifies every webhook
+   and fails closed without it, and Vonage only sends the signing JWT when this is on.
+
+3. **Link a number** to the application (Numbers → buy/assign → link to the app). The dialed DID resolves
+   to the agent via the `ai-bridge-agent-identities` row (§3). Format the row's `IdentityValue` as **bare
+   digits, no `+`** for Vonage (e.g. `14782450323`) — Vonage's webhook `to` is unprefixed, unlike Twilio.
+
+The media socket (`wss://<host>/telephony/vonage/media`, content-type `audio/l16;rate=8000`) is opened by
+the answer NCCO automatically — you don't configure it in the dashboard, but `VONAGE_MEDIA_PUBLIC_URL` must
+match your ngrok host.
+
+> **Trial accounts**: a Vonage free-trial account gets one number but **cannot provision more via API**
+> (the buy 401s) and may only interact with **verified** numbers. Test by calling **into** the Vonage
+> number (inbound); outbound (`PlaceVonageCall`) can only dial numbers you've verified as test numbers.
+
+### 6b. RingCentral setup (end-to-end)
+
+RingCentral is the odd one out: **no ngrok, no webhook, no public URL.** The agent connects as a headless
+**SIP softphone** (`ringcentral-softphone` over SIP/TLS + RTP/SRTP) — the only RingCentral product that
+carries bidirectional call audio (its WebSocket "Call Streaming" product is *receive-only*, so it can't
+voice the agent). The server holds one long-lived SIP **registration**; inbound calls arrive as SIP INVITEs
+on it directly.
+
+**Account reality:** RingCentral **removed its free sandbox**. You need a **paid RingEX** account with a
+user extension that has a **Digital Line + assigned phone number (DID)**. There's no free fake-PSTN lab —
+you test on a real, billed account, so guard against accidental outbound dialing during tests.
+
+**The five SIP creds — simplest path (console, no API/JWT/code):**
+
+1. **Admin Portal** → ensure a user extension has a **Digital Line + DID**.
+2. **Phone System → Phones & Devices → User Phones → Add Device → Other Phones → "Existing Phone"** →
+   assign it to that extension, assign the DID, and set the **Emergency Address** (mandatory — a missing
+   one **blocks outbound calls**).
+3. On that device → **Set Up and Provision → "Set up manually using SIP"** — this page shows **SIP Domain,
+   Outbound Proxy, User Name, Password, Authorization ID**. Those map 1:1 to the five `RINGCENTRAL_SIP_*`
+   env vars in §5. **Strip the `:port` off the SIP Domain.**
+4. Seed the agent-identity row (§3) with `IdentityType='PhoneNumber'`, `IdentityValue` = the DID, so an
+   inbound call to it resolves to the pinned agent. (RingCentral's INVITE `From`/`To` are SIP URIs; the
+   ingress parses the number out, keeping any leading `+` — match the row's `IdentityValue` accordingly.)
+
+**Alternative (API):** create a **Server-only (no UI) / REST API** app with **JWT auth** and scopes
+**VoIP Calling + Read Accounts + Call Control**, then `listExtensionDevices` (filter `type='OtherPhone'`)
+→ `readDeviceSipInfo` returns the same five values. More moving parts; only worth it to automate
+provisioning. **Note:** `sip-provision` is the *wrong* endpoint (that's the browser WebPhone path).
+
+> **Gotchas:** ① Use an **"Existing Phone" (`OtherPhone`)** device — a "RingCentral Phone app"
+> (`SoftPhone`-type) device's creds will **not** register with this SDK. ② **One registration per device**
+> for inbound — for concurrent inbound calls, provision a separate Existing Phone device per endpoint.
+> ③ The **"VoIP Calling" scope** sometimes isn't selectable and needs a RingCentral **support ticket** —
+> only relevant for the API route; the console-manual route sidesteps it. ④ Default codec is `OPUS/16000`
+> (wideband 16 kHz); the bridge sets its carrier sample rate to match automatically.
 
 ---
 
@@ -202,6 +317,11 @@ The things that cost real time during bring-up — each is now either fixed in c
 | Widget mint **403** | WidgetInstance row not in this DB, or host page origin not in `AllowedOrigins` | push `widget-instances` (§3); serve on a whitelisted origin |
 | Voice: **"no usable Realtime model"** | realtime key under `AI_VENDOR_API_KEY__OpenAILLM` | put it under `AI_VENDOR_API_KEY__OpenAIRealtime` (driverClass name, §5) |
 | Inbound call: **"No 'From' number specified"** | engine stamps `Direction` on the DB row but doesn't forward it into the bridge Configuration | fixed in code (`buildSessionConfiguration` sets the Direction config key) |
+| **Vonage: every webhook 403s** ("Invalid Vonage signature") | `VONAGE_SIGNATURE_SECRET` unset, or signed webhooks not enabled in the dashboard → the gate fails closed and Vonage sends no signing JWT | set the signature secret (§5) AND enable signed webhooks (§6a step 2) |
+| **Vonage answer webhook 404s** | the Voice app's Answer URL is set to GET (Vonage's default) | switch the Answer + Event URL methods to **POST** (§6a step 1) |
+| **Vonage: connects but audio is garbled / silent** | the media path was built as a Twilio copy (base64 μ-law in JSON) | **fixed in code** — Vonage carries audio as **raw binary L16 PCM** frames + JSON **text** control events; no base64, no μ-law (`real-vonage-bindings.ts` / `vonageMediaRegistry.ts`) |
+| **Vonage: agent talks over itself after the caller interrupts** | Vonage queues up to **~60s** of sent audio; without a flush, the agent drains the old reply while answering the new input | **fixed in code** — barge-in now sends Vonage's `{"action":"clear"}` command (`BaseTelephonyBridge.FlushOutboundMedia` → `ITelephonyCallSdk.flushOutbound`). Use a headset when testing to avoid acoustic-echo false barge-ins. |
+| **Vonage: can't buy a number (`number/buy` 401)** | free-trial accounts get one number but can't provision more via API, and only interact with verified numbers | use the trial number; verify your cell as a test number; test inbound, not outbound (§6a trial note) |
 | Twilio **31920** / WS upgrade **400** | two `WebSocketServer({server})` (GraphQL + media) fight over the HTTP `upgrade` event in ws 8.x | fixed in code — single path-routing upgrade dispatcher + `noServer:true` |
 | Audio **deep / slowed down** | model PCM is 24 kHz, Twilio Media Streams are 8 kHz μ-law — played at the wrong rate | fixed in code — `BaseTelephonyBridge` resamples both legs |
 | Outbound rejected, Twilio **21210** | caller-ID (the agent identity's number) isn't provisioned on the Twilio account | use a number you own on the account as the agent identity's `IdentityValue` |

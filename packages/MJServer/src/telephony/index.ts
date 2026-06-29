@@ -26,10 +26,11 @@ export { VonageTelephonyService, type VonageTelephonyServiceDeps } from './Vonag
 export * from './VonageTelephonyRouter.js';
 export * from './vonage-runtime.js';
 
-// ── RingCentral Call-Control + media-stream ────────────────────────────────────────────
-export { RingCentralCallMediaRegistry } from './ringcentralMediaRegistry.js';
+// ── RingCentral SIP softphone (the only RingCentral transport with bidirectional call audio) ──
+// No media registry / webhook router: the softphone is an outbound SIP registration that receives inbound
+// INVITEs directly. The service owns the registration; the runtime holder shares it with the outbound
+// PlaceRingCentralCall resolver.
 export { RingCentralTelephonyService, type RingCentralTelephonyServiceDeps } from './RingCentralTelephonyService.js';
-export * from './RingCentralTelephonyRouter.js';
 export * from './ringcentral-runtime.js';
 
 // ── Teams meetings (Microsoft Graph cloud-communications + ACS application-hosted media) ──

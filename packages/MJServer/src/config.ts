@@ -420,28 +420,31 @@ const vonageTelephonySchema = z.object({
 }).passthrough();
 
 /**
- * RingCentral telephony binding: OAuth credentials for the Call-Control REST client, the publicly
- * reachable media-stream URL, and the webhook verification token. Resolved here from
- * `mj.config.cjs` / env — never inlined. When `ringcentral` is omitted, the RingCentral telephony
- * routes are not mounted. (RingCentral does NOT HMAC-sign webhooks like Twilio: a Validation-Token
- * handshake proves endpoint ownership at registration, and a verification-token authenticates each
- * delivery.)
+ * RingCentral telephony binding: **SIP device credentials** for the headless softphone (the
+ * `ringcentral-softphone` SIP/RTP path — the only RingCentral product that carries bidirectional call
+ * audio; the WebSocket "Call Streaming" product is receive-only). These come from a RingCentral
+ * "Other Phone" (BYO-device) registration's SIP info, resolved here from `mj.config.cjs` / env — never
+ * inlined. When `ringcentral` is omitted, the RingCentral softphone is not started.
+ *
+ * Unlike Twilio/Vonage, there is NO public HTTP webhook or media WSS: the softphone is an outbound SIP
+ * registration that receives inbound INVITEs directly over its own SIP/TLS connection. So this block has
+ * no signing secret or public URL — just the SIP device creds + codec.
  */
 const ringcentralTelephonySchema = z.object({
-  /** RingCentral platform server URL (sandbox vs production) — required to construct the SDK. */
-  serverUrl: z.string(),
-  /** RingCentral app client id. */
-  clientId: z.string(),
-  /** RingCentral app client secret. */
-  clientSecret: z.string(),
-  /** RingCentral JWT for server-to-server (JWT) auth — preferred over an access token when present. */
-  jwt: z.string().optional(),
-  /** Pre-obtained OAuth access token — used when no JWT is supplied. */
-  accessToken: z.string().optional(),
-  /** The publicly reachable `wss://…/telephony/ringcentral/media` URL the session bridges its audio to. */
-  streamPublicUrl: z.string(),
-  /** The verification token the webhook subscription was created with — gates public notification delivery. */
-  webhookVerificationToken: z.string().optional(),
+  /** SIP domain (e.g. `sip.ringcentral.com`). */
+  sipDomain: z.string(),
+  /** SIP outbound proxy (`host:port`, e.g. `sip10.ringcentral.com:5096`). */
+  sipOutboundProxy: z.string(),
+  /** SIP auth username (the device's phone number / extension). */
+  sipUsername: z.string(),
+  /** SIP auth password (resolved upstream — never inlined). */
+  sipPassword: z.string(),
+  /** SIP authorization id (the device's RingCentral authorization id). */
+  sipAuthorizationId: z.string(),
+  /** Codec to negotiate. Defaults to `OPUS/16000` (clean wideband PCM16 — the least-friction realtime path). */
+  codec: z.enum(['OPUS/16000', 'OPUS/48000/2', 'PCMU/8000']).optional(),
+  /** Skip TLS cert validation (sandbox/test only — never in production). */
+  ignoreTlsCertErrors: zodBooleanWithTransforms().optional().default(false),
 }).passthrough();
 
 /**
