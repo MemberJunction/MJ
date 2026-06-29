@@ -46,9 +46,16 @@ describe('resolveRealtimeUi — chrome (the orb ↔ console rule)', () => {
     expect(r.showThread).toBe(true);
   });
 
-  it('auto: composer intent (disclosure) also counts as "asked for text"', () => {
-    const r = resolveRealtimeUi({ chrome: 'auto' }, signals({ containerWidthPx: 800, disclosureShowComposer: true }));
-    expect(r.chrome).toBe('console');
+  it('auto: the disclosure ratchet alone does NOT flip to console — only explicit text intent', () => {
+    // Wide + a high disclosure base (power user) but the user has NOT revealed text → stays an orb
+    // (this is the bug that produced an empty body: ratchet ≠ "the user asked for text").
+    const ratchetOnly = resolveRealtimeUi({ chrome: 'auto' }, signals({ containerWidthPx: 900, disclosureShowComposer: true, disclosureShowThread: true }));
+    expect(ratchetOnly.chrome).toBe('orb');
+    expect(ratchetOnly.showHero).toBe(true);
+    expect(ratchetOnly.showThread).toBe(false);
+    // Once the user reveals text (captions on), it graduates.
+    const revealed = resolveRealtimeUi({ chrome: 'auto' }, signals({ containerWidthPx: 900, textRevealed: true }));
+    expect(revealed.chrome).toBe('console');
   });
 
   it('auto: review mode always uses the console (transcript surface)', () => {

@@ -22,7 +22,7 @@ import {
 } from './realtime-surface-panel-prefs';
 import { RealtimeDisclosureModel, RealtimeUxDensity, SerializeUxMilestones, REALTIME_UX_PREF_KEY } from './realtime-disclosure';
 import {
-  resolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS,
+  resolveRealtimeUi, DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS,
   RealtimeUiInputs, RealtimeUiSignals, ResolvedRealtimeUi,
   RealtimeChromeMode, RealtimeControlId, RealtimeUiConnectionState
 } from './realtime-ui-config';
@@ -382,7 +382,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * disclosure model, the connection state, the container width, or the channel/activity
    * set changes. Read-only to consumers via the {@link Ui} getter.
    */
-  private _ui: ResolvedRealtimeUi = resolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, this.buildSignals());
+  // Seed from a dependency-free baseline — this runs as a field initializer, BEFORE the
+  // disclosure model / session state / ResizeObserver exist. recomputeUi() produces the real
+  // value once dependencies are ready (post-init + on every wired change source).
+  private _ui: ResolvedRealtimeUi = resolveRealtimeUi(DEFAULT_REALTIME_UI_INPUTS, DEFAULT_REALTIME_UI_SIGNALS);
 
   /**
    * The current resolved UI view-model. Every visibility/affordance decision the template
@@ -667,19 +670,29 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * {@link ResizeObserver}-measured width. Pure read — no side effects.
    */
   private buildSignals(): RealtimeUiSignals {
+    // Defensive: this can be reached before every dependency is wired (field-init / early
+    // change-detection). Fall back to the dependency-free baseline rather than throw — the
+    // next recompute, once everything exists, produces the real value.
+    const disclosure = this.Disclosure;
+    if (!disclosure) {
+      return DEFAULT_REALTIME_UI_SIGNALS;
+    }
     const reviewing = this.IsReviewing;
     return {
-      containerWidthPx: this.containerWidthPx,
-      // Text intent = the user has reached the text disclosure level (level ≥ 1).
-      textRevealed: this.Disclosure.SessionLevel >= 1,
-      disclosureShowThread: this.Disclosure.ShowThread,
-      disclosureShowComposer: this.Disclosure.ShowComposer,
-      disclosureShowPanel: this.Disclosure.ShowPanel,
-      disclosureShowGear: this.Disclosure.ShowGear,
+      containerWidthPx: this.containerWidthPx ?? 0,
+      // Text intent = the user EXPLICITLY asked to see text this session — i.e. captions are on
+      // (the captions toggle, the hero's "Show the conversation", RevealText(), and SetCaptions()
+      // all route through ShowCaptions). NOT the disclosure ratchet: a power user still opens to
+      // the calm orb until they ask for text, matching the historical ShowHero = !ShowCaptions.
+      textRevealed: this.ShowCaptions,
+      disclosureShowThread: disclosure.ShowThread,
+      disclosureShowComposer: disclosure.ShowComposer,
+      disclosureShowPanel: disclosure.ShowPanel,
+      disclosureShowGear: disclosure.ShowGear,
       // A surface to populate: the on-demand Details peek, or review (always has a surface).
       surfacePanelEarned: this.DetailsPeek || reviewing,
-      hasChannels: this.realtime.ActiveChannels.some(c => c.HasSurface()),
-      hasActivity: this.State.Cards.length > 0,
+      hasChannels: (this.realtime?.ActiveChannels ?? []).some(c => c.HasSurface()),
+      hasActivity: (this.State?.Cards?.length ?? 0) > 0,
       devMode: this.DevMode,
       isReviewing: reviewing,
       channelFocus: this.ChannelFocusMode,

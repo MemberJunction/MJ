@@ -295,7 +295,22 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       )
       .subscribe((event) => {
         const url = (event as NavigationEnd).urlAfterRedirects || (event as NavigationEnd).url;
-        this.isChatRoute = url.includes('/chat') || url.includes('/conversations');
+        const nowChatRoute = url.includes('/chat') || url.includes('/conversations');
+        const activeConvoId = this.bridge.ActiveConversationID$.value;
+        // Symmetric conversation handoff across the chat-route boundary, so a live call / chat
+        // never dies on navigation — it just moves to whichever surface is visible. Fired for ANY
+        // navigation (nav click, deep link, back/forward), not only the agent's NavigateToApp tool.
+        if (this.isChatRoute && !nowChatRoute && activeConvoId) {
+          // Leaving the full chat workspace → hand the conversation to the floating overlay so it
+          // pops up there and persists.
+          this.bridge.SwitchToOverlay(activeConvoId);
+        } else if (!this.isChatRoute && nowChatRoute && activeConvoId) {
+          // Entering the full chat workspace while the overlay holds a live conversation → hand it
+          // to the workspace (BEFORE the overlay collapses) so the session continues there instead
+          // of being stranded in a collapsed bubble.
+          this.bridge.SwitchToWorkspace(activeConvoId);
+        }
+        this.isChatRoute = nowChatRoute;
       });
 
     // Track active app changes for AI agent context awareness

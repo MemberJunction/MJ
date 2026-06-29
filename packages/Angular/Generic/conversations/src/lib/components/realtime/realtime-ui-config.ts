@@ -276,6 +276,30 @@ export interface ResolvedRealtimeUi {
 }
 
 /**
+ * A safe, dependency-free baseline {@link RealtimeUiSignals}. Use this to seed a
+ * resolved view-model **before** the component's runtime dependencies (the
+ * disclosure model, the session state, the `ResizeObserver`) exist — e.g. in a
+ * field initializer. It describes a freshly-connecting widget at zero width with
+ * nothing earned yet, so the first paint is a calm orb until `recomputeUi()`
+ * runs with real signals. Never read `this` to build the first value.
+ */
+export const DEFAULT_REALTIME_UI_SIGNALS: RealtimeUiSignals = {
+  containerWidthPx: 0,
+  textRevealed: false,
+  disclosureShowThread: false,
+  disclosureShowComposer: false,
+  disclosureShowPanel: false,
+  disclosureShowGear: false,
+  surfacePanelEarned: false,
+  hasChannels: false,
+  hasActivity: false,
+  devMode: false,
+  isReviewing: false,
+  channelFocus: false,
+  connectionState: 'connecting',
+};
+
+/**
  * Resolve the consumer config + live signals into a render-ready view-model.
  *
  * Pure and deterministic: same inputs ⇒ same output, no side effects, no clock,
@@ -315,10 +339,12 @@ export function resolveRealtimeUi(
   const isConsole = chrome === 'console';
   const compact = cfg.compact || signals.containerWidthPx < cfg.consoleBreakpointPx;
 
-  // The transcript shows whenever the user has earned/revealed it, OR we're in a
-  // console (consoles always carry the thread), OR we're reviewing a recording.
-  const showThread =
-    allowTextReveal && (signals.textRevealed || signals.disclosureShowThread || isConsole || signals.isReviewing);
+  // The transcript shows when the user has EXPLICITLY revealed text this session
+  // (`textRevealed`), OR we're in a console (consoles always carry the thread), OR we're
+  // reviewing a recording. We deliberately do NOT consult the disclosure ratchet here: a
+  // power user with a high base level still opens to the calm orb, exactly like the historical
+  // `ShowHero = !ShowCaptions` behaviour — "keep the orb until the user asks for text".
+  const showThread = allowTextReveal && (signals.textRevealed || isConsole || signals.isReviewing);
 
   // The hero orb owns the surface in orb chrome (and there's nothing else to show).
   const showHero = chrome === 'orb' && !showThread;
@@ -381,7 +407,8 @@ function resolveChrome(
   if (!allowTextReveal) {
     return 'orb';
   }
+  // Intent is the USER explicitly revealing text this session — NOT the disclosure ratchet.
+  // Wider-alone keeps the orb; a power user who hasn't asked for text keeps the orb too.
   const hasRoom = signals.containerWidthPx >= cfg.consoleBreakpointPx;
-  const hasIntent = signals.textRevealed || signals.disclosureShowComposer;
-  return hasRoom && hasIntent ? 'console' : 'orb';
+  return hasRoom && signals.textRevealed ? 'console' : 'orb';
 }
