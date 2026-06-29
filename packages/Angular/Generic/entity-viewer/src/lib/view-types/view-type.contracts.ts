@@ -59,6 +59,21 @@ export interface IViewTypeDescriptor {
   readonly PropSheetComponent?: Type<unknown>;
 
   /**
+   * When `true`, this view type's `config.gridState` is backed by the **canonical**
+   * `UserView.GridState` column (the single, framework-wide store for a view's
+   * columns / sort / filter / aggregates — also read by `MJUserViewEntity.Columns`,
+   * the GraphQL data provider's field list, and export) rather than by an opaque
+   * per-view-type blob in `DisplayState.viewTypeConfigs`.
+   *
+   * The container honors this by (a) seeding the renderer's `config.gridState` from
+   * the canonical store and (b) routing the renderer's `configChanged.gridState`
+   * back to it on persist. This keeps the grid, the config panel, the server query,
+   * and export all reading/writing one source of truth. Defaults to `false`, so
+   * non-grid view types (Cards/Timeline/Map) keep their opaque per-type config.
+   */
+  readonly UsesCanonicalGridState?: boolean;
+
+  /**
    * Predicate that decides whether this view type is available for a given entity.
    * For example, Timeline requires a date field; Map requires geocoding support.
    * Grid and Cards are always available.
@@ -165,6 +180,16 @@ export interface IViewRenderer<TConfig = unknown> {
    * NOT a signal that drives the outer app.)
    */
   dataRequest?: EventEmitter<ViewDataRequest>;
+
+  /**
+   * Optional: ask the host to open this view's configuration UI (e.g. the workspace's config
+   * panel). Generic — every view type has configurable settings (the descriptor's
+   * {@link IViewTypeDescriptor.PropSheetComponent}); a plug-in raises this when the user invokes
+   * an in-renderer affordance for it (e.g. the grid's "Manage Columns" toolbar item). The
+   * container forwards it to the host, which owns the config UI; no per-view-type branching.
+   * (Container ↔ plug-in coordination — NOT a signal that drives the outer app.)
+   */
+  configureRequested?: EventEmitter<void>;
 }
 
 /**
@@ -239,6 +264,13 @@ export abstract class BaseViewTypeDescriptor implements IViewTypeDescriptor {
   abstract readonly Icon: string;
   abstract readonly RendererComponent: Type<unknown>;
   readonly PropSheetComponent?: Type<unknown>;
+
+  /**
+   * Default: this view type uses its own opaque per-view-type config (stored in
+   * `DisplayState.viewTypeConfigs`). Override to `true` in a view type that renders the
+   * canonical grid columns (see {@link IViewTypeDescriptor.UsesCanonicalGridState}).
+   */
+  readonly UsesCanonicalGridState: boolean = false;
 
   /**
    * Default availability: available for every entity. Override in subclasses that have
