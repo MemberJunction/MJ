@@ -94,3 +94,108 @@ export function analyzeQueryForMaterialization(opts: {
 
     return { qualifies: true, columns: [surrogate, ...dataColumns], surrogateColumnName };
 }
+
+// ─── Phase 2: parameterization qualifying (§9 buckets + §10 refuse-under-uncertainty) ─────────
+
+/**
+ * Verified role of a single query parameter, produced by the render-and-diff verifier (Phase 2b)
+ * with an LLM proposer (Phase 2c). The verifier is the oracle; this module only consumes its
+ * verdict — so `RowFilter` here means *proven* row-filter (the render-and-diff confirmed the only
+ * difference across param values is a substituted literal at a WHERE predicate on `filterColumn`).
+ */
+export type ParamRole = 'RowFilter' | 'Structural' | 'Unbounded';
+
+/** Persisted parameterization mode (mirrors the `MaterializedResult.ParamMode` CHECK values). */
+export type ParamMode = 'None' | 'RowFilterBroad' | 'PerValueCache' | 'BoundFixed';
+
+/** One parameter's verified classification (input to {@link qualifyParameterizedQuery}). */
+export interface ParamClassification {
+    /** Parameter name (the Nunjucks variable). */
+    name: string;
+    /** Verified role. `RowFilter` requires `filterColumn`; `Structural` may carry a bounded domain. */
+    role: ParamRole;
+    /** Bucket 1: the output column the param filters on (must be present in the materialized output). */
+    filterColumn?: string;
+    /** Bucket 2: the verifier-bounded value domain (advisory — the runtime guard still recomputes on a miss). */
+    boundedDomain?: string[];
+}
+
+/** The parameterization-qualification decision for a query. */
+export interface ParamQualification {
+    /** True only if the query's params are all safely materializable. */
+    qualifies: boolean;
+    /** When `qualifies` is false, a human-readable reason (logged, never guessed past). */
+    reason?: string;
+    /** Resolved mode. `None` for an unparameterized query. */
+    paramMode: ParamMode;
+    /** RowFilterBroad: the columns to apply as read-time predicates against the broad materialized table (§6.4). */
+    rowFilterColumns: string[];
+}
+
+/**
+ * Decides the {@link ParamMode} for a (possibly parameterized) query from its per-param
+ * classifications — the §9 qualifying rule under the §10 asymmetric-risk posture
+ * (**default to NOT materializable unless every param is provably safe**). Pure — no DB/IO/LLM.
+ *
+ * Rules:
+ *  - no params → `None` (qualifies; caller materializes the static query).
+ *  - any `Unbounded` param (Bucket 3) → refuse (author can bind it to a fixed value → BoundFixed,
+ *    which arrives here as effectively unparameterized).
+ *  - `RowFilter` (Bucket 1) → the `filterColumn` MUST be present in the materialized output, else
+ *    refuse (filtering on a projected-away column would be unsound).
+ *  - `Structural` (Bucket 2) → only when `allowPerValueCache` is enabled AND the verifier bounded
+ *    the domain; otherwise refuse (recompute live). Open decision §17 — defaults OFF.
+ *  - a mix of row-filter and structural params is not modeled in v1 → refuse.
+ */
+export function qualifyParameterizedQuery(opts: {
+    queryName: string;
+    params: ParamClassification[];
+    /** The query's materialized output column names (for the Bucket-1 column-presence check). */
+    outputColumns: string[];
+    /** Whether Bucket-2 per-value cache is supported in this build (default false → structural recomputes). */
+    allowPerValueCache?: boolean;
+}): ParamQualification {
+    const { queryName, params, outputColumns } = opts;
+    const allowPerValueCache = opts.allowPerValueCache ?? false;
+    const refuse = (reason: string): ParamQualification => ({ qualifies: false, reason, paramMode: 'None', rowFilterColumns: [] });
+
+    if (!params || params.length === 0) {
+        return { qualifies: true, paramMode: 'None', rowFilterColumns: [] };
+    }
+
+    const outputSet = new Set(outputColumns.map((c) => c.trim().toLowerCase()));
+    const rowFilterColumns: string[] = [];
+    let hasStructural = false;
+
+    for (const p of params) {
+        if (p.role === 'Unbounded') {
+            return refuse(`query "${queryName}" param "${p.name}" is unbounded/arbitrary structural (Bucket 3) — not materializable; bind it to a fixed value (BoundFixed) to materialize a specific instance`);
+        }
+        if (p.role === 'Structural') {
+            hasStructural = true;
+            if (!allowPerValueCache) {
+                return refuse(`query "${queryName}" param "${p.name}" is structural (Bucket 2) and per-value cache is disabled — recompute live, not materializable`);
+            }
+            if (!p.boundedDomain || p.boundedDomain.length === 0) {
+                return refuse(`query "${queryName}" param "${p.name}" is structural with no bounded domain — cannot enumerate a per-value cache safely`);
+            }
+            continue;
+        }
+        // RowFilter (Bucket 1): the filter column must be physically present in the materialized output (§9/§10).
+        if (!p.filterColumn) {
+            return refuse(`query "${queryName}" param "${p.name}" classified RowFilter but no filter column was resolved — refusing under uncertainty`);
+        }
+        if (!outputSet.has(p.filterColumn.trim().toLowerCase())) {
+            return refuse(`query "${queryName}" param "${p.name}" filters on column "${p.filterColumn}", which is not in the materialized output — disqualify (or project that column into the query)`);
+        }
+        rowFilterColumns.push(p.filterColumn);
+    }
+
+    if (rowFilterColumns.length > 0 && hasStructural) {
+        return refuse(`query "${queryName}" mixes row-filter and structural params — not modeled in v1; refusing under uncertainty`);
+    }
+    if (hasStructural) {
+        return { qualifies: true, paramMode: 'PerValueCache', rowFilterColumns: [] };
+    }
+    return { qualifies: true, paramMode: 'RowFilterBroad', rowFilterColumns };
+}
