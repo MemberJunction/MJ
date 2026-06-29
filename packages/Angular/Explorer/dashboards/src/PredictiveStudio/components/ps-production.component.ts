@@ -1,7 +1,7 @@
-import { Component, Input, OnInit, ViewEncapsulation, inject } from '@angular/core';
+import { Component, Input, OnInit, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { Metadata, RunView, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
+import { RunView, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
 import {
   MJMLModelScoringBindingEntity,
   MJProcessRunEntity,
@@ -75,8 +75,6 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   public rows: ProductionRowVM[] = [];
   public loading = true;
 
-  private readonly md = inject(Metadata);
-
   async ngOnInit(): Promise<void> {
     await this.buildRows();
   }
@@ -127,7 +125,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   private resolveEntityName(b: MJMLModelScoringBindingEntity): string {
     if (b.TargetEntity) return b.TargetEntity;
     if (b.TargetEntityID) {
-      const entity = this.md.Entities.find((e) => e.ID === b.TargetEntityID);
+      const entity = this.ProviderToUse.Entities.find((e) => e.ID === b.TargetEntityID);
       if (entity) return entity.Name;
     }
     return '—';
@@ -178,7 +176,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
    */
   private async loadDistribution(row: ProductionRowVM, b: MJMLModelScoringBindingEntity): Promise<void> {
     if (!b.TargetEntityID || !b.TargetColumn) return;
-    const entity = this.md.Entities.find((e) => e.ID === b.TargetEntityID);
+    const entity = this.ProviderToUse.Entities.find((e) => e.ID === b.TargetEntityID);
     if (!entity) return;
     const field = entity.Fields.find((f) => f.Name.toLowerCase() === b.TargetColumn!.toLowerCase());
     if (!field) return;
