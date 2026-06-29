@@ -125,6 +125,15 @@ export interface IVonageClientBindings {
      * @param cb Invoked when the call ends.
      */
     onCallStatus(callUuid: string, cb: () => void): void;
+
+    /**
+     * Discards the audio Vonage has QUEUED on the media leg (sends the `{"action":"clear"}` websocket
+     * command). Called on barge-in so the agent's not-yet-played voice is dropped instead of draining
+     * Vonage's deep (~60s) playback queue over the caller's new turn.
+     *
+     * @param callUuid The call UUID whose queued outbound audio to flush.
+     */
+    flushOutbound(callUuid: string): void;
 }
 
 /** The default bindings used when none are supplied — every operation throws the bind-me error. */
@@ -138,6 +147,7 @@ const UNBOUND_BINDINGS: IVonageClientBindings = {
     onDigits: () => throwUnboundVoid('onDigits (receive DTMF)'),
     transferCall: () => throwUnbound('transferCall (transfer)'),
     onCallStatus: () => throwUnboundVoid('onCallStatus (call ended)'),
+    flushOutbound: () => throwUnboundVoid('flushOutbound (clear queued audio)'),
 };
 
 function throwUnbound(op: string): never {
@@ -234,6 +244,13 @@ export class VonageCallSdk implements ITelephonyCallSdk {
         this.endedCb = cb;
         if (this.activeCallUuid) {
             this.bindings.onCallStatus(this.activeCallUuid, cb);
+        }
+    }
+
+    /** @inheritdoc — flushes Vonage's queued outbound audio for the active call (barge-in). No-op if no live call. */
+    public flushOutbound(): void {
+        if (this.activeCallUuid) {
+            this.bindings.flushOutbound(this.activeCallUuid);
         }
     }
 

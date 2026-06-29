@@ -32,7 +32,7 @@ import {
     verifyVonageJwt,
     resolveInboundCall,
     buildInboundAnswerNcco,
-    type VonageMediaFrame,
+    parseVonageControlEvent,
 } from '@memberjunction/ai-bridge-vonage';
 import type { VonageTelephonyConfig } from '../config.js';
 import { VonageCallMediaRegistry } from './vonageMediaRegistry.js';
@@ -167,16 +167,33 @@ function wireMediaSocket(socket: WebSocket, request: IncomingMessage, registry: 
         socket.close();
         return;
     }
-    const adapter = { send: (data: string) => socket.send(data), close: () => socket.close() };
+    const adapter = {
+        sendBinary: (data: Uint8Array) => socket.send(data),
+        sendText: (data: string) => socket.send(data),
+        close: () => socket.close(),
+    };
     registry.AttachSocket(callUuid, adapter);
 
-    socket.on('message', (raw: unknown) => {
-        const message = parseWsMessage(raw);
-        if (message) {
-            registry.DispatchInbound(callUuid, message);
+    // Vonage splits the media leg by frame type: BINARY frames carry raw L16 PCM audio; TEXT frames carry
+    // JSON control events (websocket:connected / websocket:dtmf / close). `ws` reports which via isBinary.
+    socket.on('message', (raw: Buffer, isBinary: boolean) => {
+        if (isBinary) {
+            registry.DispatchInboundAudio(callUuid, toArrayBuffer(raw));
+            return;
+        }
+        const event = parseVonageControlEvent(raw.toString('utf8'));
+        if (event) {
+            registry.DispatchInboundEvent(callUuid, event);
         }
     });
     socket.on('close', () => registry.EndCall(callUuid));
+}
+
+/** Copies a Node `Buffer` into a standalone `ArrayBuffer` (respecting byteOffset/length, never aliasing the pool). */
+function toArrayBuffer(buf: Buffer): ArrayBuffer {
+    const out = new ArrayBuffer(buf.byteLength);
+    new Uint8Array(out).set(buf);
+    return out;
 }
 
 /** Reads the `call_uuid` query param off the websocket upgrade request URL, or null when absent. */
@@ -194,16 +211,6 @@ function readCallUuid(request: IncomingMessage): string | null {
 function appendCallUuid(mediaUrl: string, callUuid: string): string {
     const sep = mediaUrl.includes('?') ? '&' : '?';
     return `${mediaUrl}${sep}call_uuid=${encodeURIComponent(callUuid)}`;
-}
-
-/** Parses a raw WS payload (Buffer/string) into a Vonage media frame, or null when unparseable. */
-function parseWsMessage(raw: unknown): VonageMediaFrame | null {
-    try {
-        const text = typeof raw === 'string' ? raw : raw instanceof Buffer ? raw.toString('utf8') : String(raw);
-        return JSON.parse(text) as VonageMediaFrame;
-    } catch {
-        return null;
-    }
 }
 
 /** Coerces an Express body (JSON object or urlencoded) to the `Record<string,string>` the verifiers expect. */

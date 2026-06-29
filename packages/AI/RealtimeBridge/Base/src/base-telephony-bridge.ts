@@ -184,6 +184,16 @@ export interface ITelephonyCallSdk {
      * @param cb Invoked when the call has ended.
      */
     onCallEnded(cb: () => void): void;
+
+    /**
+     * Discards any outbound audio the provider has QUEUED but not yet played — the agent's not-yet-heard
+     * voice — so the agent goes silent immediately on barge-in. Carriers that buffer deeply (Vonage queues
+     * up to ~60s) MUST implement this or the agent keeps talking over itself after being interrupted.
+     *
+     * **Optional**: a provider whose media path plays in near-real-time with no client-side queue has
+     * nothing to flush and omits it (the base treats an absent method as a no-op).
+     */
+    flushOutbound?(): void;
 }
 
 /**
@@ -393,6 +403,17 @@ export abstract class BaseTelephonyBridge extends BaseRealtimeBridge {
      */
     public OnMedia(handler: (frame: BridgeMediaFrame) => void): void {
         this.mediaHandler = handler;
+    }
+
+    /**
+     * Flushes the agent's queued outbound voice on barge-in by delegating to the SDK's {@link
+     * ITelephonyCallSdk.flushOutbound} (e.g. Vonage's `{"action":"clear"}` websocket command). The engine
+     * calls this from `OnInterruption`; for carriers that buffer outbound audio (notably Vonage's ~60s
+     * queue) this is what stops the agent talking over itself after the caller cuts in. A no-op when the
+     * SDK doesn't implement flush (its media path has no client-side queue).
+     */
+    public override FlushOutboundMedia(): void {
+        this.sdk?.flushOutbound?.();
     }
 
     // ── Capability-gated virtuals telephony supports (gated by SupportedFeatures) ─────

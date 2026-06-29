@@ -13,19 +13,25 @@
  * peer SDK loaded only when the provider is configured) and is resolved by the host's native-adapter
  * wiring, never statically imported here.
  *
- * ## The audio contract (T0 codec)
- * Vonage's WebSocket media leg carries **G.711 μ-law @ 8 kHz mono** PSTN audio (the same companded
- * telephony format Twilio Media Streams use); the {@link IVonageClientBindings} seam speaks **PCM16
- * `ArrayBuffer`**. All transcoding goes through the shared T0 codec ({@link muLawToPcm16Buffer} /
- * {@link pcm16ToMuLawBuffer} from `@memberjunction/ai-bridge-base`) — never reimplemented here. The pure
- * helpers {@link parseVonageMediaFrame} / {@link encodeVonageMediaFrame} do the codec mapping so they
- * unit-test with no network.
+ * ## The audio contract (L16 PCM, NOT μ-law — this is where Vonage diverges hard from Twilio)
+ * Vonage's WebSocket media leg carries audio as **raw binary WebSocket frames of 16-bit little-endian
+ * L16 PCM** at the `content-type` rate (we negotiate `audio/l16;rate=8000`); NON-audio events (DTMF,
+ * `websocket:connected`, close) arrive as **JSON text frames**. There is NO base64 envelope and NO
+ * companding — the Twilio Media Streams `{event:'media',payload:<base64 μ-law>}` shape does not apply
+ * here. At `rate=8000` the inbound binary already IS the PCM16 the {@link IVonageClientBindings} seam
+ * speaks, so audio passes straight through; the carrier↔model resample lives downstream, exactly as on
+ * the Twilio path after μ-law decode. The host ingress owns the binary-vs-text split on the wire and
+ * pumps audio as `ArrayBuffer`s through {@link IVonageMediaPump}; {@link parseVonageControlEvent} parses
+ * the JSON text events.
  *
  * ## Vonage deltas vs Twilio (the point of T2)
  * - **NCCO, not TwiML**: the answer/connect document is a JSON array of actions ({@link buildConnectNcco}),
  *   not an XML `<Connect><Stream>`.
  * - **WebSocket `connect` action**: media rides a `connect` action with an `endpoint` of `type: 'websocket'`
  *   (vs Twilio's `<Stream>`).
+ * - **Binary L16 media, JSON text events**: audio is raw binary PCM (no base64, no μ-law); DTMF/close are
+ *   JSON text frames with `digit` at the TOP level (`{event:'websocket:dtmf',digit:'5'}`) — vs Twilio's
+ *   single all-JSON channel.
  * - **Voice API**: `createCall` is REST `POST /v1/calls`; transfer/hangup are REST `PUT /v1/calls/:uuid`
  *   ({@link buildTransferNccoAction}); DTMF is `PUT /v1/calls/:uuid/dtmf`.
  *
@@ -35,7 +41,6 @@
  * @see `/plans/realtime/bridges-and-widget/telephony-vendor-bindings.md` §1c, §T2, §4, §5.
  */
 
-import { muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
 import { IVonageClientBindings } from './vonage-call-sdk';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -102,59 +107,41 @@ export function buildTransferNccoAction(toNumber: string): NccoAction[] {
     return [{ action: 'connect', endpoint: [{ type: 'phone', number: toNumber } as unknown as NccoEndpoint] }];
 }
 
-/** One Vonage WebSocket media frame as it appears (post-JSON-parse) on the media leg. */
-export interface VonageMediaFrame {
-    /** The event verb — `'media'` for an audio frame, `'websocket:dtmf'` for a DTMF event, `'close'` for end. */
+/**
+ * One Vonage **control event** — a JSON *text* frame on the media leg (NOT audio; audio is raw binary).
+ * Vonage sends `websocket:connected` on open, `websocket:dtmf` for keypad input (with `digit` at the TOP
+ * level, not nested), and a close event when the leg ends.
+ */
+export interface VonageControlEvent {
+    /** The event verb — e.g. `'websocket:connected'`, `'websocket:dtmf'`, `'close'`. */
     event: string;
-    /** The base64-encoded μ-law audio payload (present on `media` events). */
-    payload?: string;
-    /** The DTMF payload (present on `websocket:dtmf` events). */
-    dtmf?: {
-        /** The pressed DTMF digit (`0`-`9`, `*`, `#`). */
-        digit: string;
-    };
+    /** The pressed DTMF digit (`0`-`9`, `*`, `#`) — present on `websocket:dtmf` events, at the top level. */
+    digit?: string;
+    /** The DTMF press duration in ms — present on `websocket:dtmf` events. */
+    duration?: number;
+    /** Any other event fields, typed without widening to `any`. */
+    [field: string]: unknown;
 }
 
 /**
- * **Pure** decode of one inbound Vonage media frame to a PCM16 `ArrayBuffer` — base64 μ-law → μ-law bytes
- * → PCM16 via the T0 codec ({@link muLawToPcm16Buffer}). Returns `null` for any non-`media` event or a
- * frame with no payload, so the caller can ignore `websocket:dtmf` / `close` cleanly.
+ * **Pure** parse of one Vonage media-leg **text** frame (the JSON control events). Returns the parsed
+ * {@link VonageControlEvent}, or `null` when the text is not a JSON object carrying an `event` string.
+ * Audio frames are binary and never reach this function — the host ingress routes binary vs. text and
+ * pumps audio straight through {@link IVonageMediaPump} as PCM `ArrayBuffer`s.
  *
- * @param frame The parsed Vonage media frame object.
- * @returns The decoded PCM16 audio, or `null` when the frame carries no audio payload.
+ * @param text The UTF-8 text-frame payload Vonage sent.
+ * @returns The parsed control event, or `null` when the frame is not a recognizable JSON event.
  */
-export function parseVonageMediaFrame(frame: VonageMediaFrame): ArrayBuffer | null {
-    if (frame.event !== 'media' || !frame.payload) {
+export function parseVonageControlEvent(text: string): VonageControlEvent | null {
+    try {
+        const parsed: unknown = JSON.parse(text);
+        if (parsed && typeof parsed === 'object' && typeof (parsed as { event?: unknown }).event === 'string') {
+            return parsed as VonageControlEvent;
+        }
+        return null;
+    } catch {
         return null;
     }
-    const mulaw = base64ToArrayBuffer(frame.payload);
-    return muLawToPcm16Buffer(mulaw);
-}
-
-/**
- * **Pure** encode of one outbound PCM16 `ArrayBuffer` into the Vonage outbound `media` frame shape —
- * PCM16 → μ-law via the T0 codec ({@link pcm16ToMuLawBuffer}) → base64 payload. The returned object is
- * `JSON.stringify`-ready for the websocket send.
- *
- * @param pcm The agent's outbound PCM16 audio.
- * @returns A Vonage outbound `media` frame ready to JSON-serialize and send.
- */
-export function encodeVonageMediaFrame(pcm: ArrayBuffer): VonageMediaFrame {
-    const mulaw = pcm16ToMuLawBuffer(pcm);
-    return { event: 'media', payload: arrayBufferToBase64(mulaw) };
-}
-
-/** Decodes a base64 string to a fresh `ArrayBuffer` (Node `Buffer` path; works in any Node runtime). */
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-    const buf = Buffer.from(base64, 'base64');
-    const out = new ArrayBuffer(buf.length);
-    new Uint8Array(out).set(buf);
-    return out;
-}
-
-/** Encodes an `ArrayBuffer` to a base64 string (Node `Buffer` path; works in any Node runtime). */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-    return Buffer.from(new Uint8Array(buffer)).toString('base64');
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -199,15 +186,20 @@ export interface IVonageVoiceLike {
 }
 
 /**
- * The bidirectional WebSocket media pump for a single call's media leg. Production wires this over the
- * accepted websocket for the call UUID; tests inject a fake. The pump speaks raw frame objects — transcode
- * happens in {@link RealVonageBindings} via the pure helpers above.
+ * The bidirectional WebSocket media pump for a single call's media leg, modeling Vonage's binary-audio /
+ * text-event split. Production wires this over the accepted websocket for the call UUID (binary frames =
+ * L16 PCM audio, text frames = JSON control events); tests inject a fake. Audio is raw PCM `ArrayBuffer`s
+ * — no envelope, no transcode — so {@link RealVonageBindings} just forwards bytes.
  */
 export interface IVonageMediaPump {
-    /** Sends one outbound media frame on the call's websocket. */
-    Send(callUuid: string, frame: VonageMediaFrame): void;
-    /** Registers the inbound-frame handler for the call's websocket (latest handler wins). */
-    OnFrame(callUuid: string, handler: (frame: VonageMediaFrame) => void): void;
+    /** Sends one outbound PCM16 audio frame as a BINARY websocket message (raw L16 PCM, no envelope). */
+    SendAudio(callUuid: string, pcm: ArrayBuffer): void;
+    /** Registers the inbound PCM16 audio handler for the call's binary media frames. */
+    OnAudio(callUuid: string, handler: (pcm: ArrayBuffer) => void): void;
+    /** Registers the inbound control-event handler for the call's JSON text frames (DTMF / connected / close). */
+    OnEvent(callUuid: string, handler: (event: VonageControlEvent) => void): void;
+    /** Discards the call's queued outbound audio (sends Vonage's `{"action":"clear"}` text command). */
+    Clear(callUuid: string): void;
 }
 
 /** Options {@link RealVonageBindings} needs at construction — the injected client surfaces + the media URL. */
@@ -274,17 +266,14 @@ export class RealVonageBindings implements IVonageClientBindings {
 
     /** @inheritdoc */
     public pushWebsocketAudio(callUuid: string, pcm: ArrayBuffer): void {
-        this.mediaPump.Send(callUuid, encodeVonageMediaFrame(pcm));
+        // Raw binary L16 PCM out — no μ-law, no base64, no JSON envelope (that's Twilio's wire, not Vonage's).
+        this.mediaPump.SendAudio(callUuid, pcm);
     }
 
     /** @inheritdoc */
     public onWebsocketAudio(callUuid: string, cb: (pcm: ArrayBuffer) => void): void {
-        this.mediaPump.OnFrame(callUuid, (frame) => {
-            const pcm = parseVonageMediaFrame(frame);
-            if (pcm) {
-                cb(pcm);
-            }
-        });
+        // Inbound binary frames at rate=8000 already ARE PCM16 — pass straight through (resample is downstream).
+        this.mediaPump.OnAudio(callUuid, cb);
     }
 
     /** @inheritdoc */
@@ -294,8 +283,8 @@ export class RealVonageBindings implements IVonageClientBindings {
 
     /** @inheritdoc */
     public onDigits(callUuid: string, cb: (digits: string) => void): void {
-        this.mediaPump.OnFrame(callUuid, (frame) => {
-            const digit = readDtmfDigit(frame);
+        this.mediaPump.OnEvent(callUuid, (event) => {
+            const digit = readDtmfDigit(event);
             if (digit) {
                 cb(digit);
             }
@@ -309,11 +298,16 @@ export class RealVonageBindings implements IVonageClientBindings {
 
     /** @inheritdoc */
     public onCallStatus(callUuid: string, cb: () => void): void {
-        this.mediaPump.OnFrame(callUuid, (frame) => {
-            if (frame.event === 'close') {
+        this.mediaPump.OnEvent(callUuid, (event) => {
+            if (event.event === 'close' || event.event === 'websocket:closed') {
                 cb();
             }
         });
+    }
+
+    /** @inheritdoc — barge-in: tell Vonage to discard its queued outbound audio so the agent stops mid-utterance. */
+    public flushOutbound(callUuid: string): void {
+        this.mediaPump.Clear(callUuid);
     }
 }
 
@@ -323,11 +317,15 @@ function readEventUrl(args?: Record<string, unknown>): string | undefined {
     return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-/** Reads a DTMF digit out of a Vonage `websocket:dtmf` event frame, or `undefined` for non-DTMF frames. */
-function readDtmfDigit(frame: VonageMediaFrame): string | undefined {
-    if (frame.event !== 'websocket:dtmf') {
+/**
+ * Reads a DTMF digit out of a Vonage `websocket:dtmf` control event, or `undefined` for non-DTMF events.
+ * Vonage carries the digit at the TOP level (`{event:'websocket:dtmf',digit:'5',duration:260}`), unlike
+ * Twilio's nested shape — reading `event.digit`, not `event.dtmf.digit`, is the whole point of this fix.
+ */
+function readDtmfDigit(event: VonageControlEvent): string | undefined {
+    if (event.event !== 'websocket:dtmf') {
         return undefined;
     }
-    const digit = frame.dtmf?.digit;
+    const digit = event.digit;
     return typeof digit === 'string' && digit.length > 0 ? digit : undefined;
 }

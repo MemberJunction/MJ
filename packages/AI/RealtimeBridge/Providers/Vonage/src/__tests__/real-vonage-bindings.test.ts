@@ -1,16 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { muLawToPcm16Buffer, pcm16ToMuLawBuffer } from '@memberjunction/ai-bridge-base';
 import {
     RealVonageBindings,
     buildConnectNcco,
     buildTransferNccoAction,
-    parseVonageMediaFrame,
-    encodeVonageMediaFrame,
+    parseVonageControlEvent,
     IVonageVoiceLike,
     IVonageMediaPump,
     VonageCreateCallParams,
     VonageTransferParams,
-    VonageMediaFrame,
+    VonageControlEvent,
 } from '../real-vonage-bindings';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -38,18 +36,30 @@ class FakeVoice implements IVonageVoiceLike {
     }
 }
 
+/** Fake pump modeling Vonage's binary-audio / text-event split (no envelope, no transcode). */
 class FakeMediaPump implements IVonageMediaPump {
-    public readonly Sent: Array<{ callUuid: string; frame: VonageMediaFrame }> = [];
-    private handlers = new Map<string, (frame: VonageMediaFrame) => void>();
+    public readonly SentAudio: Array<{ callUuid: string; pcm: ArrayBuffer }> = [];
+    public readonly Cleared: string[] = [];
+    private audioHandlers = new Map<string, (pcm: ArrayBuffer) => void>();
+    private eventHandlers = new Map<string, (event: VonageControlEvent) => void>();
 
-    public Send(callUuid: string, frame: VonageMediaFrame): void {
-        this.Sent.push({ callUuid, frame });
+    public SendAudio(callUuid: string, pcm: ArrayBuffer): void {
+        this.SentAudio.push({ callUuid, pcm });
     }
-    public OnFrame(callUuid: string, handler: (frame: VonageMediaFrame) => void): void {
-        this.handlers.set(callUuid, handler);
+    public OnAudio(callUuid: string, handler: (pcm: ArrayBuffer) => void): void {
+        this.audioHandlers.set(callUuid, handler);
     }
-    public Drive(callUuid: string, frame: VonageMediaFrame): void {
-        this.handlers.get(callUuid)?.(frame);
+    public OnEvent(callUuid: string, handler: (event: VonageControlEvent) => void): void {
+        this.eventHandlers.set(callUuid, handler);
+    }
+    public Clear(callUuid: string): void {
+        this.Cleared.push(callUuid);
+    }
+    public DriveAudio(callUuid: string, pcm: ArrayBuffer): void {
+        this.audioHandlers.get(callUuid)?.(pcm);
+    }
+    public DriveEvent(callUuid: string, event: VonageControlEvent): void {
+        this.eventHandlers.get(callUuid)?.(event);
     }
 }
 
@@ -62,11 +72,6 @@ function makeBindings(mediaWssUrl = 'wss://api.example/telephony/vonage/media'):
     const pump = new FakeMediaPump();
     const bindings = new RealVonageBindings({ Voice: voice, MediaPump: pump, MediaWssUrl: mediaWssUrl });
     return { bindings, voice, pump };
-}
-
-/** A base64 μ-law payload over a known μ-law byte run, for round-trip checks. */
-function muLawBase64(bytes: number[]): string {
-    return Buffer.from(Uint8Array.from(bytes)).toString('base64');
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -99,39 +104,27 @@ describe('NCCO pure helpers', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Pure media-frame transcode via the T0 codec.
+// Pure control-event parsing — the JSON text frames (audio is binary, never JSON).
 // ──────────────────────────────────────────────────────────────────────────────
 
-describe('media-frame transcode (T0 codec)', () => {
-    it('parseVonageMediaFrame decodes base64 μ-law to PCM16 matching the codec', () => {
-        const mulawBytes = [0xff, 0x80, 0x00, 0x7f, 0x40];
-        const frame: VonageMediaFrame = { event: 'media', payload: muLawBase64(mulawBytes) };
-        const pcm = parseVonageMediaFrame(frame);
-        expect(pcm).not.toBeNull();
-        const expected = muLawToPcm16Buffer(Uint8Array.from(mulawBytes).buffer);
-        expect(new Uint8Array(pcm!)).toEqual(new Uint8Array(expected));
+describe('parseVonageControlEvent', () => {
+    it('parses a DTMF event with the digit at the TOP level (not nested under dtmf)', () => {
+        const event = parseVonageControlEvent('{"event":"websocket:dtmf","digit":"5","duration":260}');
+        expect(event).not.toBeNull();
+        expect(event!.event).toBe('websocket:dtmf');
+        expect(event!.digit).toBe('5');
+        expect(event!.duration).toBe(260);
     });
 
-    it('parseVonageMediaFrame returns null for non-media events', () => {
-        expect(parseVonageMediaFrame({ event: 'websocket:dtmf', dtmf: { digit: '1' } })).toBeNull();
-        expect(parseVonageMediaFrame({ event: 'close' })).toBeNull();
-        expect(parseVonageMediaFrame({ event: 'media' })).toBeNull();
+    it('parses the connected + close lifecycle events', () => {
+        expect(parseVonageControlEvent('{"event":"websocket:connected"}')!.event).toBe('websocket:connected');
+        expect(parseVonageControlEvent('{"event":"close"}')!.event).toBe('close');
     });
 
-    it('encodeVonageMediaFrame encodes PCM16 to base64 μ-law matching the codec', () => {
-        const pcm = new Int16Array([0, 1000, -1000, 32767, -32768]).buffer;
-        const frame = encodeVonageMediaFrame(pcm);
-        expect(frame.event).toBe('media');
-        const expectedMulaw = pcm16ToMuLawBuffer(pcm);
-        expect(frame.payload).toBe(Buffer.from(new Uint8Array(expectedMulaw)).toString('base64'));
-    });
-
-    it('round-trips μ-law base64 → PCM16 → back through the codec (lossy-stable)', () => {
-        const mulawBytes = [0x10, 0x20, 0x30, 0x40, 0x50, 0xaa, 0x55];
-        const inFrame: VonageMediaFrame = { event: 'media', payload: muLawBase64(mulawBytes) };
-        const pcm = parseVonageMediaFrame(inFrame)!;
-        const outFrame = encodeVonageMediaFrame(pcm);
-        expect(Buffer.from(outFrame.payload!, 'base64')).toEqual(Buffer.from(Uint8Array.from(mulawBytes)));
+    it('returns null for non-JSON, non-object JSON, or an object with no event string', () => {
+        expect(parseVonageControlEvent('not json')).toBeNull();
+        expect(parseVonageControlEvent('123')).toBeNull();
+        expect(parseVonageControlEvent('{"foo":"bar"}')).toBeNull();
     });
 });
 
@@ -188,40 +181,37 @@ describe('RealVonageBindings — Voice API mapping', () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// RealVonageBindings → WebSocket media pump (audio + DTMF + ended).
+// RealVonageBindings → WebSocket media pump (binary audio + text-event DTMF/ended).
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe('RealVonageBindings — WebSocket media mapping', () => {
-    it('pushWebsocketAudio encodes PCM16 to a μ-law media frame', () => {
+    it('pushWebsocketAudio forwards PCM16 straight through as binary (no μ-law, no envelope)', () => {
         const { bindings, pump } = makeBindings();
         const pcm = new Int16Array([100, -100, 5000]).buffer;
         bindings.pushWebsocketAudio('von9', pcm);
-        expect(pump.Sent.length).toBe(1);
-        expect(pump.Sent[0].callUuid).toBe('von9');
-        const expectedMulaw = pcm16ToMuLawBuffer(pcm);
-        expect(pump.Sent[0].frame.payload).toBe(Buffer.from(new Uint8Array(expectedMulaw)).toString('base64'));
+        expect(pump.SentAudio.length).toBe(1);
+        expect(pump.SentAudio[0].callUuid).toBe('von9');
+        expect(new Uint8Array(pump.SentAudio[0].pcm)).toEqual(new Uint8Array(pcm));
     });
 
-    it('onWebsocketAudio delivers decoded PCM16 for media frames and ignores non-media', () => {
+    it('onWebsocketAudio delivers inbound binary PCM16 frames verbatim', () => {
         const { bindings, pump } = makeBindings();
         const heard: ArrayBuffer[] = [];
         bindings.onWebsocketAudio('von9', (pcm) => heard.push(pcm));
 
-        const mulawBytes = [0xff, 0x00, 0x7f];
-        pump.Drive('von9', { event: 'media', payload: muLawBase64(mulawBytes) });
-        pump.Drive('von9', { event: 'close' }); // ignored
+        const pcm = new Int16Array([1, -1, 32767, -32768]).buffer;
+        pump.DriveAudio('von9', pcm);
 
         expect(heard.length).toBe(1);
-        const expected = muLawToPcm16Buffer(Uint8Array.from(mulawBytes).buffer);
-        expect(new Uint8Array(heard[0])).toEqual(new Uint8Array(expected));
+        expect(new Uint8Array(heard[0])).toEqual(new Uint8Array(pcm));
     });
 
-    it('onDigits surfaces websocket:dtmf-event digits only', () => {
+    it('onDigits surfaces websocket:dtmf-event digits (top-level digit) only', () => {
         const { bindings, pump } = makeBindings();
         const digits: string[] = [];
         bindings.onDigits('von9', (d) => digits.push(d));
-        pump.Drive('von9', { event: 'websocket:dtmf', dtmf: { digit: '7' } });
-        pump.Drive('von9', { event: 'media', payload: muLawBase64([0x00]) }); // not dtmf
+        pump.DriveEvent('von9', { event: 'websocket:dtmf', digit: '7', duration: 100 });
+        pump.DriveEvent('von9', { event: 'websocket:connected' }); // not dtmf
         expect(digits).toEqual(['7']);
     });
 
@@ -229,9 +219,15 @@ describe('RealVonageBindings — WebSocket media mapping', () => {
         const { bindings, pump } = makeBindings();
         let ended = false;
         bindings.onCallStatus('von9', () => (ended = true));
-        pump.Drive('von9', { event: 'media', payload: muLawBase64([0x00]) });
+        pump.DriveEvent('von9', { event: 'websocket:connected' });
         expect(ended).toBe(false);
-        pump.Drive('von9', { event: 'close' });
+        pump.DriveEvent('von9', { event: 'close' });
         expect(ended).toBe(true);
+    });
+
+    it('flushOutbound clears the call’s queued audio (barge-in)', () => {
+        const { bindings, pump } = makeBindings();
+        bindings.flushOutbound('von9');
+        expect(pump.Cleared).toEqual(['von9']);
     });
 });
