@@ -44,7 +44,7 @@
           @switch (activePanel) {
             @case ('home') { <ps-home [engine]="engine" (navigate)="selectPanel($event)" (askAgent)="openChat($event)"></ps-home> }
             @case ('catalog') { <ps-catalog [engine]="engine" (askAgent)="openChat($event)"></ps-catalog> }
-            @case ('pipelines') { <ps-pipelines [engine]="engine" (askAgent)="openChat($event)"></ps-pipelines> }
+            @case ('pipelines') { <ps-pipelines [engine]="engine" [provider]="Provider" [currentUser]="currentUser" (askAgent)="openChat($event)"></ps-pipelines> }
             @case ('experiments') { <ps-experiments [engine]="engine"></ps-experiments> }
             @case ('registry') { <ps-registry [engine]="engine"></ps-registry> }
             @case ('production') { <ps-production [engine]="engine"></ps-production> }

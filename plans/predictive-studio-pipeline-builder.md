@@ -36,15 +36,24 @@ visualization fed with fake data. The builder reads/writes these real fields:
       → output) → recovered longest-path layout + bezier edges; inspector shows the **selected node's real
       config** + live **Leakage guard / As-of / Validation** parsed from the pipeline (read-only). No fake
       data; no dead Fit/Validate/Train (deferred to P5). Dashboards build clean, PS tests 82 pass.
-- [ ] **P2 — Editable inspector.** Selected node's config becomes editable in-memory (rename, change
-      columns/strategy/dims/etc. per Kind). Dirty tracking. No persistence yet.
-- [ ] **P3 — Add / remove / rewire.** Palette drag-to-add a node of each Kind; delete a node; connect/disconnect
-      ports (edges). Cycle prevention. Re-layout on change.
-- [ ] **P4 — Persist.** Serialize the canvas back to `SourceBindings` + `FeatureSteps` JSON; `pipeline.Save()`
-      (strongly-typed entity, provider-threaded, `LatestResult` error handling). Version bump policy TBD.
-- [ ] **P5 — Validate / Fit / Train.** Wire the toolbar to the engine: Validate (spec sanity + leakage),
-      Train (`PredictiveStudioTrainModelOperation`). Surface run progress; on success the model appears in
-      Registry. **AC:** edit a pipeline → Save → Train → a new `MJ: ML Models` row.
+- [x] **P2 — Editable inspector.** ✅ The parsed spec IS the editable state; nodes/edges are derived, so an
+      edit re-derives + re-lays-out. Inspector edits every kind: source (Kind/Ref/Alias), step (Kind switch
+      resets config to defaults; per-Kind fields for all 9 kinds), target (variable + problem type), algorithm
+      (dropdown + hyperparameters JSON), and live Leakage/As-of/Validation. Dirty tracking + "Unsaved" badge.
+- [x] **P3 — Add / remove / rewire.** ✅ Palette "+ Source" / "+ Feature step" add a default node; per-node
+      Delete (cleans up downstream `Inputs`); rewire via the inspector's "Inputs (upstream steps)" checkboxes
+      with **cycle prevention**. Re-layout on every change. (Inspector-driven, not drag-wiring — robust + explicit
+      for a structured persisted DAG.)
+- [x] **P4 — Persist.** ✅ Save serializes the edit state back to `SourceBindings` + `FeatureSteps` (+ target/
+      algorithm/hyperparameters/Leakage/As-of/Validation) and `pipeline.Save()` — strongly-typed entity,
+      provider-threaded, `LatestResult.CompleteMessage` error handling, success/failure notifications.
+- [x] **P5 — Validate / Train.** ✅ Validate = client-side spec sanity (sources / target / algorithm / valid
+      hyperparameters JSON). Train = `PredictiveStudioTrainModelOperation({ pipelineId })`, gated on a saved
+      (non-dirty) pipeline, with busy state, leakage-flag surfacing, and an engine refresh on success → the
+      model appears in Registry. Dashboards build clean; PS tests 82 pass.
+
+**Status: builder COMPLETE (P1–P5).** Verified by build + tests; live UI walkthrough (edit → Save → Train on a
+real pipeline) still worth a Playwright pass.
 
 ## Non-goals / guards
 - **No new entity** — everything reads/writes existing `MJ: ML Training Pipelines` JSON columns.

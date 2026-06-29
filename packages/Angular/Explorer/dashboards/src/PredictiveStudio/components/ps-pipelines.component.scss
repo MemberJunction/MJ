@@ -69,5 +69,15 @@
 .ps-pipelines .ihead .tile[data-type='algo'] { background: var(--ps-node-algorithm); }
 .ps-pipelines .ihead .tile[data-type='output'] { background: var(--mj-status-success); }
 
+// Palette chips are interactive buttons in the editor
+.ps-pipelines .canvas-bar .ps-pchip { cursor: pointer; border: none; }
+.ps-pipelines .canvas-bar .ps-pchip:hover { filter: brightness(1.08); }
+
+// Inspector edit fields
+.ps-pipelines .ps-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.ps-pipelines .ps-field > label { font-size: 12px; font-weight: 650; color: var(--mj-text-muted); }
+.ps-pipelines .inputs-list { display: flex; flex-direction: column; gap: 4px; }
+.ps-pipelines .inp-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mj-text-secondary); cursor: pointer; }
+
 // Empty-state CTA spacing
 .ps-pipelines .ps-empty button { margin-top: 16px; }
