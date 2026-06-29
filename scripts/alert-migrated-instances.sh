@@ -56,11 +56,19 @@ col() { # $1 themeAttr  $2 label
   alert warning "" "$(ic warning)" 'Low agreement may indicate evaluation criteria need refinement.'
   alert warning "" "$(ic warning)" 'You do not have authorization to create entities in any schema. Contact your administrator.'
 
-  echo '<div class="grp">MCP — error / success (pending commit)</div>'
+  echo '<div class="grp">MCP — error / success (committed)</div>'
   printf '<div class="mj-alert mj-alert--error"><i class="mj-alert__icon %s"></i><div class="mj-alert__content">Failed to connect to MCP server.</div><button class="mj-alert__dismiss"><i class="fa-solid fa-xmark"></i></button></div>\n' "$(ic error)"
   alert error "" "$(ic error)" 'Name is required.'
   alert success "" "$(ic success)" 'Execution Successful <span style="float:right;font-size:0.75rem">142ms</span>'
   alert error "" "$(ic error)" 'Execution Failed'
+
+  echo '<div class="grp">core-entity-forms (pending commit)</div>'
+  alert error "" "$(ic error)" 'Could not load provider catalog — driver not found.'
+  alert warning "" "$(ic warning)" 'The selected provider'"'"'s <code>DriverClass</code> is not registered with this MJServer build.'
+  printf '<div class="mj-alert mj-alert--error"><i class="mj-alert__icon %s"></i><div class="mj-alert__content"><div class="mj-alert__title">Query execution failed</div><div style="margin-top:8px;font-family:monospace;font-size:0.9em">Invalid column name '"'"'Foo'"'"'.</div></div></div>\n' "$(ic error)"
+  alert error "" "$(ic error)" '<strong>Missing or malformed RuntimeActionConfiguration.</strong> This Runtime action cannot run until a valid configuration is supplied.'
+  printf '<div class="mj-alert mj-alert--warning"><i class="mj-alert__icon %s"></i><div class="mj-alert__content"><div class="mj-alert__title">Wildcard permissions enabled</div><div style="font-size:0.9em">This runtime action has wildcard flags that bypass the allowlists below.</div></div></div>\n' "$(ic warning)"
+  alert warning "" "$(ic warning)" 'Output example is required when output type is '"'"'object'"'"'.'
 
   echo '</div></div>'
 }
