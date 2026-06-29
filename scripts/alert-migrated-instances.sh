@@ -62,7 +62,15 @@ col() { # $1 themeAttr  $2 label
   alert success "" "$(ic success)" 'Execution Successful <span style="float:right;font-size:0.75rem">142ms</span>'
   alert error "" "$(ic error)" 'Execution Failed'
 
-  echo '<div class="grp">core-entity-forms (pending commit)</div>'
+  echo '<div class="grp">Generic packages (pending commit)</div>'
+  alert error "" "$(ic error)" 'Could not load form preview — component spec missing.'
+  alert info "" "$(ic info)" '<div>Materializes <strong>128 records</strong> from <strong>Active Users</strong> into a static List.</div>'
+  alert success "" "$(ic success)" 'Safe operation — no records will be removed from the list.'
+  alert error "" "$(ic error)" '<div><strong>12 record(s) will be removed from this list.</strong> These records are members today but are no longer matched by the source.</div>'
+  alert success "" "$(ic success)" 'Feedback submitted successfully!'
+  alert error "" "$(ic error)" 'You do not have permission to share this resource.'
+
+  echo '<div class="grp">core-entity-forms (committed)</div>'
   alert error "" "$(ic error)" 'Could not load provider catalog — driver not found.'
   alert warning "" "$(ic warning)" 'The selected provider'"'"'s <code>DriverClass</code> is not registered with this MJServer build.'
   printf '<div class="mj-alert mj-alert--error"><i class="mj-alert__icon %s"></i><div class="mj-alert__content"><div class="mj-alert__title">Query execution failed</div><div style="margin-top:8px;font-family:monospace;font-size:0.9em">Invalid column name '"'"'Foo'"'"'.</div></div></div>\n' "$(ic error)"
