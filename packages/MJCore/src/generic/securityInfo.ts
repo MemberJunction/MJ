@@ -56,6 +56,24 @@ export interface MagicLinkScope {
 }
 
 /**
+ * Returning-visitor context carried on {@link UserInfo} for a public web-widget guest session,
+ * sourced from the verified session token's claims. Lets a server-created conversation (the voice
+ * path, which mints its conversation server-side) stamp the same returning-visitor anchor + resolved
+ * identity the text path stamps client-side, so cross-session memory works uniformly across modalities.
+ * Not a database/GraphQL field — an in-memory, per-session carrier.
+ */
+export interface WidgetVisitorContext {
+    /** Durable, opaque returning-visitor anchor (stamped on Conversation.VisitorKey). */
+    VisitorKey?: string;
+    /** The prior conversation this visit chains from (stamped on Conversation.PreviousConversationID). */
+    PreviousConversationID?: string;
+    /** Resolved polymorphic identity entity id (stamped on Conversation.ResolvedEntityID when set). */
+    ResolvedEntityID?: string;
+    /** Resolved polymorphic identity record id (stamped on Conversation.ResolvedRecordID when set). */
+    ResolvedRecordID?: string;
+}
+
+/**
  * A list of all users who have or had access to the system.
  * Contains user profile information, authentication details, and role assignments.
  */
@@ -195,6 +213,22 @@ export class UserInfo extends BaseInfo {
     }
     public set MagicLinkScope(value: MagicLinkScope | undefined) {
         this._MagicLinkScope = value;
+    }
+
+    private _WidgetVisitorContext?: WidgetVisitorContext = undefined;
+
+    /**
+     * Returning-visitor context for a public web-widget guest session. Set at request time from the
+     * verified session token's claims (the widget mint embeds the resolved VisitorKey / prior
+     * conversation / resolved identity). Consumed when a conversation is created server-side (the voice
+     * path) so it carries the same returning-visitor anchor + resolved identity the text path stamps
+     * client-side. Same getter/setter (non-enumerable) rationale as MagicLinkScope — not a DB/GraphQL field.
+     */
+    public get WidgetVisitorContext(): WidgetVisitorContext | undefined {
+        return this._WidgetVisitorContext;
+    }
+    public set WidgetVisitorContext(value: WidgetVisitorContext | undefined) {
+        this._WidgetVisitorContext = value;
     }
 
     private _IsMagicLinkAnonymous: boolean = false;

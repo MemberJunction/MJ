@@ -57,14 +57,22 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
             return { reply: '', success: false, error: 'Widget transport not initialized.' };
         }
         try {
-            const detail = await this.saveUserMessage(text);
-            if (!detail) {
+            const userDetail = await this.saveUserMessage(text);
+            if (!userDetail) {
                 return { reply: '', success: false, error: 'Could not record your message.' };
+            }
+            // The agent writes its reply INTO a pre-created response detail whose id is passed as
+            // `conversationDetailId` (the AgentRunner contract — see AgentRunner.ts: `options.conversationDetailId`
+            // IS the agent response detail). Create it as Role='AI' so the reply is an agent turn, not a
+            // second user turn; `message`/`latestMessageId` stays the user's triggering message.
+            const agentDetail = await this.createAgentResponseDetail();
+            if (!agentDetail) {
+                return { reply: '', success: false, error: 'Could not start the agent response.' };
             }
             const result = await ConversationsRuntime.Instance.AgentRunner.processMessage({
                 conversationId: this.conversationId,
-                message: detail,
-                conversationDetailId: detail.ID,
+                message: userDetail,
+                conversationDetailId: agentDetail.ID,
                 applicationId: this.session.applicationId,
                 // D5: ALWAYS pin the support agent — never the unfiltered fallback.
                 explicitAgentId: this.session.pinnedAgentId,
@@ -102,12 +110,37 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         if (this.contextUser?.ID) {
             convo.UserID = this.contextUser.ID;
         }
+        // Scope the conversation to the widget's Application. The returning-visitor lookup at mint
+        // resolves the prior conversation by (VisitorKey AND ApplicationID), so without this the chain
+        // never forms (PreviousConversationID stays null → no recap, no cross-session memory).
+        // ApplicationScope must be 'Application' for ApplicationID to be set (CK_Conversation_ScopeAppBinding).
+        if (this.session?.applicationId) {
+            convo.ApplicationScope = 'Application';
+            convo.ApplicationID = this.session.applicationId;
+        }
         // Stamp the per-session id so the Widget Guest RLS filters ({{ScopeResourceID}}) isolate
         // this guest's conversation from other anonymous guests sharing the Anonymous principal.
         // Read-isolation is enforced by the SIGNED session scope, so a client mis-stamp can only
         // hide the guest's own rows from itself — never expose another session's rows.
         if (this.session?.sessionId) {
             convo.ExternalID = this.session.sessionId;
+        }
+        // Returning-visitor chain (RV1): when remembering is on, stamp the durable VisitorKey and link to
+        // the visitor's prior conversation (resolved server-side by VisitorKey at mint). Both are null when
+        // the widget's RememberReturningVisitors toggle is off, so this is a no-op in the default case.
+        if (this.session?.rememberReturningVisitors) {
+            if (this.session.visitorKey) {
+                convo.VisitorKey = this.session.visitorKey;
+            }
+            if (this.session.previousConversationId) {
+                convo.PreviousConversationID = this.session.previousConversationId;
+            }
+            // RV4 (host-identity path): when the mint resolved a polymorphic identity, stamp it so memory
+            // injection keys off the resolved record rather than the anonymous cookie chain.
+            if (this.session.resolvedEntityId && this.session.resolvedRecordId) {
+                convo.ResolvedEntityID = this.session.resolvedEntityId;
+                convo.ResolvedRecordID = this.session.resolvedRecordId;
+            }
         }
         const saved = await convo.Save();
         if (!saved) {
@@ -124,6 +157,29 @@ export class RuntimeWidgetTransport implements IWidgetTransport {
         detail.ConversationID = this.conversationId!;
         detail.Role = 'User';
         detail.Message = text;
+        const saved = await detail.Save();
+        if (!saved) {
+            return null;
+        }
+        return detail;
+    }
+
+    /**
+     * Creates the agent's response detail placeholder (Role='AI', In-Progress) the agent run writes
+     * into. Mirrors how the chat UI / AgentRunner pre-create the response row; its id is passed as
+     * `conversationDetailId` so the reply lands as an agent turn the widget can read back.
+     */
+    private async createAgentResponseDetail(): Promise<MJConversationDetailEntity | null> {
+        const md = new Metadata();
+        const detail = await md.GetEntityObject<MJConversationDetailEntity>(CONVERSATION_DETAILS_ENTITY, this.contextUser ?? undefined);
+        detail.NewRecord();
+        detail.ConversationID = this.conversationId!;
+        detail.Role = 'AI';
+        detail.Message = '⏳ Starting…';
+        detail.Status = 'In-Progress';
+        if (this.session?.pinnedAgentId) {
+            detail.AgentID = this.session.pinnedAgentId;
+        }
         const saved = await detail.Save();
         if (!saved) {
             return null;

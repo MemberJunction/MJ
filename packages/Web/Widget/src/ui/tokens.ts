@@ -111,4 +111,18 @@ export const WIDGET_SHADOW_STYLES = `
     border-radius: 6px; padding: 4px 10px; cursor: pointer; font: inherit; font-size: 0.95em;
 }
 .mj-widget-banner-retry:hover { background: var(--mj-status-error-text); }
+.mj-widget-memory-notice {
+    display: flex; align-items: center; gap: 8px; padding: 6px 12px;
+    background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary);
+    border-top: 1px solid var(--mj-border-default);
+    font-size: 0.75em;
+}
+.mj-widget-memory-notice-text { flex: 1; }
+.mj-widget-forget {
+    background: none; color: var(--mj-text-secondary); border: none;
+    padding: 2px 4px; cursor: pointer; font: inherit; font-size: 1em;
+    text-decoration: underline; white-space: nowrap;
+}
+.mj-widget-forget:hover { color: var(--mj-text-primary); }
+.mj-widget-forget:disabled { opacity: 0.6; cursor: default; }
 `;

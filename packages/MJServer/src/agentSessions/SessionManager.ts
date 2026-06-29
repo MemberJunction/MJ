@@ -7,6 +7,7 @@ import {
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { RealtimeClientSessionService, RealtimeChannelServerHost } from '@memberjunction/ai-agents';
 import { GetHostInstanceID } from './HostInstance.js';
+import { writeReturningVisitorRecap } from './ReturningVisitorRecap.js';
 
 /** Entity names — centralised so the `MJ:`-prefix convention is applied in exactly one place. */
 const SESSION_ENTITY = 'MJ: AI Agent Sessions';
@@ -160,6 +161,10 @@ export class SessionManager {
         await this.disconnectChannels(agentSessionID, contextUser, provider, preloadedChannels);
         await this.finalizeObservabilityRuns(session, contextUser, provider);
         await this.notifyChannelPluginsSessionClosed(agentSessionID, closeReason);
+        // Returning-visitor recap (RV2): if this session's conversation is returning-visitor-enabled,
+        // summarize it into an Active memory note so the visitor's next session opens with prior context.
+        // Best-effort + no-op for non-returning-visitor conversations; never blocks teardown.
+        await writeReturningVisitorRecap(session.ConversationID, session.AgentID, contextUser, provider);
         return true;
     }
 
@@ -320,6 +325,22 @@ export class SessionManager {
         // sharing the Anonymous UserID. No-op for named principals (no scope → default ExternalID).
         if (contextUser.MagicLinkScope?.ResourceID) {
             conversation.ExternalID = contextUser.MagicLinkScope.ResourceID;
+        }
+
+        // Returning-visitor memory (RV1/RV2/RV4) for the VOICE path: the widget guest token carries the
+        // resolved VisitorKey / prior-conversation / resolved identity (surfaced on WidgetVisitorContext),
+        // so a server-created voice conversation gets the same anchor the text path stamps client-side.
+        // Absent for non-widget sessions and widgets with returning-visitor memory off — a no-op default.
+        const visitor = contextUser.WidgetVisitorContext;
+        if (visitor?.VisitorKey) {
+            conversation.VisitorKey = visitor.VisitorKey;
+            if (visitor.PreviousConversationID) {
+                conversation.PreviousConversationID = visitor.PreviousConversationID;
+            }
+            if (visitor.ResolvedEntityID && visitor.ResolvedRecordID) {
+                conversation.ResolvedEntityID = visitor.ResolvedEntityID;
+                conversation.ResolvedRecordID = visitor.ResolvedRecordID;
+            }
         }
 
         const saved = await conversation.Save();

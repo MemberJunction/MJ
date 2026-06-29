@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Widget Details Section -->
+    <!-- Widget Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="widgetDetails"
-        SectionName="Widget Details"
-        Icon="fa fa-window-maximize"
+        SectionKey="widgetConfiguration"
+        SectionName="Widget Configuration"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -52,10 +52,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Security & Scope Section -->
+    <!-- Integration and Security Section -->
     <mj-collapsible-panel
-        SectionKey="securityScope"
-        SectionName="Security & Scope"
+        SectionKey="integrationAndSecurity"
+        SectionName="Integration and Security"
         Icon="fa fa-shield-alt"
         [Form]="this"
         [FormContext]="formContext">
@@ -105,11 +105,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Session & Limits Section -->
+    <!-- Session and Abuse Control Section -->
     <mj-collapsible-panel
-        SectionKey="sessionLimits"
-        SectionName="Session & Limits"
-        Icon="fa fa-clock"
+        SectionKey="sessionAndAbuseControl"
+        SectionName="Session and Abuse Control"
+        Icon="fa fa-tachometer-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -132,6 +132,32 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="VoiceMaxSessionMinutes"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Visitor Experience Section -->
+    <mj-collapsible-panel
+        SectionKey="visitorExperience"
+        SectionName="Visitor Experience"
+        Icon="fa fa-user-clock"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RememberReturningVisitors"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="VisitorMemoryRetentionDays"
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"

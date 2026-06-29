@@ -371,6 +371,17 @@ const widgetSchema = z.object({
    * HostIdentity and no key is configured here, host mints fail closed.
    */
   hostPublicKeys: z.record(z.string(), z.string()).optional().default({}),
+  /**
+   * Returning-visitor identity-resolution target (RV4). When a visitor verifies (magic-link upgrade)
+   * or a host asserts their identity, their email is resolved to a record `(entityName, recordId)`
+   * and prior anonymous memory is merged onto that polymorphic pair. Deployment-configurable so the
+   * resolved record need NOT be an MJ User — point it at any entity that carries the visitor's email
+   * (e.g. a CRM `Persons` table). Defaults to the core `Users` entity keyed by `Email`.
+   */
+  identityResolution: z.object({
+    entityName: z.string().optional().default('Users'),
+    emailField: z.string().optional().default('Email'),
+  }).optional(),
 }).passthrough();
 
 /**

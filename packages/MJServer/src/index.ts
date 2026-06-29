@@ -1010,6 +1010,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
   // authenticated invite-creation router mounts AFTER it (see below).
+  let widgetAuthenticatedRouter: ReturnType<typeof createWidgetHandler>['authenticatedRouter'] | undefined;
   let magicLinkAuthenticatedRouter: ReturnType<typeof createMagicLinkHandler>['authenticatedRouter'] | undefined;
   if (configInfo.magicLink?.enabled) {
     const { publicRouter, authenticatedRouter } = createMagicLinkHandler(oauthPublicUrl, configInfo.magicLink);
@@ -1024,7 +1025,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // magic-link RS256 key + `magic-link` auth provider (ensured idempotently inside
   // createWidgetHandler), so it stands on its own even if magicLink.enabled is false.
   if (configInfo.widget?.enabled) {
-    const { publicRouter: widgetRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
+    const { publicRouter: widgetRouter, authenticatedRouter: widgetAuthRouter } = createWidgetHandler(oauthPublicUrl, configInfo.widget);
+    widgetAuthenticatedRouter = widgetAuthRouter;
     app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetRouter);
     // The widget reuses the magic-link RS256 key + auth provider to validate guest
     // tokens, which validates by fetching the JWKS at MAGIC_LINK_MOUNT_PATH/jwks.json.
@@ -1152,6 +1154,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   if (magicLinkAuthenticatedRouter) {
     app.use(MAGIC_LINK_MOUNT_PATH, cors<cors.CorsRequest>(), magicLinkAuthenticatedRouter);
     startupLog.LogIf('verbose', `[MagicLink] Authenticated route registered at ${MAGIC_LINK_MOUNT_PATH}/create`);
+  }
+
+  // ─── Widget authenticated route (RV4 resolve-identity) ────────────────────
+  // Mounts after the unified auth middleware so a verified visitor (post magic-link upgrade) can
+  // promote their anonymous returning-visitor trail to the verified record.
+  if (widgetAuthenticatedRouter) {
+    app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetAuthenticatedRouter);
+    startupLog.LogIf('verbose', `[Widget] Authenticated route registered at ${WIDGET_MOUNT_PATH}/resolve-identity`);
   }
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────

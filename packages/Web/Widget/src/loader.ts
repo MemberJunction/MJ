@@ -11,6 +11,7 @@
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
 import type { WidgetMountOptions, WidgetSession } from './types.js';
 import { WidgetSessionClient } from './session/widget-session-client.js';
+import { readVisitorKey, writeVisitorKey, clearVisitorKey } from './session/visitor-key-cookie.js';
 import type { IWidgetTransport } from './transport/widget-transport.js';
 import { RuntimeWidgetTransport } from './transport/runtime-widget-transport.js';
 import type { IVoiceController } from './voice/voice-controller.js';
@@ -38,7 +39,15 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
     defineSupportWidgetElement();
 
     const client = (deps.sessionClientFactory ?? defaultSessionClient)(options.apiUrl, options.widgetKey);
-    const session = await client.Mint();
+
+    // Returning-visitor anchor (RV1): present the durable cookie (if any) so the server can chain this
+    // visit to the visitor's prior conversation. Gated server-side on the widget's RememberReturningVisitors
+    // toggle — when off, the server returns no visitorKey and we set no cookie below.
+    const presentedVisitorKey = readVisitorKey(options.widgetKey);
+    const session = await client.Mint(presentedVisitorKey);
+    if (session.rememberReturningVisitors && session.visitorKey) {
+        writeVisitorKey(options.widgetKey, session.visitorKey);
+    }
 
     const transport = (deps.transportFactory ?? defaultTransport)(options.apiUrl);
     await transport.Initialize(session);
@@ -50,6 +59,19 @@ export async function mountWidget(options: WidgetMountOptions, deps: WidgetMount
 
     if (session.modality === 'Voice' || session.modality === 'Both') {
         element.SetVoiceController((deps.voiceControllerFactory ?? defaultVoiceController)(session));
+    }
+
+    // RV5 "forget me": only wired when the widget remembers returning visitors and a durable key exists.
+    // Archives the visitor's server-side memory, then clears the first-party cookie so no linkage remains.
+    if (session.rememberReturningVisitors && session.visitorKey) {
+        const visitorKey = session.visitorKey;
+        element.SetForgetHandler(async () => {
+            const result = await client.Forget(visitorKey);
+            if (!result.success) {
+                throw new Error(result.error ?? 'forget failed');
+            }
+            clearVisitorKey(options.widgetKey);
+        });
     }
 
     resolveMountTarget(options.mountTarget).appendChild(element);
@@ -140,7 +162,7 @@ function scheduleRefresh(
     scheduler(() => {
         void (async () => {
             try {
-                const refreshed = await client.Refresh();
+                const refreshed = await client.Refresh(session.visitorKey);
                 transport.UpdateToken(refreshed.token);
                 scheduleRefresh(client, transport, element, refreshed, scheduler);
             } catch {

@@ -133,6 +133,17 @@ export function buildWidgetGuestClaims(args: {
    * Anonymous principal, so a host can never escalate a guest into a real account.
    */
   hostIdentity?: { email: string; firstName?: string; lastName?: string };
+  /**
+   * Returning-visitor anchor + resolved identity (RV1/RV2/RV4) carried as claims so the VOICE path
+   * (server-created conversation) stamps the same fields the text path stamps client-side. Set only
+   * when the widget remembers returning visitors. Omitted ⇒ no returning-visitor claims (default off).
+   */
+  returningVisitor?: {
+    visitorKey?: string;
+    previousConversationId?: string;
+    resolvedEntityId?: string;
+    resolvedRecordId?: string;
+  };
 }): MagicLinkJWTClaims {
   const claims = buildSessionClaims({
     issuer: args.issuer,
@@ -163,6 +174,12 @@ export function buildWidgetGuestClaims(args: {
     claims.family_name = args.hostIdentity.lastName ?? claims.family_name;
     claims.name = [args.hostIdentity.firstName, args.hostIdentity.lastName].filter(Boolean).join(' ') || claims.name;
     claims.mj_host_email = args.hostIdentity.email;
+  }
+  if (args.returningVisitor) {
+    claims.mj_visitor_key = args.returningVisitor.visitorKey;
+    claims.mj_previous_conversation_id = args.returningVisitor.previousConversationId;
+    claims.mj_resolved_entity_id = args.returningVisitor.resolvedEntityId;
+    claims.mj_resolved_record_id = args.returningVisitor.resolvedRecordId;
   }
   return claims;
 }

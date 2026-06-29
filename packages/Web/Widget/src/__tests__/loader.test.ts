@@ -3,6 +3,7 @@ import { mountWidget, bootstrapFromDocument } from '../loader.js';
 import { WidgetSessionClient, type FetchLike } from '../session/widget-session-client.js';
 import { MockWidgetTransport } from '../transport/mock-widget-transport.js';
 import { WIDGET_TAG_NAME } from '../ui/support-widget-element.js';
+import { readVisitorKey } from '../session/visitor-key-cookie.js';
 
 const sessionBody = {
     success: true,
@@ -49,6 +50,39 @@ describe('mountWidget', () => {
     it('falls back to <body> when no mount target is given', async () => {
         const el = await mountWidget({ widgetKey: 'pk', apiUrl: 'https://api.test' }, deps(new MockWidgetTransport(), []));
         expect(el.parentElement).toBe(document.body);
+    });
+});
+
+describe('mountWidget — returning-visitor cookie (RV1, gated)', () => {
+    beforeEach(() => {
+        document.body.innerHTML = '';
+        for (const part of document.cookie.split(';')) {
+            const name = part.split('=')[0]?.trim();
+            if (name) document.cookie = `${name}=; Max-Age=0; Path=/`;
+        }
+    });
+
+    /** A loader deps bundle whose session client uses a fetch returning the given body. */
+    function depsWithBody(body: unknown) {
+        const fetchImpl: FetchLike = async () => ({ ok: true, status: 200, json: async () => body });
+        return {
+            sessionClientFactory: (apiUrl: string, widgetKey: string) => new WidgetSessionClient(apiUrl, widgetKey, fetchImpl),
+            transportFactory: () => new MockWidgetTransport(),
+            scheduler: () => {},
+        };
+    }
+
+    it('writes the durable cookie when remembering is on and a key is returned', async () => {
+        await mountWidget(
+            { widgetKey: 'pk_remember', apiUrl: 'https://api.test' },
+            depsWithBody({ ...sessionBody, rememberReturningVisitors: true, visitorKey: 'vk_persist_me' }),
+        );
+        expect(readVisitorKey('pk_remember')).toBe('vk_persist_me');
+    });
+
+    it('writes NO cookie when remembering is off (default)', async () => {
+        await mountWidget({ widgetKey: 'pk_off', apiUrl: 'https://api.test' }, depsWithBody(sessionBody));
+        expect(readVisitorKey('pk_off')).toBeUndefined();
     });
 });
 

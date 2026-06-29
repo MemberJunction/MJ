@@ -13059,7 +13059,7 @@ export const MJConversationSchema = z.object({
         * * Default Value: newsequentialid()`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     ExternalID: z.string().nullable().describe(`
@@ -13089,18 +13089,18 @@ export const MJConversationSchema = z.object({
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
     LinkedEntityID: z.string().nullable().describe(`
         * * Field Name: LinkedEntityID
-        * * Display Name: Linked Entity ID
+        * * Display Name: Linked Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
         * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`),
     LinkedRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedRecordID
-        * * Display Name: Linked Record ID
+        * * Display Name: Linked Record
         * * SQL Data Type: nvarchar(500)
         * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
-        * * Display Name: Data Context ID
+        * * Display Name: Data Context
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -13125,13 +13125,13 @@ export const MJConversationSchema = z.object({
         * * Description: Tracks the processing status of the conversation: Available, Processing`),
     EnvironmentID: z.string().describe(`
         * * Field Name: EnvironmentID
-        * * Display Name: Environment ID
+        * * Display Name: Environment
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
         * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09`),
     ProjectID: z.string().nullable().describe(`
         * * Field Name: ProjectID
-        * * Display Name: Project ID
+        * * Display Name: Project
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
@@ -13142,7 +13142,7 @@ export const MJConversationSchema = z.object({
         * * Description: Indicates if this conversation is pinned to the top of lists`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run ID
+        * * Display Name: Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
@@ -13159,13 +13159,13 @@ export const MJConversationSchema = z.object({
         * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application ID
+        * * Display Name: Application
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
         * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`),
     DefaultAgentID: z.string().nullable().describe(`
         * * Field Name: DefaultAgentID
-        * * Display Name: Default Agent ID
+        * * Display Name: Default Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`),
@@ -13176,7 +13176,7 @@ export const MJConversationSchema = z.object({
         * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`),
     RecordingFileID: z.string().nullable().describe(`
         * * Field Name: RecordingFileID
-        * * Display Name: Recording File ID
+        * * Display Name: Recording File
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.`),
@@ -13185,42 +13185,76 @@ export const MJConversationSchema = z.object({
         * * Display Name: Egress ID
         * * SQL Data Type: nvarchar(255)
         * * Description: The LiveKit egress session id for this meeting's room recording. Set when recording starts; used to stop the egress and to correlate the egress-completion result with this conversation. NULL when the meeting was not recorded.`),
+    VisitorKey: z.string().nullable().describe(`
+        * * Field Name: VisitorKey
+        * * Display Name: Visitor Key
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Durable, opaque returning-visitor anchor (R3). Holds the value of a long-lived first-party cookie minted by the widget on first visit, used to find this visitor's prior conversations while they are still anonymous. Distinct from ExternalID (which stays per-session for RLS isolation). NULL for conversations that are not widget returning-visitor sessions.`),
+    ResolvedEntityID: z.string().nullable().describe(`
+        * * Field Name: ResolvedEntityID
+        * * Display Name: Resolved Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Polymorphic resolved-identity entity (R1). Foreign key to Entity — identifies WHICH entity the conversation's counterparty resolved to (e.g. User, a member/contact record, BizAppsCommon Person). Paired with ResolvedRecordID. NULL while the visitor is anonymous. "The conversation is always with a User" is a false premise — pointing at a User is one case, not the contract.`),
+    ResolvedRecordID: z.string().nullable().describe(`
+        * * Field Name: ResolvedRecordID
+        * * Display Name: Resolved Record
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Polymorphic resolved-identity record key (R1). The primary-key value of the record (within ResolvedEntityID's entity) the conversation resolved to. NVARCHAR(450), indexed but intentionally NOT FK-constrained so it can point at any entity, including composite or non-uuid PKs. NULL while the visitor is anonymous.`),
+    PreviousConversationID: z.string().nullable().describe(`
+        * * Field Name: PreviousConversationID
+        * * Display Name: Previous Conversation
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+        * * Description: Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. NULL for a brand-new visitor's first conversation.`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity
+        * * Display Name: Linked Entity Name
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
-        * * Display Name: Data Context
+        * * Display Name: Data Context Name
         * * SQL Data Type: nvarchar(255)`),
     Environment: z.string().describe(`
         * * Field Name: Environment
-        * * Display Name: Environment
+        * * Display Name: Environment Name
         * * SQL Data Type: nvarchar(255)`),
     Project: z.string().nullable().describe(`
         * * Field Name: Project
-        * * Display Name: Project
+        * * Display Name: Project Name
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run
+        * * Display Name: Test Run Name
         * * SQL Data Type: nvarchar(255)`),
     Application: z.string().nullable().describe(`
         * * Field Name: Application
-        * * Display Name: Application
+        * * Display Name: Application Name
         * * SQL Data Type: nvarchar(100)`),
     DefaultAgent: z.string().nullable().describe(`
         * * Field Name: DefaultAgent
-        * * Display Name: Default Agent
+        * * Display Name: Default Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RecordingFile: z.string().nullable().describe(`
         * * Field Name: RecordingFile
-        * * Display Name: Recording File
+        * * Display Name: Recording File Name
         * * SQL Data Type: nvarchar(500)`),
+    ResolvedEntity: z.string().nullable().describe(`
+        * * Field Name: ResolvedEntity
+        * * Display Name: Resolved Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    PreviousConversation: z.string().nullable().describe(`
+        * * Field Name: PreviousConversation
+        * * Display Name: Previous Conversation Name
+        * * SQL Data Type: nvarchar(255)`),
+    RootPreviousConversationID: z.string().nullable().describe(`
+        * * Field Name: RootPreviousConversationID
+        * * Display Name: Root Previous Conversation
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type MJConversationEntityType = z.infer<typeof MJConversationSchema>;
@@ -21045,7 +21079,7 @@ export const MJOpenAppSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: System Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(64)
         * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.`),
     DisplayName: z.string().describe(`
@@ -21075,7 +21109,7 @@ export const MJOpenAppSchema = z.object({
         * * Description: Optional contact email for the publisher`),
     PublisherURL: z.string().nullable().describe(`
         * * Field Name: PublisherURL
-        * * Display Name: Publisher Website
+        * * Display Name: Publisher URL
         * * SQL Data Type: nvarchar(500)
         * * Description: Optional website URL for the publisher`),
     RepositoryURL: z.string().describe(`
@@ -21085,12 +21119,12 @@ export const MJOpenAppSchema = z.object({
         * * Description: GitHub repository URL where this app is hosted`),
     SchemaName: z.string().nullable().describe(`
         * * Field Name: SchemaName
-        * * Display Name: Database Schema
+        * * Display Name: Schema Name
         * * SQL Data Type: nvarchar(128)
         * * Description: Database schema name used by this app for its tables and objects. Unique per instance.`),
     MJVersionRange: z.string().describe(`
         * * Field Name: MJVersionRange
-        * * Display Name: Compatible MJ Version Range
+        * * Display Name: MJ Version Range
         * * SQL Data Type: nvarchar(100)
         * * Description: Semver range specifying which MJ versions this app is compatible with (e.g. >=4.0.0 <5.0.0)`),
     License: z.string().nullable().describe(`
@@ -21100,12 +21134,12 @@ export const MJOpenAppSchema = z.object({
         * * Description: SPDX license identifier for this app (e.g. MIT, Apache-2.0)`),
     Icon: z.string().nullable().describe(`
         * * Field Name: Icon
-        * * Display Name: Icon Class
+        * * Display Name: Icon
         * * SQL Data Type: nvarchar(100)
         * * Description: Optional icon identifier (e.g. Font Awesome class) for UI display`),
     Color: z.string().nullable().describe(`
         * * Field Name: Color
-        * * Display Name: Branding Color
+        * * Display Name: Color
         * * SQL Data Type: nvarchar(20)
         * * Description: Optional hex color code for branding in the UI (e.g. #FF5733)`),
     ManifestJSON: z.string().describe(`
@@ -21150,7 +21184,7 @@ export const MJOpenAppSchema = z.object({
         * * Default Value: getutcdate()`),
     Subpath: z.string().nullable().describe(`
         * * Field Name: Subpath
-        * * Display Name: Repository Subpath
+        * * Display Name: Subpath
         * * SQL Data Type: nvarchar(500)
         * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.`),
     InstalledByUser: z.string().describe(`
@@ -30032,19 +30066,19 @@ export const MJWidgetInstanceSchema = z.object({
         * * Description: Public, non-secret embed key (e.g. "pk_live_…") placed in the host page's data-widget-key attribute. Used to resolve this configuration at POST /widget/session. Unique. Not a credential — security comes from the origin allowlist, rate limits, the restricted guest role, and short-lived minted tokens.`),
     ApplicationID: z.string().describe(`
         * * Field Name: ApplicationID
-        * * Display Name: Application ID
+        * * Display Name: Application
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
         * * Description: Foreign key to Application — the single app a guest session is scoped to. Mirrors the magic-link single-application model.`),
     PinnedAgentID: z.string().describe(`
         * * Field Name: PinnedAgentID
-        * * Display Name: Pinned Agent ID
+        * * Display Name: Pinned Agent
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Foreign key to AIAgent — the support agent that is PINNED for every turn (passed as explicitAgentId). D5: pinning fixes which agent runs; combined with the restricted guest role it prevents a public visitor from reaching arbitrary agents/data. The pinned agent's own tool/handoff surface should be support-scoped.`),
     GuestRoleID: z.string().describe(`
         * * Field Name: GuestRoleID
-        * * Display Name: Guest Role ID
+        * * Display Name: Guest Role
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
         * * Description: Foreign key to Role — the restricted guest role assigned to the synthesized guest principal. This role's entity permissions are the real authorization boundary (read/write only the visitor's own Conversation + Conversation Details). Roles ride per-session JWT claims, not DB rows on the shared Anonymous principal.`),
@@ -30093,15 +30127,26 @@ export const MJWidgetInstanceSchema = z.object({
         * * Description: Time-to-live in minutes for a minted guest session JWT. Short by design (default 15) to limit replay/theft; the widget refreshes before expiry. Capped at 1440 (24h).`),
     RateLimitPerMinute: z.number().describe(`
         * * Field Name: RateLimitPerMinute
-        * * Display Name: Rate Limit (Per Minute)
+        * * Display Name: Rate Limit Per Minute
         * * SQL Data Type: int
         * * Default Value: 30
         * * Description: Maximum number of guest-session mints allowed per minute per source IP/origin for this widget. Reuses the magic-link rate-limit pattern.`),
     VoiceMaxSessionMinutes: z.number().nullable().describe(`
         * * Field Name: VoiceMaxSessionMinutes
-        * * Display Name: Voice Max Session (Minutes)
+        * * Display Name: Voice Max Session Minutes
         * * SQL Data Type: int
         * * Description: Optional hard ceiling (minutes) on a single voice session's duration for this widget. NULL means fall back to the server-wide default. Voice is the biggest cost/abuse surface; the SessionJanitor enforces this server-side (W4).`),
+    RememberReturningVisitors: z.boolean().describe(`
+        * * Field Name: RememberReturningVisitors
+        * * Display Name: Remember Returning Visitors
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Returning-visitor memory opt-in (R6). When 0 (default) this widget sets no durable visitor cookie and writes no cross-session recap — fully off. When 1, the widget mints a durable VisitorKey cookie, links each new Conversation to the visitor's prior one, and writes a recap memory note on close so a returning visitor's agent opens with prior context.`),
+    VisitorMemoryRetentionDays: z.number().nullable().describe(`
+        * * Field Name: VisitorMemoryRetentionDays
+        * * Display Name: Visitor Memory Retention (Days)
+        * * SQL Data Type: int
+        * * Description: Retention window (days) for returning-visitor recap memory notes generated by this widget. NULL means use the system default. Past this window the visitor's auto-generated recap notes decay/archive via the Memory Manager. Ignored when RememberReturningVisitors = 0.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -30114,15 +30159,15 @@ export const MJWidgetInstanceSchema = z.object({
         * * Default Value: getutcdate()`),
     Application: z.string().describe(`
         * * Field Name: Application
-        * * Display Name: Application
+        * * Display Name: Application Name
         * * SQL Data Type: nvarchar(100)`),
     PinnedAgent: z.string().nullable().describe(`
         * * Field Name: PinnedAgent
-        * * Display Name: Pinned Agent
+        * * Display Name: Pinned Agent Name
         * * SQL Data Type: nvarchar(255)`),
     GuestRole: z.string().describe(`
         * * Field Name: GuestRole
-        * * Display Name: Guest Role
+        * * Display Name: Guest Role Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -65217,7 +65262,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -65295,7 +65340,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntityID
-    * * Display Name: Linked Entity ID
+    * * Display Name: Linked Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.
@@ -65309,7 +65354,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedRecordID
-    * * Display Name: Linked Record ID
+    * * Display Name: Linked Record
     * * SQL Data Type: nvarchar(500)
     * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).
     */
@@ -65322,7 +65367,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContextID
-    * * Display Name: Data Context ID
+    * * Display Name: Data Context
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Data Contexts (vwDataContexts.ID)
     */
@@ -65373,7 +65418,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: EnvironmentID
-    * * Display Name: Environment ID
+    * * Display Name: Environment
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Environments (vwEnvironments.ID)
     * * Default Value: F51358F3-9447-4176-B313-BF8025FD8D09
@@ -65387,7 +65432,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ProjectID
-    * * Display Name: Project ID
+    * * Display Name: Project
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)
     */
@@ -65414,7 +65459,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run ID
+    * * Display Name: Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.
@@ -65447,7 +65492,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application ID
+    * * Display Name: Application
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
     * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.
@@ -65461,7 +65506,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgentID
-    * * Display Name: Default Agent ID
+    * * Display Name: Default Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.
@@ -65488,7 +65533,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: RecordingFileID
-    * * Display Name: Recording File ID
+    * * Display Name: Recording File
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
     * * Description: For a Meeting-Room conversation, the MJ: Files row holding the room-level composite recording (the LiveKit egress MP4, copied into MJStorage). NULL when the meeting was not recorded.
@@ -65514,8 +65559,62 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: VisitorKey
+    * * Display Name: Visitor Key
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Durable, opaque returning-visitor anchor (R3). Holds the value of a long-lived first-party cookie minted by the widget on first visit, used to find this visitor's prior conversations while they are still anonymous. Distinct from ExternalID (which stays per-session for RLS isolation). NULL for conversations that are not widget returning-visitor sessions.
+    */
+    get VisitorKey(): string | null {
+        return this.Get('VisitorKey');
+    }
+    set VisitorKey(value: string | null) {
+        this.Set('VisitorKey', value);
+    }
+
+    /**
+    * * Field Name: ResolvedEntityID
+    * * Display Name: Resolved Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Polymorphic resolved-identity entity (R1). Foreign key to Entity — identifies WHICH entity the conversation's counterparty resolved to (e.g. User, a member/contact record, BizAppsCommon Person). Paired with ResolvedRecordID. NULL while the visitor is anonymous. "The conversation is always with a User" is a false premise — pointing at a User is one case, not the contract.
+    */
+    get ResolvedEntityID(): string | null {
+        return this.Get('ResolvedEntityID');
+    }
+    set ResolvedEntityID(value: string | null) {
+        this.Set('ResolvedEntityID', value);
+    }
+
+    /**
+    * * Field Name: ResolvedRecordID
+    * * Display Name: Resolved Record
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Polymorphic resolved-identity record key (R1). The primary-key value of the record (within ResolvedEntityID's entity) the conversation resolved to. NVARCHAR(450), indexed but intentionally NOT FK-constrained so it can point at any entity, including composite or non-uuid PKs. NULL while the visitor is anonymous.
+    */
+    get ResolvedRecordID(): string | null {
+        return this.Get('ResolvedRecordID');
+    }
+    set ResolvedRecordID(value: string | null) {
+        this.Set('ResolvedRecordID', value);
+    }
+
+    /**
+    * * Field Name: PreviousConversationID
+    * * Display Name: Previous Conversation
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: Conversation-altitude returning-visitor chain (R2). Self-foreign-key to the visitor's immediately prior Conversation (found by VisitorKey or the resolved pair at mint time). History and memory are conversation-scoped, so the chain lives here — NOT on AIAgentSession.LastSessionID, which owns reconnect/resume semantics and is walked by the replay viewer. NULL for a brand-new visitor's first conversation.
+    */
+    get PreviousConversationID(): string | null {
+        return this.Get('PreviousConversationID');
+    }
+    set PreviousConversationID(value: string | null) {
+        this.Set('PreviousConversationID', value);
+    }
+
+    /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -65524,7 +65623,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity
+    * * Display Name: Linked Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -65533,7 +65632,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DataContext
-    * * Display Name: Data Context
+    * * Display Name: Data Context Name
     * * SQL Data Type: nvarchar(255)
     */
     get DataContext(): string | null {
@@ -65542,7 +65641,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Environment
-    * * Display Name: Environment
+    * * Display Name: Environment Name
     * * SQL Data Type: nvarchar(255)
     */
     get Environment(): string {
@@ -65551,7 +65650,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Project
-    * * Display Name: Project
+    * * Display Name: Project Name
     * * SQL Data Type: nvarchar(255)
     */
     get Project(): string | null {
@@ -65560,7 +65659,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run
+    * * Display Name: Test Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -65569,7 +65668,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: Application
-    * * Display Name: Application
+    * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string | null {
@@ -65578,7 +65677,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: DefaultAgent
-    * * Display Name: Default Agent
+    * * Display Name: Default Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultAgent(): string | null {
@@ -65587,11 +65686,38 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: RecordingFile
-    * * Display Name: Recording File
+    * * Display Name: Recording File Name
     * * SQL Data Type: nvarchar(500)
     */
     get RecordingFile(): string | null {
         return this.Get('RecordingFile');
+    }
+
+    /**
+    * * Field Name: ResolvedEntity
+    * * Display Name: Resolved Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ResolvedEntity(): string | null {
+        return this.Get('ResolvedEntity');
+    }
+
+    /**
+    * * Field Name: PreviousConversation
+    * * Display Name: Previous Conversation Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PreviousConversation(): string | null {
+        return this.Get('PreviousConversation');
+    }
+
+    /**
+    * * Field Name: RootPreviousConversationID
+    * * Display Name: Root Previous Conversation
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootPreviousConversationID(): string | null {
+        return this.Get('RootPreviousConversationID');
     }
 }
 
@@ -85484,7 +85610,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: System Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(64)
     * * Description: Unique lowercase identifier for the app (e.g. acme-crm). Must contain only lowercase letters, digits, and hyphens.
     */
@@ -85562,7 +85688,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: PublisherURL
-    * * Display Name: Publisher Website
+    * * Display Name: Publisher URL
     * * SQL Data Type: nvarchar(500)
     * * Description: Optional website URL for the publisher
     */
@@ -85588,7 +85714,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: SchemaName
-    * * Display Name: Database Schema
+    * * Display Name: Schema Name
     * * SQL Data Type: nvarchar(128)
     * * Description: Database schema name used by this app for its tables and objects. Unique per instance.
     */
@@ -85601,7 +85727,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: MJVersionRange
-    * * Display Name: Compatible MJ Version Range
+    * * Display Name: MJ Version Range
     * * SQL Data Type: nvarchar(100)
     * * Description: Semver range specifying which MJ versions this app is compatible with (e.g. >=4.0.0 <5.0.0)
     */
@@ -85627,7 +85753,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Icon
-    * * Display Name: Icon Class
+    * * Display Name: Icon
     * * SQL Data Type: nvarchar(100)
     * * Description: Optional icon identifier (e.g. Font Awesome class) for UI display
     */
@@ -85640,7 +85766,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Color
-    * * Display Name: Branding Color
+    * * Display Name: Color
     * * SQL Data Type: nvarchar(20)
     * * Description: Optional hex color code for branding in the UI (e.g. #FF5733)
     */
@@ -85735,7 +85861,7 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
 
     /**
     * * Field Name: Subpath
-    * * Display Name: Repository Subpath
+    * * Display Name: Subpath
     * * SQL Data Type: nvarchar(500)
     * * Description: In-repo subdirectory the app was installed from for multi-app repositories (e.g. 'CRM/HubSpot'). NULL when the app's mj-app.json is at the repository root.
     */
@@ -109188,32 +109314,34 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * Validate() method override for MJ: Widget Instances entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * RateLimitPerMinute: The rate limit per minute must be greater than zero to ensure a valid API traffic threshold is enforced.
-    * * SessionTTLMinutes: Session TTL (Time-To-Live) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
+    * * RateLimitPerMinute: The rate limit per minute must be a positive number greater than zero to ensure API requests are throttled correctly.
+    * * SessionTTLMinutes: The session time-to-live (TTL) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours) to ensure session durations remain within a secure and valid range.
+    * * VisitorMemoryRetentionDays: Visitor memory retention days must be a positive number greater than 0 if specified.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateRateLimitPerMinutePositive(result);
+        this.ValidateRateLimitPerMinuteGreaterThanZero(result);
         this.ValidateSessionTTLMinutesRange(result);
+        this.ValidateVisitorMemoryRetentionDaysGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * The rate limit per minute must be greater than zero to ensure a valid API traffic threshold is enforced.
+    * The rate limit per minute must be a positive number greater than zero to ensure API requests are throttled correctly.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateRateLimitPerMinutePositive(result: ValidationResult) {
-    	if (this.RateLimitPerMinute <= 0) {
+    public ValidateRateLimitPerMinuteGreaterThanZero(result: ValidationResult) {
+    	if (this.RateLimitPerMinute !== undefined && this.RateLimitPerMinute !== null && this.RateLimitPerMinute <= 0) {
     		result.Errors.push(new ValidationErrorInfo(
     			"RateLimitPerMinute",
-    			"The rate limit per minute must be greater than zero.",
+    			"Rate limit per minute must be greater than 0.",
     			this.RateLimitPerMinute,
     			ValidationErrorType.Failure
     		));
@@ -109221,22 +109349,37 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
     }
 
     /**
-    * Session TTL (Time-To-Live) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
+    * The session time-to-live (TTL) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours) to ensure session durations remain within a secure and valid range.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateSessionTTLMinutesRange(result: ValidationResult) {
-    	if (this.SessionTTLMinutes !== undefined && this.SessionTTLMinutes !== null) {
-    		if (this.SessionTTLMinutes <= 0 || this.SessionTTLMinutes > 1440) {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"SessionTTLMinutes",
-    				"Session TTL must be greater than 0 and less than or equal to 1440 minutes (24 hours).",
-    				this.SessionTTLMinutes,
-    				ValidationErrorType.Failure
-    			));
-    		}
+    	if (this.SessionTTLMinutes != null && (this.SessionTTLMinutes <= 0 || this.SessionTTLMinutes > 1440)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SessionTTLMinutes",
+    			"Session TTL must be greater than 0 and less than or equal to 1440 minutes (24 hours).",
+    			this.SessionTTLMinutes,
+    			ValidationErrorType.Failure
+    		));
     	}
+    }
+
+    /**
+    * Visitor memory retention days must be a positive number greater than 0 if specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVisitorMemoryRetentionDaysGreaterThanZero(result: ValidationResult) {
+        if (this.VisitorMemoryRetentionDays != null && this.VisitorMemoryRetentionDays <= 0) {
+            result.Errors.push(new ValidationErrorInfo(
+                "VisitorMemoryRetentionDays",
+                "Visitor memory retention days must be greater than 0.",
+                this.VisitorMemoryRetentionDays,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -109280,7 +109423,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: ApplicationID
-    * * Display Name: Application ID
+    * * Display Name: Application
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
     * * Description: Foreign key to Application — the single app a guest session is scoped to. Mirrors the magic-link single-application model.
@@ -109294,7 +109437,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: PinnedAgentID
-    * * Display Name: Pinned Agent ID
+    * * Display Name: Pinned Agent
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
     * * Description: Foreign key to AIAgent — the support agent that is PINNED for every turn (passed as explicitAgentId). D5: pinning fixes which agent runs; combined with the restricted guest role it prevents a public visitor from reaching arbitrary agents/data. The pinned agent's own tool/handoff surface should be support-scoped.
@@ -109308,7 +109451,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: GuestRoleID
-    * * Display Name: Guest Role ID
+    * * Display Name: Guest Role
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
     * * Description: Foreign key to Role — the restricted guest role assigned to the synthesized guest principal. This role's entity permissions are the real authorization boundary (read/write only the visitor's own Conversation + Conversation Details). Roles ride per-session JWT claims, not DB rows on the shared Anonymous principal.
@@ -109405,7 +109548,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: RateLimitPerMinute
-    * * Display Name: Rate Limit (Per Minute)
+    * * Display Name: Rate Limit Per Minute
     * * SQL Data Type: int
     * * Default Value: 30
     * * Description: Maximum number of guest-session mints allowed per minute per source IP/origin for this widget. Reuses the magic-link rate-limit pattern.
@@ -109419,7 +109562,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: VoiceMaxSessionMinutes
-    * * Display Name: Voice Max Session (Minutes)
+    * * Display Name: Voice Max Session Minutes
     * * SQL Data Type: int
     * * Description: Optional hard ceiling (minutes) on a single voice session's duration for this widget. NULL means fall back to the server-wide default. Voice is the biggest cost/abuse surface; the SessionJanitor enforces this server-side (W4).
     */
@@ -109428,6 +109571,33 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
     }
     set VoiceMaxSessionMinutes(value: number | null) {
         this.Set('VoiceMaxSessionMinutes', value);
+    }
+
+    /**
+    * * Field Name: RememberReturningVisitors
+    * * Display Name: Remember Returning Visitors
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Returning-visitor memory opt-in (R6). When 0 (default) this widget sets no durable visitor cookie and writes no cross-session recap — fully off. When 1, the widget mints a durable VisitorKey cookie, links each new Conversation to the visitor's prior one, and writes a recap memory note on close so a returning visitor's agent opens with prior context.
+    */
+    get RememberReturningVisitors(): boolean {
+        return this.Get('RememberReturningVisitors');
+    }
+    set RememberReturningVisitors(value: boolean) {
+        this.Set('RememberReturningVisitors', value);
+    }
+
+    /**
+    * * Field Name: VisitorMemoryRetentionDays
+    * * Display Name: Visitor Memory Retention (Days)
+    * * SQL Data Type: int
+    * * Description: Retention window (days) for returning-visitor recap memory notes generated by this widget. NULL means use the system default. Past this window the visitor's auto-generated recap notes decay/archive via the Memory Manager. Ignored when RememberReturningVisitors = 0.
+    */
+    get VisitorMemoryRetentionDays(): number | null {
+        return this.Get('VisitorMemoryRetentionDays');
+    }
+    set VisitorMemoryRetentionDays(value: number | null) {
+        this.Set('VisitorMemoryRetentionDays', value);
     }
 
     /**
@@ -109452,7 +109622,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: Application
-    * * Display Name: Application
+    * * Display Name: Application Name
     * * SQL Data Type: nvarchar(100)
     */
     get Application(): string {
@@ -109461,7 +109631,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: PinnedAgent
-    * * Display Name: Pinned Agent
+    * * Display Name: Pinned Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get PinnedAgent(): string | null {
@@ -109470,7 +109640,7 @@ export class MJWidgetInstanceEntity extends BaseEntity<MJWidgetInstanceEntityTyp
 
     /**
     * * Field Name: GuestRole
-    * * Display Name: Guest Role
+    * * Display Name: Guest Role Name
     * * SQL Data Type: nvarchar(50)
     */
     get GuestRole(): string {

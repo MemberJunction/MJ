@@ -28,7 +28,7 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAuditLogs', sectionName: 'Audit Logs', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationRecordMaps', sectionName: 'Company Integration Record Maps', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationRunDetails', sectionName: 'Company Integration Run Details', isExpanded: false },
-            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false },
+            { sectionKey: 'mJConversationsLinkedEntityID', sectionName: 'Conversations', isExpanded: false },
             { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJDatasetItems', sectionName: 'Dataset Items', isExpanded: false },
             { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
@@ -89,7 +89,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
             { sectionKey: 'mJProcessRuns', sectionName: 'Process Runs', isExpanded: false },
             { sectionKey: 'mJRecordProcessWatermarks', sectionName: 'Record Process Watermarks', isExpanded: false },
-            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false }
+            { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
+            { sectionKey: 'mJConversationsResolvedEntityID', sectionName: 'Conversations (Resolved Entity)', isExpanded: false }
         ]);
     }
 }

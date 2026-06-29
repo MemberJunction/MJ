@@ -219,4 +219,34 @@ describe('SupportWidgetElement — connection-lost banner (W6 graceful degradati
         expect(retried).toBe(1);
         expect(banner(el).hasAttribute('hidden')).toBe(true);
     });
+
+    // ── RV5: returning-visitor privacy notice + "forget me" ────────────────────
+    it('renders no memory notice by default (remembering off)', () => {
+        const el = mountElement(new MockWidgetTransport());
+        expect(el.ShadowRootRef.querySelector('.mj-widget-memory-notice')).toBeNull();
+    });
+
+    it('renders the privacy notice + forget control only when remembering is on AND a handler is wired', () => {
+        const el = mountElement(new MockWidgetTransport());
+        el.SetSession({ ...SESSION, rememberReturningVisitors: true });
+        // Remembering on but no handler → still no notice.
+        expect(el.ShadowRootRef.querySelector('.mj-widget-memory-notice')).toBeNull();
+        el.SetForgetHandler(async () => {});
+        expect(el.ShadowRootRef.querySelector('.mj-widget-memory-notice')).not.toBeNull();
+        expect(el.ShadowRootRef.querySelector('.mj-widget-forget')?.textContent).toBe('Forget me');
+    });
+
+    it('invokes the forget handler and confirms via a system line', async () => {
+        const el = mountElement(new MockWidgetTransport());
+        el.SetSession({ ...SESSION, rememberReturningVisitors: true });
+        let called = 0;
+        el.SetForgetHandler(async () => {
+            called++;
+        });
+        (el.ShadowRootRef.querySelector('.mj-widget-forget') as HTMLButtonElement).click();
+        await flush();
+        expect(called).toBe(1);
+        const systemMsg = el.ShadowRootRef.querySelector('.mj-widget-msg.system');
+        expect(systemMsg?.textContent).toContain('forgotten');
+    });
 });

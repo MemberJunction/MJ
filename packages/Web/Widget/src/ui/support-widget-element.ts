@@ -33,6 +33,8 @@ export class SupportWidgetElement extends HTMLElement {
     private greeting = 'Hi! How can we help you today?';
     /** The pending retry the connection-lost banner invokes; null when no banner is shown. */
     private pendingRetry: RetryAction | null = null;
+    private forgetHandler: (() => Promise<void>) | null = null;
+    private forgetting = false;
     /** Capability probe for the voice/mic affordance (overridable for tests). */
     private voiceSupportedProbe: () => boolean = () => VoiceIsSupported();
     /** Bound key handler for the open panel's focus trap (added/removed on open/close). */
@@ -62,6 +64,16 @@ export class SupportWidgetElement extends HTMLElement {
     /** Injects the transport the element sends turns through. */
     public SetTransport(transport: IWidgetTransport): void {
         this.transport = transport;
+    }
+
+    /**
+     * Wires the RV5 "forget me" action. The loader supplies a handler that archives the visitor's
+     * server-side memory and clears the durable cookie. When set (and the widget remembers returning
+     * visitors), a privacy notice + "Forget me" control render below the composer.
+     */
+    public SetForgetHandler(handler: () => Promise<void>): void {
+        this.forgetHandler = handler;
+        if (this.isConnected) this.render();
     }
 
     /** Injects the voice controller (enables the mic button when modality allows voice). */
@@ -126,7 +138,57 @@ export class SupportWidgetElement extends HTMLElement {
             this.buildProgress(),
             this.buildComposer(),
         );
+        const notice = this.buildMemoryNotice();
+        if (notice) {
+            panel.append(notice);
+        }
         return panel;
+    }
+
+    /**
+     * RV5 visitor-facing privacy notice + "Forget me" control. Rendered only when this widget remembers
+     * returning visitors AND a forget handler is wired — otherwise returns null (no notice, no control),
+     * keeping the default (memory-off) widget unchanged.
+     */
+    private buildMemoryNotice(): HTMLElement | null {
+        if (!this.session?.rememberReturningVisitors || !this.forgetHandler) {
+            return null;
+        }
+        const notice = document.createElement('div');
+        notice.className = 'mj-widget-memory-notice';
+        const text = document.createElement('span');
+        text.className = 'mj-widget-memory-notice-text';
+        text.textContent = 'We remember your past chats to help you faster.';
+        const forget = document.createElement('button');
+        forget.className = 'mj-widget-forget';
+        forget.type = 'button';
+        forget.textContent = 'Forget me';
+        forget.addEventListener('click', () => void this.onForgetClicked());
+        notice.append(text, forget);
+        return notice;
+    }
+
+    /** Invokes the wired forget handler, then surfaces a confirmation as a system line. */
+    private async onForgetClicked(): Promise<void> {
+        if (this.forgetting || !this.forgetHandler) {
+            return;
+        }
+        this.forgetting = true;
+        const forget = this.query('.mj-widget-forget') as HTMLButtonElement | null;
+        if (forget) {
+            forget.disabled = true;
+        }
+        try {
+            await this.forgetHandler();
+            this.appendMessage('system', 'Your saved chat history has been forgotten.');
+        } catch {
+            this.appendMessage('system', 'Could not forget your history right now. Please try again later.');
+        } finally {
+            this.forgetting = false;
+            if (forget) {
+                forget.disabled = false;
+            }
+        }
     }
 
     /** The connection-lost banner (hidden until a send / token refresh fails). */

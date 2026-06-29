@@ -53,6 +53,71 @@ describe('WidgetSessionClient.Mint', () => {
     });
 });
 
+describe('WidgetSessionClient.Mint (returning-visitor, RV1/RV2/RV4)', () => {
+    it('sends the presented visitorKey and maps the returning-visitor + resolved-identity fields', async () => {
+        const { fn, calls } = fakeFetch(200, {
+            ...goodBody,
+            rememberReturningVisitors: true,
+            visitorKey: 'vk_abc123',
+            previousConversationId: 'conv-prior',
+            resolvedEntityId: 'ent-users',
+            resolvedRecordId: 'rec-42',
+        });
+        const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
+        const session = await client.Mint('vk_abc123');
+
+        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', visitorKey: 'vk_abc123' });
+        expect(session.rememberReturningVisitors).toBe(true);
+        expect(session.visitorKey).toBe('vk_abc123');
+        expect(session.previousConversationId).toBe('conv-prior');
+        expect(session.resolvedEntityId).toBe('ent-users');
+        expect(session.resolvedRecordId).toBe('rec-42');
+    });
+
+    it('defaults rememberReturningVisitors to false when the server omits it', async () => {
+        const { fn } = fakeFetch(200, goodBody);
+        const client = new WidgetSessionClient('https://api.test', 'pk', fn);
+        const session = await client.Mint();
+        expect(session.rememberReturningVisitors).toBe(false);
+        expect(session.visitorKey).toBeUndefined();
+    });
+});
+
+describe('WidgetSessionClient.Forget (RV5)', () => {
+    it('POSTs widgetKey + visitorKey to /widget/forget and reports success', async () => {
+        const { fn, calls } = fakeFetch(200, { success: true, notesArchived: 3 });
+        const client = new WidgetSessionClient('https://api.test/', 'pk_test_1', fn);
+
+        const result = await client.Forget('vk_abc123');
+
+        expect(calls[0].url).toBe('https://api.test/widget/forget');
+        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', visitorKey: 'vk_abc123' });
+        expect(result).toEqual({ success: true, notesArchived: 3 });
+    });
+
+    it('returns a failure result (never throws) when forget is rejected', async () => {
+        const { fn } = fakeFetch(403, { success: false, errorCode: 'upgrade_not_enabled' });
+        const client = new WidgetSessionClient('https://api.test', 'pk', fn);
+        const result = await client.Forget('vk');
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('upgrade_not_enabled');
+    });
+});
+
+describe('WidgetSessionClient.ResolveIdentity (RV4)', () => {
+    it('POSTs with the verified Bearer token + visitorKey and reports the merge', async () => {
+        const { fn, calls } = fakeFetch(200, { success: true, mergedConversations: 2 });
+        const client = new WidgetSessionClient('https://api.test', 'pk_test_1', fn);
+
+        const result = await client.ResolveIdentity('verified.jwt', 'vk_abc123');
+
+        expect(calls[0].url).toBe('https://api.test/widget/resolve-identity');
+        expect((calls[0].init?.headers as Record<string, string>).authorization).toBe('Bearer verified.jwt');
+        expect(JSON.parse(calls[0].init?.body as string)).toEqual({ widgetKey: 'pk_test_1', visitorKey: 'vk_abc123' });
+        expect(result).toEqual({ success: true, mergedConversations: 2 });
+    });
+});
+
 describe('WidgetSessionClient.Refresh', () => {
     it('hits the refresh endpoint', async () => {
         const { fn, calls } = fakeFetch(200, goodBody);

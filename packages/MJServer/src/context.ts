@@ -15,7 +15,7 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type WidgetVisitorContext } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -242,8 +242,12 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
     }
   }
 
-  // Named session with no resource scope → no per-request state needed, use the cached user.
-  if (!isAnon && !scope) {
+  // Returning-visitor context (RV1/RV2/RV4): carried on a widget guest token so the voice path
+  // (server-created conversation) stamps the same returning-visitor anchor + resolved identity.
+  const visitorContext = extractWidgetVisitorContext(payload);
+
+  // Named session with no resource scope and no visitor context → no per-request state needed.
+  if (!isAnon && !scope && !visitorContext) {
     return userRecord;
   }
 
@@ -255,12 +259,34 @@ function buildMagicLinkSessionUser(userRecord: UserInfo, payload: jwt.JwtPayload
   if (scope) {
     sessionUser.MagicLinkScope = scope;
   }
+  if (visitorContext) {
+    sessionUser.WidgetVisitorContext = visitorContext;
+  }
   if (isAnon) {
     // Mark the session so the CurrentUser field resolver serves these synthesized roles
     // (the shared Anonymous principal holds none in the DB). See UserInfo.IsMagicLinkAnonymous.
     sessionUser.IsMagicLinkAnonymous = true;
   }
   return sessionUser;
+}
+
+/**
+ * Extracts the returning-visitor context (RV1/RV2/RV4) from a widget guest token's claims, or
+ * undefined when the token carries no VisitorKey (the default, remembering-off case). Used so the
+ * voice path can stamp the conversation with the same anchor/identity the text path stamps client-side.
+ */
+function extractWidgetVisitorContext(payload: jwt.JwtPayload): WidgetVisitorContext | undefined {
+  const visitorKey = payload['mj_visitor_key'];
+  if (typeof visitorKey !== 'string' || !visitorKey) {
+    return undefined;
+  }
+  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  return {
+    VisitorKey: visitorKey,
+    PreviousConversationID: str(payload['mj_previous_conversation_id']),
+    ResolvedEntityID: str(payload['mj_resolved_entity_id']),
+    ResolvedRecordID: str(payload['mj_resolved_record_id']),
+  };
 }
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>

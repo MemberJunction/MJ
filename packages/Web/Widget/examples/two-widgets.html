@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MJ Support Widget — guest test harness</title>
+    <style>
+        /* ── Deliberately hostile host styles ───────────────────────────────────────
+           If the widget's shadow DOM is doing its job, NONE of this leaks into the
+           widget, and the widget doesn't restyle this page. */
+        body { font-family: Georgia, serif; background: #fafad2; color: #663399; margin: 0; padding: 1.5rem 2rem 4rem; line-height: 1.5; }
+        button { background: hotpink !important; border: 4px dashed red !important; }
+        textarea, input { text-transform: uppercase !important; }
+        h1 { margin: 0 0 .25rem; }
+        .sub { color: #8a6d3b; margin-top: 0; }
+        .note { font-family: system-ui, sans-serif; background: #fff; border-left: 4px solid #264FAF; padding: 1rem 1rem 1rem 1.25rem; border-radius: 0 8px 8px 0; max-width: 60rem; margin: 1.25rem 0; }
+        .note strong { color: #264FAF; }
+        ol.checklist { font-family: system-ui, sans-serif; font-size: .9rem; color: #333; max-width: 60rem; }
+        code { background: #f1f1f1; padding: 0 .3rem; border-radius: 3px; font-family: ui-monospace, monospace; }
+    </style>
+</head>
+<body>
+    <h1>MJ Support Widget — guest test harness</h1>
+    <p class="sub">A bare third-party page. Serve it on <code>http://localhost:8080</code> (a whitelisted origin)
+       so the embed is a true cross-origin drop-in.</p>
+
+    <div class="note">
+        <strong>One widget per page.</strong> The conversations runtime is a process-wide singleton, so two
+        widgets on the <em>same</em> page would share one agent-dispatch context and collide. That mirrors real
+        usage (a customer embeds one widget per site). <br><br>
+        <strong>To demo cross-guest isolation:</strong> open this page in <em>two separate browser windows</em>
+        (or one normal + one incognito). Each window is its own JS context → its own guest session with a distinct
+        <code>ExternalID</code> → fully isolated. Server-side RLS enforces the isolation regardless; the two
+        windows just let you <em>see</em> it.
+    </div>
+
+    <!-- THE ENTIRE EMBED: one mount element + one script. The loader auto-bootstraps from these attributes. -->
+    <div
+        data-widget-key="pk_test_example_support_widget"
+        data-api-url="http://localhost:4008"
+        data-title="Acme Support"
+        data-greeting="Hi! Ask us anything."
+    ></div>
+    <script type="module" src="../dist/mj-widget.js"></script>
+
+    <ol class="checklist">
+        <li><strong>Shadow-DOM isolation:</strong> the loud yellow/purple/hotpink page must NOT bleed into the widget, and the widget must not restyle this page.</li>
+        <li><strong>Guest text turn (no login):</strong> open the launcher, type a message — it reaches the pinned <code>Sage</code> agent with no MJ login.</li>
+        <li><strong>Voice:</strong> click the mic, talk. The voice ceiling is enforced server-side at the realtime mint.</li>
+        <li><strong>Cross-guest isolation:</strong> open a second window (incognito), chat there too — each window's conversation is private to that guest.</li>
+        <li><strong>Magic-link upgrade:</strong> trigger upgrade from a guest session and complete the link — the session escalates to a resolved account, keeping the conversation.</li>
+    </ol>
+</body>
+</html>

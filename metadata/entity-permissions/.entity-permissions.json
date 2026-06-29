@@ -170,7 +170,7 @@
       "ID": "46E2294F-7319-4A0D-9BD5-C3471CF919EA"
     },
     "sync": {
-      "lastModified": "2026-06-27T16:26:38.735Z",
+      "lastModified": "2026-06-29T21:33:05.487Z",
       "checksum": "4eb90a6c015ef5719d5f2f78532477e9076f797f242a4353f23a7679815dee6b"
     }
   },
@@ -189,7 +189,7 @@
       "ID": "89D1B400-7C2F-4390-93A3-7D05353EEF16"
     },
     "sync": {
-      "lastModified": "2026-06-27T16:26:38.761Z",
+      "lastModified": "2026-06-29T21:33:05.613Z",
       "checksum": "5840d923821aa41b4817243e5f0cf084dfe90924971641ba6268c4f444da4601"
     }
   },
@@ -208,7 +208,7 @@
       "ID": "228DB8C7-DAAF-4E4A-8DBD-2173FEF2602D"
     },
     "sync": {
-      "lastModified": "2026-06-28T16:40:26.846Z",
+      "lastModified": "2026-06-29T21:33:05.628Z",
       "checksum": "99f8f4d210d5b5869b7028ad37fafd1a8f42f5cae1062b4e018996b9f443c336"
     }
   },
@@ -227,7 +227,7 @@
       "ID": "92289B8C-2175-496D-804A-F7AB3A86E5C6"
     },
     "sync": {
-      "lastModified": "2026-06-28T16:40:26.859Z",
+      "lastModified": "2026-06-29T21:33:05.641Z",
       "checksum": "48ded14d9292845b83a7e1b7f1eb9faad3a30758b7603b59cf6fa8d4ec6971ec"
     }
   },
@@ -245,7 +245,7 @@
       "ID": "91FEF155-2A6C-4413-A7B7-E2102E889F78"
     },
     "sync": {
-      "lastModified": "2026-06-28T17:08:34.142Z",
+      "lastModified": "2026-06-29T21:33:05.653Z",
       "checksum": "793141d5980887a81f5bb71de41980b257e165333943fb10de48447d4f0e59c9"
     }
   },
@@ -262,7 +262,7 @@
       "ID": "F6EE8067-2AA2-4C8F-94A6-0570728B5DF8"
     },
     "sync": {
-      "lastModified": "2026-06-28T17:08:34.102Z",
+      "lastModified": "2026-06-29T21:33:05.561Z",
       "checksum": "be8f614b84f094f792d17da401c05e58e58bc12d7b122758b7bb1d666c70801b"
     }
   },
@@ -279,7 +279,7 @@
       "ID": "343A55BB-F236-4800-867D-F0DB37B322E7"
     },
     "sync": {
-      "lastModified": "2026-06-28T17:08:34.117Z",
+      "lastModified": "2026-06-29T21:33:05.574Z",
       "checksum": "594dd9ff836f6d5c5552c7d8b8576e44a16c68eec1471f74545ee908fb5f889e"
     }
   },
@@ -296,8 +296,158 @@
       "ID": "38382D9B-174A-469A-A90F-282FDFCD3FD9"
     },
     "sync": {
-      "lastModified": "2026-06-28T17:08:34.130Z",
+      "lastModified": "2026-06-29T21:33:05.589Z",
       "checksum": "4d2930db8fcbc0f445bd08d41e53829792fc44a746dfe454f08caf75e8d7f521"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Notifications",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "04D515BC-271A-4DE4-B975-7C96AA416DBC"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:43:23.852Z",
+      "checksum": "3e0880b1befd376de8331ee7cccce221b2abbd699f9c62ace5b2536125482dc6"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Workspaces",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "8AA541BB-B0A2-402C-9DD6-8372EA1BDE55"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:43:23.823Z",
+      "checksum": "dd4e15cc14e12774bf75f55be05dc045421f8689bd625400e2dc50c3356d291a"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Settings",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "412384AA-5402-49EB-8856-7BB3BF0F6109"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:43:23.840Z",
+      "checksum": "ea184656acf663480c117691f397bc9de44ccf9436fb1383d1ceeca7c780a7b5"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Applications",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "F1AF803D-8121-4D76-96CF-1C751A4D6FD4"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:43:23.879Z",
+      "checksum": "4d56f68496b9dacc9cef706799e8a1e887dcad2b623e7a909fb2c6a9836cb3ca"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Favorites",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "6F269BD7-EBF5-4A3F-B3C9-4B55072E20A7"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:43:23.892Z",
+      "checksum": "7b64a710848937f02ad463ae5ef6d9f565d82905ffde9715eff1992b5a7e520f"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Record Logs",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "002B1251-6C30-4B18-A53E-44395A856676"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:43:23.905Z",
+      "checksum": "581ecae06fc24092deb2204a19ff3e31374444221cb47c65604cbc3eea61aa46"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Notification Preferences",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Magic Link: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "AEF583A0-61B6-469E-9ABD-9F04E90957AA"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:43:23.916Z",
+      "checksum": "28a01aaceca2f14a4a8c68be3dc0832d5c017fb4c84e9e9bd3d3bde39a195045"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Request Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true
+    },
+    "primaryKey": {
+      "ID": "0EC1AF79-9E71-4066-BF2D-B363334D0945"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:48:46.723Z",
+      "checksum": "1ae8cbcd043778679074f8468f26376c650a1dab64933d534bf01257161e736e"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Requests",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true
+    },
+    "primaryKey": {
+      "ID": "75AC2DF9-DE42-40D6-A347-24B9B4480837"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:48:46.739Z",
+      "checksum": "21619ccb54a1cf3ab5a1071043d17e645144b4cc3409c5c6c86a581faca7d220"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Artifacts",
+      "RoleID": "@lookup:MJ: Roles.Name=Widget Guest",
+      "CanRead": true,
+      "CanCreate": true
+    },
+    "primaryKey": {
+      "ID": "72B995BE-337F-4907-9DBC-2A924AD2BB68"
+    },
+    "sync": {
+      "lastModified": "2026-06-29T21:48:46.751Z",
+      "checksum": "50fde9e6f83cfae4c3f2e8f70d6f5eda38259f51daafc477f1f16ecac8c016bb"
     }
   }
 ]

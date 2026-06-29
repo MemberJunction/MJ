@@ -16,7 +16,7 @@
 
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { MJWidgetInstanceEntity } from '@memberjunction/core-entities';
+import type { MJWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { generateSessionId } from '../auth/magicLink/magicLinkCore.js';
@@ -24,8 +24,22 @@ import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
 import { configInfo, type WidgetConfig } from '../config.js';
 import { buildWidgetGuestClaims, evaluateWidgetMint, type WidgetMintErrorCode } from './widgetCore.js';
 import { verifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
+import { writeReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
+import { resolveIdentityByEmail, mergeVisitorIdentity, forgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
 
 const WIDGET_ENTITY = 'MJ: Widget Instances';
+const CONVERSATIONS_ENTITY = 'MJ: Conversations';
+
+/** Shape of the durable visitor anchor key (opaque base64url, same alphabet as generateSessionId). */
+const VISITOR_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
+
+/** Resolved returning-visitor anchor for a mint: the durable key + the prior conversation to chain from. */
+interface ReturningVisitorResolution {
+  /** The durable VisitorKey to persist as a cookie (validated-presented or freshly minted). */
+  visitorKey: string;
+  /** The most-recent prior conversation for this anchor in the widget's app, when this is a returning visit. */
+  previousConversationId?: string;
+}
 
 /** Per-request forensic context captured for audit (sourced from the HTTP request). */
 export interface WidgetMintAuditContext {
@@ -46,6 +60,13 @@ export interface MintGuestSessionInput {
    * host's registered public key; its identity is carried as informational claims only.
    */
   hostAssertion?: string;
+  /**
+   * The durable returning-visitor anchor (RV1) the client presents from its first-party cookie.
+   * Honored only when the widget's `RememberReturningVisitors` toggle is on: a valid presented key
+   * chains this visit to the visitor's prior conversation; absent/invalid on a first visit, the
+   * server mints a fresh one. Ignored entirely when remembering is off.
+   */
+  visitorKey?: string;
   audit?: WidgetMintAuditContext;
 }
 
@@ -74,6 +95,80 @@ export interface MintGuestSessionResult {
    * voice-abuse guard uses the deployment-configured limit; also enforced server-side at mint.
    */
   voiceMaxSessionMinutes?: number;
+  /** Whether returning-visitor memory is enabled for this widget (gates the cookie + chaining). */
+  rememberReturningVisitors?: boolean;
+  /**
+   * The durable visitor anchor to persist as a cookie (RV1). Set only when remembering is on:
+   * the validated key the client presented, or a freshly minted one on a first visit.
+   */
+  visitorKey?: string;
+  /** The visitor's prior conversation for this anchor (RV2 chain); set only on a returning visit. */
+  previousConversationId?: string;
+  /**
+   * The resolved polymorphic identity entity id (RV4), set only when a host-identity widget asserted a
+   * resolvable identity at mint. The client stamps it (with {@link MintGuestSessionResult.resolvedRecordId})
+   * onto the new conversation so memory injection (RV3) keys off the resolved record, not the cookie.
+   */
+  resolvedEntityId?: string;
+  /** The resolved polymorphic identity record id (RV4); paired with {@link MintGuestSessionResult.resolvedEntityId}. */
+  resolvedRecordId?: string;
+  error?: string;
+  errorCode?: WidgetMintErrorCode;
+}
+
+/** Input to resolve a returning visitor's identity after they verify (RV4, magic-link upgrade path). */
+export interface ResolveVisitorIdentityInput {
+  /** The widget's public embed key. */
+  widgetKey: string;
+  /** The durable returning-visitor anchor whose trail should be promoted to the verified identity. */
+  visitorKey: string;
+  /** The verified visitor's email (from the authenticated session) — resolved to a record via config. */
+  verifiedEmail: string;
+  /** The request's Origin header — enforced against the instance allowlist. */
+  origin?: string;
+}
+
+/** Result of an RV4 identity resolve+merge. */
+export interface ResolveVisitorIdentityResult {
+  success: boolean;
+  /** The resolved polymorphic pair, when a record matched the verified email. */
+  resolved?: ResolvedVisitorIdentity;
+  /** How many conversations were stamped with the resolved identity. */
+  mergedConversations?: number;
+  error?: string;
+  errorCode?: WidgetMintErrorCode;
+}
+
+/** Input to a "forget me" request (RV5). */
+export interface ForgetVisitorInput {
+  /** The widget's public embed key. */
+  widgetKey: string;
+  /** The durable returning-visitor anchor to forget. */
+  visitorKey: string;
+  /** The request's Origin header — enforced against the instance allowlist. */
+  origin?: string;
+}
+
+/**
+ * Result of the shared RV4/RV5 visitor-privacy gate. A single flat shape (not a discriminated union)
+ * because MJServer compiles without strictNullChecks, where literal-discriminant narrowing is disabled.
+ * On `ok`, `widget`/`contextUser` are set; otherwise `errorCode`/`error` are set.
+ */
+interface VisitorPrivacyGateResult {
+  ok: boolean;
+  widget?: MJWidgetInstanceEntity;
+  contextUser?: UserInfo;
+  errorCode?: WidgetMintErrorCode;
+  error?: string;
+}
+
+/** Result of a "forget me" request (RV5). */
+export interface ForgetVisitorResult {
+  success: boolean;
+  /** Count of memory notes archived. */
+  notesArchived?: number;
+  /** Count of conversations whose VisitorKey linkage was cleared. */
+  conversationsCleared?: number;
   error?: string;
   errorCode?: WidgetMintErrorCode;
 }
@@ -153,7 +248,21 @@ export class WidgetSessionService {
         hostIdentity = verified;
       }
 
-      return this.audited(this.mintToken(widget, guestRoleName, hostIdentity), input, widget);
+      // Returning-visitor anchor (RV1): resolve/mint the durable VisitorKey and chain to the prior
+      // conversation — only when this widget opts in. Never blocks the mint (best-effort on lookup failure).
+      const returningVisitor = await this.resolveReturningVisitor(widget, input.visitorKey, contextUser);
+
+      // RV2 (text path): the text widget runs client-side and has no server "session closed" event, so
+      // we recap the visitor's PRIOR conversation lazily, at the moment they return — which is exactly
+      // when the recap is needed for RV3 to inject it into this new session. Idempotent (skips when a
+      // recap already exists) and best-effort (never blocks or fails the mint).
+      await this.recapPriorConversationIfNeeded(widget, returningVisitor, contextUser);
+
+      // RV4 (host-identity path): when a host asserts a resolvable identity, promote the visitor's prior
+      // anonymous trail to that record and surface the pair so the client stamps the new conversation.
+      const resolvedIdentity = await this.resolveHostIdentityIfApplicable(widget, hostIdentity, returningVisitor, contextUser);
+
+      return this.audited(this.mintToken(widget, guestRoleName, hostIdentity, returningVisitor, resolvedIdentity), input, widget);
     } catch (e) {
       LogError(e);
       return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
@@ -237,7 +346,13 @@ export class WidgetSessionService {
   }
 
   /** Builds + signs the guest JWT for an eligible widget instance. */
-  private mintToken(widget: MJWidgetInstanceEntity, guestRoleName: string, hostIdentity?: HostAssertedIdentity): MintGuestSessionResult {
+  private mintToken(
+    widget: MJWidgetInstanceEntity,
+    guestRoleName: string,
+    hostIdentity?: HostAssertedIdentity,
+    returningVisitor?: ReturningVisitorResolution,
+    resolvedIdentity?: ResolvedVisitorIdentity,
+  ): MintGuestSessionResult {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const ttlMinutes = widget.SessionTTLMinutes || this.config.defaultSessionTtlMinutes;
     // Generated once and returned to the client: the widget stamps Conversation.ExternalID with
@@ -254,6 +369,16 @@ export class WidgetSessionService {
       nowSeconds,
       ttlSeconds: ttlMinutes * 60,
       hostIdentity,
+      // RV1/RV2/RV4: carry the returning-visitor anchor + resolved identity as claims so the voice path
+      // (server-created conversation) stamps the same fields the text path stamps client-side.
+      returningVisitor: returningVisitor
+        ? {
+            visitorKey: returningVisitor.visitorKey,
+            previousConversationId: returningVisitor.previousConversationId,
+            resolvedEntityId: resolvedIdentity?.entityId,
+            resolvedRecordId: resolvedIdentity?.recordId,
+          }
+        : undefined,
     });
     const token = MagicLinkKeyManager.Instance.Sign(claims);
     return {
@@ -266,7 +391,213 @@ export class WidgetSessionService {
       modality: widget.Modality,
       sessionId,
       voiceMaxSessionMinutes: widget.VoiceMaxSessionMinutes ?? undefined,
+      rememberReturningVisitors: !!returningVisitor,
+      visitorKey: returningVisitor?.visitorKey,
+      previousConversationId: returningVisitor?.previousConversationId,
+      resolvedEntityId: resolvedIdentity?.entityId,
+      resolvedRecordId: resolvedIdentity?.recordId,
     };
+  }
+
+  /**
+   * RV4 (host-identity path): when a `HostIdentity` widget asserts a resolvable identity AND remembering
+   * is on, resolve the asserted email to a polymorphic record and merge the visitor's prior anonymous
+   * trail onto it. Returns the resolved pair (so the client stamps the new conversation), or undefined
+   * when not applicable or no record matched. Best-effort — never blocks the mint.
+   */
+  private async resolveHostIdentityIfApplicable(
+    widget: MJWidgetInstanceEntity,
+    hostIdentity: HostAssertedIdentity | undefined,
+    returningVisitor: ReturningVisitorResolution | undefined,
+    contextUser: UserInfo,
+  ): Promise<ResolvedVisitorIdentity | undefined> {
+    if (!widget.RememberReturningVisitors || !hostIdentity?.email || !returningVisitor?.visitorKey) {
+      return undefined;
+    }
+    // global-provider-ok: server-side mint under the single default provider.
+    const identity = await resolveIdentityByEmail(hostIdentity.email, contextUser, Metadata.Provider, this.config.identityResolution);
+    if (!identity) {
+      return undefined;
+    }
+    await mergeVisitorIdentity({
+      visitorKey: returningVisitor.visitorKey,
+      applicationId: widget.ApplicationID,
+      identity,
+      contextUser,
+      provider: Metadata.Provider,
+    });
+    return identity;
+  }
+
+  /**
+   * RV4 (magic-link upgrade path): after a visitor verifies their identity, promote their anonymous
+   * trail to the verified record. Called from the AUTHENTICATED route with the verified session's email,
+   * so the resolved record is the deployment-configured target for that email (default: the MJ User).
+   * Validates the widget + origin + opt-in + key, then resolves and merges. Never throws.
+   */
+  public async ResolveVisitorIdentity(input: ResolveVisitorIdentityInput): Promise<ResolveVisitorIdentityResult> {
+    try {
+      const gate = await this.gateVisitorPrivacyRequest(input.widgetKey, input.visitorKey, input.origin);
+      if (!gate.ok) {
+        return { success: false, errorCode: gate.errorCode, error: gate.error };
+      }
+      const identity = await resolveIdentityByEmail(input.verifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution);
+      if (!identity) {
+        // Verified, but no record matches the email under the configured target — nothing to merge.
+        return { success: true, mergedConversations: 0 };
+      }
+      const mergedConversations = await mergeVisitorIdentity({
+        visitorKey: input.visitorKey,
+        applicationId: gate.widget.ApplicationID,
+        identity,
+        contextUser: gate.contextUser,
+        provider: Metadata.Provider,
+      });
+      return { success: true, resolved: identity, mergedConversations };
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * RV5 "forget me": archives the visitor's auto-generated memory and clears the VisitorKey linkage for
+   * this anchor in the widget's application. Public (the visitor proves possession of the durable key,
+   * not an identity). Validates the widget + origin + opt-in + key, then delegates to {@link forgetVisitor}.
+   */
+  public async ForgetVisitor(input: ForgetVisitorInput): Promise<ForgetVisitorResult> {
+    try {
+      const gate = await this.gateVisitorPrivacyRequest(input.widgetKey, input.visitorKey, input.origin);
+      if (!gate.ok) {
+        return { success: false, errorCode: gate.errorCode, error: gate.error };
+      }
+      const { notesArchived, conversationsCleared } = await forgetVisitor({
+        visitorKey: input.visitorKey,
+        applicationId: gate.widget.ApplicationID,
+        contextUser: gate.contextUser,
+        provider: Metadata.Provider,
+      });
+      return { success: true, notesArchived, conversationsCleared };
+    } catch (e) {
+      LogError(e);
+      return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
+    }
+  }
+
+  /**
+   * Shared guard for the RV4/RV5 visitor-privacy endpoints: resolves the lookup user, loads + validates
+   * the widget (status/origin), requires returning-visitor memory to be ON, and validates the presented
+   * VisitorKey shape. Returns the resolved widget + context user on success, or a structured failure.
+   */
+  private async gateVisitorPrivacyRequest(
+    widgetKey: string,
+    visitorKey: string,
+    origin: string | undefined,
+  ): Promise<VisitorPrivacyGateResult> {
+    const contextUser = this.resolveLookupUser();
+    if (!contextUser) {
+      return { ok: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
+    }
+    const widget = await this.loadWidgetByKey(widgetKey, contextUser);
+    if (!widget) {
+      return { ok: false, errorCode: 'not_found', error: 'Unknown widget key.' };
+    }
+    const eligibility = evaluateWidgetMint(
+      { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
+      origin,
+    );
+    if (!eligibility.ok) {
+      return { ok: false, errorCode: eligibility.errorCode ?? 'server_error', error: 'Widget request rejected.' };
+    }
+    if (!widget.RememberReturningVisitors) {
+      return { ok: false, errorCode: 'upgrade_not_enabled', error: 'Returning-visitor memory is not enabled for this widget.' };
+    }
+    if (!VISITOR_KEY_PATTERN.test((visitorKey ?? '').trim())) {
+      return { ok: false, errorCode: 'not_found', error: 'A valid visitorKey is required.' };
+    }
+    return { ok: true, widget, contextUser };
+  }
+
+  /**
+   * Resolves the returning-visitor anchor for a mint (RV1). Returns undefined when the widget does NOT
+   * opt in (RememberReturningVisitors off) — the default, fully-off path: no cookie, no chaining.
+   * When on: validates the presented key (else mints a fresh one) and, for a returning key, finds the
+   * visitor's most-recent prior conversation in this widget's application to chain from. Best-effort:
+   * a lookup failure degrades to "no prior conversation" rather than blocking the session.
+   */
+  private async resolveReturningVisitor(
+    widget: MJWidgetInstanceEntity,
+    presentedKey: string | undefined,
+    contextUser: UserInfo,
+  ): Promise<ReturningVisitorResolution | undefined> {
+    if (!widget.RememberReturningVisitors) {
+      return undefined;
+    }
+    const presented = (presentedKey ?? '').trim();
+    const isReturning = VISITOR_KEY_PATTERN.test(presented);
+    const visitorKey = isReturning ? presented : generateSessionId();
+    const previousConversationId = isReturning
+      ? await this.findPreviousConversationByVisitorKey(visitorKey, widget.ApplicationID, contextUser)
+      : undefined;
+    return { visitorKey, previousConversationId };
+  }
+
+  /**
+   * Recaps the visitor's prior conversation when they return (RV2, text path). No-op unless this is a
+   * returning visit (a resolved `previousConversationId`). Delegates to the shared, idempotent,
+   * best-effort {@link writeReturningVisitorRecap}, attributing the recap to the widget's pinned agent
+   * and stamping the widget's `VisitorMemoryRetentionDays` as the note's expiry. Awaited so the recap
+   * note exists before the new session's memory injection (RV3) runs; the recap's own idempotency
+   * bounds the LLM cost to the first return after each prior conversation.
+   */
+  private async recapPriorConversationIfNeeded(
+    widget: MJWidgetInstanceEntity,
+    returningVisitor: ReturningVisitorResolution | undefined,
+    contextUser: UserInfo,
+  ): Promise<void> {
+    const priorConversationId = returningVisitor?.previousConversationId;
+    if (!priorConversationId) {
+      return;
+    }
+    // global-provider-ok: server-side mint under the single default provider (same rationale as resolveGuestRoleName).
+    await writeReturningVisitorRecap(
+      priorConversationId,
+      widget.PinnedAgentID,
+      contextUser,
+      Metadata.Provider,
+      widget.VisitorMemoryRetentionDays,
+    );
+  }
+
+  /**
+   * Finds the visitor's most-recent prior conversation for a VisitorKey, scoped to the widget's
+   * application so a key can never resolve a conversation from a different deployment. Returns the
+   * id or undefined (first visit, or read failure — never throws).
+   */
+  private async findPreviousConversationByVisitorKey(
+    visitorKey: string,
+    applicationId: string,
+    contextUser: UserInfo,
+  ): Promise<string | undefined> {
+    const rv = new RunView();
+    const result = await rv.RunView<MJConversationEntity>(
+      {
+        EntityName: CONVERSATIONS_ENTITY,
+        // visitorKey is validated base64url ([A-Za-z0-9_-]) so the literal is injection-safe; applicationId
+        // is a server-trusted UUID. Scope to the application to prevent cross-widget anchor reuse.
+        ExtraFilter: `VisitorKey = '${visitorKey}' AND ApplicationID = '${applicationId.replace(/'/g, "''")}'`,
+        OrderBy: '__mj_CreatedAt DESC',
+        MaxRows: 1,
+        Fields: ['ID'],
+        ResultType: 'simple',
+      },
+      contextUser,
+    );
+    if (!result.Success) {
+      LogError(`[Widget] Returning-visitor lookup failed: ${result.ErrorMessage}`);
+      return undefined;
+    }
+    return result.Results?.[0]?.ID ?? undefined;
   }
 
   /** Loads a single widget instance by its public key (read-only, simple result). */

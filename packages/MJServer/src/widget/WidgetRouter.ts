@@ -45,10 +45,12 @@ function ensureWidgetSigning(publicUrl: string, widgetConfig: WidgetConfig): voi
 }
 
 /**
- * Builds the widget public router. Mount it at WIDGET_MOUNT_PATH BEFORE the unified
- * auth middleware (the mint endpoint is public — visitors have no MJ JWT yet).
+ * Builds the widget routers. Mount `publicRouter` at WIDGET_MOUNT_PATH BEFORE the unified auth
+ * middleware (the mint/forget endpoints are public — visitors have no MJ JWT yet) and
+ * `authenticatedRouter` at the same path AFTER it (the RV4 resolve-identity endpoint needs the
+ * verified principal from `req.userPayload`).
  */
-export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { publicRouter: Router } {
+export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { publicRouter: Router; authenticatedRouter: Router } {
   ensureWidgetSigning(publicUrl, config);
 
   const service = new WidgetSessionService(publicUrl, config);
@@ -80,7 +82,59 @@ export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { 
     await handleUpgrade(service, req, res);
   });
 
-  return { publicRouter };
+  // RV5 "forget me": archive the visitor's memory + clear the VisitorKey linkage. Public — the visitor
+  // proves possession of the durable key (not an identity). Same coarse limiter as mint.
+  publicRouter.post('/forget', mintLimiter, json(), async (req: Request, res: Response) => {
+    await handleForget(service, req, res);
+  });
+
+  // RV4 resolve-identity: promote the visitor's anonymous trail to the verified record. AUTHENTICATED —
+  // it reads the verified principal's email from req.userPayload, so it mounts after the auth middleware.
+  const authenticatedRouter = Router();
+  authenticatedRouter.post('/resolve-identity', mintLimiter, json(), async (req: Request, res: Response) => {
+    await handleResolveIdentity(service, req, res);
+  });
+
+  return { publicRouter, authenticatedRouter };
+}
+
+/** Handles "forget me" (RV5) — parses the body, calls the service, maps the status. */
+async function handleForget(service: WidgetSessionService, req: Request, res: Response): Promise<void> {
+  const body = (req.body ?? {}) as { widgetKey?: string; visitorKey?: string };
+  const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
+  const visitorKey = typeof body.visitorKey === 'string' ? body.visitorKey : '';
+  if (!widgetKey) {
+    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
+    return;
+  }
+  const result = await service.ForgetVisitor({ widgetKey, visitorKey, origin: req.get('origin') ?? undefined });
+  res.status(result.success ? 200 : result.errorCode === 'server_error' ? 500 : 403).json(result);
+}
+
+/**
+ * Handles RV4 resolve-identity — reads the verified email from the authenticated principal
+ * (`req.userPayload.userRecord`), parses the body, calls the service, maps the status.
+ */
+async function handleResolveIdentity(service: WidgetSessionService, req: Request, res: Response): Promise<void> {
+  const verifiedUser = req.userPayload?.userRecord;
+  if (!verifiedUser?.Email) {
+    res.status(401).json({ success: false, errorCode: 'server_error', error: 'Authentication required.' });
+    return;
+  }
+  const body = (req.body ?? {}) as { widgetKey?: string; visitorKey?: string };
+  const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
+  const visitorKey = typeof body.visitorKey === 'string' ? body.visitorKey : '';
+  if (!widgetKey) {
+    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
+    return;
+  }
+  const result = await service.ResolveVisitorIdentity({
+    widgetKey,
+    visitorKey,
+    verifiedEmail: verifiedUser.Email,
+    origin: req.get('origin') ?? undefined,
+  });
+  res.status(result.success ? 200 : result.errorCode === 'server_error' ? 500 : 403).json(result);
 }
 
 /** Handles the magic-link upgrade request — parses the body, calls the service, maps the status. */
@@ -100,7 +154,7 @@ async function handleUpgrade(service: WidgetSessionService, req: Request, res: R
 
 /** Shared mint/refresh handler — parses the request, calls the service, maps the status. */
 async function handleMint(service: WidgetSessionService, req: Request, res: Response, refresh: boolean): Promise<void> {
-  const body = (req.body ?? {}) as { widgetKey?: string; hostAssertion?: string };
+  const body = (req.body ?? {}) as { widgetKey?: string; hostAssertion?: string; visitorKey?: string };
   const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
   if (!widgetKey) {
     res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
@@ -112,6 +166,7 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
     widgetKey,
     origin,
     hostAssertion: typeof body.hostAssertion === 'string' ? body.hostAssertion : undefined,
+    visitorKey: typeof body.visitorKey === 'string' ? body.visitorKey : undefined,
     audit: { ipAddress: req.ip, userAgent: req.get('user-agent') ?? undefined, origin },
   };
   const result = refresh ? await service.RefreshGuestSession(input) : await service.MintGuestSession(input);

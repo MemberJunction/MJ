@@ -407,6 +407,12 @@ export class AgentRunner {
                 onProgress: wrappedOnProgress
             };
 
+            // Returning-visitor memory (RV3): when the caller supplied no explicit memory scope, derive it
+            // from THIS conversation's resolved identity / prior-conversation chain so the existing note
+            // injection surfaces the recap a prior session left for a returning visitor. No-op for ordinary
+            // conversations (no resolved identity, no prior link) — scope stays unset, behavior unchanged.
+            await this.applyReturningVisitorMemoryScope(modifiedParams, conversationId, contextUser, md);
+
             const agentResult = await this.RunAgent<C, R>(modifiedParams);
 
             // Mark execution as completed to stop progress saves
@@ -1546,6 +1552,52 @@ export class AgentRunner {
             'video/ogg': 'ogv'
         };
         return mimeToExt[mimeType.toLowerCase()] || 'bin';
+    }
+
+    /**
+     * Returning-visitor memory scope (RV3, text/conversation path). Derives the agent's primary memory
+     * scope from a conversation's returning-visitor fields when the caller supplied none:
+     *
+     *   - resolved visitor  → `(ResolvedEntityID's entity name, ResolvedRecordID)`
+     *   - linked anonymous  → `("MJ: Conversations", PreviousConversationID)`
+     *   - ordinary chat     → leaves scope unset (no behavior change)
+     *
+     * Mutates `params.PrimaryScopeEntityName` / `params.PrimaryScopeRecordID`, which `BaseAgent` already
+     * threads into note injection. An explicit caller-supplied scope always wins. Best-effort — a failure
+     * here never blocks the agent run (the visitor just gets no prior context this turn).
+     */
+    private async applyReturningVisitorMemoryScope<C>(
+        params: ExecuteAgentParams<C>,
+        conversationId: string,
+        contextUser: UserInfo,
+        md: IMetadataProvider
+    ): Promise<void> {
+        try {
+            // Explicit scope (top-level or via data bag) always wins — don't override it.
+            if (params.PrimaryScopeRecordID || (params.data?.PrimaryScopeRecordID as string | undefined)) {
+                return;
+            }
+            const convo = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+            if (!(await convo.Load(conversationId))) {
+                return;
+            }
+            let entityName: string | undefined;
+            let recordId: string | undefined;
+            if (convo.ResolvedEntityID && convo.ResolvedRecordID) {
+                entityName = md.Entities.find((e) => UUIDsEqual(e.ID, convo.ResolvedEntityID!))?.Name;
+                recordId = convo.ResolvedRecordID;
+            } else if (convo.PreviousConversationID) {
+                entityName = 'MJ: Conversations';
+                recordId = convo.PreviousConversationID;
+            }
+            if (entityName && recordId) {
+                params.PrimaryScopeEntityName = entityName;
+                params.PrimaryScopeRecordID = recordId;
+                LogStatus(`[ReturningVisitor] derived memory scope ${entityName}/${recordId} for conversation ${conversationId}`);
+            }
+        } catch (e) {
+            LogError(`[ReturningVisitor] failed to derive memory scope for conversation ${conversationId}: ${e instanceof Error ? e.message : String(e)}`);
+        }
     }
 
     /**
