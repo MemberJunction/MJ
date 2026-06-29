@@ -365,40 +365,6 @@
     color: var(--mj-text-primary);
 }
 
-/* Info Banner */
-.info-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-accent-300);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-brand-primary);
-    margin-bottom: 20px;
-}
-
-.info-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-}
-
-/* Recommendation Banner */
-.recommendation-banner {
-    display: flex;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-warning-800);
-    margin-top: 20px;
-}
-
-.recommendation-banner i {
-    margin-top: 2px;
-    flex-shrink: 0;
-    color: var(--mj-color-warning-500);
-}
 
 /* Redundant Loads Table */
 .redundant-loads-table-wrapper {
@@ -493,14 +459,6 @@
 }
 
 /* Performance Section Styles */
-.warning-banner {
-    background: var(--mj-color-warning-50) !important;
-    color: var(--mj-color-warning-800) !important;
-}
-
-.warning-banner i {
-    color: var(--mj-color-warning-500);
-}
 
 .telemetry-summary {
     display: grid;
@@ -2269,22 +2227,6 @@
     margin-top: 4px;
 }
 
-.pattern-warning {
-    margin-top: 12px;
-    padding: 12px;
-    background: var(--mj-color-warning-50);
-    border-radius: var(--mj-radius-md);
-    font-size: 12px;
-    color: var(--mj-color-warning-800);
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-}
-
-.pattern-warning i {
-    color: var(--mj-color-warning-500);
-    margin-top: 2px;
-}
 
 /* Detail Actions */
 .detail-actions {
