@@ -554,21 +554,6 @@
     border-radius: 4px;
 }
 
-.error-panel {
-    background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
-    border: 1px solid color-mix(in srgb, var(--mj-status-error) 20%, transparent);
-    border-radius: 8px;
-    padding: 16px;
-}
-
-.error-panel h4 {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 12px 0;
-    font-size: 14px;
-    color: var(--mj-status-error);
-}
 
 .error-message {
     margin: 0;

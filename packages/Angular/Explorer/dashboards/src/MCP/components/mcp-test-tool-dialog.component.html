@@ -290,10 +290,9 @@
       </div>
       <!-- Error Message -->
       @if (ExecutionResult?.ErrorMessage) {
-        <div class="error-panel">
-          <h4><i class="fa-solid fa-exclamation-triangle"></i> Error</h4>
+        <mj-alert Variant="error" Title="Error">
           <pre class="error-message">{{ ExecutionResult?.ErrorMessage }}</pre>
-        </div>
+        </mj-alert>
       }
       <!-- Result Data -->
       @if (ExecutionResult?.Result) {

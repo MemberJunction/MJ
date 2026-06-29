@@ -239,20 +239,17 @@
                                             }
                                             <!-- Sync Result Banner -->
                                             @if (getSyncState(conn.ID)?.lastResult && !isSyncing(conn.ID)) {
-                                                <div class="sync-result-banner"
-                                                     [class.success]="getSyncState(conn.ID)?.lastResult?.Success"
-                                                     [class.error]="!getSyncState(conn.ID)?.lastResult?.Success">
+                                                <mj-alert Size="sm"
+                                                     [Variant]="getSyncState(conn.ID)?.lastResult?.Success ? 'success' : 'error'">
                                                     @if (getSyncState(conn.ID)?.lastResult?.Success) {
-                                                        <i class="fa-solid fa-check-circle"></i>
                                                         <span>Synced: {{ getSyncState(conn.ID)?.lastResult?.Added }} added,
                                                               {{ getSyncState(conn.ID)?.lastResult?.Updated }} updated,
                                                               {{ getSyncState(conn.ID)?.lastResult?.Deprecated }} deprecated
                                                         </span>
                                                     } @else {
-                                                        <i class="fa-solid fa-exclamation-circle"></i>
                                                         <span>{{ getSyncState(conn.ID)?.lastResult?.ErrorMessage }}</span>
                                                     }
-                                                </div>
+                                                </mj-alert>
                                             }
                                             <div class="card-body">
                                                 @if (conn.Description) {

@@ -445,19 +445,7 @@
 }
 
 .scope-tip {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--mj-status-info-bg);
-    border-radius: 8px;
     margin-top: 16px;
-    font-size: 13px;
-    color: var(--mj-status-info-text);
-}
-
-.scope-tip i {
-    color: var(--mj-status-info);
 }
 
 .scope-tip code {

@@ -159,10 +159,9 @@
             }
           </div>
         }
-        <div class="scope-tip">
-          <i class="fa-solid fa-lightbulb"></i>
+        <mj-alert Variant="info" Size="sm" Icon="fa-solid fa-lightbulb" class="scope-tip">
           <span>Tip: Use wildcards like <code>entities:*</code> for broad access within a category</span>
-        </div>
+        </mj-alert>
         <!-- No Scopes Warning -->
         @if (!IsLoadingScopes && getSelectedScopeCount() === 0) {
           <div class="no-scopes-warning">

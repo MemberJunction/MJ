@@ -359,14 +359,9 @@
 
         <!-- Sync result banner -->
         @if (SyncResult) {
-          <div class="sync-result-banner" [class.sync-success]="SyncResult.Success" [class.sync-failure]="!SyncResult.Success">
-            @if (SyncResult.Success) {
-              <i class="fa-solid fa-circle-check"></i>
-            } @else {
-              <i class="fa-solid fa-circle-xmark"></i>
-            }
-            <span>{{ SyncResult.Message || (SyncResult.Success ? 'Sync completed successfully' : 'Sync failed') }}</span>
-          </div>
+          <mj-alert Size="sm" [Variant]="SyncResult.Success ? 'success' : 'error'">
+            {{ SyncResult.Message || (SyncResult.Success ? 'Sync completed successfully' : 'Sync failed') }}
+          </mj-alert>
         }
 
         <!-- Auto-Map Schema panel -->
