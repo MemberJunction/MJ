@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, ViewEncapsulation } from '@angular/core';
+import { Component, EventEmitter, Input, OnInit, Output, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -128,9 +128,39 @@ const USE_CASE_ICONS: Record<string, string> = {
                   <span class="ps-lvl" [class]="'ps-lvl-' + card.bestLevel">{{ levelLabel(card.bestLevel) }}</span>
                 }
                 <span class="ps-spacer"></span>
-                <button mjButton variant="secondary" size="sm"><i class="fa-solid fa-circle-info"></i> Details</button>
-                <button mjButton variant="primary" size="sm"><i class="fa-solid fa-diagram-project"></i> Use</button>
+                <button mjButton variant="secondary" size="sm" data-testid="ps-catalog-details"
+                  [class.on]="detailId === card.algo.ID" (click)="toggleDetail(card.algo.ID)">
+                  <i class="fa-solid fa-circle-info"></i> Details
+                </button>
+                <button mjButton variant="primary" size="sm" data-testid="ps-catalog-use"
+                  (click)="useAlgorithm(card.algo)">
+                  <i class="fa-solid fa-diagram-project"></i> Use
+                </button>
               </div>
+              @if (detailId === card.algo.ID) {
+                <div class="adetail" data-testid="ps-catalog-detail">
+                  @if (card.algo.Description) {
+                    <p class="ps-small adetail-desc">{{ card.algo.Description }}</p>
+                  }
+                  <div class="dkv"><span class="dk">Problem types</span><span class="dv">{{ card.problemTypes.join(', ') || '—' }}</span></div>
+                  <div class="dkv"><span class="dk">Driver class</span><span class="dv ps-mono">{{ card.algo.DriverClass }}</span></div>
+                  @if (hyperparams(card.algo).length > 0) {
+                    <div class="dk" style="margin-top:8px">Default hyperparameters</div>
+                    <div class="hp-list">
+                      @for (hp of hyperparams(card.algo); track hp.k) {
+                        <div class="hp"><span class="ps-mono">{{ hp.k }}</span><span class="ps-mono ps-muted">{{ hp.v }}</span></div>
+                      }
+                    </div>
+                  } @else {
+                    <div class="ps-small ps-muted" style="margin-top:6px">Sensible defaults are applied at training time.</div>
+                  }
+                  <div class="adetail-foot">
+                    <button mjButton variant="primary" size="sm" (click)="useAlgorithm(card.algo)">
+                      <i class="fa-solid fa-diagram-project"></i> Use this algorithm
+                    </button>
+                  </div>
+                </div>
+              }
             </div>
           }
         </div>
@@ -141,8 +171,13 @@ const USE_CASE_ICONS: Record<string, string> = {
 export class PSCatalogComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
 
+  /** Emitted with a starter prompt to open + seed the Model Development Agent chat. */
+  @Output() askAgent = new EventEmitter<string>();
+
   public selectedUseCaseIds: string[] = [];
   public cards: AlgoCardVM[] = [];
+  /** The algorithm whose inline detail panel is expanded (null = none). */
+  public detailId: string | null = null;
 
   ngOnInit(): void {
     this.rebuildCards();
@@ -180,6 +215,40 @@ export class PSCatalogComponent implements OnInit {
   public clearScenarios(): void {
     this.selectedUseCaseIds = [];
     this.rebuildCards();
+  }
+
+  // ---- algorithm card actions ----
+
+  /** Toggle the inline detail panel for an algorithm card. */
+  public toggleDetail(id: string): void {
+    this.detailId = this.detailId === id ? null : id;
+  }
+
+  /** Seed the Model Development Agent to build a model with the chosen algorithm. */
+  public useAlgorithm(algo: MJMLAlgorithmEntity): void {
+    this.askAgent.emit(
+      `Help me build a predictive model using the ${algo.Name} algorithm. ` +
+        `Walk me through choosing the entity, the outcome to predict, and the features to assemble.`,
+    );
+  }
+
+  /** Parse an algorithm's `DefaultHyperparameters` JSON into a small key/value list (≤8 rows). */
+  public hyperparams(algo: MJMLAlgorithmEntity): { k: string; v: string }[] {
+    const raw = algo.DefaultHyperparameters;
+    if (!raw) {
+      return [];
+    }
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') {
+        return [];
+      }
+      return Object.entries(parsed as Record<string, unknown>)
+        .map(([k, v]) => ({ k, v: String(v) }))
+        .slice(0, 8);
+    } catch {
+      return [];
+    }
   }
 
   public rank(level: RecommendationLevel): number {

@@ -49,3 +49,16 @@
   display: flex; align-items: center; gap: 8px; padding: 12px 16px;
   border-top: 1px solid var(--mj-border-subtle); background: var(--mj-bg-surface-card);
 }
+
+/* Inline algorithm detail panel (toggled by the Details button) */
+.ps-catalog .adetail {
+  padding: 14px 16px; border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-sunken); display: flex; flex-direction: column; gap: 8px;
+}
+.ps-catalog .adetail-desc { margin: 0; line-height: 1.45; color: var(--mj-text-secondary); }
+.ps-catalog .dkv { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.ps-catalog .dk { color: var(--mj-text-muted); font-weight: 650; }
+.ps-catalog .dv { color: var(--mj-text-primary); text-align: right; }
+.ps-catalog .hp-list { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.ps-catalog .hp { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; }
+.ps-catalog .adetail-foot { display: flex; justify-content: flex-start; margin-top: 6px; }

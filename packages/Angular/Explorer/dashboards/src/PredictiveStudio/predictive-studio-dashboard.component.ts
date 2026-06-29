@@ -62,6 +62,8 @@ export class PredictiveStudioDashboardComponent extends BaseDashboard {
   public isLoading = true;
   public activePanel: PSPanelKey = 'home';
   public chatOpen = false;
+  /** Starter prompt seeded into the copilot chat input when a panel CTA opens it (null = no seed). */
+  public pendingChatMessage: string | null = null;
 
   /** Resolved at runtime from the agent cache by name; null until resolved (chat falls back to default-agent routing). */
   private _modelDevAgentId: string | null = null;
@@ -162,7 +164,13 @@ export class PredictiveStudioDashboardComponent extends BaseDashboard {
     this.chatOpen = !this.chatOpen;
   }
 
-  public openChat(): void {
+  /**
+   * Open the copilot, optionally seeding the chat input with a starter prompt (from a panel's
+   * "Ask the agent" / "Use" CTA). The prompt flows to `mj-conversation-chat-area`'s `pendingMessage`.
+   */
+  public openChat(prompt?: string): void {
+    // Always assign (clearing any prior seed) so a plain reopen doesn't re-inject a stale "Use" prompt.
+    this.pendingChatMessage = prompt ?? null;
     this.chatOpen = true;
   }
 
