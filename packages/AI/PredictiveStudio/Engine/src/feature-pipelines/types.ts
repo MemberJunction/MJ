@@ -7,6 +7,8 @@
  * — NOT a new persistence shape.
  */
 
+import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
+
 /**
  * Name of the seeded `MJ: Record Process Categories` row that marks a Record
  * Process as a Feature Pipeline. Authored in
@@ -38,8 +40,13 @@ export interface FeaturePipelineSummary {
   Description: string | null;
   /** Record Process lifecycle status: `Active` / `Disabled` / `Draft`. */
   Status: 'Active' | 'Disabled' | 'Draft';
-  /** The work the pipeline performs per record. Feature pipelines use Infer / Action / Agent. */
-  WorkType: 'Action' | 'Agent' | 'FieldRules' | 'Infer';
+  /**
+   * The work the pipeline performs per record (Feature pipelines typically use Infer / Action /
+   * Agent). Derived from the entity's `WorkType` so it tracks the CodeGen-generated union — which
+   * is sourced from the `CK_RecordProcess_WorkType` CHECK constraint and grows as work types are
+   * added (e.g. `'ML Model'`).
+   */
+  WorkType: MJRecordProcessEntity['WorkType'];
   /** Id of the entity whose records the pipeline derives features for. */
   TargetEntityID: string;
   /** Display name of the target entity (denormalized from the Record Process view). */

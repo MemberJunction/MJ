@@ -22,7 +22,7 @@
  * batch and completes instantly.
  */
 
-import { IMetadataProvider, IStartupSink, LogStatus, RegisterForStartup, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, IStartupSink, LogStatusEx, RegisterForStartup, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 
 import { registerMLScoringProcessor } from './register';
@@ -57,6 +57,10 @@ export class PredictiveStudioScoringStartup extends BaseSingleton<PredictiveStud
    */
   public async HandleStartup(_contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
     registerMLScoringProcessor(buildProductionMLInferenceDeps());
-    LogStatus('[PredictiveStudioScoringStartup] Registered ML Model scoring processor for Record Set Processing.');
+    // Routine boot registration — only surface it under verbose logging to keep startup quiet.
+    LogStatusEx({
+      message: '[PredictiveStudioScoringStartup] Registered ML Model scoring processor for Record Set Processing.',
+      verboseOnly: true,
+    });
   }
 }
