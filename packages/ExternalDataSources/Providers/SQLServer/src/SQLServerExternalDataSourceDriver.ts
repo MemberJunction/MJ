@@ -10,6 +10,7 @@ import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import {
   BaseExternalDataSourceDriver,
   BaseSqlExternalDataSourceDriver,
+  SqlDialectKey,
   ExternalConnectionTestResult,
   ExternalViewParams,
   ExternalViewResult,
@@ -152,6 +153,8 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
+      // Read-only enforcement (EDS is read-only): screen the rendered native SQL before it runs.
+      this.screenReadOnlyNativeQuery(queryText);
       return await this.withConnectionRetry(dataSource, async () => {
         const pool = await this.getConnection(dataSource, contextUser);
         // mssql binds by name (@name); callers reference parameters by their declared name.
@@ -278,6 +281,11 @@ export class SQLServerExternalDataSourceDriver extends BaseSqlExternalDataSource
   }
 
   /** Quote a SQL identifier with T-SQL brackets, escaping embedded `]`. */
+  /** T-SQL native queries must be parsed with the SQL Server grammar for accurate read-only screening. */
+  protected sqlDialectKey(): SqlDialectKey {
+    return 'sqlserver';
+  }
+
   protected quoteIdent(name: string): string {
     return `[${name.replace(/]/g, ']]')}]`;
   }

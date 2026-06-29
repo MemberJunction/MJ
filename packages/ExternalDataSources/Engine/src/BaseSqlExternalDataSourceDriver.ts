@@ -2,6 +2,7 @@ import { ExternalObjectType, ExternalSchemaRelationship } from "@memberjunction/
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
 import { ExternalFkRow, ExternalViewParams } from "./types";
+import { assertReadOnlyNativeQuery, type SqlDialectKey } from "./sqlReadOnlyScreen";
 
 /**
  * Intermediate base for the relational (SQL) external data source drivers
@@ -21,6 +22,27 @@ import { ExternalFkRow, ExternalViewParams } from "./types";
 export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> extends BaseExternalDataSourceDriver<TConnection> {
   /** Quote a single SQL identifier for this dialect, escaping the dialect's embedded quote char. */
   protected abstract quoteIdent(name: string): string;
+
+  /**
+   * Parser dialect used to screen native-query text for read-only safety (see
+   * {@link screenReadOnlyNativeQuery}). Defaults to `'ansi'` (PostgreSQL grammar), which covers
+   * PostgreSQL / MySQL / Oracle / Snowflake; the SQL Server driver overrides this to `'sqlserver'`
+   * so T-SQL specifics (brackets, `TOP`, `@vars`) parse correctly.
+   */
+  protected sqlDialectKey(): SqlDialectKey {
+    return 'ansi';
+  }
+
+  /**
+   * Enforce the read-only contract on a native-query string before it executes. Concrete SQL
+   * drivers MUST call this at the top of `RunNativeQuery` — EDS is read-only, but rendered Query
+   * SQL runs verbatim on a read/write connection and is not covered by the provider-layer
+   * Save/Delete backstop. Fail-closed: throws on stacked statements, unparseable SQL, or any
+   * write/DDL. See {@link assertReadOnlyNativeQuery}.
+   */
+  protected screenReadOnlyNativeQuery(sql: string): void {
+    assertReadOnlyNativeQuery(sql, this.sqlDialectKey());
+  }
 
   /**
    * Dialect-specific ORDER BY + paging suffix appended after the `FROM`/`WHERE` of a SELECT.

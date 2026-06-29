@@ -149,6 +149,8 @@ export class OracleExternalDataSourceDriver extends BaseSqlExternalDataSourceDri
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
+      // Read-only enforcement (EDS is read-only): screen the rendered native SQL before it runs.
+      this.screenReadOnlyNativeQuery(queryText);
       return await this.withConnectionRetry(dataSource, async () => {
         const pool = await this.getConnection(dataSource, contextUser);
         // Oracle binds by name (:name); callers reference parameters by their declared name.

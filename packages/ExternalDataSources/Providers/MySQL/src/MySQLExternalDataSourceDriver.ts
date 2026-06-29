@@ -150,6 +150,8 @@ export class MySQLExternalDataSourceDriver extends BaseSqlExternalDataSourceDriv
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
+      // Read-only enforcement (EDS is read-only): screen the rendered native SQL before it runs.
+      this.screenReadOnlyNativeQuery(queryText);
       return await this.withConnectionRetry(dataSource, async () => {
         const pool = await this.getConnection(dataSource, contextUser);
         // mysql2 uses positional placeholders (?); bind values in array order.

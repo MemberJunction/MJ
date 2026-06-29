@@ -142,6 +142,8 @@ export class PostgresExternalDataSourceDriver extends BaseSqlExternalDataSourceD
   ): Promise<ExternalQueryResult<TRow>> {
     const start = Date.now();
     try {
+      // Read-only enforcement (EDS is read-only): screen the rendered native SQL before it runs.
+      this.screenReadOnlyNativeQuery(queryText);
       return await this.withConnectionRetry(dataSource, async () => {
         const pool = await this.getConnection(dataSource, contextUser);
         // pg uses positional placeholders ($1..$n); bind values in array order.
