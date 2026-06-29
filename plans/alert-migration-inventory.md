@@ -1,0 +1,75 @@
+# Alert Migration — Inventory & Reliable-Detection Markers
+
+Source of truth for migrating bespoke inline alerts onto `<mj-alert>`, and the
+basis for the `check:alerts` coverage/regression script. Built from a 4-agent
+classification sweep of the 92 candidate files (behavior-based, de-noised).
+
+## Totals (genuine inline alerts)
+~**69 genuine alert instances** across ~40 files (the other candidates were
+field-validation, error-STATE screens, toasts, badges, hints, or decorative).
+
+| Bucket | Genuine alerts |
+|---|---|
+| settings + explorer-core | 15 |
+| forms + Generic | 11 |
+| dashboards-B (MCP/Scheduling/SysDiag/…) | 21 |
+| dashboards-A (AI/APIKeys/Actions/…) | 22 |
+
+## ✅ Reliable bespoke-alert markers (migration targets / detection)
+High-confidence — these are genuine inline alerts wherever they appear:
+- **`.alert` (+ `-error` / `-danger` / `-warning` / `-info` / `-success`)** — Bootstrap-style box; most reliable, ~8 components.
+- **`*-banner` family** (genuine): `error-banner`, `mj-error-banner`, `info-banner`, `warning-banner`, `status-banner`, `status-warning-banner`, `sync-result-banner`, `recommendation-banner`, `success-banner`, `merge-warning-banner`, `fields-error-banner`, `mj-flow-node-warning-banner`.
+- **box/card/panel**: `warning-box`, `info-box`, `success-card`, `error-card`†, `error-panel`, `result-header` (with `.success`/`.error`).
+- **`.message` + `.error-message` / `.success-message` pair** (Permissions, ApplicationRoles) — match the PAIR, never bare `.error-message`.
+- **named one-offs** (genuine): `suggestion-error`, `no-scopes-warning`, `key-warning`, `security-note`, `security-notice`, `scope-tip`, `pattern-warning`, `beta-warning`, `parent-info`, `alert-item` (+`alert-error`/`alert-warning`).
+- **`role="alert"`** attribute is a useful secondary signal (several genuine banners set it).
+
+## 🚫 EXCLUDE from markers (false-positives — would over-count)
+- **bare `.error-message`** — the #1 hazard, flagged by all 4 agents. Overloaded: a real banner, a per-field validation msg, an error-tinted field-value box, a `<pre>` error blob, AND a `.data-table` cell. Only count when paired with `.message`, never standalone.
+- **error-STATE screens** → these belong to **`mj-empty-state` (error)**, NOT `mj-alert`: `error-container`, `error-content`, `error-icon`, `retry-button` (application-management, entity-permissions, role-management, settings, user-management, EntityAdmin, agent-editor).
+- **"alert" in name but NOT an alert**: `alert-header`, `clear-header` (panel-header chrome that recolors), `health-banner` / `health-warning` / `health-critical` / `health-alert` / `health-*-text` (hero score banners).
+- **transient/loading**: `saving-overlay`, `sync-progress-banner` (belong to a loading primitive).
+- **field validation / hints / previews**: `field-error`, `error-text`, `field-hint`, `help-text`, `hint`, `section-hint`, `*-hint`, `expiration-preview`, `schedule-cron-preview`, `*-subtitle`, `merge-disabled-hint`, `changes-indicator`.
+- **empty states**: `no-roles`, `no-permissions`, `no-tools-message`, `no-params`, `empty-row`, `empty-*`, `no-search-results`, etc.
+- **badges/pills/chips**: `*-badge`, `*-pill`, `*-chip`, `status-indicator`.
+- **content blocks**: bare `.message` (paragraph), `error-info`, `error-analysis`, `insight-card`, `slow-queries-section`, `no-index-warning-dialog` (modal).
+- **mockup**: `artifacts/design/query-save-ux-mockup.html` (not a live component).
+
+†**`error-card` collision**: a real state-card in `entity-pipeline-panel` (→ mj-alert) vs. a `<pre>`-wrapping content block in `mcp-log-detail-panel` (keep inline). Disambiguate by sibling (`error-title`/`error-icon` ⇒ alert).
+
+## ⚠️ Markerless inline-style alerts (separate heuristic required)
+`mcp-dashboard.html` has genuine error/result banners written as
+`style="background: var(--mj-status-error-bg)…"` with **no class**. Class markers
+miss these. The script needs a second pass: inline `style=` containing
+`--mj-status-(error|success|warning|info)-bg`.
+
+## Scan scope note
+SystemDiagnostics alerts live in the **inline template of
+`system-diagnostics.component.ts`**, not an `.html` file → the script must scan
+`.ts` as well as `.html`.
+
+## Reliable testing (three pillars)
+1. **Component DOM tests** — `alert.component.dom.test.ts` (8 tests: variants, ARIA
+   role logic + override, icon default/suppress, dismiss emits+hides, projection).
+2. **Coverage + regression** — `npm run check:alerts` (`.github/scripts/check-alerts.sh`).
+   Reports canonical `<mj-alert>` vs bespoke (verified markers minus the false-positives
+   above, plus the inline-style heuristic; scans `.ts`). Baseline at start: **0% — 0 / 72**.
+   CI ratchet: `check-alerts.sh --max <N>` fails if bespoke exceeds N; lower N as we migrate.
+   `--list` prints every site.
+3. **Force-state visual harness** — `scripts/alert-states-gallery.sh` renders `<mj-alert>`
+   in every real-world shape (variant × message/title/dismiss/actions/sm), light+dark, using
+   the component's styles **extracted live from source** (no drift) → `plans/alert-screenshots/
+   alert-states.html` + `alert-states-baseline.png`. Server-independent; regenerate after any
+   mj-alert change and diff the screenshot. This solves "conditional UI is invisible" for the
+   component's appearance.
+   - **Per-site context check (manual, needs dev server):** to verify a migrated alert in its
+     real surroundings, temporarily force its `@if` gate true (or set the flag via the dev-mode
+     `ng` debug API), screenshot, revert — the established force-state technique. Used during
+     migration for layout/context spot-checks the static harness can't cover.
+
+## Migration notes
+- **+actions** (need the `[actions]` slot): `entity-pipeline-panel` error-card (Retry), `scheduling-overview` alert-item (Release), `test-run-form` error-banner (Retry), the two `alert alert-danger` matrices (Retry). ~5.
+- **Dismissible** (need `Dismissible`): `conversation-feedback`, `user-profile-settings`, `mcp-dashboard`, SystemDiagnostics telemetry banner.
+- **Token remap on migrate**: `user-app-config` uses Material `--mat-sys-*` tokens.
+- **Visual-review-before-migrate**: `key-warning` (dark key box), `mj-flow-node-warning-banner` (~10px inside a graph node — mj-alert chrome may be too heavy), borderline info/empty hybrids (`no-roles-message`).
+- **Boundary**: don't migrate the `error-container` error-STATE screens here — they're the empty-state effort's.
