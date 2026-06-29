@@ -65,6 +65,7 @@ import {
     SaveSQLResult,
     AfterKeyNotSupportedError,
     IsKeysetPaginationOrderableType,
+    ExternalDataSourceReadRouter,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -1445,6 +1446,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             this.CheckUserReadPermissions(entityInfo.Name, user);
 
+            // ── External data source dispatch ──
+            // Entities backed by an external data source are proxied live through a
+            // driver and have no view/sproc in the MJ DB, so delegate before any SQL
+            // generation. This is a no-op for every MJ-DB entity (ExternalDataSourceID null).
+            if (entityInfo.ExternalDataSourceID) {
+                // Refuse rather than silently bypass Row-Level Security — a remote system can't
+                // enforce MJ's RLS WHERE clauses, so returning unfiltered rows would be a data leak.
+                this.assertExternalReadAllowedUnderRLS(entityInfo, user);
+                // Refuse params we can't honor remotely rather than silently dropping them — most
+                // importantly AfterKey, which would otherwise return the same page on every call.
+                this.assertExternalRunViewParamsSupported(params, entityInfo.Name);
+                // A saved view's stored WhereClause/OrderBy live on viewEntity, not params, and the
+                // normal SQL path that applies them runs below this early return — so fold them in
+                // here, else a UserView over an external entity silently returns unfiltered rows.
+                const externalParams = await this.mergeExternalViewParams(params, viewEntity, user);
+                const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+                if (!externalRouter) {
+                    throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+                }
+                const externalResult = await externalRouter.RunViewExternal<T>(entityInfo, externalParams, user, this);
+                // Apply the same row post-processing MJ-DB reads get (field decryption + datetime
+                // normalization). Without this, an Encrypt-flagged external field surfaces as ciphertext.
+                if (externalResult.Success && externalResult.Results && externalResult.Results.length > 0) {
+                    // Generic-erasure boundary: PostProcessRows operates on Record<string,unknown>[]
+                    // but Results is typed T[]; the double-cast bridges that erasure (not a lazy `any`).
+                    const rows = externalResult.Results as unknown as Record<string, unknown>[];
+                    externalResult.Results = (await this.PostProcessRows(rows, entityInfo, user)) as unknown as T[];
+                }
+                return externalResult;
+            }
+
             // ── Parameters (transform user-provided SQL clauses for platform compatibility) ──
             const extraFilter: string = this.TransformExternalSQLClause((params.ExtraFilter as string) || '', entityInfo);
             const userSearchString: string = params.UserSearchString ?? '';
@@ -2088,6 +2120,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     continue;
                 }
 
+                // External-data-source entities can't participate in DB-side cache validation
+                // (no MJ base view / __mj_UpdatedAt to COUNT/MAX against). Route them to the
+                // standard execution path, which dispatches to the external driver and TTL-caches
+                // correctly via runFullQueryAndCacheResult (permissions are still enforced there
+                // by InternalRunView). Mirrors the AfterKey bypass above.
+                if (entityInfo.ExternalDataSourceID) {
+                    itemsWithoutCacheCheck.push({ index: i, item });
+                    continue;
+                }
+
                 try {
                     this.CheckUserReadPermissions(entityInfo.Name, user);
                     itemsNeedingValidation.push({ index: i, item, entityInfo });
@@ -2332,10 +2374,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // eligibility gate matters: BypassCache/AfterKey/count_only results were
             // never widened and must NOT be written under the superset fingerprint.
             if (this.runViewCacheEligible(params) && LocalCacheManager.Instance.IsInitialized) {
-                const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
-                const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
-                const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-                await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
+                // External entities cache with a TTL (no BaseEntity events to invalidate them);
+                // MJ-DB entities get undefined (event-invalidated as before). A 0 means the
+                // external source has caching disabled — skip the write to avoid stale data.
+                const ttlMs = await this.resolveExternalCacheTTLMs(params, contextUser);
+                if (ttlMs !== 0) {
+                    const rlsWhereClause = this.ComputeRunViewRLSWhereClause(params, contextUser);
+                    const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString, rlsWhereClause);
+                    const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
+                    await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this, ttlMs);
+                }
             }
             // Project the response down to the caller's requested shape AFTER the
             // cache write — the cache keeps the superset, the caller gets their fields.
@@ -2344,6 +2392,142 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return result;
+    }
+
+    /**
+     * Resolves the cache TTL (in ms) for a RunView's entity, or `undefined` for MJ-DB entities
+     * (which use event-based cache invalidation, not TTL). External-data-source entities MUST be
+     * time-bounded — their remote data changes never emit BaseEntity events — so this returns the
+     * data source's DefaultCacheTTLSeconds (via the external router) in ms, or `0` to signal "do
+     * not cache" (TTL disabled on the source, or no router available to resolve one).
+     */
+    protected async resolveExternalCacheTTLMs(params: RunViewParams, contextUser?: UserInfo): Promise<number | undefined> {
+        if (!params.EntityName) return undefined;
+        const entityInfo = this.EntityByName(params.EntityName);
+        if (!entityInfo?.ExternalDataSourceID) return undefined; // MJ-DB entity — event-invalidated, no TTL
+        const router = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+        if (!router) return 0; // external but no router resolvable — don't cache (avoid stale-forever)
+        const ttlSeconds = await router.GetCacheTTLSeconds(entityInfo.ExternalDataSourceID, contextUser, this);
+        return ttlSeconds > 0 ? ttlSeconds * 1000 : 0;
+    }
+
+    /**
+     * Guards external-data-source reads against silently bypassing Row-Level Security. A remote
+     * system can't enforce MJ's RLS WHERE clauses, so if RLS would filter this user's rows we
+     * refuse the read with a clear error rather than returning unfiltered data. Users exempt from
+     * RLS (e.g. admins) get an empty clause and pass through — RLS wouldn't restrict them on an
+     * MJ-DB entity either. Called from the external RunView and Load dispatch points.
+     */
+    protected assertExternalReadAllowedUnderRLS(entityInfo: EntityInfo, user: UserInfo): void {
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            throw new Error(
+                `Entity '${entityInfo.Name}' is backed by an external data source and has Row-Level Security that applies ` +
+                `to this user. RLS cannot be enforced on a remote system, so external reads are refused for RLS-protected ` +
+                `entities to avoid returning unfiltered data. Remove the RLS filter, or do not back this entity with an external data source.`,
+            );
+        }
+    }
+
+    /**
+     * Builds a primary-key WHERE filter for an external single-record Load. Plain (unquoted)
+     * identifiers — each driver applies its own dialect quoting. Quoted values are single-quote-
+     * escaped (doubled) to prevent SQL injection / broken filters from a value containing a quote
+     * (standard SQL escaping that every external SQL driver and the Mongo filter translator
+     * understand); null values become "IS NULL".
+     */
+    /**
+     * Rejects RunView params an external data source can't honor, rather than silently dropping
+     * them. Most important is AfterKey (keyset pagination): the external read path only supports
+     * offset paging, so a silently-dropped AfterKey would return the same page on every call — an
+     * infinite loop / duplicate processing in deep-pagination jobs. Aggregates and a non-empty
+     * UserSearchString likewise can't be evaluated remotely. Throws a clear error naming the param.
+     */
+    protected assertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        if (params.AfterKey) {
+            throw new Error(`Keyset pagination (AfterKey) is not supported for external-data-source entity '${entityName}'. Use StartRow/MaxRows offset paging instead.`);
+        }
+        if (params.Aggregates && params.Aggregates.length > 0) {
+            throw new Error(`Aggregates are not supported for external-data-source entity '${entityName}'. Author an external MJ Query for aggregate results instead.`);
+        }
+        if (typeof params.UserSearchString === 'string' && params.UserSearchString.trim().length > 0) {
+            throw new Error(`UserSearchString is not supported for external-data-source entity '${entityName}'. Use ExtraFilter instead.`);
+        }
+        // Apply the same forbidden-keyword screen the MJ-DB path runs on caller-supplied SQL
+        // clauses before they're passed to the remote driver. The driver still parameterizes
+        // values, but this blocks obvious injection of statement-terminating / DDL keywords.
+        // NOTE: this is a deliberately conservative cross-dialect pre-filter applied to EVERY
+        // external source, including MongoDB (whose real parser is MongoFilterTranslator) — a Mongo
+        // filter containing a SQL-ish token is screened here even though Mongo never builds SQL.
+        // Acceptable belt-and-suspenders; scope to SQL drivers if it ever proves noisy.
+        const extraFilter = (params.ExtraFilter as string) || '';
+        if (extraFilter && !this.ValidateUserProvidedSQLClause(extraFilter)) {
+            throw new Error(`Invalid ExtraFilter clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
+        }
+        const orderBy = (params.OrderBy as string) || '';
+        if (orderBy && !this.ValidateUserProvidedSQLClause(orderBy)) {
+            throw new Error(`Invalid OrderBy clause for external-data-source entity '${entityName}': contains one or more forbidden keywords.`);
+        }
+    }
+
+    /**
+     * Folds a saved view's stored WhereClause and OrderByClause into the RunView params before
+     * external dispatch. The external branch returns before the normal SQL path that applies
+     * them, so without this a UserView over an external entity would silently return unfiltered,
+     * unordered rows. The view's WhereClause is ANDed with any caller ExtraFilter; the view's
+     * OrderByClause is used only when the caller supplied no OrderBy. Returns params unchanged
+     * when there is no saved view.
+     */
+    protected async mergeExternalViewParams(
+        params: RunViewParams,
+        viewEntity: MJUserViewEntityExtended | null,
+        user: UserInfo,
+    ): Promise<RunViewParams> {
+        if (!viewEntity) return params;
+        const merged: RunViewParams = { ...params };
+        const callerFilter = (params.ExtraFilter as string) || '';
+        if (viewEntity.WhereClause && viewEntity.WhereClause.length > 0) {
+            const renderedWhere = (await this.RenderViewWhereClause(viewEntity, user))?.trim();
+            if (renderedWhere) {
+                merged.ExtraFilter = callerFilter ? `(${callerFilter}) AND (${renderedWhere})` : renderedWhere;
+            }
+        }
+        if ((!params.OrderBy || (params.OrderBy as string).length === 0) && viewEntity.OrderByClause) {
+            merged.OrderBy = viewEntity.OrderByClause;
+        }
+        // The view's WhereClause/OrderByClause weren't covered by the pre-merge screen in
+        // assertExternalRunViewParamsSupported — validate the MERGED clauses before they reach the
+        // remote driver (mirrors the MJ-DB path, which validates the post-merge OrderBy).
+        const mergedFilter = (merged.ExtraFilter as string) || '';
+        if (mergedFilter && !this.ValidateUserProvidedSQLClause(mergedFilter)) {
+            throw new Error(`Invalid effective filter for external-data-source view '${viewEntity.Name}': the saved view's WhereClause contains one or more forbidden keywords.`);
+        }
+        const mergedOrderBy = (merged.OrderBy as string) || '';
+        if (mergedOrderBy && !this.ValidateUserProvidedSQLClause(mergedOrderBy)) {
+            throw new Error(`Invalid effective OrderBy for external-data-source view '${viewEntity.Name}': the saved view's OrderByClause contains one or more forbidden keywords.`);
+        }
+        return merged;
+    }
+
+    protected buildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
+        return compositeKey.KeyValuePairs.map(val => {
+            const pk = entityInfo.PrimaryKeys.find(p => p.Name.trim().toLowerCase() === val.FieldName.trim().toLowerCase());
+            if (!pk) throw new Error(`Primary key ${val.FieldName} not found in entity ${entityInfo.Name}`);
+            if (val.Value === null || val.Value === undefined) {
+                return `${pk.Name} IS NULL`;
+            }
+            if (!pk.NeedsQuotes) {
+                // Numeric/boolean PKs interpolate unquoted — validate the value really is
+                // numeric/boolean so a string like "1 OR 1=1" can't be injected into the
+                // remote WHERE clause (string PKs go through the quote-escaped branch below).
+                const v = val.Value;
+                if (typeof v !== 'number' && typeof v !== 'boolean' && !/^-?\d+(\.\d+)?$/.test(String(v))) {
+                    throw new Error(`Invalid primary key value for '${pk.Name}' on external entity '${entityInfo.Name}': expected a numeric or boolean value.`);
+                }
+                return `${pk.Name}=${String(v)}`;
+            }
+            return `${pk.Name}='${String(val.Value).replace(/'/g, "''")}'`;
+        }).join(' AND ');
     }
 
     /**
@@ -2826,6 +3010,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // Process parameters (composition + Nunjucks templates)
             const { finalSQL, appliedParameters } = this.processQueryParameters(query, params.Parameters, contextUser);
 
+            // ── External data source dispatch ──
+            // Queries bound to an external data source execute their (now fully-rendered)
+            // native SQL via the driver, not the MJ DB. No-op for MJ-DB queries.
+            if (query.ExternalDataSourceID) {
+                const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+                if (!externalRouter) {
+                    throw new Error(`Query '${query.Name}' is bound to an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+                }
+                return await this.runExternalQueryWithCache(query, finalSQL, params, externalRouter, contextUser);
+            }
+
             // Execute query — use SQL-level paging when requested, else fetch all rows
             const useSQLPaging = QueryPagingEngine.ShouldPage(params.StartRow, params.MaxRows);
             let paginatedResult: Record<string, unknown>[];
@@ -2979,6 +3174,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Finds a query from RunQueryParams and validates user permissions.
      * Uses `resolveQuery()` for lookup and `ValidateQueryForExecution()` for permissions.
      */
+    /**
+     * A saved query is "external" when it resolves to a Query bound to an external data source.
+     * Used by the base RunQuery CacheLocal layer to defer external-query caching to
+     * InternalRunQuery's runExternalQueryWithCache. Non-throwing — resolves from cached metadata.
+     */
+    protected override IsExternalQuery(params: RunQueryParams): boolean {
+        if (params.SQL || (!params.QueryID && !params.QueryName)) return false; // ad-hoc SQL is never external-cached here
+        return !!this.resolveQuery(params)?.ExternalDataSourceID;
+    }
+
     protected findAndValidateQuery(params: RunQueryParams, contextUser?: UserInfo): MJQueryEntityExtended {
         const query = this.resolveQuery(params);
         if (!query) {
@@ -3032,6 +3237,101 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         return { finalSQL: result.FinalSQL, appliedParameters: result.AppliedParameters };
+    }
+
+    /**
+     * Checks the columns an external-data-source query returned against the fields the Query
+     * *declares* (its QueryField metadata) and logs a warning naming any declared field that
+     * is missing — the signature of a remote object whose columns have drifted (renamed or
+     * dropped).
+     *
+     * Per the External Data Sources plan this is intentionally NON-FATAL: the rows are still
+     * returned unchanged. Drift is surfaced for diagnosis, not treated as a hard failure —
+     * the declared field metadata can legitimately lag the remote schema, and the plan calls
+     * for "a warning logged, rows still returned." Matching is case-insensitive because remote
+     * dialects differ in column casing (e.g. Snowflake uppercases unquoted identifiers). No-op
+     * when the query declares no fields or returned no rows (columns can't be inspected without
+     * a row, and an empty result is legitimate). Extra columns beyond the declared set are fine.
+     */
+    /**
+     * Executes an external-data-source query with TTL-based result caching keyed off the data
+     * source's DefaultCacheTTLSeconds. External queries can't be event-invalidated (their data
+     * lives on a remote system), so a time-bounded cache is the read-cost mitigation the plan
+     * calls for — notably for warehouses like Snowflake. The data source's TTL is the source of
+     * truth (a TTL of <= 0 disables caching for the source); field-drift warnings still apply to
+     * freshly-fetched rows. Ad-hoc SQL (params.SQL) is never cached.
+     */
+    protected async runExternalQueryWithCache(
+        query: MJQueryEntityExtended,
+        finalSQL: string,
+        params: RunQueryParams,
+        router: ExternalDataSourceReadRouter,
+        contextUser?: UserInfo,
+    ): Promise<RunQueryResult> {
+        const externalDataSourceID = query.ExternalDataSourceID!;
+        const ttlSeconds = await router.GetCacheTTLSeconds(externalDataSourceID, contextUser, this);
+        const cacheable = !params.SQL && ttlSeconds > 0 && LocalCacheManager.Instance.IsInitialized;
+
+        let fingerprint: string | undefined;
+        if (cacheable) {
+            // MaxRows/StartRow shape the result set, and the data source ID disambiguates slots.
+            const fingerprintParams: Record<string, unknown> = {
+                ...(params.Parameters ?? {}),
+                __maxRows: params.MaxRows ?? -1,
+                __startRow: params.StartRow ?? 0,
+                __eds: externalDataSourceID,
+            };
+            fingerprint = LocalCacheManager.Instance.GenerateRunQueryFingerprint(query.ID, query.Name, fingerprintParams, this.InstanceConnectionString);
+            const cached = await LocalCacheManager.Instance.GetRunQueryResult(fingerprint); // TTL-enforced
+            if (cached) {
+                return {
+                    QueryID: cached.queryId ?? query.ID,
+                    QueryName: query.Name,
+                    Success: true,
+                    Results: cached.results as RunQueryResult['Results'],
+                    RowCount: cached.results.length,
+                    TotalRowCount: cached.rowCount ?? cached.results.length,
+                    ExecutionTime: 0,
+                    ErrorMessage: '',
+                    CacheHit: true,
+                    CacheKey: fingerprint,
+                };
+            }
+        }
+
+        const externalResult = await router.RunQueryExternal(externalDataSourceID, query.ID, query.Name, finalSQL, params, contextUser, this);
+        const checked = this.warnIfExternalQueryFieldsMissing(query, externalResult);
+
+        if (cacheable && fingerprint && checked.Success) {
+            // Fire-and-forget store with the data source's TTL (ms).
+            LocalCacheManager.Instance.SetRunQueryResult(
+                fingerprint, query.Name, checked.Results, '', checked.TotalRowCount, query.ID, ttlSeconds * 1000,
+            ).catch(e => LogError(`External RunQuery cache write failed: ${e}`));
+        }
+        return checked;
+    }
+
+    protected warnIfExternalQueryFieldsMissing(query: MJQueryEntityExtended, result: RunQueryResult): RunQueryResult {
+        if (!result.Success || !result.Results || result.Results.length === 0) {
+            return result;
+        }
+        const declaredFields = query.QueryFields;
+        if (!declaredFields || declaredFields.length === 0) {
+            return result;
+        }
+        const presentKeys = new Set(
+            Object.keys(result.Results[0] as Record<string, unknown>).map(k => k.trim().toLowerCase()),
+        );
+        const missing = declaredFields
+            .map(f => f.Name)
+            .filter(name => name && !presentKeys.has(name.trim().toLowerCase()));
+        if (missing.length > 0) {
+            LogStatus(
+                `Warning: external query '${query.Name}' returned rows missing declared field(s): ${missing.join(', ')}. ` +
+                `The remote object's columns may have drifted from the query's field metadata. Rows are returned as-is.`,
+            );
+        }
+        return result;
     }
 
     /**
@@ -3252,6 +3552,37 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo,
     ): Promise<Record<string, unknown> | null> {
         const entityInfo = entity.EntityInfo;
+
+        // ── External data source dispatch ──
+        // Entities backed by an external data source have no MJ view/sproc, so proxy the
+        // single-record load through the external router as a RunView with a primary-key
+        // filter and MaxRows=1. No-op for every MJ-DB entity (ExternalDataSourceID null).
+        // Relationship loading is intentionally not supported for external entities (they
+        // are read-only leaf records); entityRelationshipsToLoad is ignored here.
+        if (entityInfo.ExternalDataSourceID) {
+            // Refuse rather than silently bypass Row-Level Security (a remote system can't enforce it).
+            this.assertExternalReadAllowedUnderRLS(entityInfo, user);
+            const externalRouter = MJGlobal.Instance.ClassFactory.CreateInstance<ExternalDataSourceReadRouter>(ExternalDataSourceReadRouter);
+            if (!externalRouter) {
+                throw new Error(`Entity '${entityInfo.Name}' is backed by an external data source but no ExternalDataSourceReadRouter is registered. Ensure @memberjunction/external-data-sources is loaded.`);
+            }
+            const externalFilter = this.buildExternalPrimaryKeyFilter(entityInfo, compositeKey);
+            const externalResult = await externalRouter.RunViewExternal<Record<string, unknown>>(
+                entityInfo,
+                { EntityName: entityInfo.Name, ExtraFilter: externalFilter, MaxRows: 1 },
+                user,
+                this,
+            );
+            if (!externalResult.Success) {
+                throw new Error(`External Load failed for '${entityInfo.Name}': ${externalResult.ErrorMessage}`);
+            }
+            if (externalResult.Results && externalResult.Results.length > 0) {
+                // Same post-processing MJ-DB Load applies (field decryption + datetime normalization).
+                const processed = await this.PostProcessRows(externalResult.Results as Record<string, unknown>[], entityInfo, user);
+                return processed.length > 0 ? processed[0] : null;
+            }
+            return null;
+        }
 
         // Build WHERE from composite key
         const where = compositeKey.KeyValuePairs.map(val => {
@@ -3474,6 +3805,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const entityName = String(item['Entity']);
             const entityID = String(item['EntityID']);
             const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
+
+            // External-data-source entities have no MJ base view — their data is proxied live and
+            // can't be served through the dataset's batched MJ-DB SQL path. Fail loud for that item
+            // rather than silently querying a non-existent (or wrongly same-named) local view.
+            const itemEntity = this.EntityByName(entityName);
+            if (itemEntity?.ExternalDataSourceID) {
+                errorResults.push({
+                    EntityID: entityID,
+                    EntityName: entityName,
+                    Code: code,
+                    Results: [],
+                    LatestUpdateDate: undefined,
+                    Status: `Dataset item '${code}' references external-data-source entity '${entityName}', which is not supported in datasets (its data is proxied live, not stored in MJ).`,
+                    Success: false,
+                });
+                continue;
+            }
 
             // Build effective filter (WhereClause + optional runtime ItemFilter)
             let effectiveFilter = whereClause;

@@ -400,8 +400,26 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         pkParamNames.push(pk.CodeName);
       }
       const pkParamsList = pkParamNames.join(', ');
+      // CompositeKey.Validate() matches FieldName against entity.Fields…Name (the DB field name), so the
+      // key MUST use pk.Name — not pk.CodeName, which diverges for PKs whose DB name needs sanitizing
+      // (spaces, leading digit, reserved word). The bound value still comes from the CodeName arg variable.
+      const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.Name}', Value: ${pk.CodeName} }`).join(', ');
 
-      sRet += `
+      if (entity.ExternalDataSourceID) {
+        // External-data-source entities have no MJ base view to query — proxy the single-record
+        // load through a BaseEntity object, which the provider dispatches to the external read
+        // router (same path as the grid's RunView). RLS + field post-processing are applied there.
+        sRet += `
+    @Query(() => ${serverGraphQLTypeName}, { nullable: true })
+    async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+        this.CheckUserReadPermissions('${entity.Name}', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });${auditAccessCode}
+        const compositeKey = new CompositeKey([${pkCompositeKeyPairs}]);
+        return this.LoadExternalRecordByKey<${serverGraphQLTypeName}>('${entity.Name}', compositeKey, provider, userPayload);
+    }
+    `;
+      } else {
+        sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
     async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
@@ -412,6 +430,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
         return result;
     }
     `;
+      }
       if (entity.AllowAllRowsAPI) {
         // this entity allows a query to return all rows, so include that type of query next
         sRet += `
@@ -551,6 +570,13 @@ export class ${classPrefix}${typeNameBase}Input {`;
 
     // MUTATIONS
     // First, determine if the entity has either Create/Edit allowed, if either, we need to generate a InputType
+    //
+    // External-data-source entities intentionally generate mutations like any other entity (gated only
+    // by Allow*API + !VirtualEntity). The generated resolver routes through CreateRecord/UpdateRecord/
+    // DeleteRecord → entity.Save()/.Delete(), and an external entity extends ReadOnlyExternalBaseEntity
+    // whose Save/Delete reject (returning false + LatestResult) BEFORE any sproc is reached — so the
+    // mutation fails loudly with the read-only reason rather than silently not existing. (No sproc is
+    // generated for these entities, but none is ever called.)
     if (entity.AllowCreateAPI && !entity.VirtualEntity) {
       // generate a create mutation
       sRet += `

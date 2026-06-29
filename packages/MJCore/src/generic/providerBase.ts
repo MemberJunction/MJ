@@ -1577,6 +1577,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - Optional user context for permissions (required server-side)
      * @returns The query results
      */
+    /**
+     * Whether a saved query is bound to an external data source. The base returns false;
+     * providers that support external data sources override this (consulting query metadata)
+     * so the outer RunQuery CacheLocal layer can defer to InternalRunQuery's own external
+     * TTL caching. Synchronous + non-throwing: resolves from cached metadata only.
+     */
+    protected IsExternalQuery(_params: RunQueryParams): boolean {
+        return false;
+    }
+
     public async RunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // Shallow-clone for symmetry with RunView — pipeline must never mutate caller objects
         params = { ...params };
@@ -1594,6 +1604,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const queryCacheEngaged = params.CacheLocal === true
             && !params.SQL
             && (!!params.QueryID || !!params.QueryName)
+            // External-data-source queries own their own TTL caching inside InternalRunQuery
+            // (runExternalQueryWithCache, keyed to the source's DefaultCacheTTLSeconds). This
+            // outer CacheLocal layer would otherwise write a SECOND, divergent slot with no/foreign
+            // TTL (CacheLocalTTL) — a stale-forever hazard since external data can't be event-invalidated.
+            && !this.IsExternalQuery(params)
             && LocalCacheManager.Instance.IsInitialized;
         let queryFingerprint: string | undefined;
         if (queryCacheEngaged) {

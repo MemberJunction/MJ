@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/external-data-source-postgres",
+  "version": "5.43.0",
+  "description": "PostgreSQL driver for the MemberJunction External Data Sources primitive. Registers a BaseExternalDataSourceDriver implementation via @RegisterClass(BaseExternalDataSourceDriver, 'PostgresExternalDriver') using the node-postgres (pg) client for live, read-only proxied access to an external PostgreSQL database.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/external-data-sources": "5.43.0",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "@types/pg": "^8.11.11",
+    "tsc-alias": "^1.8.16",
+    "ts-node-dev": "^2.0.0",
+    "vitest": "^3.1.1",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

@@ -12,8 +12,14 @@ import {
     UserInfo,
     RunQueryParams,
     RunQueryResult,
+    RunViewParams,
+    EntityInfo,
+    CompositeKey,
+    BaseEntity,
+    EntitySaveOptions,
+    EntityDeleteOptions,
 } from '@memberjunction/core';
-import { MJQueryEntityExtended, QueryEngine } from '@memberjunction/core-entities';
+import { MJQueryEntityExtended, MJUserViewEntityExtended, QueryEngine } from '@memberjunction/core-entities';
 
 /**
  * Test subclass exposing protected pipeline methods for testing.
@@ -119,6 +125,29 @@ class TestPipelineProvider extends GenericDatabaseProvider {
         contextUser?: UserInfo,
     ): void {
         this.auditQueryExecution(query, params, finalSQL, rowCount, totalRowCount, executionTime, contextUser);
+    }
+
+    public testWarnIfExternalQueryFieldsMissing(
+        query: MJQueryEntityExtended,
+        result: RunQueryResult,
+    ): RunQueryResult {
+        return this.warnIfExternalQueryFieldsMissing(query, result);
+    }
+
+    public testAssertExternalReadAllowedUnderRLS(entityInfo: EntityInfo, user: UserInfo): void {
+        this.assertExternalReadAllowedUnderRLS(entityInfo, user);
+    }
+
+    public testBuildExternalPrimaryKeyFilter(entityInfo: EntityInfo, compositeKey: CompositeKey): string {
+        return this.buildExternalPrimaryKeyFilter(entityInfo, compositeKey);
+    }
+
+    public testAssertExternalRunViewParamsSupported(params: RunViewParams, entityName: string): void {
+        this.assertExternalRunViewParamsSupported(params, entityName);
+    }
+
+    public testMergeExternalViewParams(params: RunViewParams, viewEntity: MJUserViewEntityExtended | null, user: UserInfo): Promise<RunViewParams> {
+        return this.mergeExternalViewParams(params, viewEntity, user);
     }
 }
 
@@ -847,6 +876,284 @@ ORDER BY bridge.LastName, bridge.FirstName`,
             );
 
             expect(createAuditSpy).toHaveBeenCalled();
+        });
+    });
+
+    // ================================================================
+    // warnIfExternalQueryFieldsMissing (external data source queries)
+    // Drift detection is intentionally NON-FATAL per the EDS plan: warn, return rows.
+    // ================================================================
+    describe('warnIfExternalQueryFieldsMissing', () => {
+        const makeExternalQuery = (name: string, fieldNames: string[]): MJQueryEntityExtended =>
+            ({ Name: name, QueryFields: fieldNames.map(n => ({ Name: n })) } as unknown as MJQueryEntityExtended);
+
+        const makeResult = (rows: Record<string, unknown>[]): RunQueryResult => ({
+            Success: true,
+            QueryID: 'q-ext',
+            QueryName: 'Ext',
+            Results: rows,
+            RowCount: rows.length,
+            TotalRowCount: rows.length,
+            ExecutionTime: 1,
+            ErrorMessage: '',
+        });
+
+        it('passes through when all declared fields are present', () => {
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
+                makeExternalQuery('Sales', ['Region', 'Amount']),
+                makeResult([{ Region: 'East', Amount: 100 }]),
+            );
+            expect(out.Success).toBe(true);
+            expect(out.Results).toHaveLength(1);
+        });
+
+        it('matches declared fields case-insensitively (e.g. Snowflake uppercased columns)', () => {
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
+                makeExternalQuery('Sales', ['Region', 'Amount']),
+                makeResult([{ REGION: 'East', AMOUNT: 100 }]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('allows extra columns beyond the declared set', () => {
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
+                makeExternalQuery('Sales', ['Region']),
+                makeResult([{ Region: 'East', Amount: 100, Extra: 'x' }]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('is non-fatal when declared fields are missing — warns but returns the rows unchanged', () => {
+            // Per the EDS plan, schema drift is logged as a warning, not failed. Rows pass through.
+            const rows = [{ Region: 'East', Amount: 100 }];
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
+                makeExternalQuery('Sales', ['Region', 'Amount', 'Margin']),
+                makeResult(rows),
+            );
+            expect(out.Success).toBe(true);
+            expect(out.Results).toEqual(rows);
+            expect(out.RowCount).toBe(1);
+            expect(out.ErrorMessage).toBe('');
+        });
+
+        it('no-ops when the query declares no fields', () => {
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
+                makeExternalQuery('Sales', []),
+                makeResult([{ Anything: 1 }]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('no-ops when the result has no rows (columns cannot be inspected)', () => {
+            const out = provider.testWarnIfExternalQueryFieldsMissing(
+                makeExternalQuery('Sales', ['Region']),
+                makeResult([]),
+            );
+            expect(out.Success).toBe(true);
+        });
+
+        it('passes an already-failed result through unchanged', () => {
+            const failed: RunQueryResult = { ...makeResult([]), Success: false, ErrorMessage: 'driver exploded' };
+            const out = provider.testWarnIfExternalQueryFieldsMissing(makeExternalQuery('Sales', ['Region']), failed);
+            expect(out.Success).toBe(false);
+            expect(out.ErrorMessage).toBe('driver exploded');
+        });
+    });
+
+    // ================================================================
+    // External read security guards: RLS refusal + Load PK filter escaping
+    // ================================================================
+    describe('assertExternalReadAllowedUnderRLS', () => {
+        const entityWithRLS = (clause: string): EntityInfo =>
+            ({ Name: 'Sales', GetUserRowLevelSecurityWhereClause: () => clause } as unknown as EntityInfo);
+
+        it('throws when RLS applies to the user (non-empty clause) — refuses, never silently bypasses', () => {
+            expect(() => provider.testAssertExternalReadAllowedUnderRLS(entityWithRLS("UserID = 'u-1'"), mockUser))
+                .toThrow(/Row-Level Security/);
+        });
+
+        it('does not throw when there is no RLS clause (empty) — e.g. no RLS configured, or exempt user', () => {
+            expect(() => provider.testAssertExternalReadAllowedUnderRLS(entityWithRLS(''), mockUser)).not.toThrow();
+        });
+    });
+
+    describe('buildExternalPrimaryKeyFilter', () => {
+        const entity = (pks: { Name: string; NeedsQuotes: boolean }[]): EntityInfo =>
+            ({ Name: 'Sales', PrimaryKeys: pks } as unknown as EntityInfo);
+        const key = (pairs: { FieldName: string; Value: unknown }[]): CompositeKey =>
+            ({ KeyValuePairs: pairs } as unknown as CompositeKey);
+
+        it('quotes and emits a string primary key', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'ID', Value: 'abc' }]),
+            )).toBe("ID='abc'");
+        });
+
+        it('escapes single quotes (doubled) — blocks injection / broken filters', () => {
+            // A value with a quote must not break out of the literal.
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'Name', NeedsQuotes: true }]),
+                key([{ FieldName: 'Name', Value: "O'Brien" }]),
+            )).toBe("Name='O''Brien'");
+
+            // Classic injection payload is neutralized (every quote doubled).
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'ID', Value: "x' OR '1'='1" }]),
+            )).toBe("ID='x'' OR ''1''=''1'");
+        });
+
+        it('emits numeric (non-quoted) primary keys verbatim', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: false }]),
+                key([{ FieldName: 'ID', Value: 42 }]),
+            )).toBe('ID=42');
+        });
+
+        it('joins composite keys with AND', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'OrgID', NeedsQuotes: true }, { Name: 'Seq', NeedsQuotes: false }]),
+                key([{ FieldName: 'OrgID', Value: 'a' }, { FieldName: 'Seq', Value: 3 }]),
+            )).toBe("OrgID='a' AND Seq=3");
+        });
+
+        it('emits IS NULL for a null key value rather than broken SQL', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'ID', Value: null }]),
+            )).toBe('ID IS NULL');
+        });
+
+        it('throws when a key field is not a primary key of the entity', () => {
+            expect(() => provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: true }]),
+                key([{ FieldName: 'Bogus', Value: 'x' }]),
+            )).toThrow(/Primary key Bogus not found/);
+        });
+
+        it('rejects a non-numeric string for a non-quoted (numeric) PK — blocks unquoted injection', () => {
+            expect(() => provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: false }]),
+                key([{ FieldName: 'ID', Value: '1 OR 1=1' }]),
+            )).toThrow(/expected a numeric or boolean value/);
+        });
+
+        it('accepts a numeric-looking string and a boolean for a non-quoted PK', () => {
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'ID', NeedsQuotes: false }]),
+                key([{ FieldName: 'ID', Value: '42' }]),
+            )).toBe('ID=42');
+            expect(provider.testBuildExternalPrimaryKeyFilter(
+                entity([{ Name: 'Flag', NeedsQuotes: false }]),
+                key([{ FieldName: 'Flag', Value: true }]),
+            )).toBe('Flag=true');
+        });
+    });
+
+    describe('assertExternalRunViewParamsSupported', () => {
+        it('throws on AfterKey (keyset pagination) — prevents the silent same-page-forever loop', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', AfterKey: { KeyValuePairs: [{ FieldName: 'ID', Value: '1' }] } } as unknown as RunViewParams,
+                'Sales',
+            )).toThrow(/Keyset pagination \(AfterKey\) is not supported/);
+        });
+
+        it('throws on Aggregates', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', Aggregates: [{ Expression: 'COUNT(*)' }] } as unknown as RunViewParams,
+                'Sales',
+            )).toThrow(/Aggregates are not supported/);
+        });
+
+        it('throws on a non-empty UserSearchString', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', UserSearchString: 'acme' } as RunViewParams,
+                'Sales',
+            )).toThrow(/UserSearchString is not supported/);
+        });
+
+        it('throws on an ExtraFilter containing forbidden SQL keywords', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', ExtraFilter: "Region='NW'; DROP TABLE Sales" } as RunViewParams,
+                'Sales',
+            )).toThrow(/Invalid ExtraFilter clause/);
+        });
+
+        it('throws on an OrderBy containing forbidden SQL keywords', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', OrderBy: 'Amount; DELETE FROM Sales' } as RunViewParams,
+                'Sales',
+            )).toThrow(/Invalid OrderBy clause/);
+        });
+
+        it('does not throw for supported params (filter/order/page/fields) or empty search', () => {
+            expect(() => provider.testAssertExternalRunViewParamsSupported(
+                { EntityName: 'Sales', ExtraFilter: "Region='NW'", OrderBy: 'Amount DESC', MaxRows: 50, StartRow: 100, Fields: ['ID'], UserSearchString: '  ' } as RunViewParams,
+                'Sales',
+            )).not.toThrow();
+        });
+    });
+
+    describe('mergeExternalViewParams', () => {
+        const user = { ID: 'u1' } as UserInfo;
+        const view = (overrides: Partial<{ WhereClause: string; OrderByClause: string }>) =>
+            ({ WhereClause: '', OrderByClause: '', ...overrides } as unknown as MJUserViewEntityExtended);
+
+        it('returns params unchanged when there is no saved view', async () => {
+            const params = { EntityName: 'Sales', ExtraFilter: "Region='NW'" } as RunViewParams;
+            const merged = await provider.testMergeExternalViewParams(params, null, user);
+            expect(merged).toBe(params);
+        });
+
+        it("ANDs the view's WhereClause with the caller's ExtraFilter", async () => {
+            const params = { EntityName: 'Sales', ExtraFilter: "Region='NW'" } as RunViewParams;
+            const merged = await provider.testMergeExternalViewParams(params, view({ WhereClause: "Status='Active'" }), user);
+            expect(merged.ExtraFilter).toBe("(Region='NW') AND (Status='Active')");
+        });
+
+        it("uses the view's WhereClause alone when the caller supplied no ExtraFilter", async () => {
+            const merged = await provider.testMergeExternalViewParams({ EntityName: 'Sales' } as RunViewParams, view({ WhereClause: "Status='Active'" }), user);
+            expect(merged.ExtraFilter).toBe("Status='Active'");
+        });
+
+        it("applies the view's OrderByClause only when the caller supplied no OrderBy", async () => {
+            const withCaller = await provider.testMergeExternalViewParams({ EntityName: 'Sales', OrderBy: 'Amount DESC' } as RunViewParams, view({ OrderByClause: 'Name ASC' }), user);
+            expect(withCaller.OrderBy).toBe('Amount DESC');
+            const noCaller = await provider.testMergeExternalViewParams({ EntityName: 'Sales' } as RunViewParams, view({ OrderByClause: 'Name ASC' }), user);
+            expect(noCaller.OrderBy).toBe('Name ASC');
+        });
+
+        it("rejects a view WhereClause containing forbidden SQL keywords (validated post-merge)", async () => {
+            await expect(provider.testMergeExternalViewParams(
+                { EntityName: 'Sales' } as RunViewParams, view({ WhereClause: "Status='X'; DROP TABLE Sales" }), user,
+            )).rejects.toThrow(/Invalid effective filter/);
+        });
+
+        it("rejects a view OrderByClause containing forbidden SQL keywords", async () => {
+            await expect(provider.testMergeExternalViewParams(
+                { EntityName: 'Sales' } as RunViewParams, view({ OrderByClause: 'Name; DELETE FROM Sales' }), user,
+            )).rejects.toThrow(/Invalid effective OrderBy/);
+        });
+    });
+
+    describe('provider read-only enforcement for external entities', () => {
+        // Provider-layer backstop: Save/Delete must refuse an external-data-source entity even when
+        // its generated class is NOT ReadOnlyExternalBaseEntity (e.g. an explicit custom subclass).
+        const user = { ID: 'u1' } as UserInfo;
+        const extEntity = {
+            EntityInfo: { ExternalDataSourceID: 'ds-1', Name: 'Ext Sales' },
+            RegisterTransactionPreprocessing: () => { /* no-op for the refusal path */ },
+        } as unknown as BaseEntity;
+
+        // Save (provider layer) rethrows; Delete returns false (MJ's Delete-is-boolean convention) —
+        // each matches the existing AllowCreate/AllowDelete checks right beside the new guards.
+        it('Save() refuses an external-data-source entity (throws read-only)', async () => {
+            await expect(provider.Save(extEntity, user, undefined as unknown as EntitySaveOptions)).rejects.toThrow(/read-only/);
+        });
+
+        it('Delete() refuses an external-data-source entity (returns false)', async () => {
+            await expect(provider.Delete(extEntity, undefined as unknown as EntityDeleteOptions, user)).resolves.toBe(false);
         });
     });
 });

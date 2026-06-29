@@ -1,0 +1,43 @@
+{
+  "name": "@memberjunction/external-data-source-snowflake",
+  "version": "5.43.0",
+  "description": "Snowflake driver for the MemberJunction External Data Sources primitive. Registers a BaseExternalDataSourceDriver implementation via @RegisterClass(BaseExternalDataSourceDriver, 'SnowflakeExternalDriver') using the official snowflake-sdk for live, read-only proxied access to a Snowflake account.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/external-data-sources": "5.43.0"
+  },
+  "peerDependencies": {
+    "snowflake-sdk": "^2.4.0"
+  },
+  "peerDependenciesMeta": {
+    "snowflake-sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "@types/snowflake-sdk": "^1.6.0",
+    "tsc-alias": "^1.8.16",
+    "ts-node-dev": "^2.0.0",
+    "vitest": "^3.1.1",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

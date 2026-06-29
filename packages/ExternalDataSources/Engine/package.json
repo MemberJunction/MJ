@@ -1,0 +1,34 @@
+{
+  "name": "@memberjunction/external-data-sources",
+  "version": "5.43.0",
+  "description": "MemberJunction: External Data Sources — live, runtime-proxied read access to remote data systems (Snowflake, Oracle, MongoDB, external SQL Server / PostgreSQL / MySQL) via pluggable @RegisterClass drivers.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.43.0",
+    "@memberjunction/global": "5.43.0",
+    "@memberjunction/core-entities": "5.43.0",
+    "@memberjunction/credentials": "5.43.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "tsc-alias": "^1.8.16",
+    "ts-node-dev": "^2.0.0",
+    "vitest": "^3.1.1",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

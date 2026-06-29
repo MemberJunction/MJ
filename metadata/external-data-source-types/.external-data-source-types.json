@@ -1,0 +1,108 @@
+[
+  {
+    "fields": {
+      "Name": "PostgreSQL (External)",
+      "Description": "Live, read-only proxied access to an external PostgreSQL database via the node-postgres (pg) driver. Use for querying a Postgres instance that lives outside the MemberJunction database.",
+      "DriverClass": "PostgresExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "pgsql",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6B667710-EE23-4FA1-81BB-B867F008DD17"
+    },
+    "sync": {
+      "lastModified": "2026-06-15T20:41:16.512Z",
+      "checksum": "3b92dc18205802e246f1fdb381b2246970f9e679c8500ea5fca87202fb2eaaa3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Snowflake (External)",
+      "Description": "Live, read-only proxied access to a Snowflake account via the official snowflake-sdk. Supports password, programmatic access token (PAT), and key-pair (SNOWFLAKE_JWT) authentication. ANSI SQL with LIMIT/OFFSET paging.",
+      "DriverClass": "SnowflakeExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "ansi",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "94E7A2F9-42B8-4942-964F-3BCD94981BBA"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MongoDB (External)",
+      "Description": "Live, read-only proxied access to an external MongoDB database via the official mongodb driver. RunView filters use a contained SQL-WHERE -> Mongo translation; native queries run aggregation pipelines supplied as JSON. Schema is inferred by sampling documents.",
+      "DriverClass": "MongoExternalDriver",
+      "MetadataIntrospectionStrategy": "SampledDocuments",
+      "FilterDialect": "mongo-ast",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D38EF7F6-8C96-4ED1-A626-11770D7B84ED"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SQL Server (External)",
+      "Description": "Live, read-only proxied access to an external Microsoft SQL Server database via the node-mssql driver. T-SQL dialect with TOP / OFFSET-FETCH paging and INFORMATION_SCHEMA + sys.* introspection (tables, columns, primary keys, foreign keys).",
+      "DriverClass": "SQLServerExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "tsql",
+      "PagingStrategy": "OffsetFetch",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B80C2CE0-A17B-43C1-95E3-C6A24117CE61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MySQL (External)",
+      "Description": "Live, read-only proxied access to an external MySQL / MariaDB database via the mysql2 driver. Backtick-quoted identifiers, LIMIT/OFFSET paging, and INFORMATION_SCHEMA introspection (tables, columns, primary keys, foreign keys).",
+      "DriverClass": "MySQLExternalDriver",
+      "MetadataIntrospectionStrategy": "InformationSchema",
+      "FilterDialect": "mysql",
+      "PagingStrategy": "LimitOffset",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2464B6AE-1F10-4F0B-8499-C6EBFABBE60D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oracle (External)",
+      "Description": "Live, read-only proxied access to an external Oracle database via node-oracledb in Thin mode (no Instant Client required). Double-quoted identifiers, OFFSET/FETCH paging, :named bind parameters, and ALL_* catalog introspection (tables, columns, primary keys, foreign keys).",
+      "DriverClass": "OracleExternalDriver",
+      "MetadataIntrospectionStrategy": "NativeCatalog",
+      "FilterDialect": "oracle",
+      "PagingStrategy": "OffsetFetch",
+      "SupportsSchemaIntrospection": true,
+      "SupportsNativeQueries": true,
+      "SupportsReadWrite": false,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DEE445E3-8135-4B29-A904-B40BD5D8FC7F"
+    }
+  }
+]
