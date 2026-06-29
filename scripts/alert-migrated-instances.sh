@@ -51,10 +51,16 @@ col() { # $1 themeAttr  $2 label
   alert warning "" "$(ic warning)" '<div class="vw"><span>Source field "amount" is not mapped to any target.</span><span>Target field "status" has no source.</span></div>'
   alert warning sm "$(ic warning)" '<div><div>Column "legacy_id" will be dropped.</div><div>Type change on "created" may truncate data.</div></div>'
 
-  echo '<div class="grp">AI / Testing / DatabaseDesigner (pending commit)</div>'
+  echo '<div class="grp">AI / Testing / DatabaseDesigner (committed)</div>'
   alert warning "" "$(ic warning)" 'Merging is not available for this entity. Detection results are read-only.'
   alert warning "" "$(ic warning)" 'Low agreement may indicate evaluation criteria need refinement.'
   alert warning "" "$(ic warning)" 'You do not have authorization to create entities in any schema. Contact your administrator.'
+
+  echo '<div class="grp">MCP — error / success (pending commit)</div>'
+  printf '<div class="mj-alert mj-alert--error"><i class="mj-alert__icon %s"></i><div class="mj-alert__content">Failed to connect to MCP server.</div><button class="mj-alert__dismiss"><i class="fa-solid fa-xmark"></i></button></div>\n' "$(ic error)"
+  alert error "" "$(ic error)" 'Name is required.'
+  alert success "" "$(ic success)" 'Execution Successful <span style="float:right;font-size:0.75rem">142ms</span>'
+  alert error "" "$(ic error)" 'Execution Failed'
 
   echo '</div></div>'
 }

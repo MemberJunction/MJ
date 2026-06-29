@@ -88,11 +88,16 @@ const DEFAULT_ICONS: Record<MJAlertVariant, string> = {
       align-items: flex-start;
       gap: var(--mj-space-3);
       padding: var(--mj-space-3) var(--mj-space-4);
+      margin-bottom: var(--mj-space-4);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
       font-size: var(--mj-text-sm);
       line-height: 1.45;
     }
+    /* Alerts are flow content almost always followed by other content, so they
+       carry a default bottom margin (like a <p>; cf. Bootstrap's .alert). When an
+       alert is the only/last child of its container, drop the trailing gap. */
+    :host(:last-child) { margin-bottom: 0; }
     :host(.mj-alert--dismissed) { display: none; }
 
     .mj-alert__icon {

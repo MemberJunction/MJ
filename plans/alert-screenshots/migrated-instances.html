@@ -401,11 +401,16 @@
       align-items: flex-start;
       gap: var(--mj-space-3);
       padding: var(--mj-space-3) var(--mj-space-4);
+      margin-bottom: var(--mj-space-4);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
       font-size: var(--mj-text-sm);
       line-height: 1.45;
     }
+    /* Alerts are flow content almost always followed by other content, so they
+       carry a default bottom margin (like a <p>; cf. Bootstrap's .alert). When an
+       alert is the only/last child of its container, drop the trailing gap. */
+    :last-child { margin-bottom: 0; }
     .mj-alert--dismissed { display: none; }
 
     .mj-alert__icon {
@@ -503,10 +508,15 @@ h1{font-size:13px;margin:0 0 14px;color:var(--mj-text-primary);text-transform:up
 <div class="grp">Integration (committed)</div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content"><div class="vw"><span>Source field "amount" is not mapped to any target.</span><span>Target field "status" has no source.</span></div></div></div>
 <div class="mj-alert mj-alert--warning mj-alert--sm"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content"><div><div>Column "legacy_id" will be dropped.</div><div>Type change on "created" may truncate data.</div></div></div></div>
-<div class="grp">AI / Testing / DatabaseDesigner (pending commit)</div>
+<div class="grp">AI / Testing / DatabaseDesigner (committed)</div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content">Merging is not available for this entity. Detection results are read-only.</div></div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content">Low agreement may indicate evaluation criteria need refinement.</div></div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content">You do not have authorization to create entities in any schema. Contact your administrator.</div></div>
+<div class="grp">MCP — error / success (pending commit)</div>
+<div class="mj-alert mj-alert--error"><i class="mj-alert__icon fa-solid fa-circle-exclamation"></i><div class="mj-alert__content">Failed to connect to MCP server.</div><button class="mj-alert__dismiss"><i class="fa-solid fa-xmark"></i></button></div>
+<div class="mj-alert mj-alert--error"><i class="mj-alert__icon fa-solid fa-circle-exclamation"></i><div class="mj-alert__content">Name is required.</div></div>
+<div class="mj-alert mj-alert--success"><i class="mj-alert__icon fa-solid fa-circle-check"></i><div class="mj-alert__content">Execution Successful <span style="float:right;font-size:0.75rem">142ms</span></div></div>
+<div class="mj-alert mj-alert--error"><i class="mj-alert__icon fa-solid fa-circle-exclamation"></i><div class="mj-alert__content">Execution Failed</div></div>
 </div></div>
 <div class="themecol" data-theme="dark"><h1>Dark — migrated instances</h1><div class="demo">
 <div class="grp">explorer-settings · confirm-delete modals (committed)</div>
@@ -521,9 +531,14 @@ h1{font-size:13px;margin:0 0 14px;color:var(--mj-text-primary);text-transform:up
 <div class="grp">Integration (committed)</div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content"><div class="vw"><span>Source field "amount" is not mapped to any target.</span><span>Target field "status" has no source.</span></div></div></div>
 <div class="mj-alert mj-alert--warning mj-alert--sm"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content"><div><div>Column "legacy_id" will be dropped.</div><div>Type change on "created" may truncate data.</div></div></div></div>
-<div class="grp">AI / Testing / DatabaseDesigner (pending commit)</div>
+<div class="grp">AI / Testing / DatabaseDesigner (committed)</div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content">Merging is not available for this entity. Detection results are read-only.</div></div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content">Low agreement may indicate evaluation criteria need refinement.</div></div>
 <div class="mj-alert mj-alert--warning"><i class="mj-alert__icon fa-solid fa-triangle-exclamation"></i><div class="mj-alert__content">You do not have authorization to create entities in any schema. Contact your administrator.</div></div>
+<div class="grp">MCP — error / success (pending commit)</div>
+<div class="mj-alert mj-alert--error"><i class="mj-alert__icon fa-solid fa-circle-exclamation"></i><div class="mj-alert__content">Failed to connect to MCP server.</div><button class="mj-alert__dismiss"><i class="fa-solid fa-xmark"></i></button></div>
+<div class="mj-alert mj-alert--error"><i class="mj-alert__icon fa-solid fa-circle-exclamation"></i><div class="mj-alert__content">Name is required.</div></div>
+<div class="mj-alert mj-alert--success"><i class="mj-alert__icon fa-solid fa-circle-check"></i><div class="mj-alert__content">Execution Successful <span style="float:right;font-size:0.75rem">142ms</span></div></div>
+<div class="mj-alert mj-alert--error"><i class="mj-alert__icon fa-solid fa-circle-exclamation"></i><div class="mj-alert__content">Execution Failed</div></div>
 </div></div>
 </div></body></html>

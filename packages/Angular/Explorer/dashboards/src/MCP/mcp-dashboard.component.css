@@ -5,27 +5,6 @@
 /* ========================================
    Main Content Area
    ======================================== */
-/* Error Banner */
-.error-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    margin: 0 0 16px 0;
-    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
-    border: 1px solid var(--mj-status-error);
-    border-radius: 8px;
-    color: var(--mj-status-error);
-}
-
-.error-banner .close-btn {
-    margin-left: auto;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--mj-status-error);
-    padding: 4px;
-}
 
 /* ========================================
    Data Display Components
