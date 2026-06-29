@@ -1,10 +1,14 @@
 # CodeGen Large-Schema & Operational Resilience Plan
 
-**Status:** Draft (revised 2026-05-12 with code-verified corrections)
-**Author:** Captured 2026-05-11 during NSTA/Aptify onboarding
+**Status:** Re-scoped 2026-06-29 against current source. Original draft 2026-05-11 (NSTA/Aptify onboarding); first code-verification pass 2026-05-12.
+**Author:** Captured 2026-05-11; re-scope by Pranav Rao.
 **Trigger case:** Onboarding the Aptify product database for [National Science Teachers Association (NSTA)] — 2,116 `dbo` tables, ~390 GB, several tables in the 20–50M row range, heavy customer customization on top of the core Aptify product.
 
-> **Revision note (2026-05-12):** §2.2, §2.4, and §2.10 below contain claims that were partially incorrect when checked against the current source. Inline **Correction** boxes flag each one and link to the actual code path. The remediation tasks (T2.1, T1.2, T1.7) are still warranted but need to be re-scoped against the real call sites before implementation. See §8 for a consolidated post-review addendum.
+> ## ⚑ Re-scope note (2026-06-29)
+>
+> This plan sat for ~7 weeks while ~100 commits landed on `CodeGenLib` and the metadata hot-path. A four-cluster code audit on 2026-06-29 found that **most of the original Tier-1 correctness work and the entire metadata-refresh concern are already done or obsolete.** Rather than delete the history, every finding and task below now carries a **`STATUS (2026-06-29)`** box with the current code state and a citation.
+>
+> **What's actually left collapses into 4 workstreams — see [§9](#9-rescope-2026-06-29--the-four-workstreams).** The headline is parallelism: there is still **zero `worker_threads` / `os.cpus()` usage anywhere in CodeGen**, several generation loops are still serial, and the SQL-exec batch is still hardcoded at 5.
 
 ## 1. Problem Statement
 
@@ -16,7 +20,10 @@ MJ CodeGen works well for greenfield MJ projects and modest brownfield schemas, 
 - **CG processes tables it shouldn't.** Things like `EntityRecordVersions` (Aptify's own audit/versioning system, 49M rows) get full MJ entity treatment — views, CRUD procs, audit columns added on top of the existing audit columns — when they should be skipped entirely. CG has no way to know.
 - **Visibility is poor.** The CLI shows a spinner and occasional "Created new entity X" lines. Whether CG is making progress, stuck, or dead is not observable without querying the database directly.
 
-The pain is real but most of the underlying machinery is in place. This plan splits the work into quick wins (1–3 days each), medium investments (1–2 weeks), and larger architectural changes (multi-week).
+> **STATUS (2026-06-29):** Two of these five are materially improved.
+> - *Brittle failure on a single timeout* — the metadata load is no longer one fat query; it's a single dataset call fanned into 21 **parallel, per-item-cached** queries (`GenericDatabaseProvider.ts:3419-3630`), so one slow query no longer loses the whole load. See §2.2.
+> - *Visibility* — a `CodeGenReporter` now records a full nested phase tree with durations to `~/.mj/codegen-state/run-<timestamp>.json` and a live elapsed-time ticker exists (`status_logging.ts:49-69`). The data is captured but **not yet surfaced** as phase/ETA output. See §2.5.
+> - *Wall-clock*, *blast radius*, and *processes tables it shouldn't* remain real → Workstreams **A** (skip-entity) and **B** (parallelism) in §9.
 
 ## 2. Concrete Findings From the NSTA Run
 
@@ -30,13 +37,21 @@ Symptom: `RequestError: Failed to cancel request in 5000ms`. The application cod
 
 Default of 120s should be raised, and the timeout should be configurable per-phase (not just globally).
 
+> **STATUS (2026-06-29): MOSTLY DONE.** A unified, cross-platform `codegenPool.statementTimeoutMs` now exists and is plumbed to both providers — SQL Server maps it to mssql `requestTimeout` (`db-connection.ts:56`), PostgreSQL to libpq `-c statement_timeout` (`pg-connection.ts:56-57`); schema at `config.ts:581-615` (commit `c611164182`). Precedence: `statementTimeoutMs` → legacy `dbRequestTimeout` → 120000. **Remaining gaps:** (a) the default is still 120s — raising it is a one-line config change; (b) no *per-phase* override; (c) `acquireTimeoutMillis` is still not coupled to the request timeout. Low priority — fold the leftover bits into Workstream C.
+
 ### 2.2 `Metadata.Refresh()` is atomic and unparallelized
 
 `packages/MJCore/src/generic/providerBase.ts:2655–2701` — `GetAllMetadata()` runs a sequential dataset load of 26 `RunView` calls, no pagination, no parallelism, then does an O(n²) post-process join in JavaScript.
 
 On a database with 2,000 entities and 60K+ EntityField rows, any single one of those 26 queries can blow the request timeout. The whole load is then lost.
 
-> **Correction (2026-05-12, code-verified):** The "26 sequential `RunView` calls" framing is wrong. `GetAllMetadata` makes a **single** `GetDatasetByName('MJ_Metadata')` call (providerBase.ts:2663–2675), and post-processing uses `.filter()` lookups (2678–2681), not nested loops. The user-visible symptom on NSTA is real — but it's one fat dataset query timing out, not 26 separate ones. **T2.1 needs to be re-scoped** against the actual call site: the right fix is likely server-side pagination of `MJ_Metadata` (sp returning paged result sets, or splitting into multiple datasets loaded in parallel), not wrapping imaginary 26 calls in retries.
+> **Correction (2026-05-12):** The "26 sequential `RunView` calls" framing was wrong. `GetAllMetadata` makes a single `GetDatasetByName('MJ_Metadata')` call.
+
+> **STATUS (2026-06-29): OBSOLETE — close T2.1 / T1.9.** The concern is gone on both axes:
+> - **Load:** `GetAllMetadata` (`providerBase.ts:3415-3461`) issues one `GetDatasetByName('MJ_Metadata')`, which fans into 21 independent queries executed in parallel via `ExecuteSQLBatch` (`GenericDatabaseProvider.ts:3541-3550`, `Promise.all` at `867-885`), each with its own LocalCacheManager entry. A single query failing no longer loses the others.
+> - **Post-process:** the O(n²) JS join was replaced with O(N+M) pre-indexed `Map` lookups (`groupByNormalizedUUID`, `providerBase.ts:3487-3554`; commit `d5a51b3bb8`, 2026-05-24) — ~1800× fewer ops on 2K entities / 60K fields.
+> - **Hardening:** a fast-start pre-validation circuit-breaker (`preValidateAndRefresh`, commit `8e92d87b85`) validates freshness up front and degrades gracefully on timeout; field lookups are now O(1) (commit `5f82aa8202`, 2026-06-27).
+> The only residual is raw row volume on the `EntityFields` query — a DB/view-cost issue, not a CodeGen architecture issue. **T2.1 (chunked refresh) and T1.9 (retry the 26 queries) are both dropped.**
 
 ### 2.3 Audit-column backfill is brutal on large tables
 
@@ -51,369 +66,213 @@ ALTER TABLE x ADD CONSTRAINT DF_x___mj_CreatedAt DEFAULT GETUTCDATE() FOR __mj_C
 
 On `EntityRecordVersions` (49M rows) that UPDATE takes 15–30 min. On `ScheduleTransAccountEntry` (20.8M rows), 10+ min. With multiple such tables, this single phase can take hours.
 
-In SQL Server 2012+, `ALTER TABLE ADD col NOT NULL DEFAULT <runtime constant>` is a metadata-only operation for fixed-size types — instant, regardless of row count. The audit columns fit this pattern (`DATETIMEOFFSET`, default `GETUTCDATE()`, NOT NULL). Switching to a single-statement add eliminates the entire UPDATE phase.
+In SQL Server 2012+, `ALTER TABLE ADD col NOT NULL DEFAULT <runtime constant>` is a metadata-only operation for fixed-size types — instant, regardless of row count.
+
+> **STATUS (2026-06-29): STILL 3-statement, BUT INTENTIONAL — do not "fix" in isolation.** The 3-statement pattern is still live for `DATETIMEOFFSET` on SQL Server/Azure (`SQLServerCodeGenProvider.ts:1148-1169`, executed batch-separated via `manage-metadata.ts:3136`). The single-statement metadata-only ADD was **deliberately rejected** as a documented defensive workaround (`SQLServerCodeGenProvider.ts:1156`) because SQL Azure throws an implicit-conversion error adding a `NOT NULL DEFAULT DATETIMEOFFSET` in one statement. Non-`DATETIMEOFFSET` types already use a single statement (`:1168`).
+> **Conclusion:** the original T1.3 ("switch to metadata-only ALTER") is **not a free win** and risks breaking Azure. The right mitigation for the 49M-row case is *not touching the table at all* → **Workstream A (skip-entity)** moots this. T1.3 is dropped as a standalone task.
 
 ### 2.4 No skip-entity capability for "metadata-y" tables
 
-`packages/CodeGenLib/src/Config/config.ts:647–656` — `excludeSchemas` and `excludeTables` exist, but they only affect file generation and JSON schema output. **They do not stop the table from being treated as an MJ entity** (added audit columns, generated CRUD procs, registered in `__mj.Entity`).
+`packages/CodeGenLib/src/Config/config.ts:647–656` — `excludeSchemas` and `excludeTables` exist, but they only affect file generation and JSON schema output. **They do not stop the table from being treated as an MJ entity.**
 
 Tables that should be skipped at the *entity-treatment* level:
 - Audit/versioning systems already provided by the source app (`EntityRecordVersions`, `*History`, `*Audit`, `*Log`, `*Trace`)
 - High-row-count tables where adding MJ overhead is more cost than benefit
-- Tables that already carry their own audit metadata columns and don't need MJ's
+- Tables that already carry their own audit metadata columns
 
-CG has no notion of "discover but don't generate" vs "skip entirely" vs "treat as reference".
-
-> **Correction (2026-05-12, code-verified):** Not quite right for `excludeSchemas`. It is plumbed into `spUpdateExistingEntitiesFromSchema` (manage-metadata.ts:3348) so new entity rows are not created for excluded schemas, and into `ensureCreatedAtUpdatedAtFieldsExist` (manage-metadata.ts:2474, filtered at 2896) so the audit-column phase skips excluded schemas. The real gap is **table-level**: `excludeTables` doesn't propagate into entity treatment, and there's no pattern-based or row-count-heuristic skip at all. **T1.2 should be reframed** as "extend the existing schema-level skip to table-level + patterns + row-count heuristic," not "skip-entity capability doesn't exist."
+> **STATUS (2026-06-29): PARTIALLY DONE.** `excludeTables` now *does* skip at the entity level — `createNewEntities` applies `createExcludeTablesAndSchemasFilter()` to the candidate-table query (`manage-metadata.ts:4065-4096`), so excluded tables get no `__mj.Entity` row (and therefore no audit columns / CRUD procs). Schema/table matching supports wildcards. **Still missing:** pattern-family globs (`%History`, `%Audit%`, `%Log`), a row-count auto-suggest heuristic, and an `excludeFromEntityTreatment` mode that distinguishes "discover but don't generate" from "skip entirely." → **Workstream A.**
 
 ### 2.5 CLI feedback is opaque on long runs
 
-`packages/CodeGenLib/src/Misc/status_logging.ts` (implied) — the CLI shows a spinner and emits sporadic `Created new entity X` lines. There is no:
-- Top-level phase indicator (`[Phase 6/11] Generating SQL objects...`)
-- Within-phase progress (`Adding audit columns: 705 / 2116`)
-- ETA based on observed rate
-- Persisted phase log so a re-run knows where the last run got to
+`packages/CodeGenLib/src/Misc/status_logging.ts` — the CLI shows a spinner and emits sporadic `Created new entity X` lines. There is no top-level phase indicator, within-phase progress, ETA, or persisted phase log.
 
-During the NSTA run we had to repeatedly query `sys.columns` and `__mj.Entity` directly to confirm CG hadn't hung.
+> **STATUS (2026-06-29): HALF DONE — and the remaining half is now cheap.** A `CodeGenReporter` records a full nested phase tree with per-phase durations, entity breakdown, and LLM costs, persisting each run to `~/.mj/codegen-state/run-<timestamp>.json` (retains the last 50; `codegen-reporter.ts:144,373`), and `status_logging.ts:49-69` shows a live elapsed-time ticker (commit `e776c117d0`). **Still missing:** the user-facing `[Phase X/N name]` boundary print, within-phase counts (`705/2116`), and an ETA. Because the durations are already persisted per run, **ETA becomes a lookup against the last successful run-state, not a model.** → **Workstream C.**
 
 ### 2.6 No checkpoint / resume
 
-If a CG run dies after processing 1,800 of 2,000 entities, the next run starts at 0. The DB writes that did succeed (Entity rows, audit columns on N tables) are persisted but CG has no manifest tying that state back to a phase position. The user has to either let it re-discover the same state or manually intervene.
+If a CG run dies after processing 1,800 of 2,000 entities, the next run starts at 0. The DB writes that did succeed are persisted but CG has no manifest tying that state back to a phase position.
+
+> **STATUS (2026-06-29): NOT DONE.** No `--resume` / checkpoint exists (the run-state files are read-only telemetry archives, never consulted to resume). This is the one genuinely large item still open → **Workstream D (defer-decide):** the run-state file is the natural foundation, but if Workstream A makes full runs fast enough, the semantic cost of resume ("is it the same run?") may not pay off. Sequence last.
 
 ### 2.7 Connection pool acquire timeout
 
-Companion to 2.1 — the SQL pool's `acquireTimeoutMillis` was hitting much earlier than the request timeout in practice during heavy concurrent generation phases. Needs to be coupled to `dbRequestTimeout`.
+Companion to 2.1 — the SQL pool's `acquireTimeoutMillis` was hitting much earlier than the request timeout. Needs to be coupled to `dbRequestTimeout`.
+
+> **STATUS (2026-06-29): NOT DONE.** Still uncoupled. Trivial; fold into Workstream C.
 
 ### 2.8 `dbRequestTimeout` config key path is non-obvious
 
-`packages/CodeGenLib/src/Config/db-connection.ts:11,36` reads `dbRequestTimeout` from the **root** of the resolved config. But the documented pattern for connection pool tuning (e.g. in `CLAUDE.md` SQL Server Connection Pooling section) shows pool settings under `databaseSettings.connectionPool`. A reasonable operator places `dbRequestTimeout` next to the pool config under `databaseSettings` — and CG silently ignores it, keeping the 120s default.
+A reasonable operator places `dbRequestTimeout` under `databaseSettings` and CG silently ignores it, keeping the 120s default.
 
-Observed during the NSTA run: the user set `databaseSettings.dbRequestTimeout: 1800000` thinking it would apply to CG. CG still hit `Timeout: Request failed to complete in 120000ms`. Required moving the key to root level for it to take effect.
-
-Improvement: accept the key in both locations for back-compat, or unify under one namespace, or at minimum warn loudly at CG startup when `databaseSettings.dbRequestTimeout` is set (since that's a clear signal of operator intent).
+> **STATUS (2026-06-29): IMPROVED (env layer).** PG_*/DB_* env-var precedence now emits a de-dup'd startup warning when both are set (commits `8d64480f1e`, `c611164182`). But there is still **no startup echo of the effective resolved statement timeout**, which is the cheapest possible misconfiguration guard. Fold into Workstream C.
 
 ### 2.9 AI "smart field identification" lacks output validation
 
-`packages/CodeGenLib/src/Database/manage-metadata.ts:~4959-4985` — `applyDefaultInViewUpdates` calls `result.defaultInView.includes(f.Name as string)` directly on the AI's response. Observed failures during NSTA run:
+`packages/CodeGenLib/src/Database/manage-metadata.ts:~4959-4985` — `applyDefaultInViewUpdates` calls `result.defaultInView.includes(...)` directly on the AI's response, crashing with `TypeError: Cannot read properties of undefined` when the AI returns a malformed shape or invents field names.
 
-```
-TypeError: Cannot read properties of undefined (reading 'includes')
-    at applyDefaultInViewUpdates (manage-metadata.js:4104:77)
-```
-
-Companion warnings tell the rest of the story:
-- `Smart field identification returned invalid searchPredicate field: 'undefined' not found in entity fields` — the AI literally returned the string `'undefined'` as a field name
-- `Smart field identification returned invalid searchableFields: _ExternalHousingBlockID not found in entity` — AI invented a field name
-- `Smart field identification returned invalid defaultInView fields: Committee_CommitteeType_Name not found in entity` — AI invented a foreign-key-like field name
-
-The AI is unreliable on schemas it hasn't seen patterns for. The downstream code:
-- Doesn't null-guard on the AI's response shape (`result.defaultInView` can be `undefined` and that crashes)
-- Treats invalid AI output as a warning, then continues into code that assumes the output is valid
-
-Improvement: schema-validate the AI response against the actual entity's field list. Drop any field name the AI returns that isn't in the entity. Add explicit null/undefined checks on the result shape. If validation drops everything, fall back to deterministic heuristics (first string column with "name" in its name, otherwise PK).
+> **STATUS (2026-06-29): FIXED — close T1.6.** Null-guard in place (`const defaultInView = result.defaultInView ?? []`, `manage-metadata.ts:5245`) plus field-name validation against the entity's real field list with a logged error for invented names (`:5251-5256`). The crash cascade is resolved. **Dropped.**
 
 ### 2.10 Generated base view assumes every entity has a `Name` column
 
-Observed dozens of `Invalid column name 'Name'` warnings during view creation. MJ's base view template appears to reference a `Name` column unconditionally. On Aptify tables without a column literally named `Name` (which is many — Aptify uses `*Name` variants like `FirstName`, `CompanyName`, `Title`, etc.), the generated view is invalid.
+Dozens of `Invalid column name 'Name'` warnings during view creation on Aptify tables lacking a literal `Name` column.
 
-Improvement: the generated view should reference a `NameField` resolved per-entity (could be `Name`, `Title`, `Description`, or a configured field). On entities with no obvious name field, the view should still be valid — just without a virtual `Name` column.
-
-> **Correction (2026-05-12, code-verified):** `sql_codegen.ts:1780` (`getIsNameFieldForSingleEntity`) already resolves `NameField` per entity, gated by `IncludeRelatedEntityNameFieldInBaseView` and `RelatedEntityJoinFieldsConfig` (1767–1779). The "unconditional `Name` reference" diagnosis is too sweeping — the `Invalid column name 'Name'` warnings on NSTA almost certainly come from a specific branch (likely a related entity whose configured/inferred NameField is the literal `Name` but the target table lacks that column). **T1.7 should start with a 30-min repro** to localize the offending branch before any fix is scoped.
+> **STATUS (2026-06-29): FIXED — close T1.7.** A single-winner `IsNameField` refactor (commit `724492f6ce`, 2026-06-12) enforces exactly one name field per entity: `selectNameFieldWinner` (`manage-metadata.ts:5184-5203`) picks one deterministically and clears losers, gated by an eligibility guardrail that rejects PKs, virtual fields, and unbounded text (`isFieldEligibleForNameField`, `:5218-5233`). 57 core entities had drifting multi-flag state; now stable. **Dropped.**
 
 ### 2.11 Generated view column-name collisions
 
-Observed: `Column names in each view or function must be unique. Column name 'Entity_Virtual' in view or function 'vwEntityBaseViewsWizards' is specified more than once.`
+`Column name 'Entity_Virtual' ... specified more than once.` — two FK relationships to the same entity generating the same default virtual-column name.
 
-The generator emitted two columns named `Entity_Virtual` in the same view. This is a real generator bug — likely two FK relationships pointing to the same entity, both generating a virtual column with the same default name.
-
-Improvement: detect collisions during view-template assembly. Disambiguate (e.g. `Entity_Virtual_1`, `Entity_Virtual_2`, or use the FK column name as a prefix).
+> **STATUS (2026-06-29): FIXED — close T1.8.** Collision detection + disambiguation now exists: FK-name joins append a `_Virtual` suffix on collision (`sql_codegen.ts:1819-1830`), explicitly-configured colliding aliases are detected and skipped (`:1862-1866`), via `hasAliasCollision()` checking base fields, generated aliases, and system columns (`:1938-1950`). **Dropped.**
 
 ## 3. Additional Findings From Code Study
 
-These were uncovered by reading the CodeGen source, not directly observed during the run, but apply to large schemas:
-
 ### 3.1 Hardcoded batch size of 5
 
-`packages/CodeGenLib/src/Database/sql_codegen.ts:504–625, 4710–4717` — SQL object generation processes entities in batches of 5 via `Promise.all()`. For 2,000 entities that's 400 sequential batches. The 5-wide parallelism is sized for LLM rate limits (`advancedGeneration.batchSize`) but reused for SQL generation where rate limits don't apply.
+`packages/CodeGenLib/src/Database/sql_codegen.ts:504–625, 4710–4717` — SQL object generation processes entities in batches of 5 via `Promise.all()`. The 5-wide parallelism is sized for LLM rate limits but reused for SQL generation where rate limits don't apply.
 
-Improvement: split `advancedGeneration.batchSize` (LLM-bound, stays at 5–10) from `sqlGenerationBatchSize` (DB-bound, could be 20–50) and `fileGenerationConcurrency` (CPU/disk-bound, could be `os.cpus()`).
+> **STATUS (2026-06-29): STILL CONFLATED (DB side).** `advancedGeneration.batchSize` (LLM) is now correctly separate — advanced/AI generation batches at that knob via `Promise.allSettled` (`manage-metadata.ts:4888-4921`). But **SQL object generation is still hardcoded**: `perEntityBatchSize = dbPlatform === 'postgresql' ? 1 : 5` (`sql_codegen.ts:216`), batch-then-`Promise.all` at `:566-624`, permissions batch of 5 at `:504-556`. The PG `1` is a *deliberate* serial fallback (catalog deadlocks under parallel phased DDL, explained `:203-215`) and must stay. The SQL Server `5` is arbitrary and DB-I/O-bound → raise + make configurable in **Workstream B**.
 
 ### 3.2 EntityField backfill is per-entity in some paths
 
-`packages/CodeGenLib/src/Database/manage-metadata.ts:~2449+` — field validation/audit/relationship checks iterate entity-by-entity. With 2,000 entities × 50 avg fields = 100K rows handled in O(n²) shape. Comment in code already notes the trade-off ("avoid both per-entity round-trips and parallel calls (page-level lock contention)") but no batched-DML path is implemented.
+`manage-metadata.ts:~2449+` — field validation/audit/relationship checks iterate entity-by-entity, O(n²) shape. No batched-DML path implemented.
 
-Improvement: batched multi-row UPSERTs against `EntityField`, MERGE-style by `(EntityID, Name)`.
+> **STATUS (2026-06-29): NOT ADDRESSED.** Still per-entity in these paths. Lower priority than the generation loops; candidate for Workstream B if profiling flags it after the bigger wins land.
 
 ### 3.3 Cascade-delete dependency analysis is uncached
 
-`packages/CodeGenLib/src/Database/sql_codegen.ts:2186–2243` — `buildCascadeDeleteDependencies()` walks every entity and every field every run to build the dependency graph. O(n²) in the worst case. No memoization, no DB-side cache. On unchanged schemas the result is identical run to run.
+`sql_codegen.ts:2186–2243` — `buildCascadeDeleteDependencies()` walks every entity and every field every run, O(n²), no memoization. On unchanged schemas the result is identical run to run.
 
-Improvement: hash the relevant Entity/EntityField columns; cache the dependency graph keyed by that hash; rebuild only when the hash changes.
+> **STATUS (2026-06-29): STILL UNCACHED + SERIAL.** Confirmed: `buildCascadeDeleteDependencies` (`sql_codegen.ts:2190-2221`) calls `analyzeCascadeDeleteDependencies` (`:2145-2184`) which does nested `md.Entities × e.Fields` scans, rebuilt from scratch every run. Pure CPU + metadata work → strong **Workstream B** candidate (memoize by metadata hash; optionally parallelize the FK scan).
 
 ### 3.4 No cross-schema parallelism in SQL generation
 
-SQL object generation batches don't partition by schema. Two batches touching different schemas could run concurrently with zero lock contention. The current sequencing leaves throughput on the table.
+SQL object generation batches don't partition by schema.
+
+> **STATUS (2026-06-29): NOT ADDRESSED.** Still no schema partitioning. Subsumed by the concurrency-width work in **Workstream B**; cross-schema worker partitioning is the stretch goal there.
 
 ### 3.5 Angular subclass generation is serial
 
-`packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts:149–150` — appears to await per-entity. CPU-bound, easily parallelizable up to `os.cpus()`.
+`packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts:149–150` — appears to await per-entity. CPU-bound, easily parallelizable.
+
+> **STATUS (2026-06-29): STILL SERIAL — prime worker-threads target.** Confirmed serial `for...await` (`entity_subclasses_codegen.ts:147-149`). The work splits in two: the `skipDBUpdate` emit pass is pure template/AST string-building (CPU-bound → `worker_threads`), while the DB-writeback pass awaits `LogSQLAndExecute` (`:534`, I/O-bound → concurrency). The same shape applies to GraphQL and Angular generation. → core of **Workstream B**.
 
 ### 3.6 No "fast mode" for unchanged-schema re-runs
 
-There's no flag that says "I'm re-running CG, the schema didn't change, just regenerate output artifacts." Every run pays the full discovery / validation cost.
+No flag for "schema didn't change, just regenerate output artifacts."
 
-## 4. Proposed Improvements
+> **STATUS (2026-06-29): NOT DONE.** Still pays full discovery/validation cost every run. Related to Workstream D (a schema-state hash is shared infrastructure between resume and fast-mode); deferred with it.
 
-Grouped by effort and dependency.
+## 4. Original Tier-1 / Tier-2 / Tier-3 Tasks — Disposition
 
-### Tier 1 — Quick wins (1–3 days each, independent)
+The original plan enumerated tasks T1.1–T1.13, T2.1–T2.4, T3.1–T3.3. Their current disposition:
 
-#### T1.1 Raise default `dbRequestTimeout`, plumb it through the pool
+| Task | Original intent | Disposition (2026-06-29) | Citation |
+|---|---|---|---|
+| T1.1 | Raise default timeout, plumb pool | **Mostly done** (unified `statementTimeoutMs`); default still 120s | `db-connection.ts:56`, `config.ts:581-615` |
+| T1.2 | Skip-entity config + patterns | **Partial** — name-based entity skip done; patterns/row-count missing → **WS A** | `manage-metadata.ts:4065-4096` |
+| T1.3 | Metadata-only audit ALTER | **Dropped** — intentional 3-stmt Azure workaround; mooted by WS A | `SQLServerCodeGenProvider.ts:1156` |
+| T1.4 | Structured CLI status | **Partial** — telemetry persisted, not surfaced → **WS C** | `codegen-reporter.ts:373`, `status_logging.ts:49-69` |
+| T1.5 | Timeout discoverability | **Partial** — env warning yes, timeout echo no → **WS C** | `config.ts:661-680` |
+| T1.6 | AI smart-field validation | **DONE** | `manage-metadata.ts:5245-5256` |
+| T1.7 | `Name` field resolution | **DONE** (single-winner) | commit `724492f6ce`; `manage-metadata.ts:5184-5203` |
+| T1.8 | View column collisions | **DONE** | `sql_codegen.ts:1819-1950` |
+| T1.9 | Retry the 26 metadata queries | **Dropped** — premise obsolete | `GenericDatabaseProvider.ts:3541-3550` |
+| T1.10 | Aptify sample exclude config | **Open** → **WS A** | — |
+| T1.11 | Audit-column NULL-tolerance audit | **Moot** (T1.3 dropped) | — |
+| T1.12 | Cross-platform ALTER parity | **Moot** (T1.3 dropped) | — |
+| T1.13 | Phase-level wall-clock telemetry | **DONE** (captured) / surface → **WS C** | `codegen-reporter.ts` |
+| T2.1 | Chunked Metadata.Refresh | **Dropped** — already parallel + cached + O(N+M) | `providerBase.ts:3415-3554` |
+| T2.2 | Checkpoint / `--resume` | **Open** → **WS D** | — |
+| T2.3 | Interactive mode + flags | **Open** — UX polish; fold into WS A confirmation prompts | — |
+| T2.4 | Separate LLM/SQL/file concurrency knobs | **Partial** — LLM split done; SQL/file knobs missing → **WS B** | `sql_codegen.ts:216` |
+| T3.1 | Cross-schema parallelism | **Open** → **WS B** (stretch) | — |
+| T3.2 | Cached dependency graph | **Open** → **WS B** | `sql_codegen.ts:2190-2221` |
+| T3.3 | Fast mode | **Open** → **WS D** (deferred) | — |
 
-Change default from `120000` → `600000` (10 min). Wire `dbRequestTimeout` into `acquireTimeoutMillis` on the pool. Allow per-phase override (e.g., `metadataRefreshTimeout`, `sqlGenerationTimeout`).
+---
 
-**Effort:** half day. **Risk:** none — defaults change, configurable.
+## 9. Re-scope (2026-06-29) — The Four Workstreams
 
-#### T1.2 Skip-entity config and pattern-based auto-skip
+Everything still worth doing collapses into four workstreams, ordered by leverage-per-effort. The guiding correction vs. the original plan: **the correctness bugs are fixed and the metadata path is hardened — what's left is wall-clock (skip work + parallelize work) plus observability and an optional resume.**
 
-Add to `mj.config.cjs`:
+### Workstream A — Skip-entity heuristics *(highest leverage, lowest risk)*
 
-```js
-codeGen: {
-  excludeFromEntityTreatment: {
-    // Explicit list
-    tables: [
-      { schema: 'dbo', table: 'EntityRecordVersions' },
-      { schema: 'dbo', table: 'sysdiagrams' },
-    ],
-    // Pattern-based
-    patterns: [
-      { schema: 'dbo', tableLike: '%History' },
-      { schema: 'dbo', tableLike: '%Audit%' },
-      { schema: 'dbo', tableLike: '%Log' },
-      { schema: 'dbo', tableLike: '%RecordVersion%' },
-    ],
-    // Heuristic-based with confirmation
-    autoDetect: {
-      enabled: true,
-      rowCountThreshold: 5000000,    // suggest skip for tables > 5M rows
-      requireConfirmation: true,      // ask before skipping in interactive mode
-    },
-  },
-},
-```
+Finish what `excludeTables` started. Skipping the 49M-row `EntityRecordVersions` *entirely* is strictly better than backfilling it faster — and it moots the audit-column lock (§2.3) without touching the deliberate Azure workaround.
 
-Plumb through to:
-- Entity discovery (don't create `__mj.Entity` row)
-- Audit column addition (don't ALTER)
-- CRUD proc generation (don't generate)
-- File generation (existing `excludeTables` already handles this)
+- Pattern-family skip: glob support for `%History`, `%Audit%`, `%Log`, `%RecordVersion%` (extend `createExcludeTablesAndSchemasFilter`, `manage-metadata.ts:4065-4096`).
+- Row-count auto-suggest: flag tables over a configurable threshold (default ~5M) and, in interactive mode, offer skip / add-without-backfill / proceed (absorbs the useful half of old T2.3).
+- Ship a curated `metadata/sample-configs/aptify-excludes.cjs` so every Aptify onboarding doesn't rediscover the same list (old T1.10).
 
-**Effort:** 1–2 days. **Risk:** low — additive feature.
+**Effort:** ~2 days. **Risk:** low — additive. **Builds on:** existing entity-level skip.
 
-#### T1.3 Switch audit columns to metadata-only ALTER
+### Workstream B — Parallelism, split honestly by bottleneck *(the worker-threads ask)*
 
-Replace the three-statement add/update/alter pattern with:
+There is no `worker_threads` / `os.cpus()` usage in CodeGen today. But the win only materializes if we route each loop to the *right* primitive — threads for CPU work, wider async for I/O work.
 
-```sql
-ALTER TABLE x ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL CONSTRAINT DF_x___mj_CreatedAt DEFAULT GETUTCDATE();
-```
+- **B1 · CPU-bound → `worker_threads`.** The `skipDBUpdate` code-emit passes for entity subclasses, GraphQL, and Angular (`entity_subclasses_codegen.ts:147-149` and siblings) are template/AST string-building. Run them on a worker pool sized `os.cpus()-1`.
+- **B2 · CPU-bound → cache + parallelize.** Memoize `buildCascadeDeleteDependencies` (`sql_codegen.ts:2190-2221`) keyed by a metadata hash so unchanged schemas skip the O(n²) rebuild; parallelize the FK scan if still hot.
+- **B3 · I/O-bound → widen async, no threads.** Split the hardcoded SQL-exec batch (`sql_codegen.ts:216`) into a configurable `sqlGenerationConcurrency` (raise to ~20 on SQL Server). **Leave PostgreSQL at 1** — its serial fallback guards real catalog deadlocks (`:203-215`).
+- **B4 · Free restructure.** The top-level file-gen phases (GraphQL / Angular / DBSchema) run serially in `runFileGenerationPhase` (`runCodeGen.ts:510-659`) but are independent — `Promise.all` the independent ones.
+- **Stretch:** cross-schema worker partitioning (old T3.1).
 
-In SQL Server 2012+ this is metadata-only for fixed-size types with constant defaults. Detect compat level; fall back to current behavior for `< 110`.
+> ⚠️ **Worker-threads packaging gotcha.** MJ ships as bundled/symlinked workspace packages, so a worker entry file must stay resolvable inside the published `@memberjunction/cli` — the same failure class as the dynamic-`import()` `ERR_MODULE_NOT_FOUND` documented in `CLAUDE.md` §8. Use a deliberate, declared worker entry point; do **not** rely on `new Worker(__filename)` surviving the bundle.
 
-**Effort:** 1 day. **Risk:** medium — needs testing on PostgreSQL/MySQL providers. Worst case, gate behind a flag.
+**Effort:** B3/B4 ~2–3 days; B1/B2 ~1 week incl. the packaging work + tests. **Risk:** medium — measure DB throughput before settling `sqlGenerationConcurrency` defaults.
 
-#### T1.4 Add structured CLI status
+### Workstream C — Surface the telemetry that already exists *(cheap, high perceived value)*
 
-Required minimum:
-- Print `[Phase X/N] Phase Name` at every phase boundary
-- Update spinner every N items processed within a phase: `Adding audit columns: 705 / 2116 (33%, ETA 1h 12m)`
-- On exit, write a `.codegen-run-state.json` with phase history, durations, errors
+The phase tree and per-phase durations are already persisted; only the display is missing.
 
-**Effort:** 2 days. **Risk:** none — pure CLI/observability.
+- Print `[Phase X/N name]` at each boundary and within-phase counts (`705/2116`).
+- ETA by projecting against the last successful `~/.mj/codegen-state/run-*.json` (a lookup, not a model).
+- Echo the resolved effective statement timeout at startup (§2.8) and couple `acquireTimeoutMillis` to it (§2.7).
 
-#### T1.5 Make `dbRequestTimeout` discoverable / hard-to-misconfigure
+**Effort:** ~2 days. **Risk:** none — observability only.
 
-Two-part fix:
-1. Accept the key at `databaseSettings.dbRequestTimeout` in addition to root level.
-2. At CG startup, log the effective resolved timeout: `[CodeGen] DB request timeout: 600s (from mj.config.cjs)`. Operators currently have no signal that their override worked until something times out hours later.
+### Workstream D — Resume / checkpoint *(defer-decide)*
 
-**Effort:** half day. **Risk:** none.
+The one genuinely large architectural item. The run-state file is the natural foundation, and a schema-state hash would also unlock "fast mode" (old T3.3). **But** if Workstream A makes full Aptify runs fast enough, the semantic complexity of resume ("is this the same run? is entity 1,800 the same entity?") may not pay off. **Sequence last; decide after measuring with Workstreams A + C in place.**
 
-#### T1.6 Defensive validation on AI smart-field-identification output
+**Effort:** 1–2 weeks if pursued. **Risk:** medium — content-addressed identity, not positional.
 
-In `applySmartFieldIdentification` and `applyDefaultInViewUpdates`:
-- Null-guard every property of the AI response shape (`result.defaultInView`, `result.searchableFields`, `result.searchPredicate`, etc.)
-- For each field name the AI returns, verify it exists in the entity's actual field list. Drop any that don't match. Log a warning with the offending name.
-- If everything is dropped, fall back to deterministic heuristics (e.g., first string column matching `/name|title|label|description/i`, else the PK).
+### Recommended sequence
 
-**Effort:** 1 day. **Risk:** low. Prevents the crash cascade observed on NSTA where ~15 entities failed in this phase.
-
-#### T1.7 Robust `Name` field resolution in generated base view
-
-Replace unconditional `Name` references in the generated base view template with a resolved `NameField` per entity. If no name-like field exists, omit the virtual column rather than emitting an invalid view.
-
-**Effort:** 1 day. **Risk:** low. Eliminates the `Invalid column name 'Name'` view-compile failures observed on NSTA.
-
-#### T1.8 Detect & disambiguate column-name collisions in generated views
-
-When the view template assembles virtual columns from FK relationships, check for name collisions and disambiguate (e.g. append the source FK column name as a suffix). Currently emits invalid SQL when two FKs to the same entity collide.
-
-**Effort:** half day. **Risk:** low.
-
-#### T1.9 Retry-with-backoff on the 26 `Metadata.Refresh()` dataset queries
-
-Wrap each `RunView` inside `GetAllMetadata` with retry: 3 attempts, 5s / 15s / 30s backoff. Log which item retried.
-
-**Effort:** half day. **Risk:** low — only adds resilience.
-
-### Tier 2 — Medium effort (1–2 weeks each)
-
-#### T2.1 Chunked / paginated Metadata.Refresh()
-
-Refactor `GetAllMetadata` so each large item (EntityField, EntityFieldValue, EntityPermission, EntityRelationship) loads in pages of N (default 5,000) instead of all-in-one. Progress reported per page. Failure on one page doesn't lose the rest.
-
-This is the single biggest improvement for "the run takes a long time but at least it can survive a flaky query."
-
-**Effort:** 1 week including tests. **Risk:** medium — touches a hot path, need careful testing for ordering / completeness guarantees.
-
-#### T2.2 Checkpoint / `--resume`
-
-CG writes a per-run manifest to `.codegen-state/<run-id>.json` capturing:
-- Phase reached
-- Per-phase: items completed (entity IDs for entity-iterating phases)
-- Errors encountered
-- Database state hash (for sanity)
-
-`--resume <run-id>` (or `--resume-last`) skips completed entities/phases and continues. With a no-op detection layer it should be safe to re-run blindly too.
-
-**Effort:** 1–2 weeks. **Risk:** medium — semantically subtle (what is "the same run"?).
-
-#### T2.3 Interactive mode + `--skip-warnings` / `--auto-yes`
-
-When CG encounters a concern (e.g., "about to backfill 49M rows on `EntityRecordVersions`"), it can prompt interactively:
-
-```
-  EntityRecordVersions (49,318,059 rows) looks like an audit/versioning table.
-  Adding MJ audit columns will backfill all 49M rows (~25 min).
-
-  [s] Skip this table entirely (recommended)
-  [a] Add columns without backfilling (existing rows = NULL)
-  [b] Backfill anyway (slow)
-  [q] Quit
-
-  Choice [s]:
-```
-
-Paired with `--skip-warnings`, `--auto-yes`, and `--non-interactive` for CI / scripted runs.
-
-**Effort:** 1 week. **Risk:** low — additive UX layer over already-decided behavior.
-
-#### T2.4 Separate concurrency knobs for LLM, SQL, and file generation
-
-Split `advancedGeneration.batchSize` from new `sqlGenerationConcurrency` (default 20) and `fileGenerationConcurrency` (default `os.cpus()`). Wire through to existing `Promise.all` sites.
-
-**Effort:** 3–5 days. **Risk:** medium — DB throughput experiments needed to pick safe defaults.
-
-### Tier 3 — Larger architectural
-
-#### T3.1 Cross-schema parallelism in SQL generation
-
-Partition entities by schema. Spawn a worker per schema with its own batch loop. Coordinator collects errors and reports unified progress.
-
-**Effort:** 2 weeks. **Risk:** medium — care needed around cross-schema FKs and shared metadata tables.
-
-#### T3.2 Cached dependency graph
-
-Hash relevant Entity / EntityField columns into a `EntityDependencyCacheHash` per entity. Persist `EntityDependencyCache` table mapping hash → JSON dependency graph. On run start, rebuild only for entities whose hash changed.
-
-**Effort:** 2 weeks. **Risk:** medium — invalidation logic must be conservative (false negatives are fine, false positives = staleness).
-
-#### T3.3 "Fast mode" for unchanged-schema re-runs
-
-`--fast-regenerate` or auto-detected: if the schema hash hasn't changed since the last successful run, skip discovery, validation, and SQL recompilation. Only regenerate TypeScript / Angular artifacts.
-
-**Effort:** 2–3 weeks. **Risk:** higher — needs a robust schema-state hash and careful semantics.
-
-## 5. Sequencing Recommendation
-
-If the goal is to make CG usable on big Aptify-like schemas as soon as possible:
-
-1. **T1.5 (timeout discoverability)** + **T1.4 (CLI status)** — do first. Cheap. Massively reduces "is it dead?" / "did my config take effect?" anxiety, and surfaces where the real slow phases are. Better data for everything else.
-2. **T1.3 (metadata-only audit columns)** — biggest wall-clock win. Eliminates hours.
-3. **T1.2 (skip-entity)** — second biggest wall-clock win. Skips work that shouldn't happen at all.
-4. **T1.6 (AI output validation)** + **T1.7 (Name field resolution)** + **T1.8 (view column collisions)** — these were observed failing on NSTA. They produce broken output even when CG "completes." Each is small.
-5. **T1.1 (timeouts default)** + **T1.9 (retry)** — close the easy-failure paths.
-6. **T2.1 (chunked refresh)** — once T1 is in, this is the next-biggest reliability gain.
-7. **T2.2 (resume)** — gives operators a recovery path when something does still fail.
-8. **T2.3 (interactive)** — UX polish on top.
-9. **T2.4 → T3.x** — performance scaling work for the next class of problem.
+1. **A** (skip-entity) — biggest wall-clock win, lowest risk; unblocks fast iteration on the big DB.
+2. **C** (surface telemetry) — cheap, and gives the *measurements* that justify B and the D go/no-go.
+3. **B** (parallelism) — the worker-threads work, now data-driven.
+4. **D** (resume) — only if A+C+B haven't already made runs short enough.
 
 ## 6. Risks and Open Questions
 
-- **Cross-platform parity.** Audit-column metadata-only ALTER is SQL Server-specific. Need to verify the equivalent for PostgreSQL (`ADD COLUMN ... DEFAULT ... NOT NULL` is metadata-only in PG 11+) and MySQL (varies by storage engine).
-- **What does "metadata-y" mean precisely?** Pattern-based detection (`%History`, `%Audit`, `%Log`) will have false positives. Confirmation defaults + opt-out flags handle this, but the heuristic itself needs tuning across customer schemas.
-- **Resume semantics.** "Resume from entity 1,800" assumes entity 1,800 is the same entity on both runs. If the schema changes between runs, the ordering may not be stable. Need a content-addressed identifier, not a positional one.
-- **Backwards compatibility.** Audit columns being NULL on pre-MJ rows changes a soft invariant. Verify that downstream code (sp templates, view templates, BaseEntity) doesn't assume non-null.
-- **Concurrency safety.** Cross-schema parallelism assumes schemas are independent. Need to verify shared metadata tables (`__mj.Entity`, `__mj.EntityField`) tolerate concurrent writes from multiple generation workers.
+- **Cross-platform parity.** Audit-column metadata-only ALTER is intentionally *not* used on SQL Azure (§2.3) — leave it. PG handles its own path.
+- **What does "metadata-y" mean precisely?** Pattern detection (`%History`, `%Audit`) will have false positives. Confirmation defaults + opt-out flags (Workstream A) handle this; the heuristic still needs tuning across customer schemas.
+- **Worker packaging.** See the gotcha box in Workstream B — the highest-risk part of B1.
+- **Resume semantics.** "Resume from entity 1,800" needs a content-addressed identifier, not a positional one (Workstream D).
+- **Concurrency safety.** Wider SQL concurrency and any cross-schema partitioning must respect the PG catalog-deadlock constraint (`sql_codegen.ts:203-215`) and concurrent writes to shared metadata tables.
 
 ## 7. Source Material
 
-Captured in conversation 2026-05-11. Specific code references:
+Captured in conversation 2026-05-11; re-verified 2026-06-29. Current code references:
 
-- `packages/CodeGenLib/src/Config/db-connection.ts:36` — request timeout default
-- `packages/CodeGenLib/src/Config/config.ts:552` — `dbRequestTimeout` config key
-- `packages/CodeGenLib/src/Config/config.ts:647–656` — current exclude options
-- `packages/MJCore/src/generic/providerBase.ts:2655–2701` — `GetAllMetadata` body
-- `packages/CodeGenLib/src/Database/manage-metadata.ts:~2449` — entity field backfill
-- `packages/CodeGenLib/src/Database/sql_codegen.ts:504–625, 2186–2243, 4710–4717` — SQL gen batching, cascade-delete dependencies
-- `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts:149–150` — Angular subclass generation
-- `packages/CodeGenLib/src/runCodeGen.ts:209–222, 232–436` — top-level orchestration phases
+- `packages/CodeGenLib/src/Config/db-connection.ts:56` — unified `statementTimeoutMs` (SQL Server)
+- `packages/CodeGenLib/src/Config/pg-connection.ts:56-57` — `statementTimeoutMs` (PostgreSQL)
+- `packages/CodeGenLib/src/Config/config.ts:581-615` — `codegenPool` block
+- `packages/CodeGenLib/src/Database/manage-metadata.ts:4065-4096` — entity-level exclude filter
+- `packages/CodeGenLib/src/Database/manage-metadata.ts:5184-5268` — single-winner NameField + AI field validation
+- `packages/CodeGenLib/src/Database/sql_codegen.ts:203-216` — SQL batch sizing + PG serial fallback
+- `packages/CodeGenLib/src/Database/sql_codegen.ts:1819-1950` — view alias collision handling
+- `packages/CodeGenLib/src/Database/sql_codegen.ts:2145-2221` — uncached cascade-delete dependency analysis
+- `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts:147-149` — serial subclass generation
+- `packages/CodeGenLib/src/Misc/codegen-reporter.ts` — persisted run-state telemetry
+- `packages/CodeGenLib/src/Misc/status_logging.ts:49-69` — live elapsed ticker
+- `packages/MJCore/src/generic/providerBase.ts:3415-3554` — `GetAllMetadata` (single dataset, O(N+M) post-process)
+- `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts:3419-3630` — 21-query parallel dataset load
 
 NSTA database snapshot at time of capture:
-- 2,116 `dbo` tables, 277 `__mj` tables
-- ~390 GB total data
-- 49.3M rows in `EntityRecordVersions`
-- 20.8M rows in `ScheduleTransAccountEntry`
-- 7.9M rows in `OrderDetail`
-- 5.3M rows in `Subscription`
-- Compatibility level required to be bumped from 110 → 160 to support modern T-SQL (`STRING_SPLIT` etc.) used by MJ procs
+- 2,116 `dbo` tables, 277 `__mj` tables; ~390 GB total
+- 49.3M rows in `EntityRecordVersions`; 20.8M in `ScheduleTransAccountEntry`; 7.9M in `OrderDetail`; 5.3M in `Subscription`
+- Compatibility level bumped 110 → 160 for modern T-SQL used by MJ procs
 
-## 8. Post-Review Addendum (2026-05-12)
+## 8. Post-Review Addendum (2026-05-12) — superseded
 
-Findings from a code-verification pass over the original plan. Inline corrections appear under §2.2, §2.4, and §2.10; the items below are additions, sequencing changes, and risk callouts the original plan didn't have.
-
-### 8.1 Sequencing change
-
-Swap **T1.2 ahead of T1.3** in §5. Skipping `EntityRecordVersions` entirely (T1.2) is strictly better than backfilling it faster (T1.3), and T1.2 reduces T1.3's testing surface. Revised order for the first wave:
-
-1. T1.5 + T1.4 (timeout discoverability + CLI status) — lead with these so all subsequent prioritization is data-driven.
-2. **T1.2 (skip-entity)** — eliminate work that shouldn't happen at all.
-3. **T1.3 (metadata-only audit ALTER)** — speed up the work that should.
-4. T1.6 / T1.7 / T1.8 (correctness fixes).
-5. T1.1 / T1.9 (resilience defaults).
-6. T2.1, then T2.2, etc.
-
-### 8.2 New tasks to add
-
-- **T1.10 — Aptify-specific sample exclude config.** Ship `metadata/sample-configs/aptify-excludes.cjs` (or similar) with a curated skip list for Aptify schemas: `EntityRecordVersions`, `*History`, the trans-log family, etc. Every customer onboarding an Aptify database otherwise rediscovers the same list. Cheap, high-leverage, depends only on T1.2 landing.
-- **T1.11 — Audit-column NULL-tolerance audit (precondition for T1.3).** Before shipping the metadata-only ALTER, grep for `__mj_CreatedAt` / `__mj_UpdatedAt` usage across the codebase and confirm nothing assumes NOT NULL post-backfill. View templates, sp templates, and `BaseEntity` are the most likely offenders. Risk-mitigation only; gates T1.3.
-- **T1.12 — Cross-platform parity for metadata-only ALTER (precondition for T1.3).** §6 lists this as a risk; promote it to a task. PostgreSQL 11+ supports the equivalent (`ADD COLUMN ... DEFAULT ... NOT NULL` is metadata-only with a non-volatile default). MySQL behavior is storage-engine-dependent and may need to retain the 3-statement path. Compat-detect and gate.
-- **T1.13 — Phase-level wall-clock telemetry.** A direct consequence of T1.4: once phase boundaries are logged, also persist per-phase durations to the run-state file. The current plan estimates which phases dominate; we should *measure* before scoping T2.x.
-
-### 8.3 Re-scoping notes for existing tasks
-
-- **T2.1 (chunked `Metadata.Refresh()`)** — see §2.2 correction. The 1-week estimate was based on retrying 26 imagined calls. Actual fix is server-side pagination of one dataset query, which is structurally different work. Re-estimate after reading the actual `GetDatasetByName('MJ_Metadata')` resolver.
-- **T1.2 (skip-entity)** — see §2.4 correction. Reframe as "extend schema-level skip to table-level + pattern + row-count heuristic." Smaller than originally scoped.
-- **T1.7 (NameField resolution)** — see §2.10 correction. Start with a focused repro on NSTA to identify the offending code branch. Likely a single conditional, not a template-wide rewrite.
-
-### 8.4 Confirmed-as-stated items
-
-These were verified against the source and the plan's framing is accurate:
-
-- §2.1 / T1.1, T1.5 — `db-connection.ts:36` defaults `requestTimeout` to 120s; not coupled to `acquireTimeoutMillis`.
-- §2.3 / T1.3 — `manage-metadata.ts:2946–2958` uses the 3-statement add-NULL / UPDATE / ALTER-NOT-NULL pattern via `dbProvider.addColumnSQL()` + `BatchSeparator`.
-- §2.9 / T1.6 — `manage-metadata.ts:4965` does `result.defaultInView.includes(...)` with no null-guard on the container. Field-name validation does run (4968–4973), but only when the container is a valid array.
-- §3.1 / T2.4 — the `5` from `advancedGeneration.batchSize` is reused for DB-DDL batches at `sql_codegen.ts:216` and `manage-metadata.ts:4710`. Conflation is real.
-- §3.3 — `sql_codegen.ts:2186–2217` `buildCascadeDeleteDependencies` is uncached.
-- §3.5 — `entity_subclasses_codegen.ts:149–150` is a serial `for…await` loop.
+The 2026-05-12 addendum (§2.2/§2.4/§2.10 corrections, sequencing, T1.10–T1.13) has been folded into the per-section `STATUS` boxes above and the §4 disposition table. Retained here only as a pointer; **§9 is the live plan.**
