@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { assertReadOnlyNativeQuery } from "../sqlReadOnlyScreen";
+import { assertReadOnlyNativeQuery, assertReadOnlyClause } from "../sqlReadOnlyScreen";
 
 /**
  * Read-only screen for the native-query path (EDS is read-only by contract). Fail-closed:
@@ -44,6 +44,41 @@ describe("assertReadOnlyNativeQuery", () => {
         });
         it("unparseable SQL", () => {
             expect(() => assertReadOnlyNativeQuery("this is not valid sql @#$%", "ansi")).toThrow();
+        });
+    });
+});
+
+describe("assertReadOnlyClause", () => {
+    describe("allows legitimate filter / order-by fragments", () => {
+        it("a simple WHERE predicate", () => {
+            expect(() => assertReadOnlyClause("Status = 'Active'", "ansi", "where")).not.toThrow();
+        });
+        it("a compound WHERE predicate", () => {
+            expect(() => assertReadOnlyClause("Score >= 10 AND Region = 'East'", "ansi", "where")).not.toThrow();
+        });
+        it("a read subquery in the WHERE (still read-only)", () => {
+            expect(() => assertReadOnlyClause("id IN (SELECT id FROM other_t)", "ansi", "where")).not.toThrow();
+        });
+        it("an ORDER BY with direction", () => {
+            expect(() => assertReadOnlyClause("Name DESC", "ansi", "orderby")).not.toThrow();
+        });
+        it("a multi-column ORDER BY (PK-style)", () => {
+            expect(() => assertReadOnlyClause("id, name", "ansi", "orderby")).not.toThrow();
+        });
+    });
+
+    describe("rejects injection vectors (fail-closed)", () => {
+        it("comment marker in WHERE (would truncate the rest of the query)", () => {
+            expect(() => assertReadOnlyClause("1=1 --", "ansi", "where")).toThrow(/comment/i);
+        });
+        it("statement separator in WHERE", () => {
+            expect(() => assertReadOnlyClause("1=1; DROP TABLE orders", "ansi", "where")).toThrow(/separator/i);
+        });
+        it("statement separator in ORDER BY", () => {
+            expect(() => assertReadOnlyClause("name; DROP TABLE orders", "ansi", "orderby")).toThrow(/separator/i);
+        });
+        it("parenthesis break-out attempt in WHERE", () => {
+            expect(() => assertReadOnlyClause("1=1) UNION SELECT password FROM users WHERE ('x'='x'", "ansi", "where")).toThrow();
         });
     });
 });

@@ -47,3 +47,46 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
         );
     }
 }
+
+/**
+ * Defense-in-depth screen for a caller-supplied WHERE-body / ORDER-BY-body fragment before it is
+ * interpolated into a driver SELECT (see `BaseSqlExternalDataSourceDriver.buildSelectSql`).
+ *
+ * The clause contract is the same as MJ RunView's `ExtraFilter`/`OrderBy` — a trusted dialect
+ * fragment the provider screens (`ValidateUserProvidedSQLClause`). But the engine is the security
+ * boundary for the drivers, so it must NOT rely on a specific caller having screened: any consumer
+ * (a different provider, a direct caller, a test harness) reaches the raw interpolation otherwise.
+ * This re-screens at the boundary. Fail-closed; throws when the fragment:
+ *   - contains a comment marker (`--`, `/* *​/`) — can truncate the rest of the generated query, or
+ *   - contains a statement separator (`;`), or
+ *   - does not parse as a single read-only statement once wrapped (break-out / smuggled write/DDL).
+ *
+ * Note: this blocks statement-stacking, comment truncation, and smuggled writes/DDL — it does NOT
+ * attempt to block every read-side resource-abuse function (e.g. `pg_sleep`, `UTL_HTTP`); the data
+ * source connects under its own (ideally least-privilege, read-only) credential for that surface.
+ */
+export function assertReadOnlyClause(clause: string, dialectKey: SqlDialectKey, kind: "where" | "orderby"): void {
+    if (/--|\/\*|\*\//.test(clause)) {
+        throw new Error(`External ${kind} clause rejected: SQL comment markers are not allowed.`);
+    }
+    if (/;/.test(clause)) {
+        throw new Error(`External ${kind} clause rejected: statement separators are not allowed.`);
+    }
+    // Structural validation: wrap the fragment as a single plain SELECT and parse it. A clean
+    // fragment keeps the top-level statement a `select`; a break-out (e.g. `1=1) UNION SELECT
+    // secret ...`) turns the top level into a set-op, and a smuggled write turns it into a mutation.
+    // Requiring `StatementKind === 'select'` rejects both the UNION-exfiltration break-out and writes,
+    // while still permitting a UNION nested *inside* a subquery (which stays a top-level select).
+    // Anything that doesn't parse is refused (fail-closed). The table name is a throwaway placeholder.
+    const wrapped =
+        kind === "where"
+            ? `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`
+            : `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`;
+    const dialect = dialectFor(dialectKey);
+    const parser = new SQLParser(wrapped, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== "select") {
+        throw new Error(
+            `External ${kind} clause rejected: not a safe read-only ${kind} fragment — refusing under uncertainty.`,
+        );
+    }
+}

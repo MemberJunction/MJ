@@ -2,7 +2,7 @@ import { ExternalObjectType, ExternalSchemaRelationship } from "@memberjunction/
 import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { BaseExternalDataSourceDriver } from "./BaseExternalDataSourceDriver";
 import { ExternalFkRow, ExternalViewParams } from "./types";
-import { assertReadOnlyNativeQuery, type SqlDialectKey } from "./sqlReadOnlyScreen";
+import { assertReadOnlyNativeQuery, assertReadOnlyClause, type SqlDialectKey } from "./sqlReadOnlyScreen";
 
 /**
  * Intermediate base for the relational (SQL) external data source drivers
@@ -45,6 +45,15 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
   }
 
   /**
+   * Re-screen a caller-supplied WHERE / ORDER-BY fragment at the driver boundary (defense in depth)
+   * before it is interpolated into a SELECT — the engine does not rely on an upstream caller having
+   * screened it. Fail-closed; see {@link assertReadOnlyClause}.
+   */
+  protected screenReadOnlyClause(clause: string, kind: "where" | "orderby"): void {
+    assertReadOnlyClause(clause, this.sqlDialectKey(), kind);
+  }
+
+  /**
    * Dialect-specific ORDER BY + paging suffix appended after the `FROM`/`WHERE` of a SELECT.
    * Receives the full {@link ExternalViewParams}; returns the clause (with a leading space) or ''.
    */
@@ -61,10 +70,17 @@ export abstract class BaseSqlExternalDataSourceDriver<TConnection = unknown> ext
   /**
    * Build a parameter-free SELECT. The projection + filter are dialect-agnostic; ordering/paging is
    * delegated to {@link orderAndPageClause} (and an optional {@link selectTopClause}). The `filter`
-   * is a trusted dialect WHERE body — the same contract as MJ RunView's `ExtraFilter` — screened
-   * upstream by the provider before it reaches a driver.
+   * and `orderBy` are dialect fragments — the same contract as MJ RunView's `ExtraFilter`/`OrderBy` —
+   * and are re-screened HERE at the driver boundary ({@link screenReadOnlyClause}) before
+   * interpolation: defense in depth, NOT relying on an upstream caller having screened them.
    */
   protected buildSelectSql(target: string, params: ExternalViewParams): string {
+    if (params.filter) {
+      this.screenReadOnlyClause(params.filter, 'where');
+    }
+    if (params.orderBy) {
+      this.screenReadOnlyClause(params.orderBy, 'orderby');
+    }
     const projection = params.fields?.length ? params.fields.map((f) => this.quoteIdent(f)).join(', ') : '*';
     let sql = `SELECT ${this.selectTopClause(params)}${projection} FROM ${target}`;
     if (params.filter) {
