@@ -200,8 +200,14 @@ export class MaterializationRefresher {
                 ? `SELECT * FROM ${entity.SchemaName}."${entity.BaseView}"`
                 : `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}]`;
         }
-        // Query case — unparameterized queries only (enforced at materialization time), so SQL is static.
+        // Query case. For a RowFilterBroad materialization (Phase 2d) the BROAD source SELECT — the
+        // query with its row-filter WHERE predicate(s) removed — is persisted on the row at
+        // materialization time; the refresh rebuilds it broad and the filter is re-applied at read
+        // (ExtraFilter on the materialized VE). Unparameterized queries use the static query SQL.
         if (!matResult.SourceQueryID) return null;
+        if (matResult.ParamMode === 'RowFilterBroad') {
+            return matResult.BroadSQL && matResult.BroadSQL.trim().length > 0 ? matResult.BroadSQL : null;
+        }
         const query = await provider.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
         await query.Load(matResult.SourceQueryID);
         return query.SQL && query.SQL.trim().length > 0 ? query.SQL : null;

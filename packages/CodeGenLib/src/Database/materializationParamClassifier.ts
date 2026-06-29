@@ -120,7 +120,7 @@ function defaultHoldValue(type: QueryParamType): unknown {
 }
 
 /** Builds the base value map with every parameter held at its stable value. */
-function buildHeldValues(params: QueryParamDef[]): Record<string, unknown> {
+export function buildHeldValues(params: QueryParamDef[]): Record<string, unknown> {
     const held: Record<string, unknown> = {};
     for (const p of params) {
         held[p.Name] = holdValue(p);

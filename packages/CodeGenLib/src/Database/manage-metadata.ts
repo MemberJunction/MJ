@@ -1,14 +1,17 @@
-import { SQLDialect } from '@memberjunction/sql-dialect';
+import { SQLDialect, SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenQueryRow, CodeGenDatabaseProvider, MaterializedColumnSpec } from './codeGenDatabaseProvider';
 import { analyzeQueryForMaterialization } from './materializationAnalysis';
+import { classifyQueryParameters, buildHeldValues, type QueryParamDef, type VariantRenderer } from './materializationParamClassifier';
+import { buildBroadRowFilterSQL } from './materializationBroadRender';
+import { QueryParameterProcessor, type QueryTemplateInput } from '@memberjunction/query-processor';
 // Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
 // under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
 // `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
 // and the SS code path silently fails.
 import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
-import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
-import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
+import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, RunQuerySQLFilterManager, SeverityType, UserInfo } from "@memberjunction/core";
+import { MJApplicationEntity, MJEntityFieldSchema, MJQueryParameterEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
@@ -1291,6 +1294,71 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Phase 2d — classifies a parameterized query's parameters (deterministic render-and-diff) and,
+    * when every parameter is a safe row filter, produces the BROAD source SQL the refresh engine
+    * materializes (the query with its row-filter WHERE predicates removed). Returns the persistence
+    * fields, or a precise refusal (per-parameter reasons) so non-qualifying queries are skipped loudly.
+    */
+   protected async classifyParameterizedQueryForMaterialization(
+      pool: CodeGenConnection,
+      queryId: string,
+      queryName: string,
+      outputColumns: string[],
+      currentUser: UserInfo,
+   ): Promise<{ qualifies: true; rowFilterColumns: string[]; broadSQL: string } | { qualifies: false; reason: string }> {
+      const coreSchema = mj_core_schema();
+      const md = new Metadata();
+
+      // Load the query template + parameter definitions (typed entities for the renderer).
+      const qRes = await this.runQueryWithParams(pool, `SELECT SQL, UsesTemplate FROM ${this.qs(coreSchema, 'Query')} WHERE ID = @QID`, { QID: queryId });
+      const sqlText = (qRes.recordset[0]?.SQL as string) ?? '';
+      const usesTemplate = !!qRes.recordset[0]?.UsesTemplate;
+      const paramRows = await this.runQueryWithParams(pool, `SELECT Name, Type, SampleValue, DefaultValue, IsRequired, ValidationFilters FROM ${this.qs(coreSchema, 'QueryParameter')} WHERE QueryID = @QID ORDER BY Sequence`, { QID: queryId });
+      const queryParams: MJQueryParameterEntity[] = [];
+      for (const row of paramRows.recordset) {
+         const pe = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters', currentUser);
+         pe.LoadFromData(row);
+         queryParams.push(pe);
+      }
+
+      // Platform-aware Nunjucks renderer — the same SQL-safe filters production uses.
+      const platform = this.dbProvider.PlatformKey;
+      RunQuerySQLFilterManager.Instance.SetPlatform(platform);
+      const dialect = platform === 'postgresql' ? new PostgreSQLDialect() : new SQLServerDialect();
+      const templateInput: QueryTemplateInput = { SQL: sqlText, UsesTemplate: usesTemplate, Parameters: queryParams };
+      const render: VariantRenderer = (vals) => {
+         const res = QueryParameterProcessor.processQueryTemplate(templateInput, vals, undefined, true);
+         if (!res.success) {
+            throw new Error(res.error ?? 'template render failed');
+         }
+         return res.processedSQL;
+      };
+
+      const paramDefs: QueryParamDef[] = queryParams.map((p) => ({ Name: p.Name, Type: p.Type, SampleValue: p.SampleValue }));
+      const classification = classifyQueryParameters({ queryName, params: paramDefs, outputColumns, dialect, render });
+      if (!classification.qualification.qualifies) {
+         const detail = classification.perParam.map((pp) => `${pp.name}: ${pp.verdict.reason}`).join('; ');
+         return { qualifies: false, reason: `${classification.qualification.reason ?? 'parameters not materializable'}${detail ? ` — [${detail}]` : ''}` };
+      }
+      if (classification.qualification.paramMode !== 'RowFilterBroad') {
+         return { qualifies: false, reason: `parameterization mode '${classification.qualification.paramMode}' is not supported for materialization in v1 (only RowFilterBroad)` };
+      }
+
+      // Build the broad source SQL: render a concrete instance (held values) then strip the row-filter predicates.
+      let renderedHeld: string;
+      try {
+         renderedHeld = render(buildHeldValues(paramDefs));
+      } catch (e) {
+         return { qualifies: false, reason: `could not render the query to build broad SQL: ${e instanceof Error ? e.message : String(e)}` };
+      }
+      const broad = buildBroadRowFilterSQL(renderedHeld, classification.qualification.rowFilterColumns, dialect);
+      if (broad.removedCount === 0) {
+         return { qualifies: false, reason: `expected to strip row-filter predicate(s) on [${classification.qualification.rowFilterColumns.join(', ')}] but none were removed from the rendered SQL — refusing to avoid a wrongly-filtered materialization` };
+      }
+      return { qualifies: true, rowFilterColumns: classification.qualification.rowFilterColumns, broadSQL: broad.sql };
+   }
+
+   /**
     * Processes query materialization (CodeGen materialization phase, sub-step C — plan §4.2).
     * Scans queries flagged `IsMaterialized = 1` and, for each that *qualifies* (unparameterized,
     * has declared output fields — see analyzeQueryForMaterialization, §9/§10):
@@ -1331,11 +1399,36 @@ export class ManageMetadataBase {
          const fieldsRes = await this.runQueryWithParams(pool, `SELECT Name, SQLFullType, IsComputed FROM ${this.qs(coreSchema, 'QueryField')} WHERE QueryID = @QID ORDER BY Sequence`, { QID: queryId });
          const fields = fieldsRes.recordset.map((r: CodeGenQueryRow) => ({ Name: r.Name as string, SQLFullType: r.SQLFullType as string, IsComputed: !!r.IsComputed }));
 
-         const analysis = analyzeQueryForMaterialization({ queryName, isParameterized, fields, surrogateSQLType });
+         // Parameterized queries (Phase 2d): classify via deterministic render-and-diff. A query whose
+         // parameters are all safe row filters materializes BROAD (the row-filter predicate is removed)
+         // and the filter is re-applied at read; anything not provably a safe row filter is refused with
+         // a precise reason. Unparameterized queries skip this entirely.
+         let paramMode: 'None' | 'RowFilterBroad' = 'None';
+         let rowFilterColumns: string[] = [];
+         let broadSQL: string | null = null;
+         if (isParameterized) {
+            const pc = await this.classifyParameterizedQueryForMaterialization(pool, queryId, queryName, fields.map((f) => f.Name), currentUser);
+            if (!pc.qualifies) {
+               logStatus(`    > Skipping materialization of parameterized query "${queryName}": ${pc.reason}`);
+               continue;
+            }
+            paramMode = 'RowFilterBroad';
+            rowFilterColumns = pc.rowFilterColumns;
+            broadSQL = pc.broadSQL;
+         }
+
+         // The materialized table's column shape is the query's output columns — independent of
+         // parameterization (a row-filter query is materialized broad over the same columns). Pass
+         // isParameterized:false so the analyzer yields the shape; the param gate above already ran.
+         const analysis = analyzeQueryForMaterialization({ queryName, isParameterized: false, fields, surrogateSQLType });
          if (!analysis.qualifies) {
             logStatus(`    > Skipping materialization of query "${queryName}": ${analysis.reason}`);
             continue;
          }
+
+         // SQL literals for the row-filter persistence columns (shared by the insert/update branches).
+         const rowFilterColumnsLit = rowFilterColumns.length > 0 ? `'${esc(JSON.stringify(rowFilterColumns))}'` : 'NULL';
+         const broadSQLLit = broadSQL ? `'${esc(broadSQL)}'` : 'NULL';
 
          // RLS downgrade gate (§6.2, ships day one) — a materialized query entity does NOT inherit its
          // source entities' row-level security. Refuse to materialize when any source entity carries a
@@ -1393,7 +1486,8 @@ export class ManageMetadataBase {
          if (existing.recordset.length > 0) {
             matResultId = existing.recordset[0].ID;
             const sqlUpd = `UPDATE ${this.qs(coreSchema, 'MaterializedResult')}
-                              SET GeneratedEntityID=${idLit(generatedEntityId)}, SchemaName='${esc(coreSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}'
+                              SET GeneratedEntityID=${idLit(generatedEntityId)}, SchemaName='${esc(coreSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
+                                  ${this.qi('ParamMode')}='${paramMode}', ${this.qi('RowFilterColumns')}=${rowFilterColumnsLit}, ${this.qi('BroadSQL')}=${broadSQLLit}
                             WHERE ID='${matResultId}'`;
             await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for query "${queryName}"`);
          } else {
@@ -1401,9 +1495,9 @@ export class ManageMetadataBase {
             const c = (n: string) => this.qi(n);
             const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
                                  ${c('ID')}, ${c('SourceType')}, ${c('SourceQueryID')}, ${c('GeneratedEntityID')}, ${c('SchemaName')}, ${c('TableName')}, ${c('ViewName')},
-                                 ${c('ParamMode')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
+                                 ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
                             VALUES ( '${matResultId}', 'Query', '${queryId}', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
-                                 'None', 'FullRebuild', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
+                                 '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, 'FullRebuild', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
             await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
          }
          await this.LogSQLAndExecute(pool, `UPDATE ${this.qs(coreSchema, 'Query')} SET MaterializedResultID='${matResultId}' WHERE ID='${queryId}'`, `Set Query.MaterializedResultID back-link for "${queryName}"`);
