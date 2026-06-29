@@ -1,4 +1,4 @@
-import { Component, EventEmitter, HostBinding, Input, Output } from '@angular/core';
+import { booleanAttribute, Component, EventEmitter, HostBinding, Input, Output } from '@angular/core';
 
 /**
  * Visual intent of an `<mj-alert>`. Drives the color treatment and the default
@@ -185,8 +185,8 @@ export class MJAlertComponent {
    */
   @Input() Icon: string | null = null;
 
-  /** Show a dismiss (×) button. */
-  @Input() Dismissible = false;
+  /** Show a dismiss (×) button. Accepts a bare attribute (`Dismissible`) or `[Dismissible]="expr"`. */
+  @Input({ transform: booleanAttribute }) Dismissible = false;
 
   /**
    * ARIA live role on the host. When unset, defaults from `Variant`:
