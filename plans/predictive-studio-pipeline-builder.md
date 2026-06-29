@@ -31,10 +31,11 @@ visualization fed with fake data. The builder reads/writes these real fields:
 
 ## Phases (commit per phase)
 
-- [ ] **P1 — Real read-only DAG.** Pipeline picker (list → select) → build the DAG from the real spec →
-      render the recovered canvas; inspector shows the **selected node's real config** (read-only). No fake
-      data, no dead Fit/Validate/Train (hidden until P5). **AC:** `ps-live-renewal-lifecycle` renders its
-      actual sources + steps + algorithm + target.
+- [x] **P1 — Real read-only DAG.** ✅ Pipeline picker (pills → select) → builds the DAG from the real
+      spec (`SourceBindings` → root steps; `FeatureSteps` edges via `Inputs`; terminals + target → algorithm
+      → output) → recovered longest-path layout + bezier edges; inspector shows the **selected node's real
+      config** + live **Leakage guard / As-of / Validation** parsed from the pipeline (read-only). No fake
+      data; no dead Fit/Validate/Train (deferred to P5). Dashboards build clean, PS tests 82 pass.
 - [ ] **P2 — Editable inspector.** Selected node's config becomes editable in-memory (rename, change
       columns/strategy/dims/etc. per Kind). Dirty tracking. No persistence yet.
 - [ ] **P3 — Add / remove / rewire.** Palette drag-to-add a node of each Kind; delete a node; connect/disconnect

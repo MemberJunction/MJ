@@ -149,6 +149,7 @@
     "@memberjunction/ng-ui-components": "5.43.0",
     "@memberjunction/ng-versions": "5.43.0",
     "@memberjunction/ng-word-cloud": "5.43.0",
+    "@memberjunction/predictive-studio-core": "5.43.0",
     "@memberjunction/skip-types": "5.43.0",
     "@memberjunction/tag-engine-base": "5.43.0",
     "@memberjunction/templates-base-types": "5.43.0",
