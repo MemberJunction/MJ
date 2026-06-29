@@ -1089,11 +1089,11 @@
       </div>
 
       @if (DDLPreviewWarnings.length > 0) {
-        <div class="ddl-warnings">
+        <mj-alert Variant="warning" Size="sm">
           @for (warn of DDLPreviewWarnings; track warn) {
-            <div class="ddl-warning"><i class="fa-solid fa-triangle-exclamation"></i> {{ warn }}</div>
+            <div>{{ warn }}</div>
           }
-        </div>
+        </mj-alert>
       }
 
       @if (DDLPreview) {

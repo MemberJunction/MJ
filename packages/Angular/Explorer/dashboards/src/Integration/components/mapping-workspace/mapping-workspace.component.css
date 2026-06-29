@@ -568,13 +568,6 @@
 .mini-label { font-size: 10px; color: var(--mj-text-disabled); }
 
 /* ===== Validation ===== */
-.validation-banner {
-  background: var(--mj-color-warning-50); border: 1px solid var(--mj-color-warning-200); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 14px;
-  display: flex; align-items: flex-start; gap: 10px;
-  font-size: 13px; color: var(--mj-color-warning-600);
-}
-.validation-banner > i { margin-top: 2px; }
 .validation-warnings { display: flex; flex-direction: column; gap: 2px; }
 
 .field-map-card.validation-error .fmc-source {
