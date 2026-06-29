@@ -67,6 +67,14 @@ SystemDiagnostics alerts live in the **inline template of
      `ng` debug API), screenshot, revert — the established force-state technique. Used during
      migration for layout/context spot-checks the static harness can't cover.
 
+## Migration conventions (decided)
+- **Icons: standardize to the variant default** — do NOT preserve per-instance semantic
+  icons (e.g. role-dialog's `fa-user-tag`/`fa-shield-halved` were dropped for the standard
+  info/warning icons). Maximum consistency; `Icon=` override reserved for genuinely special cases.
+- **Bare boolean attrs**: `<mj-alert Dismissible>` works (the input uses `booleanAttribute`).
+- **Drop** the bespoke icon, `role` attribute, and close button on migration — the component
+  renders its own.
+
 ## Migration notes
 - **+actions** (need the `[actions]` slot): `entity-pipeline-panel` error-card (Retry), `scheduling-overview` alert-item (Release), `test-run-form` error-banner (Retry), the two `alert alert-danger` matrices (Retry). ~5.
 - **Dismissible** (need `Dismissible`): `conversation-feedback`, `user-profile-settings`, `mcp-dashboard`, SystemDiagnostics telemetry banner.
