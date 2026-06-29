@@ -64,10 +64,7 @@
                                     </div>
 
                                     @if (!getAllowUserPreference(vm.type)) {
-                                        <div class="info-message" role="alert" aria-live="polite">
-                                            <i class="fa-solid fa-info-circle" aria-hidden="true"></i>
-                                            <span>This notification type's delivery channels cannot be customized.</span>
-                                        </div>
+                                        <mj-alert Variant="info">This notification type's delivery channels cannot be customized.</mj-alert>
                                     }
                                 </div>
 
