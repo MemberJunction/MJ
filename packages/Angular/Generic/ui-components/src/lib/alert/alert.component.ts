@@ -136,30 +136,36 @@ const DEFAULT_ICONS: Record<MJAlertVariant, string> = {
     }
     :host(.mj-alert--sm) .mj-alert__icon { font-size: 0.875rem; }
 
-    /* ── Variants (token-driven, dark-mode-safe) ───────────────── */
+    /* ── Variants (token-driven, dark-mode-safe) ───────────────────
+       Background is an OPAQUE tint (status color mixed into the surface), NOT the
+       translucent --mj-status-*-bg token. Translucent backgrounds let whatever
+       sits behind the alert show through, so the same alert rendered on two
+       different dialog backdrops looked different. An opaque tint is identical
+       regardless of what's behind it, and still adapts to light/dark via the
+       surface + status tokens. */
     :host(.mj-alert--info) {
-      background: var(--mj-status-info-bg);
+      background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
       border-color: var(--mj-status-info-border);
       color: var(--mj-status-info-text);
     }
     :host(.mj-alert--info) .mj-alert__icon { color: var(--mj-status-info); }
 
     :host(.mj-alert--success) {
-      background: var(--mj-status-success-bg);
+      background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
       border-color: var(--mj-status-success-border);
       color: var(--mj-status-success-text);
     }
     :host(.mj-alert--success) .mj-alert__icon { color: var(--mj-status-success); }
 
     :host(.mj-alert--warning) {
-      background: var(--mj-status-warning-bg);
+      background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
       border-color: var(--mj-status-warning-border);
       color: var(--mj-status-warning-text);
     }
     :host(.mj-alert--warning) .mj-alert__icon { color: var(--mj-status-warning); }
 
     :host(.mj-alert--error) {
-      background: var(--mj-status-error-bg);
+      background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface));
       border-color: var(--mj-status-error-border);
       color: var(--mj-status-error-text);
     }
