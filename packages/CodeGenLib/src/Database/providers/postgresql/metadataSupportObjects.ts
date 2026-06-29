@@ -448,6 +448,7 @@ BEGIN
   LEFT JOIN unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS ex(v)
     ON e."SchemaName"::text = TRIM(ex.v)
   WHERE e."VirtualEntity" = FALSE
+    AND e."ExternalDataSourceID" IS NULL -- exclude external-data-source entities (no physical table/view; data is remote)
     AND ex.v IS NULL
     AND (NOT v_is_scoped OR ef."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
 
