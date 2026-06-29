@@ -47,9 +47,14 @@ col() { # $1 themeAttr  $2 label
   alert warning "" "$(ic warning)" '<strong>Cache not initialized.</strong> The LocalCacheManager requires initialization with a storage provider during app startup.'
   alert warning sm "$(ic warning)" 'This pattern has been called 5 times. Consider caching or batching.'
 
-  echo '<div class="grp">Integration (pending commit)</div>'
+  echo '<div class="grp">Integration (committed)</div>'
   alert warning "" "$(ic warning)" '<div class="vw"><span>Source field "amount" is not mapped to any target.</span><span>Target field "status" has no source.</span></div>'
   alert warning sm "$(ic warning)" '<div><div>Column "legacy_id" will be dropped.</div><div>Type change on "created" may truncate data.</div></div>'
+
+  echo '<div class="grp">AI / Testing / DatabaseDesigner (pending commit)</div>'
+  alert warning "" "$(ic warning)" 'Merging is not available for this entity. Detection results are read-only.'
+  alert warning "" "$(ic warning)" 'Low agreement may indicate evaluation criteria need refinement.'
+  alert warning "" "$(ic warning)" 'You do not have authorization to create entities in any schema. Contact your administrator.'
 
   echo '</div></div>'
 }
