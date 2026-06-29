@@ -336,7 +336,7 @@ export interface SystemDiagnosticsUserPreferences {
                         </table>
                       </div>
         
-                      <mj-alert Variant="warning" Icon="fa-solid fa-lightbulb">
+                      <mj-alert Variant="warning" Icon="fa-solid fa-lightbulb" class="recommendation-banner">
                         <strong>Recommendation:</strong>
                         Consider consolidating data loading by having dependent engines
                         access data from a parent engine, or restructuring the engine
@@ -1157,7 +1157,7 @@ export interface SystemDiagnosticsUserPreferences {
                     </div>
                   </div>
                   @if (eventDetailPanel.relatedPattern.count >= 2) {
-                    <mj-alert Variant="warning" Size="sm">
+                    <mj-alert Variant="warning" Size="sm" class="pattern-warning">
                       This pattern has been called {{ eventDetailPanel.relatedPattern.count }} times. Consider caching or batching.
                     </mj-alert>
                   }

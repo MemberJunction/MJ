@@ -2228,6 +2228,10 @@
 }
 
 
+/* Position the migrated mj-alerts (component is margin-less apart from its bottom) */
+.recommendation-banner { margin-top: 20px; }
+.pattern-warning { margin-top: 12px; }
+
 /* Detail Actions */
 .detail-actions {
     display: flex;

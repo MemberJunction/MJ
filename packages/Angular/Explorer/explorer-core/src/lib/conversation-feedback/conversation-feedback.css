@@ -268,8 +268,9 @@
 }
 
 /* -----------------------------------------------------------------------------
-   Error banner
+   Error banner — positions the error mj-alert (component is margin-less but for bottom)
    ----------------------------------------------------------------------------- */
+.error-banner { margin: 0 1.5rem 0.75rem; }
 
 /* -----------------------------------------------------------------------------
    Scrollable Content
