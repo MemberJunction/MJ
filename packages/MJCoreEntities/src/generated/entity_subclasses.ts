@@ -19816,6 +19816,16 @@ export const MJMaterializedResultSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RowFilterColumns: z.string().nullable().describe(`
+        * * Field Name: RowFilterColumns
+        * * Display Name: Row Filter Columns
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the output column names that the row-filter parameters map to. Populated when ParamMode is RowFilterBroad. The materialization holds all rows broad and these columns are filtered at read time (plan section 6.4). NULL for non-row-filter materializations.`),
+    BroadSQL: z.string().nullable().describe(`
+        * * Field Name: BroadSQL
+        * * Display Name: Broad SQL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: For a RowFilterBroad materialization, the broad source SELECT that the refresh engine materializes: the source query with its row-filter WHERE predicates removed, so the materialized table holds every row the query could return for any parameter value. NULL for non-parameterized materializations, which use the source query SQL directly.`),
     SourceQuery: z.string().nullable().describe(`
         * * Field Name: SourceQuery
         * * Display Name: Source Query
@@ -82071,6 +82081,32 @@ export class MJMaterializedResultEntity extends BaseEntity<MJMaterializedResultE
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RowFilterColumns
+    * * Display Name: Row Filter Columns
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the output column names that the row-filter parameters map to. Populated when ParamMode is RowFilterBroad. The materialization holds all rows broad and these columns are filtered at read time (plan section 6.4). NULL for non-row-filter materializations.
+    */
+    get RowFilterColumns(): string | null {
+        return this.Get('RowFilterColumns');
+    }
+    set RowFilterColumns(value: string | null) {
+        this.Set('RowFilterColumns', value);
+    }
+
+    /**
+    * * Field Name: BroadSQL
+    * * Display Name: Broad SQL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: For a RowFilterBroad materialization, the broad source SELECT that the refresh engine materializes: the source query with its row-filter WHERE predicates removed, so the materialized table holds every row the query could return for any parameter value. NULL for non-parameterized materializations, which use the source query SQL directly.
+    */
+    get BroadSQL(): string | null {
+        return this.Get('BroadSQL');
+    }
+    set BroadSQL(value: string | null) {
+        this.Set('BroadSQL', value);
     }
 
     /**

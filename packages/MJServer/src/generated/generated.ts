@@ -57365,6 +57365,12 @@ export class MJMaterializedResult_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON array of the output column names that the row-filter parameters map to. Populated when ParamMode is RowFilterBroad. The materialization holds all rows broad and these columns are filtered at read time (plan section 6.4). NULL for non-row-filter materializations.`}) 
+    RowFilterColumns?: string;
+        
+    @Field({nullable: true, description: `For a RowFilterBroad materialization, the broad source SELECT that the refresh engine materializes: the source query with its row-filter WHERE predicates removed, so the materialized table holds every row the query could return for any parameter value. NULL for non-parameterized materializations, which use the source query SQL directly.`}) 
+    BroadSQL?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     SourceQuery?: string;
@@ -57441,6 +57447,12 @@ export class CreateMJMaterializedResultInput {
     @Field({ nullable: true })
     IntendedWorkload: string | null;
 
+    @Field({ nullable: true })
+    RowFilterColumns: string | null;
+
+    @Field({ nullable: true })
+    BroadSQL: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -57504,6 +57516,12 @@ export class UpdateMJMaterializedResultInput {
 
     @Field({ nullable: true })
     IntendedWorkload?: string | null;
+
+    @Field({ nullable: true })
+    RowFilterColumns?: string | null;
+
+    @Field({ nullable: true })
+    BroadSQL?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
