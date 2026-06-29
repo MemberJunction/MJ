@@ -10,6 +10,7 @@ import {
   RunViewResult,
   UserInfo,
 } from "@memberjunction/core";
+import { MJExternalDataSourceEntity } from "@memberjunction/core-entities";
 import { ExternalDataSourceRouter } from "./ExternalDataSourceRouter";
 import { ExternalRow, ExternalViewParams } from "./types";
 
@@ -17,12 +18,19 @@ import { ExternalRow, ExternalViewParams } from "./types";
 const DEFAULT_EXTERNAL_CACHE_TTL_SECONDS = 300;
 
 /**
- * Default row limit applied ONLY when a RunView supplies no MaxRows and the entity has no
- * UserViewMaxRows, so an unbounded RunView doesn't stream an entire remote table. This is a
- * default for the absent case — NOT a hard cap: an explicit MaxRows is always honored as-is
- * (matching the MJ-DB path). A true ceiling on explicit values would be a separate safeguard.
+ * Default row limit applied when a RunView supplies no MaxRows and the entity has no
+ * UserViewMaxRows, so an unbounded RunView doesn't stream an entire remote table.
  */
 const DEFAULT_EXTERNAL_MAX_ROWS = 1000;
+
+/**
+ * Hard ceiling on the effective row count of an external read, applied EVEN to an explicit caller
+ * MaxRows so a `RunView({ MaxRows: 100_000_000 })` can't stream/meter an entire remote table
+ * (egress cost, remote load). Unlike the MJ-DB path, the blast radius here is a remote/metered
+ * source, so this fails closed. Overridable per source via ConnectionConfig `{ "maxRowLimit": N }`;
+ * the effective cap is `min(requested, perSourceLimit ?? HARD_MAX_EXTERNAL_ROWS)`.
+ */
+const HARD_MAX_EXTERNAL_ROWS = 50_000;
 
 /**
  * Concrete {@link ExternalDataSourceReadRouter} registered for the ClassFactory
@@ -71,15 +79,10 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
         fields: params.Fields && params.Fields.length ? params.Fields : undefined,
         filter: (params.ExtraFilter as string) || undefined,
         orderBy,
-        // Row limit: an explicit MaxRows is honored verbatim (no hard ceiling, same as MJ-DB);
-        // only when MaxRows is absent do we apply a default — the entity's UserViewMaxRows, else
-        // DEFAULT_EXTERNAL_MAX_ROWS — so an unbounded RunView doesn't stream a whole remote table.
-        maxRows:
-          params.MaxRows && params.MaxRows > 0
-            ? params.MaxRows
-            : entity.UserViewMaxRows && entity.UserViewMaxRows > 0
-              ? entity.UserViewMaxRows
-              : DEFAULT_EXTERNAL_MAX_ROWS,
+        // Row limit: the requested count (explicit MaxRows, else the entity's UserViewMaxRows, else
+        // the absent-case default) capped by the per-source / hard ceiling so even a huge explicit
+        // MaxRows can't stream a whole remote table (§M3 — fail-closed against a metered source).
+        maxRows: this.resolveMaxRows(params, entity, dataSource),
         offset,
       };
       const res = await driver.RunView<ExternalRow>(dataSource, viewParams, contextUser);
@@ -157,6 +160,36 @@ export class ExternalDataSourceReadRouterImpl extends ExternalDataSourceReadRout
   ): Promise<ExternalSchemaDescriptor> {
     const { driver, dataSource } = await ExternalDataSourceRouter.Instance.Resolve(externalDataSourceID, contextUser, provider);
     return driver.IntrospectSchema(dataSource, schemaName, contextUser);
+  }
+
+  /**
+   * The effective, ceiling-capped row limit for an external read (review M3). The requested count
+   * is the explicit MaxRows, else the entity's UserViewMaxRows, else {@link DEFAULT_EXTERNAL_MAX_ROWS};
+   * it is then capped by the per-source override or {@link HARD_MAX_EXTERNAL_ROWS} so an explicit
+   * MaxRows can't stream a whole remote table. Fail-closed.
+   */
+  private resolveMaxRows(params: RunViewParams, entity: EntityInfo, dataSource: MJExternalDataSourceEntity): number {
+    const requested =
+      params.MaxRows && params.MaxRows > 0
+        ? params.MaxRows
+        : entity.UserViewMaxRows && entity.UserViewMaxRows > 0
+          ? entity.UserViewMaxRows
+          : DEFAULT_EXTERNAL_MAX_ROWS;
+    const ceiling = this.perSourceMaxRowLimit(dataSource) ?? HARD_MAX_EXTERNAL_ROWS;
+    return Math.min(requested, ceiling);
+  }
+
+  /** Optional per-source row ceiling from ConnectionConfig `{ "maxRowLimit": N }`; undefined if unset/invalid. */
+  private perSourceMaxRowLimit(dataSource: MJExternalDataSourceEntity): number | undefined {
+    if (!dataSource.ConnectionConfig) {
+      return undefined;
+    }
+    try {
+      const cfg = JSON.parse(dataSource.ConnectionConfig) as { maxRowLimit?: unknown };
+      return typeof cfg.maxRowLimit === 'number' && cfg.maxRowLimit > 0 ? cfg.maxRowLimit : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private failView<T>(errorMessage: string, executionTime: number): RunViewResult<T> {

@@ -100,6 +100,30 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       expect(viewParams.maxRows).toBe(250);
     });
 
+    it('caps an explicit MaxRows above the hard ceiling (fail-closed against a metered source)', async () => {
+      const driver = makeFakeDriver();
+      (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
+      mockResolve(driver);
+      const entity = new EntityInfo({ Name: 'Big', ExternalDataSourceID: 'ds-1', BaseTable: 'big' });
+      await impl.RunViewExternal(entity, { EntityName: 'Big', MaxRows: 100_000_000 });
+      const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(viewParams.maxRows).toBe(50_000); // HARD_MAX_EXTERNAL_ROWS — not the requested 100M
+    });
+
+    it('honors a per-source ConnectionConfig maxRowLimit as the effective ceiling', async () => {
+      const driver = makeFakeDriver();
+      (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
+      vi.spyOn(ExternalDataSourceRouter.Instance, 'Resolve').mockResolvedValue({
+        driver,
+        dataSource: { ID: 'ds-1', Name: 'Demo', ConnectionConfig: JSON.stringify({ maxRowLimit: 250 }) } as never,
+        dataSourceType: { DriverClass: 'PostgresExternalDriver' } as never,
+      });
+      const entity = new EntityInfo({ Name: 'Big', ExternalDataSourceID: 'ds-1', BaseTable: 'big' });
+      await impl.RunViewExternal(entity, { EntityName: 'Big', MaxRows: 100_000_000 });
+      const [, viewParams] = (driver.RunView as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(viewParams.maxRows).toBe(250); // per-source override caps below the hard default
+    });
+
     it('defaults orderBy to the entity primary key when paginating without an explicit order', async () => {
       const driver = makeFakeDriver();
       (driver.RunView as ReturnType<typeof vi.fn>).mockResolvedValue({ success: true, rows: [], executionTimeMs: 1 });
