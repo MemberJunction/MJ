@@ -17845,5 +17845,375 @@
       "lastModified": "2026-06-16T01:17:10.887Z",
       "checksum": "e59100304928f6e1ba56997f557c913a900607e00df1088f9522321c8371affd"
     }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5.2",
+      "PowerRank": 22,
+      "Description": "Z.AI's GLM 5.2 is an open-weights Mixture-of-Experts model with roughly 744-753B total parameters tuned for long-horizon autonomous coding and engineering tasks. Released to GLM Coding Plan tiers on June 13, 2026 with the standalone pay-per-token API live since June 16, 2026. 1M-token context window, MIT license, frontier-class coding performance reported to beat GPT-5.5 on multiple long-horizon coding benchmarks at roughly 1/6 the cost.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ZAILLM",
+            "APIName": "glm-5.2",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "z-ai/glm-5.2",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-06-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.4,
+            "OutputPricePerUnit": 4.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5.2 standalone pay-per-token API pricing on Z.AI direct, live since June 16, 2026. $1.40 / $4.40 per 1M tokens. 1M context, MIT-licensed open weights (744-753B MoE). Subscription tiers (GLM Coding Lite/Pro/Max) are separate from this pay-per-token rate. Sources: https://docs.z.ai/guides/overview/pricing ; https://openrouter.ai/z-ai/glm-5.2 ; https://venturebeat.com/technology/z-ais-open-weights-glm-5-2-beats-gpt-5-5-on-multiple-long-horizon-coding-benchmarks-for-1-6th-the-cost ; https://lushbinary.com/blog/glm-5-2-api-pricing-glm-coding-plan-guide/"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-06-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.4,
+            "OutputPricePerUnit": 4.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5.2 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/z-ai/glm-5.2"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nemotron 3 Ultra",
+      "PowerRank": 17,
+      "Description": "NVIDIA Nemotron 3 Ultra is a 550B-total / 55B-active parameter hybrid Mamba-Transformer Mixture-of-Experts model built for frontier reasoning and orchestration in long-running agentic systems. Pre-trained in NVFP4 with Latent MoE and MTP layers. Released June 4, 2026 at Computex. 1M-token context. Open weights and training recipes available under the NVIDIA Open Model License (commercial use permitted). Distributed as an NIM microservice and across OpenRouter, Together AI, Anaconda, and build.nvidia.com.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=NVIDIA",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "nvidia/nemotron-3-ultra-550b-a55b",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-06-04T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 2.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Nemotron 3 Ultra reference pricing as of June 4, 2026 launch at Computex. $0.50 / $2.50 per 1M tokens (NVIDIA-listed reference). OpenRouter weighted-average across providers is approximately $0.423 / $2.61. A separate :free OpenRouter route is also available. Open weights under the NVIDIA Open Model License (commercial use permitted). Sources: https://developer.nvidia.com/blog/nvidia-nemotron-3-ultra-powers-faster-more-efficient-reasoning-for-long-running-agents/ ; https://openrouter.ai/nvidia/nemotron-3-ultra-550b-a55b:free ; https://www.together.ai/models/nvidia-nemotron-3-ultra ; https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Magistral Medium 1.2",
+      "PowerRank": 12,
+      "Description": "Mistral AI's Magistral Medium is a native reasoning model that produces transparent chain-of-thought before its final answer. Version 1.2 (magistral-medium-2509) released September 18, 2025 with eight-language coverage (English, French, Spanish, German, Italian, Arabic, Russian, Simplified Chinese) and a 128K context window. Magistral generates 2-5x more output tokens than generalist models because reasoning traces are verbose by design, so budget output spend accordingly.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MistralLLM",
+            "APIName": "magistral-medium-2509",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 40960,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "mistral.magistral-medium-2509-v1:0",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 40960,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "mistralai/magistral-medium-2509",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 40960,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2025-09-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.0,
+            "OutputPricePerUnit": 5.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Magistral Medium 1.2 (magistral-medium-2509) pricing on Mistral direct API. $2.00 / $5.00 per 1M tokens. Reasoning model — expect 2-5x more output tokens than a generalist for the same task. Sources: https://mistral.ai/pricing/ ; https://docs.mistral.ai/models/magistral-medium-1-2-25-09 ; https://artificialanalysis.ai/providers/mistral"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2025-09-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.0,
+            "OutputPricePerUnit": 5.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Magistral Medium 1.2 on OpenRouter (passthrough pricing). Source: OpenRouter Mistral models listing."
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Magistral Small 1.2",
+      "PowerRank": 7,
+      "Description": "Mistral AI's Magistral Small 1.2 (magistral-small-2509) is the open-weights (Apache 2.0) counterpart to Magistral Medium, released September 18, 2025. Same transparent chain-of-thought reasoning, same eight-language coverage, same 128K context. Distributed via the Mistral API, Amazon Bedrock, OpenRouter, and Hugging Face (mistralai/Magistral-Small-2509). Best fit for budget reasoning workloads.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 2,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MistralLLM",
+            "APIName": "magistral-small-2509",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 40960,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 10,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "mistral.magistral-small-2509-v1:0",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 40960,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "mistralai/magistral-small-2509",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 40960,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2025-09-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 1.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Magistral Small 1.2 (magistral-small-2509) pricing on Mistral direct API. $0.50 / $1.50 per 1M tokens. Open weights under Apache 2.0. Reasoning model - expect 2-5x more output tokens than a generalist. Sources: https://mistral.ai/pricing/ ; https://huggingface.co/mistralai/Magistral-Small-2509 ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-mistral-ai-magistral-small-2509.html"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2025-09-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.5,
+            "OutputPricePerUnit": 1.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Magistral Small 1.2 on OpenRouter (passthrough pricing)."
+          }
+        }
+      ]
+    }
   }
 ]
