@@ -1,4 +1,4 @@
-<div class="message-input-wrapper">
+<div class="message-input-wrapper" cdkOverlayOrigin #pickerOrigin="cdkOverlayOrigin">
   <!-- Processing Indicator Overlay -->
   @if (isProcessing) {
     <div class="processing-indicator">
@@ -34,8 +34,19 @@
 
   <!-- Voice agent/co-agent/model picker — shown when starting a call on a conversation
        with NO prior agent participation, or on demand via the caret next to the phone
-       button (any conversation). Anchored above the composer. -->
-  @if (showRealtimeAgentPicker) {
+       button (any conversation). Rendered in a body-level CDK overlay anchored above the
+       composer so it POPS OUT of the chat overlay's clipping border instead of being cut
+       off at the top of a narrow (~390px) overlay. -->
+  <ng-template
+    cdkConnectedOverlay
+    [cdkConnectedOverlayOrigin]="pickerOrigin"
+    [cdkConnectedOverlayOpen]="showRealtimeAgentPicker"
+    [cdkConnectedOverlayPositions]="pickerOverlayPositions"
+    [cdkConnectedOverlayPush]="true"
+    [cdkConnectedOverlayHasBackdrop]="true"
+    cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+    (backdropClick)="onRealtimeAgentPickerCancelled()"
+    (detach)="onRealtimeAgentPickerCancelled()">
     <mj-realtime-agent-picker
       [Provider]="Provider"
       [Agents]="voicePickerAgents"
@@ -45,7 +56,7 @@
       (AgentPicked)="onRealtimeAgentPicked($event)"
       (Cancelled)="onRealtimeAgentPickerCancelled()">
     </mj-realtime-agent-picker>
-  }
+  </ng-template>
 </div>
 
 <!-- The voice "call mode" overlay is hosted by <mj-conversation-chat-area> (it fills the

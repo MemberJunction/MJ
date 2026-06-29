@@ -397,7 +397,14 @@ flowchart TB
     OUT -->|yes| WB["WriteBackProcessor<br/>score column / child rows<br/>sortable · filterable · reportable"]
 ```
 
-The processor **warm-loads the model once** and shares it across the batch (an in-flight `loadPromise` deduplicates concurrent records). It resolves the assembly config from the model's `Lineage` (or the related pipeline), assembles features in `'on-demand'` context (**transform-only — never re-fits**), calls the sidecar `/predict`, and returns a `RecordResult` with an `MLInferenceResultPayload` (`modelId`, `target`, `problemType`, `score`, `class`).
+The processor **warm-loads the model once** and shares it across the batch (an in-flight `loadPromise` deduplicates concurrent records). It resolves the assembly config from the model's `Lineage` (or the related pipeline), assembles features in `'on-demand'` context (**transform-only — never re-fits**), calls the sidecar `/predict`, and returns a `RecordResult` with an `MLInferenceResultPayload`. Those payload fields are the refs available to an `OutputMapping` (read with `$.`):
+
+| ref | meaning |
+|---|---|
+| `$.score` | numeric output — **probability** (classification) or value (regression) |
+| `$.class` | predicted class label (classification only) |
+| `$.scoredAt` | ISO-8601 UTC timestamp of when the prediction was produced |
+| `$.modelId` / `$.target` / `$.problemType` | lineage (which model, its target, classification/regression) |
 
 ### 6.3 Ephemeral vs write-back
 
@@ -406,6 +413,19 @@ The processor **warm-loads the model once** and shares it across the batch (an i
 ### 6.4 Single, batch, on-demand, scheduled
 
 The sidecar doesn't care about cardinality — single-record serves interactive/agent needs, batch serves bulk. **On-demand** = `RecordProcess.RunNow` + a runtime scope override (records/view/list/filter/single). **Scheduled** = the `Schedule` trigger, with an `MJ: ML Model Scoring Binding` (`upsertScoringBinding`) recording lineage (`LastScoredAt` / `LastRowCount`) for staleness detection and retraining (§14). **Materialized** prediction columns (population-wide, indexed) are the *deferred* later optimization gated on #2770 (§17); scoring + write-back ship with **zero dependency** on it.
+
+### 6.5 Where predictions go — the four storage paths
+
+These are **four distinct, orthogonal** things. The common confusion is to assume column write-back needs materialization (#2770), or that "Materialized Results" is an ML run-history store — **neither is true.** All "store a prediction" needs are met by paths A–C **today**; #2770 (D) is an optional future *auto-refresh* optimization, nothing more.
+
+| | Path | What it is | Status | When to use |
+|---|---|---|---|---|
+| **A** | **Column write-back** — `OutputMapping.fields` | Writes the prediction into a real column on the **target entity**, **overwritten each run** (the *current* value). `fields` is a map, so one run can write several columns. | ✅ shipped | "Put each member's latest renewal probability on the member record." e.g. `{ "RenewalProbability": "$.score", "LastScoredAt": "$.scoredAt" }` |
+| **B** | **`MJ: Process Run Details`** | Automatic per-record **transactional history** — every scoring run writes one detail row per record carrying the full prediction `ResultPayload` (score/class/scoredAt/lineage), `RecordID`, `Status`, `CompletedAt`. No config. | ✅ shipped (automatic) | Audit / replay / "what did the model say for this member on each run" — for free, even with no `OutputMapping`. |
+| **C** | **`OutputMapping.childRecord`** — typed time-series | Creates a **child record per scored record per run** in an entity *you* define (e.g. `Member Renewal Scores` with `MemberID` + `Probability` + `ScoredAt`). A clean, queryable, append-only history of your own shape. | ✅ shipped | "Keep a typed history table / time-series of scores" (cleaner than the generic JSON in path B). |
+| **D** | **#2770 Materialized Results** | A **generic**, not-yet-built primitive for materializing *any query/entity result set* as a cached, auto-refreshed physical table. **Not ML-specific, not run history.** ML can later ride it for population-wide *indexed* prediction columns. | ⏳ deferred (design-doc; gated on PR #2770) | A *future* optimization for indexed, population-wide querying — **never required** to store predictions. |
+
+> **#2770 is NOT "ML Model Run Results."** It's view/entity-materialization infrastructure that ML could *optionally* use later. Per-run prediction history already lives in path B (`MJ: Process Run Details`) and, if you want a typed table, path C (`childRecord`). Writing a prediction into an entity column (path A) is a plain MJ column write — it needs nothing from #2770.
 
 ---
 

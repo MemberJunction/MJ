@@ -296,6 +296,9 @@ export class MLModelInferenceProcessor implements IRecordProcessor {
       problemType: model.problemType,
       score: prediction.score,
       class: prediction.class,
+      // Stamp when the prediction was produced so write-back can persist a "last scored at"
+      // column via OutputMapping (`{ "<YourColumn>": "$.scoredAt" }`). ISO-8601 UTC.
+      scoredAt: new Date().toISOString(),
     };
   }
 
@@ -327,6 +330,13 @@ export interface MLInferenceResultPayload {
   score: number;
   /** Predicted class label, present for classification problems. */
   class?: string;
+  /**
+   * ISO-8601 UTC timestamp of when this prediction was produced. Lets write-back persist a
+   * dedicated "last scored at" column on the target entity via `OutputMapping`
+   * (`{ "LastScoredAt": "$.scoredAt" }`) — distinct from the row's whole-record `__mj_UpdatedAt`,
+   * which moves on any edit, not just scoring.
+   */
+  scoredAt: string;
 }
 
 /** Internal — the assembly config resolved off a model for scoring. */

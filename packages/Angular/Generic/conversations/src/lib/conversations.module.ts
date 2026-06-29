@@ -2,6 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
+import { OverlayModule } from '@angular/cdk/overlay';
 
 // MJ UI Components
 import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
@@ -170,6 +171,7 @@ const COMPONENTS = [
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
+    OverlayModule,
     MJButtonDirective,
     MJDatepickerComponent,
     MJDialogComponent,

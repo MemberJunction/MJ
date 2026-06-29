@@ -1,4 +1,4 @@
-import { Component, ElementRef, EventEmitter, Input, Output, ViewChild, inject } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, Output, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
@@ -35,6 +35,15 @@ export class RealtimeComposerComponent {
    * never becomes permanent chrome. Default closed (voice-first), reset per session.
    */
   @Input() Open = false;
+
+  /**
+   * COMPACT (Calm Orb · overlay) presentation: collapse the phone-call strip to the
+   * mockup's lean dock — **Mute + End + a "•••"** overflow button. The "•••" blooms a small
+   * sheet hosting the secondary actions (Captions / Details / Type). The fused level-2 dock
+   * (minis + text input) is unchanged. Fed from the overlay's resolved `Ui.compact`.
+   * Default `false` (the full 5-button strip is unchanged).
+   */
+  @Input() Compact = false;
 
   /** Emitted when the user opens (Type control / typing) or closes (hide control) the dock. */
   @Output() OpenChanged = new EventEmitter<boolean>();
@@ -82,6 +91,26 @@ export class RealtimeComposerComponent {
   /** True while the big-controls phone-call strip renders (instead of the dock). */
   public get StripMode(): boolean {
     return !this.Open;
+  }
+
+  /**
+   * Whether the compact "•••" overflow sheet (Captions / Details / Type) is open. Only used
+   * in {@link Compact} strip mode; any outside click or action selection closes it.
+   */
+  public MoreOpen = false;
+
+  /** Open/close the compact overflow sheet (stops propagation so the outside-click close skips it). */
+  public ToggleMore(event: MouseEvent): void {
+    event.stopPropagation();
+    this.MoreOpen = !this.MoreOpen;
+  }
+
+  /** Any outside click closes the compact overflow sheet. */
+  @HostListener('document:click')
+  public OnDocumentClick(): void {
+    if (this.MoreOpen) {
+      this.MoreOpen = false;
+    }
   }
 
   /** Toggle the local microphone mute and surface the new state to the overlay. */

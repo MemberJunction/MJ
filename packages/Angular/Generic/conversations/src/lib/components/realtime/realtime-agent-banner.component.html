@@ -1,4 +1,4 @@
-<div class="banner" [class.banner--review]="ReviewMode">
+<div class="banner" [class.banner--review]="ReviewMode" [class.banner--compact]="Compact && !ReviewMode">
   @if (ReviewMode) {
     <!-- SESSION REVIEW: static orb · name · review badge · started→closed · close-reason chip,
          with the review's exit actions up here in the header bar (Start live leads, Close trails). -->
@@ -38,6 +38,30 @@
         <i class="fa-solid fa-xmark" aria-hidden="true"></i>
       </button>
     </div>
+  } @else if (Compact) {
+    <!-- COMPACT (Calm Orb · overlay): a tiny identity + state row only. No duplicate orb,
+         no state pill, no headphones / gear / expand — the body shows the big orb + name +
+         state, and the lean dock owns the actions. Minimize stays reachable here. -->
+    <div class="banner__id banner__id--compact">
+      <span class="banner__avatar" aria-hidden="true">{{ AgentName.charAt(0) }}</span>
+      <span class="banner__name banner__name--compact">{{ AgentName }}</span>
+      <span class="banner__state-chip">
+        @if (IsBusy(State)) {
+          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+        } @else {
+          <span class="banner__state-dot" [attr.data-state]="OrbState(State)" aria-hidden="true"></span>
+        }
+        <span class="banner__state-chip-label">{{ StateLabel(State) }}</span>
+      </span>
+    </div>
+
+    @if (ShowMinimize) {
+      <button type="button" class="iconb banner__minimize--compact" (click)="MinimizeRequested.emit()"
+              title="Hide the call view — the call stays live"
+              aria-label="Minimize the call view">
+        <i class="fa-solid fa-minus" aria-hidden="true"></i>
+      </button>
+    }
   } @else {
     <div class="agent-orb" [attr.data-state]="OrbState(State)" aria-hidden="true"></div>
 

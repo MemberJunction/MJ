@@ -142,6 +142,21 @@ describe('scoring write-back wiring (§10.1)', () => {
     expect((result.ResultPayload as { writeBack: { updatedRecord: boolean } }).writeBack.updatedRecord).toBe(true);
   });
 
+  it('writes the score timestamp to a column when $.scoredAt is mapped', async () => {
+    const inner = buildInner();
+    const wrapped = new TestWriteBackWrapper(inner, { RenewalScore: '$.score', LastScoredAt: '$.scoredAt' });
+
+    const result = await wrapped.ProcessRecord(record('m1'), CTX);
+
+    expect(result.Status).toBe('Succeeded');
+    expect(wrapped.Writes.length).toBe(1);
+    const written = wrapped.Writes[0].fields as { RenewalScore: number; LastScoredAt: string };
+    expect(written.RenewalScore).toBe(0.83);
+    // scoredAt resolved to a valid, round-trippable ISO-8601 timestamp.
+    expect(typeof written.LastScoredAt).toBe('string');
+    expect(new Date(written.LastScoredAt).toISOString()).toBe(written.LastScoredAt);
+  });
+
   it('is ephemeral (no write) when no OutputMapping is present', async () => {
     const inner = buildInner();
     const ephemeral = new TestWriteBackWrapper(inner, undefined);
@@ -154,6 +169,8 @@ describe('scoring write-back wiring (§10.1)', () => {
     const payload = result.ResultPayload as MLInferenceResultPayload;
     expect(payload.score).toBe(0.83);
     expect(payload.class).toBe('renew');
+    // Every prediction is stamped, even ephemeral (no write-back) runs.
+    expect(new Date(payload.scoredAt).toISOString()).toBe(payload.scoredAt);
   });
 
   it('does not write when the inner record fails', async () => {

@@ -97,13 +97,15 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
-        @if (showAgentModePicker && ModePickerTargetAgentId) {
+        @if (!overlayMode && showAgentModePicker && ModePickerTargetAgentId) {
           <!-- Per-agent mode/quality picker (Draft / Standard / High).
                Targets the agent the next non-mention message will route
                to. Auto-hides when that agent has fewer than 2 configured
                presets. Choice persists per-user, per-agent via
                UserInfoEngine; emits the picked configuration ID up so
-               <mj-message-input> can forward it on the next route. -->
+               <mj-message-input> can forward it on the next route.
+               Hidden in overlayMode (the compact chat overlay): the
+               mode dropdown wastes the narrow top-right space there. -->
           <mj-conversation-mode-picker
             [AgentID]="ModePickerTargetAgentId"
             [Disabled]="isProcessing"
@@ -399,7 +401,8 @@
       [CurrentUser]="currentUser"
       [EnvironmentID]="environmentId"
       [ReviewData]="RealtimeReview"
-      [Chrome]="'auto'"
+      [Chrome]="overlayMode ? 'orb' : 'auto'"
+      [Compact]="overlayMode"
       [ShowDevLinks]="!overlayMode"
       [ShowDensityPicker]="!overlayMode"
       (NavigateRequest)="onRealtimeNavigateRequest($event)"

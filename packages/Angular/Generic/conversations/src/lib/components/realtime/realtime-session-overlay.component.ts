@@ -978,9 +978,12 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    * itself self-hides when no channels are active, so this stays decluttered.
    */
   public get ChannelStripVisible(): boolean {
-    return this.Disclosure.ShowComposer
-      && (this.mergedUiInputs.showChannels ?? DEFAULT_REALTIME_UI_INPUTS.showChannels)
-      && !this.ChannelFocusMode;
+    // Reads the RESOLVED Ui.showChannelStrip flag — which already ANDs the host's
+    // [ShowChannels] input, an active channel, console chrome, and the no-focus rule.
+    // In orb/compact chrome it is false, so the overlay never shows the "CHANNELS · Voice"
+    // strip (the lean Calm-Orb surface). The strip component itself still self-hides when
+    // no channels are active, keeping the console decluttered too.
+    return this._ui.showChannelStrip;
   }
 
   /**

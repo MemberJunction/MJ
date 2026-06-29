@@ -213,14 +213,21 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
     `,
     styles: [`
         :host {
-            position: absolute;
-            bottom: calc(100% + 8px);
-            right: 8px;
-            z-index: 60;
+            /* Rendered inside a body-level CDK connected overlay (see message-input) — CDK
+               owns the positioning + z-index, so the host is just a plain block. The height
+               cap keeps the popover from growing past the viewport; the agent list inside
+               scrolls when content exceeds it. CDK's `push` keeps it on-screen, and because
+               it lives at the body level it can never be clipped by the chat overlay border. */
+            display: block;
+            max-height: min(440px, calc(100vh - 24px));
         }
         .mj-voice-picker {
             width: 300px;
+            max-width: calc(100vw - 24px);
             display: flex; flex-direction: column;
+            /* Match the host cap so the inner flex column knows its bound and lets the agent
+               list ('mj-voice-picker__list') take the remaining space + scroll. */
+            max-height: min(440px, calc(100vh - 120px));
             background: var(--mj-bg-surface-elevated);
             border: 1px solid var(--mj-border-default);
             border-radius: 8px;
@@ -252,11 +259,23 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
         .mj-voice-picker__search input::placeholder { color: var(--mj-text-disabled); }
         .mj-voice-picker__search:focus-within { border-color: var(--mj-border-focus); }
         .mj-voice-picker__list {
+            /* The agent list is the flexible region: it scrolls internally and gives way
+               first when the whole popup is capped to the overlay height. min-height:0 lets
+               it actually shrink inside the flex column; the 220px max keeps it tidy when
+               there's plenty of room. */
+            flex: 1 1 auto;
+            min-height: 0;
             max-height: 220px; overflow-y: auto;
             border-top: 1px solid var(--mj-border-subtle);
             border-bottom: 1px solid var(--mj-border-subtle);
             padding: 4px 0;
         }
+        /* Keep the chrome around the list from collapsing when the popup is height-capped. */
+        .mj-voice-picker__header,
+        .mj-voice-picker__search,
+        .mj-voice-picker__select-row,
+        .mj-voice-picker__record-row,
+        .mj-voice-picker__footer { flex-shrink: 0; }
         .mj-voice-picker__item {
             display: flex; align-items: center; gap: 8px; width: 100%;
             padding: 7px 12px;

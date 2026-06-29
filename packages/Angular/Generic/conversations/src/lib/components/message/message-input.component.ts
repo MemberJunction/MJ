@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
+import { ConnectedPosition } from '@angular/cdk/overlay';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
@@ -361,6 +362,18 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /** True while the "Start a voice call with…" agent picker popover is open. */
   public showRealtimeAgentPicker: boolean = false;
+
+  /**
+   * CDK connected-overlay positions for the voice agent picker. Preferred: open UPWARD,
+   * right edge aligned to the composer's right edge (matching the old absolute placement).
+   * Fallback: open downward when there isn't room above. Because the popover renders in the
+   * body-level CDK overlay container (with `cdkConnectedOverlayPush`), it escapes the chat
+   * overlay's `overflow: hidden` border and can never clip at the top of a narrow overlay.
+   */
+  public readonly pickerOverlayPositions: ConnectedPosition[] = [
+    { originX: 'end', originY: 'top', overlayX: 'end', overlayY: 'bottom', offsetY: -8 },
+    { originX: 'end', originY: 'bottom', overlayX: 'end', overlayY: 'top', offsetY: 8 },
+  ];
 
   /**
    * `MJ: User Settings` key persisting the user's co-agent choice for realtime calls
