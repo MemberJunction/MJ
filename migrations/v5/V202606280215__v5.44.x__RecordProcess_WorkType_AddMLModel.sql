@@ -16,3 +16,70 @@
 ALTER TABLE ${flyway:defaultSchema}.RecordProcess DROP CONSTRAINT IF EXISTS CK_RecordProcess_WorkType;
 ALTER TABLE ${flyway:defaultSchema}.RecordProcess ADD CONSTRAINT CK_RecordProcess_WorkType
     CHECK ([WorkType] IN ('Action', 'Agent', 'Infer', 'FieldRules', 'ML Model'));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- =============================================================================================
+-- ⬇️  CODEGEN OUTPUT  ⬇️
+--
+-- Run `mj codegen` after the CHECK change above. CodeGen derives the WorkType value list
+-- (EntityFieldValue rows + EntityField.ValueListType) and regenerates the entity-subclass
+-- TypeScript union FROM this CHECK constraint, and emits its SQL. Paste (cat) that generated
+-- SQL below this line so the metadata sync ships in the same migration.
+-- =============================================================================================
+/* SQL text to insert entity field value with ID 444187b1-4c04-4ff3-98e9-b98499a068fb */
+INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
+                                       ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
+                                    VALUES
+                                       ('444187b1-4c04-4ff3-98e9-b98499a068fb', '58345D95-711E-470F-BD28-1AA4AD8214D2', 5, 'ML Model', 'ML Model', GETUTCDATE(), GETUTCDATE());
+

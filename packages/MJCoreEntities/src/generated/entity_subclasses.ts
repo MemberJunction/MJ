@@ -24442,7 +24442,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Disabled
     *   * Draft
         * * Description: Lifecycle status: Draft (not yet wired), Active (triggers live), or Disabled`),
-    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer')]).describe(`
+    WorkType: z.union([z.literal('Action'), z.literal('Agent'), z.literal('FieldRules'), z.literal('Infer'), z.literal('ML Model')]).describe(`
         * * Field Name: WorkType
         * * Display Name: Work Type
         * * SQL Data Type: nvarchar(20)
@@ -24452,6 +24452,7 @@ export const MJRecordProcessSchema = z.object({
     *   * Agent
     *   * FieldRules
     *   * Infer
+    *   * ML Model
         * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.`),
     ActionID: z.string().nullable().describe(`
         * * Field Name: ActionID
@@ -94967,12 +94968,13 @@ export class MJRecordProcessEntity extends BaseEntity<MJRecordProcessEntityType>
     *   * Agent
     *   * FieldRules
     *   * Infer
+    *   * ML Model
     * * Description: Whether the work is an Action, an Agent, or an Infer (per-record AI Prompt). Agents are dispatched through the Execute Agent action and must be top-level + ExposeAsAction; Infer runs the AI Prompt named by PromptID for each record and writes its structured output back via OutputMapping.
     */
-    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' {
+    get WorkType(): 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model' {
         return this.Get('WorkType');
     }
-    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer') {
+    set WorkType(value: 'Action' | 'Agent' | 'FieldRules' | 'Infer' | 'ML Model') {
         this.Set('WorkType', value);
     }
 
