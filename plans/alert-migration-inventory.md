@@ -56,6 +56,20 @@ SystemDiagnostics alerts live in the **inline template of
    above, plus the inline-style heuristic; scans `.ts`). Baseline at start: **0% — 0 / 72**.
    CI ratchet: `check-alerts.sh --max <N>` fails if bespoke exceeds N; lower N as we migrate.
    `--list` prints every site.
+### 🔴 STANDARD: every visual capture is DUAL-MODE (light + dark)
+A migration that looks right in light can still be wrong in dark (and vice-versa) —
+so **every** visual check covers **both** themes. No single-mode screenshots.
+- **Component baseline** — `scripts/alert-states-gallery.sh` already renders light **and**
+  dark side-by-side.
+- **Per-site** — `scripts/visual-shot-dual.sh <name> [force-js]` screenshots the current
+  live page in light then dark (forces `data-theme="dark"` on `<html>`, reverts after).
+  For conditional alerts (error/success that only show on a flag), pass a `force-js`
+  snippet using the Angular dev API that RE-APPLIES the state in each theme (toggling
+  re-renders and can clear it), e.g.
+  `const c=ng.getComponent(document.querySelector('mj-role-dialog')); c.error='…'; ng.applyChanges(c)`.
+  Output: `plans/alert-screenshots/migrated/<name>-light.png` + `-dark.png`.
+- Prereq: dev server up + browser navigated to the dialog/state first.
+
 3. **Force-state visual harness** — `scripts/alert-states-gallery.sh` renders `<mj-alert>`
    in every real-world shape (variant × message/title/dismiss/actions/sm), light+dark, using
    the component's styles **extracted live from source** (no drift) → `plans/alert-screenshots/
