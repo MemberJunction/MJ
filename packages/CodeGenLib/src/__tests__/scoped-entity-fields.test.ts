@@ -104,3 +104,20 @@ describe('Phase A — scoped entity field plumbing', () => {
         });
     });
 });
+
+describe('EDS — external-entity prune guard (PR #2449)', () => {
+    // The PG metadata-management SP `spDeleteUnneededEntityFields` is self-ensured
+    // (CREATE OR REPLACE on every manageMetadata run), regenerated from
+    // metadataSupportObjects.ts. A careless edit dropping the guard would silently delete
+    // external entities' EntityField metadata on every PG run (external entities are
+    // VirtualEntity = FALSE with no physical column, so the orphan join matches them all).
+    // This locks the guard in. The SQL Server analogue lives in migration 1726, which is
+    // immutable once applied; the fragile, regenerated-from-code copy is PostgreSQL's — so
+    // that's the one a unit test must pin.
+    it('PostgreSQLCodeGenProvider excludes external entities from spDeleteUnneededEntityFields', () => {
+        const sql = new PostgreSQLCodeGenProvider().getMetadataSupportObjectsSQL('__mj');
+        expect(sql).toBeTruthy();
+        expect(sql!).toContain('spDeleteUnneededEntityFields');
+        expect(sql!).toMatch(/e\."ExternalDataSourceID"\s+IS NULL/);
+    });
+});
