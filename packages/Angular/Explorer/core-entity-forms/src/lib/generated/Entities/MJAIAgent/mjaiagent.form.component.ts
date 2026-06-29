@@ -61,7 +61,7 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentCoAgentsTargetAgentID', sectionName: 'AI Agent Co Agents (Target Agent)', isExpanded: false },
             { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
             { sectionKey: 'mJRecordProcesses', sectionName: 'Record Processes', isExpanded: false },
-            { sectionKey: 'mJWidgetInstances', sectionName: 'Widget Instances', isExpanded: false }
+            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false }
         ]);
     }
 }

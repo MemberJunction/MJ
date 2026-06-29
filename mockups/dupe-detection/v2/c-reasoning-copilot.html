@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dupe v2 · C — Reasoning copilot</title>
+<link rel="stylesheet" href="../shared.css">
+<style>
+    :root { --llm: var(--mj-brand-primary); --vec: var(--vector-accent); }
+    .layout { display:grid; grid-template-columns:1fr 400px; height:calc(100vh - 53px); }
+    .left { overflow:auto; padding:16px 18px; }
+    .copilot { border-left:1px solid var(--mj-border-default); background:var(--mj-bg-surface); display:flex; flex-direction:column; }
+
+    /* condensed comparison grid (the real one, just narrower) */
+    .cmp-mini-head { display:flex; align-items:center; gap:11px; margin-bottom:12px; }
+    .cmp-mini-head .eicon{ width:32px;height:32px;border-radius:8px;background:var(--mj-brand-soft);color:var(--mj-text-link);display:flex;align-items:center;justify-content:center;font-size:15px;}
+    .cmp-mini-head h2{font-size:15px;margin:0}
+    .cmp-mini-head .spacer{flex:1}
+
+    .cgrid { display:grid; grid-template-columns:130px repeat(3,minmax(150px,1fr)); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius); overflow:hidden; background:var(--mj-bg-surface); }
+    .corner,.colhd,.lblcell,.vcell{ padding:9px 11px; border-bottom:1px solid var(--mj-border-subtle); font-size:12.5px; }
+    .corner{ background:var(--mj-bg-surface-card); font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--mj-text-muted); font-weight:700; border-right:1px solid var(--mj-border-default); }
+    .colhd{ background:var(--mj-bg-surface-card); border-right:1px solid var(--mj-border-subtle); display:flex; flex-direction:column; gap:5px; }
+    .colhd .cname{font-weight:700;font-size:12.5px;display:flex;align-items:center;gap:6px}
+    .colhd.survivor{ background:color-mix(in srgb,var(--mj-brand-primary) 7%,var(--mj-bg-surface-card)); box-shadow:inset 3px 0 0 var(--mj-brand-primary);}
+    .schip{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;border:1px solid;width:fit-content}
+    .schip.vec{color:var(--vec);border-color:color-mix(in srgb,var(--vec) 35%,transparent)}
+    .schip.llm{color:var(--llm);border-color:color-mix(in srgb,var(--llm) 35%,transparent)}
+    .lblcell{ background:var(--mj-bg-surface); color:var(--mj-text-secondary); font-weight:600; border-right:1px solid var(--mj-border-default);}
+    .vcell{ border-right:1px solid var(--mj-border-subtle); cursor:pointer; }
+    .vcell.selected{ background:color-mix(in srgb,var(--mj-brand-primary) 9%,transparent); box-shadow:inset 3px 0 0 var(--mj-brand-primary); font-weight:600;}
+    .vcell.diff{ background:color-mix(in srgb,var(--mj-status-warning) 8%,transparent);}
+    .qlink{ display:inline-block; margin-left:6px; font-size:10px; color:var(--llm); cursor:pointer; opacity:.75; }
+    .qlink:hover{opacity:1;text-decoration:underline}
+    .mergebar{display:flex;gap:10px;align-items:center;margin-top:14px}
+    .mergebar .spacer{flex:1}
+
+    /* copilot panel */
+    .cp-head{ display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--mj-border-default);}
+    .cp-head .av{ width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--llm),#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px;}
+    .cp-head .ttl{font-weight:700;font-size:13.5px}
+    .cp-head .mode{margin-left:auto}
+    .mode-pill{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,#7c3aed 12%,transparent);color:#7c3aed;border:1px solid color-mix(in srgb,#7c3aed 30%,transparent)}
+
+    .cp-body{ flex:1; overflow:auto; padding:14px 16px; display:flex; flex-direction:column; gap:14px;}
+    .verdict-card{ padding:13px 14px; border-radius:var(--mj-radius); border:1px solid var(--mj-status-success-border); background:color-mix(in srgb,var(--rec-merge) 9%,var(--mj-bg-surface));}
+    .verdict-card .v{font-size:17px;font-weight:800;color:var(--rec-merge);display:flex;align-items:center;gap:8px}
+    .verdict-card .scl{display:flex;gap:14px;margin-top:9px;font-size:12px}
+    .verdict-card .scl .x b{font-size:15px}
+    .vecn{color:var(--vec)} .llmn{color:var(--llm)}
+
+    .msg{ display:flex; gap:10px; }
+    .msg .ic{ width:26px;height:26px;border-radius:7px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:13px;}
+    .msg.bot .ic{ background:linear-gradient(135deg,var(--llm),#7c3aed); color:#fff;}
+    .msg.user{ flex-direction:row-reverse; }
+    .msg.user .ic{ background:var(--mj-bg-surface-sunken); color:var(--mj-text-secondary);}
+    .bubble{ font-size:13px; line-height:1.55; padding:10px 13px; border-radius:11px; max-width:300px;}
+    .msg.bot .bubble{ background:var(--mj-bg-surface-card); border:1px solid var(--mj-border-default); color:var(--mj-text-secondary); border-top-left-radius:3px;}
+    .msg.user .bubble{ background:var(--mj-brand-primary); color:#fff; border-top-right-radius:3px;}
+    .bubble b{color:var(--mj-text-primary)}
+    .msg.user .bubble b{color:#fff}
+
+    /* tool trace (Agent mode) */
+    .trace{ border:1px solid var(--mj-border-default); border-radius:10px; overflow:hidden;}
+    .trace-hd{ display:flex; align-items:center; gap:8px; padding:9px 12px; background:var(--mj-bg-surface-card); font-size:12px; font-weight:700; cursor:pointer;}
+    .trace-hd .chev{margin-left:auto;color:var(--mj-text-muted)}
+    .trace-step{ display:flex; gap:9px; padding:8px 12px; border-top:1px solid var(--mj-border-subtle); font-size:12px; color:var(--mj-text-muted);}
+    .trace-step .n{ width:18px;height:18px;border-radius:50%;background:var(--mj-bg-surface-sunken);color:var(--mj-text-secondary);font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}
+    .trace-step b{color:var(--mj-text-secondary)}
+
+    .memnote{ display:flex; gap:9px; font-size:12px; color:var(--mj-text-muted); padding:9px 11px; border-radius:9px; background:color-mix(in srgb,#7c3aed 6%,transparent); border:1px solid color-mix(in srgb,#7c3aed 22%,transparent);}
+    .memnote .tag{color:#7c3aed;font-weight:700;flex:0 0 auto}
+
+    .seclbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--mj-text-muted);font-weight:700}
+
+    .cp-foot{ border-top:1px solid var(--mj-border-default); padding:12px 14px;}
+    .askbox{ display:flex; gap:8px; align-items:center; border:1px solid var(--mj-border-default); border-radius:999px; padding:5px 6px 5px 14px; background:var(--mj-bg-surface-card);}
+    .askbox input{ flex:1; border:none; background:transparent; outline:none; color:var(--mj-text-primary); font-size:13px;}
+    .askbox .send{ width:30px;height:30px;border-radius:50%;border:none;background:var(--mj-brand-primary);color:#fff;cursor:pointer;}
+    .suggest{ display:flex; gap:7px; flex-wrap:wrap; margin-bottom:9px;}
+    .suggest .s{ font-size:11.5px; padding:5px 10px; border-radius:999px; border:1px solid var(--mj-border-default); color:var(--mj-text-secondary); background:var(--mj-bg-surface); cursor:pointer;}
+    .suggest .s:hover{background:var(--mj-bg-surface-hover)}
+</style>
+</head>
+<body>
+
+<div class="mock-nav">
+    <div class="brand"><span class="dot"></span> Dupe Detection <small>· v2 mockups</small></div>
+    <div class="links">
+        <a href="index.html">v2 Overview</a>
+        <a href="a-augment-in-place.html">A · Augment</a>
+        <a href="b-recommendation-board.html">B · Reco Board</a>
+        <a href="c-reasoning-copilot.html" class="active">C · Copilot</a>
+        <a href="../index.html">↩ v1</a>
+    </div>
+    <div class="spacer"></div>
+    <span class="pattern-tag">v2-C — grid + docked conversational reasoning copilot (Agent mode)</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌓 <span id="tlabel">Dark</span></button>
+</div>
+
+<div class="layout">
+    <!-- LEFT: condensed real comparison grid -->
+    <div class="left">
+        <div class="cmp-mini-head">
+            <div class="eicon">⚇</div>
+            <h2>Acme Corporation</h2>
+            <span class="chip ghost tiny">Accounts · 3 duplicates</span>
+            <div class="spacer"></div>
+            <div class="chip vector">vec .96</div><div class="chip merge">LLM Merge .98</div>
+        </div>
+
+        <div class="cgrid">
+            <div class="corner">Field</div>
+            <div class="colhd survivor"><span class="cname">Acme Corporation ★</span><span class="schip vec">survivor</span></div>
+            <div class="colhd"><span class="cname">Acme Corp <span class="prov sf tiny"><span class="swatch"></span>SF</span></span><span class="schip llm">LLM .98</span></div>
+            <div class="colhd"><span class="cname">Acme Corp LLC <span class="prov hubspot tiny"><span class="swatch"></span>HS</span></span><span class="schip llm">LLM .97</span></div>
+
+            <div class="lblcell">Phone</div>
+            <div class="vcell diff">555-0100</div>
+            <div class="vcell selected">+1 (555) 010-0100 <span class="qlink">why?</span></div>
+            <div class="vcell">555.0100</div>
+
+            <div class="lblcell">Billing Addr</div>
+            <div class="vcell diff">123 Main St</div>
+            <div class="vcell selected">123 Main Street, Ste 400 <span class="qlink">why?</span></div>
+            <div class="vcell">123 Main St</div>
+
+            <div class="lblcell">Annual Rev</div>
+            <div class="vcell selected">$12.4M <span class="qlink">why?</span></div>
+            <div class="vcell"><span class="muted">—</span></div>
+            <div class="vcell">$11.9M</div>
+
+            <div class="lblcell">City</div>
+            <div class="vcell selected">San Francisco</div>
+            <div class="vcell">San Francisco</div>
+            <div class="vcell diff">SF</div>
+        </div>
+
+        <div class="mergebar">
+            <span class="tiny muted">Surviving <b style="color:var(--mj-text-link)">Acme Corporation</b> · 2 cherry-picked · 17 deps re-pointed</span>
+            <div class="spacer"></div>
+            <button class="btn danger-ghost">Reject all</button>
+            <button class="btn success">Merge records</button>
+        </div>
+    </div>
+
+    <!-- RIGHT: reasoning copilot -->
+    <div class="copilot">
+        <div class="cp-head">
+            <div class="av">✦</div>
+            <div><div class="ttl">Duplicate Resolution</div><div class="tiny muted">Agent · with memory + tools</div></div>
+            <div class="mode"><span class="mode-pill">AGENT MODE</span></div>
+        </div>
+
+        <div class="cp-body">
+            <div class="verdict-card">
+                <div class="v">✓ Merge — high confidence</div>
+                <div class="scl">
+                    <span class="x">vector <b class="vecn">0.96</b></span>
+                    <span class="x">→ LLM <b class="llmn">0.98</b></span>
+                    <span class="x muted">strengthened +0.02</span>
+                </div>
+            </div>
+
+            <div class="msg bot">
+                <div class="ic">✦</div>
+                <div class="bubble">These three are the same legal entity. All share <b>acme.com</b> and the same primary address; “Corp” and “LLC” are formatting/legal-suffix variants. I kept <b>Acme Corporation</b> as survivor (most dependents) but pulled the <b>verified phone &amp; suite address</b> from the Salesforce record — they're more current there.</div>
+            </div>
+
+            <div>
+                <div class="seclbl" style="margin-bottom:7px;">Investigation trace</div>
+                <div class="trace">
+                    <div class="trace-hd">🛠 4 tool calls <span class="chev">▾</span></div>
+                    <div class="trace-step"><span class="n">1</span><span><b>get_record_deltas</b> — compared 23 fields across 3 records</span></div>
+                    <div class="trace-step"><span class="n">2</span><span><b>lookup_related</b> — checked Contacts on each; overlapping people on Acme Corp &amp; LLC</span></div>
+                    <div class="trace-step"><span class="n">3</span><span><b>check_external_ids</b> — SF + HubSpot rows, no conflicting EIN</span></div>
+                    <div class="trace-step"><span class="n">4</span><span><b>field_recency</b> — SF phone/address verified 2026-05 (newer)</span></div>
+                </div>
+            </div>
+
+            <div class="memnote"><span class="tag">⟲ memory</span><span>Applied entity note: <i>“For Accounts, prefer most-recently-verified phone/address over the highest-dependency record.”</i> (learned from 9 prior reviews)</span></div>
+
+            <div class="msg user"><div class="ic">🧑</div><div class="bubble">Why keep the Salesforce address?</div></div>
+            <div class="msg bot"><div class="ic">✦</div><div class="bubble">The survivor's <b>123 Main St</b> is a truncated subset of Salesforce's <b>123 Main Street, Suite 400</b> — same location, more complete. And SF's was verified more recently. You can override per-field in the grid if your records say otherwise.</div></div>
+        </div>
+
+        <div class="cp-foot">
+            <div class="suggest">
+                <span class="s">Why not “Not a duplicate”?</span>
+                <span class="s">What did dependents tell you?</span>
+                <span class="s">Re-run stricter</span>
+            </div>
+            <div class="askbox">
+                <input placeholder="Ask about this match…">
+                <button class="send">↑</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleTheme(){ const d=document.documentElement.classList.toggle('dark'); document.getElementById('tlabel').textContent=d?'Light':'Dark'; }
+if (matchMedia('(prefers-color-scheme: dark)').matches){ toggleTheme(); }
+</script>
+</body>
+</html>
