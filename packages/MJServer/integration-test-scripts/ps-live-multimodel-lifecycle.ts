@@ -204,7 +204,7 @@ async function connect(): Promise<{ md: Metadata; route: IMetadataProvider; user
     '', client.Url, '', async () => '', '__mj', undefined, undefined, client.MJAPIKey,
   );
   await setupGraphQLClient(config);
-  const md = new Metadata();
+  const md = new Metadata(); // global-provider-ok: standalone integration/demo script
   const route = GraphQLDataProvider.Instance;
   const user = md.CurrentUser;
   if (!user) {

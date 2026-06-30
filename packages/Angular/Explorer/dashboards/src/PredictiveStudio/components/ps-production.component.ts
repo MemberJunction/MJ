@@ -338,7 +338,7 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   private resolveEntityName(b: MJMLModelScoringBindingEntity): string {
     if (b.TargetEntity) return b.TargetEntity;
     if (b.TargetEntityID) {
-      const entity = this.ProviderToUse.Entities.find((e) => e.ID === b.TargetEntityID);
+      const entity = this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, b.TargetEntityID));
       if (entity) return entity.Name;
     }
     return '—';

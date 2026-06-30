@@ -60,7 +60,7 @@ import {
   CompositeKey,
   type IMetadataProvider,
 } from '@memberjunction/core';
-import { SafeJSONParse } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import '@memberjunction/core-entities';
 import {
   MJMLAlgorithmEntity,
@@ -509,7 +509,7 @@ async function main(): Promise<void> {
       scoringBindingIds.push(writeBack.binding.ID);
       check(writeBack.binding.Mode === 'OnDemand', `binding.Mode === 'OnDemand' (got '${writeBack.binding.Mode}')`);
       check(writeBack.binding.TargetColumn === OUTPUT_FIELD, `binding.TargetColumn === '${OUTPUT_FIELD}' (got '${writeBack.binding.TargetColumn}')`);
-      check(writeBack.binding.RecordProcessID === wbRP.ID, 'binding.RecordProcessID === the RP id');
+      check(UUIDsEqual(writeBack.binding.RecordProcessID, wbRP.ID), 'binding.RecordProcessID === the RP id');
     }
 
     // ── 4a. Verify the write-back RP carries an OutputMapping ─────────────────

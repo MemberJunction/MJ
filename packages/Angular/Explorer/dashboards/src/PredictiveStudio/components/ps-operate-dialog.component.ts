@@ -184,7 +184,7 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
     this.isClassification = model?.ProblemType === 'classification';
     const pipeline = model ? this.engine.Pipelines.find((p) => UUIDsEqual(p.ID, model.PipelineID)) : undefined;
     const entity = pipeline?.TargetEntityID
-      ? this.ProviderToUse.Entities.find((e) => e.ID === pipeline.TargetEntityID)
+      ? this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, pipeline.TargetEntityID))
       : undefined;
     this.state.targetEntityName = entity?.Name ?? '';
     this.entityFields = (entity?.Fields ?? []).map((f) => f.Name).sort((a, b) => a.localeCompare(b));
