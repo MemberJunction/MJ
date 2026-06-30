@@ -473,6 +473,16 @@ async function main(): Promise<void> {
       check(payloads.length > 0, 'GENERIC run wrote ≥1 Process Run Detail row');
       const withScore = payloads.filter((p) => isNumeric(p.score) && p.scoredAt != null);
       check(withScore.length > 0, "a detail's ResultPayload parses to { score: <number>, scoredAt } (predictions in run history)");
+
+      // ── ANTI-SKEW REGRESSION GUARD ──────────────────────────────────────────────
+      // The pipeline trains on `MembershipType` — a VIRTUAL (view-joined) column the on-demand
+      // scope can silently drop, which made every prediction identical (the bug this guards). The
+      // assembler now re-reads dropped feature columns from the entity view, so predictions must VARY.
+      // A single distinct score across a multi-type scope = the skew is back. (Pre-fix this assertion
+      // did not exist — the suite only checked that scores *existed*, which is how the bug stayed latent.)
+      const distinctScores = new Set(withScore.map((p) => p.score)).size;
+      console.log(`  Distinct prediction scores across ${withScore.length} rows: ${distinctScores}`);
+      check(distinctScores > 1, `GENERIC predictions VARY across the scope (distinct scores=${distinctScores}>1) — virtual feature reached the model, no train/serve skew`);
     }
 
     // The member column must NOT have been written in generic mode.

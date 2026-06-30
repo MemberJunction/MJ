@@ -1,9 +1,38 @@
-# 🐞 FLAGGED FINDING — score-time train/serve skew on virtual (denormalized) features
+# ✅ RESOLVED — score-time train/serve skew on virtual (denormalized) features
 
 **Found:** 2026-06-30, via the in-browser E2E "Run now" on the Production tab (Operate flow).
-**Severity:** High (predictions are silently wrong) — but **latent** (no existing test asserts prediction
-*variation*) and **pre-existing** (lives in the FeatureAssembly score path, NOT in the phase-2 Operate work).
-**Status:** NOT fixed. Documented for a deliberate, reviewed fix — deliberately not blind-patched overnight
+**Fixed:** 2026-06-30 (same day, after review + sign-off on the approach).
+**Severity:** High (predictions were silently wrong) — and **latent** (no existing test asserted prediction
+*variation*), **pre-existing** (lived in the FeatureAssembly score path, NOT in the phase-2 Operate work).
+
+## ✅ Resolution (what shipped)
+
+Both fixes landed in `FeatureAssemblyExecutor.assemble()` ([feature-assembly-executor.ts](../packages/AI/PredictiveStudio/Engine/src/feature-assembly/feature-assembly-executor.ts)) — the single code path, so train / materialize / on-demand all benefit:
+
+1. **Symmetric re-read (`hydrateMissingFeatureColumns`)** — after building the column plan, any required raw
+   feature column **absent** from the resolved rows is re-read from the **same entity view the training path
+   reads** (`dataAccess.fetchRows`, keyed by primary key), then merged in. Columns already present are left
+   untouched, so a complete record set (training, a full `entity_object` load, unit fixtures) pays **no** second
+   read and **no** blob tax — only the on-demand narrow-projection case re-reads, and only the dropped columns.
+   Train and score can no longer diverge on what they feed the model.
+2. **Hard-fail guardrail (`assertRequiredColumnsPresent`)** — if a required feature column is **still** absent
+   after hydration, assembly **throws** with a precise message. `MLModelInferenceProcessor`'s existing per-record
+   `try/catch` turns that into a `Failed` run detail that bubbles to the run history + the Production-tab UI.
+   No more silent "Succeeded" with garbage. This also guards **training** — a pipeline declaring a column the
+   view doesn't expose now fails loudly up front instead of producing a no-signal model.
+
+**Proof:**
+- Unit (`src/__tests__/feature-assembly.test.ts`, +3): hydrate-fills-virtual-column, guardrail-throws-on-absent,
+  and a **train/serve parity** test (same rows inline-vs-hydrated → byte-identical matrix). Full engine: **290 pass**.
+- Integration (`ps-inproc-operate-flow.ts`, +1 assertion): a fresh `Status` model trained on the virtual
+  `MembershipType` feature, scored on-demand via `RecordProcessExecutor.RunByID` →
+  **`Distinct prediction scores across 15 rows: 4` (was 1)** — the regression guard whose absence let this hide.
+
+The historical analysis that led to the fix is preserved below for context.
+
+---
+
+**Original status (pre-fix):** documented for a deliberate, reviewed fix — deliberately not blind-patched overnight
 in the anti-skew backbone (regression risk to working models). The phase-2 Operate feature itself is verified
 working end-to-end; it merely *surfaced* this.
 
