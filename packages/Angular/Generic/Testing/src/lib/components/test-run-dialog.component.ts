@@ -578,10 +578,7 @@ interface ProgressUpdate {
             </div>
 
             @if (isRunning && PanelMode) {
-              <div class="safe-to-close-banner">
-                <i class="fa-solid fa-info-circle"></i>
-                <span>Tests run on the server. You can close this panel &mdash; your test will keep running. Check the dashboard for updates.</span>
-              </div>
+              <mj-alert Variant="info" class="test-run-alert-pos">Tests run on the server. You can close this panel &mdash; your test will keep running. Check the dashboard for updates.</mj-alert>
             }
 
             @if (executionLog.length > 0) {
@@ -628,10 +625,7 @@ interface ProgressUpdate {
                       </div>
                     }
                   } @else {
-                    <div class="error-message">
-                      <i class="fa-solid fa-exclamation-triangle"></i>
-                      <span>{{ result.errorMessage }}</span>
-                    </div>
+                    <mj-alert Variant="error" class="test-run-result-alert-pos">{{ result.errorMessage }}</mj-alert>
                   }
                 </div>
               </div>
@@ -1189,23 +1183,8 @@ interface ProgressUpdate {
       color: var(--mj-text-secondary);
     }
 
-    .safe-to-close-banner {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 10px 14px;
+    .test-run-alert-pos {
       margin-bottom: 12px;
-      border-radius: 8px;
-      font-size: 13px;
-      line-height: 1.4;
-      background: var(--mj-status-info-bg);
-      color: var(--mj-status-info-text);
-      border: 1px solid var(--mj-status-info-border);
-    }
-
-    .safe-to-close-banner i {
-      margin-top: 2px;
-      flex-shrink: 0;
     }
 
     .execution-log {
@@ -1336,27 +1315,8 @@ interface ProgressUpdate {
       font-size: 13px;
     }
 
-    .error-message {
-      display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      padding: 14px;
-      background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
-      border-radius: 6px;
-      color: var(--mj-status-error);
-      font-size: 13px;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-
-    .error-message i {
-      font-size: 20px;
-      flex-shrink: 0;
-      margin-top: 2px;
-    }
-
-    .error-message span {
-      flex: 1;
+    .test-run-result-alert-pos {
+      margin: 0;
     }
 
     /* Tags Section Styles */

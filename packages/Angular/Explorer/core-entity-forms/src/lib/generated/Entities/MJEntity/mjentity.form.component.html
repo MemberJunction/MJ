@@ -2307,25 +2307,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Scoped Prompt Parts Section -->
+    <!-- ML Training Pipelines Section -->
     <mj-collapsible-panel
-        SectionKey="mJScopedPromptParts"
-        SectionName="Scoped Prompt Parts"
-        Icon="fa fa-comment-dots"
+        SectionKey="mJMLTrainingPipelines"
+        SectionName="ML Training Pipelines"
+        Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJScopedPromptParts')"
+        [BadgeCount]="GetSectionRowCount('mJMLTrainingPipelines')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scoped Prompt Parts','PrimaryScopeEntityID')"
-                [NewRecordValues]="NewRecordValues('MJ: Scoped Prompt Parts')"
-                [AllowLoad]="IsSectionExpanded('mJScopedPromptParts')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Training Pipelines','TargetEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Training Pipelines')"
+                [AllowLoad]="IsSectionExpanded('mJMLTrainingPipelines')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJScopedPromptParts', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLTrainingPipelines', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- ML Model Scoring Bindings Section -->
+    <mj-collapsible-panel
+        SectionKey="mJMLModelScoringBindings"
+        SectionName="ML Model Scoring Bindings"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJMLModelScoringBindings')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','TargetEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings')"
+                [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

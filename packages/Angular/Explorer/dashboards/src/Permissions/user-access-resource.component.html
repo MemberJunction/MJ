@@ -11,10 +11,7 @@
   <mj-page-body>
 
   @if (ErrorMessage) {
-    <div class="message error-message">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      <span>{{ ErrorMessage }}</span>
-    </div>
+    <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
   }
 
   <div class="selector-row">

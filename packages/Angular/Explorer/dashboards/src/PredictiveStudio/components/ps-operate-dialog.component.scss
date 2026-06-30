@@ -1,0 +1,38 @@
+// "Operate this model" dialog — scope + output knobs, composed Remote Ops. Tokens only.
+
+.ps-operate {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 4px 2px;
+}
+
+.ps-operate .op-target {
+  margin: 0;
+}
+
+.ps-operate .op-hint {
+  margin-top: 6px;
+}
+
+.ps-operate .op-summary {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+  color: var(--mj-text-secondary);
+}
+.ps-operate .op-summary i {
+  color: var(--mj-brand-primary);
+}
+
+// smaller segmented control (value-kind toggle)
+.ps-operate .ps-seg.sm button {
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+.op-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 2px 2px;
+}

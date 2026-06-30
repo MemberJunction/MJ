@@ -26,6 +26,9 @@ const hoisted = vi.hoisted(() => {
             { ID: EXPLICIT_AGENT_ID_H, Name: 'ExplicitAgent' },
         ] as Array<{ ID: string; Name: string }>,
         getSettingMock: vi.fn<[string, string?], string | undefined>(),
+        // Drives the mocked Application RunView: the value the app's
+        // AgentSettings.DefaultAgentID resolves to (undefined = app has no AgentSettings row).
+        appDefaultAgentId: { value: undefined as string | undefined },
     };
 });
 
@@ -55,9 +58,21 @@ vi.mock('@memberjunction/global', () => ({
         (a ?? '').toLowerCase() === (b ?? '').toLowerCase(),
 }));
 
-vi.mock('@memberjunction/core', () => ({}));
+vi.mock('@memberjunction/core', () => ({
+    // Minimal RunView stand-in: returns one MJ: Applications row whose AgentSettingsObject
+    // exposes the DefaultAgentID under test, or an empty result set when none is configured.
+    RunView: class {
+        async RunView(): Promise<{ Success: boolean; Results: Array<{ AgentSettingsObject: { DefaultAgentID: string } | null }> }> {
+            const id = hoisted.appDefaultAgentId.value;
+            if (id === undefined) {
+                return { Success: true, Results: [] };
+            }
+            return { Success: true, Results: [{ AgentSettingsObject: { DefaultAgentID: id } }] };
+        }
+    },
+}));
 
-const { allAgents, getSettingMock } = hoisted;
+const { allAgents, getSettingMock, appDefaultAgentId } = hoisted;
 
 import { DefaultAgentResolver } from '../default-agent/DefaultAgentResolver';
 
@@ -67,6 +82,7 @@ describe('DefaultAgentResolver', () => {
     beforeEach(() => {
         resolver = new DefaultAgentResolver();
         getSettingMock.mockReset();
+        appDefaultAgentId.value = undefined;
     });
 
     describe('Step 1 — explicit agent ID', () => {
@@ -98,7 +114,48 @@ describe('DefaultAgentResolver', () => {
         });
     });
 
-    describe('Steps 2 + 3 — Application Setting (app-scoped, then global)', () => {
+    describe('Step 2 — Application.AgentSettings.DefaultAgentID', () => {
+        it('wins over the Application Setting key when the app declares a default agent', async () => {
+            appDefaultAgentId.value = EXPLICIT_AGENT_ID; // any known agent
+            getSettingMock.mockReturnValue(APP_SCOPED_AGENT_ID); // would win at step 3 if reached
+
+            const agent = await resolver.resolve({ applicationId: 'some-app' });
+
+            expect(agent.ID).toBe(EXPLICIT_AGENT_ID);
+            // Step 2 short-circuits before the settings engine is consulted.
+            expect(getSettingMock).not.toHaveBeenCalled();
+        });
+
+        it('falls through to the settings chain when AgentSettings has no default agent', async () => {
+            appDefaultAgentId.value = undefined; // app has no AgentSettings.DefaultAgentID
+            getSettingMock.mockReturnValue(APP_SCOPED_AGENT_ID);
+
+            const agent = await resolver.resolve({ applicationId: 'some-app' });
+
+            expect(agent.ID).toBe(APP_SCOPED_AGENT_ID);
+        });
+
+        it('falls through with a warning when AgentSettings points at a stale agent', async () => {
+            appDefaultAgentId.value = 'stale-uuid-no-longer-exists';
+            getSettingMock.mockReturnValue(APP_SCOPED_AGENT_ID);
+
+            const agent = await resolver.resolve({ applicationId: 'some-app' });
+
+            expect(agent.ID).toBe(APP_SCOPED_AGENT_ID);
+        });
+
+        it('is skipped entirely when no applicationId is supplied', async () => {
+            appDefaultAgentId.value = EXPLICIT_AGENT_ID; // would resolve if consulted
+            getSettingMock.mockReturnValue(FALLBACK_AGENT_ID);
+
+            const agent = await resolver.resolve({}); // no app context
+
+            // AgentSettings step requires an applicationId; without it we go straight to settings.
+            expect(agent.ID).toBe(FALLBACK_AGENT_ID);
+        });
+    });
+
+    describe('Steps 3 + 4 — Application Setting (app-scoped, then global)', () => {
         it('uses the setting value when it resolves to a known agent', async () => {
             getSettingMock.mockReturnValue(APP_SCOPED_AGENT_ID);
 
@@ -133,7 +190,7 @@ describe('DefaultAgentResolver', () => {
         });
     });
 
-    describe('Step 4 — code-const Sage fallback', () => {
+    describe('Step 5 — code-const Sage fallback', () => {
         it('returns the Sage agent when no setting is configured', async () => {
             getSettingMock.mockReturnValue(undefined);
 

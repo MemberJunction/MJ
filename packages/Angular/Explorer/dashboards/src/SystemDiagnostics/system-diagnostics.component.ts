@@ -9,6 +9,13 @@ import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjuncti
 import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { TabConfig } from '@memberjunction/ng-ui-components';
+import { validateEnumParam, validateNonNegativeNumberParam } from '../shared/agent-tool-validation';
+import {
+    buildSystemDiagnosticsAgentContext,
+    VALID_DIAGNOSTICS_SECTIONS,
+    VALID_PERF_TABS,
+    VALID_TELEMETRY_CATEGORIES,
+} from './system-diagnostics-agent-context';
 import * as d3 from 'd3';
 
 /**
@@ -295,15 +302,12 @@ export interface SystemDiagnosticsUserPreferences {
                   </div>
         
                   <div class="section-panel-content">
-                    <div class="info-banner">
-                      <i class="fa-solid fa-info-circle"></i>
-                      <div>
-                        <strong>What is this?</strong>
-                        This section shows entities that are loaded by multiple engines.
-                        Redundant loading indicates potential optimization opportunities where engines
-                        could share data or consolidate their loading logic.
-                      </div>
-                    </div>
+                    <mj-alert Variant="info">
+                      <strong>What is this?</strong>
+                      This section shows entities that are loaded by multiple engines.
+                      Redundant loading indicates potential optimization opportunities where engines
+                      could share data or consolidate their loading logic.
+                    </mj-alert>
         
                     @if (redundantLoads.length === 0) {
                       <mj-empty-state Variant="success"
@@ -339,15 +343,12 @@ export interface SystemDiagnosticsUserPreferences {
                         </table>
                       </div>
         
-                      <div class="recommendation-banner">
-                        <i class="fa-solid fa-lightbulb"></i>
-                        <div>
-                          <strong>Recommendation:</strong>
-                          Consider consolidating data loading by having dependent engines
-                          access data from a parent engine, or restructuring the engine
-                          hierarchy to avoid duplicate data fetches.
-                        </div>
-                      </div>
+                      <mj-alert Variant="warning" Icon="fa-solid fa-lightbulb" class="recommendation-spacing">
+                        <strong>Recommendation:</strong>
+                        Consider consolidating data loading by having dependent engines
+                        access data from a parent engine, or restructuring the engine
+                        hierarchy to avoid duplicate data fetches.
+                      </mj-alert>
                     }
                   </div>
                 </div>
@@ -398,13 +399,9 @@ export interface SystemDiagnosticsUserPreferences {
                     </div>
                   </div>
                   @if (serverTelemetryError) {
-                    <div class="error-banner">
-                      <i class="fa-solid fa-exclamation-triangle"></i>
+                    <mj-alert Variant="error" Dismissible (Dismissed)="serverTelemetryError = null">
                       {{ serverTelemetryError }}
-                      <button class="dismiss-btn" (click)="serverTelemetryError = null">
-                        <i class="fa-solid fa-times"></i>
-                      </button>
-                    </div>
+                    </mj-alert>
                   }
         
                   <!-- Performance Sub-Navigation Tabs -->
@@ -441,13 +438,10 @@ export interface SystemDiagnosticsUserPreferences {
         
                   <div class="section-panel-content">
                     @if (!telemetryEnabled) {
-                      <div class="info-banner warning-banner">
-                        <i class="fa-solid fa-exclamation-triangle"></i>
-                        <div>
-                          <strong>Telemetry is disabled.</strong>
-                          Enable telemetry to track RunView, RunQuery, and Engine loading performance.
-                        </div>
-                      </div>
+                      <mj-alert Variant="warning">
+                        <strong>Telemetry is disabled.</strong>
+                        Enable telemetry to track RunView, RunQuery, and Engine loading performance.
+                      </mj-alert>
                     }
         
                     <!-- Monitor Tab (PerfMon Chart) -->
@@ -623,10 +617,9 @@ export interface SystemDiagnosticsUserPreferences {
                           </div>
                         </div>
                       } @else if (telemetryEnabled && telemetrySummary && telemetrySummary.totalEvents > 0) {
-                        <div class="success-banner">
-                          <i class="fa-solid fa-check-circle"></i>
+                        <mj-alert Variant="success" class="telemetry-success-alert">
                           <span>No slow operations detected. All operations completed under {{ slowQueryThresholdMs }}ms.</span>
-                        </div>
+                        </mj-alert>
                       }
                     }
         
@@ -939,13 +932,10 @@ export interface SystemDiagnosticsUserPreferences {
         
                   <div class="section-panel-content">
                     @if (!cacheInitialized) {
-                      <div class="info-banner warning-banner">
-                        <i class="fa-solid fa-exclamation-triangle"></i>
-                        <div>
-                          <strong>Cache not initialized.</strong>
-                          The LocalCacheManager requires initialization with a storage provider during app startup.
-                        </div>
-                      </div>
+                      <mj-alert Variant="warning">
+                        <strong>Cache not initialized.</strong>
+                        The LocalCacheManager requires initialization with a storage provider during app startup.
+                      </mj-alert>
                     } @else {
                       <!-- Cache Summary Stats -->
                       <div class="cache-summary">
@@ -1169,10 +1159,9 @@ export interface SystemDiagnosticsUserPreferences {
                     </div>
                   </div>
                   @if (eventDetailPanel.relatedPattern.count >= 2) {
-                    <div class="pattern-warning">
-                      <i class="fa-solid fa-exclamation-triangle"></i>
+                    <mj-alert Variant="warning" Size="sm" class="pattern-hint-spacing">
                       This pattern has been called {{ eventDetailPanel.relatedPattern.count }} times. Consider caching or batching.
-                    </div>
+                    </mj-alert>
                   }
                 </div>
               }
@@ -1522,6 +1511,189 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         if (this.activeSection === 'performance' && this.perfTab === 'monitor') {
             setTimeout(() => this.renderPerfChart(), 100);
         }
+
+        // Wire the agent context + read-only client tools (see SAFETY BOUNDARY below).
+        this.registerAgentClientTools();
+        this.publishAgentContext();
+    }
+
+    // ================================================================
+    // AI Agent Context & Client Tools
+    //
+    // 🚨 SAFETY BOUNDARY — READ-ONLY DIAGNOSTIC METRICS ONLY 🚨
+    // System Diagnostics is a monitoring surface. The agent context and the
+    // client tools registered here are strictly NAVIGATIONAL + READ-ONLY:
+    // section/tab switches, refresh, telemetry category filter, and the
+    // slow-query display threshold. Destructive maintenance operations that
+    // exist on this component (clearTelemetry, clearAllCache, toggleTelemetry,
+    // refreshAllEngines) are DELIBERATELY NOT exposed to the agent — they mutate
+    // runtime state and must remain human-initiated.
+    //
+    // Context exposes ONLY read-only diagnostic METRICS + bounded runtime SHAPE
+    // names: engine class names, redundantly-loaded entity names, slow-operation
+    // labels (op / entity name + duration), telemetry category breakdown, and
+    // cache counts/sizes. It NEVER exposes raw telemetry payloads, filter SQL
+    // bodies, cache entry VALUES, query results, connection strings, or any
+    // secret — no such value is read into the published context. See
+    // system-diagnostics-agent-context.ts for the read-only context contract and
+    // the no-secret-leak unit test.
+    // ================================================================
+
+    /**
+     * Publish the current diagnostics state to the AI agent. Re-invoked on every
+     * meaningful state change (section/tab switch, data refresh, threshold change)
+     * so the agent always sees a fresh, read-only snapshot of the dashboard.
+     */
+    private publishAgentContext(): void {
+        const byType = this.cacheStats?.byType;
+        this.navigationService.SetAgentContext(this, buildSystemDiagnosticsAgentContext({
+            // Navigation
+            ActiveSection: this.activeSection,
+            PerfTab: this.perfTab,
+            TelemetrySource: this.telemetrySource,
+            TelemetryEnabled: this.telemetryEnabled,
+            ServerTelemetryEnabled: this.serverTelemetryEnabled,
+            CategoryFilter: this.categoryFilter,
+            SlowQueryThresholdMs: this.slowQueryThresholdMs,
+
+            // Engines
+            EngineCount: this.engineStats?.totalEngines ?? this.engines.length,
+            LoadedEngineCount: this.engines.filter(e => e.isLoaded).length,
+            TotalMemoryBytes: this.engineStats?.totalEstimatedMemoryBytes ?? 0,
+            TotalMemoryDisplay: this.formatBytes(this.engineStats?.totalEstimatedMemoryBytes ?? 0),
+            EngineNames: this.engines.map(e => e.className),
+
+            // Redundant loading
+            RedundantLoadCount: this.redundantLoads.length,
+            RedundantEntityNames: this.redundantLoads.map(r => r.entityName),
+
+            // Telemetry aggregates
+            TotalEvents: this.telemetrySummary?.totalEvents ?? 0,
+            TotalPatterns: this.telemetrySummary?.totalPatterns ?? 0,
+            TotalInsights: this.telemetrySummary?.totalInsights ?? 0,
+            ActiveEvents: this.telemetrySummary?.activeEvents ?? 0,
+            SlowQueryCount: this.slowQueries.length,
+            SlowOperations: this.slowQueries.map(q => ({
+                Label: q.entityName || q.operation,
+                Category: q.category,
+                ElapsedMs: Math.round(q.elapsedMs ?? 0),
+            })),
+            CategoryBreakdown: this.categoriesWithData.map(c => ({
+                Name: c.name,
+                Events: c.events,
+                AvgMs: Math.round(c.avgMs),
+            })),
+
+            // Cache (counts + sizes only — never entry values)
+            CacheInitialized: this.cacheInitialized,
+            CacheTotalEntries: this.cacheStats?.totalEntries ?? 0,
+            CacheTotalSizeBytes: this.cacheStats?.totalSizeBytes ?? 0,
+            CacheHits: this.cacheStats?.hits ?? 0,
+            CacheMisses: this.cacheStats?.misses ?? 0,
+            CacheHitRate: this.cacheHitRate,
+            CacheDatasetCount: byType?.dataset?.count ?? 0,
+            CacheRunViewCount: byType?.runview?.count ?? 0,
+            CacheRunQueryCount: byType?.runquery?.count ?? 0,
+        }));
+    }
+
+    /**
+     * Register the read-only / navigational client tools the agent may invoke.
+     * Every Handler is tolerant: it validates input and returns
+     * `{ Success: false, ErrorMessage }` rather than throwing.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'SwitchDiagnosticsSection',
+                Description: 'Switch the active System Diagnostics section. Valid sections: engines, redundant, performance, cache.',
+                ParameterSchema: { type: 'object', properties: { section: { type: 'string', enum: ['engines', 'redundant', 'performance', 'cache'] } }, required: ['section'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSwitchSectionTool(params),
+            },
+            {
+                Name: 'SwitchPerformanceTab',
+                Description: 'Switch the active Performance sub-tab. Valid tabs: monitor, overview, events, patterns, insights.',
+                ParameterSchema: { type: 'object', properties: { tab: { type: 'string', enum: ['monitor', 'overview', 'events', 'patterns', 'insights'] } }, required: ['tab'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSwitchPerfTabTool(params),
+            },
+            {
+                Name: 'RefreshDiagnostics',
+                Description: 'Refresh all diagnostics data (engine registry, telemetry, redundant loads). Read-only — does not clear or mutate any state.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleRefreshTool(),
+            },
+            {
+                Name: 'FilterTelemetryByCategory',
+                Description: "Filter the performance telemetry view by category. Valid categories: all, RunView, RunQuery, Engine, AI, Cache.",
+                ParameterSchema: { type: 'object', properties: { category: { type: 'string', enum: ['all', 'RunView', 'RunQuery', 'Engine', 'AI', 'Cache'] } }, required: ['category'] },
+                Handler: async (params: Record<string, unknown>) => this.handleFilterTelemetryTool(params),
+            },
+            {
+                Name: 'SetSlowQueryThreshold',
+                Description: 'Set the slow-query display threshold in milliseconds (controls which operations are flagged slow). Read-only display setting.',
+                ParameterSchema: { type: 'object', properties: { thresholdMs: { type: 'number', minimum: 0 } }, required: ['thresholdMs'] },
+                Handler: async (params: Record<string, unknown>) => this.handleSetSlowQueryThresholdTool(params),
+            },
+        ]);
+    }
+
+    private static readonly DIAGNOSTICS_SECTIONS = VALID_DIAGNOSTICS_SECTIONS;
+    private static readonly PERF_TABS = VALID_PERF_TABS;
+    private static readonly TELEMETRY_CATEGORIES = VALID_TELEMETRY_CATEGORIES;
+
+    private handleSwitchSectionTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['section'], SystemDiagnosticsComponent.DIAGNOSTICS_SECTIONS, 'section');
+        if (!v.ok) return v.result;
+        this.setActiveSection(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private handleSwitchPerfTabTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['tab'], SystemDiagnosticsComponent.PERF_TABS, 'tab');
+        if (!v.ok) return v.result;
+        this.setPerfTab(v.value);
+        this.publishAgentContext();
+        return { Success: true };
+    }
+
+    private async handleRefreshTool(): Promise<{ Success: boolean; ErrorMessage?: string }> {
+        try {
+            await this.refreshData();
+            this.publishAgentContext();
+            return { Success: true };
+        } catch (e) {
+            return { Success: false, ErrorMessage: e instanceof Error ? e.message : 'Refresh failed.' };
+        }
+    }
+
+    private handleFilterTelemetryTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateEnumParam(params?.['category'], SystemDiagnosticsComponent.TELEMETRY_CATEGORIES, 'category');
+        if (!v.ok) return v.result;
+        this.setCategoryFilter(v.value as TelemetryCategory | 'all');
+        return { Success: true };
+    }
+
+    private handleSetSlowQueryThresholdTool(params: Record<string, unknown>): { Success: boolean; ErrorMessage?: string } {
+        const v = validateNonNegativeNumberParam(params?.['thresholdMs'], 'thresholdMs');
+        if (!v.ok) return v.result;
+        this.SetSlowQueryThreshold(v.value);
+        return { Success: true };
+    }
+
+    /**
+     * Set the slow-query display threshold (ms) and re-derive the slow-query list
+     * from the already-loaded telemetry events. Read-only display control — does
+     * not refetch or mutate any telemetry data.
+     */
+    public SetSlowQueryThreshold(thresholdMs: number): void {
+        this.slowQueryThresholdMs = thresholdMs;
+        this.slowQueries = this.telemetryEvents
+            .filter(e => e.elapsedMs !== undefined && e.elapsedMs >= this.slowQueryThresholdMs)
+            .sort((a, b) => (b.elapsedMs || 0) - (a.elapsedMs || 0))
+            .slice(0, 20);
+        this.cdr.markForCheck();
+        this.publishAgentContext();
     }
 
     setActiveSection(section: 'engines' | 'redundant' | 'performance' | 'cache'): void {
@@ -1535,6 +1707,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+        this.publishAgentContext();
     }
 
     /**
@@ -1635,6 +1808,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         } finally {
             this.isLoading = false;
             this.cdr.markForCheck();
+            this.publishAgentContext();
         }
     }
 
@@ -1790,6 +1964,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+        this.publishAgentContext();
     }
 
     jumpToPatternsByCategory(categoryName: string): void {

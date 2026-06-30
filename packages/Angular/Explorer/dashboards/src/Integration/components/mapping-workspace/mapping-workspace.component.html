@@ -367,14 +367,13 @@
 
           <!-- Validation warnings -->
           @if (ActiveEditableFields.length > 0 && !MappingValidation.IsValid) {
-            <div class="validation-banner">
-              <i class="fa-solid fa-triangle-exclamation"></i>
+            <mj-alert Variant="warning">
               <div class="validation-warnings">
                 @for (warning of MappingValidation.Warnings; track warning) {
                   <span>{{ warning }}</span>
                 }
               </div>
-            </div>
+            </mj-alert>
           }
 
           <div class="field-mapping-header">

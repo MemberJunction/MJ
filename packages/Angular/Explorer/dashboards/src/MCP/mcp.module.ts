@@ -28,7 +28,8 @@ import {
     MJViewToggleComponent,
     MJRefreshButtonComponent,
     MJStatBadgeComponent,
-    MJEmptyStateComponent
+    MJEmptyStateComponent,
+    MJAlertComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
@@ -80,6 +81,7 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         MJRefreshButtonComponent,
     MJStatBadgeComponent,
         MJEmptyStateComponent,
+        MJAlertComponent,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,

@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Maintenance",
+      "Description": "Runs the Predictive Studio maintenance pass (plan §12 / SP10) on a recurring cadence over the MJ: ML Model Scoring Bindings: staleness detection (cadence / data-volume / drift), scheduled re-scoring of Mode='Scheduled' bindings, and retraining triggers for stale models (retrain the same pipeline into a new immutable version, compare the challenger's holdout metrics against the incumbent, and produce a promotion RECOMMENDATION). It NEVER auto-promotes — promotion remains a separate signed-off Action (PS-AGENT-7). The action driver wraps the MaintenanceEngine.runMaintenancePass(bindings, policy, deps) entry in @memberjunction/predictive-studio. Default cadence is weekly (Sundays 3 AM UTC); administrators can adjust the CronExpression. Disabled until the PredictiveStudio.RunMaintenancePass action lands with the SP10 action/Remote-Op tranche; set Status='Active' to enable. WIRING NOTE: when that action lands, add Configuration.ActionID = '@lookup:MJ: Actions.DriverClass=PredictiveStudioRunMaintenancePassAction'. It is intentionally omitted today because the action does not yet exist and an unresolvable @lookup hard-fails (and rolls back) the entire scheduled-jobs push.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=ActionScheduledJobDriver",
+      "CronExpression": "0 0 3 * * 0",
+      "Timezone": "UTC",
+      "Status": "Disabled",
+      "Configuration": {}
+    },
+    "primaryKey": {
+      "ID": "2CCE4280-9B29-4DCC-86A4-E5AF765909D1"
+    },
+    "sync": {
+      "lastModified": "2026-06-27T17:16:44.913Z",
+      "checksum": "0afe72fda88db8ba6a3b4da9776115dc2cd2c49b3e62af6727798c350b8386f4"
+    }
+  }
+]

@@ -49,6 +49,7 @@
     "@memberjunction/ng-timeline": "5.43.0",
     "@memberjunction/ng-workspace-initializer": "5.43.0",
     "@okta/okta-auth-js": "^7.14.1",
+    "@workos-inc/authkit-js": "^0.20.1",
     "ag-grid-angular": "^35.0.1",
     "ag-grid-community": "^35.0.1",
     "dhtmlx-gantt": "^9.1.1",
