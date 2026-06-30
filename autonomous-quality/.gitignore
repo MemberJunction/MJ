@@ -1,0 +1,5 @@
+# Runtime state — durable across fires but local to this machine, not committed by default.
+# (You CAN commit log/investigations.jsonl to a dedicated branch if you want a portable, git-backed memory.
+#  For the MVP it stays local.)
+log/
+workspace/
