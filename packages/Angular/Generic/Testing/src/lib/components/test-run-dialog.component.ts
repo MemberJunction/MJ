@@ -98,15 +98,13 @@ interface ProgressUpdate {
 
             <!-- Variables Section for Preselected Mode -->
             @if (availableVariables.length > 0) {
-              <div class="variables-section">
-                <button class="variables-toggle" (click)="showVariablesSection = !showVariablesSection">
-                  <i class="fa-solid" [class.fa-chevron-right]="!showVariablesSection" [class.fa-chevron-down]="showVariablesSection"></i>
+              <mj-accordion-panel Size="sm" [FlushBody]="true" [(Expanded)]="showVariablesSection">
+                <ng-template mjAccordionTitle>
                   <i class="fa-solid fa-sliders"></i>
                   <span>Test Variables</span>
                   <span class="variables-count-badge">{{ availableVariables.length }}</span>
-                </button>
-
-                @if (showVariablesSection) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   <div class="variables-content">
                     @for (variable of availableVariables; track variable.definition.name) {
                       <div class="variable-row">
@@ -150,20 +148,18 @@ interface ProgressUpdate {
                       </div>
                     }
                   </div>
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
 
             <!-- Advanced Options for Preselected Suite Mode -->
             @if (runMode === 'suite' && suiteTests.length > 0) {
-              <div class="advanced-options-section preselected-advanced">
-                <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
-                  <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+              <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="showAdvancedOptions" (ExpandedChange)="onAdvancedOptionsExpandedChange($event)">
+                <ng-template mjAccordionTitle>
                   <span>Advanced Options</span>
                   <span class="test-count-badge">{{ suiteTests.length }} tests</span>
-                </button>
-
-                @if (showAdvancedOptions) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   <div class="advanced-content">
                     <!-- Selection Mode Tabs -->
                     <div class="selection-mode-tabs">
@@ -257,8 +253,8 @@ interface ProgressUpdate {
                       </div>
                     }
                   </div>
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
             </div>
           }
@@ -376,14 +372,12 @@ interface ProgressUpdate {
 
               <!-- Advanced Options - Progressive Disclosure -->
               @if (selectedSuiteId && suiteTests.length > 0) {
-                <div class="advanced-options-section">
-                  <button class="advanced-toggle" (click)="toggleAdvancedOptions()">
-                    <i class="fa-solid" [class.fa-chevron-right]="!showAdvancedOptions" [class.fa-chevron-down]="showAdvancedOptions"></i>
+                <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="showAdvancedOptions" (ExpandedChange)="onAdvancedOptionsExpandedChange($event)">
+                  <ng-template mjAccordionTitle>
                     <span>Advanced Options</span>
                     <span class="test-count-badge">{{ suiteTests.length }} tests</span>
-                  </button>
-
-                  @if (showAdvancedOptions) {
+                  </ng-template>
+                  <ng-template mjAccordionBody>
                     <div class="advanced-content">
                       <!-- Selection Mode Tabs -->
                       <div class="selection-mode-tabs">
@@ -477,8 +471,8 @@ interface ProgressUpdate {
                         </div>
                       }
                     </div>
-                  }
-                </div>
+                  </ng-template>
+                </mj-accordion-panel>
               }
             }
 
@@ -1453,39 +1447,7 @@ interface ProgressUpdate {
     }
 
     /* Advanced Options - Progressive Disclosure */
-    .advanced-options-section {
-      background: var(--mj-bg-surface);
-      border-radius: 8px;
-      box-shadow: var(--mj-shadow-sm);
-      overflow: hidden;
-    }
-
-    .advanced-toggle {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--mj-text-secondary);
-      text-align: left;
-      transition: background 0.2s ease;
-    }
-
-    .advanced-toggle:hover {
-      background: var(--mj-bg-surface-sunken);
-    }
-
-    .advanced-toggle i {
-      color: var(--mj-text-disabled);
-      font-size: 12px;
-      transition: transform 0.2s ease;
-    }
-
+    /* .advanced-options-section / .advanced-toggle chrome is now owned by <mj-accordion-panel>. */
     .test-count-badge {
       margin-left: auto;
       padding: 2px 8px;
@@ -1682,42 +1644,7 @@ interface ProgressUpdate {
       font-size: 12px;
     }
 
-    .preselected-advanced {
-      /* No extra margin - handled by dialog-scroll-content gap */
-    }
-
-    /* Variables Section Styles */
-    .variables-section {
-      background: var(--mj-bg-surface);
-      border-radius: 8px;
-      box-shadow: var(--mj-shadow-sm);
-      overflow: hidden;
-    }
-
-    .variables-toggle {
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--mj-text-secondary);
-      text-align: left;
-      transition: background 0.2s ease;
-    }
-
-    .variables-toggle:hover {
-      background: var(--mj-bg-surface-sunken);
-    }
-
-    .variables-toggle .fa-sliders {
-      color: var(--mj-brand-primary);
-    }
-
+    /* .variables-section / .variables-toggle chrome is now owned by <mj-accordion-panel>. */
     .variables-count-badge {
       margin-left: auto;
       padding: 2px 8px;
@@ -2131,8 +2058,8 @@ export class TestRunDialogComponent extends BaseAngularComponent implements OnIn
     this.sequenceEnd = this.suiteTests.length > 0 ? this.suiteTests[this.suiteTests.length - 1].sequence : null;
   }
 
-  toggleAdvancedOptions(): void {
-    this.showAdvancedOptions = !this.showAdvancedOptions;
+  onAdvancedOptionsExpandedChange(expanded: boolean): void {
+    this.showAdvancedOptions = expanded;
     this.cdr.markForCheck();
   }
 
