@@ -249,7 +249,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserNotifications(): MJUserNotificationEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserNotifications || [])
+    return this.GetConfigData<MJUserNotificationEntity>('_UserNotifications')
       .filter((n) => UUIDsEqual(n.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -259,7 +259,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserSettings(): MJUserSettingEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserSettings || []).filter((s) => UUIDsEqual(s.UserID, this._loadedForUserId));
+    return this.GetConfigData<MJUserSettingEntity>('_UserSettings')
+      .filter((s) => UUIDsEqual(s.UserID, this._loadedForUserId));
   }
 
   /**
@@ -525,7 +526,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get Workspaces(): MJWorkspaceEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._Workspaces || []).filter((w) => UUIDsEqual(w.UserID, this._loadedForUserId));
+    return this.GetConfigData<MJWorkspaceEntity>('_Workspaces')
+      .filter((w) => UUIDsEqual(w.UserID, this._loadedForUserId));
   }
 
   /**
@@ -541,7 +543,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserApplications(): MJUserApplicationEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserApplications || [])
+    return this.GetConfigData<MJUserApplicationEntity>('_UserApplications')
       .filter((ua) => UUIDsEqual(ua.UserID, this._loadedForUserId))
       .sort((a, b) => {
         // Sort by Sequence first, then by Application name
@@ -557,7 +559,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserFavorites(): MJUserFavoriteEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserFavorites || [])
+    return this.GetConfigData<MJUserFavoriteEntity>('_UserFavorites')
       .filter((f) => UUIDsEqual(f.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.Get('__mj_CreatedAt')).getTime() - new Date(a.Get('__mj_CreatedAt')).getTime());
   }
@@ -567,7 +569,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get UserRecordLogs(): MJUserRecordLogEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserRecordLogs || [])
+    return this.GetConfigData<MJUserRecordLogEntity>('_UserRecordLogs')
       .filter((r) => UUIDsEqual(r.UserID, this._loadedForUserId))
       .sort((a, b) => new Date(b.LatestAt).getTime() - new Date(a.LatestAt).getTime());
   }
@@ -581,7 +583,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Useful for server-side admin scenarios.
    */
   public get AllNotifications(): MJUserNotificationEntity[] {
-    return this._UserNotifications || [];
+    return this.GetConfigData<MJUserNotificationEntity>('_UserNotifications');
   }
 
   /**
@@ -589,7 +591,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Useful for server-side admin scenarios.
    */
   public get AllUserApplications(): MJUserApplicationEntity[] {
-    return this._UserApplications || [];
+    return this.GetConfigData<MJUserApplicationEntity>('_UserApplications');
   }
 
   /**
@@ -1126,7 +1128,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public get NotificationPreferences(): MJUserNotificationPreferenceEntity[] {
     if (!this._loadedForUserId) return [];
-    return (this._UserNotificationPreferences || []).filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
+    return this.GetConfigData<MJUserNotificationPreferenceEntity>('_UserNotificationPreferences')
+      .filter((p) => UUIDsEqual(p.UserID, this._loadedForUserId));
   }
 
   public GetUserPreferenceForType(userId: string, typeId: string): MJUserNotificationPreferenceEntity | undefined {
@@ -1146,6 +1149,6 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Notification types are global (not user-specific) and define the available notification categories.
    */
   public get NotificationTypes(): MJUserNotificationTypeEntity[] {
-    return this._NotificationTypes || [];
+    return this.GetConfigData<MJUserNotificationTypeEntity>('_NotificationTypes');
   }
 }
