@@ -58,7 +58,7 @@ export interface PSProcessRunRow {
   ID: string;
   Status: string;
   StartTime: Date | null;
-  CreatedAt: Date;
+  CreatedAt: Date | null;
   SuccessCount: number;
   TotalItemCount?: number | null;
   ProcessName: string | null;
@@ -521,7 +521,9 @@ export function buildActivityFeed(
   const items: PSActivityFeedItem[] = [];
 
   for (const run of scoringRuns) {
-    const when = run.StartTime ?? run.CreatedAt;
+    // Never let a missing/invalid timestamp crash the whole feed — fall back to `now` so the run
+    // still appears (a just-created run can transiently arrive with no usable date).
+    const when = toDate(run.StartTime) ?? toDate(run.CreatedAt) ?? now;
     const failed = run.Status === 'Failed';
     items.push({
       kind: failed ? 'warn' : 'run',
@@ -537,6 +539,7 @@ export function buildActivityFeed(
 
   for (const ev of modelEvents) {
     const isArchive = ev.kind === 'archive';
+    const when = toDate(ev.when) ?? now;
     items.push({
       kind: isArchive ? 'archive' : 'promote',
       icon: isArchive ? 'fa-solid fa-box-archive' : 'fa-solid fa-arrow-up',
@@ -544,8 +547,8 @@ export function buildActivityFeed(
         ? `${ev.name} archived`
         : `${ev.name} promoted to ${ev.status}`,
       detail: ev.auc != null ? `${ev.algorithm ?? 'model'} · holdout AUC ${ev.auc.toFixed(3)}` : (ev.algorithm ?? 'model'),
-      when: relativeTime(ev.when, now),
-      sortMs: ev.when.getTime(),
+      when: relativeTime(when, now),
+      sortMs: when.getTime(),
     });
   }
 
@@ -595,6 +598,13 @@ export interface PSModelEventSource extends Pick<PSModelRow, 'Metrics' | 'Holdou
  * A compact relative-time string ("just now", "22 minutes ago", "3 hours ago", "Yesterday",
  * "2 days ago", or a date for older). Deterministic given `now` — testable.
  */
+/** Coerce a possibly-null / string / Date value to a valid Date, or `null` when there isn't one. */
+export function toDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export function relativeTime(when: Date, now: Date): string {
   const ms = now.getTime() - when.getTime();
   if (ms < 0) return 'just now';

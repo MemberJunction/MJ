@@ -184,7 +184,7 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
     this.isClassification = model?.ProblemType === 'classification';
     const pipeline = model ? this.engine.Pipelines.find((p) => UUIDsEqual(p.ID, model.PipelineID)) : undefined;
     const entity = pipeline?.TargetEntityID
-      ? this.ProviderToUse.Entities.find((e) => e.ID === pipeline.TargetEntityID)
+      ? this.ProviderToUse.Entities.find((e) => UUIDsEqual(e.ID, pipeline.TargetEntityID))
       : undefined;
     this.state.targetEntityName = entity?.Name ?? '';
     this.entityFields = (entity?.Fields ?? []).map((f) => f.Name).sort((a, b) => a.localeCompare(b));
@@ -235,8 +235,8 @@ export class PSOperateDialogComponent extends BaseAngularComponent {
       this.state.scopeMode === 'all'
         ? `every record in <strong>${entity}</strong>`
         : this.state.scopeMode === 'view'
-          ? `the <strong>${this.viewName() ?? 'selected view'}</strong> view of ${entity}`
-          : `the <strong>${this.listName() ?? 'selected list'}</strong> list of ${entity}`;
+          ? `the <strong>${this.viewName() ?? 'selected'}</strong> view of ${entity}`
+          : `the <strong>${this.listName() ?? 'selected'}</strong> list of ${entity}`;
     const output =
       this.state.outputMode === 'writeback'
         ? this.state.outputField.trim()
