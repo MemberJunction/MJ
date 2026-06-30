@@ -111,6 +111,24 @@ describe('MJAccordionPanelComponent (DOM)', () => {
     expect(panel.classList.contains('mj-accordion-panel--flush-body')).toBe(true);
   });
 
+  it('applies the fill modifier class, and activates the host fill class only while expanded', () => {
+    const fixture = TestBed.createComponent(MJAccordionPanelComponent);
+    fixture.componentRef.setInput('Fill', true);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const panel = host.querySelector('.mj-accordion-panel') as HTMLElement;
+
+    // inner panel always carries the fill modifier when Fill is set
+    expect(panel.classList.contains('mj-accordion-panel--fill')).toBe(true);
+    // but a COLLAPSED fill panel must NOT claim flex space (no host fill-active class)
+    expect(host.classList.contains('mj-accordion-fill-active')).toBe(false);
+
+    fixture.componentRef.setInput('Expanded', true);
+    fixture.detectChanges();
+    // expanded → host claims the leftover height
+    expect(host.classList.contains('mj-accordion-fill-active')).toBe(true);
+  });
+
   it('does not render an actions region when no mjAccordionActions template is projected', () => {
     const fixture = render();
     expect(fixture.nativeElement.querySelector('.mj-accordion-actions')).toBeNull();

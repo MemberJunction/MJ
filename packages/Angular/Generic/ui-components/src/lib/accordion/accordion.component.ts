@@ -87,6 +87,7 @@ export class MJAccordionActionsDirective {
       [class.mj-accordion-panel--sm]="Size === 'sm'"
       [class.mj-accordion-panel--bare]="Bare"
       [class.mj-accordion-panel--flush-body]="FlushBody"
+      [class.mj-accordion-panel--fill]="Fill"
       [attr.data-variant]="Variant !== 'default' ? Variant : null">
       <div class="mj-accordion-header-row">
         <button class="mj-accordion-header" type="button"
@@ -154,10 +155,30 @@ export class MJAccordionPanelComponent {
    * (code editors, full-bleed grids, custom forms).
    */
   @Input() FlushBody = false;
+  /**
+   * Fill mode — for "rail section that owns the leftover height" cases (e.g. an
+   * entity tree or grid that should consume all remaining vertical space and
+   * scroll *internally*), rather than the default "reveal stacked content"
+   * disclosure. When set AND expanded, the panel becomes a flex column that
+   * fills its flex parent and its body becomes a `flex:1; min-height:0` region —
+   * the projected content is expected to provide its own scroll child. While
+   * collapsed, the panel behaves exactly like a normal panel (header only,
+   * natural height) and does NOT claim the leftover space.
+   *
+   * Requires the panel's parent to be a flex column with `min-height:0`.
+   * Note: the open/close height animation is skipped in fill mode (the body
+   * fills rather than animating to content height).
+   */
+  @Input() Fill = false;
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
   @ContentChild(MJAccordionActionsDirective) actionsTemplate: MJAccordionActionsDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
+  /** Host claims flex:1 of its parent ONLY while a Fill panel is expanded —
+   *  so a collapsed Fill panel sits at natural (header) height like any other. */
+  @HostBinding('class.mj-accordion-fill-active') get fillActive(): boolean {
+    return this.Fill && this.Expanded;
+  }
 
   /** Stable per-instance ids that programmatically associate the header
    *  `<button>` with its body region (`aria-controls` ↔ `aria-labelledby`),

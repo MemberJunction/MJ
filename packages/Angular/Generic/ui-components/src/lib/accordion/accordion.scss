@@ -169,6 +169,52 @@
 /* ── Flush body — body manages its own padding (code editors, full-bleed grids) ── */
 .mj-accordion-panel--flush-body .mj-accordion-body { padding: 0; }
 
+/* ── Fill — "rail section that owns the leftover height" (entity tree/grid that
+   fills remaining vertical space and scrolls internally), rather than the default
+   content-height disclosure. Requires the panel's parent to be a flex column with
+   min-height:0. The grid-fr open animation is replaced by flex sizing while
+   expanded; a collapsed fill panel falls back to the normal grid-0fr collapse,
+   so it still sits at natural header height and yields the space to its siblings.
+
+   The host only claims flex space when expanded (.mj-accordion-fill-active), so a
+   collapsed fill panel doesn't hog the rail. ── */
+.mj-accordion-panel-host.mj-accordion-fill-active {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.mj-accordion-panel--fill.mj-accordion-panel--expanded {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  .mj-accordion-header-row { flex: 0 0 auto; }
+
+  /* Override the grid-fr animation: the body region now fills the column. */
+  .mj-accordion-body-outer {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  .mj-accordion-body-clip {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0;
+    min-height: 0;
+  }
+  /* The body is a fill region; projected content supplies its own scroll child. */
+  .mj-accordion-body {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+}
+
 /* ── Emphasis variants (visual hierarchy, brand-colored — not status) ───────
    Make a panel read bolder/quieter. All driven by brand tokens, so they
    adapt to dark mode + white-labeling. Set via [Variant] on the panel.
