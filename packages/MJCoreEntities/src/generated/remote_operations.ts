@@ -28,6 +28,70 @@ export interface PredictiveStudioControlExperimentSessionOutput {
     status: string;
 }
 
+/** Input for `PredictiveStudio.CreateScoringProcess`. */
+export interface PredictiveStudioCreateScoringProcessInput {
+    /** Id of the `MJ: ML Models` row the created Record Process scores with. */
+    modelId: string;
+    /** The entity whose rows are scored (e.g. `Memberships`). */
+    targetEntityName: string;
+    /**
+     * The records a run scores. Mirrors the Record Set Processing scope shapes
+     * (Filter / View / List). Populate EXACTLY ONE selector; `all` is the
+     * whole-entity shortcut ("score everyone"), expressed under the hood as a Filter
+     * with the all-rows predicate `(1=1)`.
+     */
+    scope: {
+        /** A SQL filter over the target entity selecting the rows to score. */
+        filter?: string;
+        /** A `User Views` id whose rows are scored. */
+        viewId?: string;
+        /** A `Lists` id whose member rows are scored. */
+        listId?: string;
+        /** Score the WHOLE target entity ("score everyone"); mutually exclusive with the others. */
+        all?: boolean;
+    };
+    /**
+     * Optional. The target-entity column to write the prediction into (e.g.
+     * `RenewalScore`). **When supplied → write-back mode**: each run writes the
+     * prediction into that column AND a `MJ: ML Model Scoring Bindings` lineage row
+     * (`Mode='OnDemand'`) is created. **When omitted → generic output, no binding**:
+     * predictions are recorded in the process run history (`MJ: Process Run Details`)
+     * only, with no write-back column and no scoring binding.
+     */
+    outputField?: string;
+    /**
+     * Which prediction value the write-back lands in `outputField` — the numeric
+     * `'score'` (probability / regression value — the default) or the predicted
+     * `'class'` label (classification). Ignored in generic mode (no `outputField`).
+     */
+    valueKind?: 'score' | 'class';
+    /** Primary-key field on the target entity the model joins on (defaults to `ID`). */
+    primaryKeyField?: string;
+    /** Optional Record Process name; a descriptive default is generated when omitted. */
+    name?: string;
+}
+
+/** Output of `PredictiveStudio.CreateScoringProcess` — the created on-demand scoring Record Process + write-back lineage. */
+export interface PredictiveStudioCreateScoringProcessOutput {
+    /**
+     * Id of the created `MJ: Record Processes` row (`WorkType='ML Model'`,
+     * `OnDemandEnabled=true`, no schedule). This is the row the generic
+     * "Run Record Process" run-now Remote Op and the generic scheduler dialog target.
+     */
+    recordProcessId: string;
+    /**
+     * Whether write-back was configured — `true` when an `outputField` was supplied
+     * (the Record Process carries an `OutputMapping` and a scoring binding was
+     * created), `false` in generic mode (predictions recorded in run history only).
+     */
+    wroteColumn: boolean;
+    /**
+     * Id of the created `MJ: ML Model Scoring Bindings` lineage row (`Mode='OnDemand'`)
+     * in write-back mode. Omitted in generic mode (no `outputField`, no binding).
+     */
+    scoringBindingId?: string;
+}
+
 /** The lifecycle status to transition an ML Model to. */
 export type PredictiveStudioModelTargetStatus = 'Validated' | 'Published' | 'Archived';
 
@@ -463,6 +527,22 @@ export interface TemplateRunOutput {
  */
 export class PredictiveStudioControlExperimentSessionOperation extends BaseRemotableOperation<PredictiveStudioControlExperimentSessionInput, PredictiveStudioControlExperimentSessionOutput> {
     public readonly OperationKey = "PredictiveStudio.ControlExperimentSession";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+}
+
+// ============================================================
+// PredictiveStudio.CreateScoringProcess — Create Scoring Process
+// ============================================================
+/**
+ * Create Scoring Process
+ * Create an on-demand WorkType='ML Model' MJ: Record Processes row that scores a target entity's records with a trained MJ: ML Models (no schedule). The scope selects records (a saved view / a list / an entity filter / the whole entity). When outputField is supplied, the run writes the prediction into that column and a MJ: ML Model Scoring Bindings lineage row (Mode='OnDemand') is created; when omitted, output is generic (run history only) with no binding. Returns the new Record Process id, whether a write-back column was configured, and the scoring binding id (when created). The created row is then run-now via the Run Record Process operation or scheduled via the generic scheduling dialog. Delegates to createScoringProcess in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.CreateScoringProcess'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioCreateScoringProcessOperation extends BaseRemotableOperation<PredictiveStudioCreateScoringProcessInput, PredictiveStudioCreateScoringProcessOutput> {
+    public readonly OperationKey = "PredictiveStudio.CreateScoringProcess";
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
