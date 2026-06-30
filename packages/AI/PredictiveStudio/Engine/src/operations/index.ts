@@ -1,7 +1,7 @@
 /**
  * @module operations
  *
- * Barrel for the **Predictive Studio Remote Operations** — the six Manual-mode
+ * Barrel for the **Predictive Studio Remote Operations** — the seven Manual-mode
  * server bodies for the CodeGen-emitted `PredictiveStudio.*` operation bases
  * (`@memberjunction/core-entities` → `generated/remote_operations.ts`).
  *
@@ -19,6 +19,7 @@
  *   - `PredictiveStudio.StartExperimentSession`  → {@link PredictiveStudioStartExperimentSessionServerOperation}
  *   - `PredictiveStudio.ControlExperimentSession`→ {@link PredictiveStudioControlExperimentSessionServerOperation}
  *   - `PredictiveStudio.PromoteModel`            → {@link PredictiveStudioPromoteModelServerOperation}
+ *   - `PredictiveStudio.CreateScoringProcess`    → {@link PredictiveStudioCreateScoringProcessServerOperation}
  */
 
 export * from './delegation';
@@ -28,6 +29,7 @@ export * from './run-feature-pipeline.operation';
 export * from './start-experiment-session.operation';
 export * from './control-experiment-session.operation';
 export * from './promote-model.operation';
+export * from './create-scoring-process.operation';
 
 import { PredictiveStudioTrainModelServerOperation } from './train-model.operation';
 import { PredictiveStudioScoreRecordSetServerOperation } from './score-record-set.operation';
@@ -35,9 +37,10 @@ import { PredictiveStudioRunFeaturePipelineServerOperation } from './run-feature
 import { PredictiveStudioStartExperimentSessionServerOperation } from './start-experiment-session.operation';
 import { PredictiveStudioControlExperimentSessionServerOperation } from './control-experiment-session.operation';
 import { PredictiveStudioPromoteModelServerOperation } from './promote-model.operation';
+import { PredictiveStudioCreateScoringProcessServerOperation } from './create-scoring-process.operation';
 
 /**
- * Tree-shaking anchor — call from a server bootstrap to guarantee the six
+ * Tree-shaking anchor — call from a server bootstrap to guarantee the seven
  * `@RegisterClass(BaseRemotableOperation, 'PredictiveStudio.*')` registrations are
  * not eliminated by the bundler. Referencing the classes through this function
  * creates a static code path the bundler keeps (mirrors `LoadPredictiveStudioActions`
@@ -50,4 +53,5 @@ export function LoadPredictiveStudioOperations(): void {
   void PredictiveStudioStartExperimentSessionServerOperation;
   void PredictiveStudioControlExperimentSessionServerOperation;
   void PredictiveStudioPromoteModelServerOperation;
+  void PredictiveStudioCreateScoringProcessServerOperation;
 }
