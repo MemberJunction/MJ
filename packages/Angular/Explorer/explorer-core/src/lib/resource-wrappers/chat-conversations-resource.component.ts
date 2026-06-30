@@ -74,6 +74,7 @@ import { Subject, takeUntil } from 'rxjs';
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
               [pendingArtifactId]="pendingArtifactId"
+              [pendingArtifactConversationId]="pendingArtifactConversationId"
               [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
               [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
               (sidebarToggleClicked)="expandSidebar()"
@@ -266,6 +267,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // Pending navigation state
   public pendingArtifactId: string | null = null;
+  public pendingArtifactConversationId: string | null = null;
   /**
    * A pending request to open the REALTIME SESSION REVIEW overlay (deep link /
    * cross-resource nav with `realtimeSessionId`, e.g. the AI Agent Session form's
@@ -336,7 +338,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(command => this.handleActionableCommand(command));
+      .subscribe(request => this.handleActionableCommand(request.command));
 
     // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
     this.bridge.SwitchEvent$
@@ -441,6 +443,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Set pending artifact if provided
     if (artifactId) {
       this.pendingArtifactId = artifactId;
+      this.pendingArtifactConversationId = conversationId || null;
       this.pendingArtifactVersionNumber = versionNumber;
     }
 
@@ -497,6 +500,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Reflect any artifact intent so the chat area can open it.
     this.pendingArtifactId = artifactId;
+    this.pendingArtifactConversationId = artifactId ? conversationId : null;
     this.pendingArtifactVersionNumber = versionNumber;
 
     if (conversationId && conversationId !== this.selectedConversationId) {
@@ -953,6 +957,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onPendingArtifactConsumed(): void {
     this.pendingArtifactId = null;
+    this.pendingArtifactConversationId = null;
     this.pendingArtifactVersionNumber = null;
     // Update URL to remove artifact params
     this.updateUrl();
