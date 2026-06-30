@@ -275,7 +275,7 @@
 .field-select:focus {
   outline: none;
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .field-input:disabled,
@@ -293,7 +293,8 @@
 
 .field-input.error:focus,
 .field-select.error:focus {
-  box-shadow: 0 0 0 3px rgba(211, 47, 47, 0.2);
+  --mj-ring-color: var(--mj-status-error);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .field-input::placeholder,
@@ -392,7 +393,7 @@
 }
 
 .checkbox-input:focus + .checkbox-label .checkbox-indicator {
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
+  box-shadow: var(--mj-focus-ring);
 }
 
 .checkbox-label strong {

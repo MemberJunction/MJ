@@ -237,7 +237,7 @@
 }
 .field-map-card:hover {
   border-color: var(--mj-border-strong);
-  box-shadow: 0 2px 8px rgba(74, 108, 247, 0.06);
+  box-shadow: var(--mj-shadow-sm);
 }
 .field-map-card.has-transform {
   border-left: 3px solid var(--mj-color-indigo-500);
@@ -340,7 +340,7 @@
   background: var(--mj-bg-page);
   transition: border-color 0.15s;
 }
-.fmc-select:focus { border-color: var(--mj-color-indigo-500); outline: none; box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.12); }
+.fmc-select:focus { border-color: var(--mj-brand-primary); outline: none; box-shadow: var(--mj-focus-ring); }
 
 /* Shared input style */
 .fmc-input {
@@ -349,7 +349,7 @@
   background: var(--mj-bg-page);
   transition: border-color 0.15s;
 }
-.fmc-input:focus { border-color: var(--mj-color-indigo-500); outline: none; box-shadow: 0 0 0 2px rgba(74, 108, 247, 0.12); }
+.fmc-input:focus { border-color: var(--mj-brand-primary); outline: none; box-shadow: var(--mj-focus-ring); }
 .fmc-input.mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 12px; }
 
 /* Flags (key, required) */
