@@ -11,9 +11,10 @@ import type {
 /**
  * Unit tests for the Schedule Model Scoring action. NO live DB — the scheduling
  * helper is mocked via the action's overridable `schedule()` seam. These prove the
- * action stays thin: param validation (ModelID / TargetEntityName / OutputField /
- * ScopeFilter / ContextUser), correct mapping of the conversational params onto the
- * helper's options (cadence + valueKind parsing), and result→output-param mapping.
+ * action stays thin: param validation (ModelID / TargetEntityName / ScopeFilter /
+ * ContextUser — OutputField is OPTIONAL), correct mapping of the conversational params
+ * onto the helper's options (cadence + valueKind parsing), and result→output-param
+ * mapping for BOTH the write-back (binding present) and generic (binding null) modes.
  */
 
 /** A captured-call mock helper returning a stub Record Process + scoring binding. */
@@ -71,7 +72,6 @@ describe('PredictiveStudioScheduleModelScoringAction — validation', () => {
   it.each([
     ['ModelID', [{ Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
     ['TargetEntityName', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
-    ['OutputField', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'ScopeFilter', Type: 'Input', Value: 'x=1' }]],
     ['ScopeFilter', [{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' }, { Name: 'OutputField', Type: 'Input', Value: 'X' }]],
   ] as const)('fails when %s is missing', async (_missing, list) => {
     const scheduler = new MockScheduler(STUB_RESULT);
@@ -107,7 +107,31 @@ describe('PredictiveStudioScheduleModelScoringAction — delegation + mapping', 
     expect(result.Success).toBe(true);
     expect(out(p, 'RecordProcessID')).toBe('rp-1');
     expect(out(p, 'CronExpression')).toBe('0 0 1 * *');
+    expect(out(p, 'WroteColumn')).toBe(true); // write-back mode (binding present)
     expect(out(p, 'ScoringBindingID')).toBe('binding-1'); // the lineage binding id
+  });
+
+  it('handles generic output (null binding): WroteColumn=false, no ScoringBindingID, still succeeds', async () => {
+    // Generic-mode helper result — RP saved, but no write-back column / lineage binding.
+    const genericResult = {
+      recordProcess: { ID: 'rp-2', Name: 'Score Memberships with model m1 (Monthly)', CronExpression: '0 0 1 * *' },
+      binding: null,
+    } as unknown as ScheduledModelScoringResult;
+    const scheduler = new MockScheduler(genericResult);
+    // No OutputField param — optional now.
+    const p = params([
+      { Name: 'ModelID', Type: 'Input', Value: 'm1' },
+      { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' },
+      { Name: 'ScopeFilter', Type: 'Input', Value: "Status='Active'" },
+    ]);
+    const result = await new TestableAction(scheduler.fn).run(p);
+
+    expect(scheduler.CallCount).toBe(1);
+    expect(scheduler.LastOpts?.outputField).toBeUndefined(); // passed through as generic
+    expect(result.Success).toBe(true);
+    expect(out(p, 'RecordProcessID')).toBe('rp-2');
+    expect(out(p, 'WroteColumn')).toBe(false);
+    expect(out(p, 'ScoringBindingID')).toBeUndefined(); // no binding → no id emitted
   });
 
   it('parses a named cadence (case-insensitive) and value kind', async () => {

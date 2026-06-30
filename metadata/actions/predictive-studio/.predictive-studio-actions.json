@@ -749,8 +749,9 @@
   {
     "_comments": [
       "Schedule Model Scoring — thin Action boundary over the PS2-6 createScheduledModelScoring helper.",
-      "Binds a trained ML Model to write its prediction into a target entity column on a recurring",
-      "schedule (default monthly). Validates ModelID + TargetEntityName + OutputField + ScopeFilter,",
+      "Schedules a trained ML Model to score a record scope on a recurring cadence. OutputField is OPTIONAL:",
+      "set it to write the prediction into that column (+ a scoring binding); omit for generic output (predictions",
+      "in the process run history only). Validates ModelID + TargetEntityName + exactly one scope selector,",
       "delegates to the helper (which creates + saves a scheduled MJ: Record Processes row whose owned",
       "MJ: Scheduled Jobs row is auto-created on save), and returns the new Record Process id + cron."
     ],
@@ -807,8 +808,8 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "IsRequired": true,
-            "Description": "The column on the target entity the prediction is written into (e.g. 'RenewalScore')."
+            "IsRequired": false,
+            "Description": "Optional. The target-entity column to write the prediction into (e.g. 'RenewalScore'). Omit for generic output — each run records its predictions in the process run history (MJ: Process Run Details) only, with no write-back column and no scoring binding."
           },
           "primaryKey": {
             "ID": "B9DDA710-EFF0-49C4-971F-BCAD32D17549"
@@ -948,7 +949,7 @@
             "ActionID": "@parent:ID",
             "ResultCode": "VALIDATION_ERROR",
             "IsSuccess": false,
-            "Description": "A required param (ModelID / TargetEntityName / OutputField / ScopeFilter / ContextUser) is missing."
+            "Description": "A required param (ModelID / TargetEntityName / ContextUser) or the single scope selector is missing (OutputField is optional — omit for generic output)."
           },
           "primaryKey": {
             "ID": "CD316F65-502C-4DF8-8813-9C5FF959DDA5"

@@ -14,6 +14,13 @@
  * `MJ: Record Processes` row, whose owned `MJ: Scheduled Jobs` row is auto-created
  * on save), then maps the new Record Process id + cron onto output params.
  *
+ * `OutputField` is **optional**: supply it for write-back (the prediction is written
+ * into that target column and a `MJ: ML Model Scoring Bindings` lineage row is
+ * created), or omit it for **generic output** (predictions land in the process run
+ * history / `MJ: Process Run Details` only — no write-back column, no binding). The
+ * output params reflect which mode ran (`WroteColumn` + a `ScoringBindingID` only when
+ * a binding was created).
+ *
  * The helper is invoked behind an overridable factory seam so unit tests substitute
  * a mock with no live DB.
  */
@@ -44,9 +51,12 @@ export const SCHEDULE_MODEL_SCORING_DRIVER_CLASS = 'PredictiveStudioScheduleMode
 export type ScheduleModelScoringFn = (opts: ScheduleModelScoringOptions) => Promise<ScheduledModelScoringResult>;
 
 /**
- * Binds a trained `MJ: ML Models` to a recurring write-back: scores the target
- * entity's rows on a cadence (default monthly) and writes the prediction into a
- * column. Outputs: `RecordProcessID` (string), `CronExpression` (string).
+ * Binds a trained `MJ: ML Models` to a recurring scoring run: scores the target
+ * entity's rows on a cadence (default monthly). The `OutputField` param is optional —
+ * supply it to write the prediction into that target column (write-back mode), or omit
+ * it for generic output (predictions recorded in `MJ: Process Run Details` only).
+ * Outputs: `RecordProcessID` (string), `CronExpression` (string), `WroteColumn`
+ * (boolean), and — write-back mode only — `ScoringBindingID` (string).
  */
 @RegisterClass(BaseAction, SCHEDULE_MODEL_SCORING_DRIVER_CLASS)
 export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveStudioAction {
@@ -61,10 +71,9 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
       if (!targetEntityName) {
         return this.fail('VALIDATION_ERROR', 'TargetEntityName parameter is required');
       }
+      // OutputField is OPTIONAL: present → write-back into that column (+ lineage
+      // binding); omitted → generic output (predictions in run history only).
       const outputField = this.getStringParam(params, 'OutputField');
-      if (!outputField) {
-        return this.fail('VALIDATION_ERROR', 'OutputField parameter is required');
-      }
       const scopeFilter = this.getStringParam(params, 'ScopeFilter');
       if (!scopeFilter) {
         return this.fail('VALIDATION_ERROR', 'ScopeFilter parameter is required (the SQL predicate selecting rows to score)');
@@ -96,20 +105,25 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
   }
 
   /**
-   * Map the saved Record Process + scoring binding onto output params + a
-   * human-readable message. Outputs the Record Process id + cron (the scheduled
-   * write-back) and the scoring binding id (the lineage row the model-prediction
-   * panel / "Models in Production" dashboard read).
+   * Map the saved Record Process (+ optional scoring binding) onto output params + a
+   * human-readable message. Always outputs the Record Process id + cron (the scheduled
+   * run) and `WroteColumn` (whether a write-back column was bound). In write-back mode
+   * it also outputs `ScoringBindingID` (the lineage row the model-prediction panel /
+   * "Models in Production" dashboard read); in generic mode `binding` is `null`, so no
+   * `ScoringBindingID` is emitted and the message reflects run-history-only output.
    */
   protected mapResult(params: RunActionParams, result: ScheduledModelScoringResult): ActionResultSimple {
     const { recordProcess: rp, binding } = result;
     this.addOutputParam(params, 'RecordProcessID', rp.ID);
     this.addOutputParam(params, 'CronExpression', rp.CronExpression);
-    this.addOutputParam(params, 'ScoringBindingID', binding.ID);
-    return this.ok(
-      params,
-      `Scheduled scoring Record Process '${rp.Name}' (${rp.CronExpression}); it will score and write back on its cadence.`,
-    );
+    this.addOutputParam(params, 'WroteColumn', binding !== null);
+    if (binding !== null) {
+      this.addOutputParam(params, 'ScoringBindingID', binding.ID);
+    }
+    const outcome = binding !== null
+      ? 'it will score and write back on its cadence.'
+      : 'it will score on its cadence, recording predictions in the process run history.';
+    return this.ok(params, `Scheduled scoring Record Process '${rp.Name}' (${rp.CronExpression}); ${outcome}`);
   }
 
   // ----- param parsing -------------------------------------------------------

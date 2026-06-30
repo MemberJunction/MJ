@@ -246,10 +246,10 @@ describe('createScheduledModelScoring — assembled Record Process', () => {
     expect(JSON.parse(rp.OutputMapping as string)).toEqual({ fields: { RenewalSegment: '$.class' } });
   });
 
-  it('generates a descriptive default name when none is supplied', async () => {
+  it('generates a descriptive default name (with the write-back column) when none is supplied', async () => {
     const { opts, rp } = setup();
     await createScheduledModelScoring(opts);
-    expect(rp.Name).toBe('Score Memberships with model model-1 (Monthly)');
+    expect(rp.Name).toBe('Score Memberships with model model-1 → RenewalScore (Monthly)');
   });
 
   it('uses a supplied name verbatim', async () => {
@@ -293,6 +293,37 @@ describe('createScheduledModelScoring — scoring binding (lineage row)', () => 
   });
 });
 
+// ----- generic output (no write-back column) -----------------------------------
+
+describe('createScheduledModelScoring — generic output (no outputField)', () => {
+  it('omits OutputMapping and creates no binding (binding is null), keeping the RP otherwise intact', async () => {
+    const { opts, rp, binding } = setup({ outputField: undefined });
+    const result = await createScheduledModelScoring(opts);
+
+    // Generic mode: no write-back mapping, no lineage binding row.
+    expect(rp.OutputMapping).toBeNull();
+    expect(result.binding).toBeNull();
+    expect(binding.SaveCalled).toBe(false);
+
+    // The RP is still a correct scheduled ML Model scoring row.
+    expect(rp.SaveCalled).toBe(true);
+    expect(rp.WorkType).toBe('ML Model');
+    expect(rp.Status).toBe('Active');
+    expect(JSON.parse(rp.Configuration as string)).toEqual({ modelId: 'model-1', primaryKeyField: 'ID' });
+    expect(rp.CronExpression).toBe('0 0 1 * *');
+    expect(rp.ScheduleEnabled).toBe(true);
+    expect(rp.OnDemandEnabled).toBe(true);
+    expect(rp.ScopeType).toBe('Filter');
+    expect(rp.ScopeFilter).toBe("Status='Active'");
+  });
+
+  it('generates a column-free default name in generic mode', async () => {
+    const { opts, rp } = setup({ outputField: undefined });
+    await createScheduledModelScoring(opts);
+    expect(rp.Name).toBe('Score Memberships with model model-1 (Monthly)');
+  });
+});
+
 // ----- scope mapping -----------------------------------------------------------
 
 describe('createScheduledModelScoring — scope → ScopeType', () => {
@@ -319,6 +350,15 @@ describe('createScheduledModelScoring — scope → ScopeType', () => {
     expect(rp.ScopeType).toBe('List');
     expect(rp.ScopeListID).toBe('list-7');
   });
+
+  it('maps a whole-entity scope (all: true) to ScopeType=Filter + the all-rows predicate (1=1)', async () => {
+    const { opts, rp } = setup({ scope: { all: true } });
+    await createScheduledModelScoring(opts);
+    expect(rp.ScopeType).toBe('Filter');
+    expect(rp.ScopeFilter).toBe('(1=1)');
+    expect(rp.ScopeViewID).toBeNull();
+    expect(rp.ScopeListID).toBeNull();
+  });
 });
 
 // ----- validation --------------------------------------------------------------
@@ -334,19 +374,24 @@ describe('createScheduledModelScoring — validation', () => {
     await expect(createScheduledModelScoring(opts)).rejects.toThrow(/`targetEntityName` is required/);
   });
 
-  it('throws when outputField is missing', async () => {
-    const { opts } = setup({ outputField: '' });
-    await expect(createScheduledModelScoring(opts)).rejects.toThrow(/`outputField` is required/);
+  it('does NOT throw when outputField is omitted (generic output is valid)', async () => {
+    const { opts } = setup({ outputField: undefined });
+    await expect(createScheduledModelScoring(opts)).resolves.toMatchObject({ binding: null });
   });
 
   it('throws when no scope selector is populated', async () => {
     const { opts } = setup({ scope: {} });
-    await expect(createScheduledModelScoring(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId/);
+    await expect(createScheduledModelScoring(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
   });
 
   it('throws when more than one scope selector is populated', async () => {
     const { opts } = setup({ scope: { filter: "x=1", viewId: 'v1' } });
-    await expect(createScheduledModelScoring(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId/);
+    await expect(createScheduledModelScoring(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
+  });
+
+  it('throws when two selectors are populated including all (all + filter)', async () => {
+    const { opts } = setup({ scope: { all: true, filter: "x=1" } });
+    await expect(createScheduledModelScoring(opts)).rejects.toThrow(/exactly one of: filter, viewId, listId, all/);
   });
 
   it('throws when the target entity is unknown to metadata', async () => {
