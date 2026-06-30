@@ -3,10 +3,10 @@ import { Subject } from 'rxjs';
 import { IMetadataProvider } from '@memberjunction/core';
 import {
   RealtimeSessionService,
-  VoiceConnectionState,
-  VoiceDelegationNarration,
-  VoiceDelegationProgress,
-  VoiceDelegationResult
+  RealtimeConnectionState,
+  RealtimeDelegationNarration,
+  RealtimeDelegationProgress,
+  RealtimeDelegationResult
 } from '../lib/services/realtime-session.service';
 
 /**
@@ -62,7 +62,7 @@ interface TranscriptEvent {
 }
 
 /** The private surface the tests drive — no `any`, just the members under test. */
-interface VoiceSessionNarrationInternals {
+interface RealtimeSessionNarrationInternals {
   client: FakeRealtimeClient | null;
   agentSessionId: string | null;
   narrationTemplate: string | null;
@@ -75,7 +75,7 @@ interface VoiceSessionNarrationInternals {
   spokenNarrations: string[];
   lastNarratedTail: string;
   handleToolCall(call: { CallID: string; ToolName: string; ArgumentsJson: string }): Promise<void>;
-  dispatchProgress(progress: VoiceDelegationProgress): void;
+  dispatchProgress(progress: RealtimeDelegationProgress): void;
   onDelegationStatusMessage(raw: string): void;
   subscribeDelegationProgress(): void;
   onClientTranscript(transcript: TranscriptEvent): Promise<void>;
@@ -85,8 +85,8 @@ interface VoiceSessionNarrationInternals {
   wireClientHandlers(client: unknown): void;
 }
 
-function internals(service: RealtimeSessionService): VoiceSessionNarrationInternals {
-  return service as unknown as VoiceSessionNarrationInternals;
+function internals(service: RealtimeSessionService): RealtimeSessionNarrationInternals {
+  return service as unknown as RealtimeSessionNarrationInternals;
 }
 
 interface Deferred<T> {
@@ -109,7 +109,7 @@ function createDeferred<T>(): Deferred<T> {
 interface Harness {
   service: RealtimeSessionService;
   client: FakeRealtimeClient;
-  i: VoiceSessionNarrationInternals;
+  i: RealtimeSessionNarrationInternals;
   /** One deferred per ExecuteRealtimeSessionTool invocation, in call order. */
   pendingTools: Array<Deferred<{ ExecuteRealtimeSessionTool: string }>>;
   executeGQL: ReturnType<typeof vi.fn>;
@@ -593,7 +593,7 @@ describe('RealtimeSessionService — narration instructions + spoken-history cap
   });
 
   it('narration-kind final transcripts are EPHEMERAL: emitted on DelegationNarration$, never a caption, never relayed', async () => {
-    const narrations: VoiceDelegationNarration[] = [];
+    const narrations: RealtimeDelegationNarration[] = [];
     const captionCounts: number[] = [];
     h.service.DelegationNarration$.subscribe(n => narrations.push(n));
     h.service.Captions$.subscribe(c => captionCounts.push(c.length));
@@ -618,7 +618,7 @@ describe('RealtimeSessionService — narration instructions + spoken-history cap
   });
 
   it('interim (non-final) transcripts are ignored entirely', async () => {
-    const narrations: VoiceDelegationNarration[] = [];
+    const narrations: RealtimeDelegationNarration[] = [];
     h.service.DelegationNarration$.subscribe(n => narrations.push(n));
 
     await h.i.onClientTranscript({ Role: 'Assistant', Text: 'partial…', IsFinal: false, Kind: 'narration' });
@@ -643,7 +643,7 @@ describe('RealtimeSessionService — progress dispatch + stale filtering + push-
   });
 
   it('drops STALE progress for a CallID not in flight — no UI emission, no context note, no timer', () => {
-    const seen: VoiceDelegationProgress[] = [];
+    const seen: RealtimeDelegationProgress[] = [];
     h.service.DelegationProgress$.subscribe(p => seen.push(p));
 
     progress(h, 'never-started', 'stale message');
@@ -657,7 +657,7 @@ describe('RealtimeSessionService — progress dispatch + stale filtering + push-
     const call = beginDelegation(h, 'c1');
     await completeDelegation(h, call);
 
-    const seen: VoiceDelegationProgress[] = [];
+    const seen: RealtimeDelegationProgress[] = [];
     h.service.DelegationProgress$.subscribe(p => seen.push(p));
     progress(h, 'c1', 'too late');
 
@@ -667,7 +667,7 @@ describe('RealtimeSessionService — progress dispatch + stale filtering + push-
 
   it('emits in-flight progress on DelegationProgress$ AND feeds the model a context note', () => {
     void beginDelegation(h, 'c1');
-    const seen: VoiceDelegationProgress[] = [];
+    const seen: RealtimeDelegationProgress[] = [];
     h.service.DelegationProgress$.subscribe(p => seen.push(p));
 
     progress(h, 'c1', 'live update');
@@ -679,7 +679,7 @@ describe('RealtimeSessionService — progress dispatch + stale filtering + push-
   it('parses a matching push-status frame end-to-end (raw JSON → DelegationProgress$)', () => {
     h.i.subscribeDelegationProgress();
     void beginDelegation(h, 'c1');
-    const seen: VoiceDelegationProgress[] = [];
+    const seen: RealtimeDelegationProgress[] = [];
     h.service.DelegationProgress$.subscribe(p => seen.push(p));
 
     h.pushStatus$.next(
@@ -700,7 +700,7 @@ describe('RealtimeSessionService — progress dispatch + stale filtering + push-
   it('ignores non-JSON frames and frames with the wrong resolver / type / session', () => {
     h.i.subscribeDelegationProgress();
     void beginDelegation(h, 'c1');
-    const seen: VoiceDelegationProgress[] = [];
+    const seen: RealtimeDelegationProgress[] = [];
     h.service.DelegationProgress$.subscribe(p => seen.push(p));
 
     h.pushStatus$.next('not json at all');
@@ -735,7 +735,7 @@ describe('RealtimeSessionService — delegation lifecycle (thinking state, resul
   });
 
   it('a server-relayed tool call flips the connection state to thinking', () => {
-    const states: VoiceConnectionState[] = [];
+    const states: RealtimeConnectionState[] = [];
     h.service.ConnectionState$.subscribe(s => states.push(s));
 
     void beginDelegation(h, 'c1');
@@ -744,7 +744,7 @@ describe('RealtimeSessionService — delegation lifecycle (thinking state, resul
   });
 
   it('emits the parsed delegation result (incl. RunID) and feeds the raw JSON back to the model', async () => {
-    const results: VoiceDelegationResult[] = [];
+    const results: RealtimeDelegationResult[] = [];
     h.service.DelegationResult$.subscribe(r => results.push(r));
     const call = beginDelegation(h, 'c1');
 
@@ -761,7 +761,7 @@ describe('RealtimeSessionService — delegation lifecycle (thinking state, resul
 
   it('a tool-execution failure feeds an error payload to the model and surfaces the error as the result output', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const results: VoiceDelegationResult[] = [];
+    const results: RealtimeDelegationResult[] = [];
     h.service.DelegationResult$.subscribe(r => results.push(r));
     const call = beginDelegation(h, 'c1');
 

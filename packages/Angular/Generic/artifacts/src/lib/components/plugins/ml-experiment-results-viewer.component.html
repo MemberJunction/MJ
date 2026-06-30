@@ -1,0 +1,182 @@
+<div class="ml-exp-viewer" [ngClass]="cssClass">
+
+  @if (IsLoading) {
+    <div class="ml-exp-loading">
+      <mj-loading text="Loading experiment results…" size="medium"></mj-loading>
+    </div>
+  } @else if (HasError || !Spec) {
+    <div class="ml-exp-empty">
+      <i class="fa-solid fa-flask-vial"></i>
+      <h3>No experiment results to display</h3>
+      <p>{{ ErrorMessage || 'This artifact does not contain readable ML experiment results.' }}</p>
+    </div>
+  } @else {
+
+    <!-- HERO -->
+    <div class="ml-exp-hero">
+      <div class="hero-badge"><i class="fa-solid fa-flask-vial"></i></div>
+      <div class="hero-titles">
+        <h2 class="hero-title">ML Experiment Results</h2>
+        @if (Summary) {
+          <div class="hero-sub">{{ Summary }}</div>
+        }
+      </div>
+      @if (HeadlineScore != null) {
+        <div class="hero-metric">
+          <div class="hero-metric-value">{{ HeadlineScore }}</div>
+          <div class="hero-metric-label">{{ TargetMetricLabel }} · winner</div>
+        </div>
+      }
+    </div>
+
+    <div class="ml-exp-body">
+
+      <!-- GOAL BAR -->
+      <div class="goalbar">
+        @if (Goal) {
+          <div class="goal-item">
+            <span class="goal-key">Goal</span>
+            <span class="goal-val">{{ Goal }}</span>
+          </div>
+        }
+        @if (Spec.target) {
+          <div class="goal-item">
+            <span class="goal-key">Target</span>
+            <span class="goal-val">{{ Spec.target }}</span>
+          </div>
+        }
+        @if (Spec.asOf) {
+          <div class="goal-item">
+            <span class="goal-key">As-of</span>
+            <span class="goal-val">{{ Spec.asOf }}</span>
+          </div>
+        }
+        @if (Spec.validation) {
+          <div class="goal-item">
+            <span class="goal-key">Validation</span>
+            <span class="goal-val">{{ Spec.validation }}</span>
+          </div>
+        }
+        @if (Spec.budgetUsed) {
+          <div class="goal-item">
+            <span class="goal-key">Budget used</span>
+            <span class="goal-val">{{ Spec.budgetUsed }}</span>
+          </div>
+        }
+      </div>
+
+      <div class="ml-exp-cols">
+
+        <!-- LEFT COLUMN: leaderboard + feature importance -->
+        <div class="col-main">
+
+          <div class="section-title">Leaderboard</div>
+          @if (LeaderboardRows.length > 0) {
+            <div class="lb-card">
+              <table class="lb-table">
+                <thead>
+                  <tr>
+                    <th class="lb-rank-col">#</th>
+                    <th>Algorithm</th>
+                    <th>Feature set</th>
+                    <th class="num">{{ TargetMetricLabel }}</th>
+                    <th class="num">CV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of LeaderboardRows; track row.rank) {
+                    <tr [class.is-winner]="row.isWinner"
+                        [class.has-model]="row.modelId"
+                        (click)="OnOpenRowModel(row)">
+                      <td>
+                        <span class="rank" [class.gold]="row.isWinner">{{ row.rank }}</span>
+                      </td>
+                      <td class="algo">
+                        @if (row.isWinner) {
+                          <strong>{{ row.algorithm }}</strong>
+                        } @else {
+                          {{ row.algorithm }}
+                        }
+                        @if (row.modelId) {
+                          <i class="fa-solid fa-arrow-up-right-from-square row-link-icon"
+                             title="Open this model"></i>
+                        }
+                      </td>
+                      <td class="muted">{{ row.featureSet || '—' }}</td>
+                      <td class="num">
+                        @if (row.isWinner) {
+                          <strong>{{ formatScore(row.score) }}</strong>
+                        } @else {
+                          {{ formatScore(row.score) }}
+                        }
+                      </td>
+                      <td class="num muted">{{ formatScore(row.cvScore) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else {
+            <div class="inline-empty">No leaderboard iterations were recorded.</div>
+          }
+
+          @if (FeatureBars.length > 0) {
+            <div class="section-title">Feature Importance — winning model</div>
+            <div class="fi-card">
+              @for (bar of FeatureBars; track bar.feature) {
+                <div class="fbar">
+                  <div class="fbar-label" [title]="bar.feature">{{ bar.feature }}</div>
+                  <div class="fbar-track">
+                    <span class="fbar-fill" [style.width.%]="bar.widthPct"></span>
+                  </div>
+                  <div class="fbar-num">{{ formatImportance(bar.importance) }}</div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- RIGHT COLUMN: winning model card + drill-through -->
+        <div class="col-side">
+          <div class="section-title">Winning Model</div>
+          <div class="winner-card">
+            <div class="winner-top">
+              <div class="crown"><i class="fa-solid fa-crown"></i></div>
+              <div class="winner-head">
+                <h3 class="winner-name">{{ WinningAlgorithm }}</h3>
+                @if (WinningModelSubtitle) {
+                  <div class="muted">{{ WinningModelSubtitle }}</div>
+                }
+              </div>
+            </div>
+
+            @if (WinningMetrics.length > 0) {
+              <div class="wmetrics">
+                @for (m of WinningMetrics; track m.label) {
+                  <div class="wmetric">
+                    <div class="wmetric-value">{{ m.value }}</div>
+                    <div class="wmetric-label">{{ m.label }}</div>
+                  </div>
+                }
+              </div>
+            }
+
+            <button mjButton variant="primary" class="drill-btn"
+                    [disabled]="!HasDrillThroughTarget"
+                    (click)="OnDrillThroughToModel()">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              Drill through to ML Model
+            </button>
+
+            @if (!HasDrillThroughTarget) {
+              <div class="drill-hint muted">
+                No linked ML Model record on this artifact yet.
+              </div>
+            }
+          </div>
+        </div>
+
+      </div>
+    </div>
+  }
+</div>

@@ -1,0 +1,276 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Predictive Studio — Pipeline Wizard</title>
+<link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  /* ---- big horizontal stepper ---- */
+  .wiz-stepper { display: flex; align-items: stretch; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 18px; }
+  .wstep { flex: 1; display: flex; align-items: center; gap: 12px; padding: 16px 20px; position: relative; border-right: 1px solid var(--mj-border-subtle); }
+  .wstep:last-child { border-right: none; }
+  .wstep .wnum { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 14px; flex: 0 0 auto; border: 2px solid var(--mj-border-strong); color: var(--mj-text-muted); background: var(--mj-bg-surface); }
+  .wstep .wmeta .wt { font-size: 13.5px; font-weight: 700; color: var(--mj-text-secondary); }
+  .wstep .wmeta .ws { font-size: 11.5px; color: var(--mj-text-muted); }
+  .wstep.done { background: var(--mj-bg-surface-card); }
+  .wstep.done .wnum { background: var(--mj-success); border-color: var(--mj-success); color: #fff; }
+  .wstep.done .wmeta .wt { color: var(--mj-text-primary); }
+  .wstep.curr { background: var(--mj-brand-soft); }
+  .wstep.curr .wnum { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); background: var(--mj-bg-surface); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 16%, transparent); }
+  .wstep.curr .wmeta .wt { color: var(--mj-brand-primary); }
+  .wstep.curr::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--mj-brand-primary); }
+  .wstep .chev { margin-left: auto; color: var(--mj-text-disabled); font-size: 12px; }
+
+  .wiz-grid { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+
+  /* ---- step content ---- */
+  .step-head { display: flex; align-items: center; gap: 12px; padding: 18px 20px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .step-head .sh-ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: #fff; background: var(--mj-brand-primary); font-size: 16px; flex: 0 0 auto; }
+  .step-head h2 { font-size: 17px; }
+  .step-head .sh-sub { font-size: 12.5px; color: var(--mj-text-muted); margin-top: 2px; }
+
+  .fsec { padding: 18px 20px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .fsec:last-child { border-bottom: none; }
+  .fsec-title { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--mj-text-muted); font-weight: 700; margin-bottom: 12px; }
+  .fsec-title .badge { text-transform: none; letter-spacing: 0; }
+
+  .field { margin-bottom: 14px; } .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 11.5px; font-weight: 700; color: var(--mj-text-secondary); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .04em; }
+  .field .hint { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 5px; }
+  .ctrl { width: 100%; padding: 8px 11px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 13px; background: var(--mj-bg-surface); color: var(--mj-text-primary); }
+  .seg { display: inline-flex; border: 1px solid var(--mj-border-default); border-radius: 8px; overflow: hidden; }
+  .seg button { border: none; background: var(--mj-bg-surface); padding: 7px 13px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--mj-text-secondary); }
+  .seg button.on { background: var(--mj-brand-primary); color: #fff; }
+
+  /* feature step rows (checklist look) */
+  .feat-rows { display: flex; flex-direction: column; gap: 8px; }
+  .feat-row { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border: 1px solid var(--mj-border-default); border-radius: 9px; background: var(--mj-bg-surface); }
+  .feat-row.on { border-color: color-mix(in srgb, var(--mj-brand-primary) 45%, var(--mj-border-default)); background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface)); }
+  .feat-row .fr-ic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; background: #2050c8; font-size: 12px; flex: 0 0 auto; }
+  .feat-row .fr-main { flex: 1; min-width: 0; }
+  .feat-row .fr-name { font-size: 13.5px; font-weight: 650; }
+  .feat-row .fr-sub { font-size: 12px; color: var(--mj-text-muted); }
+  .feat-row .fr-out { font-size: 11.5px; font-weight: 700; color: var(--mj-brand-primary); font-variant-numeric: tabular-nums; }
+  .chk { width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--mj-border-strong); display: grid; place-items: center; color: #fff; font-size: 10px; background: var(--mj-bg-surface); flex: 0 0 auto; }
+  .chk.on { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+
+  .wiz-actions { display: flex; align-items: center; gap: 10px; padding: 16px 20px; background: var(--mj-bg-surface-card); border-top: 1px solid var(--mj-border-subtle); }
+
+  /* ---- mini-DAG summary ---- */
+  .summary { position: sticky; top: 86px; align-self: start; }
+  .mini-dag { display: flex; flex-direction: column; gap: 0; padding: 6px 0; }
+  .mdrow { display: flex; align-items: flex-start; gap: 11px; padding: 0 16px; position: relative; }
+  .mdrow .md-ic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-size: 12px; flex: 0 0 auto; z-index: 1; }
+  .md-ic.s { background: #6b7280; } .md-ic.f { background: #2050c8; } .md-ic.e { background: #7b3ff0; } .md-ic.t { background: #1f9d57; } .md-ic.a { background: #d98213; }
+  .mdrow .md-body { flex: 1; min-width: 0; padding-bottom: 14px; }
+  .mdrow .md-name { font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .mdrow .md-sub { font-size: 11.5px; color: var(--mj-text-muted); }
+  .mdrow::before { content: ""; position: absolute; left: 30px; top: 30px; bottom: -2px; width: 2px; background: var(--mj-border-default); }
+  .mdrow:last-child::before { display: none; }
+  .mdrow.curr .md-name { color: var(--mj-brand-primary); }
+  .mdrow.curr .md-ic { box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 18%, transparent); }
+  .mdrow.pending .md-ic { opacity: .45; }
+  .mdrow.pending .md-name, .mdrow.pending .md-sub { color: var(--mj-text-disabled); }
+  .mdrow.pending::before { background: repeating-linear-gradient(var(--mj-border-strong) 0 4px, transparent 4px 8px); }
+  .sum-foot { display: flex; flex-direction: column; gap: 7px; padding: 14px 16px; border-top: 1px solid var(--mj-border-subtle); background: var(--mj-bg-surface-card); }
+  .sum-foot .sf-row { display: flex; justify-content: space-between; font-size: 12.5px; }
+  .sum-foot .sf-row .k { color: var(--mj-text-muted); }
+</style></head>
+<body><div class="ps-app">
+<aside class="ps-sidebar">
+ <div class="ps-brand"><div class="logo"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><div class="name">Predictive Studio</div><div class="sub">MemberJunction</div></div></div>
+ <nav class="ps-nav"><div class="group">Build</div>
+  <a><i class="fa-solid fa-gauge-high"></i> Home</a>
+  <a class="active"><i class="fa-solid fa-diagram-project"></i> Training Pipelines</a>
+  <a><i class="fa-solid fa-shapes"></i> Algorithm Catalog</a>
+  <div class="group">Run</div><a><i class="fa-solid fa-flask"></i> Experiments</a><a><i class="fa-solid fa-cubes"></i> Model Registry</a><a><i class="fa-solid fa-chart-column"></i> Compare Runs</a>
+  <div class="group">Assist</div><a><i class="fa-solid fa-robot"></i> Model Dev Agent</a>
+ </nav>
+ <div class="me"><div class="ps-avatar">AN</div><div class="small"><div style="color:#fff;font-weight:600">Amith N.</div><div style="color:#7e8ca5">Data Studio</div></div></div>
+</aside>
+<main class="ps-main">
+ <div class="ps-topbar">
+   <h1>Member Renewal Predictor</h1>
+   <span class="badge blue"><i class="fa-solid fa-wand-magic-sparkles"></i> Guided wizard</span>
+   <span class="crumb">Training Pipelines / New pipeline / <b style="color:var(--mj-text-secondary)">Step 2 of 5</b></span>
+   <div class="spacer"></div>
+   <span class="small muted"><i class="fa-regular fa-clock"></i> autosaved 2m ago</span>
+   <button class="btn ghost"><i class="fa-solid fa-xmark"></i> Exit wizard</button>
+ </div>
+ <div class="ps-content">
+
+  <!-- ============ BIG HORIZONTAL STEPPER ============ -->
+  <div class="wiz-stepper">
+    <div class="wstep done">
+      <div class="wnum"><i class="fa-solid fa-check"></i></div>
+      <div class="wmeta"><div class="wt">Source</div><div class="ws">3 sources · Members</div></div>
+      <i class="fa-solid fa-chevron-right chev"></i>
+    </div>
+    <div class="wstep curr">
+      <div class="wnum">2</div>
+      <div class="wmeta"><div class="wt">Features</div><div class="ws">5 steps · in progress</div></div>
+      <i class="fa-solid fa-chevron-right chev"></i>
+    </div>
+    <div class="wstep">
+      <div class="wnum">3</div>
+      <div class="wmeta"><div class="wt">Target</div><div class="ws">Renewed</div></div>
+      <i class="fa-solid fa-chevron-right chev"></i>
+    </div>
+    <div class="wstep">
+      <div class="wnum">4</div>
+      <div class="wmeta"><div class="wt">Algorithm</div><div class="ws">XGBoost</div></div>
+      <i class="fa-solid fa-chevron-right chev"></i>
+    </div>
+    <div class="wstep">
+      <div class="wnum">5</div>
+      <div class="wmeta"><div class="wt">Validation</div><div class="ws">split &amp; holdout</div></div>
+    </div>
+  </div>
+
+  <div class="wiz-grid">
+
+   <!-- ============ CENTER: ACTIVE STEP (FEATURES) ============ -->
+   <div class="card">
+     <div class="step-head">
+       <div class="sh-ic"><i class="fa-solid fa-sliders"></i></div>
+       <div><h2>Feature engineering</h2><div class="sh-sub">Define the transforms that build your training matrix from the 3 selected sources.</div></div>
+       <span class="spacer"></span>
+       <span class="badge blue"><i class="fa-solid fa-table-cells"></i> 411 feature columns</span>
+     </div>
+
+     <!-- column selection -->
+     <div class="fsec">
+       <div class="fsec-title"><i class="fa-solid fa-list-check"></i> Numeric features <span class="badge gray">2 selected</span></div>
+       <div class="feat-rows">
+         <div class="feat-row on">
+           <div class="chk on"><i class="fa-solid fa-check"></i></div>
+           <div class="fr-ic"><i class="fa-solid fa-arrow-up-1-9"></i></div>
+           <div class="fr-main"><div class="fr-name">tenure</div><div class="fr-sub">Members.tenure_yrs · years since join</div></div>
+           <span class="fr-out">numeric</span>
+         </div>
+         <div class="feat-row on">
+           <div class="chk on"><i class="fa-solid fa-check"></i></div>
+           <div class="fr-ic"><i class="fa-solid fa-calendar-check"></i></div>
+           <div class="fr-main"><div class="fr-name">events_at_signup</div><div class="fr-sub">Event Attendance · count joined within first 30d</div></div>
+           <span class="fr-out">numeric</span>
+         </div>
+       </div>
+     </div>
+
+     <!-- transforms -->
+     <div class="fsec">
+       <div class="fsec-title"><i class="fa-solid fa-wand-magic"></i> Transforms <span class="badge gray">4 steps</span></div>
+       <div class="feat-rows">
+         <div class="feat-row on">
+           <div class="chk on"><i class="fa-solid fa-check"></i></div>
+           <div class="fr-ic"><i class="fa-solid fa-fill-drip"></i></div>
+           <div class="fr-main"><div class="fr-name">Impute missing age</div><div class="fr-sub">strategy: mean (34.2) · fills 11.4% nulls</div></div>
+           <span class="fr-out">in-place</span>
+         </div>
+         <div class="feat-row on">
+           <div class="chk on"><i class="fa-solid fa-check"></i></div>
+           <div class="fr-ic"><i class="fa-solid fa-table-cells"></i></div>
+           <div class="fr-main"><div class="fr-name">One-hot encode city</div><div class="fr-sub">categorical → 18 indicator columns</div></div>
+           <span class="fr-out">+18 cols</span>
+         </div>
+         <div class="feat-row on" style="border-color:color-mix(in srgb,var(--mj-warning) 45%,var(--mj-border-default));background:color-mix(in srgb,var(--mj-warning) 5%,var(--mj-bg-surface))">
+           <div class="chk on" style="background:var(--mj-warning);border-color:var(--mj-warning)"><i class="fa-solid fa-check"></i></div>
+           <div class="fr-ic" style="background:var(--mj-warning)"><i class="fa-solid fa-clock-rotate-left"></i></div>
+           <div class="fr-main"><div class="fr-name">Recency <span class="badge amber"><i class="fa-solid fa-clock"></i> as-of decision date</span></div><div class="fr-sub">days_since_last_activity · offset 90d before renewal</div></div>
+           <span class="fr-out">+1 col</span>
+         </div>
+         <div class="feat-row on">
+           <div class="chk on"><i class="fa-solid fa-check"></i></div>
+           <div class="fr-ic"><i class="fa-solid fa-ruler-combined"></i></div>
+           <div class="fr-main"><div class="fr-name">Standardize</div><div class="fr-sub">z-score scaler across numeric features</div></div>
+           <span class="fr-out">scale</span>
+         </div>
+       </div>
+     </div>
+
+     <!-- embedding -->
+     <div class="fsec">
+       <div class="fsec-title"><i class="fa-solid fa-vector-square"></i> Embedding</div>
+       <div class="feat-row on" style="border-color:color-mix(in srgb,#7b3ff0 40%,var(--mj-border-default));background:color-mix(in srgb,#7b3ff0 4%,var(--mj-bg-surface))">
+         <div class="chk on" style="background:#7b3ff0;border-color:#7b3ff0"><i class="fa-solid fa-check"></i></div>
+         <div class="fr-ic" style="background:#7b3ff0"><i class="fa-solid fa-vector-square"></i></div>
+         <div class="fr-main"><div class="fr-name">Member summary embedding</div><div class="fr-sub">384-dim · <b>persisted</b> &amp; <b>version-pinned</b> for reproducible training</div></div>
+         <span class="fr-out" style="color:#7b3ff0">+384 cols</span>
+       </div>
+     </div>
+
+     <!-- recency config + leakage callout -->
+     <div class="fsec">
+       <div class="fsec-title"><i class="fa-solid fa-clock-rotate-left"></i> Recency · as-of configuration</div>
+       <div class="row" style="gap:16px;flex-wrap:wrap">
+         <div class="field" style="flex:1;min-width:180px;margin:0">
+           <label>As-of strategy</label>
+           <div class="seg"><button class="on">Offset</button><button>Snapshot</button><button>Event time</button></div>
+         </div>
+         <div class="field" style="flex:1;min-width:180px;margin:0">
+           <label>Offset before decision</label>
+           <div class="row" style="gap:8px"><input class="ctrl" value="90" style="width:90px"><select class="ctrl"><option>days</option><option>weeks</option></select></div>
+         </div>
+       </div>
+       <div class="callout warn" style="margin-top:14px">
+         <i class="fa-solid fa-triangle-exclamation"></i>
+         <div class="small"><b>Compute recency as-of the decision date.</b> <code>days_since_last_activity</code> must be measured from each member's snapshot 90 days <em>before</em> the renewal decision. Using current activity would leak future behavior into training and inflate validation scores — the leakage guard will block the run if this transform reads past the as-of line.</div>
+       </div>
+     </div>
+
+     <div class="wiz-actions">
+       <button class="btn"><i class="fa-solid fa-arrow-left"></i> Back to Source</button>
+       <span class="spacer" style="flex:1"></span>
+       <button class="btn ghost"><i class="fa-solid fa-floppy-disk"></i> Save draft</button>
+       <button class="btn primary">Continue to Target <i class="fa-solid fa-arrow-right"></i></button>
+     </div>
+   </div>
+
+   <!-- ============ RIGHT: MINI-DAG SUMMARY ============ -->
+   <div class="col" style="gap:16px;display:flex;flex-direction:column">
+     <div class="card summary">
+       <div class="card-head"><i class="fa-solid fa-diagram-project" style="color:var(--mj-brand-primary)"></i><h3>Pipeline summary</h3><span class="spacer"></span><span class="badge gray">v4 draft</span></div>
+       <div class="mini-dag">
+         <div class="mdrow done">
+           <div class="md-ic s"><i class="fa-solid fa-database"></i></div>
+           <div class="md-body"><div class="md-name">Sources <i class="fa-solid fa-circle-check" style="color:var(--mj-success);font-size:11px"></i></div><div class="md-sub">Members · Event Attendance · CRM #2449</div></div>
+         </div>
+         <div class="mdrow curr">
+           <div class="md-ic f"><i class="fa-solid fa-sliders"></i></div>
+           <div class="md-body"><div class="md-name">Features</div><div class="md-sub">select 2 · impute · one-hot · recency as-of · standardize</div></div>
+         </div>
+         <div class="mdrow curr">
+           <div class="md-ic e"><i class="fa-solid fa-vector-square"></i></div>
+           <div class="md-body"><div class="md-name">Embedding</div><div class="md-sub">384-dim · persisted · pinned</div></div>
+         </div>
+         <div class="mdrow pending">
+           <div class="md-ic t"><i class="fa-solid fa-bullseye"></i></div>
+           <div class="md-body"><div class="md-name">Target</div><div class="md-sub">Renewed · binary</div></div>
+         </div>
+         <div class="mdrow pending">
+           <div class="md-ic a"><i class="fa-solid fa-shapes"></i></div>
+           <div class="md-body"><div class="md-name">Algorithm</div><div class="md-sub">XGBoost · 300 / 6 / 0.1</div></div>
+         </div>
+       </div>
+       <div class="sum-foot">
+         <div class="sf-row"><span class="k">Entity</span><span><b>Members</b></span></div>
+         <div class="sf-row"><span class="k">Target</span><span class="tag">Renewed</span></div>
+         <div class="sf-row"><span class="k">Algorithm</span><span><b>XGBoost</b></span></div>
+         <div class="sf-row"><span class="k">Feature width</span><span><b>411</b> <span class="muted">(27 + 384)</span></span></div>
+         <div class="sf-row"><span class="k">As-of offset</span><span><b>90 days</b></span></div>
+       </div>
+     </div>
+
+     <div class="card">
+       <div class="card-head"><i class="fa-solid fa-shield-halved" style="color:var(--mj-success)"></i><h3>Leakage guard</h3></div>
+       <div class="card-body col" style="gap:9px">
+         <div class="row" style="justify-content:space-between;align-items:center"><span class="small">Deny-list columns</span><span class="badge gray">3</span></div>
+         <div class="row wrap" style="gap:6px"><span class="tag">renewal_date</span><span class="tag">paid_at</span><span class="tag">status_post</span></div>
+         <div class="divider"></div>
+         <div class="kv" style="display:flex;justify-content:space-between;align-items:center"><span class="small">Dominance threshold</span><span class="mono">0.60</span></div>
+         <div class="bar"><span style="width:60%;background:var(--mj-warning)"></span></div>
+         <div class="small muted">Run blocked if one feature exceeds 60% importance share.</div>
+       </div>
+     </div>
+   </div>
+
+  </div>
+ </div>
+</main>
+</div></body></html>

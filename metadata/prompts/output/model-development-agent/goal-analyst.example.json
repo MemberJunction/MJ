@@ -1,0 +1,17 @@
+{
+  "taskComplete": true,
+  "message": "Defined the prediction target: for each active member, predict whether they will lapse (not renew) within 90 days. This is a yes/no (classification) problem and we'll judge models by AUC, which rewards correctly ranking who's most at risk.",
+  "reasoning": "The user's goal and population were clear; set a precise, measurable, point-in-time-safe target.",
+  "payloadChangeRequest": {
+    "updateElements": {
+      "Goal": "Identify active members at risk of not renewing within the next 90 days so the retention team can intervene early.",
+      "TargetDefinition": {
+        "EntityName": "Members",
+        "TargetVariable": "LapsedWithin90Days",
+        "ProblemType": "classification",
+        "SuccessMetric": "AUC",
+        "AsOfStrategy": { "Mode": "offset", "OffsetDays": 90 }
+      }
+    }
+  }
+}

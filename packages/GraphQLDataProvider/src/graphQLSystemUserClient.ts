@@ -1,4 +1,4 @@
-import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL, RunQueryEnrichment } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
@@ -498,8 +498,8 @@ export class GraphQLSystemUserClient {
                 throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
             }
 
-            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataSystemUser($QueryID: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataSystemUser(QueryID: $QueryID, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     QueryID
                     QueryName
                     Success
@@ -518,6 +518,7 @@ export class GraphQLSystemUserClient {
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+            if (input.Enrichment !== undefined) variables.Enrichment = input.Enrichment;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataSystemUser: RunQuerySystemUserResult };
             
@@ -567,8 +568,8 @@ export class GraphQLSystemUserClient {
                 throw new Error('Parameters must be a JSON object, not an array. Use {} for empty parameters instead of [].');
             }
 
-            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int) {
-                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow) {
+            const query = `query GetQueryDataByNameSystemUser($QueryName: String!, $CategoryID: String, $CategoryPath: String, $Parameters: JSONObject, $MaxRows: Int, $StartRow: Int, $Enrichment: JSONObject) {
+                GetQueryDataByNameSystemUser(QueryName: $QueryName, CategoryID: $CategoryID, CategoryPath: $CategoryPath, Parameters: $Parameters, MaxRows: $MaxRows, StartRow: $StartRow, Enrichment: $Enrichment) {
                     QueryID
                     QueryName
                     Success
@@ -587,6 +588,7 @@ export class GraphQLSystemUserClient {
             if (input.Parameters !== undefined) variables.Parameters = input.Parameters;
             if (input.MaxRows !== undefined) variables.MaxRows = input.MaxRows;
             if (input.StartRow !== undefined) variables.StartRow = input.StartRow;
+            if (input.Enrichment !== undefined) variables.Enrichment = input.Enrichment;
 
             const result = await this.Client.request(query, variables) as { GetQueryDataByNameSystemUser: RunQuerySystemUserResult };
             
@@ -2213,6 +2215,10 @@ export interface GetQueryDataSystemUserInput {
      * Optional starting row number for pagination
      */
     StartRow?: number;
+    /**
+     * Optional runtime-only directive to post-process result rows through a registered query result enricher
+     */
+    Enrichment?: RunQueryEnrichment;
 }
 
 /**
@@ -2243,6 +2249,10 @@ export interface GetQueryDataByNameSystemUserInput {
      * Optional starting row number for pagination
      */
     StartRow?: number;
+    /**
+     * Optional runtime-only directive to post-process result rows through a registered query result enricher
+     */
+    Enrichment?: RunQueryEnrichment;
 }
 
 /**

@@ -91,8 +91,13 @@ import {
   AnalyticsResourceComponent,
   LoadAnalyticsResource
 } from './KnowledgeHub/components/analytics/analytics-resource.component';
+import {
+  FeaturePipelinesResourceComponent,
+  LoadFeaturePipelinesResource
+} from './KnowledgeHub/components/feature-pipelines/feature-pipelines-resource.component';
 import { ClusteringModule } from '@memberjunction/ng-clustering';
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
+import { RecordProcessEditorComponent } from '@memberjunction/ng-record-process-studio';
 import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 
 /**
@@ -142,6 +147,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     RecordDrilldownComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
+    FeaturePipelinesResourceComponent,
     AIAnalyticsResourceComponent,
     AnalyticsFilterBarComponent,
     AnalyticsExecutiveSummaryComponent,
@@ -197,7 +203,8 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJEmptyStateComponent,
     ClusteringModule,
     SchedulingModule,
-    MJWordCloudComponent
+    MJWordCloudComponent,
+    RecordProcessEditorComponent
   ],
   providers: [
     AIInstrumentationService
@@ -221,6 +228,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     VisualizeResourceComponent,
     SchedulingResourceComponent,
     AnalyticsResourceComponent,
+    FeaturePipelinesResourceComponent,
     AIAnalyticsResourceComponent,
     AnalyticsFilterBarComponent,
     AnalyticsExecutiveSummaryComponent,
@@ -246,6 +254,7 @@ export class AIDashboardsModule {
         LoadVisualizeResource();
         LoadSchedulingResource();
         LoadAnalyticsResource();
+        LoadFeaturePipelinesResource();
         LoadAIAnalyticsResource();
         LoadAnalyticsExecutiveSummary();
         LoadAnalyticsPromptRuns();

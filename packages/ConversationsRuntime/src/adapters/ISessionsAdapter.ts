@@ -46,7 +46,7 @@ export type SessionChannelState = 'open' | 'closed';
  *
  * **Three values, not four.** The server-side `AIAgentSession.CloseReason`
  * column has four (`Explicit | Janitor | Shutdown | Error`), but only two are
- * distinguishable client-side (`explicit` = user called `EndVoiceSession`;
+ * distinguishable client-side (`explicit` = user called `EndRealtimeSession`;
  * `error` = teardown ran from a catch block). `'unknown'` covers any other
  * client-observable end path. Janitor/shutdown happen out-of-process and never
  * reach the runtime — see the module-level scope cut.
@@ -79,7 +79,7 @@ export type SessionLifecycleEvent =
  *
  * @example Angular host bootstrap
  * ```typescript
- * runtime.UseSessionsAdapter(new RealtimeSessionsAdapter(voiceSessionService));
+ * runtime.UseSessionsAdapter(new RealtimeSessionsAdapter(realtimeSessionService));
  * ```
  *
  * @example Multi-source adapter (future)

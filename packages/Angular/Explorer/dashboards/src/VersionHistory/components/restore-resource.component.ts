@@ -1,10 +1,20 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { Component, OnInit, OnDestroy, AfterViewInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine, MJVersionLabelRestoreEntityType } from '@memberjunction/core-entities';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { AgentToolResult, validateStringParam } from '../../shared/agent-tool-validation';
+import {
+    buildVersionHistoryRestoreAgentContext,
+    isValidRestoreStatusFilter,
+    resolveRestore,
+    RESTORE_STATUS_FILTERS,
+    RESTORE_LIST_CAP,
+    RestoreSnapshot,
+    RestoreSummaryItem,
+} from '../version-history-restore-agent-context';
 
 interface VersionRestorePreferences {
     StatusFilter: string;
@@ -17,7 +27,7 @@ interface VersionRestorePreferences {
     styleUrls: ['./restore-resource.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class VersionHistoryRestoreResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class VersionHistoryRestoreResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
     public IsLoading = true;
 
     // Stats
@@ -56,6 +66,155 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
         this.destroy$.complete();
     }
 
+    /**
+     * After the view initializes, publish the initial agent context and register
+     * the client tools the AI agent can invoke against this surface. The ongoing
+     * context re-emit happens in {@link applyFilters} / {@link LoadData}.
+     */
+    ngAfterViewInit(): void {
+        this.publishAgentContext();
+        this.registerAgentClientTools();
+    }
+
+    // ========================================
+    // AI AGENT CONTEXT & CLIENT TOOLS
+    //
+    // 🔒 SAFETY BOUNDARY: This surface exposes ONLY read-only / filter / refresh /
+    // select-for-view tools to the agent. The actual restore/rollback operation is
+    // DESTRUCTIVE (it overwrites live records from a historical version) and is
+    // intentionally NOT exposed as a client tool — neither is any label mutation
+    // or deletion. SelectRestore only EXPANDS a history row for inspection; it
+    // performs no restore. The agent can browse, filter, and inspect restore
+    // history; a human must initiate any real restore from the UI.
+    // ========================================
+
+    /**
+     * Publish the current Restore-surface state to the AI agent via NavigationService.
+     * Shaping lives in the pure {@link buildVersionHistoryRestoreAgentContext} helper
+     * so it stays unit-testable. Called on load and on every filter change.
+     */
+    private publishAgentContext(): void {
+        const recentRestores: RestoreSummaryItem[] = this.FilteredRestores
+            .slice(0, RESTORE_LIST_CAP)
+            .map(r => ({ ID: r.ID ?? '', Name: r.VersionLabel ?? '', Status: r.Status ?? '' }));
+        const selected = this.ExpandedRestoreId
+            ? this.Restores.find(r => r.ID === this.ExpandedRestoreId)
+            : undefined;
+        const context = buildVersionHistoryRestoreAgentContext({
+            TotalRestores: this.TotalRestores,
+            SuccessfulRestores: this.SuccessfulRestores,
+            FailedRestores: this.FailedRestores,
+            PartialRestores: this.PartialRestores,
+            StatusFilter: this.StatusFilter,
+            FilteredRestoreCount: this.FilteredRestores.length,
+            RecentRestores: recentRestores,
+            SelectedRestoreId: selected?.ID ?? null,
+            SelectedRestoreName: selected?.VersionLabel ?? null,
+        });
+        this.navigationService.SetAgentContext(this, context);
+    }
+
+    /** The loaded restores narrowed to the resolver's {@link RestoreSnapshot} shape. */
+    private restoreSnapshots(): RestoreSnapshot[] {
+        return this.Restores.map(r => ({ ID: r.ID ?? '', Name: r.VersionLabel ?? '', Status: r.Status ?? '' }));
+    }
+
+    /**
+     * Register the read-only client tools the AI agent can invoke against the
+     * Restore surface. Each handler is tolerant — it never throws and returns a
+     * typed `{ Success, Data?, ErrorMessage? }` result.
+     *
+     * Tools:
+     * - FilterRestoresByStatus: filter the history by a restore status.
+     * - RefreshRestoreHistory: reload the restore history from the server.
+     * - GetRestoreStats: return the current restore-status counts.
+     * - SelectRestore: expand a restore's detail row (by ID or name) for viewing.
+     */
+    private registerAgentClientTools(): void {
+        this.navigationService.SetAgentClientTools(this, [
+            {
+                Name: 'FilterRestoresByStatus',
+                Description: `Filter the restore history by status. Valid values: ${RESTORE_STATUS_FILTERS.filter(s => s).join(', ')}. Pass an empty string to clear the filter.`,
+                ParameterSchema: { type: 'object', properties: { status: { type: 'string' } }, required: ['status'] },
+                Handler: async (params: Record<string, unknown>) => this.toolFilterRestoresByStatus(params),
+            },
+            {
+                Name: 'RefreshRestoreHistory',
+                Description: 'Reload the restore history from the server.',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => {
+                    await this.LoadData();
+                    return { Success: true, Data: { TotalRestores: this.TotalRestores } };
+                },
+            },
+            {
+                Name: 'GetRestoreStats',
+                Description: 'Get the current restore-history statistics (total, successful, failed, partial, and filtered counts).',
+                ParameterSchema: { type: 'object', properties: {} },
+                Handler: async () => ({
+                    Success: true,
+                    Data: {
+                        TotalRestores: this.TotalRestores,
+                        SuccessfulRestores: this.SuccessfulRestores,
+                        FailedRestores: this.FailedRestores,
+                        PartialRestores: this.PartialRestores,
+                        StatusFilter: this.StatusFilter,
+                        FilteredRestoreCount: this.FilteredRestores.length,
+                    },
+                }),
+            },
+            {
+                Name: 'SelectRestore',
+                Description: 'Expand a restore history entry by its ID or name to inspect its details. Resolution: exact ID, then exact name, then a name-contains match. View-only — performs no restore, rollback, or mutation.',
+                ParameterSchema: { type: 'object', properties: { restore: { type: 'string', description: 'Restore ID or name.' } }, required: ['restore'] },
+                Handler: async (params: Record<string, unknown>) => this.toolSelectRestore(params),
+            },
+        ]);
+    }
+
+    /**
+     * Expand a restore's detail row by ID or name (view-only). Resolves via the
+     * pure {@link resolveRestore} helper (exact ID → exact name → name-contains).
+     * Never throws.
+     */
+    private toolSelectRestore(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+        const parsed = validateStringParam(params['restore'], 'restore');
+        if (!parsed.ok) {
+            return parsed.result;
+        }
+        const resolution = resolveRestore(parsed.value, this.restoreSnapshots());
+        if (!resolution.ok) {
+            return { Success: false, ErrorMessage: resolution.error };
+        }
+        // Set the expanded id directly (ToggleExpand has toggle semantics; we want
+        // the agent to always land on the resolved restore being expanded).
+        this.ExpandedRestoreId = resolution.restore.ID;
+        this.publishAgentContext();
+        this.cdr.markForCheck();
+        return { Success: true, Data: { SelectedRestoreId: resolution.restore.ID, SelectedRestoreName: resolution.restore.Name } };
+    }
+
+    /**
+     * Apply a status filter for the restore history. Validates the requested
+     * status and sets it deterministically (does NOT use the toggle semantics of
+     * {@link OnStatusFilterChange}, so the agent always lands on the requested
+     * filter regardless of the current state).
+     */
+    private toolFilterRestoresByStatus(params: Record<string, unknown>): AgentToolResult & { Data?: Record<string, unknown> } {
+        const parsed = validateStringParam(params['status'], 'status');
+        if (!parsed.ok) {
+            return parsed.result;
+        }
+        if (!isValidRestoreStatusFilter(parsed.value)) {
+            const valid = RESTORE_STATUS_FILTERS.filter(s => s).join(', ');
+            return { Success: false, ErrorMessage: `Invalid status "${parsed.value}". Expected one of: ${valid} (or an empty string to clear).` };
+        }
+        this.StatusFilter = parsed.value;
+        this.applyFilters();
+        this.persistPreferences();
+        return { Success: true, Data: { StatusFilter: this.StatusFilter, FilteredRestoreCount: this.FilteredRestores.length } };
+    }
+
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         return 'Restore History';
     }
@@ -87,6 +246,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
         } finally {
             this.IsLoading = false;
             this.NotifyLoadComplete();
+            this.publishAgentContext();
             this.cdr.markForCheck();
         }
     }
@@ -103,6 +263,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             if (this.StatusFilter && r.Status !== this.StatusFilter) return false;
             return true;
         });
+        this.publishAgentContext();
         this.cdr.markForCheck();
     }
 
