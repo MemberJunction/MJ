@@ -439,7 +439,10 @@
 }
 
 .scope-hint-spacing code {
-    background: var(--mj-color-info-100);
+    /* semantic surface + inherited text so the chip stays legible in dark mode
+       (the old primitive --mj-color-info-100 didn't adapt → light-on-light) */
+    background: var(--mj-bg-surface-sunken);
+    color: inherit;
     padding: 2px 6px;
     border-radius: 4px;
     font-family: monospace;
