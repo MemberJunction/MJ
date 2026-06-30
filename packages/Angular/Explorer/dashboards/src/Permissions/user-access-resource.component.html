@@ -54,17 +54,13 @@
 
     <div class="domain-groups">
       @for (group of DomainGroups; track TrackByDomain($index, group)) {
-        <div class="domain-group" [class.expanded]="group.Expanded">
-          <button type="button" class="domain-header" (click)="ToggleGroup(group)">
-            <div class="domain-header-left">
-              <i [class]="group.Icon" class="domain-icon"></i>
-              <span class="domain-name">{{ group.DomainName }}</span>
-              <span class="domain-count">{{ group.Count }}</span>
-            </div>
-            <i class="fa-solid fa-chevron-down toggle-icon" [class.rotated]="group.Expanded"></i>
-          </button>
-
-          @if (group.Expanded) {
+        <mj-accordion-panel Size="sm" [FlushBody]="true" [Expanded]="group.Expanded" (ExpandedChange)="onGroupExpandedChange(group, $event)">
+          <ng-template mjAccordionTitle>
+            <i [class]="group.Icon" class="domain-icon"></i>
+            <span class="domain-name">{{ group.DomainName }}</span>
+            <span class="domain-count">{{ group.Count }}</span>
+          </ng-template>
+          <ng-template mjAccordionBody>
             <div class="domain-body">
               <table class="perms-table">
                 <thead>
@@ -102,8 +98,8 @@
                 </tbody>
               </table>
             </div>
-          }
-        </div>
+          </ng-template>
+        </mj-accordion-panel>
       }
     </div>
   }

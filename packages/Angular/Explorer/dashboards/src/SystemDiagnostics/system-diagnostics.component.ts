@@ -834,38 +834,37 @@ export interface SystemDiagnosticsUserPreferences {
                         <div class="insights-section">
                           <div class="insights-list">
                             @for (insight of telemetryInsights; track insight.id) {
-                              <div class="insight-card expandable" [class]="getSeverityClass(insight.severity)" [class.expanded]="insight.expanded">
-                                <div class="insight-header" (click)="toggleInsightExpanded(insight)">
-                                  <i class="fa-solid" [class]="getSeverityIcon(insight.severity)"></i>
+                              <mj-accordion-panel Size="sm" [class]="getSeverityClass(insight.severity)"
+                                  [Expanded]="insight.expanded" (ExpandedChange)="onInsightExpandedChange(insight, $event)">
+                                <ng-template mjAccordionTitle>
+                                  <i class="fa-solid insight-icon" [class]="getSeverityIcon(insight.severity)"></i>
                                   <span class="insight-title">{{ insight.title }}</span>
                                   <span class="insight-category">{{ insight.category }}</span>
-                                  <i class="fa-solid expand-icon" [class.fa-chevron-down]="!insight.expanded" [class.fa-chevron-up]="insight.expanded"></i>
-                                </div>
-        
-                                <!-- Always show key info for actionability -->
-                                <div class="insight-key-info">
-                                  @if (insight.entityName) {
-                                    <div class="key-info-item">
-                                      <span class="key-label">Entity:</span>
-                                      <span class="key-value entity-name">{{ insight.entityName }}</span>
-                                    </div>
-                                  }
-                                  @if (getInsightFilter(insight)) {
-                                    <div class="key-info-item">
-                                      <span class="key-label">Filter:</span>
-                                      <code class="key-value filter-code">{{ getInsightFilter(insight) }}</code>
-                                    </div>
-                                  }
-                                </div>
-        
-                                <div class="insight-message">{{ insight.message }}</div>
-                                <div class="insight-suggestion">
-                                  <i class="fa-solid fa-arrow-right"></i>
-                                  {{ insight.suggestion }}
-                                </div>
-        
-                                <!-- Expanded Details -->
-                                @if (insight.expanded) {
+                                </ng-template>
+                                <ng-template mjAccordionBody>
+                                  <!-- Key info for actionability -->
+                                  <div class="insight-key-info">
+                                    @if (insight.entityName) {
+                                      <div class="key-info-item">
+                                        <span class="key-label">Entity:</span>
+                                        <span class="key-value entity-name">{{ insight.entityName }}</span>
+                                      </div>
+                                    }
+                                    @if (getInsightFilter(insight)) {
+                                      <div class="key-info-item">
+                                        <span class="key-label">Filter:</span>
+                                        <code class="key-value filter-code">{{ getInsightFilter(insight) }}</code>
+                                      </div>
+                                    }
+                                  </div>
+
+                                  <div class="insight-message">{{ insight.message }}</div>
+                                  <div class="insight-suggestion">
+                                    <i class="fa-solid fa-arrow-right"></i>
+                                    {{ insight.suggestion }}
+                                  </div>
+
+                                  <!-- Expanded Details -->
                                   <div class="insight-details">
                                     <!-- Show all params from first related event -->
                                     @if (insight.relatedEvents.length > 0) {
@@ -899,8 +898,8 @@ export interface SystemDiagnosticsUserPreferences {
                                       </div>
                                     }
                                   </div>
-                                }
-                              </div>
+                                </ng-template>
+                              </mj-accordion-panel>
                             }
                           </div>
                         </div>
@@ -1241,8 +1240,8 @@ export interface SystemDiagnosticsUserPreferences {
                 } @else {
                   <div class="config-items-list">
                     @for (item of engineDetailPanel.configItems; track item.propertyName) {
-                      <div class="config-item" [class.expanded]="item.expanded">
-                        <div class="config-item-header" (click)="toggleConfigItemExpanded(item)">
+                      <mj-accordion-panel Size="sm" [Expanded]="item.expanded" (ExpandedChange)="onConfigItemExpandedChange(item, $event)">
+                        <ng-template mjAccordionTitle>
                           <div class="config-item-info">
                             <i class="fa-solid config-health-icon"
                                [class.fa-circle-check]="item.loadedSuccessfully"
@@ -1256,11 +1255,9 @@ export interface SystemDiagnosticsUserPreferences {
                           <div class="config-item-stats">
                             <span class="config-stat">{{ item.itemCount }} items</span>
                             <span class="config-stat">{{ item.memoryDisplay }}</span>
-                            <i class="fa-solid expand-icon" [class.fa-chevron-down]="!item.expanded" [class.fa-chevron-up]="item.expanded"></i>
                           </div>
-                        </div>
-        
-                        @if (item.expanded) {
+                        </ng-template>
+                        <ng-template mjAccordionBody>
                           <div class="config-item-details">
                             <div class="config-detail-row">
                               <span class="detail-label">Property:</span>
@@ -1348,8 +1345,8 @@ export interface SystemDiagnosticsUserPreferences {
                               </div>
                             }
                           </div>
-                        }
-                      </div>
+                        </ng-template>
+                      </mj-accordion-panel>
                     }
                   </div>
                 }
@@ -1942,8 +1939,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         return this.patternSort.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down';
     }
 
-    toggleInsightExpanded(insight: TelemetryInsightDisplay): void {
-        insight.expanded = !insight.expanded;
+    onInsightExpandedChange(insight: TelemetryInsightDisplay, expanded: boolean): void {
+        insight.expanded = expanded;
         this.cdr.markForCheck();
     }
 
@@ -3983,8 +3980,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     /**
      * Toggle expansion of a config item
      */
-    toggleConfigItemExpanded(item: EngineConfigItemDisplay): void {
-        item.expanded = !item.expanded;
+    onConfigItemExpandedChange(item: EngineConfigItemDisplay, expanded: boolean): void {
+        item.expanded = expanded;
         this.cdr.markForCheck();
     }
 

@@ -1,24 +1,4 @@
-.cls-org-ctx {
-    border: 1px solid var(--mj-border-default);
-    border-radius: 8px;
-    background: var(--mj-bg-surface);
-    overflow: hidden;
-}
-.cls-org-ctx-head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    width: 100%;
-    padding: 12px 14px;
-    background: var(--mj-bg-surface-card);
-    border: none;
-    cursor: pointer;
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-    text-align: left;
-}
-.cls-org-ctx-head > i:first-child { color: var(--mj-brand-primary); }
+/* cls-org-ctx wrapper + head chrome now owned by <mj-accordion-panel>. */
 .cls-org-ctx-title { flex: 1; }
 .cls-org-ctx-dirty {
     font-size: 0.72rem;
@@ -31,7 +11,6 @@
 }
 .cls-org-ctx-body {
     padding: 14px;
-    border-top: 1px solid var(--mj-border-subtle);
 }
 .cls-org-ctx-help {
     margin: 0 0 10px;
