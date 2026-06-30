@@ -314,6 +314,7 @@
                     [acceptedFileTypes]="acceptedFileTypes"
                     [initialMessage]="inputRef.conversationId === EffectivePendingMessageTarget ? pendingMessage : null"
                     [initialAttachments]="inputRef.conversationId === EffectivePendingMessageTarget ? pendingAttachments : null"
+                    (initialMessageAutoSendStarted)="onInitialMessageAutoSendStarted($event)"
                     (messageSent)="onMessageSent($event)"
                     (agentResponse)="onAgentResponse($event)"
                     (agentRunDetected)="onAgentRunDetected($event)"

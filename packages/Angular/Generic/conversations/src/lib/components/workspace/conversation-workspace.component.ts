@@ -201,6 +201,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    *  during the async send window (prevents the message bleeding into the swapped-to conversation). */
   public pendingMessageConversationId: string | null = null;
   public pendingArtifactId: string | null = null;
+  public pendingArtifactConversationId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
 
   private engine = ConversationEngine.Instance;
@@ -382,8 +383,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // These will be bubbled up to the host application
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
-      .subscribe(command => {
-        this.onActionableCommand(command);
+      .subscribe(request => {
+        this.onActionableCommand(request.command);
       });
 
     this.uiCommandHandler.automaticCommandRequested
@@ -1160,6 +1161,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // Store pending artifact info so chat area can show it and scroll to message
       if (event.artifactId) {
         this.pendingArtifactId = event.artifactId;
+        this.pendingArtifactConversationId = event.id;
         this.pendingArtifactVersionNumber = event.versionNumber || null;
         console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
       }

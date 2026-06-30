@@ -115,6 +115,8 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private _initialMessage: string | null = null;
   private _initialAttachments: PendingAttachment[] | null = null;
   private _isComponentReady = false; // Track if component is ready to send
+  /** Conversation this input has already auto-sent its pending first message for. */
+  private _autoSentForConversationId: string | null = null;
 
   @Input()
   set initialMessage(value: string | null) {
@@ -213,6 +215,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() intentCheckStarted = new EventEmitter<{conversationId: string}>(); // Emits when intent checking starts
   @Output() intentCheckCompleted = new EventEmitter<{conversationId: string}>(); // Emits when intent checking completes (carries conversationId so the parent can drop a background conversation's completion after a swap — symmetric with intentCheckStarted)
+  @Output() initialMessageAutoSendStarted = new EventEmitter<{conversationId: string}>(); // Emitted when this input latches the pending first message for auto-send
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
   @Output() artifactPickerRequested = new EventEmitter<void>(); // Emits when user clicks "Attach Artifact"
@@ -308,11 +311,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private triggerInitialSend(): void {
     const message = this._initialMessage;
     const attachments = this._initialAttachments;
+    const hasContent = !!message || !!(attachments && attachments.length > 0);
+
+    if (!hasContent || !this.conversationId || UUIDsEqual(this._autoSentForConversationId, this.conversationId)) {
+      return;
+    }
+    this._autoSentForConversationId = this.conversationId;
 
     // Set pending attachments before sending
     if (attachments && attachments.length > 0) {
       this.pendingAttachments = [...attachments];
     }
+
+    Promise.resolve().then(() => {
+      this.initialMessageAutoSendStarted.emit({ conversationId: this.conversationId });
+    });
 
     // Use setTimeout to ensure we're outside of change detection cycle
     setTimeout(() => {
