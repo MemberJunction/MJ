@@ -88,10 +88,7 @@
           </div>
         </div>
         @if (Error) {
-          <div class="error-message">
-            <i class="fa-solid fa-circle-exclamation"></i>
-            {{Error}}
-          </div>
+          <mj-alert Variant="error">{{Error}}</mj-alert>
         }
       </div>
     }
@@ -159,18 +156,14 @@
             }
           </div>
         }
-        <mj-alert Variant="info" Size="sm" Icon="fa-solid fa-lightbulb" class="scope-tip">
+        <mj-alert Variant="info" Size="sm" Icon="fa-solid fa-lightbulb" class="scope-hint-spacing">
           <span>Tip: Use wildcards like <code>entities:*</code> for broad access within a category</span>
         </mj-alert>
         <!-- No Scopes Warning -->
         @if (!IsLoadingScopes && getSelectedScopeCount() === 0) {
-          <div class="no-scopes-warning">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-            <div>
-              <strong>Warning: No permissions selected</strong>
-              <p>API keys without any assigned scopes will have <strong>no permissions</strong> and cannot perform any operations. This key will be rejected by all API endpoints until scopes are assigned.</p>
-            </div>
-          </div>
+          <mj-alert Variant="warning" Title="No permissions selected" class="noscope-spacing">
+            <p>API keys without any assigned scopes will have <strong>no permissions</strong> and cannot perform any operations. This key will be rejected by all API endpoints until scopes are assigned.</p>
+          </mj-alert>
         }
       </div>
     }
@@ -183,10 +176,9 @@
         </div>
         <h3 class="success-title">API Key Created Successfully!</h3>
         <div class="key-display">
-          <div class="key-warning">
-            <i class="fa-solid fa-triangle-exclamation"></i>
+          <mj-alert Variant="warning" Size="sm">
             <span>Copy this key now. It won't be shown again!</span>
-          </div>
+          </mj-alert>
           <div class="key-value">
             <code>{{RawApiKey}}</code>
             <button class="copy-btn" (click)="copyKey()" [class.copied]="KeyCopied">
@@ -217,13 +209,9 @@
             <span class="detail-value">{{getSelectedScopeCount()}} permissions</span>
           </div>
         </div>
-        <div class="security-note">
-          <i class="fa-solid fa-shield-check"></i>
-          <div>
-            <strong>Security Note:</strong>
-            Store this key securely. We only store a hash - the original key cannot be recovered.
-          </div>
-        </div>
+        <mj-alert Variant="info" Title="Security Note">
+          Store this key securely. We only store a hash - the original key cannot be recovered.
+        </mj-alert>
       </div>
     }
   </div>

@@ -158,36 +158,6 @@
     color: var(--mj-status-success);
 }
 
-.error-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    background: var(--mj-color-error-100);
-    border: 1px solid var(--mj-color-error-100);
-    border-radius: var(--mj-radius-md);
-    color: var(--mj-status-error);
-    font-size: 13px;
-    margin-bottom: 16px;
-}
-
-.error-banner i {
-    color: var(--mj-status-error);
-}
-
-.error-banner .dismiss-btn {
-    margin-left: auto;
-    background: transparent;
-    border: none;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    padding: 4px;
-}
-
-.error-banner .dismiss-btn:hover {
-    color: var(--mj-status-error);
-}
-
 .action-btn {
     background: var(--mj-bg-surface);
     border: none;
@@ -1402,22 +1372,9 @@
     padding: 20px 24px;
 }
 
-/* Success Banner */
-.success-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    background: var(--mj-color-success-100);
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    color: var(--mj-color-success-800);
+/* Telemetry "no slow ops" alert — positioning only; box chrome owned by <mj-alert> */
+.telemetry-success-alert {
     margin-top: 16px;
-}
-
-.success-banner i {
-    font-size: 18px;
-    color: var(--mj-status-success);
 }
 
 /* Compact Filter Bar */
@@ -2229,8 +2186,8 @@
 
 
 /* Position the migrated mj-alerts (component is margin-less apart from its bottom) */
-.recommendation-banner { margin-top: 20px; }
-.pattern-warning { margin-top: 12px; }
+.recommendation-spacing { margin-top: 20px; }
+.pattern-hint-spacing { margin-top: 12px; }
 
 /* Detail Actions */
 .detail-actions {

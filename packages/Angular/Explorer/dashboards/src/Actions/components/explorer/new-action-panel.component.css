@@ -149,12 +149,12 @@
   color: var(--mj-status-error);
 }
 
-/* Info Box — positioning only; box chrome owned by <mj-alert> */
-.info-box {
+/* Info alert — positioning only; box chrome owned by <mj-alert> */
+.panel-info-alert {
   margin-top: 24px;
 }
 
-.info-box p {
+.panel-info-alert p {
   margin: 0;
   line-height: 1.5;
 }

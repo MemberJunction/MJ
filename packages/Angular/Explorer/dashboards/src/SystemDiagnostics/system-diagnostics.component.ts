@@ -336,7 +336,7 @@ export interface SystemDiagnosticsUserPreferences {
                         </table>
                       </div>
         
-                      <mj-alert Variant="warning" Icon="fa-solid fa-lightbulb" class="recommendation-banner">
+                      <mj-alert Variant="warning" Icon="fa-solid fa-lightbulb" class="recommendation-spacing">
                         <strong>Recommendation:</strong>
                         Consider consolidating data loading by having dependent engines
                         access data from a parent engine, or restructuring the engine
@@ -392,13 +392,9 @@ export interface SystemDiagnosticsUserPreferences {
                     </div>
                   </div>
                   @if (serverTelemetryError) {
-                    <div class="error-banner">
-                      <i class="fa-solid fa-exclamation-triangle"></i>
+                    <mj-alert Variant="error" Dismissible (Dismissed)="serverTelemetryError = null">
                       {{ serverTelemetryError }}
-                      <button class="dismiss-btn" (click)="serverTelemetryError = null">
-                        <i class="fa-solid fa-times"></i>
-                      </button>
-                    </div>
+                    </mj-alert>
                   }
         
                   <!-- Performance Sub-Navigation Tabs -->
@@ -614,10 +610,9 @@ export interface SystemDiagnosticsUserPreferences {
                           </div>
                         </div>
                       } @else if (telemetryEnabled && telemetrySummary && telemetrySummary.totalEvents > 0) {
-                        <div class="success-banner">
-                          <i class="fa-solid fa-check-circle"></i>
+                        <mj-alert Variant="success" class="telemetry-success-alert">
                           <span>No slow operations detected. All operations completed under {{ slowQueryThresholdMs }}ms.</span>
-                        </div>
+                        </mj-alert>
                       }
                     }
         
@@ -1157,7 +1152,7 @@ export interface SystemDiagnosticsUserPreferences {
                     </div>
                   </div>
                   @if (eventDetailPanel.relatedPattern.count >= 2) {
-                    <mj-alert Variant="warning" Size="sm" class="pattern-warning">
+                    <mj-alert Variant="warning" Size="sm" class="pattern-hint-spacing">
                       This pattern has been called {{ eventDetailPanel.relatedPattern.count }} times. Consider caching or batching.
                     </mj-alert>
                   }
