@@ -19,6 +19,10 @@ import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+// token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
+import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
+// AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
+import { CrushCode, type CodeLang } from '@memberjunction/context-crush/code';
 import {
     RealtimeSessionRunner,
     RealtimeSessionRunnerDeps,
@@ -126,6 +130,24 @@ interface ActionResultSummary {
     resultCode: string;
     message: string;
     aiDirectives?: AIDirective[];
+}
+
+/**
+ * Resolved per-run configuration for structurally compressing inline action-result
+ * payloads via @memberjunction/context-crush. Undefined means crushing is disabled
+ * for the run (the agent opted out via `crushActionResults: false`).
+ */
+export interface ActionResultCrushConfig {
+    /** Minimum stringified length of an object/array (or code string) value before crushing. */
+    threshold: number;
+    /** Optional character budget passed to CrushJSON (undefined = no row truncation). */
+    maxChars: number | undefined;
+    /**
+     * When set, large *string* output params are reduced with CrushCode for this language.
+     * Undefined (default) means code-string crushing is off — only structural JSON crushing
+     * applies. Opt in per agent type via the `crushCodeLang` prompt param or a subclass override.
+     */
+    codeLang: CodeLang | undefined;
 }
 
 interface BaseIterationContext {
@@ -505,6 +527,14 @@ export class BaseAgent {
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
 
     /**
+     * Minimum stringified length (chars) of an object/array action-result value before
+     * structural JSON compression (CrushJSON) is applied. Small payloads aren't worth a
+     * legend, so they pass through verbatim.
+     * @private
+     */
+    private static readonly ACTION_RESULT_CRUSH_THRESHOLD = 600;
+
+    /**
      * Inspects a set of action output params for any value matching the FileOutputRef shape
      * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
      * Returns all matching FileOutputRef values found across all output params.
@@ -862,6 +892,15 @@ export class BaseAgent {
      * prompt execution occurred after them.
      */
     private _promptTurnCount: number = 0;
+
+    /**
+     * Per-run config for structurally compressing inline action-result payloads.
+     * Resolved once at run start from the agent-type prompt params (default on);
+     * read by formatActionResultsAsMarkdown so both the direct and loop callers
+     * share the same setting without threading it through every signature.
+     * @private
+     */
+    private _actionResultCrush: ActionResultCrushConfig | undefined = undefined;
 
     /**
      * Execution limits for dynamically added actions.
@@ -6555,12 +6594,29 @@ The context is now within limits. Please retry your request with the recovered c
             return `\`${String(value)}\``;
         }
 
-        let stringValue: string;
         if (typeof value === 'string') {
-            stringValue = value;
-        } else {
-            // Compact JSON (no pretty-printing) for objects/arrays
-            stringValue = JSON.stringify(value);
+            // A string param may carry JSON (many actions JSON.stringify their payloads),
+            // SQL/TS code, or plain text. Try structural JSON compression first — it is a
+            // safe no-op on non-JSON (crushParamValue's internal JSON.parse failure is
+            // caught and returns null) — then opt-in AST code reduction (SQL/TS), then pass
+            // through (optionally length-capped).
+            const crushedJson = this.crushParamValue(value);
+            if (crushedJson !== null) {
+                return crushedJson;
+            }
+            const crushedCode = this.crushCodeValue(value);
+            if (crushedCode !== null) {
+                return crushedCode;
+            }
+            return maxLength > 0 && value.length > maxLength ? `${value.substring(0, maxLength)}…` : value;
+        }
+
+        // Objects/arrays: compact JSON (no pretty-printing), optionally structurally
+        // compressed via context-crush when crushing is enabled and the value is large.
+        const stringValue = JSON.stringify(value);
+        const crushed = this.crushParamValue(stringValue);
+        if (crushed !== null) {
+            return crushed;
         }
 
         if (maxLength > 0 && stringValue.length > maxLength) {
@@ -6568,6 +6624,86 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return stringValue;
+    }
+
+    /**
+     * Resolve the per-run action-result compression config from the agent-type prompt
+     * params. Crushing is on by default and only disabled when an agent explicitly sets
+     * `crushActionResults: false`, mirroring the `includeXxxDocs` opt-out convention.
+     * @private
+     */
+    protected resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
+        const agentTypePromptParams = params.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        if (agentTypePromptParams?.crushActionResults === false) {
+            return undefined;
+        }
+        const requestedLang = agentTypePromptParams?.crushCodeLang;
+        const codeLang: CodeLang | undefined =
+            requestedLang === 'sql' || requestedLang === 'typescript' ? requestedLang : undefined;
+        return { threshold: BaseAgent.ACTION_RESULT_CRUSH_THRESHOLD, maxChars: undefined, codeLang };
+    }
+
+    /**
+     * AST-reduce a large code-string action-result value when the agent opted into a code
+     * language (via `crushCodeLang` or a subclass override) and the value clears the size
+     * threshold. Returns reduced code plus a one-line legend, or null to keep the string
+     * verbatim (crushing disabled, too small, or no net saving).
+     *
+     * token optimization via @memberjunction/context-crush (CodeCompressor-inspired)
+     * @private
+     */
+    private crushCodeValue(stringValue: string): string | null {
+        const config = this._actionResultCrush;
+        if (!config || !config.codeLang || stringValue.length < config.threshold) {
+            return null;
+        }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure falls back to the verbatim value.
+        try {
+            const result = CrushCode(stringValue, config.codeLang);
+            if (result.CrushedChars >= result.OriginalChars) {
+                return null;
+            }
+            const legend = DescribeCrush(result);
+            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Structurally compress a JSON action-result value when crushing is enabled for the run
+     * and the value clears the size threshold. Accepts either the `JSON.stringify` of an
+     * object/array param, or a raw string param that itself contains JSON (many actions
+     * stringify their payloads, e.g. `run-adhoc-query`'s `Results`). Returns crushed text
+     * plus a one-line legend, or null when crushing is disabled, the value is too small, the
+     * value isn't valid JSON, or compression wouldn't actually save characters — so callers
+     * fall back to verbatim (and, for strings, to code crushing) behavior.
+     *
+     * token optimization via @memberjunction/context-crush (SmartCrusher-inspired)
+     * @private
+     */
+    private crushParamValue(stringValue: string): string | null {
+        const config = this._actionResultCrush;
+        if (!config || stringValue.length < config.threshold) {
+            return null;
+        }
+        // Crushing is a best-effort optimization — it must never break an agent turn. Any
+        // failure (non-JSON input, pathologically deep payloads) falls back to verbatim.
+        try {
+            // Parse to a plain JSON value. This is the JSON.stringify of an object/array
+            // param, or a raw string param that contains JSON; non-JSON strings throw here
+            // and are caught below (caller then tries code crushing / verbatim).
+            const json = JSON.parse(stringValue) as JsonValue;
+            const result = CrushJSON(json, { MaxChars: config.maxChars });
+            if (result.CrushedChars >= result.OriginalChars) {
+                return null; // no net saving — keep the verbatim JSON
+            }
+            const legend = DescribeCrush(result);
+            return legend ? `${result.Text}\n  ↳ ${legend}` : result.Text;
+        } catch {
+            return null;
+        }
     }
 
     /**
@@ -6810,6 +6946,10 @@ The context is now within limits. Please retry your request with the recovered c
         
         // Reset prompt turn counter for this execution
         this._promptTurnCount = 0;
+
+        // Resolve action-result compression config for this run (default on; opt out via
+        // crushActionResults: false in the agent-type prompt params).
+        this._actionResultCrush = this.resolveActionResultCrush(params);
 
         // Create MJAIAgentRunEntity
         this._agentRun = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
@@ -11639,6 +11779,17 @@ The context is now within limits. Please retry your request with the recovered c
         }> = [];
         const messagesToRemove: number[] = [];
 
+        // Cache-aware guard: confine pruning/compaction to the volatile tail so we don't
+        // perturb the provider's KV-cached prompt prefix. The stable prefix is the maximal
+        // contiguous leading run of non-result messages (system/RAG context, injected
+        // memory, the original user request). Expired messages that fall inside that prefix
+        // are deferred — genuine context overflow still reaches them via attemptContextRecovery.
+        // token optimization via @memberjunction/context-crush (CacheAligner-inspired)
+        const { Boundary: stablePrefixBoundary } = PartitionStablePrefix(
+            params.conversationMessages,
+            (msg) => !this.IsVolatileResultMessage(msg as ChatMessage)
+        );
+
         // Phase 1: Identify expired messages
         for (let i = 0; i < params.conversationMessages.length; i++) {
             const msg = params.conversationMessages[i] as AgentChatMessage;
@@ -11659,6 +11810,13 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Check if expired
             if (turnsAlive > msg.metadata.expirationTurns) {
+                // Defer expiry of messages inside the cache-stable prefix to preserve the
+                // provider's cached prompt prefix; overflow recovery handles them if needed.
+                if (i < stablePrefixBoundary) {
+                    this.logStatus(`[Turn ${currentTurn}] Deferred expiry of cache-stable prefix message at index ${i}`, true, params);
+                    continue;
+                }
+
                 msg.metadata.isExpired = true;
 
                 if (msg.metadata.expirationMode === 'Remove') {
@@ -11969,6 +12127,22 @@ The context is now within limits. Please retry your request with the recovered c
         return messageType === 'action-result'
             || messageType === 'client-tool-result'
             || messageType === 'tool-result';
+    }
+
+    /**
+     * Returns true if the message is a turn-generated result (action, tool, client tool,
+     * sub-agent, or loop). These are the volatile, expirable messages that accumulate over
+     * turns. Everything else — system/RAG context, injected memory, the original user
+     * request — anchors the cache-stable prompt prefix and is protected from routine pruning.
+     * @protected
+     */
+    protected IsVolatileResultMessage(msg: ChatMessage): boolean {
+        const messageType = (msg as AgentChatMessage).metadata?.messageType;
+        return messageType === 'action-result'
+            || messageType === 'client-tool-result'
+            || messageType === 'tool-result'
+            || messageType === 'sub-agent-result'
+            || messageType === 'loop-result';
     }
 
     protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
