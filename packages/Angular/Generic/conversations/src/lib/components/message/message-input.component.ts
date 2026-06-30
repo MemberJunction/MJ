@@ -216,6 +216,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Output() intentCheckStarted = new EventEmitter<{conversationId: string}>(); // Emits when intent checking starts
   @Output() intentCheckCompleted = new EventEmitter<{conversationId: string}>(); // Emits when intent checking completes (carries conversationId so the parent can drop a background conversation's completion after a swap — symmetric with intentCheckStarted)
   @Output() initialMessageAutoSendStarted = new EventEmitter<{conversationId: string}>(); // Emitted when this input latches the pending first message for auto-send
+  @Output() initialMessageAutoSendFailed = new EventEmitter<{conversationId: string}>(); // Emitted when a latched pending first message fails before messageSent
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
   @Output() artifactPickerRequested = new EventEmitter<void>(); // Emits when user clicks "Attach Artifact"
@@ -328,8 +329,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     });
 
     // Use setTimeout to ensure we're outside of change detection cycle
-    setTimeout(() => {
-      this.sendMessageWithText(message || '');
+    setTimeout(async () => {
+      const sent = await this.sendMessageWithText(message || '');
+      if (!sent) {
+        this._autoSentForConversationId = null;
+        this.initialMessageAutoSendFailed.emit({ conversationId: this.conversationId });
+      }
     }, 100);
   }
 
@@ -871,7 +876,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * `this.pendingAttachments` may not contain the attachment. Pass it in
    * explicitly and we merge + dedupe (by `id`) before saving.
    */
-  public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<void> {
+  public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<boolean> {
     const merged: PendingAttachment[] = (() => {
       if (!extraAttachments || extraAttachments.length === 0) {
         return [...this.pendingAttachments];
@@ -890,11 +895,11 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const hasAttachments = merged.length > 0;
 
     if (!hasText && !hasAttachments) {
-      return;
+      return false;
     }
 
     if (this.isSending) {
-      return;
+      return false;
     }
 
     this.isSending = true;
@@ -949,7 +954,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
               console.error('Failed to roll back conversation detail after attachment rejection:', rollbackErr);
             }
             this.isSending = false;
-            return;
+            return false;
           }
         }
 
@@ -967,11 +972,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         const mentionResult = this.parseMentionsFromMessage(detail.Message);
         const isFirstMessage = this.conversationHistory.length === 0;
         await this.routeMessage(detail, mentionResult, isFirstMessage);
+        return true;
       } else {
         this.handleSendFailure(detail);
+        return false;
       }
     } catch (error) {
       this.handleSendError(error);
+      return false;
     } finally {
       this.isSending = false;
     }

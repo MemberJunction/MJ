@@ -166,6 +166,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private _pendingMessage: string | null = null;
   @Input()
   set pendingMessage(value: string | null) {
+    const previousPendingMessage = this._pendingMessage;
     // Handle case where an object is incorrectly passed
     if (value && typeof value === 'object' && 'text' in value) {
       this._pendingMessage = (value as { text: string }).text;
@@ -176,6 +177,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // pending message can't be misrouted to a stale conversation.
     if (!this._pendingMessage) {
       this._pendingMessageTargetId = null;
+      this._pendingMessageReservedTargetId = null;
+    } else if (this._pendingMessage !== previousPendingMessage) {
+      this._pendingMessageReservedTargetId = null;
     }
   }
   get pendingMessage(): string | null {
@@ -197,6 +201,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** Internally-captured target for {@link pendingMessage}, set when this component creates a
    *  new conversation from the empty state. Host-independent; immune to conversation-swap timing. */
   private _pendingMessageTargetId: string | null = null;
+  private _pendingMessageReservedTargetId: string | null = null;
 
   /**
    * The conversation a pending message must be delivered to. Prefers the explicit host input,
@@ -205,6 +210,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   public get EffectivePendingMessageTarget(): string | null {
     return this.pendingMessageConversationId ?? this._pendingMessageTargetId ?? this.conversationId;
+  }
+
+  public shouldDeliverPendingMessageTo(conversationId: string): boolean {
+    const targetId = this.EffectivePendingMessageTarget;
+    return UUIDsEqual(conversationId, targetId) && !UUIDsEqual(this._pendingMessageReservedTargetId, targetId);
   }
 
   // Using getter/setter to ensure reactivity
@@ -1223,6 +1233,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.messages = [];
       this.isLoadingConversation = false;
       this.currentlyLoadingConversationId = null;
+      this.lastLoadedConversationId = null;
       this.agentStateService.stopPolling();
     }
   }
@@ -1355,8 +1366,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    this.lastLoadedConversationId = conversationId;
-
     try {
       // Read from engine cache — always present after loadMessages() calls LoadConversationDetails()
       const cacheEntry = this.engine.GetCachedDetailEntry(conversationId);
@@ -1436,6 +1445,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       // Update artifact count for header display
       this.artifactCount = this.calculateUniqueArtifactCount();
       this.updateArtifactCountDisplay();
+
+      this.lastLoadedConversationId = conversationId;
 
       // Trigger message re-render now that peripheral data is loaded
       this.messages = [...this.messages];
@@ -1521,6 +1532,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
     if (this.pendingMessage && this.isPendingMessageTarget(message.ConversationID)) {
+      this._pendingMessageReservedTargetId = null;
       this.pendingMessageConsumed.emit();
     }
 
@@ -1589,7 +1601,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   onInitialMessageAutoSendStarted(event: {conversationId: string}): void {
     if (this.pendingMessage && this.isPendingMessageTarget(event.conversationId)) {
-      this.pendingMessageConsumed.emit();
+      this._pendingMessageReservedTargetId = event.conversationId;
+    }
+  }
+
+  onInitialMessageAutoSendFailed(event: {conversationId: string}): void {
+    if (UUIDsEqual(event.conversationId, this._pendingMessageReservedTargetId)) {
+      this._pendingMessageReservedTargetId = null;
     }
   }
 
