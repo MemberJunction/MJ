@@ -8,11 +8,17 @@
     "Color": "#2050c8",
     "DefaultNavItems": [
       {
+        "Label": "Predictions",
+        "Icon": "fa-solid fa-wand-magic-sparkles",
+        "ResourceType": "Custom",
+        "DriverClass": "PredictiveStudioPredictionsResource",
+        "isDefault": true
+      },
+      {
         "Label": "Home",
         "Icon": "fa-solid fa-gauge-high",
         "ResourceType": "Custom",
-        "DriverClass": "PredictiveStudioHomeResource",
-        "isDefault": true
+        "DriverClass": "PredictiveStudioHomeResource"
       },
       {
         "Label": "Training Pipelines",
@@ -59,7 +65,7 @@
     "ID": "299C9272-8D38-40CA-85D4-0980F2C9FAD1"
   },
   "sync": {
-    "lastModified": "2026-06-28T22:48:10.614Z",
-    "checksum": "b0df671a9d2a9c5421ebe590f8a52a06480f8cd5f9d8169cb217263e6c4515e1"
+    "lastModified": "2026-06-30T18:17:39.116Z",
+    "checksum": "c366ac384838b4ebeb033ccf488e4ad52da2d4fcd4c715a629f98bfff97258bf"
   }
 }
