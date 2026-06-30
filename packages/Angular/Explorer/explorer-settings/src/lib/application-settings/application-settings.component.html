@@ -9,17 +9,11 @@
   }
 
   @if (ErrorMessage && !IsLoading) {
-    <div class="message error">
-      <i class="fa-solid fa-exclamation-circle"></i>
-      <span>{{ ErrorMessage }}</span>
-    </div>
+    <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
   }
 
   @if (SuccessMessage && !IsLoading) {
-    <div class="message success">
-      <i class="fa-solid fa-check-circle"></i>
-      <span>{{ SuccessMessage }}</span>
-    </div>
+    <mj-alert Variant="success">{{ SuccessMessage }}</mj-alert>
   }
 
   @if (!IsLoading && !ErrorMessage) {

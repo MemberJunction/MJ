@@ -22,10 +22,7 @@
         <form [formGroup]="userForm" (ngSubmit)="onSubmit()">
           @if (error) {
             <div class="content-section">
-              <div class="alert alert-error">
-                <i class="fa-solid fa-exclamation-triangle"></i>
-                <div>{{ error }}</div>
-              </div>
+              <mj-alert Variant="error" [Message]="error" />
             </div>
           }
           <!-- Basic Information Section -->

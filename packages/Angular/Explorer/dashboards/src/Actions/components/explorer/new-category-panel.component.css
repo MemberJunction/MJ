@@ -48,21 +48,6 @@
   overflow-y: auto;
 }
 
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
-  color: var(--mj-status-error);
-  border-radius: 8px;
-  margin-bottom: 20px;
-  font-size: 14px;
-}
-
-.error-banner i {
-  font-size: 16px;
-}
 
 .form-group {
   margin-bottom: 20px;

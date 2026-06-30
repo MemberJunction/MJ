@@ -46,10 +46,7 @@
           <!-- Error Alert -->
           @if (error) {
             <div class="form-section">
-              <div class="alert alert-error" role="alert">
-                <i class="fa-solid fa-exclamation-triangle" aria-hidden="true"></i>
-                <div>{{ error }}</div>
-              </div>
+              <mj-alert Variant="error" [Message]="error" />
             </div>
           }
 
