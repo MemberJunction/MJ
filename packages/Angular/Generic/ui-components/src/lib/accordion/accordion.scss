@@ -73,7 +73,9 @@
 .mj-accordion-icon {
   font-size: 0.75rem; color: var(--mj-text-muted);
   transition: transform var(--mj-transition-base);
-  .mj-accordion-panel--expanded & { transform: rotate(180deg); }
+  /* Scope to THIS panel's own header row (direct child) so a nested accordion's
+     chevron doesn't rotate just because an outer panel is expanded. */
+  .mj-accordion-panel--expanded > .mj-accordion-header-row & { transform: rotate(180deg); }
 }
 
 /* Body animates open/close via grid-template-rows 0fr -> 1fr (smooth auto-height,
@@ -84,7 +86,10 @@
   grid-template-rows: 0fr;
   transition: grid-template-rows var(--mj-transition-base);
 }
-.mj-accordion-panel--expanded .mj-accordion-body-outer {
+/* Child combinator (>) is critical: a descendant selector would also match a
+   NESTED accordion's body-outer whenever an OUTER panel is expanded, forcing the
+   nested panel open and breaking its collapse. Scope to this panel's own body. */
+.mj-accordion-panel--expanded > .mj-accordion-body-outer {
   grid-template-rows: 1fr;
 }
 /* The clip element is what the grid collapses — it must carry NO padding, or a
@@ -102,7 +107,7 @@
 }
 /* Header/body separator lives on the header row so it only shows while open
    (a border on the collapsing body would leave a stray line at 0fr). */
-.mj-accordion-panel--expanded .mj-accordion-header-row {
+.mj-accordion-panel--expanded > .mj-accordion-header-row {
   border-bottom: 1px solid var(--mj-border-default);
 }
 
@@ -180,8 +185,8 @@
 .mj-accordion-panel--bare {
   border: none;
   border-radius: 0;
-  .mj-accordion-header-row { background: transparent; }
-  &.mj-accordion-panel--expanded .mj-accordion-header-row { border-bottom-color: var(--mj-border-subtle); }
+  > .mj-accordion-header-row { background: transparent; }
+  &.mj-accordion-panel--expanded > .mj-accordion-header-row { border-bottom-color: var(--mj-border-subtle); }
 }
 
 /* ── Flush body — body manages its own padding (code editors, full-bleed grids) ── */
@@ -202,38 +207,42 @@
   display: flex;
   flex-direction: column;
 }
+/* Direct-child (>) chains throughout so a nested accordion inside a fill panel's
+   body is never affected by this panel's fill/expanded state. */
 .mj-accordion-panel--fill.mj-accordion-panel--expanded {
   flex: 1 1 0;
   min-height: 0;
   display: flex;
   flex-direction: column;
 
-  .mj-accordion-header-row { flex: 0 0 auto; }
+  > .mj-accordion-header-row { flex: 0 0 auto; }
 
   /* Override the grid-fr animation: the body region now fills the column. */
-  .mj-accordion-body-outer {
+  > .mj-accordion-body-outer {
     display: flex;
     flex-direction: column;
     flex: 1 1 0;
     min-height: 0;
-  }
-  .mj-accordion-body-clip {
-    display: flex;
-    flex-direction: column;
-    flex: 1 1 0;
-    min-height: 0;
-  }
-  /* The body is a fill region; projected content supplies its own scroll child. */
-  .mj-accordion-body {
-    flex: 1 1 0;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    /* Fill mode can't tween the height (it fills the leftover pane, not content
-       height), so it gets a reveal instead: a quick fade + slide-in re-triggered
-       each time the --expanded class is applied. The chevron still rotates. */
-    animation: mj-accordion-fill-reveal var(--mj-transition-base) ease;
+
+    > .mj-accordion-body-clip {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 0;
+      min-height: 0;
+
+      /* The body is a fill region; projected content supplies its own scroll child. */
+      > .mj-accordion-body {
+        flex: 1 1 0;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        /* Fill mode can't tween the height (it fills the leftover pane, not content
+           height), so it gets a reveal instead: a quick fade + slide-in re-triggered
+           each time the --expanded class is applied. The chevron still rotates. */
+        animation: mj-accordion-fill-reveal var(--mj-transition-base) ease;
+      }
+    }
   }
 }
 
@@ -251,11 +260,11 @@
 /* secondary — subtle brand tint */
 .mj-accordion-panel[data-variant='secondary'] {
   border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
-  .mj-accordion-header-row { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
+  > .mj-accordion-header-row { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); }
   &:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface)); }
-  .mj-accordion-header { color: var(--mj-brand-primary); }
-  .mj-accordion-icon { color: var(--mj-brand-primary); }
-  &.mj-accordion-panel--expanded .mj-accordion-header-row {
+  > .mj-accordion-header-row .mj-accordion-header { color: var(--mj-brand-primary); }
+  > .mj-accordion-header-row .mj-accordion-icon { color: var(--mj-brand-primary); }
+  &.mj-accordion-panel--expanded > .mj-accordion-header-row {
     border-bottom-color: color-mix(in srgb, var(--mj-brand-primary) 22%, var(--mj-border-default));
   }
 }
@@ -263,15 +272,15 @@
 /* primary — bold, solid brand header (its own colour separates it; no extra line) */
 .mj-accordion-panel[data-variant='primary'] {
   border-color: var(--mj-brand-primary);
-  .mj-accordion-header-row { background: var(--mj-brand-primary); }
+  > .mj-accordion-header-row { background: var(--mj-brand-primary); }
   &:not(.mj-accordion-panel--disabled) > .mj-accordion-header-row:hover { background: var(--mj-brand-primary-hover); }
-  .mj-accordion-header { color: var(--mj-text-inverse); }
-  .mj-accordion-icon { color: var(--mj-text-inverse); }
-  &.mj-accordion-panel--expanded .mj-accordion-header-row { border-bottom-color: transparent; }
+  > .mj-accordion-header-row .mj-accordion-header { color: var(--mj-text-inverse); }
+  > .mj-accordion-header-row .mj-accordion-icon { color: var(--mj-text-inverse); }
+  &.mj-accordion-panel--expanded > .mj-accordion-header-row { border-bottom-color: transparent; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .mj-accordion-icon { transition: none; }
   .mj-accordion-body-outer { transition: none; }
-  .mj-accordion-panel--fill.mj-accordion-panel--expanded .mj-accordion-body { animation: none; }
+  .mj-accordion-panel--fill.mj-accordion-panel--expanded > .mj-accordion-body-outer > .mj-accordion-body-clip > .mj-accordion-body { animation: none; }
 }

@@ -42,12 +42,8 @@
     </div>
     <div class="mj-agent-props-content">
       <!-- ── General Section ─────────────────── -->
-      <div class="mj-agent-props-section">
-        <button class="mj-agent-props-section-header" (click)="ToggleSection('general')">
-          <span class="mj-agent-props-section-title">General</span>
-          <i class="fa-solid" [ngClass]="IsSectionCollapsed('general') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
-        </button>
-        @if (!IsSectionCollapsed('general')) {
+      <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('general')" (ExpandedChange)="ToggleSection('general')">
+        <ng-template mjAccordionTitle><span>General</span></ng-template>
           <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>Name</label>
@@ -110,15 +106,10 @@
               </div>
             }
           </div>
-        }
-      </div>
+      </mj-accordion-panel>
       <!-- ── Configuration Section ───────────── -->
-      <div class="mj-agent-props-section">
-        <button class="mj-agent-props-section-header" (click)="ToggleSection('config')">
-          <span class="mj-agent-props-section-title">Configuration</span>
-          <i class="fa-solid" [ngClass]="IsSectionCollapsed('config') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
-        </button>
-        @if (!IsSectionCollapsed('config')) {
+      <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('config')" (ExpandedChange)="ToggleSection('config')">
+        <ng-template mjAccordionTitle><span>Configuration</span></ng-template>
           <div class="mj-agent-props-section-body">
             <!-- Loop Body Type (ForEach / While) -->
             @if (showLoopConfig) {
@@ -212,16 +203,11 @@
               </div>
             }
           </div>
-        }
-      </div>
+      </mj-accordion-panel>
       <!-- ── Data Mapping Section (Action steps) ─── -->
       @if (Step!.StepType === 'Action' || showActionPicker) {
-        <div class="mj-agent-props-section">
-          <button class="mj-agent-props-section-header" (click)="ToggleSection('mapping')">
-            <span class="mj-agent-props-section-title">Data Mapping</span>
-            <i class="fa-solid" [ngClass]="IsSectionCollapsed('mapping') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
-          </button>
-          @if (!IsSectionCollapsed('mapping')) {
+        <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('mapping')" (ExpandedChange)="ToggleSection('mapping')">
+          <ng-template mjAccordionTitle><span>Data Mapping</span></ng-template>
             <div class="mj-agent-props-section-body">
               <div class="mj-agent-props-field">
                 <label>Input Mapping</label>
@@ -248,16 +234,11 @@
                 </mj-code-editor>
               </div>
             </div>
-          }
-        </div>
+        </mj-accordion-panel>
       }
       <!-- ── Error Handling Section ──────────── -->
-      <div class="mj-agent-props-section">
-        <button class="mj-agent-props-section-header" (click)="ToggleSection('errors')">
-          <span class="mj-agent-props-section-title">Error Handling</span>
-          <i class="fa-solid" [ngClass]="IsSectionCollapsed('errors') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
-        </button>
-        @if (!IsSectionCollapsed('errors')) {
+      <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('errors')" (ExpandedChange)="ToggleSection('errors')">
+        <ng-template mjAccordionTitle><span>Error Handling</span></ng-template>
           <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>On Error</label>
@@ -302,8 +283,7 @@
               }
             </div>
           </div>
-        }
-      </div>
+      </mj-accordion-panel>
       <!-- ── Danger Zone ─────────────────────── -->
       @if (!ReadOnly) {
         <div class="mj-agent-props-section mj-agent-props-danger">
@@ -357,12 +337,8 @@
     </div>
     <div class="mj-agent-props-content">
       <!-- ── Overview Section ────────────────── -->
-      <div class="mj-agent-props-section">
-        <button class="mj-agent-props-section-header" (click)="ToggleSection('path-overview')">
-          <span class="mj-agent-props-section-title">Route</span>
-          <i class="fa-solid" [ngClass]="IsSectionCollapsed('path-overview') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
-        </button>
-        @if (!IsSectionCollapsed('path-overview')) {
+      <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('path-overview')" (ExpandedChange)="ToggleSection('path-overview')">
+        <ng-template mjAccordionTitle><span>Route</span></ng-template>
           <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>From</label>
@@ -378,15 +354,10 @@
             </div>
             <span class="mj-agent-props-hint">To change the route, rewire the connection on the canvas.</span>
           </div>
-        }
-      </div>
+      </mj-accordion-panel>
       <!-- ── Path Settings Section ───────────── -->
-      <div class="mj-agent-props-section">
-        <button class="mj-agent-props-section-header" (click)="ToggleSection('path-settings')">
-          <span class="mj-agent-props-section-title">Settings</span>
-          <i class="fa-solid" [ngClass]="IsSectionCollapsed('path-settings') ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
-        </button>
-        @if (!IsSectionCollapsed('path-settings')) {
+      <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('path-settings')" (ExpandedChange)="ToggleSection('path-settings')">
+        <ng-template mjAccordionTitle><span>Settings</span></ng-template>
           <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>Description</label>
@@ -450,8 +421,7 @@
               <span class="mj-agent-props-hint">Higher priority paths are evaluated first when multiple paths leave a step.</span>
             </div>
           </div>
-        }
-      </div>
+      </mj-accordion-panel>
       <!-- ── Danger Zone ─────────────────────── -->
       @if (!ReadOnly) {
         <div class="mj-agent-props-section mj-agent-props-danger">
