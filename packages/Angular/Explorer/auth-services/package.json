@@ -28,6 +28,7 @@
     "@azure/msal-browser": "^5.1.0",
     "@azure/msal-common": "^16.0.3",
     "@okta/okta-auth-js": "^7.14.1",
+    "@workos-inc/authkit-js": "^0.20.1",
     "aws-amplify": "^6.0.0"
   },
   "dependencies": {

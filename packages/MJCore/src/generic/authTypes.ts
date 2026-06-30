@@ -12,6 +12,7 @@ export const AUTH_PROVIDER_TYPES = {
   OKTA: 'okta',
   COGNITO: 'cognito',
   GOOGLE: 'google',
+  WORKOS: 'workos',
   CUSTOM: 'custom'
 } as const;
 
