@@ -9,6 +9,20 @@
 **Mockups:** `index.html` (browse) → `mockups/` (one file per area, three options each)
 **Audience:** Future implementing agents. Every task is executable step-by-step.
 
+> **🚧 In progress — being built in pieces.** Two sub-phases have been **carved out of this
+> plan and into their own branch/PR** because they are self-contained agent-framework features
+> that should not wait on the rest of the roadmap:
+>
+> - **P1.3 Plan Mode** + **P1.4 Skills** → **PR [#2996](https://github.com/MemberJunction/MJ/pull/2996)**
+>   (branch `agent-skills-plan-mode`). They were bundled together because they share two schema
+>   objects (the consolidated `AIAgent` ALTER and the `AIAgentRunStep.StepType` CHECK). The
+>   **consolidated "mega migration" in this PR is therefore superseded for those two pieces** —
+>   their schema lives in #2996's own migration. Refinements made during carve-out: `AISkillAction`
+>   Min/Max execution columns dropped (the model chooses); `AISkill.Status` defaults `Active`;
+>   composition junctions stay status-less (lifecycle governed by `Action.Status`/`AIAgent.Status`).
+>
+> This planning doc remains the umbrella source of truth for the **remaining** sub-phases.
+
 ---
 
 ## 0a. Background & competitive context (why this work)
@@ -212,6 +226,8 @@ Opt-in per-conversation tokens/window-%/cost. **P1.1.1** runtime `computeConvers
 
 ## P1.3 — Plan Mode
 
+> **➡️ Carved out — now building in PR [#2996](https://github.com/MemberJunction/MJ/pull/2996)** (branch `agent-skills-plan-mode`), bundled with P1.4 Skills. Schema for this sub-phase ships in that PR's migration, not the mega migration above.
+
 Capability **ON by default** (opt-out for Realtime/Proxy), **per-request toggle OFF by default** (set on the agent **pill**/composer). Reuses `AIAgentRequest`. **Single-agent in Phase 1** (concurrent planning deferred with concurrency to Phase 2).
 
 ```mermaid
@@ -245,6 +261,8 @@ sequenceDiagram
 ---
 
 ## P1.4 — Skills (capability bundles)
+
+> **➡️ Carved out — now building in PR [#2996](https://github.com/MemberJunction/MJ/pull/2996)** (branch `agent-skills-plan-mode`). Framed as a `BaseAgent` / `@memberjunction/ai-agents` feature (works for any agent invocation, not just the chat widget). Schema ships in that PR's migration. Carve-out refinements: Min/Max execution columns dropped; `AISkill.Status` defaults `Active`; composition junctions are status-less; `SKILL.md` portable import/export promoted from stretch into scope.
 
 Bundles of (instructions + optional Actions + optional sub-agents) **appended** to the system prompt on activation; new `Skill` run-step; unified-permission governance.
 
