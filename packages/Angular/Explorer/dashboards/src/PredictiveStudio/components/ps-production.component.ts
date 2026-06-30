@@ -2,12 +2,14 @@ import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewEncapsulati
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJMLModelEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProcessRunRow, primaryAuc } from '../predictive-studio.view-models';
 import { humanizeCron, StatusVariant } from '../production-distribution';
+import { PSOperateDialogComponent } from './ps-operate-dialog.component';
 
 /** A model's deployment state, derived purely from cached bindings + Record Processes. */
 type DeployState = 'bound' | 'scheduled' | 'idle';
@@ -53,7 +55,7 @@ interface ProductionModelVM {
 @Component({
   standalone: true,
   selector: 'ps-production',
-  imports: [CommonModule, SharedGenericModule],
+  imports: [CommonModule, SharedGenericModule, MJButtonDirective, PSOperateDialogComponent],
   encapsulation: ViewEncapsulation.None,
   styleUrls: ['../predictive-studio.shared.scss', './ps-production.component.scss'],
   template: `
@@ -107,6 +109,9 @@ interface ProductionModelVM {
                   <div class="ps-muted ps-small sub">{{ selected.algorithm }} · {{ selected.problemType }} · holdout {{ selected.holdoutMetric }}</div>
                 </div>
                 <span class="ps-badge" [class]="deployBadge(selected.deployState)">{{ deployLabel(selected.deployState) }}</span>
+                <button mjButton variant="primary" size="sm" data-testid="ps-production-operate" (click)="operateOpen = true">
+                  <i class="fa-solid fa-rocket"></i> Operate
+                </button>
               </div>
             </div>
 
@@ -161,7 +166,7 @@ interface ProductionModelVM {
                         <tr data-testid="ps-production-run">
                           <td>{{ (r.StartTime || r.CreatedAt) | date:'short' }}</td>
                           <td><span class="ps-badge" [class]="runBadge(r.Status)">{{ r.Status }}</span></td>
-                          <td class="ps-mono">{{ r.SuccessCount ?? 0 }}<span class="ps-muted">/{{ r.TotalItemCount ?? 0 }}</span></td>
+                          <td class="ps-mono">{{ r.SuccessCount }}<span class="ps-muted">/{{ r.TotalItemCount ?? 0 }}</span></td>
                           <td class="ps-small ps-muted">{{ r.ProcessName || '—' }}</td>
                           <td>@if (r.DryRun) { <span class="ps-tag amber">dry run</span> }</td>
                         </tr>
@@ -173,6 +178,16 @@ interface ProductionModelVM {
             </div>
           </div>
         </div>
+
+        <ps-operate-dialog
+          [Visible]="operateOpen"
+          [modelId]="selected.modelId"
+          [modelLabel]="selected.label"
+          [engine]="engine"
+          [provider]="ProviderToUse"
+          [currentUser]="ProviderToUse.CurrentUser"
+          (Close)="onOperateClose($event)">
+        </ps-operate-dialog>
       }
     </div>
   `,
@@ -188,6 +203,8 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   public selectedBindings: BindingVM[] = [];
   public runs: PSProcessRunRow[] = [];
   public loadingRuns = false;
+  /** Whether the "Operate this model" dialog is open for the selected model. */
+  public operateOpen = false;
 
   ngOnInit(): void {
     // Reactive: rebuild the published-model list on any MJ: ML Models change (save/delete/remote-invalidate).
@@ -296,6 +313,11 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
         deployState: 'idle', bindingCount: 0, processCount: 0, scheduledCount: 0, lastScoredAt: null, lastRowCount: null,
       }
     );
+  }
+
+  /** Close the Operate dialog. On a successful change it already refreshed the engine (Config(true)), and the reactive `_Models` subscription re-renders the deploy state. */
+  public onOperateClose(_result: { changed: boolean }): void {
+    this.operateOpen = false;
   }
 
   public select(id: string): void {
