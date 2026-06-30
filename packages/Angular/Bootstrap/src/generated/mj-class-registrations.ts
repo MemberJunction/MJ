@@ -475,13 +475,14 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (5 classes)
+// @memberjunction/ng-auth-services (6 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
+    MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
 // @memberjunction/ng-conversations (5 classes)
@@ -567,7 +568,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (102 classes)
+// @memberjunction/ng-dashboards (96 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -632,19 +633,13 @@ import {
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
-    PSCatalogResourceComponent,
-    PSCompareResourceComponent,
-    PSExperimentsResourceComponent,
-    PSHomeResourceComponent,
-    PSPipelinesResourceComponent,
-    PSProductionResourceComponent,
-    PSRegistryResourceComponent,
+    PSModelsResourceComponent,
+    PSPredictionsResourceComponent,
+    PSStudioResourceComponent,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,
     PipelinesComponent,
-    PredictiveStudioDashboardComponent,
-    PredictiveStudioResourceComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     RealtimeRecordingsDashboardComponent,
@@ -1125,6 +1120,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
+    MJWorkOSProvider,
     ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
@@ -1235,19 +1231,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
-    PSCatalogResourceComponent,
-    PSCompareResourceComponent,
-    PSExperimentsResourceComponent,
-    PSHomeResourceComponent,
-    PSPipelinesResourceComponent,
-    PSProductionResourceComponent,
-    PSRegistryResourceComponent,
+    PSModelsResourceComponent,
+    PSPredictionsResourceComponent,
+    PSStudioResourceComponent,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
     PermissionsUserAccessResourceComponent,
     PipelinesComponent,
-    PredictiveStudioDashboardComponent,
-    PredictiveStudioResourceComponent,
     PromptManagementComponent,
     QueryBrowserResourceComponent,
     RealtimeRecordingsDashboardComponent,
@@ -1289,7 +1279,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 591;
+export const CLASS_REGISTRATIONS_COUNT = 586;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

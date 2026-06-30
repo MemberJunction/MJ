@@ -475,13 +475,14 @@ import {
     XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
-// @memberjunction/ng-auth-services (5 classes)
+// @memberjunction/ng-auth-services (6 classes)
 import {
     MJAuth0Provider,
     MJCognitoProvider,
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
+    MJWorkOSProvider,
 } from '@memberjunction/ng-auth-services';
 
 // @memberjunction/ng-conversations (5 classes)
@@ -999,6 +1000,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMSALProvider,
     MJMagicLinkProvider,
     MJOktaProvider,
+    MJWorkOSProvider,
     ClientContextChannel,
     RealtimeMediaChannel,
     RealtimeWhiteboardChannel,
@@ -1053,7 +1055,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 481;
+export const CLASS_REGISTRATIONS_COUNT = 482;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
