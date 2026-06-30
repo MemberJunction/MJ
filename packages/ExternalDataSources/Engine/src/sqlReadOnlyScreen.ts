@@ -24,9 +24,19 @@ function dialectFor(key: SqlDialectKey): SQLParserDialect {
  *
  * Fail-closed. Throws when the SQL:
  *   - contains multiple/stacked statements (injection / smuggled write),
- *   - cannot be parsed/validated in its dialect (can't prove it's read-only → refuse), or
- *   - contains any write/DDL statement (INSERT/UPDATE/DELETE/MERGE/DROP/… — `HasWriteStatement`
- *     also catches data-modifying CTEs such as `WITH x AS (...) DELETE ...`).
+ *   - cannot be parsed/validated in its dialect (can't prove it's read-only → refuse),
+ *   - contains any write/DDL statement (INSERT/UPDATE/DELETE/MERGE/DROP/EXEC/CALL/… —
+ *     `HasWriteStatement`; unparseable data-modifying CTEs are refused by the parse gate above), or
+ *   - is a `SELECT ... INTO <newtable>` — it parses as a `select` (so `HasWriteStatement` is false),
+ *     but it CREATES a table as a side effect, so it's caught here via `StatementKind`.
+ *
+ * Known limitations — defense-in-depth, NOT a substitute for a least-privilege source credential:
+ *   - A side-effecting routine invoked from a read shape (`SELECT writing_func()`,
+ *     `SELECT nextval('s')`) is indistinguishable from a pure read in the AST and is NOT blocked.
+ *   - `GRANT`/`REVOKE` are not reliably surfaced as their own statement type by the underlying parser
+ *     for every dialect and may pass; they require privileges a read-only source credential lacks.
+ * Configure External Data Sources with a read-only/least-privilege credential as the real authority;
+ * this screen is the app-level backstop against the common write/DDL/injection vectors.
  */
 export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey): void {
     const dialect = dialectFor(dialectKey);
@@ -44,6 +54,13 @@ export function assertReadOnlyNativeQuery(sql: string, dialectKey: SqlDialectKey
     if (parser.HasWriteStatement) {
         throw new Error(
             "External native query rejected: write/DDL statements are not permitted — External Data Sources are read-only.",
+        );
+    }
+    // `SELECT ... INTO <newtable>` parses as a `select`, so HasWriteStatement misses it — but it
+    // creates a table. The parser exposes it distinctly as StatementKind 'select-into'.
+    if (parser.StatementKind === "select-into") {
+        throw new Error(
+            "External native query rejected: SELECT ... INTO creates a table — External Data Sources are read-only.",
         );
     }
 }

@@ -36,6 +36,20 @@ describe("assertReadOnlyNativeQuery", () => {
         ])("rejects %s", (_label, sql) => {
             expect(() => assertReadOnlyNativeQuery(sql, "ansi")).toThrow();
         });
+        it("rejects TRUNCATE (ansi)", () => {
+            expect(() => assertReadOnlyNativeQuery("TRUNCATE TABLE orders", "ansi")).toThrow();
+        });
+        it("rejects a CALL of a stored procedure (ansi) — a proc can mutate", () => {
+            expect(() => assertReadOnlyNativeQuery("CALL do_write()", "ansi")).toThrow();
+        });
+        it("rejects a T-SQL EXEC of a stored procedure (sqlserver) — a proc can mutate", () => {
+            expect(() => assertReadOnlyNativeQuery("EXEC dbo.DoSomething @a = 1", "sqlserver")).toThrow();
+        });
+        // Regression: SELECT ... INTO parses as a `select` (HasWriteStatement=false) but creates a
+        // table — it must still be rejected (caught via StatementKind, not HasWriteStatement).
+        it("rejects T-SQL SELECT ... INTO (creates a table) (sqlserver)", () => {
+            expect(() => assertReadOnlyNativeQuery("SELECT * INTO new_orders FROM orders", "sqlserver")).toThrow(/INTO|read-only/i);
+        });
     });
 
     describe("rejects injection / unverifiable input (fail-closed)", () => {
