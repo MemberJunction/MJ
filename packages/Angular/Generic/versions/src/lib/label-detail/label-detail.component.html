@@ -343,13 +343,13 @@
           <!-- Entity groups -->
           <div class="snapshot-groups">
             @for (group of FilteredSnapshotGroups; track group) {
-              <div class="snapshot-group">
-                <div class="group-header" (click)="ToggleSnapshotGroup(group)">
-                  <i class="fa-solid fa-chevron-right group-chevron" [class.expanded]="group.IsExpanded"></i>
+              <mj-accordion-panel Size="sm" [FlushBody]="true"
+                  [Expanded]="group.IsExpanded" (ExpandedChange)="ToggleSnapshotGroup(group)">
+                <ng-template mjAccordionTitle>
                   <i [class]="group.EntityIcon" class="group-entity-icon"></i>
                   <span class="group-name">{{group.EntityName}} <span class="group-count-inline">{{group.Items.length}}</span></span>
-                </div>
-                @if (group.IsExpanded) {
+                </ng-template>
+                <ng-template mjAccordionBody>
                   <div class="group-content">
                     <!-- Loading names indicator -->
                     @if (group.IsLoadingNames) {
@@ -383,8 +383,8 @@
                       </div>
                     }
                   </div>
-                }
-              </div>
+                </ng-template>
+              </mj-accordion-panel>
             }
           </div>
           <!-- Empty state -->
@@ -501,16 +501,16 @@
             @if (DiffResult.EntityGroups.length > 0) {
               <div class="diff-groups">
                 @for (group of DiffResult.EntityGroups; track group) {
-                  <div class="diff-group">
-                    <div class="diff-group-header" (click)="ToggleDiffGroup(group)">
-                      <i class="fa-solid fa-chevron-right diff-chevron" [class.expanded]="group.IsExpanded"></i>
+                  <mj-accordion-panel Size="sm" [FlushBody]="true"
+                      [Expanded]="group.IsExpanded" (ExpandedChange)="ToggleDiffGroup(group)">
+                    <ng-template mjAccordionTitle>
                       <i [class]="resolveEntityIconByName(group.EntityName)" class="diff-group-icon"></i>
                       <span class="diff-group-name">{{group.EntityName}}</span>
                       <span class="diff-group-count change-modified">
                         {{group.Records.length}} modified
                       </span>
-                    </div>
-                    @if (group.IsExpanded) {
+                    </ng-template>
+                    <ng-template mjAccordionBody>
                       <div class="diff-group-content">
                         @for (record of group.Records; track record) {
                           <div class="diff-record">
@@ -540,8 +540,8 @@
                           </div>
                         }
                       </div>
-                    }
-                  </div>
+                    </ng-template>
+                  </mj-accordion-panel>
                 }
               </div>
             }

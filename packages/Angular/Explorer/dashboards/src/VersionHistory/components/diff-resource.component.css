@@ -184,44 +184,14 @@
     gap: 8px;
 }
 
-.entity-group {
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 10px;
-    overflow: hidden;
-}
-
-.entity-group-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    cursor: pointer;
-    transition: background 0.15s ease;
-}
-
-.entity-group-header:hover {
-    background: var(--mj-bg-surface-sunken);
-}
-
-.entity-group-left {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.entity-group-left i:first-child {
-    font-size: 12px;
-    color: var(--mj-text-muted);
-    width: 16px;
-}
-
+/* .entity-group chrome (border / header / chevron) is now owned by <mj-accordion-panel>. */
 .entity-icon {
     color: var(--mj-brand-primary);
     font-size: 14px;
 }
 
 .entity-group-name {
+    flex: 1;
     font-size: 15px;
     font-weight: 600;
     color: var(--mj-text-primary);
@@ -240,19 +210,6 @@
     font-size: 12px;
     font-weight: 600;
     border: none;
-}
-
-/* Entity chevron animation */
-.entity-chevron {
-    font-size: 11px;
-    color: var(--mj-text-muted);
-    width: 14px;
-    text-align: center;
-    transition: transform 0.2s ease;
-}
-
-.entity-chevron.expanded {
-    transform: rotate(90deg);
 }
 
 /* Entity group items */
