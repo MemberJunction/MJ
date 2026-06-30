@@ -7,10 +7,7 @@
     <form [formGroup]="serverForm" class="server-form">
       <!-- Error Message -->
       @if (ErrorMessage) {
-        <div class="error-banner">
-          <i class="fa-solid fa-exclamation-triangle"></i>
-          {{ ErrorMessage }}
-        </div>
+        <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
       }
       <!-- Basic Info Section -->
       <div class="form-section">

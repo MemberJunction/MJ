@@ -48,10 +48,7 @@
 <mj-page-body-interior [Padding]="false">
   <!-- ── Error ──────────────────────────────────────────────────────────── -->
   @if (ErrorMessage) {
-    <div class="entity-list-error" role="alert">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      {{ ErrorMessage }}
-    </div>
+    <mj-alert Variant="error" class="entity-list-error">{{ ErrorMessage }}</mj-alert>
   }
 
   <!-- ── Loading skeleton ───────────────────────────────────────────────── -->

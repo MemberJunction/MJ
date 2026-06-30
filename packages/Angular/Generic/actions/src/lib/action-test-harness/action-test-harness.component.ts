@@ -446,16 +446,6 @@ export class ActionTestHarnessComponent extends BaseAngularComponent implements 
         });
     }
 
-    public GetResultIcon(): string {
-        if (!this.ExecutionResult) return '';
-        return this.ExecutionResult.Success ? 'fa-check-circle' : 'fa-times-circle';
-    }
-
-    public GetResultColor(): string {
-        if (!this.ExecutionResult) return '';
-        return this.ExecutionResult.Success ? '#28a745' : '#dc3545';
-    }
-
     public GetOutputParams(): MJActionParamEntity[] {
         return this._actionParams.filter(p => p.Type === 'Output' || p.Type === 'Both');
     }

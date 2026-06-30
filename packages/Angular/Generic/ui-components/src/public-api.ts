@@ -13,6 +13,7 @@ export * from './lib/calendar/calendar-utils';
 export * from './lib/datepicker/datepicker.component';
 export * from './lib/splitter/splitter.component';
 export * from './lib/accordion/accordion.component';
+export * from './lib/alert/alert.component';
 export * from './lib/window/window.component';
 export * from './lib/slide-panel/slide-panel.component';
 export * from './lib/combobox/combobox.component';

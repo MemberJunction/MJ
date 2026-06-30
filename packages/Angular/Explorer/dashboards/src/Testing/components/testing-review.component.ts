@@ -329,10 +329,9 @@ interface ReviewFormState {
               Measures how often human reviewers agree with automated evaluation scores.
             </p>
             @if (AgreementRate < 70) {
-              <div class="calibration-warning">
-                <i class="fa-solid fa-triangle-exclamation"></i>
+              <mj-alert Variant="warning">
                 Low agreement may indicate evaluation criteria need refinement.
-              </div>
+              </mj-alert>
             }
           </div>
         </div>
@@ -1088,24 +1087,6 @@ interface ReviewFormState {
       line-height: 1.6;
     }
 
-    .calibration-warning {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 12px 16px;
-      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-      border: 1px solid var(--mj-status-warning);
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--mj-status-warning);
-    }
-
-    .calibration-warning i {
-      color: var(--mj-status-warning);
-      font-size: 16px;
-      flex-shrink: 0;
-    }
 
     /* Success toast animation */
     .queue-item {

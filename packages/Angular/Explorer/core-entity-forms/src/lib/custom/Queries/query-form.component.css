@@ -171,27 +171,6 @@
    Status Warning Banner
    ======================================== */
 
-.status-warning-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    margin: 0;
-    background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
-    border-left: 4px solid var(--mj-status-warning);
-    font-size: var(--mj-text-sm);
-    color: var(--mj-text-secondary);
-    flex-shrink: 0;
-}
-
-.status-warning-banner i {
-    font-size: var(--mj-text-base);
-    flex-shrink: 0;
-}
-
-.status-warning-banner strong {
-    font-weight: 600;
-}
 
 /* ========================================
    Main Content Area
