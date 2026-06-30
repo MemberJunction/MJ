@@ -433,6 +433,66 @@ function FindMatchingBracket(content: string, openPos: number): number {
 }
 
 /**
+ * Returns the index of the last *significant* character (not whitespace, not inside a string
+ * literal, and not inside a `//` line or block comment) within `content[0, end)`, or -1 if
+ * there is none. Mirrors {@link FindMatchingBracket}'s string/comment state machine so a `//`
+ * inside a value like `'http://x'`, or a brace/quote inside a string, is never miscounted.
+ */
+function LastSignificantCharIndex(content: string, end: number): number {
+    let pos = 0;
+    let last = -1;
+    let inString: string | null = null;
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    while (pos < end) {
+        const ch = content[pos];
+
+        if (inLineComment) {
+            if (ch === '\n') inLineComment = false;
+            pos++;
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && content[pos + 1] === '/') { inBlockComment = false; pos += 2; continue; }
+            pos++;
+            continue;
+        }
+        if (inString) {
+            if (ch === '\\') { pos += 2; continue; } // skip escaped char
+            if (ch === inString) { inString = null; last = pos; } // the closing quote is significant
+            pos++;
+            continue;
+        }
+
+        if (ch === '/' && content[pos + 1] === '/') { inLineComment = true; pos += 2; continue; }
+        if (ch === '/' && content[pos + 1] === '*') { inBlockComment = true; pos += 2; continue; }
+        if (ch === '"' || ch === "'" || ch === '`') { inString = ch; last = pos; pos++; continue; }
+
+        if (ch !== ' ' && ch !== '\t' && ch !== '\r' && ch !== '\n') {
+            last = pos;
+        }
+        pos++;
+    }
+    return last;
+}
+
+/**
+ * Ensures the object body in `before` (the text up to — but excluding — an object's closing
+ * brace) is comma-terminated, so a new property spliced in right after it is a valid sibling
+ * (#2975). No-op when the preceding token is already a comma, or when the body is empty.
+ * `openBracePos` is the index of the object's own opening `{`; the inserted section carries
+ * its own trailing comma, so an otherwise-empty literal stays valid.
+ */
+function EnsureTrailingComma(before: string, openBracePos: number): string {
+    const idx = LastSignificantCharIndex(before, before.length);
+    if (idx <= openBracePos || before[idx] === ',') {
+        return before;
+    }
+    return before.slice(0, idx + 1) + ',' + before.slice(idx + 1);
+}
+
+/**
  * Inserts a section just before the closing brace of the `module.exports = { ... }` object
  * literal. Anchoring to that brace (via FindMatchingBracket) is correct even when the file
  * has trailing code or a later `};` — unlike `lastIndexOf('};')`, which lands in the wrong
@@ -453,7 +513,13 @@ function InsertBeforeModuleExportsClose(content: string, section: string): strin
     if (closePos === -1) {
         throw new Error('Could not locate the closing brace of module.exports in mj.config.cjs.');
     }
-    return content.slice(0, closePos) + section + content.slice(closePos);
+    // Comma-terminate the property immediately before the insertion point so the new section
+    // is a valid sibling rather than a syntax error (#2975). Without this, a config whose last
+    // top-level property is a brace-terminated block (e.g. `openApps: { ... }` with no trailing
+    // comma) becomes `}\n  dynamicPackages: { ... }` — invalid JS that breaks every later
+    // `require('mj.config.cjs')`, including the mj migrate / codegen / build steps an install runs.
+    const before = EnsureTrailingComma(content.slice(0, closePos), bracePos);
+    return before + section + content.slice(closePos);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
