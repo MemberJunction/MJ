@@ -196,6 +196,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isNewUnsavedConversation: boolean = false;
   public pendingMessageToSend: string | null = null;
   public pendingAttachmentsToSend: PendingAttachment[] | null = null;
+  /** The conversation pendingMessageToSend is destined for — bound to the chat-area so the
+   *  auto-send reaches only that conversation's input, even if the user swaps conversations
+   *  during the async send window (prevents the message bleeding into the swapped-to conversation). */
+  public pendingMessageConversationId: string | null = null;
   public pendingArtifactId: string | null = null;
   public pendingArtifactVersionNumber: number | null = null;
 
@@ -244,6 +248,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.isNewUnsavedConversation = true;
     this.pendingMessageToSend = null;
     this.pendingAttachmentsToSend = null;
+    this.pendingMessageConversationId = null;
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -325,6 +330,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       // This ensures the new message-input component receives the pending data
       this.pendingMessageToSend = event.pendingMessage || null;
       this.pendingAttachmentsToSend = event.pendingAttachments || null;
+      // Pin the pending message to THIS conversation so a fast conversation-swap can't
+      // redirect its auto-send into a different conversation.
+      this.pendingMessageConversationId = event.conversation.ID;
       this.selectedConversationId = event.conversation.ID;
       this.selectedConversation = event.conversation;
       this.isNewUnsavedConversation = false;
@@ -341,6 +349,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   onPendingMessageRequested(event: {text: string; attachments: PendingAttachment[]}): void {
     this.pendingMessageToSend = event.text;
     this.pendingAttachmentsToSend = event.attachments;
+    this.pendingMessageConversationId = this.selectedConversationId;
   }
 
   /**

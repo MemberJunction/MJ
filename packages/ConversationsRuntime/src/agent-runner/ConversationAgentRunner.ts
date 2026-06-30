@@ -89,9 +89,14 @@ export interface ProcessMessageInput {
 export class ConversationAgentRunner {
     private readonly session: AgentClientSession;
     private readonly _isProcessing$ = new BehaviorSubject<boolean>(false);
+    /** Reference count of in-flight runs. This runner is a process-wide singleton that may
+     *  service multiple conversations concurrently, so a plain boolean would be flipped to
+     *  `false` by the first run to finish while others are still running. The counter keeps
+     *  `isProcessing$` accurate as "is ANY run in flight". */
+    private _activeRunCount = 0;
     private _provider: IMetadataProvider | null = null;
 
-    /** Emits `true` while an agent run is in flight, `false` otherwise. */
+    /** Emits `true` while one or more agent runs are in flight, `false` otherwise. */
     public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
 
     /**
@@ -138,6 +143,7 @@ export class ConversationAgentRunner {
         if (!agent) return null;
 
         try {
+            this._activeRunCount++;
             this._isProcessing$.next(true);
 
             const currentUser = this.Provider.CurrentUser;
@@ -225,7 +231,8 @@ export class ConversationAgentRunner {
             this.context.Notification.Notify('error', errorMsg, 5_000);
             return null;
         } finally {
-            this._isProcessing$.next(false);
+            this._activeRunCount = Math.max(0, this._activeRunCount - 1);
+            this._isProcessing$.next(this._activeRunCount > 0);
         }
     }
 

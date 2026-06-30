@@ -37,6 +37,7 @@ import { RealtimeSessionReview, RealtimeSessionReviewService } from '../../servi
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import { eventBelongsToConversation, resolvePendingMessageTarget } from '../../utils/conversation-event-routing';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
@@ -172,9 +173,39 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     } else {
       this._pendingMessage = value;
     }
+    // Once the host clears the pending message (consumed), drop the captured target so a later
+    // pending message can't be misrouted to a stale conversation.
+    if (!this._pendingMessage) {
+      this._pendingMessageTargetId = null;
+    }
   }
   get pendingMessage(): string | null {
     return this._pendingMessage;
+  }
+
+  /**
+   * The conversation the {@link pendingMessage} was created FOR. The pending message's
+   * auto-send is delivered ONLY to the cached input whose conversationId matches this —
+   * NOT the live-active conversationId. Without this, swapping conversations during the
+   * (async) auto-send window lets the swapped-to conversation's input grab the still-set
+   * pendingMessage and send it too, duplicating the message into the wrong conversation.
+   *
+   * Hosts MAY set this explicitly; it also self-resolves from {@link _pendingMessageTargetId}
+   * (captured in onEmptyStateMessageSent) so the guard works regardless of host wiring.
+   */
+  @Input() pendingMessageConversationId: string | null = null;
+
+  /** Internally-captured target for {@link pendingMessage}, set when this component creates a
+   *  new conversation from the empty state. Host-independent; immune to conversation-swap timing. */
+  private _pendingMessageTargetId: string | null = null;
+
+  /**
+   * The conversation a pending message must be delivered to. Prefers the explicit host input,
+   * then the internally-captured new-conversation target, finally the active conversation
+   * (legacy fallback for single-conversation hosts that never swap).
+   */
+  public get EffectivePendingMessageTarget(): string | null {
+    return resolvePendingMessageTarget(this.pendingMessageConversationId, this._pendingMessageTargetId, this.conversationId);
   }
 
   // Using getter/setter to ensure reactivity
@@ -1227,6 +1258,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * - Instant when switching between conversations
    */
   private async loadPeripheralData(conversationId: string): Promise<void> {
+    // Defense-in-depth: this method CLEARS and rebuilds the active component's maps
+    // (agentRunsByDetailId, artifactsByDetailId, ratings, attachments) from the given
+    // conversation's engine cache. It must only ever run for the ACTIVE conversation —
+    // a stray call for a background conversation would wipe the displayed conversation's
+    // peripheral state. Callers should already guard, but we enforce it here too.
+    if (!UUIDsEqual(conversationId, this.conversationId)) {
+      return;
+    }
+
     // Skip if we've already processed peripheral data for this conversation
     if (this.lastLoadedConversationId === conversationId) {
       return;
@@ -1499,7 +1539,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Handle agent run detected event from progress updates
    * This is called when the first progress update arrives with an agent run ID
    */
-  async onAgentRunDetected(event: {conversationDetailId: string; agentRunId: string}): Promise<void> {
+  async onAgentRunDetected(event: {conversationId: string; conversationDetailId: string; agentRunId: string}): Promise<void> {
+    // Guard: ignore events from a background conversation's (hidden, still-streaming) input
+    // after a conversation swap. Without this, a background run would be written into the
+    // active conversation's agent-run map and engine cache. See onMessageSent() for context.
+    if (!eventBelongsToConversation(event.conversationId, this.conversationId)) {
+      return;
+    }
     await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId);
   }
 
@@ -1508,7 +1554,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Refreshes the agent run data in-place to get final status and timestamps
    * Also reloads attachments created during agent execution (e.g., generated images)
    */
-  async onMessageComplete(event: {conversationDetailId: string; agentId?: string}): Promise<void> {
+  async onMessageComplete(event: {conversationId: string; conversationDetailId: string; agentId?: string}): Promise<void> {
+    // Guard: ignore completion of a background conversation's run after a conversation swap.
+    // Without this, a background run is refreshed into the active conversation's engine cache
+    // (keyed by this.conversationId) and its attachments loaded into the active map.
+    if (!eventBelongsToConversation(event.conversationId, this.conversationId)) {
+      return;
+    }
+
     // Get existing agent run from map
     const existingAgentRun = this.agentRunsByDetailId.get(event.conversationDetailId);
 
@@ -1552,7 +1605,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * This is called on EVERY progress update with the full, live agent run object
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
-  async onAgentRunUpdate(event: {conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+  async onAgentRunUpdate(event: {conversationId: string; conversationDetailId: string; agentRun?: MJAIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+    // Guard: ignore live progress updates from a background conversation's run after a swap.
+    // Without this, a background run is written into the active conversation's agent-run map
+    // and into ConversationEngine's cache keyed by this.conversationId. See onMessageSent().
+    if (!eventBelongsToConversation(event.conversationId, this.conversationId)) {
+      return;
+    }
     if (event.agentRun) {
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
@@ -2403,7 +2462,17 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.cdr.detectChanges();
   }
 
-  async onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
+  async onArtifactCreated(data: {conversationId: string, conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
+    // Guard: ignore artifacts created by a background conversation's agent after a swap.
+    // Without this, reloadArtifactsForMessage -> loadPeripheralData would CLEAR the active
+    // conversation's artifact/agent-run/rating/attachment maps and rebuild them from the
+    // background conversation's cache — wiping the displayed conversation's artifacts.
+    // The background conversation's artifacts persist server-side and reload when the user
+    // navigates back to it. See onMessageSent() for the broader pattern.
+    if (!eventBelongsToConversation(data.conversationId, this.conversationId)) {
+      return;
+    }
+
     // Snapshot artifact IDs before reload to detect newly created artifacts
     const artifactIdsBefore = this.collectAllArtifactIds();
 
@@ -2689,6 +2758,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
 
       LogStatusEx({message: '✅ Created new conversation', verboseOnly: true, additionalArgs: [newConversation.ID]});
+
+      // Pin the auto-send to THIS newly-created conversation, host-independent and immune to
+      // conversation-swap timing. The pending message round-trips through the host (which sets
+      // [pendingMessage]) and comes back as an @Input; the @for delivers it ONLY to the input
+      // whose conversationId matches this target. Without this, a fast swap during the async
+      // auto-send window lets the swapped-to conversation's input grab the pending message and
+      // send it there instead (the cross-conversation bleed).
+      this._pendingMessageTargetId = newConversation.ID;
 
       // Emit to parent with the new conversation AND the pending message/attachments in a single event
       // This ensures atomic state update - workspace sets all state before Angular change detection
@@ -3603,7 +3680,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle intent check started - show temporary "Analyzing intent..." message
    */
-  async onIntentCheckStarted(): Promise<void> {
+  async onIntentCheckStarted(event: {conversationId: string}): Promise<void> {
+    // Guard: ignore intent-check UI from a background conversation's input after a swap,
+    // so the "Analyzing..." placeholder isn't injected into the displayed conversation.
+    if (!eventBelongsToConversation(event.conversationId, this.conversationId)) {
+      return;
+    }
     const md = this.ProviderToUse;
     const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
 
@@ -3629,7 +3711,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /**
    * Handle intent check completed - remove temporary message
    */
-  onIntentCheckCompleted(): void {
+  onIntentCheckCompleted(event: {conversationId: string}): void {
+    // Guard (symmetric with onIntentCheckStarted): ignore a background conversation's
+    // intent-check completion after a swap. Without this, a late completion from the
+    // conversation the user just left would remove the ACTIVE conversation's own
+    // "Analyzing..." placeholder (intentCheckMessage is a single shared field).
+    if (!eventBelongsToConversation(event.conversationId, this.conversationId)) {
+      return;
+    }
     if (this.intentCheckMessage) {
       // Remove the temporary intent check message
       this.messages = this.messages.filter(m => m !== this.intentCheckMessage);
