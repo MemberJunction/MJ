@@ -44,7 +44,8 @@
       <!-- ── General Section ─────────────────── -->
       <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('general')" (ExpandedChange)="ToggleSection('general')">
         <ng-template mjAccordionTitle><span>General</span></ng-template>
-          <div class="mj-agent-props-section-body">
+          <ng-template mjAccordionBody>
+            <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>Name</label>
               @if (!ReadOnly) {
@@ -106,11 +107,13 @@
               </div>
             }
           </div>
+          </ng-template>
       </mj-accordion-panel>
       <!-- ── Configuration Section ───────────── -->
       <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('config')" (ExpandedChange)="ToggleSection('config')">
         <ng-template mjAccordionTitle><span>Configuration</span></ng-template>
-          <div class="mj-agent-props-section-body">
+          <ng-template mjAccordionBody>
+            <div class="mj-agent-props-section-body">
             <!-- Loop Body Type (ForEach / While) -->
             @if (showLoopConfig) {
               <div class="mj-agent-props-field">
@@ -203,12 +206,14 @@
               </div>
             }
           </div>
+          </ng-template>
       </mj-accordion-panel>
       <!-- ── Data Mapping Section (Action steps) ─── -->
       @if (Step!.StepType === 'Action' || showActionPicker) {
         <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('mapping')" (ExpandedChange)="ToggleSection('mapping')">
           <ng-template mjAccordionTitle><span>Data Mapping</span></ng-template>
-            <div class="mj-agent-props-section-body">
+            <ng-template mjAccordionBody>
+              <div class="mj-agent-props-section-body">
               <div class="mj-agent-props-field">
                 <label>Input Mapping</label>
                 <mj-code-editor
@@ -234,12 +239,14 @@
                 </mj-code-editor>
               </div>
             </div>
+            </ng-template>
         </mj-accordion-panel>
       }
       <!-- ── Error Handling Section ──────────── -->
       <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('errors')" (ExpandedChange)="ToggleSection('errors')">
         <ng-template mjAccordionTitle><span>Error Handling</span></ng-template>
-          <div class="mj-agent-props-section-body">
+          <ng-template mjAccordionBody>
+            <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>On Error</label>
               @if (!ReadOnly) {
@@ -283,6 +290,7 @@
               }
             </div>
           </div>
+          </ng-template>
       </mj-accordion-panel>
       <!-- ── Danger Zone ─────────────────────── -->
       @if (!ReadOnly) {
@@ -339,7 +347,8 @@
       <!-- ── Overview Section ────────────────── -->
       <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('path-overview')" (ExpandedChange)="ToggleSection('path-overview')">
         <ng-template mjAccordionTitle><span>Route</span></ng-template>
-          <div class="mj-agent-props-section-body">
+          <ng-template mjAccordionBody>
+            <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>From</label>
               <div class="mj-agent-props-readonly-value mj-agent-props-readonly-value--muted">
@@ -354,11 +363,13 @@
             </div>
             <span class="mj-agent-props-hint">To change the route, rewire the connection on the canvas.</span>
           </div>
+          </ng-template>
       </mj-accordion-panel>
       <!-- ── Path Settings Section ───────────── -->
       <mj-accordion-panel class="mj-agent-props-accordion" Size="sm" [FlushBody]="true" [Expanded]="!IsSectionCollapsed('path-settings')" (ExpandedChange)="ToggleSection('path-settings')">
         <ng-template mjAccordionTitle><span>Settings</span></ng-template>
-          <div class="mj-agent-props-section-body">
+          <ng-template mjAccordionBody>
+            <div class="mj-agent-props-section-body">
             <div class="mj-agent-props-field">
               <label>Description</label>
               @if (!ReadOnly) {
@@ -421,6 +432,7 @@
               <span class="mj-agent-props-hint">Higher priority paths are evaluated first when multiple paths leave a step.</span>
             </div>
           </div>
+          </ng-template>
       </mj-accordion-panel>
       <!-- ── Danger Zone ─────────────────────── -->
       @if (!ReadOnly) {

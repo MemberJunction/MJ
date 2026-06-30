@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FFlowModule } from '@foblex/flow';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
-import { MJEmptyStateComponent, MJAccordionPanelComponent, MJAccordionTitleDirective } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAccordionPanelComponent, MJAccordionTitleDirective, MJAccordionBodyDirective } from '@memberjunction/ng-ui-components';
 
 // Generic components
 import { FlowEditorComponent } from './components/flow-editor.component';
@@ -37,7 +37,8 @@ import { AgentStepListComponent } from './agent-editor/agent-step-list.component
     CodeEditorModule,
     MJEmptyStateComponent,
     MJAccordionPanelComponent,
-    MJAccordionTitleDirective
+    MJAccordionTitleDirective,
+    MJAccordionBodyDirective
   ],
   exports: [
     // Generic — for any consumer
