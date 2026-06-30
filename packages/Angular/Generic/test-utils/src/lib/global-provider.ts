@@ -39,11 +39,11 @@ export function useFakeGlobalProvider<T = unknown>(): (options?: FakeProviderOpt
 
   beforeEach(() => {
     priorRunView = safeRead(() => RunView.Provider);
-    priorMetadata = safeRead(() => Metadata.Provider);
+    priorMetadata = safeRead(() => Metadata.Provider); // global-provider-ok: test helper snapshots the global provider to restore it after each test
   });
   afterEach(() => {
     RunView.Provider = priorRunView as IRunViewProvider;
-    Metadata.Provider = priorMetadata as IMetadataProvider;
+    Metadata.Provider = priorMetadata as IMetadataProvider; // global-provider-ok: restores the real global provider after each test
   });
 
   return (options: FakeProviderOptions<T> = {}) => {
@@ -52,7 +52,7 @@ export function useFakeGlobalProvider<T = unknown>(): (options?: FakeProviderOpt
     // IRunViewProvider surface (RunView/RunViews) — the same justified seam that
     // RunView.FromMetadataProvider relies on (`provider as unknown as IRunViewProvider`).
     RunView.Provider = fake as unknown as IRunViewProvider;
-    Metadata.Provider = fake;
+    Metadata.Provider = fake; // global-provider-ok: test helper installs the fake as the global provider for the duration of a test
     return fake;
   };
 }
