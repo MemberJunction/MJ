@@ -540,6 +540,31 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         // schema it merely adopted (someone else's data). Post-fix: Created=false → no drop.
         expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled();
     });
+
+    it('does NOT auto-drop a `__`-prefixed schema on rollback even with the override set (#2949 defense-in-depth)', async () => {
+        // Fresh install that genuinely CREATES a `__`-prefixed schema this run (override set), then a
+        // migration fails. Dropping a `__` schema on rollback is a higher risk class than create, so it
+        // is skipped and the operator is warned — protecting against a wrong "we created it" detection
+        // ever nuking a populated MJ-internal-adjacent schema (the `__BCSaaS` data-loss incident).
+        const underscoreManifest = JSON.parse(manifestWithMigrations('app-x'));
+        underscoreManifest.schema.name = '__mj_app_x';
+        serveManifests({ 'https://github.com/test/app-x': JSON.stringify(underscoreManifest) });
+
+        vi.mocked(FindInstalledApp).mockResolvedValue(undefined); // fresh install
+        vi.mocked(SchemaExists).mockResolvedValue(false); // absent → CreateAppSchema runs → Created=true
+
+        const onWarn = vi.fn();
+        const ctx = { ...migContext, Callbacks: { OnWarn: onWarn } } as unknown as OrchestratorContext;
+
+        const result = await InstallApp(
+            { Source: 'https://github.com/test/app-x', AllowDoubleUnderscoreSchema: true },
+            ctx,
+        );
+
+        expect(result.Success).toBe(false);
+        expect(vi.mocked(DropAppSchema)).not.toHaveBeenCalled(); // the catastrophic drop is skipped
+        expect(onWarn).toHaveBeenCalledWith('Rollback', expect.stringContaining('never'));
+    });
 });
 
 describe('UpgradeApp — migration failure is honest + recoverable (B21)', () => {

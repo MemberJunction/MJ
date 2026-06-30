@@ -371,6 +371,12 @@ async function RecordInstallationAtomically(
 /**
  * Compensating action: drops the schema if it was newly created during a failed install.
  * Notifies the user via callbacks before and after rollback.
+ *
+ * Defense-in-depth (#2949): a `__`-prefixed schema is NEVER auto-dropped on rollback, even when
+ * the create-time override (`AllowDoubleUnderscoreSchema`) is set. Drop-on-rollback is a higher
+ * risk class than create — if the "we created it this run" detection is ever wrong, dropping a
+ * `__` schema is catastrophic (the `__BCSaaS` data-loss incident). Leaving a half-created schema
+ * behind is recoverable and visible; the operator is told to clean it up manually instead.
  */
 async function CompensateSchemaOnFailure(
   manifest: MJAppManifest,
@@ -382,13 +388,23 @@ async function CompensateSchemaOnFailure(
   if (!schemaWasCreated || !manifest.schema) {
     return;
   }
+  const schemaName = manifest.schema.name;
+  if (schemaName.startsWith('__')) {
+    callbacks?.OnWarn?.(
+      'Rollback',
+      `Install failed after creating schema '${schemaName}', but '__'-prefixed schemas are never ` +
+      `auto-dropped during rollback (data-safety). If this schema was created solely by this failed ` +
+      `install and holds no data you need, drop it manually after verifying its contents.`,
+    );
+    return;
+  }
   try {
-    callbacks?.OnProgress?.('Rollback', `Rolling back: dropping schema '${manifest.schema.name}'...`);
-    await DropAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
-    callbacks?.OnProgress?.('Rollback', `Schema '${manifest.schema.name}' dropped successfully`);
+    callbacks?.OnProgress?.('Rollback', `Rolling back: dropping schema '${schemaName}'...`);
+    await DropAppSchema(schemaName, context.DatabaseProvider, { allowDoubleUnderscore });
+    callbacks?.OnProgress?.('Rollback', `Schema '${schemaName}' dropped successfully`);
   } catch (rollbackError: unknown) {
     const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
-    callbacks?.OnError?.('Rollback', `Failed to drop schema '${manifest.schema.name}' during rollback: ${msg}`);
+    callbacks?.OnError?.('Rollback', `Failed to drop schema '${schemaName}' during rollback: ${msg}`);
   }
 }
 
