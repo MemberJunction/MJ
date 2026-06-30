@@ -41100,7 +41100,7 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
 
     /**
     * Validate() method override for MJ: AI Agent Sessions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Both the Linked Entity ID and Linked Record ID must be provided together, or both must be left empty, to ensure that any external reference is complete.
+    * * Table-Level: Both Linked Entity ID and Linked Record ID must either be provided together or both left empty. This ensures that a link to an external record is always complete with both its entity type and record identifier.
     * @public
     * @method
     * @override
@@ -41114,19 +41114,19 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
 
     /**
-    * Both the Linked Entity ID and Linked Record ID must be provided together, or both must be left empty, to ensure that any external reference is complete.
+    * Both Linked Entity ID and Linked Record ID must either be provided together or both left empty. This ensures that a link to an external record is always complete with both its entity type and record identifier.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateLinkedEntityAndRecordCoexistence(result: ValidationResult) {
-    	const hasEntity = this.LinkedEntityID != null && this.LinkedEntityID !== "";
+    	const hasEntity = this.LinkedEntityID != null;
     	const hasRecord = this.LinkedRecordID != null && this.LinkedRecordID !== "";
     
     	if (hasEntity !== hasRecord) {
     		result.Errors.push(new ValidationErrorInfo(
     			"LinkedEntityID",
-    			"Both Linked Entity ID and Linked Record ID must be specified together, or both must be empty.",
+    			"Both Linked Entity ID and Linked Record ID must be provided together, or both must be left blank.",
     			this.LinkedEntityID,
     			ValidationErrorType.Failure
     		));
@@ -66352,9 +66352,9 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
 
     /**
     * Validate() method override for MJ: Conversation Widget Instances entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * RateLimitPerMinute: The rate limit per minute must be a positive number greater than zero to ensure that request limits are valid.
-    * * SessionTTLMinutes: The session time-to-live (TTL) must be between 1 and 1440 minutes (24 hours).
-    * * VisitorMemoryRetentionDays: Visitor memory retention days must be a positive number greater than zero when specified.
+    * * RateLimitPerMinute: The rate limit per minute must be a positive number greater than zero to ensure the application can process requests.
+    * * SessionTTLMinutes: The session time-to-live (TTL) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
+    * * VisitorMemoryRetentionDays: The visitor memory retention period, if specified, must be a positive number of days greater than zero.
     * @public
     * @method
     * @override
@@ -66370,16 +66370,16 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
     }
 
     /**
-    * The rate limit per minute must be a positive number greater than zero to ensure that request limits are valid.
+    * The rate limit per minute must be a positive number greater than zero to ensure the application can process requests.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateRateLimitPerMinuteGreaterThanZero(result: ValidationResult) {
-    	if (this.RateLimitPerMinute != null && this.RateLimitPerMinute <= 0) {
+    	if (this.RateLimitPerMinute !== undefined && this.RateLimitPerMinute !== null && this.RateLimitPerMinute <= 0) {
     		result.Errors.push(new ValidationErrorInfo(
     			"RateLimitPerMinute",
-    			"The rate limit per minute must be greater than zero.",
+    			"The rate limit per minute must be greater than 0.",
     			this.RateLimitPerMinute,
     			ValidationErrorType.Failure
     		));
@@ -66387,7 +66387,7 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
     }
 
     /**
-    * The session time-to-live (TTL) must be between 1 and 1440 minutes (24 hours).
+    * The session time-to-live (TTL) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -66396,7 +66396,7 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
     	if (this.SessionTTLMinutes != null && (this.SessionTTLMinutes <= 0 || this.SessionTTLMinutes > 1440)) {
     		result.Errors.push(new ValidationErrorInfo(
     			"SessionTTLMinutes",
-    			"Session TTL must be between 1 and 1440 minutes (up to 24 hours).",
+    			"Session TTL must be greater than 0 and less than or equal to 1440 minutes (24 hours).",
     			this.SessionTTLMinutes,
     			ValidationErrorType.Failure
     		));
@@ -66404,7 +66404,7 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
     }
 
     /**
-    * Visitor memory retention days must be a positive number greater than zero when specified.
+    * The visitor memory retention period, if specified, must be a positive number of days greater than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
