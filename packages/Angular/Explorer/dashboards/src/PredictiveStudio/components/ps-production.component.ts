@@ -3,8 +3,9 @@ import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { MJMLModelEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
+import { MJMLModelEntity, MJMLModelScoringBindingEntity, MJProcessRunDetailEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import { PSProcessRunRow, primaryAuc } from '../predictive-studio.view-models';
@@ -40,6 +41,18 @@ interface ProductionModelVM {
   lastRowCount: number | null;
 }
 
+/** One per-record prediction in a run's drill-in (parsed from `MJ: Process Run Details` `ResultPayload`). */
+interface RunDetailVM {
+  recordId: string;
+  status: string;
+  /** Formatted numeric prediction, or '—'. */
+  score: string;
+  /** Predicted class label (classification), or null. */
+  class: string | null;
+  /** ISO timestamp the prediction was produced (`$.scoredAt`), or the detail's completion time. */
+  scoredAt: string | null;
+}
+
 /**
  * Models in Production — the **model-centric** control tower. Every approved (Published) model appears
  * here whether it's idle, scheduled, or bound — a scoring binding is a *deployment marker*, not a
@@ -49,8 +62,8 @@ interface ProductionModelVM {
  * are loaded on demand when selected (`MJ: Process Runs` grow unbounded — never bulk-cached).
  *
  * Entity-agnostic: model labels derive from the producing pipeline; binding targets come from the binding
- * rows. (Operate actions — Schedule / Create binding / Run now — are Phase B; see
- * plans/predictive-studio-production-tab.md.)
+ * rows. **Operate** (the rocket button) opens the {@link PSOperateDialogComponent} to run/schedule/bind the
+ * model; clicking a run drills into its per-record predictions (`MJ: Process Run Details`).
  */
 @Component({
   standalone: true,
@@ -154,7 +167,31 @@ interface ProductionModelVM {
             <div class="ps-card">
               <div class="ps-card-head"><h3>Run history</h3><span class="ps-muted ps-small">last 90 days · newest first</span></div>
               <div class="ps-card-body">
-                @if (loadingRuns) {
+                @if (selectedRunId) {
+                  <!-- run drill-in: per-record predictions from Process Run Details -->
+                  <button class="run-back" data-testid="ps-production-run-back" (click)="closeRun()">
+                    <i class="fa-solid fa-arrow-left"></i> All runs
+                  </button>
+                  @if (loadingDetails) {
+                    <mj-loading text="Loading predictions..." size="small"></mj-loading>
+                  } @else if (runDetails.length === 0) {
+                    <div class="ps-small ps-muted">No per-record predictions recorded for this run.</div>
+                  } @else {
+                    <table class="runs-table" data-testid="ps-production-run-detail">
+                      <thead><tr><th>Record</th><th>Status</th><th>Prediction</th><th>Scored</th></tr></thead>
+                      <tbody>
+                        @for (d of runDetails; track d.recordId) {
+                          <tr>
+                            <td class="ps-mono ps-small">{{ d.recordId }}</td>
+                            <td><span class="ps-badge" [class]="runBadge(d.status)">{{ d.status }}</span></td>
+                            <td class="ps-mono">{{ d.score }}@if (d.class) { <span class="ps-muted"> · {{ d.class }}</span> }</td>
+                            <td class="ps-small ps-muted">{{ d.scoredAt ? (d.scoredAt | date:'short') : '—' }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  }
+                } @else if (loadingRuns) {
                   <mj-loading text="Loading runs..." size="small"></mj-loading>
                 } @else if (runs.length === 0) {
                   <div class="ps-small ps-muted">No runs recorded yet. Each time this model runs as a Record Process, its predictions are saved to the process run history — even without a scoring binding.</div>
@@ -163,12 +200,12 @@ interface ProductionModelVM {
                     <thead><tr><th>When</th><th>Status</th><th>Scored</th><th>Process</th><th></th></tr></thead>
                     <tbody>
                       @for (r of runs; track r.ID) {
-                        <tr data-testid="ps-production-run">
+                        <tr data-testid="ps-production-run" class="run-row" (click)="openRun(r.ID)">
                           <td>{{ (r.StartTime || r.CreatedAt) | date:'short' }}</td>
                           <td><span class="ps-badge" [class]="runBadge(r.Status)">{{ r.Status }}</span></td>
                           <td class="ps-mono">{{ r.SuccessCount }}<span class="ps-muted">/{{ r.TotalItemCount ?? 0 }}</span></td>
                           <td class="ps-small ps-muted">{{ r.ProcessName || '—' }}</td>
-                          <td>@if (r.DryRun) { <span class="ps-tag amber">dry run</span> }</td>
+                          <td class="run-right">@if (r.DryRun) { <span class="ps-tag amber">dry run</span> }<i class="fa-solid fa-chevron-right ps-muted"></i></td>
                         </tr>
                       }
                     </tbody>
@@ -205,6 +242,10 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   public loadingRuns = false;
   /** Whether the "Operate this model" dialog is open for the selected model. */
   public operateOpen = false;
+  /** The run whose per-record predictions are drilled into (null = the run list). */
+  public selectedRunId: string | null = null;
+  public runDetails: RunDetailVM[] = [];
+  public loadingDetails = false;
 
   ngOnInit(): void {
     // Reactive: rebuild the published-model list on any MJ: ML Models change (save/delete/remote-invalidate).
@@ -323,7 +364,64 @@ export class PSProductionComponent extends BaseAngularComponent implements OnIni
   public select(id: string): void {
     this.selectedModelId = id;
     this.selectedBindings = this.bindingsForModel(id);
+    this.closeRun();
     void this.loadRuns(id);
+  }
+
+  // ---- run drill-in: per-record predictions (on demand) ----
+
+  /** Drill into a run's per-record predictions (`MJ: Process Run Details` `ResultPayload`). */
+  public openRun(runId: string): void {
+    this.selectedRunId = runId;
+    void this.loadRunDetails(runId);
+  }
+
+  public closeRun(): void {
+    this.selectedRunId = null;
+    this.runDetails = [];
+  }
+
+  private async loadRunDetails(runId: string): Promise<void> {
+    this.loadingDetails = true;
+    this.runDetails = [];
+    this.cdr.detectChanges();
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const r = await rv.RunView<MJProcessRunDetailEntity>(
+        {
+          EntityName: 'MJ: Process Run Details',
+          ExtraFilter: `ProcessRunID='${runId}'`,
+          OrderBy: '__mj_CreatedAt ASC',
+          MaxRows: 200,
+          ResultType: 'entity_object',
+        },
+        this.ProviderToUse.CurrentUser,
+      );
+      this.runDetails = r.Success ? (r.Results ?? []).map((d) => this.toDetailVM(d)) : [];
+    } finally {
+      this.loadingDetails = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Project a Process Run Detail into a per-record prediction row, parsing the ML `ResultPayload`. */
+  private toDetailVM(d: MJProcessRunDetailEntity): RunDetailVM {
+    let score = '—';
+    let cls: string | null = null;
+    let scoredAt: string | null = d.CompletedAt ? d.CompletedAt.toISOString() : null;
+    if (d.ResultPayload) {
+      try {
+        const p = JSON.parse(d.ResultPayload) as { score?: number; class?: string; scoredAt?: string };
+        if (typeof p.score === 'number') {
+          score = p.score.toFixed(4);
+        }
+        cls = p.class ?? null;
+        scoredAt = p.scoredAt ?? scoredAt;
+      } catch {
+        /* leave defaults — a non-ML payload (or malformed) just shows '—' */
+      }
+    }
+    return { recordId: d.RecordID ?? '—', status: d.Status, score, class: cls, scoredAt };
   }
 
   /** On-demand run history for the selected model (DB-light — only the selected model, capped). */

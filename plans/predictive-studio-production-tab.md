@@ -42,20 +42,21 @@ grow unbounded — never bulk-cached).
       `WorkType='ML Model'` RP + optional `OnDemand` binding, sharing Phase-C primitives via
       `scoring-process-shared.ts`); the `PredictiveStudio.CreateScoringProcess` Remote Op (declaration → codegen →
       thin `InternalExecute` impl). 287 tests. (Commits `63aef285cb` / `e8e7294d48` / `d704396409`.)
-- [ ] **B2 — Operate panel UI (the UX).** An "Operate" button on a model's detail opens a dialog with
-      **scope** (View via `view-selector` / List via `record-selector` / Everyone) · **cadence** (Once / Daily /
-      Weekly / Monthly) · **output** (Generic / Write-back column, autocompleted from the entity's fields), plus a
-      live "what will happen" summary. **Wiring (all scouted):**
-      - call `new PredictiveStudioCreateScoringProcessOperation().Execute(input, {provider, user})` → `recordProcessId`
-        (pattern: `ps-registry.component.ts:432`).
-      - **Run now** → `RecordProcessRunNowOperation` (existing op) on that `recordProcessId`.
-      - **Schedule** → open the generic `@memberjunction/ng-scheduling` `ScheduledJobDialogComponent`
-        (`[JobTypeID]`=Run Record Process, `[DefaultConfiguration]={ RecordProcessID }`, `[HideJobType]=true`,
-        `(Close)→{Saved, Job?}`). Add `@memberjunction/ng-scheduling` as a dashboards dep.
-      - On success → engine `Config(true,…)` refresh (the reactive list updates the deploy state).
-      Unit tests (pure submit→intent mapping) + docs.
-- [ ] **D — Amazing UX polish.** Empty/idle states, run-result drill-in (a run → its per-record predictions
-      from Process Run Details), schedule chips, distribution sparkline, consistent with the Registry detail.
+- [x] **B2 — Operate panel UI.** ✅ `PSOperateDialogComponent` — an "Operate" (rocket) button on a model's
+      detail opens an `mj-dialog` with **scope** (Everyone / a saved `MJ: User View` / an `MJ: List`) + **output**
+      (run-history-only / write-back to a column, autocompleted from the entity's fields, with a probability/class
+      toggle for classification) + a live summary. Footer **[Run now]** / **[Schedule…]** both first call
+      `PredictiveStudioCreateScoringProcessOperation` → Run-now uses `RecordProcessRunNowOperation`, Schedule opens
+      the generic `@memberjunction/ng-scheduling` `ScheduledJobDialog` (Run-Record-Process job type +
+      `{RecordProcessID}` config). Target entity fixed to the model's training entity. Pure submit→input mapping
+      extracted + unit-tested (`ps-operate-dialog.mapping.ts`). On success → engine `Config(true)` → reactive list
+      updates. 94 tests. (Commit `f08919f208`.)
+- [x] **D — UX polish: run drill-in.** ✅ Run-history rows are clickable → drill into the run's **per-record
+      predictions** (`MJ: Process Run Details`, parsing the `ResultPayload` score/class/scoredAt), with a back link,
+      loading + empty states. (This commit.) Distribution sparkline for bound models — a follow-up nicety.
+
+**Status: A · C · B1 · B2 · D all shipped.** Remaining: MJServer integration script for the operate flow + an
+E2E pass.
 
 ## Guards
 - Reactive via `BaseEngine` `ObserveProperty` — no polling, no bulk run caching.
