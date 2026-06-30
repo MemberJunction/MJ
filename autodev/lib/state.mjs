@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Zero-dependency, file-backed state store for the Autonomous Quality agent.
+// Zero-dependency, file-backed state store for the autodev engine (phase 1: autonomous quality).
 // Standalone: no MemberJunction, no npm dependencies. Requires Node 18+.
 //
 // The investigation log is JSONL (one record per line). Records are keyed by `id`;
@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(__dirname, '..');                  // autonomous-quality/
+const ROOT = join(__dirname, '..');                  // autodev/
 const LOG_DIR = join(ROOT, 'log');
 const LOG_FILE = join(LOG_DIR, 'investigations.jsonl');
 const LOCK_FILE = join(LOG_DIR, '.tick.lock');

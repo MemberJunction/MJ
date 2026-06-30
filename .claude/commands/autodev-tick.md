@@ -1,23 +1,25 @@
 ---
-description: Run ONE bounded autonomous-quality investigation (cron entrypoint), then exit. Picks a candidate from an enabled work source, proves a real problem, and raises a draft PR only if proven.
+description: Run ONE bounded autodev investigation (cron entrypoint), then exit. Phase 1 = quality. Picks a candidate from an enabled work source, proves a real problem, and raises a draft PR only if proven.
 arguments:
   - name: source
     description: "Optional: force a source — pr-mining | bug | assigned-issue. Omit to auto-select by config weights."
     required: false
 ---
 
-# /aq-tick — one autonomous-quality investigation
+# /autodev-tick — one autodev unit of work
 
-You are the tactical executor for the **Autonomous Quality Agent**. A cron trigger fired a fresh Claude Code session to run **exactly ONE bounded investigation**, then **exit**. You are NOT a forever loop — the cron is the loop. Do one unit of work well and stop.
+You are the tactical executor for **autodev**, the autonomous development engine. A cron trigger fired a fresh Claude Code session to run **exactly ONE bounded unit of work**, then **exit**. You are NOT a forever loop — the cron is the loop. Do one unit of work well and stop.
+
+autodev ships one capability at a time behind a proof gate. **Phase 1 (the only one live today) is quality**: defect discovery, regression hardening, and label-gated issue work. The steps below are the phase-1 tick.
 
 **The hard rule: no false-positive PRs.** Proof of a *real, reproduced* problem is a precondition for any PR. Unproven hypotheses get logged and that's it. When in doubt, log a dead-end and exit — that is a success, not a failure.
 
-Full design context: `plans/autonomous-quality-agent/PLAN.md`. Bundle: `autonomous-quality/`.
+Full design + roadmap: `plans/autodev/PLAN.md`. Bundle: `autodev/`.
 
 ---
 
 ## Conventions
-- **Bundle root:** `autonomous-quality/` (relative to repo root). Config: `autonomous-quality/config.json`. State CLI: `node autonomous-quality/lib/state.mjs <cmd>`.
+- **Bundle root:** `autodev/` (relative to repo root). Config: `autodev/config.json`. State CLI: `node autodev/lib/state.mjs <cmd>`.
 - **Always log before exiting** — every path (dead-end, blocked, proven, capped) must `record` an investigation row so the next tick has memory.
 - **Keep it bounded** — respect `caps.maxTickMinutes`. If you're approaching it, checkpoint the investigation to the log (set a `phase` / `status: blocked`) and exit cleanly.
 
@@ -27,7 +29,7 @@ Full design context: `plans/autonomous-quality-agent/PLAN.md`. Bundle: `autonomo
 
 ### 1. Acquire the lock
 ```
-node autonomous-quality/lib/state.mjs lock-acquire
+node autodev/lib/state.mjs lock-acquire
 ```
 - `LOCKED` → another tick is running. **Stop immediately.** Print "tick skipped (locked)" and exit. Do nothing else.
 - `ACQUIRED` → continue. From here on, you MUST `lock-release` before exiting on every path.
@@ -36,8 +38,8 @@ node autonomous-quality/lib/state.mjs lock-acquire
 Confirm the environment is ready: `git rev-parse --is-inside-work-tree`, `gh auth status`, `node --version` (≥18). If anything is missing, `record` a `status: blocked` row describing the gap, `lock-release`, and exit loudly. Do not half-run.
 
 ### 3. Load config + memory
-- Read `autonomous-quality/config.json` (`prMode`, `sources`, `caps`).
-- Read the digest: `node autonomous-quality/lib/state.mjs digest`. This tells you open PRs, in-flight phased work, and recently-touched `candidateKey`s to avoid repeating.
+- Read `autodev/config.json` (`prMode`, `sources`, `caps`).
+- Read the digest: `node autodev/lib/state.mjs digest`. This tells you open PRs, in-flight phased work, and recently-touched `candidateKey`s to avoid repeating.
 
 ### 4. Enforce caps
 - Count open draft PRs (`status: pr-raised`) from the digest. If `>= caps.maxOpenDraftPRs`: do **non-PR work only** this tick (advance a phased `assigned-issue`, or deepen an existing investigation's log), or if nothing useful remains, `record` a short "capped, idle" note, `lock-release`, and exit.
@@ -51,7 +53,7 @@ Confirm the environment is ready: `git rev-parse --is-inside-work-tree`, `gh aut
 
 ### 6. Memory check
 ```
-node autonomous-quality/lib/state.mjs seen <candidateKey>
+node autodev/lib/state.mjs seen <candidateKey>
 ```
 - `SEEN dead-end ...` or `SEEN pr-raised ...` → pick a different candidate (back to step 5). Don't repeat finished work.
 - `SEEN <other> ...` with a `phase` → this is in-flight; resume it.
@@ -67,8 +69,8 @@ Estimate confidence (0–1) that a real problem exists / the issue is well-speci
 
 ### 9. Set up an isolated workspace
 Create a **throwaway** working copy so you never mutate this bundle's repo:
-- Same-repo target: `git worktree add autonomous-quality/workspace/<id> -b aq/<id> origin/next`
-- External repo: clone into `autonomous-quality/workspace/<id>`.
+- Same-repo target: `git worktree add autodev/workspace/<id> -b autodev/<id> origin/next`
+- External repo: clone into `autodev/workspace/<id>`.
 Do all edits/tests there. Clean it up (`git worktree remove`) before exiting.
 
 ### 10. Reproduce
@@ -101,7 +103,7 @@ Then `record` `status: pr-raised` with `prUrl`.
 ### 16. Finalize
 - `record` the final state of the investigation (outcome, evidence, prUrl).
 - Clean up the workspace worktree/clone.
-- `node autonomous-quality/lib/state.mjs lock-release`
+- `node autodev/lib/state.mjs lock-release`
 - Print a one-paragraph summary of what this tick did and exit.
 
 ---
@@ -109,6 +111,6 @@ Then `record` `status: pr-raised` with `prUrl`.
 ## Recording shape
 Use the schema in the plan. Example:
 ```
-node autonomous-quality/lib/state.mjs record '{"id":"<id>","source":"pr-mining","repo":"MemberJunction/MJ","candidateKey":"pr:2978","status":"dead-end","confidence":0.4,"hypothesis":"...","proofModel":"break-the-fix","outcome":"could not reproduce generalized instance","notes":"checked X,Y,Z"}'
+node autodev/lib/state.mjs record '{"id":"<id>","source":"pr-mining","repo":"MemberJunction/MJ","candidateKey":"pr:2978","status":"dead-end","confidence":0.4,"hypothesis":"...","proofModel":"break-the-fix","outcome":"could not reproduce generalized instance","notes":"checked X,Y,Z"}'
 ```
 Always pass the same `id` you got from the opening `record` in step 6 so updates merge (latest-wins).
