@@ -145,52 +145,7 @@
 /* ========================================
    Status Banner
    ======================================== */
-.status-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    font-weight: 600;
-    font-size: 16px;
-}
-
-.status-banner.status-success {
-    background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
-    color: var(--mj-color-success-700);
-}
-
-.status-banner.status-success i {
-    font-size: 24px;
-    color: var(--mj-status-success);
-}
-
-.status-banner.status-error {
-    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
-    color: var(--mj-status-error);
-}
-
-.status-banner.status-error i {
-    font-size: 24px;
-    color: var(--mj-status-error);
-}
-
-.status-banner.status-running {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-}
-
-.status-banner.status-running i {
-    font-size: 24px;
-    color: var(--mj-brand-primary);
-}
-
-.status-banner .status-text {
-    flex: 1;
-}
-
-.status-banner .duration {
+.duration {
     font-size: 14px;
     font-weight: normal;
     background: rgba(0, 0, 0, 0.05);
@@ -310,13 +265,6 @@
 /* ========================================
    Error Card
    ======================================== */
-.error-card {
-    background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
-    border: 1px solid color-mix(in srgb, var(--mj-status-error) 20%, transparent);
-    border-radius: 8px;
-    padding: 16px;
-}
-
 .error-message {
     margin: 0;
     font-family: monospace;
@@ -377,10 +325,6 @@
 
     .panel-content {
         padding: 16px;
-    }
-
-    .status-banner {
-        flex-wrap: wrap;
     }
 
     .panel-actions {

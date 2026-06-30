@@ -39,16 +39,10 @@
   <mj-page-body-interior>
     <!-- Status Messages -->
     @if (ErrorMessage) {
-      <div class="message error-message">
-        <i class="fa-solid fa-circle-exclamation"></i>
-        {{ ErrorMessage }}
-      </div>
+      <mj-alert Variant="error">{{ ErrorMessage }}</mj-alert>
     }
     @if (SuccessMessage) {
-      <div class="message success-message">
-        <i class="fa-solid fa-circle-check"></i>
-        {{ SuccessMessage }}
-      </div>
+      <mj-alert Variant="success">{{ SuccessMessage }}</mj-alert>
     }
 
     <!-- Loading State -->
