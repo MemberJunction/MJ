@@ -8,6 +8,22 @@ on:
       - 'package-lock.json'
       - 'packages/**'
       - 'vitest.*'
+      - 'turbo.json'
+      - '.github/workflows/test.yml'
+  # Full-suite backstop: every merge into next runs ALL package tests, so a runtime-only
+  # break (MJ's dynamic @RegisterClass / ClassFactory wiring can couple packages without a
+  # package.json edge that turbo's graph sees) can never slip through PR affected-filtering.
+  push:
+    branches: [next]
+  # Nightly full run as a second safety net (catches flaky/resource failures + drift).
+  schedule:
+    - cron: '0 7 * * *'
+
+# Cancel superseded runs for the same ref (e.g. when a PR is pushed again), so CI doesn't
+# keep churning the whole suite for commits that are already out of date.
+concurrency:
+  group: unit-tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -57,11 +73,41 @@ jobs:
           ENVEOF
           sed -i 's/^          //' packages/MJExplorer/src/environments/environment.ts
 
-      - name: Build packages
-        run: npm run build
+      # Decide what to run:
+      #  - pull_request: only packages changed since the base branch PLUS everything that
+      #    depends on them (turbo's `...[ref]` package-dependency selection).
+      #  - a change to a ROOT/global file (lockfile, turbo.json, root vitest/tsconfig, this
+      #    workflow) can affect every package but lives in no package dir, so turbo's filter
+      #    would select nothing — fall back to the FULL suite in that case.
+      #  - push to next / schedule / manual dispatch: always FULL (the backstop).
+      - name: Determine test scope
+        run: |
+          FILTER=""
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "${{ github.base_ref }}"
+            CHANGED="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")"
+            if echo "$CHANGED" | grep -qE '^(package-lock\.json|turbo\.json|vitest\.[^/]+|tsconfig[^/]*\.json|\.github/workflows/test\.yml)$'; then
+              echo "Root/global change detected — running the FULL suite."
+            else
+              FILTER="--filter=...[origin/${{ github.base_ref }}]"
+              echo "PR scope — affected packages + dependents: $FILTER"
+            fi
+          else
+            echo "Event '${{ github.event_name }}' — running the FULL suite (backstop)."
+          fi
+          echo "TURBO_FILTER=$FILTER" >> "$GITHUB_ENV"
 
-      - name: Run unit tests
-        run: npm test
+      - name: Build + run unit tests
+        run: |
+          if [ -n "$TURBO_FILTER" ]; then
+            echo "::group::Affected build"
+            npx turbo --log-order=stream run build "$TURBO_FILTER"
+            echo "::endgroup::"
+            npx turbo run test "$TURBO_FILTER"
+          else
+            npm run build
+            npm test
+          fi
 
       - name: Upload coverage
         if: always()
